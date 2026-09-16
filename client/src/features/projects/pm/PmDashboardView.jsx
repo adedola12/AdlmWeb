@@ -1,6 +1,16 @@
 import React from "react";
-import { FaArrowRight, FaBalanceScale, FaBug, FaChartLine, FaCheckCircle, FaClock, FaCoins, FaCopy, FaExclamationTriangle, FaFileImport, FaLayerGroup, FaListUl, FaMagic, FaPlus, FaSyncAlt, FaTachometerAlt, FaTasks, FaTimes, FaTimesCircle, FaUnlink } from "../../../components/icons.jsx";
+import { FaArrowRight, FaBug, FaExclamationTriangle, FaFileImport, FaLayerGroup, FaListUl, FaMagic, FaPlus, FaSyncAlt, FaTimes } from "../../../components/icons.jsx";
 import PmBoqHeatmap from "./PmBoqHeatmap.jsx";
+
+// The PM dashboard, in Richard's work-surface pieces: .dsh-stat tiles,
+// .wk-panel cards with .wk-ph heads, his .dsh-meter tracks for every bar,
+// .mk-note for nudges, .wk-useline rows for offender lists and ds-btn for
+// actions. He has no donut, gradient tile or red/green, so:
+//   • the tasks donut became meters (as on the project Dashboard),
+//   • tones map onto his palettes: good → his light blue ("pal-on"),
+//     warning / danger → his orange ("warn"), neutral → plain,
+//   • chart series use his tokens (SERIES below).
+// Every figure, rule and message is unchanged.
 
 function safeNum(v) {
   const n = Number(v);
@@ -13,51 +23,113 @@ function fmtMoneyDec(v) {
   return safeNum(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Six headline tiles — each uses a gradient consistent with the ADLM
-// design language. CPI / SPI swap tone (success / warning / danger)
-// based on EVM thresholds.
-// ─────────────────────────────────────────────────────────────────────
-function Tile({ label, value, sub, icon: Icon, gradient }) {
+// Chart series in his tokens.
+const SERIES = {
+  done: "var(--action)",
+  active: "var(--pal-deep-key)",
+  alert: "var(--pal-orange-key)",
+  soft: "var(--pal-orange-line)",
+  idle: "var(--ink-3)",
+  empty: "var(--line-2)",
+};
+
+function palChip(pal) {
+  return {
+    background: `var(--pal-${pal}-wash)`,
+    color: `var(--pal-${pal}-key)`,
+    borderColor: `var(--pal-${pal}-line)`,
+  };
+}
+
+const STACK = { display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" };
+// His tiles are four fixed columns; money needs room to breathe.
+const FIT_TILES = { marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" };
+const SHORT_TILES = { marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" };
+const NO_MB = { marginBottom: 0 };
+const BODY = { padding: "18px 20px 20px" };
+const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)", borderColor: "var(--pal-orange-line)" };
+const NOTE_GOOD = { background: "var(--pal-light-wash)", color: "var(--pal-light-key)", borderColor: "var(--pal-light-line)" };
+const EYEBROW = { padding: 0, margin: "0 0 4px" };
+const LINK_BTN = {
+  background: "none",
+  border: 0,
+  padding: 0,
+  cursor: "pointer",
+  font: "inherit",
+  color: "var(--action)",
+};
+
+// good / warn / neutral → his tile tone class.
+function tileTone(t) {
+  return t === "good" ? "pal-on" : t === "warn" ? "warn" : "";
+}
+// good / warn / neutral → his chip palette.
+function chipTone(t) {
+  return t === "good" ? palChip("light") : t === "warn" ? palChip("orange") : undefined;
+}
+
+function Tile({ label, value, sub, tone, title }) {
   return (
-    <div
-      className={`relative overflow-hidden rounded-2xl p-4 text-white shadow-md ${gradient}`}
-    >
-      <div className="absolute -right-4 -top-4 opacity-20 text-6xl">
-        {Icon ? <Icon /> : null}
+    <div className={`dsh-stat${tileTone(tone) ? ` ${tileTone(tone)}` : ""}`} title={title}>
+      <span className="k">{label}</span>
+      <b>{value}</b>
+      {sub ? <span className="ds-sub">{sub}</span> : null}
+    </div>
+  );
+}
+
+function Swatch({ color }) {
+  return (
+    <i
+      aria-hidden="true"
+      style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: color, flex: "none" }}
+    />
+  );
+}
+
+// One of his meter rows. `fill` defaults to his action colour.
+function MeterRow({ label, value, pct, fill, title }) {
+  const w = Math.max(0, Math.min(100, safeNum(pct)));
+  return (
+    <div className="row" title={title}>
+      <div className="lab">
+        <span>{label}</span>
+        <b>{value}</b>
       </div>
-      <div className="relative">
-        <div className="text-[10px] font-semibold uppercase tracking-widest opacity-90">
-          {label}
-        </div>
-        <div className="mt-1 text-3xl font-bold leading-none">{value}</div>
-        {sub ? <div className="mt-1.5 text-[11px] opacity-90">{sub}</div> : null}
+      <div className="track">
+        <i style={{ width: `${w}%`, ...(fill ? { background: fill } : null) }} />
       </div>
     </div>
   );
 }
 
-function gradientFor(tone) {
-  switch (tone) {
-    case "primary":
-      return "bg-gradient-to-br from-adlm-blue-700 to-blue-800";
-    case "success":
-      return "bg-gradient-to-br from-emerald-500 to-emerald-700";
-    case "info":
-      return "bg-gradient-to-br from-sky-500 to-sky-700";
-    case "warning":
-      return "bg-gradient-to-br from-amber-500 to-orange-600";
-    case "danger":
-      return "bg-gradient-to-br from-rose-500 to-rose-700";
-    case "purple":
-      return "bg-gradient-to-br from-purple-500 to-purple-700";
-    default:
-      return "bg-gradient-to-br from-slate-500 to-slate-700";
-  }
+// A card: his panel with a head, the eyebrow in his group title.
+function Panel({ eyebrow, title, note, aside, children, style }) {
+  return (
+    <section className="wk-panel" style={{ ...NO_MB, ...style }}>
+      <div className="wk-ph" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+          {eyebrow ? (
+            <p className="wk-grp" style={EYEBROW}>
+              {eyebrow}
+            </p>
+          ) : null}
+          <h2>{title}</h2>
+          {note ? (
+            <div className="wk-locnote" style={{ marginTop: 4 }}>
+              {note}
+            </div>
+          ) : null}
+        </div>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Tasks donut (gradient ring)
+// Tasks by status, as his meters (he has no donut).
 // ─────────────────────────────────────────────────────────────────────
 function TasksDonut({ buckets, totalTasks }) {
   const completed = safeNum(buckets?.completed);
@@ -67,47 +139,21 @@ function TasksDonut({ buckets, totalTasks }) {
   const total = totalTasks || completed + inProgress + blocked + notStarted;
 
   if (total === 0) {
-    return (
-      <div className="flex h-44 items-center justify-center text-xs text-slate-400">
-        No tasks yet
-      </div>
-    );
+    return <div className="wk-empty">No tasks yet</div>;
   }
-  const c1 = (completed / total) * 100;
-  const c2 = c1 + (inProgress / total) * 100;
-  const c3 = c2 + (blocked / total) * 100;
-  const bg = `conic-gradient(
-    #10b981 0 ${c1}%,
-    #f59e0b ${c1}% ${c2}%,
-    #ef4444 ${c2}% ${c3}%,
-    #e2e8f0 ${c3}% 100%
-  )`;
+  const pct = (n) => (n / total) * 100;
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="relative h-40 w-40 rounded-full shadow-inner" style={{ background: bg }}>
-        <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-white shadow-inner">
-          <div className="text-2xl font-bold text-slate-900">
-            {Math.round((completed / total) * 100)}%
-          </div>
-          <div className="text-[10px] uppercase tracking-wide text-slate-400">Done</div>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] w-full">
-        <Legend color="#10b981" label="Completed" count={completed} />
-        <Legend color="#f59e0b" label="In progress" count={inProgress} />
-        <Legend color="#ef4444" label="Blocked" count={blocked} />
-        <Legend color="#e2e8f0" label="Not started" count={notStarted} />
-      </div>
+    <div className="dsh-meter">
+      <MeterRow
+        label="Completed"
+        value={`${completed} · ${Math.round(pct(completed))}% done`}
+        pct={pct(completed)}
+        fill={SERIES.done}
+      />
+      <MeterRow label="In progress" value={inProgress} pct={pct(inProgress)} fill={SERIES.active} />
+      <MeterRow label="Blocked" value={blocked} pct={pct(blocked)} fill={SERIES.alert} />
+      <MeterRow label="Not started" value={notStarted} pct={pct(notStarted)} fill={SERIES.idle} />
     </div>
-  );
-}
-function Legend({ color, label, count }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
-      <span className="text-slate-600">{label}</span>
-      <span className="ml-auto font-semibold text-slate-900">{count}</span>
-    </span>
   );
 }
 
@@ -117,25 +163,20 @@ function Legend({ color, label, count }) {
 function BudgetBars({ BAC, EV, AC }) {
   const max = Math.max(BAC, EV, AC, 1);
   const rows = [
-    { label: "Budget (BAC)", value: BAC, gradient: "from-sky-400 to-sky-600" },
-    { label: "Earned (EV)", value: EV, gradient: "from-emerald-400 to-emerald-600" },
-    { label: "Actual (AC)", value: AC, gradient: "from-rose-400 to-rose-600" },
+    { label: "Budget (BAC)", value: BAC, fill: SERIES.active },
+    { label: "Earned (EV)", value: EV, fill: SERIES.done },
+    { label: "Actual (AC)", value: AC, fill: SERIES.alert },
   ];
   return (
-    <div className="space-y-3">
+    <div className="dsh-meter">
       {rows.map((row) => (
-        <div key={row.label}>
-          <div className="flex items-center justify-between text-[11px] text-slate-600 mb-1">
-            <span>{row.label}</span>
-            <span className="font-semibold text-slate-900">₦{fmtMoney(row.value)}</span>
-          </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full bg-gradient-to-r ${row.gradient} rounded-full`}
-              style={{ width: `${Math.min(100, (row.value / max) * 100)}%` }}
-            />
-          </div>
-        </div>
+        <MeterRow
+          key={row.label}
+          label={row.label}
+          value={`₦${fmtMoney(row.value)}`}
+          pct={(row.value / max) * 100}
+          fill={row.fill}
+        />
       ))}
     </div>
   );
@@ -148,18 +189,6 @@ function BudgetBars({ BAC, EV, AC }) {
 // across the board until tasks slipped.
 function OverdueBars({ overdueByPriority, tasksByPriority }) {
   const labels = ["critical", "high", "medium", "low"];
-  const totalShades = {
-    critical: "bg-rose-200",
-    high: "bg-amber-200",
-    medium: "bg-sky-200",
-    low: "bg-slate-200",
-  };
-  const overdueShades = {
-    critical: "bg-rose-600",
-    high: "bg-rose-500",
-    medium: "bg-amber-500",
-    low: "bg-slate-500",
-  };
   const max = Math.max(
     1,
     ...labels.map((k) => safeNum(tasksByPriority?.[k])),
@@ -169,34 +198,41 @@ function OverdueBars({ overdueByPriority, tasksByPriority }) {
     || safeNum(tasksByPriority?.none) > 0;
   const noneCount = safeNum(tasksByPriority?.none);
   return (
-    <div className="space-y-2.5">
+    <div className="dsh-meter">
       {labels.map((k) => {
         const total = safeNum(tasksByPriority?.[k]);
         const overdue = safeNum(overdueByPriority?.[k]);
         return (
-          <div key={k}>
-            <div className="flex items-center justify-between text-[11px] text-slate-600 mb-1">
-              <span className="capitalize">{k}</span>
-              <span className="font-semibold text-slate-900">
+          <div className="row" key={k}>
+            <div className="lab">
+              <span style={{ textTransform: "capitalize" }}>{k}</span>
+              <b>
                 {total}
                 {overdue > 0 ? (
-                  <span className="ml-1 text-rose-600 font-medium">
+                  <span style={{ marginLeft: 4, color: SERIES.alert, fontWeight: 400 }}>
                     ({overdue} overdue)
                   </span>
                 ) : null}
-              </span>
+              </b>
             </div>
-            <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-              {/* Total tasks bar, lighter shade */}
-              <div
-                className={`absolute inset-y-0 left-0 ${totalShades[k]} rounded-full transition-all`}
-                style={{ width: `${(total / max) * 100}%` }}
+            {/* Total in his light line, overdue drawn on top in orange. */}
+            <div className="track" style={{ position: "relative" }}>
+              <i
+                style={{
+                  position: "absolute",
+                  inset: "0 auto 0 0",
+                  width: `${(total / max) * 100}%`,
+                  background: "var(--pal-light-line)",
+                }}
               />
-              {/* Overdue overlay: darker shade, drawn on top */}
               {overdue > 0 ? (
-                <div
-                  className={`absolute inset-y-0 left-0 ${overdueShades[k]} rounded-full transition-all`}
-                  style={{ width: `${(overdue / max) * 100}%` }}
+                <i
+                  style={{
+                    position: "absolute",
+                    inset: "0 auto 0 0",
+                    width: `${(overdue / max) * 100}%`,
+                    background: SERIES.alert,
+                  }}
                 />
               ) : null}
             </div>
@@ -204,13 +240,13 @@ function OverdueBars({ overdueByPriority, tasksByPriority }) {
         );
       })}
       {noneCount > 0 ? (
-        <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">
-          + <strong className="text-slate-600">{noneCount}</strong> task
+        <div className="wk-locnote" style={{ paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+          + <strong style={{ color: "var(--ink-2)" }}>{noneCount}</strong> task
           {noneCount === 1 ? "" : "s"} with no priority assigned
         </div>
       ) : null}
       {!hasAnyTask ? (
-        <div className="text-[10px] text-slate-400 italic text-center py-2">
+        <div className="wk-locnote" style={{ textAlign: "center" }}>
           No tasks yet. Add one to populate priority breakdown.
         </div>
       ) : null}
@@ -223,25 +259,26 @@ function BurndownChart({ burndown, BAC, burndownStatus }) {
     // Pick a specific message based on what's actually missing — the
     // generic "set dates" prompt was misleading when dates ARE set but
     // finish < start, or when no tasks exist yet.
+    const strong = { display: "block", color: "var(--ink)", fontWeight: 500 };
     const message = (
       {
         "invalid-dates": (
           <>
-            <strong className="text-rose-700 block">Project dates are invalid.</strong>
+            <strong style={{ ...strong, color: SERIES.alert }}>Project dates are invalid.</strong>
             Project finish must be after project start. Edit them in the
             Project header to enable the burndown.
           </>
         ),
         "no-tasks": (
           <>
-            <strong className="text-slate-700 block">No tasks yet.</strong>
+            <strong style={strong}>No tasks yet.</strong>
             Generate tasks from BoQ or import an MS Project file to see
             the burndown.
           </>
         ),
         "no-baseline": (
           <>
-            <strong className="text-slate-700 block">No baseline cost.</strong>
+            <strong style={strong}>No baseline cost.</strong>
             Link tasks to BoQ items (or enter manual baseline cost) so
             the burndown has a value to track against.
           </>
@@ -252,11 +289,7 @@ function BurndownChart({ burndown, BAC, burndownStatus }) {
         Set project start &amp; finish dates to enable burndown.
       </>
     );
-    return (
-      <div className="flex h-44 items-center justify-center text-center text-xs text-slate-500 px-3 leading-relaxed">
-        <div>{message}</div>
-      </div>
-    );
+    return <div className="wk-empty" style={{ fontSize: 13 }}>{message}</div>;
   }
   const W = 360;
   const H = 160;
@@ -277,26 +310,26 @@ function BurndownChart({ burndown, BAC, burndownStatus }) {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-44 w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: 176 }}>
         <defs>
           <linearGradient id="plannedFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
+            <stop offset="0%" style={{ stopColor: SERIES.done, stopOpacity: 0.25 }} />
+            <stop offset="100%" style={{ stopColor: SERIES.done, stopOpacity: 0 }} />
           </linearGradient>
         </defs>
         <path d={`${plannedPath} L ${W} ${H} L 0 ${H} Z`} fill="url(#plannedFill)" />
-        <path d={plannedPath} fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeDasharray="5 3" />
+        <path d={plannedPath} fill="none" style={{ stroke: SERIES.done }} strokeWidth="2.5" strokeDasharray="5 3" />
         {actualPoints.length > 1 ? (
-          <path d={actualPath} fill="none" stroke="#dc2626" strokeWidth="2.5" />
+          <path d={actualPath} fill="none" style={{ stroke: SERIES.alert }} strokeWidth="2.5" />
         ) : null}
       </svg>
-      <div className="mt-1 flex items-center justify-center gap-4 text-[11px] text-slate-600">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-sky-500" />
+      <div className="wk-locnote" style={{ marginTop: 6, display: "flex", justifyContent: "center", gap: 16 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <i style={{ display: "inline-block", width: 16, borderTop: `2px dashed ${SERIES.done}` }} />
           Planned
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 bg-rose-600" />
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <i style={{ display: "inline-block", width: 16, borderTop: `2px solid ${SERIES.alert}` }} />
           Actual
         </span>
       </div>
@@ -318,142 +351,102 @@ function BalanceIndicator({ balance }) {
 
   const config = {
     balanced: {
-      icon: FaCheckCircle,
       title: "Plan balanced",
       detail: "PM baseline total equals the contract sum.",
-      bg: "from-emerald-50 to-emerald-100 dark:from-emerald-900/40 dark:to-emerald-800/30",
-      border: "border-emerald-300 dark:border-emerald-700",
-      text: "text-emerald-800 dark:text-emerald-200",
-      iconColor: "text-emerald-600 dark:text-emerald-400",
+      tone: "good",
+      chip: "Balanced",
     },
     over: {
-      icon: FaExclamationTriangle,
       title: "Plan exceeds contract",
       // Genuine warning — the WBS has been priced higher than the
       // contract value. Variations are the proper channel for any
       // legitimate over-allocation.
       detail: `PM baseline exceeds ${balance?.contractLocked ? "contract sum" : "BoQ total"} by ₦${fmtMoneyDec(diff)} (${pct.toFixed(1)}%). Review weighted links or move excess scope to variations.`,
-      bg: "from-rose-50 to-rose-100 dark:from-rose-900/40 dark:to-rose-800/30",
-      border: "border-rose-300 dark:border-rose-700",
-      text: "text-rose-800 dark:text-rose-200",
-      iconColor: "text-rose-600 dark:text-rose-400",
+      tone: "warn",
+      chip: "Over",
     },
     under: {
       // PM baseline below contract sum used to read as a warning
       // ("Under budget") which confused users. Re-framed as a
       // POSITIVE cost-saving signal: the WBS is forecast to cost
       // less than the agreed contract → that's a saving, not a gap.
-      icon: FaCheckCircle,
       title: "Forecast saving",
       detail: `PM baseline is ₦${fmtMoneyDec(Math.abs(diff))} (${Math.abs(pct).toFixed(1)}%) below ${balance?.contractLocked ? "contract sum" : "BoQ total"}, project is forecast to come in under contract.`,
-      bg: "from-emerald-50 to-emerald-100 dark:from-emerald-900/40 dark:to-emerald-800/30",
-      border: "border-emerald-300 dark:border-emerald-700",
-      text: "text-emerald-800 dark:text-emerald-200",
-      iconColor: "text-emerald-600 dark:text-emerald-400",
+      tone: "good",
+      chip: "Saving",
     },
     empty: {
-      icon: FaTimesCircle,
       title: "No baseline cost yet",
       detail: "Add tasks and link them to BoQ items, or enter manual cost. The dashboard will then track project books.",
-      bg: "from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700",
-      border: "border-slate-300 dark:border-slate-600",
-      text: "text-slate-700 dark:text-slate-200",
-      iconColor: "text-slate-500 dark:text-slate-400",
+      tone: "",
+      chip: "No baseline",
     },
     "no-data": {
-      icon: FaBalanceScale,
       title: "Add tasks and BoQ items to balance the project books",
       detail: "Generate tasks from BoQ, import a schedule, or add tasks manually to start tracking.",
-      bg: "from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700",
-      border: "border-slate-300 dark:border-slate-600",
-      text: "text-slate-700 dark:text-slate-200",
-      iconColor: "text-slate-500 dark:text-slate-400",
+      tone: "",
+      chip: "No data",
     },
   };
 
   const c = config[status] || config["no-data"];
-  const Icon = c.icon;
 
   return (
-    <div
-      className={`rounded-2xl border ${c.border} bg-gradient-to-br ${c.bg} p-4 shadow-sm`}
+    <Panel
+      eyebrow="Project books"
+      title={c.title}
+      note={c.detail}
+      aside={
+        <span className="wk-src sm" style={chipTone(c.tone)}>
+          {c.chip}
+        </span>
+      }
     >
-      <div className="flex items-start gap-3">
-        <Icon className={`mt-0.5 text-xl ${c.iconColor}`} />
-        <div className="flex-1 min-w-0">
-          <div className={`font-semibold ${c.text}`}>{c.title}</div>
-          <div className={`mt-0.5 text-xs ${c.text} opacity-90`}>{c.detail}</div>
-          {/* When every task is BoQ-linked, the manual baseline tile
-              just shows ₦0 and adds noise, hide it. The grid collapses
-              from 4 → 3 columns to fill the space cleanly. */}
-          <div
-            className={`mt-3 grid gap-2 text-[11px] ${
-              manual > 0
-                ? "grid-cols-2 sm:grid-cols-4"
-                : "grid-cols-2 sm:grid-cols-3"
-            }`}
-          >
-            <Stat label="Linked baseline" value={`₦${fmtMoney(linked)}`} tone="text-emerald-700 dark:text-emerald-300" />
-            {manual > 0 ? (
-              <Stat label="Manual baseline" value={`₦${fmtMoney(manual)}`} tone="text-sky-700 dark:text-sky-300" />
-            ) : null}
-            <Stat label="PM total" value={`₦${fmtMoney(total)}`} tone="text-slate-900 dark:text-slate-100" bold />
-            <Stat
-              label={balance?.contractLocked ? "Contract sum" : "Planned total"}
-              value={`₦${fmtMoney(ref)}`}
-              tone="text-slate-900 dark:text-slate-100"
-              bold
-            />
-          </div>
+      {/* When every task is BoQ-linked, the manual baseline tile just
+          shows ₦0 and adds noise, so it is hidden. */}
+      <div style={BODY}>
+        <div className="dsh-stats" style={FIT_TILES}>
+          <Tile label="Linked baseline" value={`₦${fmtMoney(linked)}`} />
+          {manual > 0 ? <Tile label="Manual baseline" value={`₦${fmtMoney(manual)}`} /> : null}
+          <Tile label="PM total" value={`₦${fmtMoney(total)}`} tone={c.tone} />
+          <Tile
+            label={balance?.contractLocked ? "Contract sum" : "Planned total"}
+            value={`₦${fmtMoney(ref)}`}
+          />
         </div>
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, tone = "text-slate-900", bold }) {
-  return (
-    <div className="rounded-lg bg-white/70 dark:bg-slate-800/70 px-2.5 py-1.5 border border-white/40 dark:border-slate-700/40">
-      <div className="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-0.5 ${tone} ${bold ? "font-bold" : "font-semibold"} text-sm`}>
-        {value}
-      </div>
-    </div>
+    </Panel>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Quick action card (compact, used in the action-strip row)
+// Quick action, as his button. The old card subtitle is the tooltip.
 // ─────────────────────────────────────────────────────────────────────
-function ActionCard({ label, icon: Icon, onClick, disabled, color = "blue", subtitle }) {
-  const colorClass = {
-    blue: "from-adlm-blue-700 to-blue-800 hover:from-blue-800 hover:to-blue-900",
-    orange: "from-amber-500 to-orange-600 hover:from-orange-600 hover:to-orange-700",
-    red: "from-rose-500 to-rose-700 hover:from-rose-600 hover:to-rose-800",
-    purple: "from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800",
-    slate: "from-slate-600 to-slate-800 hover:from-slate-700 hover:to-slate-900",
-    green: "from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800",
-  }[color];
-
+function ActionCard({ label, icon: Icon, onClick, disabled, primary = false, subtitle }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`group relative overflow-hidden rounded-xl bg-gradient-to-br ${colorClass} p-3 text-white shadow-sm transition disabled:opacity-50`}
+      title={subtitle}
+      className={`ds-btn ds-btn-sm ${primary ? "btn-p" : "btn-o"}`}
     >
-      <div className="flex items-center gap-2.5">
-        <div className="rounded-lg bg-white/20 p-2 group-hover:bg-white/30 transition">
-          {Icon ? <Icon className="text-base" /> : null}
-        </div>
-        <div className="text-left">
-          <div className="text-xs font-semibold">{label}</div>
-          {subtitle ? (
-            <div className="text-[10px] opacity-80 mt-0.5">{subtitle}</div>
-          ) : null}
-        </div>
-      </div>
+      {Icon ? <Icon size={14} /> : null}
+      {label}
     </button>
+  );
+}
+
+function ImportProgress({ importStatus, importProgress }) {
+  return (
+    <div className="dsh-meter">
+      <MeterRow
+        label={importStatus || "Importing…"}
+        value={`${importProgress}%`}
+        pct={importProgress}
+        fill={importProgress === 100 ? "var(--ok)" : undefined}
+      />
+    </div>
   );
 }
 
@@ -522,6 +515,7 @@ export default function PmDashboardView({
 
   const cpi = safeNum(headline.CPI);
   const spi = safeNum(headline.SPI);
+  const indexTone = (v) => (v >= 1 ? "good" : v >= 0.9 ? "" : "warn");
 
   // Onboarding signals — drive the empty-state banner and the "project
   // start not set" callout. Both are non-blocking — the user can still see
@@ -531,28 +525,28 @@ export default function PmDashboardView({
   const hasNoProjectStart = !dashboard?.projectStart;
 
   return (
-    <div className="space-y-4">
-      {/* Header banner */}
-      <div className="overflow-hidden rounded-2xl bg-gradient-to-r from-adlm-blue-700 via-blue-700 to-blue-800 px-5 py-4 text-white shadow-md">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs uppercase tracking-widest opacity-80">Project Management</div>
-            <div className="mt-0.5 text-xl font-bold">All-in-One PM Dashboard</div>
-            {dashboard?.projectStart || dashboard?.projectFinish ? (
-              <div className="mt-1 text-[11px] opacity-90">
-                {dashboard?.projectStart
+    <div style={STACK}>
+      {/* Header */}
+      <Panel
+        eyebrow="Project management"
+        title="All-in-One PM Dashboard"
+        note={
+          dashboard?.projectStart || dashboard?.projectFinish
+            ? `${
+                dashboard?.projectStart
                   ? new Date(dashboard.projectStart).toLocaleDateString()
-                  : "—"}
-                {" → "}
-                {dashboard?.projectFinish
+                  : "–"
+              } → ${
+                dashboard?.projectFinish
                   ? new Date(dashboard.projectFinish).toLocaleDateString()
-                  : "—"}
-              </div>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
+                  : "–"
+              }`
+            : null
+        }
+        aside={
+          <div className="wk-acts" style={{ alignItems: "center" }}>
             {dirty ? (
-              <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+              <span className="wk-dirty" style={{ marginRight: 4 }}>
                 Unsaved
               </span>
             ) : null}
@@ -560,107 +554,76 @@ export default function PmDashboardView({
               type="button"
               onClick={onSave}
               disabled={saving || !dirty}
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-bold text-adlm-blue-700 shadow hover:bg-blue-50 transition disabled:opacity-50"
+              className="ds-btn ds-btn-sm btn-p"
             >
-              <FaSyncAlt className={saving ? "animate-spin" : ""} />
+              <FaSyncAlt size={14} className={saving ? "animate-spin" : ""} />
               {saving ? "Saving…" : "Save changes"}
             </button>
-            <button
-              type="button"
-              onClick={onViewDetails}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-900/40 px-4 py-2 text-xs font-bold text-white shadow hover:bg-blue-900/60 transition"
-            >
-              <FaListUl />
+            <button type="button" onClick={onViewDetails} className="ds-btn ds-btn-sm btn-o">
+              <FaListUl size={14} />
               View Details
-              <FaArrowRight className="text-[10px]" />
+              <FaArrowRight size={12} />
             </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Empty-state onboarding banner, shown when there are no tasks at
-          all. Replaces the silent "0 / 0 / ₦0" tiles below with an actual
+      {/* Empty-state onboarding, shown when there are no tasks at all.
+          Replaces the silent "0 / 0 / ₦0" tiles below with an actual
           first-time-user prompt. Dismissed implicitly by adding any task. */}
       {hasNoTasks ? (
-        <div className="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/50 px-5 py-6 text-center">
-          <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-adlm-blue-700 text-white shadow">
-            <FaTasks className="text-xl" />
-          </div>
-          <div className="mt-3 text-base font-bold text-slate-900">
-            Your PM dashboard is empty
-          </div>
-          <div className="mt-1 text-xs text-slate-600 max-w-md mx-auto">
-            Add tasks manually, generate one task per item from your BoQ, or
-            import an MS Project file. The dashboard tiles, charts, and
-            burndown will populate automatically.
-          </div>
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={onAddTask}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-blue-700 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-blue-800"
-            >
-              <FaPlus className="text-[10px]" />
-              Add first task
-            </button>
-            <button
-              type="button"
-              onClick={onGenerateFromBoq}
-              disabled={generating}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-purple-700 disabled:opacity-50"
-            >
-              <FaMagic className="text-[10px]" />
-              {generating ? "Generating…" : "Generate from BoQ"}
-            </button>
-            <button
-              type="button"
-              onClick={pickFile}
-              disabled={importing}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-slate-800 disabled:opacity-50"
-            >
-              <FaFileImport className="text-[10px]" />
-              {importing ? "Importing…" : "Import MS Project"}
-            </button>
-          </div>
-          {importing && importProgress > 0 ? (
-            <div className="mt-4 max-w-md mx-auto w-full space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] text-slate-500">
-                <span className="font-medium">{importStatus || "Importing…"}</span>
-                <span>{importProgress}%</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${importProgress === 100 ? "bg-emerald-500" : "bg-adlm-blue-700"}`}
-                  style={{ width: `${importProgress}%` }}
-                />
-              </div>
+        <section className="wk-panel" style={NO_MB}>
+          <div className="wk-empty">
+            <b style={{ display: "block", fontSize: 16, fontWeight: 500, color: "var(--ink)" }}>
+              Your PM dashboard is empty
+            </b>
+            <span style={{ display: "block", maxWidth: 460, margin: "6px auto 0" }}>
+              Add tasks manually, generate one task per item from your BoQ, or
+              import an MS Project file. The dashboard tiles, charts, and
+              burndown will populate automatically.
+            </span>
+            <div className="wk-acts" style={{ justifyContent: "center", marginTop: 18 }}>
+              <ActionCard label="Add first task" icon={FaPlus} primary onClick={onAddTask} />
+              <ActionCard
+                label={generating ? "Generating…" : "Generate from BoQ"}
+                icon={FaMagic}
+                onClick={onGenerateFromBoq}
+                disabled={generating}
+              />
+              <ActionCard
+                label={importing ? "Importing…" : "Import MS Project"}
+                icon={FaFileImport}
+                onClick={pickFile}
+                disabled={importing}
+              />
             </div>
-          ) : null}
-          {importError ? (
-            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 max-w-md mx-auto">
-              {importError}
-            </div>
-          ) : null}
-        </div>
+            {importing && importProgress > 0 ? (
+              <div style={{ maxWidth: 460, margin: "18px auto 0", textAlign: "left" }}>
+                <ImportProgress importStatus={importStatus} importProgress={importProgress} />
+              </div>
+            ) : null}
+            {importError ? (
+              <p className="mk-note" role="alert" style={{ ...NOTE_WARN, maxWidth: 460, margin: "14px auto 0" }}>
+                {importError}
+              </p>
+            ) : null}
+          </div>
+        </section>
       ) : null}
 
-      {/* Project-start banner, non-blocking nudge when tasks exist but the
+      {/* Project-start nudge, non-blocking when tasks exist but the
           project's start date hasn't been set. Without a start the Burndown
           can't render and the Reschedule action errors out. */}
       {!hasNoTasks && hasNoProjectStart ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <div className="flex items-center gap-2">
-            <FaClock className="text-amber-600" />
-            <span>
-              <strong>Set a project start date</strong> to enable the burndown
-              chart and the task-reschedule cascade.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenHeaderSettings}
-            className="rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700"
-          >
+        <div
+          className="mk-note"
+          style={{ ...NOTE_WARN, margin: 0, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}
+        >
+          <span>
+            <strong>Set a project start date</strong> to enable the burndown
+            chart and the task-reschedule cascade.
+          </span>
+          <button type="button" onClick={onOpenHeaderSettings} className="ds-btn ds-btn-sm btn-o">
             Set start date
           </button>
         </div>
@@ -671,20 +634,15 @@ export default function PmDashboardView({
           create duplicates), and rename "Import MS Project" →
           "Update MS Project" so the user understands re-imports are
           smart-merge (preserve their progress, refresh schedule). */}
-      <div
-        className={`grid grid-cols-2 sm:grid-cols-3 gap-2.5 ${
-          hasBoqLinks ? "lg:grid-cols-4" : "lg:grid-cols-5"
-        }`}
-      >
-        <ActionCard label="Add Task" subtitle="Schedule a work item" icon={FaPlus} color="blue" onClick={onAddTask} />
-        <ActionCard label="Add Risk" subtitle="Log a risk" icon={FaExclamationTriangle} color="orange" onClick={onAddRisk} />
-        <ActionCard label="Add Issue" subtitle="Log an issue" icon={FaBug} color="red" onClick={onAddIssue} />
+      <div className="wk-bar" style={NO_MB}>
+        <ActionCard label="Add Task" subtitle="Schedule a work item" icon={FaPlus} primary onClick={onAddTask} />
+        <ActionCard label="Add Risk" subtitle="Log a risk" icon={FaExclamationTriangle} onClick={onAddRisk} />
+        <ActionCard label="Add Issue" subtitle="Log an issue" icon={FaBug} onClick={onAddIssue} />
         {!hasBoqLinks ? (
           <ActionCard
             label="Generate from BoQ"
             subtitle="One task per item"
             icon={FaMagic}
-            color="purple"
             onClick={onGenerateFromBoq}
             disabled={generating}
           />
@@ -705,27 +663,15 @@ export default function PmDashboardView({
               : ".xml or .mpp"
           }
           icon={FaFileImport}
-          color="slate"
           onClick={pickFile}
           disabled={importing}
         />
         <input ref={fileRef} type="file" accept=".xml,.mpp" className="hidden" onChange={onFile} />
       </div>
 
-      {/* Import progress bar, shown while an upload is in flight */}
+      {/* Import progress, shown while an upload is in flight */}
       {importing && importProgress > 0 ? (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-            <span className="font-medium">{importStatus || "Importing…"}</span>
-            <span>{importProgress}%</span>
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${importProgress === 100 ? "bg-emerald-500" : "bg-adlm-blue-700"}`}
-              style={{ width: `${importProgress}%` }}
-            />
-          </div>
-        </div>
+        <ImportProgress importStatus={importStatus} importProgress={importProgress} />
       ) : null}
 
       {/* Clear-imports row, hidden once tasks are linked to BoQ so
@@ -733,86 +679,66 @@ export default function PmDashboardView({
           still reset via the Reset PM data button if they really
           need to start over. */}
       {importedTaskCount > 0 && !hasBoqLinks ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/40">
-          <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <FaFileImport className="text-slate-400" />
-            <span>
-              <strong className="text-slate-900 dark:text-slate-100">{importedTaskCount}</strong>{" "}
-              task{importedTaskCount === 1 ? "" : "s"} came from MS Project import.
-            </span>
-          </div>
+        <div
+          className="mk-note"
+          style={{ margin: 0, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}
+        >
+          <span>
+            <strong style={{ color: "var(--ink)" }}>{importedTaskCount}</strong>{" "}
+            task{importedTaskCount === 1 ? "" : "s"} came from MS Project import.
+          </span>
           <button
             type="button"
             onClick={onClearImports}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition dark:bg-slate-800 dark:border-rose-700 dark:text-rose-300"
+            className="ds-btn ds-btn-sm btn-o"
             title="Remove all MS Project imported tasks. Manual & BoQ-linked tasks are preserved."
           >
-            <FaTimes className="text-[10px]" />
+            <FaTimes size={12} />
             Delete imported tasks
           </button>
         </div>
       ) : importedTaskCount > 0 ? (
         // Linked-tasks-present variant: show the count as info but
         // remove the destructive button.
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/40 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">
-          <FaFileImport className="text-emerald-500" />
-          <span>
-            <strong>{importedTaskCount}</strong> task{importedTaskCount === 1 ? "" : "s"}{" "}
-            imported from MS Project ·{" "}
-            <strong>{linkedTaskCount}</strong> linked to BoQ. Future re-imports will refresh the schedule and preserve your work.
-          </span>
-        </div>
+        <p className="mk-note" style={{ ...NOTE_GOOD, margin: 0 }}>
+          <strong>{importedTaskCount}</strong> task{importedTaskCount === 1 ? "" : "s"}{" "}
+          imported from MS Project ·{" "}
+          <strong>{linkedTaskCount}</strong> linked to BoQ. Future re-imports will refresh the schedule and preserve your work.
+        </p>
       ) : null}
 
       {importError ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+        <p className="mk-note" role="alert" style={{ ...NOTE_WARN, margin: 0 }}>
           {importError}
-        </div>
+        </p>
       ) : null}
 
       {/* Headline tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Tile
-          label="Progress"
-          value={`${safeNum(headline.progressPercent).toFixed(0)}%`}
-          sub="Avg % complete"
-          icon={FaTachometerAlt}
-          gradient={gradientFor("primary")}
-        />
-        <Tile
-          label="Budget Used"
-          value={`${safeNum(headline.budgetUsedPercent).toFixed(0)}%`}
-          sub="AC / BAC"
-          icon={FaCoins}
-          gradient={gradientFor("success")}
-        />
+      <div className="dsh-stats" style={SHORT_TILES}>
+        <Tile label="Progress" value={`${safeNum(headline.progressPercent).toFixed(0)}%`} sub="Avg % complete" />
+        <Tile label="Budget Used" value={`${safeNum(headline.budgetUsedPercent).toFixed(0)}%`} sub="AC / BAC" />
         <Tile
           label="Overdue"
           value={safeNum(headline.overdueCount)}
           sub="Tasks past end date"
-          icon={FaClock}
-          gradient={gradientFor("danger")}
+          tone={safeNum(headline.overdueCount) > 0 ? "warn" : ""}
         />
         <Tile
           label="CPI"
-          value={cpi ? cpi.toFixed(2) : "—"}
+          value={cpi ? cpi.toFixed(2) : "–"}
           sub={cpi >= 1 ? "Under budget" : cpi > 0 ? "Over budget" : "No data"}
-          icon={FaCoins}
-          gradient={gradientFor(cpi >= 1 ? "success" : cpi >= 0.9 ? "warning" : "danger")}
+          tone={cpi ? indexTone(cpi) : ""}
         />
         <Tile
           label="SPI"
-          value={spi ? spi.toFixed(2) : "—"}
+          value={spi ? spi.toFixed(2) : "–"}
           sub={spi >= 1 ? "On/ahead" : spi > 0 ? "Behind" : "No data"}
-          icon={FaChartLine}
-          gradient={gradientFor(spi >= 1 ? "success" : spi >= 0.9 ? "warning" : "danger")}
+          tone={spi ? indexTone(spi) : ""}
         />
         <Tile
           label="Tasks Done"
           value={`${safeNum(headline.tasksDonePercent).toFixed(0)}%`}
           sub={`${totals.completedTasks || 0} of ${totals.totalTasks || 0}`}
-          icon={FaTasks}
-          gradient={gradientFor("info")}
         />
       </div>
 
@@ -820,10 +746,7 @@ export default function PmDashboardView({
       <BalanceIndicator balance={balance} />
 
       {/* WBS status & priority strip, compact at-a-glance row showing
-          how the work is distributed across status + priority buckets.
-          Surfaces the priority breakdown that was previously hidden
-          behind "Overdue by priority" (which read 0 until tasks
-          slipped). */}
+          how the work is distributed across status + priority buckets. */}
       <WbsHealthStrip
         tasksByStatus={tasksByStatus}
         tasksByPriority={tasksByPriority}
@@ -837,12 +760,11 @@ export default function PmDashboardView({
       />
 
       {/* Contract movement: variations + provisional flow, with
-          execution status and forecast impact. Drives the user's awareness
-          of whether the project is going as scheduled AND as budgeted. */}
+          execution status and forecast impact. */}
       <ContractMovementPanel dashboard={dashboard} />
 
       {/* Charts grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div style={{ display: "grid", gap: 18, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
         <ChartCard title="Tasks">
           <TasksDonut buckets={buckets} totalTasks={totals.totalTasks} />
         </ChartCard>
@@ -875,37 +797,34 @@ export default function PmDashboardView({
         onViewDetails={onViewDetails}
       />
 
-      {/* EVM summary footer */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Earned Value Summary
-          </div>
-          <button
-            type="button"
-            onClick={onOpenHeaderSettings}
-            className="text-[11px] font-medium text-adlm-blue-700 hover:underline"
-          >
+      {/* EVM summary */}
+      <Panel
+        title="Earned Value Summary"
+        aside={
+          <button type="button" onClick={onOpenHeaderSettings} className="ds-btn ds-btn-sm btn-o">
             Edit project dates &amp; budget
           </button>
+        }
+      >
+        <div style={BODY}>
+          <div className="dsh-stats" style={FIT_TILES}>
+            <Tile label="BAC" value={`₦${fmtMoney(totals.BAC)}`} sub="Budget at completion" />
+            <Tile label="PV" value={`₦${fmtMoney(totals.PV)}`} sub="Planned value to date" />
+            <Tile label="EV" value={`₦${fmtMoney(totals.EV)}`} sub="Earned value" />
+            <Tile label="AC" value={`₦${fmtMoney(totals.AC)}`} sub="Actual cost" />
+            <Tile label="EAC" value={`₦${fmtMoney(totals.EAC)}`} sub="Estimate at completion" />
+            <Tile
+              label="VAC"
+              value={`₦${fmtMoney(totals.VAC)}`}
+              sub={safeNum(totals.VAC) >= 0 ? "Forecast savings" : "Forecast over-run"}
+              tone={safeNum(totals.VAC) >= 0 ? "good" : "warn"}
+            />
+          </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          <EvmStat label="BAC" value={`₦${fmtMoney(totals.BAC)}`} hint="Budget at completion" />
-          <EvmStat label="PV" value={`₦${fmtMoney(totals.PV)}`} hint="Planned value to date" />
-          <EvmStat label="EV" value={`₦${fmtMoney(totals.EV)}`} hint="Earned value" />
-          <EvmStat label="AC" value={`₦${fmtMoney(totals.AC)}`} hint="Actual cost" />
-          <EvmStat label="EAC" value={`₦${fmtMoney(totals.EAC)}`} hint="Estimate at completion" />
-          <EvmStat
-            label="VAC"
-            value={`₦${fmtMoney(totals.VAC)}`}
-            hint={safeNum(totals.VAC) >= 0 ? "Forecast savings" : "Forecast over-run"}
-            tone={safeNum(totals.VAC) >= 0 ? "text-emerald-700" : "text-rose-700"}
-          />
-        </div>
-      </div>
+      </Panel>
 
       {dashboard?.asOf ? (
-        <div className="text-[10px] text-slate-400 text-right italic">
+        <div className="wk-locnote" style={{ textAlign: "right" }}>
           As of {new Date(dashboard.asOf).toLocaleString()}
         </div>
       ) : null}
@@ -915,22 +834,9 @@ export default function PmDashboardView({
 
 function ChartCard({ title, children }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-3">
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function EvmStat({ label, value, hint, tone = "text-slate-900" }) {
-  return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-0.5 font-bold text-sm ${tone}`}>{value}</div>
-      {hint ? <div className="text-[9px] text-slate-400 mt-0.5">{hint}</div> : null}
-    </div>
+    <Panel title={title}>
+      <div style={BODY}>{children}</div>
+    </Panel>
   );
 }
 
@@ -961,28 +867,21 @@ function ContractMovementPanel({ dashboard }) {
   const bac = safeNum(totals.BAC);
   const variancePct = bac > 0 ? (vac / bac) * 100 : 0;
 
-  let healthTone = "slate";
+  let healthTone = "";
   let healthLabel = "Tracking";
   let healthMsg = "Awaiting actuals.";
   if (bac > 0 && eac > 0) {
     if (vac >= 0) {
-      healthTone = "emerald";
+      healthTone = "good";
       healthLabel = `Forecast savings ₦${fmtMoney(Math.abs(vac))}`;
       healthMsg = `Project is forecast to come in ${Math.abs(variancePct).toFixed(1)}% under contract.`;
     } else {
       const overrun = Math.abs(variancePct);
-      healthTone = overrun >= 5 ? "rose" : "amber";
+      healthTone = "warn";
       healthLabel = `Forecast over-run ₦${fmtMoney(Math.abs(vac))}`;
       healthMsg = `Project is forecast to exceed contract by ${overrun.toFixed(1)}%. Review variation execution and actuals.`;
     }
   }
-
-  const headerTone = {
-    emerald: "from-emerald-600 to-emerald-700",
-    amber: "from-amber-500 to-amber-600",
-    rose: "from-rose-600 to-rose-700",
-    slate: "from-slate-600 to-slate-700",
-  }[healthTone];
 
   // Nothing to show if both streams are empty — keep the dashboard
   // uncluttered when the project hasn't issued any variations or PC yet.
@@ -994,87 +893,83 @@ function ContractMovementPanel({ dashboard }) {
     return null;
   }
 
+  const eacPct = bac > 0 ? Math.min(130, (eac / bac) * 100) : 0;
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className={`bg-gradient-to-r ${headerTone} px-4 py-3 text-white`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest opacity-80">
-              Contract Movement
+    <Panel
+      eyebrow="Contract movement"
+      title={healthLabel}
+      note={healthMsg}
+      aside={
+        healthTone ? (
+          <span className="wk-src sm" style={chipTone(healthTone)}>
+            {healthTone === "good" ? "Within budget" : "Over budget"}
+          </span>
+        ) : null
+      }
+    >
+      <div style={BODY}>
+        <div className="dsh-stats" style={FIT_TILES}>
+          <Tile
+            label="Variations declared"
+            value={`₦${fmtMoney(variations.total)}`}
+            sub={`${variations.count || 0} instruction${variations.count === 1 ? "" : "s"}`}
+          />
+          <Tile
+            label="Variations executed"
+            value={`₦${fmtMoney(variations.earned)}`}
+            sub={`${variations.completedCount || 0} of ${variations.count || 0} done · ₦${fmtMoney(variationsOpen)} open`}
+            tone={variations.earned > 0 ? "good" : ""}
+          />
+          <Tile
+            label="PC sums released"
+            value={`₦${fmtMoney(provisional.earned)}`}
+            sub={`${provisional.completedCount || 0} of ${provisional.count || 0} drawn · ₦${fmtMoney(provisionalOpen)} held`}
+          />
+          <Tile
+            label="Forecast at completion"
+            value={`₦${fmtMoney(eac)}`}
+            sub={vac >= 0 ? "Within budget" : "Over budget"}
+            tone={vac >= 0 ? "good" : "warn"}
+          />
+        </div>
+
+        {/* Variance, as his meter: the forecast against the contract
+            baseline (capped at 130% so large over-runs stay readable),
+            with a marker where the baseline ends. */}
+        {bac > 0 ? (
+          <div className="dsh-meter" style={{ marginTop: 18 }}>
+            <div className="row">
+              <div className="lab">
+                <span>Contract baseline ₦{fmtMoney(bac)}</span>
+                <b style={{ color: vac >= 0 ? "var(--pal-light-key)" : SERIES.alert }}>
+                  Forecast ₦{fmtMoney(eac)} ({vac >= 0 ? "−" : "+"}{Math.abs(variancePct).toFixed(1)}%)
+                </b>
+              </div>
+              <div className="track" style={{ position: "relative" }}>
+                <i
+                  style={{
+                    width: `${Math.min(100, (eacPct / Math.max(100, eacPct)) * 100)}%`,
+                    background: vac >= 0 ? SERIES.done : SERIES.alert,
+                  }}
+                />
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    background: "var(--ink)",
+                    left: `${Math.min(100, (100 * bac) / Math.max(bac, eac))}%`,
+                  }}
+                />
+              </div>
             </div>
-            <div className="text-base font-bold">{healthLabel}</div>
           </div>
-          <div className="text-[11px] text-white/85 max-w-xs text-right">
-            {healthMsg}
-          </div>
-        </div>
+        ) : null}
       </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
-        <MovementStat
-          label="Variations declared"
-          value={`₦${fmtMoney(variations.total)}`}
-          hint={`${variations.count || 0} instruction${variations.count === 1 ? "" : "s"}`}
-        />
-        <MovementStat
-          label="Variations executed"
-          value={`₦${fmtMoney(variations.earned)}`}
-          hint={`${variations.completedCount || 0} of ${variations.count || 0} done · ₦${fmtMoney(variationsOpen)} open`}
-          tone={variations.earned > 0 ? "text-emerald-700" : "text-slate-700"}
-        />
-        <MovementStat
-          label="PC sums released"
-          value={`₦${fmtMoney(provisional.earned)}`}
-          hint={`${provisional.completedCount || 0} of ${provisional.count || 0} drawn · ₦${fmtMoney(provisionalOpen)} held`}
-        />
-        <MovementStat
-          label="Forecast at completion"
-          value={`₦${fmtMoney(eac)}`}
-          hint={vac >= 0 ? "Within budget" : "Over budget"}
-          tone={vac >= 0 ? "text-emerald-700" : "text-rose-700"}
-        />
-      </div>
-
-      {/* Visual variance bar, quick "are we tracking?" read */}
-      {bac > 0 ? (
-        <div className="px-4 pb-4">
-          <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
-            <span>Contract baseline</span>
-            <span>Forecast at completion</span>
-          </div>
-          <div className="relative h-4 w-full rounded-full bg-slate-100 overflow-hidden">
-            {/* Baseline as the full 100% reference */}
-            <div className="absolute inset-y-0 left-0 right-0 bg-slate-200" />
-            {/* Forecast bar: width shows EAC vs BAC, capped at 130% so
-                massive overruns still render readably. */}
-            <div
-              className={`absolute inset-y-0 left-0 transition-all ${
-                vac >= 0 ? "bg-emerald-500" : "bg-rose-500"
-              }`}
-              style={{ width: `${Math.min(130, (eac / bac) * 100)}%` }}
-            />
-            {/* Baseline marker, a vertical line at 100% to anchor the eye */}
-            <div className="absolute inset-y-0 left-[76.92%] w-px bg-white/80" style={{ left: `${Math.min(100, 100 * bac / Math.max(bac, eac))}%` }} />
-          </div>
-          <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
-            <span>₦{fmtMoney(bac)}</span>
-            <span className={vac >= 0 ? "text-emerald-700 font-semibold" : "text-rose-700 font-semibold"}>
-              ₦{fmtMoney(eac)} ({vac >= 0 ? "−" : "+"}{Math.abs(variancePct).toFixed(1)}%)
-            </span>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function MovementStat({ label, value, hint, tone = "text-slate-900" }) {
-  return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-0.5 font-bold text-sm ${tone}`}>{value}</div>
-      {hint ? <div className="text-[10px] text-slate-500 mt-0.5">{hint}</div> : null}
-    </div>
+    </Panel>
   );
 }
 
@@ -1086,15 +981,15 @@ function MovementStat({ label, value, hint, tone = "text-slate-900" }) {
 //  bits unallocated / accidentally counted lines twice?"
 //
 // Surfaces four categories from the server's boqCoverage payload:
-//   1. Fully allocated → green tile, count only (the healthy bucket).
-//   2. Unlinked        → grey tile, ₦ value at risk + top offenders.
-//   3. Under-allocated → amber tile, shortfall amount + top rows.
-//   4. Over-allocated  → rose tile, double-count amount + top rows.
+//   1. Fully allocated → good tile, count only (the healthy bucket).
+//   2. Unlinked        → neutral tile, ₦ value at risk + top offenders.
+//   3. Under-allocated → warning tile, shortfall amount + top rows.
+//   4. Over-allocated  → warning tile, double-count amount + top rows.
 //
 // Each problem category has a collapsible list of the top 8 offending
 // BoQ rows so the user can jump from "your books don't balance" to the
-// specific row they need to fix. The full visual is a single-stack
-// segmented bar showing the same proportions in one glance.
+// specific row they need to fix. The segmented bar shows the same
+// proportions in one glance.
 // ────────────────────────────────────────────────────────────────────
 function BoqCoveragePanel({ coverage, onViewDetails }) {
   if (!coverage || !coverage.totalCount) {
@@ -1108,18 +1003,18 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
   const over = safeNum(coverage.overAllocatedAmount);
   const coveragePct = safeNum(coverage.coveragePercent);
 
-  // Header tone reflects worst issue. Over-allocation outweighs under-
+  // Tone reflects the worst issue. Over-allocation outweighs under-
   // allocation because over-counts directly inflate EV (CPI/SPI lie),
   // whereas under-counts only depress them (a milder distortion).
-  let headerTone = "from-emerald-600 to-emerald-700";
+  let headerTone = "good";
   let headerLabel = "BoQ fully covered";
   let headerMsg = `${coverage.fullyAllocatedCount} BoQ entries are tracked end-to-end by the WBS.`;
   if (over > 0) {
-    headerTone = "from-rose-600 to-rose-700";
+    headerTone = "warn";
     headerLabel = `Possible double-count: ₦${fmtMoney(over)}`;
     headerMsg = `${coverage.overAllocatedCount} BoQ entries have task weights summing to > 100%. EV and CPI/SPI may be over-stated.`;
   } else if (unlinked > 0 || under > 0) {
-    headerTone = "from-amber-500 to-amber-600";
+    headerTone = "warn";
     const gap = unlinked + under;
     headerLabel = `Coverage gap: ₦${fmtMoney(gap)}`;
     const parts = [];
@@ -1132,138 +1027,103 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
     headerMsg = `${parts.join(" + ")}. WBS does not yet execute the full BoQ, EV and SPI will under-state.`;
   }
 
-  // Single-stack segmented coverage bar widths (% of total amount).
+  // Segmented coverage bar widths (% of total amount).
   const linkedPct = total > 0 ? (Math.min(linked, total) / total) * 100 : 0;
   const underPct = total > 0 ? (under / total) * 100 : 0;
   const unlinkedPct = total > 0 ? (unlinked / total) * 100 : 0;
   // Over-allocation isn't part of the 100% bar — it's an overflow
-  // marker rendered to the right of the bar instead.
+  // marker rendered under the bar instead.
   const overPct = total > 0 ? Math.min(40, (over / total) * 100) : 0;
 
+  const legend = { display: "inline-flex", alignItems: "center", gap: 6 };
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className={`bg-gradient-to-r ${headerTone} px-4 py-3 text-white`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest opacity-80">
-              BoQ ↔ WBS Coverage
-            </div>
-            <div className="text-base font-bold">{headerLabel}</div>
-          </div>
-          <div className="text-[11px] text-white/85 max-w-md text-right">
-            {headerMsg}
-          </div>
+    <Panel
+      eyebrow="BoQ ↔ WBS coverage"
+      title={headerLabel}
+      note={headerMsg}
+      aside={
+        <span className="wk-src sm" style={chipTone(headerTone)}>
+          {coveragePct.toFixed(1)}% linked
+        </span>
+      }
+    >
+      <div style={BODY}>
+        {/* One tile per coverage bucket */}
+        <div className="dsh-stats" style={SHORT_TILES}>
+          <CoverageStat
+            label="Fully covered"
+            value={`${coverage.fullyAllocatedCount}`}
+            hint="entries balanced at 100%"
+            tone="good"
+          />
+          <CoverageStat
+            label="Unlinked"
+            value={`${coverage.unlinkedCount}`}
+            hint={`₦${fmtMoney(unlinked)} unallocated`}
+            // Hover reveals every unlinked BoQ row — including the
+            // zero-cost ones. Answers the user's "show me what I missed"
+            // question without forcing them to scroll into the offender
+            // panel below.
+            details={coverage.topUnlinked}
+            detailsLabel="Unlinked BoQ items"
+          />
+          <CoverageStat
+            label="Under-allocated"
+            value={`${coverage.underAllocatedCount}`}
+            hint={`₦${fmtMoney(under)} short`}
+            tone={under > 0 ? "warn" : ""}
+            details={coverage.topUnder}
+            detailsLabel="Under-allocated BoQ items"
+          />
+          <CoverageStat
+            label="Over-allocated"
+            value={`${coverage.overAllocatedCount}`}
+            hint={`₦${fmtMoney(over)} excess`}
+            tone={over > 0 ? "warn" : ""}
+            details={coverage.topOver}
+            detailsLabel="Over-allocated BoQ items"
+          />
         </div>
-      </div>
 
-      {/* Stat tiles, one per coverage bucket */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
-        <CoverageStat
-          icon={FaCheckCircle}
-          label="Fully covered"
-          value={`${coverage.fullyAllocatedCount}`}
-          hint="entries balanced at 100%"
-          tone="text-emerald-700"
-          iconBg="bg-emerald-100"
-        />
-        <CoverageStat
-          icon={FaUnlink}
-          label="Unlinked"
-          value={`${coverage.unlinkedCount}`}
-          hint={`₦${fmtMoney(unlinked)} unallocated`}
-          tone={unlinked > 0 ? "text-slate-700" : "text-slate-400"}
-          iconBg="bg-slate-100"
-          // Hover reveals every unlinked BoQ row — including the
-          // zero-cost ones. Answers the user's "show me what I missed"
-          // question without forcing them to scroll into the offender
-          // panel below.
-          details={coverage.topUnlinked}
-          detailsLabel="Unlinked BoQ items"
-        />
-        <CoverageStat
-          icon={FaExclamationTriangle}
-          label="Under-allocated"
-          value={`${coverage.underAllocatedCount}`}
-          hint={`₦${fmtMoney(under)} short`}
-          tone={under > 0 ? "text-amber-700" : "text-slate-400"}
-          iconBg="bg-amber-100"
-          details={coverage.topUnder}
-          detailsLabel="Under-allocated BoQ items"
-        />
-        <CoverageStat
-          icon={FaCopy}
-          label="Over-allocated"
-          value={`${coverage.overAllocatedCount}`}
-          hint={`₦${fmtMoney(over)} excess`}
-          tone={over > 0 ? "text-rose-700" : "text-slate-400"}
-          iconBg="bg-rose-100"
-          details={coverage.topOver}
-          detailsLabel="Over-allocated BoQ items"
-        />
-      </div>
-
-      {/* Single-stack segmented coverage bar */}
-      <div className="px-4 pb-4">
-        <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
-          <span>
-            <strong className="text-slate-900">{coveragePct.toFixed(1)}%</strong> of
-            ₦{fmtMoney(total)} BoQ value is linked to the WBS
-          </span>
-          {over > 0 ? (
-            <span className="text-rose-700 font-semibold">
-              + ₦{fmtMoney(over)} double-counted
-            </span>
-          ) : null}
-        </div>
-        <div className="relative h-3.5 w-full rounded-full bg-slate-100 overflow-hidden flex">
-          <div
-            className="h-full bg-emerald-500 transition-all"
-            style={{ width: `${linkedPct}%` }}
-            title={`Linked: ₦${fmtMoney(linked)}`}
-          />
-          <div
-            className="h-full bg-amber-400 transition-all"
-            style={{ width: `${underPct}%` }}
-            title={`Under-allocated shortfall: ₦${fmtMoney(under)}`}
-          />
-          <div
-            className="h-full bg-slate-300 transition-all"
-            style={{ width: `${unlinkedPct}%` }}
-            title={`Unlinked: ₦${fmtMoney(unlinked)}`}
-          />
-        </div>
-        {over > 0 ? (
-          <div className="mt-2 relative h-2 w-full">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-rose-500"
-              style={{ width: `${overPct}%` }}
-            />
-            <div className="absolute inset-y-0 left-0 h-full flex items-center text-[9px] font-semibold text-rose-700 ml-1">
-              double-counted →
+        {/* Segmented coverage bar, in his meter */}
+        <div className="dsh-meter" style={{ marginTop: 18 }}>
+          <div className="row">
+            <div className="lab">
+              <span>
+                <b>{coveragePct.toFixed(1)}%</b> of ₦{fmtMoney(total)} BoQ value is linked to the WBS
+              </span>
+              {over > 0 ? (
+                <b style={{ color: SERIES.alert }}>+ ₦{fmtMoney(over)} double-counted</b>
+              ) : null}
             </div>
+            <div className="track" style={{ display: "flex" }}>
+              <i style={{ width: `${linkedPct}%`, borderRadius: 0, background: SERIES.done }} title={`Linked: ₦${fmtMoney(linked)}`} />
+              <i style={{ width: `${underPct}%`, borderRadius: 0, background: SERIES.soft }} title={`Under-allocated shortfall: ₦${fmtMoney(under)}`} />
+              <i style={{ width: `${unlinkedPct}%`, borderRadius: 0, background: SERIES.empty }} title={`Unlinked: ₦${fmtMoney(unlinked)}`} />
+            </div>
+            {over > 0 ? (
+              <div className="track" style={{ background: "transparent" }}>
+                <i style={{ width: `${overPct}%`, background: SERIES.alert }} title="double-counted" />
+              </div>
+            ) : null}
           </div>
-        ) : null}
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
-          <Legend color="#10b981" label="Linked" count={`₦${fmtMoney(linked)}`} />
-          {under > 0 ? (
-            <Legend color="#fbbf24" label="Shortfall" count={`₦${fmtMoney(under)}`} />
-          ) : null}
-          {unlinked > 0 ? (
-            <Legend color="#cbd5e1" label="Unlinked" count={`₦${fmtMoney(unlinked)}`} />
-          ) : null}
-          {over > 0 ? (
-            <Legend color="#f43f5e" label="Excess" count={`₦${fmtMoney(over)}`} />
-          ) : null}
+        </div>
+        <div className="wk-locnote" style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: "4px 16px" }}>
+          <span style={legend}><Swatch color={SERIES.done} /> Linked ₦{fmtMoney(linked)}</span>
+          {under > 0 ? <span style={legend}><Swatch color={SERIES.soft} /> Shortfall ₦{fmtMoney(under)}</span> : null}
+          {unlinked > 0 ? <span style={legend}><Swatch color={SERIES.empty} /> Unlinked ₦{fmtMoney(unlinked)}</span> : null}
+          {over > 0 ? <span style={legend}><Swatch color={SERIES.alert} /> Excess ₦{fmtMoney(over)}</span> : null}
         </div>
       </div>
 
       {/* Offender lists, only render the sections with actual issues so
-          a healthy project shows just the green stat tiles + bar. */}
+          a healthy project shows just the tiles + bar. */}
       {(coverage.topOver?.length > 0 ||
         coverage.topUnlinked?.length > 0 ||
         coverage.topUnder?.length > 0 ||
         coverage.staleLinkTasks?.length > 0) ? (
-        <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+        <div style={{ borderTop: "1px solid var(--line)", padding: "16px 20px 20px", display: "grid", gap: 12 }}>
           {/* Stale links, highest priority because the task's baseline
               silently drops to ₦0 until the user re-links. */}
           {coverage.staleLinkTasks?.length > 0 ? (
@@ -1272,8 +1132,7 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
           {coverage.topOver?.length > 0 ? (
             <CoverageOffenders
               title="Over-allocated (double-count risk)"
-              icon={FaCopy}
-              tone="rose"
+              tone="warn"
               rows={coverage.topOver}
               measureLabel="excess"
               measureKey="excess"
@@ -1283,8 +1142,7 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
           {coverage.topUnder?.length > 0 ? (
             <CoverageOffenders
               title="Under-allocated (WBS gap)"
-              icon={FaExclamationTriangle}
-              tone="amber"
+              tone="warn"
               rows={coverage.topUnder}
               measureLabel="shortfall"
               measureKey="shortfall"
@@ -1294,8 +1152,7 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
           {coverage.topUnlinked?.length > 0 ? (
             <CoverageOffenders
               title="Unlinked BoQ entries"
-              icon={FaUnlink}
-              tone="slate"
+              tone=""
               rows={coverage.topUnlinked}
               measureLabel="value"
               measureKey="amount"
@@ -1303,18 +1160,62 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
             />
           ) : null}
           {onViewDetails ? (
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={onViewDetails}
-                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-adlm-blue-700 hover:underline"
-              >
-                <FaLayerGroup className="text-[10px]" />
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" onClick={onViewDetails} className="ds-btn ds-btn-sm btn-o">
+                <FaLayerGroup size={13} />
                 Open WBS to fix
-                <FaArrowRight className="text-[9px]" />
+                <FaArrowRight size={12} />
               </button>
             </div>
           ) : null}
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
+// A collapsible list inside the coverage panel: his panel, his group title
+// and a count chip in the head, his use-lines below.
+function Collapsible({ title, count, tone, note, children }) {
+  const [open, setOpen] = React.useState(true);
+  return (
+    <div
+      className="wk-panel"
+      style={{ ...NO_MB, ...(tone === "warn" ? { borderColor: "var(--pal-orange-line)" } : null) }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{
+          ...LINK_BTN,
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          padding: "12px 16px",
+          color: "var(--ink)",
+        }}
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, textAlign: "left" }}>
+          <span className="wk-grp" style={{ padding: 0, color: tone === "warn" ? SERIES.alert : undefined }}>
+            {title}
+          </span>
+          <span className="wk-src sm" style={chipTone(tone)}>
+            {count}
+          </span>
+        </span>
+        <span className="wk-locnote">{open ? "Hide ▾" : "Show ▸"}</span>
+      </button>
+      {open ? (
+        <div style={{ borderTop: "1px solid var(--line)" }}>
+          {note ? (
+            <p className="wk-locnote" style={{ margin: 0, padding: "10px 16px 0" }}>
+              {note}
+            </p>
+          ) : null}
+          <div className="wk-use">{children}</div>
         </div>
       ) : null}
     </div>
@@ -1326,55 +1227,26 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
 // ₦0 baseline even though I linked 5 items" — the items were renamed
 // or re-ordered, breaking the identity hash.
 function StaleLinksPanel({ tasks }) {
-  const [open, setOpen] = React.useState(true);
   return (
-    <div className="rounded-lg border border-rose-300 bg-rose-50 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-rose-800"
-      >
-        <span className="inline-flex items-center gap-1.5">
-          <FaTimesCircle className="text-rose-500" />
-          Tasks with stale BoQ links
-          <span className="rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold">
-            {tasks.length}
+    <Collapsible
+      title="Tasks with stale BoQ links"
+      count={tasks.length}
+      tone="warn"
+      note="These tasks are linked to BoQ rows that no longer exist (renamed, deleted, or re-ordered). Their baseline cost has silently dropped to ₦0. Open the task and re-link to the current BoQ rows to fix."
+    >
+      {tasks.map((t) => (
+        <div className="wk-useline" key={t.taskId || t.wbs || t.name}>
+          <span className="p" title={t.name}>
+            {t.name}
+            {t.wbs ? <em>WBS {t.wbs}</em> : null}
           </span>
-        </span>
-        <span className="text-[10px] font-medium opacity-70">
-          {open ? "Hide ▾" : "Show ▸"}
-        </span>
-      </button>
-      {open ? (
-        <div className="bg-white px-3 pb-3 pt-1">
-          <div className="text-[10px] text-slate-600 italic mb-2">
-            These tasks are linked to BoQ rows that no longer exist (renamed,
-            deleted, or re-ordered). Their baseline cost has silently dropped
-            to ₦0. Open the task and re-link to the current BoQ rows to fix.
-          </div>
-          <ul className="space-y-1.5">
-            {tasks.map((t) => (
-              <li
-                key={t.taskId || t.wbs || t.name}
-                className="rounded-md border border-rose-100 bg-rose-50/40 px-2.5 py-1.5 text-[11px] flex items-center gap-2"
-              >
-                {t.wbs ? (
-                  <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-mono text-slate-600">
-                    {t.wbs}
-                  </span>
-                ) : null}
-                <span className="flex-1 min-w-0 font-medium text-slate-900 truncate" title={t.name}>
-                  {t.name}
-                </span>
-                <span className="shrink-0 text-[10px] text-rose-700 font-semibold">
-                  {t.staleCount} of {t.totalLinks} link{t.totalLinks === 1 ? "" : "s"} broken
-                </span>
-              </li>
-            ))}
-          </ul>
+          <span className="q" />
+          <span className="v" style={{ color: SERIES.alert }}>
+            {t.staleCount} of {t.totalLinks} link{t.totalLinks === 1 ? "" : "s"} broken
+          </span>
         </div>
-      ) : null}
-    </div>
+      ))}
+    </Collapsible>
   );
 }
 
@@ -1384,12 +1256,10 @@ function StaleLinksPanel({ tasks }) {
 // offending BoQ rows under that bucket. Useful for the Unlinked tile
 // where users explicitly asked "show me which items aren't covered".
 function CoverageStat({
-  icon: Icon,
   label,
   value,
   hint,
-  tone = "text-slate-900",
-  iconBg = "bg-slate-100",
+  tone = "",
   details = null, // optional array of { description, kind, amount }
   detailsLabel = "Items",
 }) {
@@ -1411,63 +1281,74 @@ function CoverageStat({
 
   return (
     <div
-      className={`relative rounded-lg border border-slate-100 bg-white px-3 py-2.5 flex items-start gap-2.5 ${
-        hasDetails ? "cursor-help" : ""
-      }`}
+      className={`dsh-stat${tileTone(tone) ? ` ${tileTone(tone)}` : ""}`}
+      style={{ overflow: "visible", zIndex: open ? 30 : undefined, cursor: hasDetails ? "help" : undefined }}
       onMouseEnter={hasDetails ? () => { cancelHide(); setOpen(true); } : undefined}
       onMouseLeave={hasDetails ? scheduleHide : undefined}
       onFocus={hasDetails ? () => setOpen(true) : undefined}
       onBlur={hasDetails ? scheduleHide : undefined}
       tabIndex={hasDetails ? 0 : -1}
     >
-      <div className={`shrink-0 rounded-md ${iconBg} p-2 ${tone}`}>
-        {Icon ? <Icon className="text-sm" /> : null}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-        <div className={`mt-0.5 font-bold text-base ${tone} leading-tight`}>{value}</div>
-        {hint ? <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={hint}>{hint}</div> : null}
-        {hasDetails ? (
-          <div className="mt-1 text-[9px] uppercase tracking-wider text-adlm-blue-700 font-semibold">
-            Hover for list ▾
-          </div>
-        ) : null}
-      </div>
+      <span className="k">{label}</span>
+      <b>{value}</b>
+      {hint ? <span className="ds-sub" title={hint}>{hint}</span> : null}
+      {hasDetails ? (
+        <span className="ds-sub" style={{ color: "var(--action)" }}>Hover for list ▾</span>
+      ) : null}
 
-      {/* Floating popover with the offender rows. Positioned below the
-          tile so it doesn't get clipped on narrow viewports. */}
+      {/* Floating list of the offender rows, in his dropdown surface.
+          Positioned below the tile so it doesn't get clipped on narrow
+          viewports. */}
       {hasDetails && open ? (
         <div
-          className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-slate-200 bg-white shadow-xl dark:bg-slate-800 dark:border-slate-700"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: "calc(100% + 6px)",
+            zIndex: 30,
+            minWidth: 260,
+            borderRadius: 14,
+            border: "1px solid var(--line)",
+            background: "var(--bg)",
+            boxShadow: "0 3px 10px rgba(var(--shadow-c),.08), 0 20px 46px rgba(var(--shadow-c),.20)",
+            overflow: "hidden",
+          }}
           onMouseEnter={cancelHide}
           onMouseLeave={scheduleHide}
         >
-          <div className="px-3 py-2 border-b border-slate-100 bg-slate-50 dark:bg-slate-700/40 dark:border-slate-700 flex items-center justify-between">
-            <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-100">
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 8,
+              padding: "10px 14px",
+              borderBottom: "1px solid var(--line)",
+            }}
+          >
+            <span className="wk-grp" style={{ padding: 0 }}>
               {detailsLabel} · {details.length}
-            </div>
-            <div className="text-[9px] text-slate-400">
-              {details.length >= 20 ? "showing top 20" : ""}
-            </div>
+            </span>
+            <span className="wk-locnote">{details.length >= 20 ? "showing top 20" : ""}</span>
           </div>
-          <ul className="max-h-72 overflow-auto divide-y divide-slate-100 dark:divide-slate-700">
+          <div className="wk-use" style={{ maxHeight: 288, overflow: "auto", padding: "2px 14px" }}>
             {details.map((d, idx) => {
               const badge = COVERAGE_KIND_BADGE[d.kind] || COVERAGE_KIND_BADGE.measured;
               return (
-                <li key={d.identity || idx} className="px-3 py-1.5 text-[11px] flex items-start gap-2">
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold ${badge.cls}`}>
-                    {badge.label}
-                  </span>
-                  <span className="flex-1 min-w-0 font-medium text-slate-800 dark:text-slate-200 truncate" title={d.description}>
+                <div className="wk-useline" key={d.identity || idx}>
+                  <span className="p" title={d.description}>
                     {d.description || `Item ${d.identity}`}
                   </span>
-                  <span className="shrink-0 text-slate-500 text-[10px]">
+                  <span className="q">
+                    <span className="wk-src sm" style={badge.style}>{badge.label}</span>
+                  </span>
+                  <span className="v">
                     {safeNum(d.amount) > 0 ? `₦${fmtMoney(d.amount)}` : "₦0"}
                   </span>
-                </li>
+                </div>
               );
             })}
-          </ul>
+          </div>
         </div>
       ) : null}
     </div>
@@ -1475,105 +1356,58 @@ function CoverageStat({
 }
 
 const COVERAGE_KIND_BADGE = {
-  measured: { label: "BoQ", cls: "bg-slate-100 text-slate-700" },
-  preliminary: { label: "Prelim", cls: "bg-purple-100 text-purple-700" },
-  provisional: { label: "PC sum", cls: "bg-amber-100 text-amber-800" },
-  variation: { label: "Variation", cls: "bg-rose-100 text-rose-700" },
+  measured: { label: "BoQ", style: undefined },
+  preliminary: { label: "Prelim", style: palChip("deep") },
+  provisional: { label: "PC sum", style: palChip("grad") },
+  variation: { label: "Variation", style: palChip("orange") },
 };
 
-function CoverageOffenders({ title, icon: Icon, tone, rows, measureLabel, measureKey, note }) {
-  const toneCls = {
-    rose: { border: "border-rose-200", bg: "bg-rose-50/60", title: "text-rose-800", icon: "text-rose-500" },
-    amber: { border: "border-amber-200", bg: "bg-amber-50/60", title: "text-amber-800", icon: "text-amber-500" },
-    slate: { border: "border-slate-200", bg: "bg-slate-50/60", title: "text-slate-800", icon: "text-slate-500" },
-  }[tone] || { border: "border-slate-200", bg: "bg-slate-50/60", title: "text-slate-800", icon: "text-slate-500" };
-
-  const [open, setOpen] = React.useState(true);
-
+function CoverageOffenders({ title, tone, rows, measureLabel, measureKey, note }) {
   return (
-    <div className={`rounded-lg border ${toneCls.border} ${toneCls.bg} overflow-hidden`}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold ${toneCls.title}`}
-      >
-        <span className="inline-flex items-center gap-1.5">
-          {Icon ? <Icon className={toneCls.icon} /> : null}
-          {title}
-          <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-bold">
-            {rows.length}
-          </span>
-        </span>
-        <span className="text-[10px] font-medium opacity-70">
-          {open ? "Hide ▾" : "Show ▸"}
-        </span>
-      </button>
-      {open ? (
-        <div className="bg-white/70 dark:bg-white/5 px-3 pb-3 pt-1">
-          {note ? (
-            <div className="text-[10px] text-slate-600 italic mb-2">{note}</div>
-          ) : null}
-          <ul className="space-y-1.5">
-            {rows.map((row) => {
-              const badge = COVERAGE_KIND_BADGE[row.kind] || COVERAGE_KIND_BADGE.measured;
-              const measure = safeNum(row[measureKey]);
-              const linkedTasks = Array.isArray(row.taskNames) ? row.taskNames : [];
-              return (
-                <li
-                  key={row.identity}
-                  className="rounded-md border border-slate-100 bg-white px-2.5 py-1.5 text-[11px] flex flex-wrap items-start gap-2"
-                >
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold ${badge.cls}`}>
-                    {badge.label}
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="font-medium text-slate-900 break-words">
-                      {row.description || `Item #${row.identity}`}
-                    </span>
-                    {linkedTasks.length > 0 ? (
-                      <span className="block text-[10px] text-slate-500 mt-0.5">
-                        Linked from: {linkedTasks.slice(0, 3).join(", ")}
-                        {linkedTasks.length > 3 ? ` +${linkedTasks.length - 3} more` : ""}
-                        {row.totalWeight != null ? (
-                          <span className="ml-1 text-slate-600">
-                            (total weight {Math.round(safeNum(row.totalWeight))}%)
-                          </span>
-                        ) : null}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-[9px] uppercase tracking-wide text-slate-500">
-                      {measureLabel}
-                    </span>
-                    <span className="font-bold text-slate-900">
-                      ₦{fmtMoney(measure)}
-                    </span>
-                    <span className="block text-[9px] text-slate-500">
-                      of ₦{fmtMoney(row.amount)}
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
-    </div>
+    <Collapsible title={title} count={rows.length} tone={tone} note={note}>
+      {rows.map((row) => {
+        const badge = COVERAGE_KIND_BADGE[row.kind] || COVERAGE_KIND_BADGE.measured;
+        const measure = safeNum(row[measureKey]);
+        const linkedTasks = Array.isArray(row.taskNames) ? row.taskNames : [];
+        return (
+          <div className="wk-useline" key={row.identity}>
+            <span className="p" style={{ overflowWrap: "anywhere" }}>
+              {row.description || `Item #${row.identity}`}
+              {linkedTasks.length > 0 ? (
+                <em>
+                  Linked from: {linkedTasks.slice(0, 3).join(", ")}
+                  {linkedTasks.length > 3 ? ` +${linkedTasks.length - 3} more` : ""}
+                  {row.totalWeight != null
+                    ? ` (total weight ${Math.round(safeNum(row.totalWeight))}%)`
+                    : ""}
+                </em>
+              ) : null}
+            </span>
+            <span className="q">
+              <span className="wk-src sm" style={badge.style}>{badge.label}</span>
+            </span>
+            <span className="v">
+              ₦{fmtMoney(measure)}
+              <em style={{ display: "block", fontStyle: "normal", fontSize: 11.5, fontWeight: 300, color: "var(--ink-3)" }}>
+                {measureLabel} of ₦{fmtMoney(row.amount)}
+              </em>
+            </span>
+          </div>
+        );
+      })}
+    </Collapsible>
   );
 }
 
 // ────────────────────────────────────────────────────────────────────
-// WbsHealthStrip — single-row dashboard panel summarising the WBS by
-// STATUS (not-started / in-progress / blocked / completed) and
-// PRIORITY (critical / high / medium / low / none).
+// WbsHealthStrip — single panel summarising the WBS by STATUS
+// (not-started / in-progress / blocked / completed) and PRIORITY
+// (critical / high / medium / low / none).
 //
-// Why this exists: the Tasks donut shows status %, but priority was
+// Why this exists: the Tasks chart shows status %, but priority was
 // only surfaced through "Overdue by priority" which reads zero on
 // healthy projects. Users couldn't see "how many critical tasks do
-// I have" without drilling into the WBS itself. This strip fixes
-// that — every category renders with count + colour tile, plus an
-// overdue overlay where relevant.
+// I have" without drilling into the WBS itself.
 // ────────────────────────────────────────────────────────────────────
 function WbsHealthStrip({
   tasksByStatus,
@@ -1582,174 +1416,121 @@ function WbsHealthStrip({
   totalTasks,
   // Critical-path counters from the MS Project import. `total` is the
   // whole count; `pending` is total minus already-completed (the live
-  // exposure to schedule slip). Falls back to undefined for older
-  // projects that haven't been re-imported since the feature shipped.
+  // exposure to schedule slip).
   criticalPathTotal = 0,
   criticalPathPending = 0,
 }) {
   if (!totalTasks) return null;
 
   const statusItems = [
-    { key: "completed", label: "Completed", color: "bg-emerald-500", text: "text-emerald-700" },
-    { key: "in-progress", label: "In progress", color: "bg-amber-500", text: "text-amber-700" },
-    { key: "blocked", label: "Blocked", color: "bg-rose-500", text: "text-rose-700" },
-    { key: "not-started", label: "Not started", color: "bg-slate-400", text: "text-slate-700" },
+    { key: "completed", label: "Completed", color: SERIES.done },
+    { key: "in-progress", label: "In progress", color: SERIES.active },
+    { key: "blocked", label: "Blocked", color: SERIES.alert },
+    { key: "not-started", label: "Not started", color: SERIES.idle },
   ];
 
   const priorityItems = [
-    { key: "critical", label: "Critical", color: "bg-rose-600", text: "text-rose-700", icon: "🔥" },
-    { key: "high", label: "High", color: "bg-amber-500", text: "text-amber-700", icon: "⚠" },
-    { key: "medium", label: "Medium", color: "bg-sky-500", text: "text-sky-700", icon: "●" },
-    { key: "low", label: "Low", color: "bg-slate-400", text: "text-slate-600", icon: "○" },
-    { key: "none", label: "Unset", color: "bg-slate-300", text: "text-slate-500", icon: "—" },
+    { key: "critical", label: "Critical", color: SERIES.alert },
+    { key: "high", label: "High", color: SERIES.soft },
+    { key: "medium", label: "Medium", color: SERIES.done },
+    { key: "low", label: "Low", color: SERIES.idle },
+    { key: "none", label: "Unset", color: SERIES.empty },
   ];
 
+  const overdueTotal = priorityItems.reduce(
+    (acc, p) => acc + safeNum(overdueByPriority?.[p.key]),
+    0,
+  );
+
+  const bar = (items, source, titleFor) => (
+    <div className="dsh-meter">
+      <div className="track" style={{ display: "flex", height: 10 }}>
+        {items.map((it) => {
+          const c = safeNum(source?.[it.key]);
+          const w = totalTasks > 0 ? (c / totalTasks) * 100 : 0;
+          if (w === 0) return null;
+          return (
+            <i
+              key={it.key}
+              style={{ width: `${w}%`, borderRadius: 0, background: it.color }}
+              title={titleFor(it, c)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const chips = { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 };
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-      {/* Critical-path banner, only shown when MS Project import
-          flagged at least one task. Surfaces the schedule risk
-          up-front: "8 critical-path tasks · 6 still pending" gives the
-          user a fast read on the bottleneck size before they scroll
-          into the WBS detail. */}
-      {safeNum(criticalPathTotal) > 0 ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2 dark:border-rose-700/50 dark:bg-rose-900/20">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-base" aria-hidden="true">🔥</span>
-            <div className="leading-tight">
-              <div className="font-semibold text-rose-800 dark:text-rose-200">
-                Critical path · {criticalPathTotal} task
-                {criticalPathTotal === 1 ? "" : "s"}
-              </div>
-              <div className="text-[10px] text-rose-700/80 dark:text-rose-300/80">
-                {criticalPathPending > 0
-                  ? `${criticalPathPending} still pending, any delay slips the project finish date`
-                  : "All critical-path tasks complete, schedule risk has cleared"}
-              </div>
-            </div>
+    <Panel eyebrow="Work breakdown" title="WBS health" note={`${totalTasks} task${totalTasks === 1 ? "" : "s"} total · ${overdueTotal} overdue`}>
+      <div style={{ ...BODY, display: "grid", gap: 18 }}>
+        {/* Critical-path note, only shown when MS Project import flagged
+            at least one task. */}
+        {safeNum(criticalPathTotal) > 0 ? (
+          <div
+            className="mk-note"
+            style={{ ...NOTE_WARN, margin: 0, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}
+          >
+            <span>
+              <strong>
+                Critical path · {criticalPathTotal} task{criticalPathTotal === 1 ? "" : "s"}
+              </strong>
+              <br />
+              {criticalPathPending > 0
+                ? `${criticalPathPending} still pending, any delay slips the project finish date`
+                : "All critical-path tasks complete, schedule risk has cleared"}
+            </span>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>Imported from MS Project</span>
           </div>
-          <div className="text-[10px] text-rose-700/70 dark:text-rose-300/70">
-            Imported from MS Project
-          </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Status column */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-              WBS Status
+        <div style={{ display: "grid", gap: 22, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+          {/* Status */}
+          <div>
+            <p className="wk-grp" style={{ padding: "0 0 10px", margin: 0 }}>WBS status</p>
+            {bar(statusItems, tasksByStatus, (s, c) => `${s.label}: ${c}`)}
+            <div style={chips}>
+              {statusItems.map((s) => (
+                <span className="wk-src sm" key={s.key}>
+                  <Swatch color={s.color} />
+                  {s.label}
+                  <b style={{ fontWeight: 500, color: "var(--ink)" }}>{safeNum(tasksByStatus?.[s.key])}</b>
+                </span>
+              ))}
             </div>
-            <div className="text-[10px] text-slate-400">
-              {totalTasks} task{totalTasks === 1 ? "" : "s"} total
-            </div>
           </div>
-          {/* Stacked horizontal bar */}
-          <div className="flex h-6 w-full overflow-hidden rounded-lg bg-slate-100 mb-2">
-            {statusItems.map((s) => {
-              const c = safeNum(tasksByStatus?.[s.key]);
-              const w = totalTasks > 0 ? (c / totalTasks) * 100 : 0;
-              if (w === 0) return null;
-              return (
-                <div
-                  key={s.key}
-                  className={`${s.color} flex items-center justify-center text-[10px] font-semibold text-white`}
-                  style={{ width: `${w}%` }}
-                  title={`${s.label}: ${c}`}
-                >
-                  {w > 8 ? c : ""}
-                </div>
-              );
-            })}
-          </div>
-          {/* Per-status counts */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-            {statusItems.map((s) => {
-              const c = safeNum(tasksByStatus?.[s.key]);
-              return (
-                <div
-                  key={s.key}
-                  className="flex items-center gap-1.5 rounded-md border border-slate-100 px-2 py-1 dark:border-slate-700"
-                >
-                  <span className={`h-2 w-2 rounded-sm ${s.color}`} />
-                  <span className="text-[10px] text-slate-600 dark:text-slate-300 truncate flex-1">
-                    {s.label}
-                  </span>
-                  <span className={`text-xs font-bold ${s.text} dark:opacity-90`}>{c}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
 
-        {/* Priority column */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-              WBS Priority
-            </div>
-            <div className="text-[10px] text-slate-400">
-              {priorityItems.reduce(
-                (acc, p) => acc + safeNum(overdueByPriority?.[p.key]),
-                0,
-              )}{" "}
-              overdue
-            </div>
-          </div>
-          {/* Stacked horizontal bar */}
-          <div className="flex h-6 w-full overflow-hidden rounded-lg bg-slate-100 mb-2">
-            {priorityItems.map((p) => {
-              const c = safeNum(tasksByPriority?.[p.key]);
-              const w = totalTasks > 0 ? (c / totalTasks) * 100 : 0;
-              if (w === 0) return null;
-              return (
-                <div
-                  key={p.key}
-                  className={`${p.color} flex items-center justify-center text-[10px] font-semibold text-white`}
-                  style={{ width: `${w}%` }}
-                  title={`${p.label}: ${c}${
-                    safeNum(overdueByPriority?.[p.key]) > 0
-                      ? ` (${overdueByPriority[p.key]} overdue)`
-                      : ""
-                  }`}
-                >
-                  {w > 8 ? c : ""}
-                </div>
-              );
-            })}
-          </div>
-          {/* Per-priority counts with overdue overlay note */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-            {priorityItems.map((p) => {
-              const c = safeNum(tasksByPriority?.[p.key]);
-              const od = safeNum(overdueByPriority?.[p.key]);
-              return (
-                <div
-                  key={p.key}
-                  className={`flex items-center gap-1.5 rounded-md border px-2 py-1 ${
-                    od > 0
-                      ? "border-rose-200 bg-rose-50/40 dark:border-rose-700 dark:bg-rose-900/20"
-                      : "border-slate-100 dark:border-slate-700"
-                  }`}
-                >
-                  <span className={`h-2 w-2 rounded-sm ${p.color}`} />
-                  <span className="text-[10px] text-slate-600 dark:text-slate-300 truncate flex-1">
+          {/* Priority */}
+          <div>
+            <p className="wk-grp" style={{ padding: "0 0 10px", margin: 0 }}>WBS priority</p>
+            {bar(priorityItems, tasksByPriority, (p, c) =>
+              `${p.label}: ${c}${
+                safeNum(overdueByPriority?.[p.key]) > 0
+                  ? ` (${overdueByPriority[p.key]} overdue)`
+                  : ""
+              }`,
+            )}
+            <div style={chips}>
+              {priorityItems.map((p) => {
+                const c = safeNum(tasksByPriority?.[p.key]);
+                const od = safeNum(overdueByPriority?.[p.key]);
+                return (
+                  <span className="wk-src sm" key={p.key} style={od > 0 ? palChip("orange") : undefined}>
+                    <Swatch color={p.color} />
                     {p.label}
+                    <b style={{ fontWeight: 500 }}>
+                      {c}
+                      {od > 0 ? ` (${od}!)` : ""}
+                    </b>
                   </span>
-                  <span className={`text-xs font-bold ${p.text} dark:opacity-90`}>
-                    {c}
-                    {od > 0 ? (
-                      <span className="ml-0.5 text-[9px] text-rose-600 font-medium">
-                        ({od}!)
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Panel>
   );
 }

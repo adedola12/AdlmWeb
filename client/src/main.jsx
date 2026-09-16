@@ -416,9 +416,18 @@ const router = createBrowserRouter([
       },
       {
         path: "pm-tracker",
+        // In his app frame: it renders the shared PM dashboard, which is
+        // built from his .ds-scoped pieces and is unstyled outside it.
         element: (
           <ProtectedRoute>
-            <PmTracker />
+            <LazyScreen>
+              <WorkShellRoute
+                screen={PmTracker}
+                title="PM Tracker"
+                page="work-projects"
+                legacy
+              />
+            </LazyScreen>
           </ProtectedRoute>
         ),
       },

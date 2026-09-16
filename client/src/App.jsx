@@ -26,7 +26,7 @@ export default function App() {
   // half stays at /learn with the marketing chrome, because it is a page for
   // people who have not signed in.
   //
-  // /projects/* and /time-management are on this list because they are now
+  // /projects/*, /time-management and /pm-tracker are on this list because they are now
   // wrapped in the same frame (see pages/WorkShellRoute.jsx), even though they
   // are our screens rather than ported ones. Leaving them off put the
   // marketing nav and "Book a demo" above a signed-in rail.
@@ -34,7 +34,7 @@ export default function App() {
   // nav and footer. /admin joins the list because the admin section now has
   // his rail: two sets of navigation over one page compete for the same job,
   // and "Book a demo" does not belong above a refund queue.
-  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-course|projects|time-management|admin)(\/|$)/.test(
+  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-course|projects|time-management|pm-tracker|admin)(\/|$)/.test(
     location.pathname,
   );
 
