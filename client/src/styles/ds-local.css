@@ -1464,7 +1464,9 @@
 
 /* tables: his small uppercase header, his rule between rows */
 .ds .wk-legacy thead th{font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3) !important}
-.ds .wk-legacy tbody tr{border-color:var(--line) !important}
+/* not !important: the dark shim never targets rows, and the bill's subtotal
+   rows set their own firmer rule inline */
+.ds .wk-legacy tbody tr{border-color:var(--line)}
 
 /* fields: his .wk-f input colours and focus ring; sizes stay the markup's */
 .ds .wk-legacy .input{background-color:var(--bg-alt) !important;border:1px solid var(--line) !important;border-radius:10px;color:var(--ink) !important;font-family:var(--font)}

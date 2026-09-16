@@ -62,6 +62,38 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+// Rows inside the bill's table, in his manner. His bill is a grid of divs
+// (.wk-qg / .wk-qgh / .wk-qtot); this one is a real <table> with editable
+// cells, so the same look is carried by his tokens on the rows instead.
+//
+//   section heading  his alt surface with a firmer rule above; while a line is
+//                    dragged over it, his light-blue wash and an action outline
+//   subtotal         the alt surface, a rule above, tabular figures
+//   total            his heavy rule (.wk-tot) above the bill's totals
+const sectionRowStyle = (dropping) => ({
+  background: dropping ? "var(--pal-light-wash)" : "var(--bg-alt)",
+  borderTop: "1px solid var(--line-2)",
+  outline: dropping ? "2px dashed var(--action)" : "none",
+  outlineOffset: -2,
+});
+const SUBTOTAL_ROW = {
+  background: "var(--bg-alt)",
+  borderTop: "1px solid var(--line-2)",
+  fontSize: 12,
+  fontWeight: 500,
+  color: "var(--ink)",
+  fontVariantNumeric: "tabular-nums",
+};
+const TOTAL_ROW = {
+  // 2px, not his 1.5px: in a collapsed table border a 1.5px rule rounds down to 1.
+  borderTop: "2px solid var(--ink)",
+  fontSize: 13.5,
+  fontWeight: 500,
+  color: "var(--ink)",
+  fontVariantNumeric: "tabular-nums",
+};
+const READING = { color: "var(--ink)", fontWeight: 500, fontVariantNumeric: "tabular-nums" };
+
 function InfoTip({ text }) {
   return (
     <span className="relative inline-flex items-center group">
@@ -1323,17 +1355,30 @@ export default function ProjectBillTable({
     { id: "provisional", label: "Provisional", icon: FaFileInvoiceDollar },
   ];
 
+  // A group of bill tools: his .wk-grp title above, the controls below.
   const RibbonGroup = ({ title, children }) => (
-    <div className="flex flex-col items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 min-w-[110px]">
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        {children}
-      </div>
-      <div className="text-[10px] uppercase tracking-wide text-slate-400">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        minWidth: 120,
+        padding: "10px 14px",
+        border: "1px solid var(--line)",
+        borderRadius: 12,
+        background: "var(--bg-alt)",
+      }}
+    >
+      <div className="wk-grp" style={{ padding: 0 }}>
         {title}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        {children}
       </div>
     </div>
   );
 
+  // His small outline button; the "active" state is his primary.
   const RibbonButton = ({
     icon: Icon,
     label,
@@ -1347,17 +1392,10 @@ export default function ProjectBillTable({
       onClick={onClick}
       disabled={disabled}
       title={title || label}
-      className={[
-        "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 text-[11px] transition",
-        disabled
-          ? "text-slate-300 cursor-not-allowed"
-          : active
-            ? "bg-adlm-blue-700 text-white"
-            : "text-slate-700 hover:bg-slate-100",
-      ].join(" ")}
+      className={`ds-btn ds-btn-sm ${active ? "btn-p" : "btn-o"}`}
     >
-      {Icon ? <Icon className="text-sm" /> : null}
-      <span className="whitespace-nowrap">{label}</span>
+      {Icon ? <Icon size={13} /> : null}
+      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
     </button>
   );
 
@@ -1456,79 +1494,79 @@ export default function ProjectBillTable({
           />
         ) : null}
 
-        {/* Office-style ribbon: tab strip + contextual groups */}
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-depth">
-          <div className="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-2 pt-2">
-            {RIBBON_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const active = ribbonTab === tab.id;
-              return (
+        {/* The bill's tools, in his pieces: .wk-tabs for the ribbon's tabs,
+            the running totals as his readings, and the tools below in titled
+            groups. The totals stay visible when the tools are hidden. */}
+        <div className="wk-panel">
+          <div className="wk-ph" style={{ flexWrap: "wrap", gap: 12 }}>
+            <div
+              className="wk-tabs"
+              role="tablist"
+              aria-label="Bill tools"
+              style={{ maxWidth: "100%", overflowX: "auto" }}
+            >
+              {RIBBON_TABS.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={ribbonTab === tab.id}
+                  className={ribbonTab === tab.id ? "on" : ""}
                   onClick={() => setRibbonTab(tab.id)}
-                  className={[
-                    "inline-flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs font-medium transition",
-                    active
-                      ? "bg-slate-50 text-adlm-blue-700 border-x border-t border-slate-200"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50",
-                  ].join(" ")}
                 >
-                  <Icon className="text-[11px]" />
                   {tab.label}
                 </button>
-              );
-            })}
-            <div className="ml-auto flex items-center gap-3 px-2 text-[11px] text-slate-500">
-              <span>
-                Measured: <b className="text-slate-700">{money(grossAmount)}</b>
+              ))}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                flexWrap: "wrap",
+                gap: "6px 14px",
+                marginLeft: "auto",
+              }}
+            >
+              <span className="wk-locnote">
+                Measured <b style={READING}>{money(grossAmount)}</b>
               </span>
               {provisionalTotal > 0 ? (
-                <span>
-                  PC:{" "}
-                  <b className="text-slate-700">{money(provisionalTotal)}</b>
+                <span className="wk-locnote">
+                  PC <b style={READING}>{money(provisionalTotal)}</b>
                 </span>
               ) : null}
               {variationsTotal !== 0 ? (
-                <span>
-                  Variations:{" "}
-                  <b
-                    className={
-                      variationsTotal > 0 ? "text-amber-700" : "text-red-700"
-                    }
-                  >
+                <span className="wk-locnote">
+                  Variations{" "}
+                  <b style={{ ...READING, color: "var(--pal-orange-key)" }}>
                     {money(variationsTotal)}
                   </b>
                 </span>
               ) : null}
-              <span className="font-semibold">
-                Project total:{" "}
-                <b className="text-adlm-blue-700">{money(projectTotal)}</b>
+              <span className="wk-locnote" style={{ color: "var(--ink-2)" }}>
+                Project total{" "}
+                <b style={{ ...READING, fontSize: 15, color: "var(--action)" }}>
+                  {money(projectTotal)}
+                </b>
               </span>
-              {/* Collapse / expand the entire ribbon panel. The summary row
-                (Measured / PC / Variations / Project total) stays visible
-                either way so users keep their at-a-glance totals. */}
               <button
                 type="button"
                 onClick={toggleRibbonCollapsed}
                 aria-expanded={!ribbonCollapsed}
                 aria-controls="boq-ribbon-body"
-                className="ml-1 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-                title={ribbonCollapsed ? "Show toolbar" : "Hide toolbar"}
+                className="ds-btn ds-btn-sm btn-o"
+                title={ribbonCollapsed ? "Show the bill tools" : "Hide the bill tools"}
               >
-                <span
-                  aria-hidden="true"
-                  className={`inline-block transition-transform ${ribbonCollapsed ? "" : "rotate-180"}`}
-                >
-                  ▾
-                </span>
-                {ribbonCollapsed ? "Show" : "Hide"}
+                {ribbonCollapsed ? "Show tools" : "Hide tools"}
               </button>
             </div>
           </div>
 
           {ribbonCollapsed ? null : (
-            <div id="boq-ribbon-body" className="flex flex-wrap gap-2 p-3">
+            <div
+              id="boq-ribbon-body"
+              style={{ display: "flex", flexWrap: "wrap", gap: 10, padding: "14px 20px" }}
+            >
               {ribbonTab === "home" ? (
                 <>
                   <RibbonGroup title="View">
@@ -1558,19 +1596,14 @@ export default function ProjectBillTable({
 
                   <RibbonGroup title="Grouping">
                     <div
-                      className="inline-flex items-center overflow-hidden rounded-md border border-slate-200 bg-white text-[11px]"
+                      className="wk-loc-sw"
                       role="tablist"
                       aria-label="Group BoQ items by"
                     >
                       <button
                         type="button"
                         onClick={() => onGroupByModeChange?.("category")}
-                        className={[
-                          "px-2.5 py-1 transition",
-                          !isTradeGrouping && !isSourceGrouping
-                            ? "bg-adlm-blue-700 text-white"
-                            : "text-slate-700 hover:bg-slate-100",
-                        ].join(" ")}
+                        className={!isTradeGrouping && !isSourceGrouping ? "on" : ""}
                         title="Group by building element (Substructure / Superstructure / HVAC / Plumbing / Electrical)"
                       >
                         Category
@@ -1578,12 +1611,7 @@ export default function ProjectBillTable({
                       <button
                         type="button"
                         onClick={() => onGroupByModeChange?.("trade")}
-                        className={[
-                          "px-2.5 py-1 transition border-l border-slate-200",
-                          isTradeGrouping
-                            ? "bg-adlm-blue-700 text-white"
-                            : "text-slate-700 hover:bg-slate-100",
-                        ].join(" ")}
+                        className={isTradeGrouping ? "on" : ""}
                         title="Group by trade / work section (Concrete Works, Formwork, Reinforcement, Masonry, Finishes, etc.)"
                       >
                         Trade
@@ -1592,19 +1620,14 @@ export default function ProjectBillTable({
                         <button
                           type="button"
                           onClick={() => onGroupByModeChange?.("source")}
-                          className={[
-                            "px-2.5 py-1 transition border-l border-slate-200",
-                            isSourceGrouping
-                              ? "bg-adlm-blue-700 text-white"
-                              : "text-slate-700 hover:bg-slate-100",
-                          ].join(" ")}
+                          className={isSourceGrouping ? "on" : ""}
                           title="Group by the discipline project each line was measured in (architectural, structural, ...)"
                         >
                           Discipline
                         </button>
                       ) : null}
                     </div>
-                    <div className="text-[10px] text-slate-500 max-w-[180px] leading-tight">
+                    <div className="wk-fx" style={{ maxWidth: 220, lineHeight: 1.45 }}>
                       {isSourceGrouping
                         ? "Grouped by the discipline project each line came from. Switch to Category or Trade to arrange the combined bill the usual way."
                         : isTradeGrouping
@@ -1627,7 +1650,8 @@ export default function ProjectBillTable({
                           if (isTradeGrouping) onAddTrade?.(t);
                           else onAddCategory?.(t);
                         }}
-                        className="mt-1 inline-flex items-center gap-1 self-start rounded-md border border-dashed border-adlm-blue-300 bg-white px-2 py-1 text-[10px] font-semibold text-adlm-blue-700 hover:bg-blue-50"
+                        className="ds-btn ds-btn-sm btn-o"
+                        style={{ alignSelf: "flex-start" }}
                         title="Create a new category / work section, remembered for your future projects"
                       >
                         + New {isTradeGrouping ? "section" : "category"}
@@ -1992,80 +2016,86 @@ export default function ProjectBillTable({
           )}
 
           {!ribbonCollapsed && showActualColumns && ribbonTab === "home" ? (
-            <div className="border-t bg-white px-3 py-2 text-[11px] text-slate-500">
+            <p className="wk-note" style={{ borderTop: "1px solid var(--line)" }}>
               Actual amount uses the entered actual qty and actual rate. If only
               one actual field is entered, the other value falls back to the
               planned quantity or rate for comparison.
-            </div>
+            </p>
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2 rounded-md border bg-white px-2 py-2">
-          <FaSearch className="text-slate-500" />
-          <input
-            className="w-full text-sm outline-none"
-            placeholder="Search items (description / group / S/N)..."
-            value={itemQuery}
-            onChange={(e) => onItemQueryChange?.(e.target.value)}
-          />
+        <div className="wk-bar" style={{ marginBottom: 0 }}>
+          <label className="wk-find">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#hi-search" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search items (description / group / S/N)..."
+              aria-label="Search bill items"
+              autoComplete="off"
+              value={itemQuery}
+              onChange={(e) => onItemQueryChange?.(e.target.value)}
+            />
+          </label>
           {itemQuery ? (
             <button
               type="button"
-              className="text-slate-500 hover:text-slate-700"
+              className="ds-btn ds-btn-sm btn-o"
               onClick={onClearItemQuery}
-              title="Clear"
+              title="Clear the search"
             >
-              <FaTimes />
+              Clear
             </button>
           ) : null}
         </div>
 
         {!items.length ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+          <div className="wk-empty">
             This project does not have any saved items yet.
           </div>
         ) : null}
 
         {items.length && !computedShown.length ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+          <div className="wk-empty">
             No items match the current search.
           </div>
         ) : null}
 
         {computedShown.length ? (
-          <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white max-w-full">
+          <div className="wk-panel" style={{ overflowX: "auto", maxWidth: "100%" }}>
             <table
               className="w-full text-sm"
               style={{ tableLayout: "auto", minWidth: 0 }}
             >
               <colgroup>
-                <col className="w-10" /> {/* S/N */}
+                <col className="w-10" />{/* S/N */}
                 <col
                   className={showActualColumns ? "w-10" : "w-[130px]"}
-                />{" "}
+                />
                 {/* Status */}
                 <col
                   style={{ width: showActualColumns ? "22%" : "28%" }}
-                />{" "}
+                />
                 {/* Description, % based */}
-                <col className="w-16" /> {/* Qty */}
-                <col className="w-10" /> {/* Unit */}
+                <col className="w-16" />{/* Qty */}
+                <col className="w-10" />{/* Unit */}
                 <col
                   style={{ width: showActualColumns ? "12%" : "16%" }}
-                />{" "}
+                />
                 {/* Rate */}
-                {showActualColumns ? <col className="w-[100px]" /> : null}{" "}
+                {showActualColumns ? <col className="w-[100px]" /> : null}
                 {/* Actual qty */}
-                {showActualColumns ? <col className="w-[100px]" /> : null}{" "}
+                {showActualColumns ? <col className="w-[100px]" /> : null}
                 {/* Actual rate */}
-                {showActualColumns ? <col className="w-[90px]" /> : null}{" "}
+                {showActualColumns ? <col className="w-[90px]" /> : null}
                 {/* Actual amount */}
-                {showActualColumns ? <col className="w-[72px]" /> : null}{" "}
+                {showActualColumns ? <col className="w-[72px]" /> : null}
                 {/* Actual added */}
-                <col className="w-[90px]" /> {/* Gross amount */}
-                <col className="w-[72px]" /> {/* Deducted */}
-                <col className="w-[72px]" /> {/* Balance */}
-                <col className="w-[80px]" /> {/* Actions */}
+                <col className="w-[90px]" />{/* Gross amount */}
+                <col className="w-[72px]" />{/* Deducted */}
+                <col className="w-[72px]" />{/* Balance */}
+                <col className="w-[80px]" />{/* Actions */}
               </colgroup>
               <thead className="bg-slate-50 text-left text-slate-600">
                 <tr>
@@ -2108,12 +2138,8 @@ export default function ProjectBillTable({
                       ref={(el) => {
                         categoryAnchorRef.current[category] = el;
                       }}
-                      className={[
-                        "border-t-2 border-adlm-blue-200 scroll-mt-24 transition-colors",
-                        dragOverCat === category && dragIdx != null
-                          ? "bg-adlm-blue-100 outline-dashed outline-2 outline-adlm-blue-400"
-                          : "bg-slate-100",
-                      ].join(" ")}
+                      className="scroll-mt-24 transition-colors"
+                      style={sectionRowStyle(dragOverCat === category && dragIdx != null)}
                       data-section={`cat-${category}`}
                       onDragOver={(e) => {
                         if (dragIdx == null) return;
@@ -2133,12 +2159,12 @@ export default function ProjectBillTable({
                     >
                       <td colSpan={totalCols} className="px-3 py-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-slate-900">
+                          <span className="wk-grp" style={{ padding: 0 }}>
                             {category}
                           </span>
-                          <span className="text-[11px] text-slate-600">
+                          <span className="wk-locnote">
                             {dragOverCat === category && dragIdx != null ? (
-                              <span className="font-semibold text-adlm-blue-700">
+                              <span style={{ color: "var(--action)", fontWeight: 500 }}>
                                 Drop to move here
                               </span>
                             ) : (
@@ -2733,7 +2759,7 @@ export default function ProjectBillTable({
                         </tr>
                       );
                     })}
-                    <tr className="border-t bg-slate-50 text-xs font-medium text-slate-800">
+                    <tr style={SUBTOTAL_ROW}>
                       <td colSpan={6} className="px-2 py-2 text-right">
                         Subtotal, {category}
                       </td>
@@ -2773,12 +2799,8 @@ export default function ProjectBillTable({
                             ref={(el) => {
                               categoryAnchorRef.current[category] = el;
                             }}
-                            className={[
-                              "border-t-2 border-adlm-blue-200 scroll-mt-24 transition-colors",
-                              dragOverCat === category && dragIdx != null
-                                ? "bg-adlm-blue-100 outline-dashed outline-2 outline-adlm-blue-400"
-                                : "bg-slate-100",
-                            ].join(" ")}
+                            className="scroll-mt-24 transition-colors"
+                      style={sectionRowStyle(dragOverCat === category && dragIdx != null)}
                             data-section={`cat-${category}`}
                             onDragOver={(e) => {
                               if (dragIdx == null) return;
@@ -2798,13 +2820,13 @@ export default function ProjectBillTable({
                           >
                             <td colSpan={totalCols} className="px-3 py-2">
                               <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold text-slate-900">
+                                <span className="wk-grp" style={{ padding: 0 }}>
                                   {category}
                                 </span>
-                                <span className="text-[11px] text-slate-600">
+                                <span className="wk-locnote">
                                   {dragOverCat === category &&
                                   dragIdx != null ? (
-                                    <span className="font-semibold text-adlm-blue-700">
+                                    <span style={{ color: "var(--action)", fontWeight: 500 }}>
                                       Drop to move here
                                     </span>
                                   ) : (
@@ -2838,8 +2860,8 @@ export default function ProjectBillTable({
                   : null}
               </tbody>
 
-              <tfoot className="bg-slate-50">
-                <tr className="border-t font-semibold text-slate-900 text-xs">
+              <tfoot>
+                <tr style={TOTAL_ROW}>
                   <td className="px-2 py-2" colSpan={6}>
                     Totals
                   </td>
@@ -2873,11 +2895,11 @@ export default function ProjectBillTable({
           );
           const grandTotal = grossAmount + linkedGrandTotal;
           return (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth">
-              <div className="mb-2 text-sm font-semibold text-slate-900">
-                Summary by category
+            <div className="wk-panel">
+              <div className="wk-ph">
+                <h2>Summary by category</h2>
               </div>
-              <div className="overflow-x-auto">
+              <div style={{ overflowX: "auto", padding: "4px 20px 16px" }}>
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 text-left text-slate-600">
                     <tr>
@@ -2979,7 +3001,8 @@ export default function ProjectBillTable({
         {onAddVariation ? (
           <div
             ref={variationsSectionRef}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
+            className="wk-panel scroll-mt-24"
+            style={{ padding: 20 }}
           >
             <div className="flex items-center justify-between">
               <div>
@@ -3178,7 +3201,8 @@ export default function ProjectBillTable({
         {onUpdatePreliminaryItem && Array.isArray(preliminaryItems) ? (
           <div
             ref={preliminarySectionRef}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
+            className="wk-panel scroll-mt-24"
+            style={{ padding: 20 }}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -3517,7 +3541,8 @@ export default function ProjectBillTable({
         {onAddProvisionalSum ? (
           <div
             ref={provisionalSectionRef}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
+            className="wk-panel scroll-mt-24"
+            style={{ padding: 20 }}
           >
             <div className="flex items-center justify-between">
               <div>
