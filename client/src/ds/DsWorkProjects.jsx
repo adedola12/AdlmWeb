@@ -18,6 +18,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
+import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -62,18 +63,8 @@ const SORTS = [
   { id: "name", label: "Name" },
 ];
 
-// Where a project opens.
-//
-// His one project screen now exists, so a project opens at its own bill rather
-// than at the per-product area. Two keys still do not have one: rategen holds
-// no bill, and archicad's projects live on their own route with their own
-// screens, so both keep going where they already went.
-const projectHref = (p) => {
-  const k = String(p.productKey || "").toLowerCase();
-  if (k === "archicad") return "/archicad";
-  if (k === "rategen") return "/rategen";
-  return k && p.id ? `/work/project/${k}/${p.id}` : "/manage";
-};
+// Where a project opens: the full workspace, by slug (see lib/projectLinks.js).
+const projectHref = projectWorkspaceHref;
 
 export default function DsWorkProjects() {
   const { accessToken } = useAuth();
@@ -87,7 +78,7 @@ export default function DsWorkProjects() {
     if (!accessToken) return undefined;
     let alive = true;
     apiAuthed("/me/projects-rollup", { token: accessToken })
-      .then((d) => alive && setProjects(d.projects || []))
+      .then((d) => alive && setProjects(normaliseRollup(d.projects)))
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;

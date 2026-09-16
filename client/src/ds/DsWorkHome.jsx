@@ -27,6 +27,7 @@ import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkPrefs from "./WkPrefs.jsx";
+import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -90,19 +91,8 @@ const icon = (name) => (
 
 const VIEW_KEY = "adlm-wh-view";
 
-// Where a project opens today.
-//
-// His design has one project screen at /work/project/:id that serves every
-// product. That screen is not built yet, and until it is, a project opens
-// where it already opens: the per-product area the dashboard sends people to.
-// Linking at the unbuilt route would be six dead links on the busiest screen
-// of the surface.
-const projectHref = (p) => {
-  const k = String(p.productKey || "").toLowerCase();
-  if (k === "archicad") return "/archicad";
-  if (k === "rategen") return "/rategen";
-  return k ? `/projects/${k}` : "/manage";
-};
+// Where a project opens: the full workspace, by slug (see lib/projectLinks.js).
+const projectHref = projectWorkspaceHref;
 
 export default function DsWorkHome() {
   const { accessToken } = useAuth();
@@ -133,7 +123,7 @@ export default function DsWorkHome() {
     let alive = true;
 
     apiAuthed("/me/projects-rollup", { token: accessToken })
-      .then((d) => alive && setProjects(d.projects || []))
+      .then((d) => alive && setProjects(normaliseRollup(d.projects)))
       .catch(() => alive && setFailed(true));
 
     // His last "Needs a decision" card is about what is on the plan but not

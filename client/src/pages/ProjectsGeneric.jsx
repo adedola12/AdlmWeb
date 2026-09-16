@@ -28,15 +28,20 @@ import {
 
 const DASHBOARD_PATH = "/manage";
 
+// Product names as the rest of the app says them (the tool keys are the old
+// CAD-host slugs: revit = QUIV, planswift = HERON, civil3d = CIVIQ).
 const TITLES = {
-  revit: "Revit Takeoffs",
-  revitmep: "Revit MEP Projects",
-  planswift: "PlanSwift Projects",
-  civil3d: "Civil 3D Takeoffs",
-  "revit-materials": "Revit Materials",
-  "revit-material": "Revit Materials",
-  "planswift-materials": "PlanSwift Materials",
-  "planswift-material": "PlanSwift Materials",
+  revit: "QUIV projects",
+  revitmep: "Revit MEP projects",
+  mep: "Revit MEP projects",
+  planswift: "HERON projects",
+  civil3d: "CIVIQ projects",
+  "revit-materials": "QUIV materials",
+  "revit-material": "QUIV materials",
+  "planswift-materials": "HERON materials",
+  "planswift-material": "HERON materials",
+  "mep-materials": "Revit MEP materials",
+  "civil3d-materials": "CIVIQ materials",
 };
 
 function normTool(t) {
@@ -2136,11 +2141,15 @@ export default function ProjectsGeneric() {
 
       // Use slug in URL if available, otherwise fall back to ID
       const urlKey = p?.slug || id;
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("project", urlKey);
-        return next;
-      });
+      // replace: swapping an id for the slug is not a new place to go back to.
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("project", urlKey);
+          return next;
+        },
+        { replace: true },
+      );
 
       initRatesFromProject(p);
       const openedId = p?._id || p?.id || id;
@@ -5120,7 +5129,7 @@ export default function ProjectsGeneric() {
             <h1>{sel ? sel?.name || "Untitled project" : title}</h1>
             <p className="wk-ref">
               {sel
-                ? title
+                ? `${title}${sel?.origin === BOQ_IMPORT_ORIGIN ? " · imported from Excel" : ""}`
                 : [sidebarMeta.app, sidebarMeta.hint].filter(Boolean).join(" · ")}
             </p>
           </div>

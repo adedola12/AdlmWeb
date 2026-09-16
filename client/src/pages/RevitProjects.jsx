@@ -86,7 +86,7 @@ export default function RevitProjects() {
                 return (
                   <li key={r._id}>
                     <a
-                      href={`?project=${r._id}`}
+                      href={`?project=${encodeURIComponent(r.slug || r._id)}`}
                       className={on ? "on" : undefined}
                       aria-current={on ? "page" : undefined}
                       onClick={(e) => {

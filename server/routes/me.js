@@ -1492,9 +1492,12 @@ router.get(
           // QUIV under-reported its own output and CIVIQ read "Not on this
           // account" while holding five schedules.
           //
-          // A BoQ import is a QUIV project. The feature is granted as
-          // quiv-boq-import and produces a full QUIV project; three of them
-          // were stored against planswift and so appeared under HERON.
+          // A BoQ import belongs to the product it is stored under. Imports
+          // were Quiv-only (and saved as revit) until 12 Aug 2026; since then
+          // an import is saved under the product it was imported into, so a
+          // "planswift" import is a HERON project. Filing every import under
+          // QUIV showed HERON imports in the QUIV folder, and they then
+          // opened as HERON.
           baseProductKey: {
             $let: {
               vars: {
@@ -1503,7 +1506,6 @@ router.get(
               in: {
                 $switch: {
                   branches: [
-                    { case: { $eq: ["$origin", "boq-import"] }, then: "revit" },
                     {
                       case: { $in: ["$$k", ["revit-materials", "revit-material"]] },
                       then: "revit",
