@@ -1,5 +1,5 @@
 import React from "react";
-import { FaCheck, FaCopy, FaTrash } from "../../components/icons.jsx";
+import { FaArrowLeft, FaChartPie, FaCheck, FaCopy, FaCube, FaDownload, FaEye, FaFileContract, FaFileInvoiceDollar, FaLock, FaProjectDiagram, FaSave, FaShareAlt, FaTrash, FaUserFriends, FaWallet } from "../../components/icons.jsx";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
@@ -16,38 +16,6 @@ const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
 // Lazy — pulls in three.js + the web-ifc wasm; only loads when the 3D tab opens.
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
 
-// Close a popover on an outside press or Escape — the same behaviour as his
-// .wk-dd control (see ds/WkDropdown.jsx).
-function useDismiss(ref, open, onClose) {
-  React.useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e) => {
-      if (!ref.current?.contains(e.target)) onClose();
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [ref, open, onClose]);
-}
-
-// A popover anchored to the right edge of its trigger, in his .wk-dd-m.
-const MENU_RIGHT = { left: "auto", right: 0, width: 320 };
-const BARE_BUTTON = {
-  background: "none",
-  border: 0,
-  padding: 0,
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
-
-// The public dashboard link, in his dropdown. Actions inside it are his menu
-// rows (.wk-dd-m button), which is how his dropdowns present actions.
 function ShareDashboardButton({
   publicShareEnabled,
   publicToken,
@@ -56,9 +24,6 @@ function ShareDashboardButton({
   const [open, setOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
-  const ref = React.useRef(null);
-  const close = React.useCallback(() => setOpen(false), []);
-  useDismiss(ref, open, close);
 
   const shareUrl = publicToken
     ? `${window.location.origin}/projects/shared/${publicToken}`
@@ -79,205 +44,83 @@ function ShareDashboardButton({
   }
 
   return (
-    <div className={`wk-dd${open ? " on" : ""}`} ref={ref}>
+    <div className="relative">
       <button
         type="button"
-        className="ds-btn ds-btn-sm btn-o"
-        aria-expanded={open}
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
         onClick={() => setOpen((v) => !v)}
       >
-        {publicShareEnabled ? "Shared · link on" : "Share dashboard"}
+        <FaShareAlt
+          className={
+            publicShareEnabled ? "text-adlm-blue-700" : "text-slate-400"
+          }
+        />
+        {publicShareEnabled ? "Shared" : "Share"}
       </button>
 
       {open && (
-        <div className="wk-dd-m" style={{ ...MENU_RIGHT, maxHeight: "none", padding: 14 }}>
-          <b style={{ display: "block", fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+          <div className="text-sm font-semibold text-slate-900 mb-2">
             Share Dashboard
-          </b>
-          <p className="wk-fx" style={{ margin: "6px 0 12px" }}>
+          </div>
+          <p className="text-xs text-slate-500 mb-3">
             Generate a public link so clients can view the project dashboard
-            (progress &amp; cost summary only).
+            (progress & cost summary only).
           </p>
 
-          <label
-            className="wk-fx"
-            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}
-          >
+          <label className="flex items-center gap-2 text-xs text-slate-700 mb-3">
             <input
               type="checkbox"
               checked={publicShareEnabled}
               disabled={busy}
               onChange={(e) => handleToggle(e.target.checked)}
+              className="rounded"
             />
             {busy ? "Updating..." : "Enable public link"}
           </label>
 
           {publicShareEnabled && shareUrl ? (
-            <>
-              <label className="wk-f">
-                <span>Public link</span>
-                <input readOnly value={shareUrl} onFocus={(e) => e.target.select()} />
-              </label>
-              <button type="button" onClick={copyUrl} style={{ marginTop: 8 }}>
-                <span>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                <input
+                  readOnly
+                  value={shareUrl}
+                  className="flex-1 bg-transparent text-xs text-slate-700 outline-none truncate"
+                />
+                <button
+                  type="button"
+                  onClick={copyUrl}
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-adlm-blue-700 hover:bg-blue-50"
+                >
                   {copied ? (
                     <>
-                      <FaCheck size={13} /> Copied
+                      <FaCheck /> Copied
                     </>
                   ) : (
                     <>
-                      <FaCopy size={13} /> Copy link
+                      <FaCopy /> Copy
                     </>
                   )}
-                </span>
-              </button>
-              <p className="wk-fx" style={{ margin: "8px 0 0" }}>
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400">
                 Anyone with this link can view the dashboard summary and chart
                 (no editing, no item details).
               </p>
-            </>
+            </div>
           ) : null}
 
-          <button type="button" onClick={close} style={{ marginTop: 8 }}>
-            <span>Close</span>
-          </button>
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              className="text-xs text-slate-500 hover:text-slate-700"
+              onClick={() => setOpen(false)}
+            >
+              Close
+            </button>
+          </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// Every export the page offers, in his dropdown. The open state stays with the
-// parent (it already closes the menu before each export runs).
-function ExportMenu({
-  open,
-  onToggle,
-  isBoqImport,
-  onExportBillBudget,
-  onExportGenericBoQ,
-  onExportGenericTradeBoQ,
-  onExportElementalBoQ,
-}) {
-  const ref = React.useRef(null);
-  const close = React.useCallback(() => {
-    if (open) onToggle?.();
-  }, [open, onToggle]);
-  useDismiss(ref, open, close);
-
-  const group = (label, note) => (
-    <div className="wk-grp" style={{ padding: "10px 11px 4px" }}>
-      {label}
-      {note ? (
-        <span style={{ marginLeft: 6, textTransform: "none", letterSpacing: 0, fontWeight: 300 }}>
-          {note}
-        </span>
-      ) : null}
-    </div>
-  );
-  const item = (key, label, title, onClick, note) => (
-    <button key={key} type="button" role="menuitem" title={title} onClick={onClick}>
-      <span>
-        {label}
-        {note ? <i>{note}</i> : null}
-      </span>
-    </button>
-  );
-
-  return (
-    <div className={`wk-dd${open ? " on" : ""}`} ref={ref}>
-      <button
-        type="button"
-        className="wk-dd-b"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={onToggle}
-      >
-        <span className="l">Export</span>
-        <span className="v">Workbooks</span>
-        <i />
-      </button>
-      {open ? (
-        <div className="wk-dd-m" role="menu" style={{ ...MENU_RIGHT, maxHeight: "70vh" }}>
-          {onExportBillBudget ? (
-            <>
-              {group("Bill & Budget", "the bill as it is here, with the build-up")}
-              {item(
-                "bb-cat",
-                "Export bill & budget workbook",
-                "Bill of Quantities with your own sections, subtitles and totals, plus separate Material, Labour and Plant schedules, a Schedule of Current Prices and a Material Summary",
-                () => onExportBillBudget("category"),
-                "Material / Labour split · current prices · material summary",
-              )}
-              {item(
-                "bb-trade",
-                "Export bill & budget (by trade)",
-                "The same workbook, with the bill sectioned by work section (trade) instead of building element",
-                () => onExportBillBudget("trade"),
-              )}
-              {/* An imported bill is already in a QS's own arrangement. The
-                  elemental / trade / milestone exports below re-cut it against
-                  a mapping built for plugin takeoffs, which loses that
-                  arrangement — so say which one to pick. */}
-              {isBoqImport ? (
-                <p className="wk-fx" style={{ margin: 0, padding: "6px 11px 8px" }}>
-                  This project came from an Excel bill — use the export above to get
-                  it back in its own sections and totals. The formats below re-cut
-                  the bill against a standard elemental or trade arrangement.
-                </p>
-              ) : null}
-            </>
-          ) : null}
-
-          {group("Generic BoQ")}
-          {item(
-            "gen-cat",
-            "Export generic BoQ (by category)",
-            "Category-grouped workbook (Substructure / Superstructure / HVAC / Plumbing / Electrical)",
-            onExportGenericBoQ,
-          )}
-          {onExportGenericTradeBoQ
-            ? item(
-                "gen-trade",
-                "Export generic BoQ (by trade)",
-                "Group the same items by trade (Concrete, Formwork, Reinforcement, Masonry, Finishes, etc.)",
-                onExportGenericTradeBoQ,
-              )
-            : null}
-
-          {group("Elemental BoQ", "grouped by building element")}
-          {item("el-b", "Bungalow", "Single-storey building format", () =>
-            onExportElementalBoQ?.("bungalow", undefined, "elemental"),
-          )}
-          {item("el-m", "Multi-storey", "Multi-storey building", () =>
-            onExportElementalBoQ?.("multistorey", undefined, "elemental"),
-          )}
-
-          {group("Trade BoQ", "grouped by work section (NRM2-style)")}
-          {item(
-            "tr-b",
-            "Bungalow (Trade format)",
-            "Concrete, formwork, reinforcement, masonry, finishes, painting, plumbing, electrical and HVAC each get their own bill",
-            () => onExportElementalBoQ?.("bungalow", undefined, "trade"),
-          )}
-          {item("tr-m", "Multi-storey (Trade format)", "Multi-storey trade-format BoQ", () =>
-            onExportElementalBoQ?.("multistorey", undefined, "trade"),
-          )}
-
-          {group("Milestone BoQ", "one priceable bill per construction stage")}
-          {item(
-            "ms-b",
-            "Bungalow (Milestone format)",
-            "Substructure, ground floor, roof: each a bill of its own that can be priced, valued and paid against",
-            () => onExportElementalBoQ?.("bungalow", undefined, "milestone"),
-          )}
-          {item(
-            "ms-m",
-            "Multi-storey (Milestone format)",
-            "One bill per storey, in the order the building goes up: the basis for a payment schedule",
-            () => onExportElementalBoQ?.("multistorey", undefined, "milestone"),
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -294,36 +137,42 @@ const TAB_OPTIONS = [
     id: "dashboard",
     label: "Dashboard",
     helper: "Overview and progress",
+    icon: FaChartPie,
     group: "Overview",
   },
   {
     id: "bill",
     label: "Bill of Quantity",
     helper: "Rates and line items",
+    icon: FaFileInvoiceDollar,
     group: "Commercial",
   },
   {
     id: "budget",
     label: "Budget",
     helper: "Cost plan & procurement",
+    icon: FaWallet,
     group: "Commercial",
   },
   {
     id: "valuation",
     label: "Valuation",
     helper: "Certificates and settings",
+    icon: FaFileContract,
     group: "Commercial",
   },
   {
     id: "model",
     label: "3D Model",
     helper: "View & verify the BIM model",
+    icon: FaCube,
     group: "Delivery",
   },
   {
     id: "pm",
     label: "PM Dashboard",
     helper: "Schedule, EVM, risks, issues",
+    icon: FaProjectDiagram,
     group: "Delivery",
   },
 ];
@@ -576,89 +425,125 @@ export default function ProjectOpenView({
     : "Completed items are deducted from the outstanding balance.";
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
+    <div className="mt-5 space-y-5">
       {isShared ? (
-        <p className="mk-note" style={{ margin: 0 }}>
-          <b>Shared project · {canEdit ? "Full access" : "View only"}</b>
-          {!canEdit ? " — You can view this project but can't edit or download it." : ""}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-adlm-blue-200 bg-blue-50 px-4 py-2.5 text-xs dark:border-adlm-blue-600/30 dark:bg-adlm-blue-600/10">
+          <span className="inline-flex items-center gap-1.5 font-semibold text-adlm-blue-700 dark:text-adlm-blue-300">
+            {canEdit ? <FaUserFriends /> : <FaEye />}
+            Shared project · {canEdit ? "Full access" : "View only"}
+          </span>
+          {!canEdit ? (
+            <span className="text-slate-500 dark:text-adlm-dark-muted">
+              You can view this project but can't edit or download it.
+            </span>
+          ) : null}
           {!canSeeRates ? (
-            <>
-              <br />
-              <span style={{ color: "var(--pal-orange-key)" }}>
-                Rates hidden. A RateGen subscription is required to view rates.
-              </span>
-            </>
+            <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+              <FaLock /> Rates hidden. A RateGen subscription is required to view
+              rates.
+            </span>
           ) : null}
-        </p>
+        </div>
       ) : null}
-
-      {/* His .wk-bar. The contract state is his own status text, and its
-          margin-right:auto is what pushes every action to the right edge. */}
-      <div>
-        <div className="wk-bar" style={{ marginBottom: 6 }}>
-          <button
-            type="button"
-            onClick={onBack}
-            title="Back to projects"
-            className="wk-back"
-            style={BARE_BUTTON}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <use href="#hi-right" />
-            </svg>
-            Projects
-          </button>
-
-          {contract?.locked ? (
-            <span
-              className="wk-clean"
-              title={`Contract locked${
-                contract?.lockedAt
-                  ? " on " + new Date(contract.lockedAt).toLocaleDateString()
-                  : ""
-              }. Qty / description edits are frozen; new items flow to Variations.`}
-            >
-              Contract locked
-            </span>
-          ) : (
-            <span
-              className="wk-dirty"
-              title="Contract is editable. Lock it on approval to start tracking variations."
-            >
-              Draft (editable)
-            </span>
-          )}
-
-          {/* Project ID stays one click away for the Windows plugin
-              "Open from Cloud" flow. */}
-          <button
-            type="button"
-            onClick={copyProjectId}
-            title="Copy this project's ID for the Windows plugin 'Open from Cloud' flow"
-            className="ds-btn ds-btn-sm btn-o"
-          >
-            {copiedId ? "✓ Copied" : "Copy project ID"}
-          </button>
-
-          {canManage ? (
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setCollabOpen(true)}
-              title="Share this project with colleagues"
-              className="ds-btn ds-btn-sm btn-o"
+              onClick={onBack}
+              title="Back to projects"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
             >
-              Collaborators
+              <FaArrowLeft className="text-[12px]" /> Back to projects
             </button>
-          ) : null}
 
-          {canManage ? (
+            {canManage ? (
+              <button
+                type="button"
+                onClick={onDelete}
+                title="Delete this project"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-orange-700 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-orange-300 dark:hover:bg-orange-500/10"
+              >
+                <FaTrash className="text-[12px]" /> Delete
+              </button>
+            ) : null}
+
+            {canManage ? (
+              <button
+                type="button"
+                onClick={() => setCollabOpen(true)}
+                title="Share this project with colleagues"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-adlm-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-blue-300 dark:hover:bg-adlm-blue-600/10"
+              >
+                <FaUserFriends className="text-[12px]" /> Collaborators
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {contract?.locked ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
+                title={`Contract locked${
+                  contract?.lockedAt
+                    ? " on " + new Date(contract.lockedAt).toLocaleDateString()
+                    : ""
+                }. Qty / description edits are frozen; new items flow to Variations.`}
+              >
+                🔒 Contract locked
+              </span>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
+                title="Contract is editable. Lock it on approval to start tracking variations."
+              >
+                ✎ Draft (editable)
+              </span>
+            )}
+            <span className="text-xs text-slate-500 dark:text-adlm-dark-muted">
+              {statusHistoryText}
+            </span>
+            {/* Project ID is hidden to keep the header clean, but stays
+                one click away for the Windows plugin "Open from Cloud" flow. */}
             <button
               type="button"
-              onClick={onDelete}
-              title="Delete this project"
-              className="ds-btn ds-btn-sm btn-o"
+              onClick={copyProjectId}
+              title="Copy this project's ID for the Windows plugin 'Open from Cloud' flow"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-muted"
             >
-              <FaTrash size={13} /> Delete
+              {copiedId ? (
+                <>
+                  <FaCheck className="text-[11px] text-emerald-600" /> Copied
+                </>
+              ) : (
+                <>
+                  <FaCopy className="text-[11px]" /> Copy project ID
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={!isDirty || saving}
+              title={
+                !isDirty
+                  ? "No changes to save"
+                  : "Save rates and valuation progress"
+              }
+              className={[
+                "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition",
+                isDirty && !saving
+                  ? "btn-3d text-white"
+                  : "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-white/10 dark:text-adlm-dark-dim",
+              ].join(" ")}
+            >
+              <FaSave className="text-[12px]" />
+              {saving ? "Saving…" : isDirty ? "Save changes" : "Saved"}
             </button>
           ) : null}
 
@@ -671,67 +556,241 @@ export default function ProjectOpenView({
                   ? "Preview and download the Project Management (schedule & earned-value) report as PDF"
                   : "Preview and download the Project Progress report as PDF"
               }
-              className="ds-btn ds-btn-sm btn-o"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
             >
+              <FaFileInvoiceDollar className="text-[12px]" />
               {activeTab === "pm" ? "PM report" : "Project report"}
             </button>
           ) : null}
 
           {canExport ? (
-            <ExportMenu
-              open={exportOpen}
-              onToggle={onToggleExportOpen}
-              isBoqImport={isBoqImport}
-              onExportBillBudget={onExportBillBudget}
-              onExportGenericBoQ={onExportGenericBoQ}
-              onExportGenericTradeBoQ={onExportGenericTradeBoQ}
-              onExportElementalBoQ={onExportElementalBoQ}
-            />
-          ) : null}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={onToggleExportOpen}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
+              >
+                <FaDownload className="text-[12px]" /> Export
+              </button>
 
-          {canEdit ? (
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={!isDirty || saving}
-              title={!isDirty ? "No changes to save" : "Save rates and valuation progress"}
-              className={`ds-btn ds-btn-sm ${isDirty && !saving ? "btn-p" : "btn-o"}`}
-            >
-              {saving ? "Saving…" : isDirty ? "Save changes" : "Saved"}
-            </button>
+              {exportOpen ? (
+              <div className="absolute right-0 z-30 mt-2 max-h-[70vh] w-80 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                {onExportBillBudget ? (
+                  <>
+                    <div className="border-b bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      Bill &amp; Budget
+                      <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
+                        — the bill as it is here, with the build-up
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                      onClick={() => onExportBillBudget("category")}
+                      title="Bill of Quantities with your own sections, subtitles and totals, plus separate Material, Labour and Plant schedules, a Schedule of Current Prices and a Material Summary"
+                    >
+                      Export bill &amp; budget workbook
+                      <span className="mt-0.5 block text-[10px] font-normal text-slate-500">
+                        Material / Labour split · current prices · material summary
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                      onClick={() => onExportBillBudget("trade")}
+                      title="The same workbook, with the bill sectioned by work section (trade) instead of building element"
+                    >
+                      Export bill &amp; budget (by trade)
+                    </button>
+                    {/* An imported bill is already in a QS's own arrangement.
+                        The elemental / trade / milestone exports below re-cut
+                        it against a mapping built for plugin takeoffs, which
+                        loses that arrangement — so say which one to pick. */}
+                    {isBoqImport ? (
+                      <p className="border-b bg-emerald-50 px-3 py-2 text-[10px] leading-relaxed text-emerald-800">
+                        This project came from an Excel bill — use the export
+                        above to get it back in its own sections and totals. The
+                        formats below re-cut the bill against a standard
+                        elemental or trade arrangement.
+                      </p>
+                    ) : (
+                      <div className="border-b" />
+                    )}
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={onExportGenericBoQ}
+                  title="Category-grouped workbook (Substructure / Superstructure / HVAC / Plumbing / Electrical)"
+                >
+                  Export generic BoQ (by category)
+                </button>
+                {onExportGenericTradeBoQ ? (
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    onClick={onExportGenericTradeBoQ}
+                    title="Group the same items by trade (Concrete, Formwork, Reinforcement, Masonry, Finishes, etc.)"
+                  >
+                    Export generic BoQ (by trade)
+                  </button>
+                ) : null}
+
+                <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Elemental BoQ
+                  <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
+, grouped by building element
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() =>
+                    onExportElementalBoQ?.("bungalow", undefined, "elemental")
+                  }
+                  title="Single-storey building format"
+                >
+                  Bungalow
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() =>
+                    onExportElementalBoQ?.(
+                      "multistorey",
+                      undefined,
+                      "elemental",
+                    )
+                  }
+                  title="Multi-storey building"
+                >
+                  Multi-storey
+                </button>
+
+                <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Trade BoQ
+                  <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
+, grouped by work section (NRM2-style)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() =>
+                    onExportElementalBoQ?.("bungalow", undefined, "trade")
+                  }
+                  title="Concrete, formwork, reinforcement, masonry, finishes, painting, plumbing, electrical and HVAC each get their own bill"
+                >
+                  Bungalow (Trade format)
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() =>
+                    onExportElementalBoQ?.("multistorey", undefined, "trade")
+                  }
+                  title="Multi-storey trade-format BoQ"
+                >
+                  Multi-storey (Trade format)
+                </button>
+
+                <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Milestone BoQ
+                  <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
+, one priceable bill per construction stage
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() =>
+                    onExportElementalBoQ?.("bungalow", undefined, "milestone")
+                  }
+                  title="Substructure, ground floor, roof: each a bill of its own that can be priced, valued and paid against"
+                >
+                  Bungalow (Milestone format)
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() =>
+                    onExportElementalBoQ?.("multistorey", undefined, "milestone")
+                  }
+                  title="One bill per storey, in the order the building goes up: the basis for a payment schedule"
+                >
+                  Multi-storey (Milestone format)
+                </button>
+              </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
-        <p className="wk-locnote" style={{ margin: 0 }}>
-          {statusHistoryText}
-        </p>
       </div>
 
-      {/* His .wk-tabs. The group and helper live in the tooltip: his tabs
-          are text only. */}
-      <div
-        className="wk-tabs"
-        role="tablist"
-        aria-label="Project views"
-        style={{ justifySelf: "start", maxWidth: "100%", overflowX: "auto" }}
-      >
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={activeTab === tab.id ? "on" : ""}
-            title={`${tab.group} · ${tab.helper}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-depth dark:border-adlm-dark-border">
+        <div className="flex items-stretch gap-1 overflow-x-auto">
+          {visibleTabs.map((tab, i) => {
+            const active = activeTab === tab.id;
+            const Icon = tab.icon;
+            const prev = visibleTabs[i - 1];
+            const newGroup = i > 0 && prev && prev.group !== tab.group;
+            return (
+              <React.Fragment key={tab.id}>
+                {/* Hairline divider marks a new group (Overview · Commercial · Delivery) */}
+                {newGroup ? (
+                  <div
+                    aria-hidden="true"
+                    className="mx-1 hidden w-px self-stretch bg-gradient-to-b from-transparent via-slate-200 to-transparent sm:block dark:via-adlm-dark-border"
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  aria-current={active ? "page" : undefined}
+                  title={`${tab.group} · ${tab.label}`}
+                  className={[
+                    "group relative min-w-[140px] flex-1 rounded-xl px-3 py-2.5 text-left transition-all duration-200",
+                    active
+                      ? "-translate-y-0.5 bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue"
+                      : "text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50 dark:text-adlm-dark-text dark:hover:bg-white/5",
+                  ].join(" ")}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={[
+                        "grid h-8 w-8 shrink-0 place-items-center rounded-lg transition",
+                        active
+                          ? "bg-white/15 text-white ring-1 ring-white/25"
+                          : "bg-slate-100 text-adlm-blue-700 group-hover:bg-blue-50 dark:bg-white/10 dark:text-adlm-blue-300",
+                      ].join(" ")}
+                    >
+                      <Icon className="text-sm" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold leading-tight">
+                        {tab.label}
+                      </div>
+                      <div
+                        className={`mt-0.5 hidden truncate text-[11px] leading-tight sm:block ${
+                          active ? "text-blue-100" : "text-slate-500 dark:text-adlm-dark-muted"
+                        }`}
+                      >
+                        {tab.helper}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
 
       {activeTab === "dashboard" ? (
         <>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          {/* Share Dashboard Button */}
+          <div className="flex items-center justify-end gap-2 mb-3">
             <ShareDashboardButton
               publicShareEnabled={publicShareEnabled}
               publicToken={publicToken}
@@ -822,62 +881,79 @@ export default function ProjectOpenView({
       ) : null}
 
       {activeTab === "valuation" ? (
-        <div style={{ display: "grid", gap: 18 }}>
-          <section className="wk-panel">
-            <div className="wk-ph">
-              <h2>Valuation workspace</h2>
-              <span className="wk-locnote">
-                Control what you see while preparing valuation sheets for this project.
-              </span>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-depth">
+            <div className="font-medium text-slate-900">
+              Valuation workspace
+            </div>
+            <div className="mt-1 text-sm text-slate-600">
+              Control what you want to see while preparing valuation sheets for
+              this project.
             </div>
 
-            {/* Valuation basis: value the job by the bill line, or derive it
-                from each line's material & labour breakdown. */}
-            <div style={{ padding: "16px 20px 0" }}>
-              <div className="wk-grp" style={{ padding: "0 0 8px" }}>
+            {/* Valuation basis: value the job by the bill line, or derive
+                it from each line's material & labour breakdown. */}
+            <div className="mt-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
                 Valuation basis
               </div>
-              <div className="wk-loc-sw" role="group" aria-label="Valuation basis">
+              <div className="mt-1.5 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-adlm-dark-border dark:bg-white/5">
                 {[
                   { id: "boq", label: "By Bill of Quantity" },
                   { id: "budget", label: "By Budget (Material & Labour)" },
-                ].map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className={(valuationSettings?.basis || "boq") === opt.id ? "on" : ""}
-                    onClick={() => onValuationSettingChange?.("basis", opt.id)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                ].map((opt) => {
+                  const active =
+                    (valuationSettings?.basis || "boq") === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => onValuationSettingChange?.("basis", opt.id)}
+                      className={[
+                        "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                        active
+                          ? "bg-white text-adlm-blue-700 shadow-sm dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                          : "text-slate-600 hover:text-slate-900 dark:text-adlm-dark-muted dark:hover:text-white",
+                      ].join(" ")}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+                {(valuationSettings?.basis || "boq") === "budget"
+                  ? "Each bill line is valued from its material & labour breakdown, mark procurement on the Budget tab. Save to apply."
+                  : "Each bill line is valued by its own % complete on the Bill of Quantity tab."}
               </div>
             </div>
-            <p className="wk-note">
-              {(valuationSettings?.basis || "boq") === "budget"
-                ? "Each bill line is valued from its material & labour breakdown, mark procurement on the Budget tab. Save to apply."
-                : "Each bill line is valued by its own % complete on the Bill of Quantity tab."}
-            </p>
 
-            <div className="wk-pf" style={{ justifyContent: "flex-start", flexWrap: "wrap", gap: 18 }}>
-              <label className="wk-fx" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
+              <label className="inline-flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={showDailyValuationLog}
-                  onChange={(e) => onToggleShowDailyValuationLog?.(e.target.checked)}
+                  onChange={(e) =>
+                    onToggleShowDailyValuationLog?.(e.target.checked)
+                  }
+                  className={checkboxCls}
                 />
                 Show daily valuation log
               </label>
-              <label className="wk-fx" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+
+              <label className="inline-flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={showValuationSettings}
-                  onChange={(e) => onToggleShowValuationSettings?.(e.target.checked)}
+                  onChange={(e) =>
+                    onToggleShowValuationSettings?.(e.target.checked)
+                  }
+                  className={checkboxCls}
                 />
                 Show valuation settings
               </label>
             </div>
-          </section>
+          </div>
 
           <ProjectValuationSummary
             projectName={projectName}
@@ -906,7 +982,11 @@ export default function ProjectOpenView({
 
       {activeTab === "model" ? (
         <React.Suspense
-          fallback={<div className="wk-empty">Loading 3D viewer…</div>}
+          fallback={
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-depth">
+              Loading 3D viewer…
+            </div>
+          }
         >
           <ModelViewer
             projectModels={projectModels}
@@ -1037,68 +1117,63 @@ export default function ProjectOpenView({
       ) : null}
 
       {activeTab === "bill" && mergeInfo?.parts?.length > 1 ? (
-        <section className="wk-panel">
-          <div className="wk-ph">
-            <h2>
-              {mergeInfo.partType === "building"
-                ? "Buildings in this job"
-                : "Disciplines in this project"}
-            </h2>
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-depth dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
+          <div className="flex items-center gap-2">
+            <div className="font-medium">
+              {mergeInfo.partType === "building" ? "Buildings in this job" : "Disciplines in this project"}
+            </div>
             {mergeReorderBusy ? (
-              <span className="wk-dirty" style={{ marginRight: 0 }}>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-adlm-blue-50 px-2 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-600/15 dark:text-adlm-blue-300">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-adlm-blue-600" />
                 Saving order…
               </span>
             ) : null}
           </div>
-          <p className="wk-note">
+          <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
             {mergeInfo.partType === "building"
               ? "This order is the order the buildings appear as sheets in the exported bill, put Main Building first and External Works last."
               : "This order is the order the disciplines appear in the combined bill."}
-          </p>
-          <div className="wk-use">
-            {mergeInfo.parts.map((part, i) => (
-              <div
-                key={part.projectId}
-                className="wk-useline"
-                style={mergeReorderBusy ? { opacity: 0.6 } : undefined}
-              >
-                <span className="p">
-                  {i + 1}. {part.name}
-                  <em>
-                    {part.itemCount} item{part.itemCount === 1 ? "" : "s"}
-                  </em>
-                </span>
-                <span className="q" />
-                <span className="v" style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    className="ds-btn ds-btn-sm btn-o"
-                    disabled={i === 0 || !onReorderMergeParts || mergeReorderBusy}
-                    title="Move up"
-                    aria-label={`Move ${part.name} up`}
-                    onClick={() => onReorderMergeParts?.(i, i - 1)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="ds-btn ds-btn-sm btn-o"
-                    disabled={
-                      i === mergeInfo.parts.length - 1 ||
-                      !onReorderMergeParts ||
-                      mergeReorderBusy
-                    }
-                    title="Move down"
-                    aria-label={`Move ${part.name} down`}
-                    onClick={() => onReorderMergeParts?.(i, i + 1)}
-                  >
-                    ↓
-                  </button>
-                </span>
-              </div>
-            ))}
           </div>
-        </section>
+          <ol className="mt-3 space-y-1.5">
+            {mergeInfo.parts.map((part, i) => (
+              <li
+                key={part.projectId}
+                className={[
+                  "flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm transition dark:border-adlm-dark-border",
+                  mergeReorderBusy ? "opacity-60" : "",
+                ].join(" ")}
+              >
+                <span className="w-5 text-center text-xs font-semibold text-slate-400">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{part.name}</span>
+                <span className="shrink-0 text-[11px] text-slate-500 dark:text-adlm-dark-dim">
+                  {part.itemCount} item{part.itemCount === 1 ? "" : "s"}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={i === 0 || !onReorderMergeParts || mergeReorderBusy}
+                  title="Move up"
+                  onClick={() => onReorderMergeParts?.(i, i - 1)}
+                >
+                  &uarr;
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={
+                    i === mergeInfo.parts.length - 1 ||
+                    !onReorderMergeParts ||
+                    mergeReorderBusy
+                  }
+                  title="Move down"
+                  onClick={() => onReorderMergeParts?.(i, i + 1)}
+                >
+                  &darr;
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
       ) : null}
 
       {activeTab === "bill" ? (
