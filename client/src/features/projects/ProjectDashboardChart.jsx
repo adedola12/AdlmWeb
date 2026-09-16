@@ -1,17 +1,30 @@
+// Planned vs actual, inside the dashboard's .wk-panel.
+//
+// The three modes are a saved per-project setting (valuationSettings
+// .dashboardChartMode), so all three stay. How each is drawn:
+//
+//   Bars   his .dsh-meter rows — the one chart-like piece he has.
+//   Donut  he has no ring anywhere; it stays a ring, drawn only in his tokens
+//   Trend  he has no line chart; it stays an SVG, drawn only in his tokens
+//
+// "His tokens" means planned is var(--ink-3), actual is var(--action), grid
+// lines are var(--line) and holes are var(--bg), so the charts follow the
+// theme instead of carrying their own hex colours. The switch between modes is
+// his .wk-loc-sw; the empty state is his .wk-empty; readings are his
+// .wk-useline rows.
+//
+// Mode ids are persisted — keep them stable. Only the labels may change.
+
 import React from "react";
 
-// Mode ids are persisted in project settings — keep them stable. Only the
-// labels are dressed up to read professionally.
 const CHART_MODES = [
   { id: "pie", label: "Donut" },
   { id: "ribbon", label: "Bars" },
   { id: "line", label: "Trend" },
 ];
 
-// Shared palette — a bright brand blue that stays legible on both the
-// light card and the dark panel, and a neutral slate for the plan.
-const ACTUAL_COLOR = "#2b86ff";
-const PLANNED_COLOR = "#94a3b8";
+const PLANNED = "var(--ink-3)";
+const ACTUAL = "var(--action)";
 
 function safeNum(value) {
   const num = Number(value);
@@ -76,25 +89,28 @@ function smoothPath(points) {
   return d;
 }
 
-function RibbonBar({ color, label, value, maxValue }) {
-  const width = maxValue > 0 ? Math.min(100, (safeNum(value) / maxValue) * 100) : 0;
+const swatch = (color) => ({
+  display: "inline-block",
+  width: 10,
+  height: 10,
+  borderRadius: "50%",
+  background: color,
+  marginRight: 8,
+  verticalAlign: 0,
+});
+
+function Reading({ label, sub, value, color, valueColor }) {
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-slate-600 dark:text-adlm-dark-muted">{label}</span>
-        <span className="font-semibold text-slate-900 dark:text-white">
-          &#8358;{money(value)}
-        </span>
-      </div>
-      <div className="h-3.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
-        <div
-          className="h-full rounded-full transition-[width] duration-700 ease-out"
-          style={{
-            width: `${width}%`,
-            backgroundImage: `linear-gradient(90deg, ${color}cc, ${color})`,
-          }}
-        />
-      </div>
+    <div className="wk-useline">
+      <span className="p">
+        {color ? <span style={swatch(color)} aria-hidden="true" /> : null}
+        {label}
+        {sub ? <em>{sub}</em> : null}
+      </span>
+      <span className="q" />
+      <span className="v" style={valueColor ? { color: valueColor } : undefined}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -141,197 +157,191 @@ export default function ProjectDashboardChart({
     actualPts.length > 1
       ? `${actualPath} L ${actualPts[actualPts.length - 1].x.toFixed(2)} ${baseline} L ${actualPts[0].x.toFixed(2)} ${baseline} Z`
       : "";
-  const varianceTone =
+
+  // Overrun reads in his orange, a saving in his light-blue key.
+  const varianceColor =
     actualCoverageCount === 0
-      ? "text-slate-600 dark:text-adlm-dark-muted"
+      ? "var(--ink-3)"
       : actualVarianceAmount > 0
-        ? "text-amber-700 dark:text-amber-400"
+        ? "var(--pal-orange-key)"
         : actualVarianceAmount < 0
-          ? "text-emerald-700 dark:text-emerald-400"
-          : "text-slate-900 dark:text-white";
+          ? "var(--pal-light-key)"
+          : "var(--ink)";
+
+  const status = statusLabel.toLowerCase();
+  const progressText = `${safeNum(progressPercent).toFixed(1)}%`;
+  const has = actualCoverageCount > 0;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="font-semibold text-slate-900 dark:text-white">Chart view</div>
-          <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
-            Planned vs actual for tracked work items, plus current{" "}
-            {statusLabel.toLowerCase()} progress.
-          </div>
-        </div>
-
-        {/* Segmented control: reads as one clean control, not loose pills. */}
-        <div className="inline-flex shrink-0 rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-slate-100 dark:bg-white/5 p-1">
-          {CHART_MODES.map((mode) => {
-            const active = chartMode === mode.id;
-            return (
-              <button
-                key={mode.id}
-                type="button"
-                aria-pressed={active}
-                className={[
-                  "rounded-lg px-3.5 py-1.5 text-sm font-semibold transition",
-                  active
-                    ? "bg-white dark:bg-adlm-dark-panel text-adlm-blue-700 dark:text-adlm-blue-300 shadow-sm"
-                    : "text-slate-600 dark:text-adlm-dark-muted hover:text-slate-900 dark:hover:text-white",
-                ].join(" ")}
-                onClick={() => onChartModeChange?.(mode.id)}
-              >
-                {mode.label}
-              </button>
-            );
-          })}
+    <div>
+      <div className="wk-bar" style={{ padding: "16px 20px 0", marginBottom: 0 }}>
+        <p className="wk-locnote" style={{ margin: 0, marginRight: "auto" }}>
+          Planned vs actual for tracked work items, plus current {status} progress.
+        </p>
+        <div className="wk-loc-sw" role="group" aria-label="Chart view">
+          {CHART_MODES.map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              aria-pressed={chartMode === mode.id}
+              className={chartMode === mode.id ? "on" : ""}
+              onClick={() => onChartModeChange?.(mode.id)}
+            >
+              {mode.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {actualCoverageCount === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-white dark:bg-white/5 p-6 text-sm text-slate-600 dark:text-adlm-dark-muted">
-          No actual data yet. Add an actual quantity or rate against an item of
-          work in the Bill of Quantity tab, then save to compare the project
-          against plan here.
+      {!has ? (
+        <div style={{ padding: 20 }}>
+          <div className="wk-empty">
+            No actual data yet. Add an actual quantity or rate against an item of work
+            in the Bill of Quantity tab, then save to compare the project against plan
+            here.
+          </div>
         </div>
       ) : null}
 
-      {chartMode === "pie" && actualCoverageCount > 0 ? (
-        <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
-          <div className="mx-auto w-full max-w-[240px]">
-            <div className="relative mx-auto h-56 w-56 rounded-full">
+      {chartMode === "pie" && has ? (
+        <>
+          <div
+            style={{
+              padding: 20,
+              display: "grid",
+              gap: 24,
+              gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{ position: "relative", width: 210, height: 210, margin: "0 auto" }}
+              role="img"
+              aria-label={`Planned ${money(actualPlannedAmount)}, actual ${money(actualTrackedAmount)}, variance ${money(actualVarianceAmount)}`}
+            >
               <div
-                className="absolute inset-0 rounded-full"
                 style={{
-                  background: `conic-gradient(${PLANNED_COLOR} 0 ${plannedPct}%, rgba(148,163,184,0.22) ${plannedPct}% 100%)`,
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: "50%",
+                  background: `conic-gradient(${PLANNED} 0 ${plannedPct}%, var(--line) ${plannedPct}% 100%)`,
                 }}
               />
-              <div className="absolute inset-5 rounded-full bg-white dark:bg-adlm-dark-panel" />
+              <div style={{ position: "absolute", inset: 16, borderRadius: "50%", background: "var(--bg)" }} />
               <div
-                className="absolute inset-9 rounded-full"
                 style={{
-                  background: `conic-gradient(${ACTUAL_COLOR} 0 ${actualPct}%, rgba(43,134,255,0.16) ${actualPct}% 100%)`,
+                  position: "absolute",
+                  inset: 30,
+                  borderRadius: "50%",
+                  background: `conic-gradient(${ACTUAL} 0 ${actualPct}%, color-mix(in srgb, var(--action) 16%, transparent) ${actualPct}% 100%)`,
                 }}
               />
-              <div className="absolute inset-16 flex flex-col items-center justify-center rounded-full bg-white dark:bg-adlm-dark-panel px-3 text-center shadow-inner">
-                <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 56,
+                  borderRadius: "50%",
+                  background: "var(--bg)",
+                  display: "grid",
+                  placeContent: "center",
+                  textAlign: "center",
+                  padding: "0 8px",
+                }}
+              >
+                <span className="wk-grp" style={{ padding: 0 }}>
                   Variance
-                </div>
-                <div className={`mt-1 text-2xl font-semibold ${varianceTone}`}>
+                </span>
+                <b
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 500,
+                    color: varianceColor,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
                   {money(actualVarianceAmount)}
-                </div>
-                <div className="mt-1 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-                  {actualCoveragePercent.toFixed(1)}% actual coverage
-                </div>
+                </b>
+                <span className="wk-fx">{actualCoveragePercent.toFixed(1)}% coverage</span>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2 text-sm">
-              <div className="flex items-center justify-between rounded-lg bg-white dark:bg-white/5 px-3 py-2">
-                <span className="inline-flex items-center gap-2 text-slate-600 dark:text-adlm-dark-muted">
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: PLANNED_COLOR }} />{" "}
-                  Planned tracked value
-                </span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  &#8358;{money(actualPlannedAmount)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-white dark:bg-white/5 px-3 py-2">
-                <span className="inline-flex items-center gap-2 text-slate-600 dark:text-adlm-dark-muted">
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: ACTUAL_COLOR }} />{" "}
-                  Actual tracked value
-                </span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  &#8358;{money(actualTrackedAmount)}
-                </span>
-              </div>
+            <div className="wk-use" style={{ padding: 0 }}>
+              <Reading
+                label="Planned tracked value"
+                value={`₦${money(actualPlannedAmount)}`}
+                color={PLANNED}
+              />
+              <Reading
+                label="Actual tracked value"
+                value={`₦${money(actualTrackedAmount)}`}
+                color={ACTUAL}
+              />
+              <Reading
+                label="Tracked scope"
+                sub="work item(s) with actual values saved"
+                value={actualCoverageCount.toLocaleString()}
+              />
+              <Reading
+                label="Progress"
+                sub={`${progressCount} of ${progressTotal} work items ${status}`}
+                value={progressText}
+              />
             </div>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">
-                Tracked scope
-              </div>
-              <div className="mt-2 text-3xl font-semibold text-slate-900 dark:text-white">
-                {actualCoverageCount}
-              </div>
-              <div className="mt-1 text-sm text-slate-500 dark:text-adlm-dark-muted">
-                work item(s) with actual values saved
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">
-                Progress
-              </div>
-              <div className="mt-2 text-3xl font-semibold text-slate-900 dark:text-white">
-                {safeNum(progressPercent).toFixed(1)}%
-              </div>
-              <div className="mt-1 text-sm text-slate-500 dark:text-adlm-dark-muted">
-                {progressCount} of {progressTotal} work items{" "}
-                {statusLabel.toLowerCase()}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-4 sm:col-span-2">
-              <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">
-                Reading the chart
-              </div>
-              <div className="mt-2 text-sm text-slate-600 dark:text-adlm-dark-muted">
-                The outer ring shows the planned value for work items where
-                actuals exist. The inner ring shows the actual captured value
-                for the same items, so overrun or savings reads at a glance.
-              </div>
-            </div>
-          </div>
-        </div>
+          <p className="wk-note">
+            Reading the chart: the outer ring shows the planned value for work items
+            where actuals exist. The inner ring shows the actual captured value for the
+            same items, so overrun or savings reads at a glance.
+          </p>
+        </>
       ) : null}
 
-      {chartMode === "ribbon" && actualCoverageCount > 0 ? (
-        <div className="space-y-4 rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-4">
-          <RibbonBar
-            color={PLANNED_COLOR}
-            label="Planned value for tracked work items"
-            value={actualPlannedAmount}
-            maxValue={scaleMax}
-          />
-          <RibbonBar
-            color={ACTUAL_COLOR}
-            label="Actual tracked value"
-            value={actualTrackedAmount}
-            maxValue={scaleMax}
-          />
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-3">
-              <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">Variance</div>
-              <div className={`mt-1 text-xl font-semibold ${varianceTone}`}>
-                {money(actualVarianceAmount)}
+      {chartMode === "ribbon" && has ? (
+        <>
+          <div style={{ padding: "18px 20px 6px" }}>
+            <div className="dsh-meter">
+              <div className="row">
+                <div className="lab">
+                  <span>Planned value for tracked work items</span>
+                  <b>₦{money(actualPlannedAmount)}</b>
+                </div>
+                <div className="track">
+                  <i style={{ width: `${plannedPct}%`, background: PLANNED }} />
+                </div>
               </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-3">
-              <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">Actual coverage</div>
-              <div className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
-                {actualCoveragePercent.toFixed(1)}%
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-3">
-              <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">Progress</div>
-              <div className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
-                {safeNum(progressPercent).toFixed(1)}%
+              <div className="row">
+                <div className="lab">
+                  <span>Actual tracked value</span>
+                  <b>₦{money(actualTrackedAmount)}</b>
+                </div>
+                <div className="track">
+                  <i style={{ width: `${actualPct}%` }} />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+          <div className="wk-use">
+            <Reading label="Variance" value={money(actualVarianceAmount)} valueColor={varianceColor} />
+            <Reading label="Actual coverage" value={`${actualCoveragePercent.toFixed(1)}%`} />
+            <Reading label="Progress" value={progressText} />
+          </div>
+        </>
       ) : null}
 
-      {chartMode === "line" && actualCoverageCount > 0 ? (
-        <div className="rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-4">
+      {chartMode === "line" && has ? (
+        <div style={{ padding: 20 }}>
           {lineSeries.length ? (
-            <div className="space-y-4">
+            <>
               <svg
                 viewBox={`0 0 ${viewWidth} ${viewHeight}`}
-                className="h-[260px] w-full overflow-visible"
+                style={{ width: "100%", height: 260, overflow: "visible" }}
+                role="img"
+                aria-label="Planned and actual cumulative value by tracked work item"
               >
                 <defs>
                   <linearGradient id="adlmActualArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={ACTUAL_COLOR} stopOpacity="0.28" />
-                    <stop offset="100%" stopColor={ACTUAL_COLOR} stopOpacity="0" />
+                    <stop offset="0%" style={{ stopColor: ACTUAL, stopOpacity: 0.28 }} />
+                    <stop offset="100%" style={{ stopColor: ACTUAL, stopOpacity: 0 }} />
                   </linearGradient>
                 </defs>
 
@@ -344,15 +354,10 @@ export default function ProjectDashboardChart({
                         y1={y}
                         x2={viewWidth - padX}
                         y2={y}
-                        className="stroke-slate-200 dark:stroke-white/10"
+                        style={{ stroke: "var(--line)" }}
                         strokeDasharray="4 4"
                       />
-                      <text
-                        x="6"
-                        y={y + 4}
-                        fontSize="11"
-                        className="fill-slate-500 dark:fill-adlm-dark-muted"
-                      >
+                      <text x="6" y={y + 4} fontSize="11" style={{ fill: "var(--ink-3)" }}>
                         {money(lineMax * tick)}
                       </text>
                     </g>
@@ -364,7 +369,7 @@ export default function ProjectDashboardChart({
                 <path
                   d={plannedPath}
                   fill="none"
-                  stroke={PLANNED_COLOR}
+                  style={{ stroke: PLANNED }}
                   strokeWidth="3"
                   strokeDasharray="6 5"
                   strokeLinecap="round"
@@ -372,7 +377,7 @@ export default function ProjectDashboardChart({
                 <path
                   d={actualPath}
                   fill="none"
-                  stroke={ACTUAL_COLOR}
+                  style={{ stroke: ACTUAL }}
                   strokeWidth="4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -389,21 +394,20 @@ export default function ProjectDashboardChart({
                     viewHeight - padY - (safeNum(point.actual) / lineMax) * (viewHeight - padY * 2);
                   return (
                     <g key={point.label}>
-                      <circle cx={x} cy={plannedY} r="3.5" fill={PLANNED_COLOR} />
+                      <circle cx={x} cy={plannedY} r="3.5" style={{ fill: PLANNED }} />
                       <circle
                         cx={x}
                         cy={actualY}
                         r="4.5"
-                        fill="#fff"
-                        stroke={ACTUAL_COLOR}
                         strokeWidth="2.5"
+                        style={{ fill: "var(--bg)", stroke: ACTUAL }}
                       />
                       <text
                         x={x}
                         y={viewHeight - 6}
                         textAnchor="middle"
                         fontSize="11"
-                        className="fill-slate-500 dark:fill-adlm-dark-muted"
+                        style={{ fill: "var(--ink-3)" }}
                       >
                         {point.label}
                       </text>
@@ -412,19 +416,15 @@ export default function ProjectDashboardChart({
                 })}
               </svg>
 
-              <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-adlm-dark-muted">
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: PLANNED_COLOR }} />{" "}
-                  Planned cumulative value
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: ACTUAL_COLOR }} />{" "}
-                  Actual cumulative value
-                </span>
-              </div>
-            </div>
+              <p className="wk-locnote" style={{ margin: "12px 0 0" }}>
+                <span style={swatch(PLANNED)} aria-hidden="true" />
+                Planned cumulative value
+                <span style={{ ...swatch(ACTUAL), marginLeft: 18 }} aria-hidden="true" />
+                Actual cumulative value
+              </p>
+            </>
           ) : (
-            <div className="text-sm text-slate-600 dark:text-adlm-dark-muted">
+            <div className="wk-empty">
               Save actual entries against at least one item of work to draw the
               comparison trend.
             </div>
