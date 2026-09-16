@@ -50,86 +50,102 @@ export default function RevitProjects() {
     navigator.clipboard.writeText(sel._id).catch(() => {});
   }
 
+  // His pieces: .wk-head, a .wk-panel list of projects (his nav links, the
+  // open one carrying his accent), and the takeoff as his use-lines.
   return (
-    <div className="grid md:grid-cols-3 gap-6">
-      <div className="card md:col-span-1">
-        <div className="flex items-center justify-between">
-          <h1 className="font-semibold">Revit Projects</h1>
-          <button className="btn btn-sm" onClick={load}>
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
+      <div className="wk-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h1>QUIV projects</h1>
+          <p className="wk-ref">Takeoffs saved from QUIV to the cloud</p>
+        </div>
+        <div className="wk-acts">
+          <button type="button" className="ds-btn ds-btn-sm btn-o" onClick={load}>
             Refresh
           </button>
         </div>
-        {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
-        <div className="mt-3 space-y-2">
-          {rows.map((r) => (
-            <button
-              key={r._id}
-              className={`w-full text-left p-2 border rounded transition hover:bg-slate-50 ${
-                sel?._id === r._id ? "bg-blue-50" : ""
-              }`}
-              onClick={() => view(r._id)}
-            >
-              <div className="font-medium">{r.name}</div>
-              <div className="text-xs text-slate-600">
-                {r.itemCount} items · {new Date(r.updatedAt).toLocaleString()}
-              </div>
-            </button>
-          ))}
-          {rows.length === 0 && (
-            <div className="text-sm text-slate-600">No projects yet.</div>
-          )}
-        </div>
       </div>
 
-      <div className="card md:col-span-2">
-        {!sel ? (
-          <div className="text-sm text-slate-600">Select a project</div>
-        ) : (
-          <>
-            <div className="flex items-start justify-between">
-              <h2 className="font-semibold mb-3">{sel.name}</h2>
-              <div className="flex gap-2">
-                <button className="btn btn-sm" onClick={copyId}>
+      {err && (
+        <p className="mk-note" role="alert" style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)", borderColor: "var(--pal-orange-line)" }}>
+          {err}
+        </p>
+      )}
+
+      <div className="grid items-start gap-[18px] grid-cols-1 md:grid-cols-3">
+        <nav className="wk-panel" aria-label="QUIV projects" style={{ marginBottom: 0, padding: "4px 14px 14px" }}>
+          <p className="dsh-grp" style={{ marginTop: 14 }}>
+            {rows.length} project{rows.length === 1 ? "" : "s"}
+          </p>
+          {rows.length === 0 ? (
+            <div className="wk-empty" style={{ padding: "20px 8px" }}>No projects yet.</div>
+          ) : (
+            <ul className="dsh-nav" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+              {rows.map((r) => {
+                const on = sel?._id === r._id;
+                return (
+                  <li key={r._id}>
+                    <a
+                      href={`?project=${r._id}`}
+                      className={on ? "on" : undefined}
+                      aria-current={on ? "page" : undefined}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        view(r._id);
+                      }}
+                      style={{ display: "block" }}
+                    >
+                      <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.name}
+                      </span>
+                      <span className="wk-locnote" style={{ display: "block" }}>
+                        {r.itemCount} items · {new Date(r.updatedAt).toLocaleString()}
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </nav>
+
+        <section className="wk-panel md:col-span-2" style={{ marginBottom: 0, minWidth: 0 }}>
+          {!sel ? (
+            <div className="wk-empty">Select a project</div>
+          ) : (
+            <>
+              <div className="wk-ph" style={{ flexWrap: "wrap" }}>
+                <h2>{sel.name}</h2>
+                <button type="button" className="ds-btn ds-btn-sm btn-o" onClick={copyId}>
                   Copy ID
                 </button>
               </div>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b">
-                    <th className="py-2 pr-4">S/N</th>
-                    <th className="py-2 pr-4">Description</th>
-                    <th className="py-2 pr-4">Qty</th>
-                    <th className="py-2 pr-4">Unit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sel.items.map((it, i) => (
-                    <tr key={i} className="border-b">
-                      <td className="py-2 pr-4">{it.sn}</td>
-                      <td className="py-2 pr-4">{it.description}</td>
-                      <td className="py-2 pr-4">{Number(it.qty).toFixed(2)}</td>
-                      <td className="py-2 pr-4">{it.unit || ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              <div className="wk-use">
+                {sel.items.map((it, i) => (
+                  <div className="wk-useline" key={i}>
+                    <span className="p">
+                      {it.description}
+                      <em>S/N {it.sn}</em>
+                    </span>
+                    <span className="q">{it.unit || ""}</span>
+                    <span className="v">{Number(it.qty).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
 
-            <div className="text-xs text-slate-500 mt-3 space-y-1">
-              <div>
-                Project ID: <code>{sel._id}</code> (use this in QUIV
-                to open/update)
+              <div className="wk-note" style={{ borderTop: "1px solid var(--line)" }}>
+                <div>
+                  Project ID: <code>{sel._id}</code> (use this in QUIV to open/update)
+                </div>
+                <div>
+                  <b>Tip:</b> In QUIV’s “Open from Cloud”, paste this ID to view the
+                  saved takeoff.
+                </div>
               </div>
-              <div>
-                <b>Tip:</b> In QUIV’s “Open from Cloud”, paste this
-                ID to view the saved takeoff.
-              </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </section>
       </div>
     </div>
   );
