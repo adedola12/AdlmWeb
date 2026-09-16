@@ -731,7 +731,7 @@ export default function AdminProposals() {
                     ) : p.notion?.lastSyncedAt ? (
                       <span className="text-xs text-emerald-600">✓ synced</span>
                     ) : (
-                      <span className="text-xs text-slate-400">, </span>
+                      <span className="text-xs text-slate-400">–</span>
                     )}
                   </td>
                   <td className="py-2 pr-3">

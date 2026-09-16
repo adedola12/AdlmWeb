@@ -1104,7 +1104,7 @@ export default function AdminAiUsage() {
                 align: "right",
                 render: (r) => {
                   const b = r.byFeature?.[f.key];
-                  if (!b) return <span className="text-slate-400">, </span>;
+                  if (!b) return <span className="text-slate-400">–</span>;
                   return (
                     <div>
                       <div>{num(b.calls)}</div>

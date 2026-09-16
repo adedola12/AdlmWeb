@@ -2937,11 +2937,11 @@ export default function ProjectBillTable({
                               <span className="ml-1 text-[9px] text-slate-400">(snapshot)</span>
                             )}
                           </td>
-                          <td className="px-2 py-2 text-right text-slate-400">, </td>
+                          <td className="px-2 py-2 text-right text-slate-400">–</td>
                           <td className="px-2 py-2 text-right text-adlm-blue-800 font-semibold">
                             {money(liveTotal)}
                           </td>
-                          <td className="px-2 py-2 text-right text-slate-400">, </td>
+                          <td className="px-2 py-2 text-right text-slate-400">–</td>
                           <td className="px-2 py-2 text-right text-adlm-blue-800 font-semibold">
                             {money(liveTotal)}
                           </td>

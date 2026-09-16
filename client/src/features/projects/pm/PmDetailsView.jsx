@@ -591,7 +591,7 @@ function TaskTable({
                 </td>
                 <td className="px-3 py-2 align-top">
                   {isSummary ? (
-                    <span className="text-[10px] text-slate-400">, </span>
+                    <span className="text-[10px] text-slate-400">–</span>
                   ) : (
                     <PriorityBadge priority={task.priority} />
                   )}
@@ -614,9 +614,9 @@ function TaskTable({
                 </td>
                 <td className="px-3 py-2 align-top text-xs text-slate-700">
                   {isSummary ? (
-                    <span className="text-[10px] text-slate-400">, </span>
+                    <span className="text-[10px] text-slate-400">–</span>
                   ) : (
-                    task.assignedTo || <span className="italic text-slate-400">, </span>
+                    task.assignedTo || <span className="italic text-slate-400">–</span>
                   )}
                 </td>
                 <td className="px-3 py-2 align-top text-right">
@@ -709,10 +709,10 @@ function RiskTable({ risks, onEditRisk, onDeleteRisk, onAddRisk }) {
                 <StatusBadge status={risk.status} />
               </td>
               <td className="px-3 py-2 align-top text-xs text-slate-700">
-                {risk.owner || <span className="italic text-slate-400">, </span>}
+                {risk.owner || <span className="italic text-slate-400">–</span>}
               </td>
               <td className="px-3 py-2 align-top text-xs text-slate-700 whitespace-normal break-words">
-                {risk.mitigation || <span className="italic text-slate-400">, </span>}
+                {risk.mitigation || <span className="italic text-slate-400">–</span>}
               </td>
               <td className="px-3 py-2 align-top text-right">
                 <div className="inline-flex items-center gap-1">
@@ -791,10 +791,10 @@ function IssueTable({ issues, onEditIssue, onDeleteIssue, onAddIssue }) {
                 <StatusBadge status={issue.status} />
               </td>
               <td className="px-3 py-2 align-top text-xs text-slate-700">
-                {issue.owner || <span className="italic text-slate-400">, </span>}
+                {issue.owner || <span className="italic text-slate-400">–</span>}
               </td>
               <td className="px-3 py-2 align-top text-xs text-slate-700 whitespace-normal break-words">
-                {issue.notes || <span className="italic text-slate-400">, </span>}
+                {issue.notes || <span className="italic text-slate-400">–</span>}
               </td>
               <td className="px-3 py-2 align-top text-[10px] text-slate-500 whitespace-nowrap">
                 {fmtDateDisplay(issue.openedAt)}

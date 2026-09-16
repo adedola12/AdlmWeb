@@ -231,7 +231,7 @@ function getDaysLeft(expiresAt) {
 
 function timeLeftBadge(expiresAt) {
   const d = getDaysLeft(expiresAt);
-  if (d == null) return <span className="text-xs text-slate-500">, </span>;
+  if (d == null) return <span className="text-xs text-slate-500">–</span>;
 
   if (d < 0) return <Badge label={`Expired ${Math.abs(d)}d`} tone="red" />;
   if (d === 0) return <Badge label="Expires today" tone="red" />;
