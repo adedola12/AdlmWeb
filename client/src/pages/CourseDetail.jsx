@@ -378,7 +378,7 @@ export default function CourseDetail() {
   }
   if (!data) return <p className="ds-sub">Loading the course…</p>;
 
-  const { course, enrollment, progress, moduleSubmissions, summary, access, classroom } = data;
+  const { course, enrollment, progress, moduleSubmissions, summary, access } = data;
   // The intro is not a module: it has no assignment, no quiz and nothing to
   // mark complete, so it selects an empty module rather than falling through to
   // the first one — which would quietly play lecture one under an "intro" tab.
@@ -683,25 +683,6 @@ export default function CourseDetail() {
                     ? `, until ${dayjs(access.expiresAt).format("D MMMM YYYY")}.`
                     : " — this course does not expire."}
                 </p>
-                {classroom?.joinUrl || classroom?.notes ? (
-                  <p className="wk-note">
-                    {classroom?.joinUrl ? (
-                      <>
-                        Live sessions run in{" "}
-                        <a
-                          className="ds-a"
-                          href={classroom.joinUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          the classroom
-                        </a>
-                        . Progress shown here is what ADLM Studio tracks.{" "}
-                      </>
-                    ) : null}
-                    {classroom?.notes || ""}
-                  </p>
-                ) : null}
               </>
             ) : null}
 

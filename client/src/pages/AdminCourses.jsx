@@ -198,10 +198,6 @@ export default function AdminCourses() {
       description: "",
       thumbnailUrl: "",
       onboardingVideoUrl: "",
-      classroomJoinUrl: "",
-      classroomProvider: "google_classroom",
-      classroomCourseId: "",
-      classroomNotes: "",
       tutorName: "",
       tutorTitle: "",
       capstoneTitle: "",
@@ -222,10 +218,6 @@ export default function AdminCourses() {
       description: course.description || "",
       thumbnailUrl: course.thumbnailUrl || "",
       onboardingVideoUrl: course.onboardingVideoUrl || "",
-      classroomJoinUrl: course.classroomJoinUrl || "",
-      classroomProvider: course.classroomProvider || "google_classroom",
-      classroomCourseId: course.classroomCourseId || "",
-      classroomNotes: course.classroomNotes || "",
       tutorName: course.tutorName || "",
       tutorTitle: course.tutorTitle || "",
       capstoneTitle: course.capstoneTitle || "",
@@ -271,7 +263,7 @@ export default function AdminCourses() {
     try {
       const res = await apiAuthed("/admin/softwares", { token: accessToken });
       setSoftwares(Array.isArray(res?.items) ? res.items : []);
-    } catch (e) {
+    } catch {
       // silent — picker just shows empty
     }
   }, [accessToken]);
@@ -506,10 +498,6 @@ export default function AdminCourses() {
             description: product.description || "",
             thumbnailUrl: product.thumbnailUrl || product.images?.[0] || "",
             onboardingVideoUrl: product.previewUrl || "",
-            classroomJoinUrl: "",
-            classroomProvider: "google_classroom",
-            classroomCourseId: "",
-            classroomNotes: "",
             tutorName: "",
             tutorTitle: "",
             capstoneTitle: "",
