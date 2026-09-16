@@ -611,7 +611,7 @@ export function InstallationsTab({
                         ))}
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-600">, </div>
+                      <div className="text-sm text-slate-600">–</div>
                     )}
                   </div>
 
@@ -638,7 +638,7 @@ export function InstallationsTab({
                         ))}
                       </ul>
                     ) : (
-                      <div className="text-sm text-slate-600">, </div>
+                      <div className="text-sm text-slate-600">–</div>
                     )}
                   </div>
 
