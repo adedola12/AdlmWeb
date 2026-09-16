@@ -171,7 +171,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · Google Classroom · self-paced
+                  100% online · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -244,7 +244,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · Google Classroom · self-paced
+                  100% online · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -381,7 +381,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · Google Classroom · self-paced
+                  100% online · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -2100,7 +2100,7 @@ export default function DsLearnPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Self-paced, delivered through Google Classroom, with weekly assessments to keep you moving. Support is available while you work through it.
+                Self-paced, delivered on the ADLM Studio platform, with weekly assessments to keep you moving. Support is available while you work through it.
               </div>
               {" "}
             </details>
