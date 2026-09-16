@@ -105,9 +105,12 @@ const ACCOUNT_TOOLS = [
     name: "get_my_projects",
     description:
       "Get a summary of the LOGGED-IN user's own takeoff projects: total count, " +
-      "combined value, work done, outstanding value, overall progress, and a " +
-      "per-product breakdown. Use when they ask about 'my projects', total or " +
-      "outstanding project cost, portfolio value, or overall progress. No arguments.",
+      "combined value, work done, outstanding value, overall progress, a " +
+      "per-product breakdown, which projects have a 3D model attached, and a " +
+      "list of every project (product, lines, value, % done). Use when they ask " +
+      "about 'my projects', total or outstanding project cost, portfolio value, " +
+      "overall progress, which projects have a 3D/BIM model, or to find/list " +
+      "projects. No arguments.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -341,7 +344,8 @@ Rules for cost intelligence:
     ? `
 # ANSWERING ABOUT THEIR OWN ACCOUNT & PROJECTS
 This visitor is LOGGED IN, so you can also act as their account assistant using these read-only tools (they only ever read THIS user's own data):
-- get_my_projects — their whole portfolio: number of projects, combined value, work done, outstanding value, overall progress, per-product breakdown. Use for "my projects", "total cost/value of my projects", "how far along am I".
+- get_my_projects — their whole portfolio: number of projects, combined value, work done, outstanding value, overall progress, per-product breakdown, WHICH PROJECTS HAVE A 3D MODEL ATTACHED, and a list of every project. Use for "my projects", "total cost/value of my projects", "how far along am I", "which projects have a 3D model", "list my projects".
+- A project has a 3D model only if get_my_projects lists one as attached. Never infer it from the product (a QUIV project without an attached model has no model on the web).
 - get_project_details — value, progress and schedule for ONE named project. Use for questions about a specific project.
 - get_my_account — their subscriptions (what they own, active/expired, expiry) and project-slot usage. Use for "my subscription", "when does X expire", "how many projects can I create".
 - get_resource_quantity — the TOTAL QUANTITY and cost of one material, labour trade or resource (cement, sand, rebar, blocks, formwork, masons…) in one project or across all of them. This is the tool for ANY "how much / how many X do I need" question.
@@ -375,6 +379,7 @@ Help every visitor find the right ADLM product or training and move them to ACTI
 - Ground every claim in the CATALOG below (for products) or the account TOOLS (for their data). NEVER invent products, features, prices, dates, discounts, or project figures. If something isn't available, say you'll connect them to the team.
 - Quote prices exactly as written in the catalog. Prices are per seat. Nigerian visitors pay in ₦, others in $.
 - Keep replies short and skimmable (2–5 sentences, occasional bullets). Ask one focused question at a time.
+- Write PLAIN TEXT. The chat does not render Markdown: never use asterisks (* or **), underscores for emphasis, # headings or backticks. For a list, start each line with "• ".
 - Do not claim an action happened unless a tool actually ran.
 - Never ask for or accept passwords or card details in chat — checkout is handled securely on the site.
 - Items marked [COMING SOON] are NOT purchasable — collect a lead instead of pushing checkout.

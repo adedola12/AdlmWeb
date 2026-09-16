@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
+import { plainText } from "../lib/plainText.js";
 
 /**
  * ADLM AI Agent ("Ada") — a conversion-focused conversational assistant that
@@ -231,7 +232,9 @@ export default function AiAgent() {
                 key={m._id ?? i2}
                 className={`ada-m ${m.role === "user" ? "ada-q" : "ada-a"}`}
               >
-                <div style={{ whiteSpace: "pre-line" }}>{m.text}</div>
+                <div style={{ whiteSpace: "pre-line" }}>
+                  {m.role === "assistant" ? plainText(m.text) : m.text}
+                </div>
 
                 {m.role === "assistant" &&
                   Array.isArray(m.actions) &&
