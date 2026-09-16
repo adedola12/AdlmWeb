@@ -112,7 +112,7 @@ reports went only to `dmarcmanager@kudimail.net`, which nobody read. The
   and emails the ops topic when any message failed authentication.
 - Tests: `node --test infra/lambda/dmarc/parse.test.mjs`.
 
-DNS it needs, in Google Cloud DNS:
+DNS it needs, in Squarespace Domains (DNS -> Custom records; the zone moved there from Google Domains, which is why the nameservers are ns-cloud-*.googledomains.com):
 
 | Name | Type | Value |
 |---|---|---|
