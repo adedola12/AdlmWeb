@@ -187,6 +187,7 @@ import { landingRoutes } from "./pages/landing/routes.jsx";
 // page never means editing this file.
 import DsPreview from "./ds/DsPreview.jsx";
 import DsPreviewGate from "./ds/DsPreviewGate.jsx";
+import NewBuildGate from "./components/NewBuildGate.jsx";
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
@@ -318,11 +319,11 @@ const router = createBrowserRouter([
         // and keeps its data until this one is proven on real accounts.
         path: "manage",
         element: (
-          <ProtectedRoute>
+          <NewBuildGate>
             <LazyScreen>
               <ManageOverview />
             </LazyScreen>
-          </ProtectedRoute>
+          </NewBuildGate>
         ),
       },
       // The rest of the Manage section. Every one of these is already a
@@ -348,10 +349,12 @@ const router = createBrowserRouter([
         { path: "dash-course/:sku", el: <LearningCourse /> },
       ].map(({ path, el }) => ({
         path,
+        // Admin roles only until go-live; customers go to the classic page
+        // (components/NewBuildGate.jsx).
         element: (
-          <ProtectedRoute>
+          <NewBuildGate>
             <LazyScreen>{el}</LazyScreen>
-          </ProtectedRoute>
+          </NewBuildGate>
         ),
       })),
       {
