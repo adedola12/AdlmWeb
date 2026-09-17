@@ -17,6 +17,7 @@
 // mean support asking for it in the first reply every time.
 
 import React from "react";
+import { useReportBack } from "./feedback/useReportBack.js";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
@@ -121,6 +122,7 @@ export default function DsSupport() {
   const [sending, setSending] = React.useState(false);
   const [said, setSaid] = React.useState("");
   const [problem, setProblem] = React.useState("");
+  useReportBack(said, problem);
 
   const loadTickets = React.useCallback(() => {
     if (!accessToken) return Promise.resolve();

@@ -20,6 +20,7 @@
 // copy rather than two.
 
 import React from "react";
+import { useReportBack } from "./feedback/useReportBack.js";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
@@ -73,6 +74,7 @@ export default function DsSettings() {
   const [saving, setSaving] = React.useState("");
   const [said, setSaid] = React.useState("");
   const [problem, setProblem] = React.useState("");
+  useReportBack(said, problem);
 
   const [avatarUrl, setAvatarUrl] = React.useState("");
   const [avatarPct, setAvatarPct] = React.useState(0);

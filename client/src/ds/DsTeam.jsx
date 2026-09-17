@@ -22,6 +22,7 @@
 // only parts of this file that change.
 
 import React from "react";
+import { useReportBack } from "./feedback/useReportBack.js";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
@@ -72,6 +73,7 @@ export default function DsTeam() {
   const [failed, setFailed] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const [problem, setProblem] = React.useState("");
+  useReportBack("", problem);
 
   React.useEffect(() => {
     if (!accessToken) return undefined;

@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom"
 import { AuthProvider } from "./store.jsx";
 import { StepUpProvider } from "./features/security/useStepUp.jsx";
 import { ThemeProvider, initThemeBeforeRender } from "./theme.jsx";
+import { FeedbackProvider } from "./ds/feedback/FeedbackProvider.jsx";
 import App from "./App.jsx";
 import "./index.css";
 // Richard's design system, ported and namespaced under `.ds`. Loading it here
@@ -1180,11 +1181,13 @@ const router = createBrowserRouter([
 const tree = (
   <React.StrictMode>
     <ThemeProvider>
-      <AuthProvider>
-        <StepUpProvider>
-          <RouterProvider router={router} />
-        </StepUpProvider>
-      </AuthProvider>
+      <FeedbackProvider>
+        <AuthProvider>
+          <StepUpProvider>
+            <RouterProvider router={router} />
+          </StepUpProvider>
+        </AuthProvider>
+      </FeedbackProvider>
     </ThemeProvider>
   </React.StrictMode>
 );
