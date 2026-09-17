@@ -70,30 +70,33 @@ export default function ArchiCADExportBar({ projectId, projectName, disabled = f
     }
   }
 
+  const baseBtn =
+    "inline-flex items-center gap-1.5 rounded-adlm px-3 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-      <div className="wk-acts">
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
         <button
           type="button"
           disabled={disabled || !!busy}
           onClick={() => download("excel")}
-          className="ds-btn ds-btn-sm btn-o"
+          className={`${baseBtn} bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500`}
         >
-          {busy === "excel" ? <FaSpinner size={14} className="animate-spin" /> : <FaFileExcel size={14} />}
+          {busy === "excel" ? <FaSpinner className="animate-spin" /> : <FaFileExcel />}
           Excel
         </button>
         <button
           type="button"
           disabled={disabled || !!busy}
           onClick={() => download("pdf")}
-          className="ds-btn ds-btn-sm btn-o"
+          className={`${baseBtn} bg-adlm-orange text-white hover:opacity-90`}
         >
-          {busy === "pdf" ? <FaSpinner size={14} className="animate-spin" /> : <FaFilePdf size={14} />}
+          {busy === "pdf" ? <FaSpinner className="animate-spin" /> : <FaFilePdf />}
           PDF
         </button>
       </div>
       {err ? (
-        <div className="wk-locnote" role="alert" style={{ color: "var(--pal-orange-key)" }}>{err}</div>
+        <div className="text-xs text-red-600 dark:text-red-400">{err}</div>
       ) : null}
     </div>
   );

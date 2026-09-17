@@ -62,75 +62,10 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-// Rows inside the bill's table, in his manner. His bill is a grid of divs
-// (.wk-qg / .wk-qgh / .wk-qtot); this one is a real <table> with editable
-// cells, so the same look is carried by his tokens on the rows instead.
-//
-//   section heading  his alt surface with a firmer rule above; while a line is
-//                    dragged over it, his light-blue wash and an action outline
-//   subtotal         the alt surface, a rule above, tabular figures
-//   total            his heavy rule (.wk-tot) above the bill's totals
-const sectionRowStyle = (dropping) => ({
-  background: dropping ? "var(--pal-light-wash)" : "var(--bg-alt)",
-  borderTop: "1px solid var(--line-2)",
-  outline: dropping ? "2px dashed var(--action)" : "none",
-  outlineOffset: -2,
-});
-const SUBTOTAL_ROW = {
-  background: "var(--bg-alt)",
-  borderTop: "1px solid var(--line-2)",
-  fontSize: 12,
-  fontWeight: 500,
-  color: "var(--ink)",
-  fontVariantNumeric: "tabular-nums",
-};
-const TOTAL_ROW = {
-  // 2px, not his 1.5px: in a collapsed table border a 1.5px rule rounds down to 1.
-  borderTop: "2px solid var(--ink)",
-  fontSize: 13.5,
-  fontWeight: 500,
-  color: "var(--ink)",
-  fontVariantNumeric: "tabular-nums",
-};
-const READING = { color: "var(--ink)", fontWeight: 500, fontVariantNumeric: "tabular-nums" };
-
-// One of his palettes, for a .wk-src chip or a toggled button.
-function palChip(pal) {
-  return {
-    background: `var(--pal-${pal}-wash)`,
-    color: `var(--pal-${pal}-key)`,
-    borderColor: `var(--pal-${pal}-line)`,
-  };
-}
-// His .wk-dd-m surface, for popovers that are open whenever they render.
-const POP = {
-  background: "var(--bg)",
-  border: "1px solid var(--line)",
-  borderRadius: 14,
-  boxShadow: "0 3px 10px rgba(var(--shadow-c),.08), 0 20px 46px rgba(var(--shadow-c),.20)",
-};
-// A compact ds-btn holding just an icon.
-const ICON_BTN = { padding: "6px 8px" };
-const ROW_BTN = { padding: "4px 6px" };
-
-// A bill row's state in his tokens: a dragged row fades, a marked row takes
-// his light wash, and the drop target shows an action-coloured line.
-function billRowStyle({ dragging, marked, dropAbove, dropBelow }) {
-  return {
-    ...(dragging
-      ? { opacity: 0.4, background: "var(--bg-alt)" }
-      : marked
-        ? { background: "var(--pal-light-wash)" }
-        : null),
-    ...(dropAbove ? { borderTop: "2px solid var(--action)" } : null),
-    ...(dropBelow ? { borderBottom: "2px solid var(--action)" } : null),
-  };
-}
-
 function InfoTip({ text }) {
   return (
     <span className="relative inline-flex items-center group">
-      <FaInfoCircle size={13} className="text-slate-500" />
+      <FaInfoCircle className="text-slate-500" />
       <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-xs text-white group-hover:block">
         {text}
       </span>
@@ -156,8 +91,13 @@ function PercentInline({
       : Math.max(0, Math.min(100, Number(row?.percentComplete) || 0));
   return (
     <span
-      className="wk-src sm"
-      style={isRatified ? palChip("light") : value > 0 ? palChip("orange") : undefined}
+      className={`inline-flex items-center gap-1 rounded-md border px-1 py-0.5 text-[10px] ${
+        isRatified
+          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+          : value > 0
+            ? "border-amber-300 bg-amber-50 text-amber-700"
+            : "border-slate-200 bg-white text-slate-500"
+      }`}
       title={
         isRatified
           ? "Fully ratified (100%)"
@@ -177,7 +117,6 @@ function PercentInline({
           onPercentChange?.(row.i, v);
         }}
         className="w-10 bg-transparent text-right tabular-nums focus:outline-none disabled:opacity-70"
-        style={{ border: 0, color: "inherit", font: "inherit" }}
       />
       <span>%</span>
     </span>
@@ -551,7 +490,7 @@ export function RateCell({
         </button>
       ) : (
         /* Expanded popup overlay on focus */
-        <div className="absolute left-0 top-0 z-40 w-80" style={POP}>
+        <div className="absolute left-0 top-0 z-40 w-80 rounded-lg border border-blue-300 bg-white shadow-xl">
           <div className="p-2">
             <input
               ref={inputRef}
@@ -601,8 +540,11 @@ export function RateCell({
             {/* Live formula preview / hint strip */}
             {formulaResult ? (
               <div
-                className="mt-1 rounded-md border px-2 py-1 text-[11px]"
-                style={palChip(formulaResult.ok ? "light" : "orange")}
+                className={`mt-1 rounded-md border px-2 py-1 text-[11px] ${
+                  formulaResult.ok
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-rose-200 bg-rose-50 text-rose-800"
+                }`}
               >
                 {formulaResult.ok ? (
                   <span>
@@ -1364,9 +1306,9 @@ export default function ProjectBillTable({
       <span className="inline-flex items-center gap-1">
         {children}
         {sortCol === col ? (
-          <span style={{ color: "var(--action)" }}>{sortAsc ? "▲" : "▼"}</span>
+          <span className="text-adlm-blue-700">{sortAsc ? "▲" : "▼"}</span>
         ) : (
-          <span style={{ color: "var(--ink-3)", opacity: 0.6 }}>⇅</span>
+          <span className="text-slate-300">⇅</span>
         )}
       </span>
     </th>
@@ -1381,30 +1323,17 @@ export default function ProjectBillTable({
     { id: "provisional", label: "Provisional", icon: FaFileInvoiceDollar },
   ];
 
-  // A group of bill tools: his .wk-grp title above, the controls below.
   const RibbonGroup = ({ title, children }) => (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        minWidth: 120,
-        padding: "10px 14px",
-        border: "1px solid var(--line)",
-        borderRadius: 12,
-        background: "var(--bg-alt)",
-      }}
-    >
-      <div className="wk-grp" style={{ padding: 0 }}>
-        {title}
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+    <div className="flex flex-col items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 min-w-[110px]">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         {children}
+      </div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">
+        {title}
       </div>
     </div>
   );
 
-  // His small outline button; the "active" state is his primary.
   const RibbonButton = ({
     icon: Icon,
     label,
@@ -1418,10 +1347,17 @@ export default function ProjectBillTable({
       onClick={onClick}
       disabled={disabled}
       title={title || label}
-      className={`ds-btn ds-btn-sm ${active ? "btn-p" : "btn-o"}`}
+      className={[
+        "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 text-[11px] transition",
+        disabled
+          ? "text-slate-300 cursor-not-allowed"
+          : active
+            ? "bg-adlm-blue-700 text-white"
+            : "text-slate-700 hover:bg-slate-100",
+      ].join(" ")}
     >
-      {Icon ? <Icon size={13} /> : null}
-      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
+      {Icon ? <Icon className="text-sm" /> : null}
+      <span className="whitespace-nowrap">{label}</span>
     </button>
   );
 
@@ -1520,79 +1456,79 @@ export default function ProjectBillTable({
           />
         ) : null}
 
-        {/* The bill's tools, in his pieces: .wk-tabs for the ribbon's tabs,
-            the running totals as his readings, and the tools below in titled
-            groups. The totals stay visible when the tools are hidden. */}
-        <div className="wk-panel">
-          <div className="wk-ph" style={{ flexWrap: "wrap", gap: 12 }}>
-            <div
-              className="wk-tabs"
-              role="tablist"
-              aria-label="Bill tools"
-              style={{ maxWidth: "100%", overflowX: "auto" }}
-            >
-              {RIBBON_TABS.map((tab) => (
+        {/* Office-style ribbon: tab strip + contextual groups */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-depth">
+          <div className="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-2 pt-2">
+            {RIBBON_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const active = ribbonTab === tab.id;
+              return (
                 <button
                   key={tab.id}
                   type="button"
-                  role="tab"
-                  aria-selected={ribbonTab === tab.id}
-                  className={ribbonTab === tab.id ? "on" : ""}
                   onClick={() => setRibbonTab(tab.id)}
+                  className={[
+                    "inline-flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs font-medium transition",
+                    active
+                      ? "bg-slate-50 text-adlm-blue-700 border-x border-t border-slate-200"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50",
+                  ].join(" ")}
                 >
+                  <Icon className="text-[11px]" />
                   {tab.label}
                 </button>
-              ))}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                flexWrap: "wrap",
-                gap: "6px 14px",
-                marginLeft: "auto",
-              }}
-            >
-              <span className="wk-locnote">
-                Measured <b style={READING}>{money(grossAmount)}</b>
+              );
+            })}
+            <div className="ml-auto flex items-center gap-3 px-2 text-[11px] text-slate-500">
+              <span>
+                Measured: <b className="text-slate-700">{money(grossAmount)}</b>
               </span>
               {provisionalTotal > 0 ? (
-                <span className="wk-locnote">
-                  PC <b style={READING}>{money(provisionalTotal)}</b>
+                <span>
+                  PC:{" "}
+                  <b className="text-slate-700">{money(provisionalTotal)}</b>
                 </span>
               ) : null}
               {variationsTotal !== 0 ? (
-                <span className="wk-locnote">
-                  Variations{" "}
-                  <b style={{ ...READING, color: "var(--pal-orange-key)" }}>
+                <span>
+                  Variations:{" "}
+                  <b
+                    className={
+                      variationsTotal > 0 ? "text-amber-700" : "text-red-700"
+                    }
+                  >
                     {money(variationsTotal)}
                   </b>
                 </span>
               ) : null}
-              <span className="wk-locnote" style={{ color: "var(--ink-2)" }}>
-                Project total{" "}
-                <b style={{ ...READING, fontSize: 15, color: "var(--action)" }}>
-                  {money(projectTotal)}
-                </b>
+              <span className="font-semibold">
+                Project total:{" "}
+                <b className="text-adlm-blue-700">{money(projectTotal)}</b>
               </span>
+              {/* Collapse / expand the entire ribbon panel. The summary row
+                (Measured / PC / Variations / Project total) stays visible
+                either way so users keep their at-a-glance totals. */}
               <button
                 type="button"
                 onClick={toggleRibbonCollapsed}
                 aria-expanded={!ribbonCollapsed}
                 aria-controls="boq-ribbon-body"
-                className="ds-btn ds-btn-sm btn-o"
-                title={ribbonCollapsed ? "Show the bill tools" : "Hide the bill tools"}
+                className="ml-1 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                title={ribbonCollapsed ? "Show toolbar" : "Hide toolbar"}
               >
-                {ribbonCollapsed ? "Show tools" : "Hide tools"}
+                <span
+                  aria-hidden="true"
+                  className={`inline-block transition-transform ${ribbonCollapsed ? "" : "rotate-180"}`}
+                >
+                  ▾
+                </span>
+                {ribbonCollapsed ? "Show" : "Hide"}
               </button>
             </div>
           </div>
 
           {ribbonCollapsed ? null : (
-            <div
-              id="boq-ribbon-body"
-              style={{ display: "flex", flexWrap: "wrap", gap: 10, padding: "14px 20px" }}
-            >
+            <div id="boq-ribbon-body" className="flex flex-wrap gap-2 p-3">
               {ribbonTab === "home" ? (
                 <>
                   <RibbonGroup title="View">
@@ -1622,14 +1558,19 @@ export default function ProjectBillTable({
 
                   <RibbonGroup title="Grouping">
                     <div
-                      className="wk-loc-sw"
+                      className="inline-flex items-center overflow-hidden rounded-md border border-slate-200 bg-white text-[11px]"
                       role="tablist"
                       aria-label="Group BoQ items by"
                     >
                       <button
                         type="button"
                         onClick={() => onGroupByModeChange?.("category")}
-                        className={!isTradeGrouping && !isSourceGrouping ? "on" : ""}
+                        className={[
+                          "px-2.5 py-1 transition",
+                          !isTradeGrouping && !isSourceGrouping
+                            ? "bg-adlm-blue-700 text-white"
+                            : "text-slate-700 hover:bg-slate-100",
+                        ].join(" ")}
                         title="Group by building element (Substructure / Superstructure / HVAC / Plumbing / Electrical)"
                       >
                         Category
@@ -1637,7 +1578,12 @@ export default function ProjectBillTable({
                       <button
                         type="button"
                         onClick={() => onGroupByModeChange?.("trade")}
-                        className={isTradeGrouping ? "on" : ""}
+                        className={[
+                          "px-2.5 py-1 transition border-l border-slate-200",
+                          isTradeGrouping
+                            ? "bg-adlm-blue-700 text-white"
+                            : "text-slate-700 hover:bg-slate-100",
+                        ].join(" ")}
                         title="Group by trade / work section (Concrete Works, Formwork, Reinforcement, Masonry, Finishes, etc.)"
                       >
                         Trade
@@ -1646,14 +1592,19 @@ export default function ProjectBillTable({
                         <button
                           type="button"
                           onClick={() => onGroupByModeChange?.("source")}
-                          className={isSourceGrouping ? "on" : ""}
+                          className={[
+                            "px-2.5 py-1 transition border-l border-slate-200",
+                            isSourceGrouping
+                              ? "bg-adlm-blue-700 text-white"
+                              : "text-slate-700 hover:bg-slate-100",
+                          ].join(" ")}
                           title="Group by the discipline project each line was measured in (architectural, structural, ...)"
                         >
                           Discipline
                         </button>
                       ) : null}
                     </div>
-                    <div className="wk-fx" style={{ maxWidth: 220, lineHeight: 1.45 }}>
+                    <div className="text-[10px] text-slate-500 max-w-[180px] leading-tight">
                       {isSourceGrouping
                         ? "Grouped by the discipline project each line came from. Switch to Category or Trade to arrange the combined bill the usual way."
                         : isTradeGrouping
@@ -1676,8 +1627,7 @@ export default function ProjectBillTable({
                           if (isTradeGrouping) onAddTrade?.(t);
                           else onAddCategory?.(t);
                         }}
-                        className="ds-btn ds-btn-sm btn-o"
-                        style={{ alignSelf: "flex-start" }}
+                        className="mt-1 inline-flex items-center gap-1 self-start rounded-md border border-dashed border-adlm-blue-300 bg-white px-2 py-1 text-[10px] font-semibold text-adlm-blue-700 hover:bg-blue-50"
                         title="Create a new category / work section, remembered for your future projects"
                       >
                         + New {isTradeGrouping ? "section" : "category"}
@@ -2042,86 +1992,80 @@ export default function ProjectBillTable({
           )}
 
           {!ribbonCollapsed && showActualColumns && ribbonTab === "home" ? (
-            <p className="wk-note" style={{ borderTop: "1px solid var(--line)" }}>
+            <div className="border-t bg-white px-3 py-2 text-[11px] text-slate-500">
               Actual amount uses the entered actual qty and actual rate. If only
               one actual field is entered, the other value falls back to the
               planned quantity or rate for comparison.
-            </p>
+            </div>
           ) : null}
         </div>
 
-        <div className="wk-bar" style={{ marginBottom: 0 }}>
-          <label className="wk-find">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <use href="#hi-search" />
-            </svg>
-            <input
-              type="search"
-              placeholder="Search items (description / group / S/N)..."
-              aria-label="Search bill items"
-              autoComplete="off"
-              value={itemQuery}
-              onChange={(e) => onItemQueryChange?.(e.target.value)}
-            />
-          </label>
+        <div className="flex items-center gap-2 rounded-md border bg-white px-2 py-2">
+          <FaSearch className="text-slate-500" />
+          <input
+            className="w-full text-sm outline-none"
+            placeholder="Search items (description / group / S/N)..."
+            value={itemQuery}
+            onChange={(e) => onItemQueryChange?.(e.target.value)}
+          />
           {itemQuery ? (
             <button
               type="button"
-              className="ds-btn ds-btn-sm btn-o"
+              className="text-slate-500 hover:text-slate-700"
               onClick={onClearItemQuery}
-              title="Clear the search"
+              title="Clear"
             >
-              Clear
+              <FaTimes />
             </button>
           ) : null}
         </div>
 
         {!items.length ? (
-          <div className="wk-empty">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
             This project does not have any saved items yet.
           </div>
         ) : null}
 
         {items.length && !computedShown.length ? (
-          <div className="wk-empty">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
             No items match the current search.
           </div>
         ) : null}
 
         {computedShown.length ? (
-          <div className="wk-panel" style={{ overflowX: "auto", maxWidth: "100%" }}>
+          <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white max-w-full">
             <table
               className="w-full text-sm"
               style={{ tableLayout: "auto", minWidth: 0 }}
             >
               <colgroup>
-                <col className="w-10" />{/* S/N */}
+                <col className="w-10" /> {/* S/N */}
                 <col
                   className={showActualColumns ? "w-10" : "w-[130px]"}
-                />
+                />{" "}
                 {/* Status */}
                 <col
                   style={{ width: showActualColumns ? "22%" : "28%" }}
-                />
+                />{" "}
                 {/* Description, % based */}
-                <col className="w-16" />{/* Qty */}
-                <col className="w-10" />{/* Unit */}
+                <col className="w-16" /> {/* Qty */}
+                <col className="w-10" /> {/* Unit */}
                 <col
                   style={{ width: showActualColumns ? "12%" : "16%" }}
-                />
+                />{" "}
                 {/* Rate */}
-                {showActualColumns ? <col className="w-[100px]" /> : null}
+                {showActualColumns ? <col className="w-[100px]" /> : null}{" "}
                 {/* Actual qty */}
-                {showActualColumns ? <col className="w-[100px]" /> : null}
+                {showActualColumns ? <col className="w-[100px]" /> : null}{" "}
                 {/* Actual rate */}
-                {showActualColumns ? <col className="w-[90px]" /> : null}
+                {showActualColumns ? <col className="w-[90px]" /> : null}{" "}
                 {/* Actual amount */}
-                {showActualColumns ? <col className="w-[72px]" /> : null}
+                {showActualColumns ? <col className="w-[72px]" /> : null}{" "}
                 {/* Actual added */}
-                <col className="w-[90px]" />{/* Gross amount */}
-                <col className="w-[72px]" />{/* Deducted */}
-                <col className="w-[72px]" />{/* Balance */}
-                <col className="w-[80px]" />{/* Actions */}
+                <col className="w-[90px]" /> {/* Gross amount */}
+                <col className="w-[72px]" /> {/* Deducted */}
+                <col className="w-[72px]" /> {/* Balance */}
+                <col className="w-[80px]" /> {/* Actions */}
               </colgroup>
               <thead className="bg-slate-50 text-left text-slate-600">
                 <tr>
@@ -2164,8 +2108,12 @@ export default function ProjectBillTable({
                       ref={(el) => {
                         categoryAnchorRef.current[category] = el;
                       }}
-                      className="scroll-mt-24 transition-colors"
-                      style={sectionRowStyle(dragOverCat === category && dragIdx != null)}
+                      className={[
+                        "border-t-2 border-adlm-blue-200 scroll-mt-24 transition-colors",
+                        dragOverCat === category && dragIdx != null
+                          ? "bg-adlm-blue-100 outline-dashed outline-2 outline-adlm-blue-400"
+                          : "bg-slate-100",
+                      ].join(" ")}
                       data-section={`cat-${category}`}
                       onDragOver={(e) => {
                         if (dragIdx == null) return;
@@ -2185,12 +2133,12 @@ export default function ProjectBillTable({
                     >
                       <td colSpan={totalCols} className="px-3 py-2">
                         <div className="flex items-center justify-between">
-                          <span className="wk-grp" style={{ padding: 0 }}>
+                          <span className="text-sm font-semibold text-slate-900">
                             {category}
                           </span>
-                          <span className="wk-locnote">
+                          <span className="text-[11px] text-slate-600">
                             {dragOverCat === category && dragIdx != null ? (
-                              <span style={{ color: "var(--action)", fontWeight: 500 }}>
+                              <span className="font-semibold text-adlm-blue-700">
                                 Drop to move here
                               </span>
                             ) : (
@@ -2259,24 +2207,29 @@ export default function ProjectBillTable({
                             setDragIdx(null);
                             setDragOverIdx(null);
                           }}
-                          className="border-t align-top transition-colors"
-                          style={billRowStyle({
-                            dragging: isDragging,
-                            marked: row.isMarked,
-                            dropAbove: isOver && dragIdx != null && dragIdx > row.i,
-                            dropBelow: isOver && dragIdx != null && dragIdx < row.i,
-                          })}
+                          className={[
+                            "border-t align-top transition-colors",
+                            isDragging
+                              ? "opacity-40 bg-slate-100"
+                              : row.isMarked
+                                ? "bg-emerald-50/40"
+                                : "bg-white",
+                            isOver && dragIdx != null && dragIdx !== row.i
+                              ? dragIdx < row.i
+                                ? "border-b-2 border-b-adlm-blue-700"
+                                : "border-t-2 border-t-adlm-blue-700"
+                              : "",
+                          ].join(" ")}
                         >
                           {/* Drag handle + S/N */}
                           <td className="px-1 py-2">
                             <div className="flex items-center gap-1">
                               {!sortCol && (
                                 <span
-                                  className="cursor-grab active:cursor-grabbing touch-none"
-                                  style={{ color: "var(--ink-3)", display: "inline-flex" }}
+                                  className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none"
                                   title="Drag to reorder"
                                 >
-                                  <FaGripVertical size={13} />
+                                  <FaGripVertical className="text-[10px]" />
                                 </span>
                               )}
                               <span className="font-medium text-slate-700">
@@ -2518,19 +2471,17 @@ export default function ProjectBillTable({
                                     <div className="relative">
                                       <button
                                         type="button"
-                                        className="ds-btn ds-btn-sm btn-o"
-                                        style={ICON_BTN}
-                                        aria-label="Pick a matching material price"
+                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border hover:bg-slate-50"
                                         title="Pick a matching material price"
                                         onClick={() =>
                                           onToggleOpenPickKey?.(row.key)
                                         }
                                       >
-                                        <FaSearch size={13} />
+                                        <FaSearch className="text-xs text-slate-600" />
                                       </button>
 
                                       {openPickKey === row.key ? (
-                                        <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden" style={POP}>
+                                        <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border bg-white shadow-lg">
                                           <div className="border-b px-3 py-2 text-xs text-slate-600">
                                             Choose a price for{" "}
                                             <b>
@@ -2596,7 +2547,7 @@ export default function ProjectBillTable({
                                           <div className="flex justify-end p-2">
                                             <button
                                               type="button"
-                                              className="ds-btn ds-btn-sm btn-o"
+                                              className="btn btn-xs"
                                               onClick={onClosePickKey}
                                             >
                                               Close
@@ -2652,10 +2603,7 @@ export default function ProjectBillTable({
 
                                   <button
                                     type="button"
-                                    className="ds-btn ds-btn-sm btn-o"
-                                    style={{ ...ICON_BTN, ...(linked ? palChip("light") : null) }}
-                                    aria-pressed={linked}
-                                    aria-label="Link similar items"
+                                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition ${canLink ? (linked ? "border-blue-300 bg-blue-50" : "hover:bg-slate-50") : "cursor-not-allowed opacity-40"}`}
                                     title={
                                       canLink
                                         ? linked
@@ -2668,7 +2616,9 @@ export default function ProjectBillTable({
                                       onToggleGroupLink?.(groupId, row.i)
                                     }
                                   >
-                                    <FaLink size={13} />
+                                    <FaLink
+                                      className={`text-xs ${linked ? "text-adlm-blue-700" : "text-slate-600"}`}
+                                    />
                                   </button>
                                 </>
                               )}
@@ -2739,31 +2689,32 @@ export default function ProjectBillTable({
 
                           {/* Actions: move up / move down / delete */}
                           <td className="px-1 py-2">
-                            <div className="flex items-center justify-center gap-1">
+                            <div className="flex items-center justify-center gap-0.5">
                               <button
                                 type="button"
-                                className="ds-btn ds-btn-sm btn-o"
-                                style={ROW_BTN}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
                                 title="Move up"
                                 disabled={row.i === 0}
                                 onClick={() => onMoveItem?.(row.i, row.i - 1)}
                               >
-                                <FaArrowUp size={12} />
+                                <FaArrowUp className="text-[10px]" />
                               </button>
                               <button
                                 type="button"
-                                className="ds-btn ds-btn-sm btn-o"
-                                style={ROW_BTN}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
                                 title="Move down"
                                 disabled={row.i >= items.length - 1}
                                 onClick={() => onMoveItem?.(row.i, row.i + 1)}
                               >
-                                <FaArrowDown size={12} />
+                                <FaArrowDown className="text-[10px]" />
                               </button>
                               <button
                                 type="button"
-                                className="ds-btn ds-btn-sm btn-o"
-                                style={ROW_BTN}
+                                className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
+                                  contractLocked
+                                    ? "text-slate-300 cursor-not-allowed"
+                                    : "hover:bg-red-50 text-slate-400 hover:text-red-600"
+                                }`}
                                 title={
                                   contractLocked
                                     ? "Contract locked. Unlock it to delete measured items, or raise a variation"
@@ -2775,14 +2726,14 @@ export default function ProjectBillTable({
                                   onDeleteItem?.(row.i);
                                 }}
                               >
-                                <FaTrashAlt size={12} />
+                                <FaTrashAlt className="text-[10px]" />
                               </button>
                             </div>
                           </td>
                         </tr>
                       );
                     })}
-                    <tr style={SUBTOTAL_ROW}>
+                    <tr className="border-t bg-slate-50 text-xs font-medium text-slate-800">
                       <td colSpan={6} className="px-2 py-2 text-right">
                         Subtotal, {category}
                       </td>
@@ -2822,8 +2773,12 @@ export default function ProjectBillTable({
                             ref={(el) => {
                               categoryAnchorRef.current[category] = el;
                             }}
-                            className="scroll-mt-24 transition-colors"
-                      style={sectionRowStyle(dragOverCat === category && dragIdx != null)}
+                            className={[
+                              "border-t-2 border-adlm-blue-200 scroll-mt-24 transition-colors",
+                              dragOverCat === category && dragIdx != null
+                                ? "bg-adlm-blue-100 outline-dashed outline-2 outline-adlm-blue-400"
+                                : "bg-slate-100",
+                            ].join(" ")}
                             data-section={`cat-${category}`}
                             onDragOver={(e) => {
                               if (dragIdx == null) return;
@@ -2843,13 +2798,13 @@ export default function ProjectBillTable({
                           >
                             <td colSpan={totalCols} className="px-3 py-2">
                               <div className="flex items-center justify-between">
-                                <span className="wk-grp" style={{ padding: 0 }}>
+                                <span className="text-sm font-semibold text-slate-900">
                                   {category}
                                 </span>
-                                <span className="wk-locnote">
+                                <span className="text-[11px] text-slate-600">
                                   {dragOverCat === category &&
                                   dragIdx != null ? (
-                                    <span style={{ color: "var(--action)", fontWeight: 500 }}>
+                                    <span className="font-semibold text-adlm-blue-700">
                                       Drop to move here
                                     </span>
                                   ) : (
@@ -2883,8 +2838,8 @@ export default function ProjectBillTable({
                   : null}
               </tbody>
 
-              <tfoot>
-                <tr style={TOTAL_ROW}>
+              <tfoot className="bg-slate-50">
+                <tr className="border-t font-semibold text-slate-900 text-xs">
                   <td className="px-2 py-2" colSpan={6}>
                     Totals
                   </td>
@@ -2918,11 +2873,11 @@ export default function ProjectBillTable({
           );
           const grandTotal = grossAmount + linkedGrandTotal;
           return (
-            <div className="wk-panel">
-              <div className="wk-ph">
-                <h2>Summary by category</h2>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth">
+              <div className="mb-2 text-sm font-semibold text-slate-900">
+                Summary by category
               </div>
-              <div style={{ overflowX: "auto", padding: "4px 20px 16px" }}>
+              <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 text-left text-slate-600">
                     <tr>
@@ -3024,8 +2979,7 @@ export default function ProjectBillTable({
         {onAddVariation ? (
           <div
             ref={variationsSectionRef}
-            className="wk-panel scroll-mt-24"
-            style={{ padding: 20 }}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -3224,8 +3178,7 @@ export default function ProjectBillTable({
         {onUpdatePreliminaryItem && Array.isArray(preliminaryItems) ? (
           <div
             ref={preliminarySectionRef}
-            className="wk-panel scroll-mt-24"
-            style={{ padding: 20 }}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -3564,8 +3517,7 @@ export default function ProjectBillTable({
         {onAddProvisionalSum ? (
           <div
             ref={provisionalSectionRef}
-            className="wk-panel scroll-mt-24"
-            style={{ padding: 20 }}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -4155,9 +4107,13 @@ function WbsLinkChip({ stats }) {
     explanation = `Sum of link weights = ${total}%. This BoQ line is correctly allocated across the WBS.`;
   }
 
-  // Balanced reads in his light palette, over-allocated in his warning
-  // orange, under-allocated stays his neutral chip.
-  const palette = { emerald: palChip("light"), rose: palChip("orange"), slate: undefined }[tone];
+  const palette = {
+    emerald:
+      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/40",
+    rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-700/40",
+    slate:
+      "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
+  }[tone];
 
   const names = Array.isArray(stats.taskNames) ? stats.taskNames : [];
   const previewNames = names.slice(0, 6);
@@ -4176,8 +4132,7 @@ function WbsLinkChip({ stats }) {
     <div className="mt-1 inline-flex items-center">
       <span
         title={title}
-        className="wk-src sm"
-        style={palette}
+        className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${palette}`}
       >
         <span aria-hidden="true">🔗</span>
         {n} link{n === 1 ? "" : "s"} · {total}%

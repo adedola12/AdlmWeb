@@ -1,5 +1,5 @@
 import React from "react";
-import { FaBug, FaExclamationTriangle, FaKeyboard, FaLink, FaTasks } from "../../../components/icons.jsx";
+import { FaBug, FaExclamationTriangle, FaKeyboard, FaLink, FaTasks, FaTimes } from "../../../components/icons.jsx";
 import PmBoqItemPicker from "./PmBoqItemPicker.jsx";
 
 function safeNum(v) {
@@ -22,15 +22,9 @@ function genId(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// Shared modal shell: his .wk-modal (the markup of his W.modal), with
-// click-outside / Esc to close and the body scroll locked. His modal has no
-// header icon, so `icon` is accepted and not drawn. `widthClass` keeps its
-// Tailwind names and maps onto his card's width.
-const MODAL_WIDTH = { "max-w-md": 448, "max-w-lg": 512, "max-w-xl": 576, "max-w-2xl": 672, "max-w-3xl": 768 };
-
-function Modal({ open, title, onClose, children, footer, widthClass = "max-w-2xl" }) {
-  const [shown, setShown] = React.useState(false);
-
+// Shared modal shell. Centred dialog, click-outside / Esc to close,
+// scroll-locked body, ADLM blue header.
+function Modal({ open, title, icon: Icon, onClose, children, footer, widthClass = "max-w-2xl" }) {
   React.useEffect(() => {
     if (!open) return undefined;
     const original = document.body.style.overflow;
@@ -45,56 +39,32 @@ function Modal({ open, title, onClose, children, footer, widthClass = "max-w-2xl
     };
   }, [open, onClose]);
 
-  // .wk-modal fades in once .on lands; the timer covers a tab that is not
-  // painting, where requestAnimationFrame never fires (as in WkModal).
-  React.useEffect(() => {
-    if (!open) {
-      setShown(false);
-      return undefined;
-    }
-    const frame = requestAnimationFrame(() => setShown(true));
-    const fallback = setTimeout(() => setShown(true), 80);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(fallback);
-    };
-  }, [open]);
-
   if (!open) return null;
-  const width = MODAL_WIDTH[widthClass] || 672;
   return (
     <div
-      className={`wk-modal${shown ? " on" : ""}`}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div
-        className="wk-modal-c"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        style={{ width: `min(${width}px, 100%)` }}
-      >
-        <button type="button" className="wk-modal-x" onClick={onClose} aria-label="Close">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <use href="#hi-close" />
-          </svg>
-        </button>
-        <h2 style={{ marginBottom: 22 }}>{title}</h2>
-        {children}
-        {footer ? (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "flex-end",
-              gap: 10,
-              marginTop: 22,
-              paddingTop: 18,
-              borderTop: "1px solid var(--line)",
-            }}
+      <div className={`relative w-full ${widthClass} max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col`}>
+        <div className="flex items-center justify-between bg-gradient-to-r from-adlm-blue-700 to-blue-800 px-5 py-3 text-white">
+          <div className="flex items-center gap-2.5 font-semibold">
+            {Icon ? <Icon className="text-base" /> : null}
+            <span className="text-base">{title}</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 hover:bg-white/20 transition"
+            aria-label="Close"
           >
+            <FaTimes />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        {footer ? (
+          <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 flex items-center justify-end gap-2">
             {footer}
           </div>
         ) : null}
@@ -103,45 +73,46 @@ function Modal({ open, title, onClose, children, footer, widthClass = "max-w-2xl
   );
 }
 
-// Field pieces for his .wk-f labels: the span is his label, and his rules
-// style the input and select. He has no textarea, so it borrows the same look.
-const TEXTAREA = {
-  width: "100%",
-  padding: "13px 14px",
-  borderRadius: 12,
-  border: "1px solid var(--line)",
-  background: "var(--bg-alt)",
-  color: "var(--ink)",
-  fontFamily: "var(--font)",
-  fontSize: 14,
-  fontWeight: 300,
-  resize: "vertical",
-};
-const STACK = { display: "grid", gap: 16 };
-const ROW = { display: "flex", flexWrap: "wrap", gap: 12 };
-const FIELD = { flex: "1 1 150px", minWidth: 0 };
-const HINT = { fontSize: 12, fontWeight: 300, color: "var(--ink-3)" };
-const CHECK = { display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-2)" };
-
 function FieldLabel({ children }) {
-  return <span>{children}</span>;
+  return <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{children}</span>;
 }
 
 function FieldInput(props) {
-  return <input {...props} />;
+  return (
+    <input
+      {...props}
+      className={`mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/30 focus:border-adlm-blue-700 ${props.className || ""}`}
+    />
+  );
 }
 
 function FieldSelect({ children, ...props }) {
-  return <select {...props}>{children}</select>;
+  return (
+    <select
+      {...props}
+      className={`mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/30 focus:border-adlm-blue-700 ${props.className || ""}`}
+    >
+      {children}
+    </select>
+  );
 }
 
 function FieldTextarea(props) {
-  return <textarea {...props} style={{ ...TEXTAREA, ...props.style }} />;
+  return (
+    <textarea
+      {...props}
+      className={`mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/30 focus:border-adlm-blue-700 ${props.className || ""}`}
+    />
+  );
 }
 
 function PrimaryButton({ children, ...props }) {
   return (
-    <button type="button" {...props} className={`ds-btn ds-btn-sm btn-p ${props.className || ""}`}>
+    <button
+      type="button"
+      {...props}
+      className={`inline-flex items-center gap-2 rounded-lg bg-adlm-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 transition disabled:opacity-50 ${props.className || ""}`}
+    >
       {children}
     </button>
   );
@@ -149,7 +120,11 @@ function PrimaryButton({ children, ...props }) {
 
 function SecondaryButton({ children, ...props }) {
   return (
-    <button type="button" {...props} className={`ds-btn ds-btn-sm btn-o ${props.className || ""}`}>
+    <button
+      type="button"
+      {...props}
+      className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition ${props.className || ""}`}
+    >
       {children}
     </button>
   );
@@ -254,9 +229,9 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
         </>
       }
     >
-      <div style={STACK}>
-        <div style={ROW}>
-          <label className="wk-f" style={{ flex: "1 1 90px", minWidth: 0 }}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+          <label className="sm:col-span-1">
             <FieldLabel>WBS</FieldLabel>
             <FieldInput
               value={form.wbs}
@@ -264,7 +239,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
               placeholder="1.1"
             />
           </label>
-          <label className="wk-f" style={{ flex: "5 1 260px", minWidth: 0 }}>
+          <label className="sm:col-span-5">
             <FieldLabel>Task name *</FieldLabel>
             <FieldInput
               value={form.name}
@@ -275,8 +250,8 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
           </label>
         </div>
 
-        <div style={ROW}>
-          <label className="wk-f" style={FIELD}>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <label>
             <FieldLabel>Start</FieldLabel>
             <FieldInput
               type="date"
@@ -284,7 +259,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
               onChange={(e) => set("startDate", e.target.value || null)}
             />
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>Finish</FieldLabel>
             <FieldInput
               type="date"
@@ -292,7 +267,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
               onChange={(e) => set("endDate", e.target.value || null)}
             />
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>% complete</FieldLabel>
             <FieldInput
               type="number"
@@ -308,7 +283,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
               }}
             />
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>Status</FieldLabel>
             <FieldSelect
               value={form.status}
@@ -322,8 +297,8 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
           </label>
         </div>
 
-        <div style={ROW}>
-          <label className="wk-f" style={FIELD}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label>
             <FieldLabel>Priority</FieldLabel>
             <FieldSelect
               value={form.priority}
@@ -335,7 +310,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
               <option value="critical">Critical</option>
             </FieldSelect>
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>Assignee</FieldLabel>
             <FieldInput
               value={form.assignedTo}
@@ -343,7 +318,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
               placeholder="Person or team"
             />
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>Resources</FieldLabel>
             <FieldInput
               value={form.resourceNames}
@@ -354,21 +329,10 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
         </div>
 
         {/* Cost section */}
-        <div className="wk-panel" style={{ marginBottom: 0, padding: 16 }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-              marginBottom: 14,
-            }}
-          >
-            <p className="wk-grp" style={{ padding: 0, margin: 0 }}>
-              Baseline cost
-            </p>
-            <div className="wk-loc-sw" role="tablist" aria-label="Baseline cost source">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <FieldLabel>Baseline cost</FieldLabel>
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[11px]">
               <button
                 type="button"
                 onClick={() => {
@@ -379,21 +343,21 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
                     set("linkedBoqIdentities", []);
                   }
                 }}
-                role="tab"
-                aria-selected={!isLinked}
-                className={!isLinked ? "on" : ""}
+                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                  !isLinked ? "bg-adlm-blue-700 text-white" : "text-slate-500"
+                }`}
               >
-                <FaKeyboard size={13} style={{ marginRight: 6, verticalAlign: "-2px" }} />
+                <FaKeyboard className="inline mr-1.5 text-[10px]" />
                 Manual
               </button>
               <button
                 type="button"
                 onClick={() => setCostMode("linked")}
-                role="tab"
-                aria-selected={isLinked}
-                className={isLinked ? "on" : ""}
+                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                  isLinked ? "bg-adlm-blue-700 text-white" : "text-slate-500"
+                }`}
               >
-                <FaLink size={13} style={{ marginRight: 6, verticalAlign: "-2px" }} />
+                <FaLink className="inline mr-1.5 text-[10px]" />
                 Link BoQ items
               </button>
             </div>
@@ -407,8 +371,8 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
               onChange={handleLinkChange}
             />
           ) : (
-            <div style={ROW}>
-              <label className="wk-f" style={FIELD}>
+            <div className="grid grid-cols-2 gap-3">
+              <label>
                 <FieldLabel>Baseline ₦</FieldLabel>
                 <FieldInput
                   type="number"
@@ -420,7 +384,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
                   placeholder="0"
                 />
               </label>
-              <label className="wk-f" style={FIELD}>
+              <label>
                 <FieldLabel>Actual ₦</FieldLabel>
                 <FieldInput
                   type="number"
@@ -436,14 +400,14 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
           )}
 
           {isLinked && form.linkedBoqIdentities?.length > 0 ? (
-            <div style={{ ...HINT, marginTop: 10 }}>
+            <div className="mt-2 text-[10px] text-slate-500">
               Baseline cost auto-updates as you change qty / rate in the Bill of Quantity tab.
               Actual cost will reflect the linked items' actual qty × actual rate once the contract is locked.
             </div>
           ) : null}
         </div>
 
-        <label className="wk-f">
+        <label className="block">
           <FieldLabel>Notes / description</FieldLabel>
           <FieldTextarea
             rows={2}
@@ -453,11 +417,12 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
           />
         </label>
 
-        <label style={CHECK}>
+        <label className="inline-flex items-center gap-2 text-xs text-slate-700">
           <input
             type="checkbox"
             checked={Boolean(form.isMilestone)}
             onChange={(e) => set("isMilestone", e.target.checked)}
+            className="rounded"
           />
           This is a milestone (zero duration marker)
         </label>
@@ -466,16 +431,17 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
             users can flip it on manual tasks to mark sequencing
             bottlenecks the importer didn't see (subcontractor lead
             time, weather windows, etc.). */}
-        <label style={CHECK}>
+        <label className="inline-flex items-center gap-2 text-xs text-slate-700">
           <input
             type="checkbox"
             checked={Boolean(form.criticalPath)}
             onChange={(e) => set("criticalPath", e.target.checked)}
+            className="rounded"
           />
           On critical path (zero slack, any delay slips finish date)
         </label>
         {form.criticalPath ? (
-          <div style={{ ...HINT, marginLeft: 26 }}>
+          <div className="ml-6 text-[10px] text-slate-500">
             Will display a 🔥 badge on the WBS row and count toward the
             dashboard's Critical-path total.
           </div>
@@ -533,8 +499,8 @@ export function PmRiskModal({ open, mode = "add", risk: initial, onSave, onClose
         </>
       }
     >
-      <div style={STACK}>
-        <label className="wk-f" style={FIELD}>
+      <div className="space-y-3">
+        <label>
           <FieldLabel>Risk title *</FieldLabel>
           <FieldInput
             value={form.title}
@@ -543,7 +509,7 @@ export function PmRiskModal({ open, mode = "add", risk: initial, onSave, onClose
             placeholder="Late delivery of cement, design rework, etc."
           />
         </label>
-        <label className="wk-f" style={FIELD}>
+        <label>
           <FieldLabel>Description</FieldLabel>
           <FieldTextarea
             rows={2}
@@ -551,8 +517,8 @@ export function PmRiskModal({ open, mode = "add", risk: initial, onSave, onClose
             onChange={(e) => set("description", e.target.value)}
           />
         </label>
-        <div style={ROW}>
-          <label className="wk-f" style={FIELD}>
+        <div className="grid grid-cols-3 gap-3">
+          <label>
             <FieldLabel>Probability</FieldLabel>
             <FieldSelect
               value={form.probability}
@@ -563,7 +529,7 @@ export function PmRiskModal({ open, mode = "add", risk: initial, onSave, onClose
               <option value="high">High</option>
             </FieldSelect>
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>Impact</FieldLabel>
             <FieldSelect
               value={form.impact}
@@ -574,7 +540,7 @@ export function PmRiskModal({ open, mode = "add", risk: initial, onSave, onClose
               <option value="high">High</option>
             </FieldSelect>
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>Status</FieldLabel>
             <FieldSelect
               value={form.status}
@@ -587,7 +553,7 @@ export function PmRiskModal({ open, mode = "add", risk: initial, onSave, onClose
             </FieldSelect>
           </label>
         </div>
-        <label className="wk-f" style={FIELD}>
+        <label>
           <FieldLabel>Owner</FieldLabel>
           <FieldInput
             value={form.owner}
@@ -595,7 +561,7 @@ export function PmRiskModal({ open, mode = "add", risk: initial, onSave, onClose
             placeholder="Who is responsible?"
           />
         </label>
-        <label className="wk-f" style={FIELD}>
+        <label>
           <FieldLabel>Mitigation plan</FieldLabel>
           <FieldTextarea
             rows={2}
@@ -657,8 +623,8 @@ export function PmIssueModal({ open, mode = "add", issue: initial, onSave, onClo
         </>
       }
     >
-      <div style={STACK}>
-        <label className="wk-f" style={FIELD}>
+      <div className="space-y-3">
+        <label>
           <FieldLabel>Issue title *</FieldLabel>
           <FieldInput
             value={form.title}
@@ -667,7 +633,7 @@ export function PmIssueModal({ open, mode = "add", issue: initial, onSave, onClo
             placeholder="Cement supplier delay, drawing inconsistency, etc."
           />
         </label>
-        <label className="wk-f" style={FIELD}>
+        <label>
           <FieldLabel>Description</FieldLabel>
           <FieldTextarea
             rows={2}
@@ -675,8 +641,8 @@ export function PmIssueModal({ open, mode = "add", issue: initial, onSave, onClo
             onChange={(e) => set("description", e.target.value)}
           />
         </label>
-        <div style={ROW}>
-          <label className="wk-f" style={FIELD}>
+        <div className="grid grid-cols-3 gap-3">
+          <label>
             <FieldLabel>Severity</FieldLabel>
             <FieldSelect
               value={form.severity}
@@ -688,7 +654,7 @@ export function PmIssueModal({ open, mode = "add", issue: initial, onSave, onClo
               <option value="critical">Critical</option>
             </FieldSelect>
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>Status</FieldLabel>
             <FieldSelect
               value={form.status}
@@ -700,7 +666,7 @@ export function PmIssueModal({ open, mode = "add", issue: initial, onSave, onClo
               <option value="closed">Closed</option>
             </FieldSelect>
           </label>
-          <label className="wk-f" style={FIELD}>
+          <label>
             <FieldLabel>Owner</FieldLabel>
             <FieldInput
               value={form.owner}
@@ -709,7 +675,7 @@ export function PmIssueModal({ open, mode = "add", issue: initial, onSave, onClo
             />
           </label>
         </div>
-        <label className="wk-f" style={FIELD}>
+        <label>
           <FieldLabel>Notes</FieldLabel>
           <FieldTextarea
             rows={2}

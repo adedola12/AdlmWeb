@@ -85,30 +85,30 @@ export default function ReportModal({ open, onClose, type, productKey, projectId
 
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-black/60 backdrop-blur-sm">
-      {/* Toolbar, in his head. It carries its own .ds scope because this
-          modal also opens from pages outside his app frame. The report
-          document below is the printable PDF and keeps its own styling. */}
-      <div className="ds" style={{ boxShadow: "0 10px 30px rgba(0,0,0,.25)" }}>
-        <div className="wk-ph" style={{ borderBottom: "1px solid var(--line)" }}>
-          <div style={{ minWidth: 0 }}>
-            <h2 style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</h2>
-            <div className="wk-locnote" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {loading ? "Building report…" : report ? nameForFile : ""}
-            </div>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-adlm-navy text-white shadow-lg">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold truncate">{title}</div>
+          <div className="text-[11px] text-white/60 truncate">
+            {loading ? "Building report…" : report ? nameForFile : ""}
           </div>
-          <div className="wk-acts" style={{ flex: "none" }}>
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={!report || loading || downloading}
-              className="ds-btn ds-btn-sm btn-p"
-            >
-              {downloading ? "Preparing PDF…" : "Download PDF"}
-            </button>
-            <button type="button" onClick={onClose} className="ds-btn ds-btn-sm btn-o">
-              Close
-            </button>
-          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={!report || loading || downloading}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-adlm-orange text-white disabled:opacity-40 hover:opacity-90 transition"
+          >
+            {downloading ? "Preparing PDF…" : "Download PDF"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-2 rounded-lg text-sm font-medium bg-white/10 hover:bg-white/20 transition"
+          >
+            Close
+          </button>
         </div>
       </div>
 
@@ -120,21 +120,10 @@ export default function ReportModal({ open, onClose, type, productKey, projectId
           </div>
         )}
         {!loading && error && (
-          <div className="ds flex items-center justify-center h-full" style={{ background: "transparent" }}>
-            <p
-              className="mk-note"
-              role="alert"
-              style={{
-                margin: 0,
-                maxWidth: 440,
-                textAlign: "center",
-                background: "var(--pal-orange-wash)",
-                color: "var(--pal-orange-key)",
-                borderColor: "var(--pal-orange-line)",
-              }}
-            >
+          <div className="flex items-center justify-center h-full">
+            <div className="bg-white rounded-xl px-6 py-5 text-sm text-red-600 max-w-md text-center">
               {error}
-            </p>
+            </div>
           </div>
         )}
         {!loading && report && (

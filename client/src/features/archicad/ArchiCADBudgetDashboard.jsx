@@ -15,83 +15,123 @@ import {
 } from "../../utils/archicadUnits.js";
 import { ARCHICAD_CATEGORIES } from "./archicadApi.js";
 
-// The four cost parts, in his tokens.
-const PARTS = [
-  { key: "material", label: "Material", color: "var(--action)" },
-  { key: "labour", label: "Labour", color: "var(--pal-deep-key)" },
-  { key: "other", label: "Other", color: "var(--ink-3)" },
-  { key: "margin", label: "Margin", color: "var(--pal-orange-key)" },
-];
+// Brand palette (matches the adlm tokens / api-contract brand colours)
+const MATERIAL_COLOR = "#1E6BCC"; // blue
+const LABOUR_COLOR = "#40B0E0"; // sky
+const MARGIN_COLOR = "#F07020"; // orange
 
-// One figure, in his dashboard tile.
 function StatCard({ label, value, helper, tone }) {
-  const cls = tone === "success" ? " pal-on" : tone === "warning" || tone === "danger" ? " warn" : "";
+  const toneClass =
+    tone === "success"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : tone === "warning"
+        ? "text-amber-600 dark:text-amber-400"
+        : tone === "danger"
+          ? "text-red-600 dark:text-red-400"
+          : "text-slate-900 dark:text-white";
   return (
-    <div className={`dsh-stat${cls}`}>
-      <span className="k">{label}</span>
-      <b>{value}</b>
-      {helper ? <span className="ds-sub">{helper}</span> : null}
+    <div className="rounded-adlm-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
+      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
+        {label}
+      </div>
+      <div className={`mt-1 text-xl font-bold tabular-nums ${toneClass}`}>{value}</div>
+      {helper ? (
+        <div className="mt-0.5 text-xs text-slate-400 dark:text-adlm-dark-dim">{helper}</div>
+      ) : null}
     </div>
   );
 }
 
-// Cost by category as his meters: each track split into material, labour,
-// other and margin, scaled to the largest category.
+// Horizontal stacked bars — material / labour / margin per category.
 function CategoryBarChart({ categories, currency }) {
   const entries = categories.filter((c) => safeNum(c.totalAmount) > 0);
   if (!entries.length) {
     return (
-      <div className="wk-empty">
+      <div className="rounded-adlm border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-adlm-dark-border dark:text-adlm-dark-muted">
         No costed lines yet, the category chart appears once the BoQ is priced.
       </div>
     );
   }
+  const W = 560;
+  const ROW = 34;
+  const PAD_L = 150;
+  const PAD_R = 78;
+  const INNER = W - PAD_L - PAD_R;
+  const H = entries.length * ROW + 8;
   const maxVal = Math.max(...entries.map((e) => safeNum(e.totalAmount)), 1);
 
   return (
     <div>
-      <div className="dsh-meter">
-        {entries.map((e) => {
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minHeight: H }}>
+        {entries.map((e, i) => {
+          const y = i * ROW + 6;
           const mat = safeNum(e.materialAmount);
           const lab = safeNum(e.labourAmount);
           const mar = safeNum(e.marginAmount);
           const tot = safeNum(e.totalAmount);
           const other = Math.max(tot - mat - lab - mar, 0);
-          const values = { material: mat, labour: lab, other, margin: mar };
+          const scale = (v) => (v / maxVal) * INNER;
+          let x = PAD_L;
+          const segs = [
+            { v: mat, color: MATERIAL_COLOR },
+            { v: lab, color: LABOUR_COLOR },
+            { v: other, color: "#94a3b8" },
+            { v: mar, color: MARGIN_COLOR },
+          ];
           return (
-            <div className="row" key={e.key}>
-              <div className="lab">
-                <span>{e.title || e.key}</span>
-                <b>{fmtMoney(tot, currency)}</b>
-              </div>
-              <div className="track" style={{ display: "flex" }}>
-                <div style={{ display: "flex", width: `${(tot / maxVal) * 100}%`, height: "100%" }}>
-                  {PARTS.map((p) =>
-                    values[p.key] > 0 ? (
-                      <i
-                        key={p.key}
-                        title={`${p.label}: ${fmtMoney(values[p.key], currency)}`}
-                        style={{
-                          width: `${(values[p.key] / tot) * 100}%`,
-                          borderRadius: 0,
-                          background: p.color,
-                        }}
-                      />
-                    ) : null,
-                  )}
-                </div>
-              </div>
-            </div>
+            <g key={e.key}>
+              <text
+                x={PAD_L - 8}
+                y={y + 14}
+                textAnchor="end"
+                fontSize={11}
+                fontWeight={600}
+                className="fill-slate-500 dark:fill-adlm-dark-muted"
+              >
+                {e.title || e.key}
+              </text>
+              <rect
+                x={PAD_L}
+                y={y + 3}
+                width={Math.max(scale(tot), 2)}
+                height={16}
+                rx={4}
+                className="fill-slate-100 dark:fill-white/10"
+              />
+              {segs.map((s, j) => {
+                if (s.v <= 0) return null;
+                const w = scale(s.v);
+                const rect = (
+                  <rect key={j} x={x} y={y + 3} width={Math.max(w, 1)} height={16} fill={s.color} />
+                );
+                x += w;
+                return rect;
+              })}
+              <text
+                x={PAD_L + scale(tot) + 6}
+                y={y + 15}
+                fontSize={10}
+                className="fill-slate-500 dark:fill-adlm-dark-muted"
+              >
+                {fmtMoney(tot, currency)}
+              </text>
+            </g>
           );
         })}
-      </div>
-      <div className="wk-locnote" style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px" }}>
-        {PARTS.filter((p) => p.key !== "other").map((p) => (
-          <span key={p.key} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <i aria-hidden="true" style={{ width: 9, height: 9, borderRadius: 3, background: p.color }} />
-            {p.label}
-          </span>
-        ))}
+      </svg>
+      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-adlm-dark-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: MATERIAL_COLOR }} />
+          Material
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: LABOUR_COLOR }} />
+          Labour
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: MARGIN_COLOR }} />
+          Margin
+        </span>
       </div>
     </div>
   );
@@ -143,12 +183,9 @@ export default function ArchiCADBudgetDashboard({
   }
 
   return (
-    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
-      {/* Summary tiles */}
-      <div
-        className="dsh-stats"
-        style={{ marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}
-      >
+    <div className="space-y-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Total material" value={fmtMoney(totals.materialAmount, currency)} />
         <StatCard label="Total labour" value={fmtMoney(totals.labourAmount, currency)} />
         <StatCard label="Total direct cost" value={fmtMoney(totals.directCost, currency)} />
@@ -170,30 +207,27 @@ export default function ArchiCADBudgetDashboard({
       </div>
 
       {/* Cost by category */}
-      <section className="wk-panel" style={{ marginBottom: 0 }}>
-        <div className="wk-ph">
-          <h2>Cost by category</h2>
+      <div className="rounded-adlm-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
+        <div className="mb-3 font-semibold text-slate-900 dark:text-white">
+          Cost by category
         </div>
-        <div style={{ padding: "18px 20px 20px" }}>
-          <CategoryBarChart categories={categories} currency={currency} />
-        </div>
-      </section>
+        <CategoryBarChart categories={categories} currency={currency} />
+      </div>
 
       {/* Budget vs actual */}
-      <section className="wk-panel" style={{ marginBottom: 0 }}>
-        <div className="wk-ph" style={{ flexWrap: "wrap" }}>
-          <div>
-            <h2>Budget tracker</h2>
-            <div className="wk-locnote" style={{ marginTop: 4 }}>
-              Set a target budget for this project and track the estimate against it.
-            </div>
-          </div>
+      <div className="rounded-adlm-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
+        <div className="mb-1 font-semibold text-slate-900 dark:text-white">
+          Budget tracker
         </div>
-        <div style={{ padding: "18px 20px 20px" }}>
+        <div className="mb-4 text-sm text-slate-500 dark:text-adlm-dark-muted">
+          Set a target budget for this project and track the estimate against it.
+        </div>
 
-        <form onSubmit={submitBudget} className="wk-bar" style={{ margin: 0, alignItems: "flex-end" }}>
-          <label className="wk-f" style={{ flex: "0 1 260px", margin: 0 }}>
-            <span>Target budget ({currency})</span>
+        <form onSubmit={submitBudget} className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
+              Target budget ({currency})
+            </span>
             <input
               type="number"
               min="0"
@@ -201,51 +235,54 @@ export default function ArchiCADBudgetDashboard({
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="e.g. 50,000,000"
-              style={{ fontVariantNumeric: "tabular-nums" }}
+              className="w-56 rounded-adlm border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums text-slate-900 focus:border-adlm-blue-600 focus:outline-none dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-text"
             />
           </label>
           <button
             type="submit"
             disabled={savingBudget || target === ""}
-            className="ds-btn ds-btn-sm btn-p"
+            className="inline-flex items-center gap-1.5 rounded-adlm bg-adlm-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-adlm-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {savingBudget ? <FaSpinner size={14} className="animate-spin" /> : null}
+            {savingBudget ? <FaSpinner className="animate-spin" /> : null}
             Save budget
           </button>
         </form>
 
         {storedTarget > 0 ? (
-          <div className="dsh-meter" style={{ marginTop: 20 }}>
-            <div className="row">
-            <div className="lab" style={{ flexWrap: "wrap" }}>
-              <span>
+          <div className="mt-5 space-y-3">
+            <div className="h-4 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+              <div
+                className={`h-full rounded-full transition-[width] duration-700 ease-out ${
+                  over ? "bg-red-500" : "bg-emerald-500"
+                }`}
+                style={{ width: `${Math.min(usedPct, 100)}%` }}
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="text-slate-600 dark:text-adlm-dark-muted">
                 Estimate {fmtMoney(grandTotal, currency)} of{" "}
                 {fmtMoney(storedTarget, currency)} target (
                 {formatQty(storedTarget > 0 ? (grandTotal / storedTarget) * 100 : 0, 1)}%)
               </span>
-              <b style={{ color: over ? "var(--pal-orange-key)" : "var(--pal-light-key)" }}>
+              <span
+                className={`font-semibold ${
+                  over
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-emerald-600 dark:text-emerald-400"
+                }`}
+              >
                 {over
                   ? `Over budget by ${fmtMoney(Math.abs(variance), currency)}`
                   : `Under budget by ${fmtMoney(variance, currency)}`}
-              </b>
-            </div>
-            <div className="track">
-              <i
-                style={{
-                  width: `${Math.min(usedPct, 100)}%`,
-                  background: over ? "var(--pal-orange-key)" : undefined,
-                }}
-              />
-            </div>
+              </span>
             </div>
           </div>
         ) : (
-          <p className="wk-locnote" style={{ margin: "16px 0 0" }}>
+          <div className="mt-4 text-sm text-slate-400 dark:text-adlm-dark-dim">
             No target budget set yet.
-          </p>
+          </div>
         )}
-        </div>
-      </section>
+      </div>
     </div>
   );
 }

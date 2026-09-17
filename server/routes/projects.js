@@ -255,7 +255,6 @@ import {
   BOQ_IMPORT_PRODUCTS,
   hasBoqImportGrant,
   canImportBoqFor,
-  isBoqImportProduct,
 } from "../util/boqImportAccess.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
@@ -315,13 +314,6 @@ function requireBoqImport(productKey = null) {
           error:
             "Excel BoQ import is switched on per account. Ask ADLM to enable it for you.",
           code: "BOQ_IMPORT_NOT_GRANTED",
-        });
-      }
-
-      if (productKey && !isBoqImportProduct(productKey)) {
-        return res.status(403).json({
-          error: "Excel BoQ import is available for HERON projects only.",
-          code: "BOQ_IMPORT_PRODUCT_OFF",
         });
       }
 
@@ -6233,9 +6225,6 @@ async function listLinkCandidates(req, res) {
 // material & labour schedule priced off the constants library and RateGen.
 //
 // Access is per product — you import a bill for a product you subscribe to.
-// Since 17 Sep 2026 only HERON imports; the QUIV and MEP addresses stay
-// registered so they refuse clearly (requireBoqImport) instead of falling
-// through to the generic /:productKey routes.
 // Quiv (revit) and Heron (planswift) cover building bills; MEP (revitmep)
 // covers services bills, which break down through the services engine. The
 // legacy admin-granted quiv-boq-import entitlement is still honoured on the

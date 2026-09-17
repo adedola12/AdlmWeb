@@ -2,6 +2,7 @@
 // Element drill-down route — GET /api/archicad/element/:projectId/:guid.
 import React from "react";
 import { Link, useParams } from "react-router-dom";
+import { FaArrowLeft } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { unwrap } from "../features/archicad/archicadApi.js";
@@ -39,34 +40,40 @@ export default function ArchiCADElement() {
   }, [load]);
 
   return (
-    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
-      <div className="wk-bar" style={{ marginBottom: 0, justifyContent: "space-between" }}>
-        <Link to={`/archicad/${projectId}/boq`} className="wk-back">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-              <use href="#hi-right" />
-            </svg>
-          Back to BoQ
-        </Link>
-        <ArchiCADUnitToggle units={units} onChange={setUnits} />
-      </div>
+    <div className="min-h-screen bg-slate-50 dark:bg-adlm-dark-bg">
+      <div className="mx-auto max-w-5xl space-y-4 px-4 py-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            to={`/archicad/${projectId}/boq`}
+            className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-slate-700 dark:text-adlm-dark-muted dark:hover:text-adlm-dark-text"
+          >
+            <FaArrowLeft className="text-xs" /> Back to BoQ
+          </Link>
+          <ArchiCADUnitToggle units={units} onChange={setUnits} />
+        </div>
 
-      {err ? (
-        <p className="mk-note" role="alert" style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)", borderColor: "var(--pal-orange-line)" }}>
-          {err}
-        </p>
-      ) : null}
+        {err ? (
+          <div className="rounded-adlm-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+            {err}
+          </div>
+        ) : null}
 
-      {loading ? (
-        <div className="wk-panel animate-pulse" style={{ marginBottom: 0, minHeight: 260 }} aria-hidden="true" />
-      ) : element ? (
-        <div className="wk-legacy">
+        {loading ? (
+          <div className="animate-pulse space-y-4">
+            <div className="h-20 rounded-adlm-lg border border-slate-200 bg-white dark:border-adlm-dark-border dark:bg-adlm-dark-panel" />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="h-48 rounded-adlm-lg border border-slate-200 bg-white dark:border-adlm-dark-border dark:bg-adlm-dark-panel" />
+              <div className="h-48 rounded-adlm-lg border border-slate-200 bg-white dark:border-adlm-dark-border dark:bg-adlm-dark-panel" />
+            </div>
+          </div>
+        ) : element ? (
           <ArchiCADElementPanel element={element} units={units} projectId={projectId} />
-        </div>
-      ) : !err ? (
-        <div className="wk-panel wk-empty" style={{ marginBottom: 0 }}>
-          Element not found in this project&apos;s BoQ.
-        </div>
-      ) : null}
+        ) : !err ? (
+          <div className="rounded-adlm-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-muted">
+            Element not found in this project's BoQ.
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -42,18 +42,7 @@ export const BOQ_IMPORT_PRODUCTS = Object.freeze({
   mep: { label: "MEP", route: "mep" },
 });
 
-// Excel import is a HERON feature (decision of 17 Sep 2026). QUIV and MEP
-// keep their entries above so their import addresses still answer with a
-// clear refusal, but only these products can import a bill or earn a grant.
-// Projects already imported under QUIV or MEP stay open like any project.
-export const BOQ_IMPORT_ENABLED_KEYS = Object.freeze(["planswift"]);
-
-export const BOQ_IMPORT_PRODUCT_KEYS = BOQ_IMPORT_ENABLED_KEYS;
-
-/** True when bills can be imported for this product at all. */
-export function isBoqImportProduct(productKey) {
-  return BOQ_IMPORT_ENABLED_KEYS.includes(productKey);
-}
+export const BOQ_IMPORT_PRODUCT_KEYS = Object.freeze(Object.keys(BOQ_IMPORT_PRODUCTS));
 
 function isActive(e, now = dayjs()) {
   if (!e || e.status !== "active") return false;
@@ -81,7 +70,8 @@ export function subscribedBoqProducts(user) {
 }
 
 /**
- * Can this user be GRANTED the feature? They must already subscribe to HERON — the grant is an add-on to a licence, not a
+ * Can this user be GRANTED the feature? They must already subscribe to at
+ * least one of the three products — the grant is an add-on to a licence, not a
  * licence of its own. Enforced server-side so no grant path can bypass it.
  */
 export function isBoqImportEligible(user) {

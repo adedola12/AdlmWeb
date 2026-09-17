@@ -3,7 +3,7 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { useStepUp } from "../features/security/useStepUp.jsx";
 import { apiAuthed } from "../http.js";
-import { Link, Navigate, useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 // ifcElements (which pulls in the ~1.5 MB web-ifc wasm wrapper) is imported
 // dynamically inside handleUploadModel so it is code-split out of the main
@@ -28,20 +28,15 @@ import {
 
 const DASHBOARD_PATH = "/dashboard";
 
-// Product names as the rest of the app says them (the tool keys are the old
-// CAD-host slugs: revit = QUIV, planswift = HERON, civil3d = CIVIQ).
 const TITLES = {
-  revit: "QUIV projects",
-  revitmep: "Revit MEP projects",
-  mep: "Revit MEP projects",
-  planswift: "HERON projects",
-  civil3d: "CIVIQ projects",
-  "revit-materials": "QUIV",
-  "revit-material": "QUIV",
-  "planswift-materials": "HERON",
-  "planswift-material": "HERON",
-  "mep-materials": "Revit MEP",
-  "civil3d-materials": "CIVIQ",
+  revit: "Revit Takeoffs",
+  revitmep: "Revit MEP Projects",
+  planswift: "PlanSwift Projects",
+  civil3d: "Civil 3D Takeoffs",
+  "revit-materials": "Revit Materials",
+  "revit-material": "Revit Materials",
+  "planswift-materials": "PlanSwift Materials",
+  "planswift-material": "PlanSwift Materials",
 };
 
 function normTool(t) {
@@ -83,10 +78,10 @@ const BOQ_IMPORT_ENTITLEMENTS = ["boq-import", "quiv-boq-import"];
 // tool → { route segment on the API, entitlement that unlocks it }.
 // MEP is "mep" for the entitlement, the project bucket and the route alike —
 // "revitmep" is not a key any user actually holds.
-// Excel BoQ import is a HERON feature only. Projects imported earlier under
-// another product still open; they just cannot import again.
 const BOQ_IMPORT_TOOLS = {
+  revit: { route: "revit", entitlement: "revit" },
   planswift: { route: "planswift", entitlement: "planswift" },
+  mep: { route: "mep", entitlement: "mep" },
 };
 
 function entActive(ents, productKey) {
@@ -125,7 +120,7 @@ function getSidebarMeta(tool) {
     };
   }
 
-  if (t === "revitmep" || t === "mep") {
+  if (t === "revitmep") {
     return {
       app: "Revit MEP",
       section: "Projects",
@@ -1204,8 +1199,9 @@ export default function ProjectsGeneric() {
   // Which API routes this tool's BoQ import uses (null = not available here).
   const boqImport = boqImportFor(authUser, toolNorm);
   const canBoqImport = Boolean(boqImport);
-  const boqRoute = boqImport?.route || "planswift";
-  const boqImportBadge = "HERON";
+  const boqRoute = boqImport?.route || "revit";
+  const boqImportBadge =
+    toolNorm === "planswift" ? "HERON" : toolNorm === "mep" ? "MEP" : "QUIV";
   const [boqImportOpen, setBoqImportOpen] = React.useState(false);
   const [boqImportBusy, setBoqImportBusy] = React.useState(false);
   const [boqImportFile, setBoqImportFile] = React.useState(null);
@@ -2117,17 +2113,9 @@ export default function ProjectsGeneric() {
         }
       }
     } catch (e) {
-      // closeProject() clears the message, so it runs first: the other order
-      // left a lapsed subscription looking like an empty "0 projects" list.
+      setErr(e.message || "Failed to load projects");
       closeProject();
       setRows([]);
-      const msg = e?.message || "Failed to load projects";
-      const product = String(TITLES[tool] || "this product").replace(/ projects$/, "");
-      setErr(
-        /subscription/i.test(msg)
-          ? `${msg}: ${product} projects can only be opened with an active ${product} subscription. Renew it under Manage > Products & seats to open them again; nothing has been deleted.`
-          : msg,
-      );
     }
   }
 
@@ -2148,15 +2136,11 @@ export default function ProjectsGeneric() {
 
       // Use slug in URL if available, otherwise fall back to ID
       const urlKey = p?.slug || id;
-      // replace: swapping an id for the slug is not a new place to go back to.
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.set("project", urlKey);
-          return next;
-        },
-        { replace: true },
-      );
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("project", urlKey);
+        return next;
+      });
 
       initRatesFromProject(p);
       const openedId = p?._id || p?.id || id;
@@ -5101,12 +5085,6 @@ export default function ProjectsGeneric() {
 
   const title = TITLES[tool] || "Projects";
 
-  // There is no Materials page. A material & labour schedule is a project's
-  // Budget; one opened directly (?project=) still loads here from its own
-  // storage, but the bare materials list forwards to the product's list.
-  const materialsTool = /-materials?$/.test(toolNorm);
-  const materialsListOnly = materialsTool && !searchParams.get("project");
-
   // Persist procurement marking from the Budget tab. Isolated PUT that only
   // updates budgetItems[] — never touches the BoQ/valuation save path.
   async function saveBudgetProcurement(nextBudgetItems) {
@@ -5131,11 +5109,6 @@ export default function ProjectsGeneric() {
   const checkboxCls =
     "h-4 w-4 accent-blue-600 border-0 outline-none ring-0 focus:ring-0 focus:outline-none";
 
-  if (materialsListOnly) {
-    const base = toolNorm.replace(/-materials?$/, "");
-    return <Navigate to={`/projects/${base === "revitmep" ? "mep" : base}`} replace />;
-  }
-
   return (
     <div>
       <div>
@@ -5147,7 +5120,7 @@ export default function ProjectsGeneric() {
             <h1>{sel ? sel?.name || "Untitled project" : title}</h1>
             <p className="wk-ref">
               {sel
-                ? `${title}${sel?.origin === BOQ_IMPORT_ORIGIN ? " · imported from Excel" : ""}${materialsTool ? " · material & labour schedule" : ""}`
+                ? title
                 : [sidebarMeta.app, sidebarMeta.hint].filter(Boolean).join(" · ")}
             </p>
           </div>
@@ -5335,7 +5308,6 @@ export default function ProjectsGeneric() {
                 projectName={sel?.name || "Project"}
                 selectedId={selectedId}
                 showMaterials={showMaterials}
-                materialsSchedule={materialsTool}
                 statusLabel={statusLabel}
                 statusPastLabel={statusPastLabel}
                 checkboxCls={checkboxCls}

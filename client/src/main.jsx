@@ -201,18 +201,14 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Home /> },
 
+      // Classic page, no app frame, until the new build goes fully live. The
+      // 15 Sept release put this inside WorkShellRoute (title "Programme",
+      // page "work-programme"); go-live puts it back.
       {
         path: "time-management",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={TimeManagement}
-                title="Programme"
-                page="work-programme"
-                legacy
-              />
-            </LazyScreen>
+            <TimeManagement />
           </ProtectedRoute>
         ),
       },
@@ -415,14 +411,7 @@ const router = createBrowserRouter([
         path: "revit-projects",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={RevitProjects}
-                title="QUIV projects"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <RevitProjects />
           </ProtectedRoute>
         ),
       },
@@ -430,31 +419,15 @@ const router = createBrowserRouter([
         path: "portfolio",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={Portfolio}
-                title="Portfolio"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <Portfolio />
           </ProtectedRoute>
         ),
       },
       {
         path: "pm-tracker",
-        // In his app frame: it renders the shared PM dashboard, which is
-        // built from his .ds-scoped pieces and is unstyled outside it.
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={PmTracker}
-                title="PM Tracker"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <PmTracker />
           </ProtectedRoute>
         ),
       },
@@ -462,14 +435,7 @@ const router = createBrowserRouter([
         path: "portfolio-dashboard",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={PortfolioDashboard}
-                title="Portfolio dashboard"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <PortfolioDashboard />
           </ProtectedRoute>
         ),
       },
@@ -489,17 +455,14 @@ const router = createBrowserRouter([
           return { element: <ModelCheckReport /> };
         },
       },
+      // Classic page, no app frame, until the new build goes fully live. The
+      // 15 Sept release put this inside WorkShellRoute (title "Projects",
+      // page "work-projects"); go-live puts it back.
       {
         path: "projects/:tool",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={ProjectsGeneric}
-                title="Projects"
-                page="work-projects"
-              />
-            </LazyScreen>
+            <ProjectsGeneric />
           </ProtectedRoute>
         ),
       },
@@ -510,14 +473,7 @@ const router = createBrowserRouter([
         path: "j/:code",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={JoinProject}
-                title="Join a project"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <JoinProject />
           </ProtectedRoute>
         ),
       },
@@ -527,14 +483,7 @@ const router = createBrowserRouter([
         path: "archicad",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={ArchiCADLanding}
-                title="ArchiCAD projects"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <ArchiCADLanding />
           </ProtectedRoute>
         ),
       },
@@ -542,14 +491,7 @@ const router = createBrowserRouter([
         path: "archicad/:projectId/boq",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={ArchiCADBoQ}
-                title="ArchiCAD bill"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <ArchiCADBoQ />
           </ProtectedRoute>
         ),
       },
@@ -557,14 +499,7 @@ const router = createBrowserRouter([
         path: "archicad/:projectId/dashboard",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={ArchiCADDashboard}
-                title="ArchiCAD dashboard"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <ArchiCADDashboard />
           </ProtectedRoute>
         ),
       },
@@ -572,14 +507,7 @@ const router = createBrowserRouter([
         path: "archicad/:projectId/element/:guid",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={ArchiCADElement}
-                title="ArchiCAD element"
-                page="work-projects"
-                legacy
-              />
-            </LazyScreen>
+            <ArchiCADElement />
           </ProtectedRoute>
         ),
       },

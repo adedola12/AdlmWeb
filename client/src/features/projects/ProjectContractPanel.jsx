@@ -16,7 +16,7 @@ function money(v) {
 
 function formatDate(v) {
   const d = v ? new Date(v) : null;
-  if (!d || Number.isNaN(d.getTime())) return "–";
+  if (!d || Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString();
 }
 
@@ -28,69 +28,30 @@ function bytes(n) {
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-// A button in his .wk-tabs. The count rides after the label in his muted ink.
 function SubTab({ active, onClick, label, count }) {
   return (
     <button
       type="button"
-      role="tab"
-      aria-selected={active}
       onClick={onClick}
-      className={active ? "on" : ""}
+      className={[
+        "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
+        active
+          ? "bg-adlm-blue-700 text-white"
+          : "text-slate-700 hover:bg-slate-100",
+      ].join(" ")}
     >
       {label}
       {typeof count === "number" && count > 0 ? (
-        <span style={{ marginLeft: 6, color: "var(--ink-3)" }}>{count}</span>
+        <span
+          className={[
+            "rounded-full px-1.5 py-0.5 text-[10px]",
+            active ? "bg-white text-adlm-blue-700" : "bg-slate-200 text-slate-700",
+          ].join(" ")}
+        >
+          {count}
+        </span>
       ) : null}
     </button>
-  );
-}
-
-// His palettes for chips and tones.
-function tone(pal) {
-  return {
-    background: `var(--pal-${pal}-wash)`,
-    color: `var(--pal-${pal}-key)`,
-    borderColor: `var(--pal-${pal}-line)`,
-  };
-}
-const NO_MB = { marginBottom: 0 };
-const STACK = { display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" };
-const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" };
-const ICON_BTN = { padding: "4px 8px" };
-
-// A section head inside the panel: his group title and a note, actions right.
-function SectionHead({ title, sub, children }) {
-  return (
-    <div
-      className="wk-bar"
-      style={{ marginBottom: 0, justifyContent: "space-between", alignItems: "flex-start" }}
-    >
-      <div style={{ minWidth: 0, flex: "1 1 260px" }}>
-        <p className="wk-grp" style={{ padding: 0, margin: 0 }}>
-          {title}
-        </p>
-        <div className="wk-locnote" style={{ marginTop: 4 }}>
-          {sub}
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// His tiles are four fixed columns, sized for short figures. A full naira
-// figure at his tile size is ~210px, so the tiles wrap at a width that fits one.
-const FIT_TILES = { marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" };
-
-// One figure, in his dashboard tile.
-function Tile({ label, value, sub, tone: t, title }) {
-  return (
-    <div className={`dsh-stat${t ? ` ${t}` : ""}`} title={title}>
-      <span className="k">{label}</span>
-      <b>{value}</b>
-      <span className="ds-sub">{sub}</span>
-    </div>
   );
 }
 
@@ -118,14 +79,20 @@ function CertificatesSection({
   );
 
   return (
-    <div style={STACK}>
-      <SectionHead
-        title="Interim payment certificates"
-        sub="Each certificate is numbered and carries its own cumulative, less-previous, retention, VAT and WHT values: ready for Architect / QS / Client sign-off."
-      >
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">
+            Interim Payment Certificates
+          </div>
+          <div className="text-[11px] text-slate-500">
+            Each certificate is numbered and carries its own cumulative, less-previous,
+            retention, VAT and WHT values: ready for Architect / QS / Client sign-off.
+          </div>
+        </div>
         <button
           type="button"
-          className="ds-btn ds-btn-sm btn-p"
+          className="btn btn-xs btn-primary inline-flex items-center gap-1"
           onClick={() => onIssue?.()}
           disabled={busy || disabled}
           title={
@@ -134,24 +101,24 @@ function CertificatesSection({
               : "Issue a new interim certificate"
           }
         >
-          <FaPlus size={12} />
+          <FaPlus className="text-[9px]" />
           {busy ? "Issuing..." : "Issue certificate"}
         </button>
-      </SectionHead>
+      </div>
 
       {note ? (
-        <p className="mk-note" style={{ margin: 0, ...NOTE_WARN }}>
+        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
           {note}
-        </p>
+        </div>
       ) : null}
 
       {sorted.length === 0 ? (
-        <div className="wk-panel wk-empty" style={NO_MB}>
+        <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
           No certificates issued yet. Click “Issue certificate” to generate
           IPC #01 against the current value-to-date.
         </div>
       ) : (
-        <div className="wk-panel" style={{ marginBottom: 0, overflowX: "auto" }}>
+        <div className="overflow-x-auto rounded border border-slate-200">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
@@ -215,24 +182,20 @@ function CertificatesSection({
                         <button
                           type="button"
                           onClick={() => onDownload?.(c.number)}
-                          className="ds-btn ds-btn-sm btn-o"
-                          style={ICON_BTN}
-                          aria-label="Download certificate"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800"
                           title="Download .xlsx"
                         >
-                          <FaDownload size={13} />
+                          <FaDownload className="text-[10px]" />
                         </button>
                         {isLast ? (
                           <button
                             type="button"
                             onClick={() => onDelete?.(c.number)}
                             disabled={disabled}
-                            className="ds-btn ds-btn-sm btn-o"
-                            style={ICON_BTN}
-                            aria-label="Delete certificate"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-red-50 text-slate-400 hover:text-red-600"
                             title="Delete (latest cert only)"
                           >
-                            <FaTrashAlt size={13} />
+                            <FaTrashAlt className="text-[10px]" />
                           </button>
                         ) : null}
                       </div>
@@ -373,30 +336,31 @@ function FinalAccountSection({
     : livePreview;
 
   return (
-    <div style={STACK}>
-      <SectionHead
-        title="Final account"
-        sub={
-          isFinalized
-            ? `Finalized on ${formatDate(finalAccount.finalizedAt)}, all project data is frozen.`
-            : contractLocked
-              ? "Preview of the closing settlement based on current data."
-              : "Pre-lock preview, savings / over-run only start tracking after the contract is locked."
-        }
-      >
-        <div className="wk-acts">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">Final Account</div>
+          <div className="text-[11px] text-slate-500">
+            {isFinalized
+              ? `Finalized on ${formatDate(finalAccount.finalizedAt)}, all project data is frozen.`
+              : contractLocked
+                ? "Preview of the closing settlement based on current data."
+                : "Pre-lock preview, savings / over-run only start tracking after the contract is locked."}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
           {isFinalized ? (
             <>
               <button
                 type="button"
-                className="ds-btn ds-btn-sm btn-o"
+                className="btn btn-xs inline-flex items-center gap-1"
                 onClick={onDownload}
               >
-                <FaDownload size={12} /> Download
+                <FaDownload className="text-[9px]" /> Download
               </button>
               <button
                 type="button"
-                className="ds-btn ds-btn-sm btn-o"
+                className="btn btn-xs"
                 onClick={onReopen}
                 title="Reopen the final account to make adjustments"
               >
@@ -406,7 +370,7 @@ function FinalAccountSection({
           ) : (
             <button
               type="button"
-              className="ds-btn ds-btn-sm btn-p"
+              className="btn btn-xs btn-primary inline-flex items-center gap-1"
               onClick={() => onFinalize?.("")}
               disabled={disabledFinalize}
               title={
@@ -415,76 +379,120 @@ function FinalAccountSection({
                   : "Freeze the final account and compute settlement"
               }
             >
-              <FaFileInvoiceDollar size={12} /> Finalize
+              <FaFileInvoiceDollar className="text-[9px]" /> Finalize
             </button>
           )}
         </div>
-      </SectionHead>
+      </div>
 
-      {/* The settlement, in his dashboard tiles (four a row, wrapping). */}
-      <div className="dsh-stats" style={FIT_TILES}>
-        <Tile label="Measured work (final)" value={money(view.measuredWorkFinal)} />
-        <Tile label="Provisional" value={money(view.provisionalFinal)} />
-        <Tile label="Preliminaries" value={money(view.preliminaryFinal)} />
+      <div className="grid gap-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 text-xs sm:grid-cols-2 md:grid-cols-3">
+        <div>
+          <div className="text-slate-500 dark:text-slate-400">Measured work (final)</div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
+            {money(view.measuredWorkFinal)}
+          </div>
+        </div>
+        <div>
+          <div className="text-slate-500 dark:text-slate-400">Provisional</div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
+            {money(view.provisionalFinal)}
+          </div>
+        </div>
+        <div>
+          <div className="text-slate-500 dark:text-slate-400">Preliminaries</div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
+            {money(view.preliminaryFinal)}
+          </div>
+        </div>
         {/* Contingency + Tax, only render when set so old projects
             without these values don't show ₦0 stub tiles. */}
         {safeNum(view.contingencyFinal) > 0 || contingencyPercent > 0 ? (
-          <Tile
-            label={`Contingency (${Number(contingencyPercent || 0).toFixed(1)}%)`}
-            value={money(view.contingencyFinal)}
-          />
+          <div>
+            <div className="text-slate-500 dark:text-slate-400">
+              Contingency ({Number(contingencyPercent || 0).toFixed(1)}%)
+            </div>
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
+              {money(view.contingencyFinal)}
+            </div>
+          </div>
         ) : null}
         {safeNum(view.taxFinal) > 0 || taxPercent > 0 ? (
-          <Tile
-            label={`Tax / VAT (${Number(taxPercent || 0).toFixed(1)}%)`}
-            value={money(view.taxFinal)}
-          />
+          <div>
+            <div className="text-slate-500 dark:text-slate-400">
+              Tax / VAT ({Number(taxPercent || 0).toFixed(1)}%)
+            </div>
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
+              {money(view.taxFinal)}
+            </div>
+          </div>
         ) : null}
-        <Tile label="Variations" value={money(view.variationsFinal)} />
-        <Tile
-          label={contractLocked || isFinalized ? "Final contract value" : "Live project total"}
-          value={money(view.currentValue ?? view.finalContractValue)}
-          sub={!contractLocked && !isFinalized ? "Pre-lock preview." : null}
-        />
+        <div>
+          <div className="text-slate-500 dark:text-slate-400">Variations</div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
+            {money(view.variationsFinal)}
+          </div>
+        </div>
+        <div>
+          <div className="text-slate-500 dark:text-slate-400">
+            {contractLocked || isFinalized
+              ? "Final contract value"
+              : "Live project total"}
+          </div>
+          <div className="text-base font-bold text-adlm-blue-700 dark:text-adlm-blue-300">
+            {money(view.currentValue ?? view.finalContractValue)}
+          </div>
+          {!contractLocked && !isFinalized ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">
+              Pre-lock preview.
+            </div>
+          ) : null}
+        </div>
         {/* Actual spent, surfaces the live actuals figure so users can
             see what their over-run is being calculated against. */}
-        <Tile
-          label="Actual spent to date"
-          value={money(view.actualSpent)}
-          sub={safeNum(view.actualSpent) === 0 ? "No spend recorded yet." : null}
-        />
-        <Tile
-          label={
-            view.savingsLabel ||
-            (view.savings >= 0 ? "Under-run (savings)" : "Over-run")
-          }
-          tone={
-            view.savingsTone === "positive"
-              ? "pal-on"
-              : view.savingsTone === "negative"
-                ? "warn"
-                : ""
-          }
-          title={
-            !contractLocked && !isFinalized
-              ? "Lock the contract to start tracking savings or over-run against the agreed sum."
-              : safeNum(view.actualSpent) === 0
-                ? "Over-run = max(0, actual spent − planned). With no spend recorded, the figure is 0."
-                : `Over-run = Actual spent (₦${money(view.actualSpent)}) − Planned (₦${money(view.plannedTotal + view.variationsFinal)})`
-          }
-          value={
-            !contractLocked && !isFinalized
-              ? "–"
-              : money(safeNum(view.savingsValue))
-          }
-          sub={
-            !contractLocked && !isFinalized
-              ? "Lock the contract to start tracking."
-              : safeNum(view.actualSpent) === 0 && safeNum(view.savingsValue) === 0
-                ? "No actual spend yet, no over-run."
-                : null
-          }
-        />
+        <div>
+          <div className="text-slate-500 dark:text-slate-400">Actual spent to date</div>
+          <div className="text-base font-bold text-slate-900 dark:text-slate-100">
+            {money(view.actualSpent)}
+          </div>
+          {safeNum(view.actualSpent) === 0 ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">No spend recorded yet.</div>
+          ) : null}
+        </div>
+        <div>
+          <div className="text-slate-500 dark:text-slate-400">
+            {view.savingsLabel ||
+              (view.savings >= 0 ? "Under-run (savings)" : "Over-run")}
+          </div>
+          <div
+            className={`text-base font-bold ${
+              view.savingsTone === "positive"
+                ? "text-emerald-700 dark:text-emerald-400"
+                : view.savingsTone === "negative"
+                  ? "text-red-700 dark:text-red-400"
+                  : "text-slate-500 dark:text-slate-400"
+            }`}
+            title={
+              !contractLocked && !isFinalized
+                ? "Lock the contract to start tracking savings or over-run against the agreed sum."
+                : safeNum(view.actualSpent) === 0
+                  ? "Over-run = max(0, actual spent − planned). With no spend recorded, the figure is 0."
+                  : `Over-run = Actual spent (₦${money(view.actualSpent)}) − Planned (₦${money(view.plannedTotal + view.variationsFinal)})`
+            }
+          >
+            {!contractLocked && !isFinalized
+              ? "—"
+              : money(safeNum(view.savingsValue))}
+          </div>
+          {!contractLocked && !isFinalized ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">
+              Lock the contract to start tracking.
+            </div>
+          ) : safeNum(view.actualSpent) === 0 && safeNum(view.savingsValue) === 0 ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">
+              No actual spend yet, no over-run.
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -502,19 +510,26 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
 
   return (
     <div
-      className="wk-panel"
-      style={{
-        marginBottom: 0,
-        padding: 14,
-        ...(attached ? { borderColor: "var(--pal-light-line)" } : null),
-      }}
+      className={[
+        "rounded border p-3 transition",
+        attached
+          ? "border-emerald-200 bg-emerald-50/30"
+          : "border-slate-200 bg-slate-50",
+      ].join(" ")}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-          <FaCube size={14} className={attached ? "text-emerald-600" : "text-slate-400"} />
+          <FaCube className={attached ? "text-emerald-600" : "text-slate-400"} />
           {label}
         </div>
-        <span className="wk-src sm" style={attached ? tone("light") : undefined}>
+        <span
+          className={[
+            "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+            attached
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-slate-200 text-slate-600",
+          ].join(" ")}
+        >
           {attached ? "Attached" : "Not attached"}
         </span>
       </div>
@@ -534,27 +549,26 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
                 const v = model.validation || {};
                 const map = {
                   valid: [
-                    tone("light"),
+                    "bg-emerald-100 text-emerald-800",
                     `✓ Verified, ${v.matchedCount}/${v.requiredCount} quantity elements found`,
                   ],
                   "no-quantities": [
-                    undefined,
+                    "bg-slate-200 text-slate-600",
                     "No quantities to verify against",
                   ],
                   unchecked: [
-                    tone("deep"),
+                    "bg-amber-100 text-amber-800",
                     "Not Element-ID checked",
                   ],
                   invalid: [
-                    tone("orange"),
+                    "bg-red-100 text-red-800",
                     `⚠ ${v.missingCount} of ${v.requiredCount} elements missing`,
                   ],
                 };
-                const [chipTone, text] = map[v.status] || map.unchecked;
+                const [cls, text] = map[v.status] || map.unchecked;
                 return (
                   <span
-                    className="wk-src sm"
-                    style={chipTone}
+                    className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold ${cls}`}
                     title={
                       v.ifcElementCount
                         ? `${v.ifcElementCount.toLocaleString()} elements in the IFC`
@@ -614,7 +628,7 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
             disabled={busy || disabled}
             title="Fallback: upload manually if the plugin wasn't used"
           >
-            <FaUpload size={11} />
+            <FaUpload className="text-[8px]" />
             {busy ? "Uploading..." : attached ? "Replace manually" : "Upload manually"}
           </button>
         </>
@@ -657,16 +671,16 @@ function ModelsPanel({
     return { elements: ids.size, lines };
   }, [items, productKey]);
   return (
-    <div style={STACK}>
-      <p className="mk-note" style={{ margin: 0 }}>
+    <div className="space-y-3">
+      <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
         <b>Auto-attached from Revit.</b> When you save a project from the
         QUIV, the model is exported to IFC (compressed to stay under
         100 MB) and pushed here automatically. For large models the plugin
         asks first since saving takes longer. No manual upload needed.
-      </p>
+      </div>
 
       {unclassified.elements > 0 ? (
-        <p className="mk-note" style={{ margin: 0, ...NOTE_WARN }}>
+        <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
           <b>
             {unclassified.elements.toLocaleString()} element
             {unclassified.elements === 1 ? "" : "s"}
@@ -675,13 +689,11 @@ function ModelsPanel({
           {unclassified.lines === 1 ? "" : "s"} aren’t classified into a
           discipline, so they’re <b>not covered</b> by model validation. Re-save
           the project from the updated QUIV to tag them automatically.
-        </p>
+        </div>
       ) : null}
 
       {attached.length ? (
-        <div
-          style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
-        >
+        <div className="grid gap-3 md:grid-cols-3">
           {["architectural", "structural", "mep"].map((d) => (
             <ModelStatus
               key={d}
@@ -696,31 +708,29 @@ function ModelsPanel({
           ))}
         </div>
       ) : (
-        <div className="wk-panel wk-empty" style={NO_MB}>
+        <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
           No BIM models attached yet. Save the project from QUIV
           to push the models automatically.
         </div>
       )}
 
-      <div className="wk-bar" style={{ marginBottom: 0, justifyContent: "space-between" }}>
+      <div className="flex items-center justify-between text-[11px]">
         <button
           type="button"
           onClick={() => setShowManual((v) => !v)}
-          className="ds-btn ds-btn-sm btn-o"
+          className="text-slate-500 hover:text-slate-700 hover:underline"
           title="Rarely needed, the plugin auto-pushes. Use if you have an IFC from elsewhere."
         >
           {showManual ? "Hide manual upload" : "Advanced: manual upload"}
         </button>
-        <span className="wk-locnote">
-          Open the <b>3D Model</b> tab to view &amp;
+        <span className="text-slate-400">
+          Open the <b className="font-semibold">3D Model</b> tab to view &amp;
           verify.
         </span>
       </div>
 
       {showManual ? (
-        <div
-          style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
-        >
+        <div className="grid gap-3 md:grid-cols-3">
           {["architectural", "structural", "mep"].map((d) => (
             <ModelStatus
               key={`manual-${d}`}
@@ -818,11 +828,13 @@ export default function ProjectContractPanel({
     .join(" · ");
 
   return (
-    <section className="wk-panel" style={NO_MB}>
-      <div className="wk-ph" style={{ flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
-          <h2>Contract administration</h2>
-          <div className="wk-locnote" style={{ marginTop: 4 }}>
+    <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-900 dark:text-white">
+            Contract administration
+          </div>
+          <div className="text-[11px] text-slate-500">
             {collapsed && collapsedSummary
               ? collapsedSummary
               : hideModels
@@ -837,34 +849,37 @@ export default function ProjectContractPanel({
           onClick={toggleCollapsed}
           aria-expanded={!collapsed}
           aria-controls="contract-admin-body"
-          className="ds-btn ds-btn-sm btn-o"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition"
           title={collapsed ? "Show contract administration" : "Hide contract administration"}
         >
+          <span
+            aria-hidden="true"
+            className={`inline-block transition-transform ${collapsed ? "" : "rotate-180"}`}
+          >
+            ▾
+          </span>
           {collapsed ? "Show" : "Hide"}
         </button>
       </div>
 
       {collapsed ? null : (
-      <div id="contract-admin-body" style={{ ...STACK, padding: "16px 20px 20px" }}>
-      <div
-        className="wk-tabs"
-        role="tablist"
-        aria-label="Contract administration"
-        style={{ maxWidth: "100%", overflowX: "auto", justifySelf: "start" }}
-      >
+      <div id="contract-admin-body" className="flex flex-wrap items-center gap-1 border-b border-slate-100 pb-2">
         <SubTab
+          id="certificates"
           active={tab === "certificates"}
           onClick={() => setTab("certificates")}
           label="Interim certificates"
           count={certificates.length}
         />
         <SubTab
+          id="final"
           active={tab === "final"}
           onClick={() => setTab("final")}
           label="Final account"
         />
         {hideModels ? null : (
           <SubTab
+            id="models"
             active={tab === "models"}
             onClick={() => setTab("models")}
             label="BIM models"
@@ -872,6 +887,7 @@ export default function ProjectContractPanel({
           />
         )}
       </div>
+      )}
 
       {!collapsed && tab === "certificates" ? (
         <CertificatesSection
@@ -929,8 +945,6 @@ export default function ProjectContractPanel({
           disabled={Boolean(finalAccount?.finalized)}
         />
       ) : null}
-      </div>
-      )}
-    </section>
+    </div>
   );
 }

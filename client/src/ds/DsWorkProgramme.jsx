@@ -52,7 +52,6 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkDropdown from "./WkDropdown.jsx";
 import WkPrefs from "./WkPrefs.jsx";
-import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -357,7 +356,7 @@ export default function DsWorkProgramme() {
     apiAuthed("/me/projects-rollup", { token: accessToken })
       .then((d) => {
         if (!alive) return;
-        const all = normaliseRollup(Array.isArray(d?.projects) ? d.projects : d?.items || []);
+        const all = Array.isArray(d?.projects) ? d.projects : d?.items || [];
         // The shelf is "has work that can be sequenced", not "is a bill".
         //
         // That distinction is the whole reason HERON and CIVIQ were missing:
@@ -984,7 +983,7 @@ export default function DsWorkProgramme() {
                 r.items.map((g, i) => (
                   <div className="wk-qr" key={`${r.trade}-${i}`}>
                     <span className="d">
-                      <Link to={projectWorkspaceHref(current)}>
+                      <Link to={`/work/project/${current.productKey}/${current.id}`}>
                         {g.name}
                       </Link>
                       <em>

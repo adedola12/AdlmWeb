@@ -1,5 +1,5 @@
 import React from "react";
-import { FaCheckSquare, FaRegSquare, FaTimes } from "../../../components/icons.jsx";
+import { FaCheckSquare, FaRegSquare, FaSearch, FaTimes } from "../../../components/icons.jsx";
 
 function safeNum(value) {
   const n = Number(value);
@@ -14,34 +14,18 @@ function fmtMoney(value) {
 // glance which BoQ stream they're linking to. Measured items use the
 // row's category chip instead (their nature is obvious), so they return
 // null here.
-function palChip(pal) {
-  return {
-    background: `var(--pal-${pal}-wash)`,
-    color: `var(--pal-${pal}-key)`,
-    borderColor: `var(--pal-${pal}-line)`,
-  };
-}
-
 function kindBadgeFor(kind) {
   switch (kind) {
     case "preliminary":
-      return { label: "Prelim", style: palChip("deep") };
+      return { label: "Prelim", cls: "bg-purple-100 text-purple-700" };
     case "provisional":
-      return { label: "PC sum", style: palChip("grad") };
+      return { label: "PC sum", cls: "bg-amber-100 text-amber-800" };
     case "variation":
-      return { label: "Variation", style: palChip("orange") };
+      return { label: "Variation", cls: "bg-rose-100 text-rose-700" };
     default:
       return null; // measured items get their category chip downstream
   }
 }
-
-// His .wk-dd-m surface for the suggestions list.
-const POP = {
-  borderRadius: 14,
-  border: "1px solid var(--line)",
-  background: "var(--bg)",
-  boxShadow: "0 3px 10px rgba(var(--shadow-c),.08), 0 20px 46px rgba(var(--shadow-c),.20)",
-};
 
 // Searchable multi-select picker for BoQ items.
 //
@@ -217,8 +201,7 @@ export default function PmBoqItemPicker({
             return (
               <span
                 key={item.identity}
-                className="wk-src sm"
-                style={palChip("light")}
+                className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-adlm-blue-700 border border-blue-200"
               >
                 <span className="max-w-[180px] truncate" title={item.description}>
                   {item.description || `Item ${item.sn}`}
@@ -228,8 +211,7 @@ export default function PmBoqItemPicker({
                     fix, 30% final fix). Live updates the chip's
                     contribution and the parent's baselineCost. */}
                 <span
-                  className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5"
-                  style={{ border: "1px solid var(--pal-light-line)", background: "var(--bg)" }}
+                  className="inline-flex items-center gap-0.5 rounded-full bg-white/70 dark:bg-white/10 px-1.5 py-0.5 border border-blue-200/60"
                   title="Weight (%). Share of this BoQ line allocated to the current task. Lower this when other tasks also link to the same line."
                 >
                   <input
@@ -238,15 +220,14 @@ export default function PmBoqItemPicker({
                     max="100"
                     value={weight}
                     onChange={(e) => setWeight(item.identity, e.target.value)}
-                    className="w-10 bg-transparent text-[10px] font-semibold text-right outline-none p-0"
-                    style={{ border: 0, color: "inherit" }}
+                    className="w-10 bg-transparent text-[10px] font-semibold text-adlm-blue-700 text-right outline-none p-0"
                   />
                   <span className="text-[10px] opacity-80">%</span>
                 </span>
                 <span className="text-[10px] opacity-80">
                   ₦{fmtMoney(contribution)}
                   {weight !== 100 ? (
-                    <span className="ml-1" style={{ color: "var(--ink-3)" }}>
+                    <span className="ml-1 text-slate-500">
                       (of ₦{fmtMoney(item.amount)})
                     </span>
                   ) : null}
@@ -254,11 +235,10 @@ export default function PmBoqItemPicker({
                 <button
                   type="button"
                   onClick={() => toggleItem(item.identity)}
-                  className="rounded-full p-0.5"
-                  style={{ background: "none", border: 0, color: "inherit", cursor: "pointer" }}
+                  className="rounded-full hover:bg-blue-100 p-0.5"
                   title="Unlink"
                 >
-                  <FaTimes size={11} />
+                  <FaTimes className="text-[9px]" />
                 </button>
               </span>
             );
@@ -266,8 +246,7 @@ export default function PmBoqItemPicker({
           <button
             type="button"
             onClick={clearAll}
-            className="wk-locnote self-center"
-            style={{ background: "none", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}
+            className="text-[11px] text-slate-500 hover:text-rose-600 underline self-center"
           >
             Clear all
           </button>
@@ -275,12 +254,10 @@ export default function PmBoqItemPicker({
       ) : null}
 
       {/* Search input */}
-      <label className="wk-find" style={{ display: "block" }}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <use href="#hi-search" />
-        </svg>
+      <div className="relative">
+        <FaSearch className="absolute left-3 top-2.5 text-slate-400 text-xs" />
         <input
-          type="search"
+          type="text"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -288,32 +265,28 @@ export default function PmBoqItemPicker({
           }}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
-          aria-label="Search BoQ items"
-          autoComplete="off"
+          className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/40 focus:border-adlm-blue-700"
         />
-      </label>
+      </div>
 
       {/* Suggestions dropdown */}
       {open ? (
-        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto" style={POP}>
+        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
           {items.length === 0 ? (
-            <div className="wk-empty" style={{ padding: 18 }}>{emptyHint}</div>
+            <div className="px-3 py-4 text-center text-xs text-slate-400">{emptyHint}</div>
           ) : filtered.length === 0 ? (
-            <div className="wk-empty" style={{ padding: 18 }}>No matches.</div>
+            <div className="px-3 py-4 text-center text-xs text-slate-400">No matches.</div>
           ) : (
             <>
               {showSelectAll ? (
-                <div
-                  className="wk-locnote sticky top-0 z-10 flex items-center justify-between px-3 py-2"
-                  style={{ background: "var(--bg)", borderBottom: "1px solid var(--line)" }}
-                >
-                  <span>
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px]">
+                  <span className="text-slate-500">
                     {filtered.length} item{filtered.length === 1 ? "" : "s"}
                   </span>
                   <button
                     type="button"
                     onClick={selectAllVisible}
-                    style={{ background: "none", border: 0, padding: 0, cursor: "pointer", color: "var(--action)", fontFamily: "inherit" }}
+                    className="font-medium text-adlm-blue-700 hover:underline"
                   >
                     Select all visible
                   </button>
@@ -327,41 +300,36 @@ export default function PmBoqItemPicker({
                     key={item.identity}
                     type="button"
                     onClick={() => toggleItem(item.identity)}
-                    className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs"
-                    style={{
-                      border: 0,
-                      borderBottom: "1px solid var(--line)",
-                      cursor: "pointer",
-                      color: "var(--ink-2)",
-                      background: checked ? "var(--pal-light-wash)" : "transparent",
-                    }}
+                    className={`flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover:bg-blue-50 transition ${
+                      checked ? "bg-blue-50/60" : ""
+                    }`}
                   >
-                    <span className="mt-0.5" style={{ color: checked ? "var(--action)" : "var(--ink-3)" }}>
-                      {checked ? <FaCheckSquare size={15} /> : <FaRegSquare size={15} />}
+                    <span className="mt-0.5 text-adlm-blue-700">
+                      {checked ? <FaCheckSquare /> : <FaRegSquare className="text-slate-300" />}
                     </span>
                     <span className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         {kindBadge ? (
-                          <span className="wk-src sm" style={kindBadge.style}>
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold ${kindBadge.cls}`}>
                             {kindBadge.label}
                           </span>
                         ) : null}
-                        <span className="truncate" style={{ fontWeight: 500, color: "var(--ink)" }}>
+                        <span className="font-medium text-slate-900 truncate">
                           {item.description || `Item ${item.sn}`}
                         </span>
                         {item.category && item.kind === "measured" ? (
-                          <span className="wk-src sm">
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-500">
                             {item.category}
                           </span>
                         ) : null}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-3 text-[11px]" style={{ color: "var(--ink-3)" }}>
+                      <div className="mt-0.5 flex items-center gap-3 text-[10px] text-slate-500">
                         <span>#{item.sn}</span>
                         <span>
                           {fmtMoney(item.qty)} {item.unit}
                         </span>
                         <span>@ ₦{fmtMoney(item.rate)}</span>
-                        <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>
+                        <span className="font-semibold text-slate-700">
                           = ₦{fmtMoney(item.amount)}
                         </span>
                       </div>
@@ -383,15 +351,12 @@ export default function PmBoqItemPicker({
             (it) => (weightByIdentity.get(it.identity) ?? 100) !== 100,
           );
           return (
-            <div
-              className="mk-note"
-              style={{ marginTop: 10, background: "var(--pal-light-wash)", color: "var(--pal-light-key)", borderColor: "var(--pal-light-line)" }}
-            >
+            <div className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-[11px] text-emerald-800">
               <b>Linked baseline{anyDownweighted ? " (weighted)" : ""}:</b>{" "}
               ₦{fmtMoney(derivedAmount)} from {selectedItems.length} BoQ item
               {selectedItems.length === 1 ? "" : "s"}
               {anyDownweighted ? (
-                <div style={{ marginTop: 4, fontSize: 12, opacity: 0.85 }}>
+                <div className="mt-0.5 text-[10px] text-emerald-700/80">
                   Tip: when several tasks share a BoQ line, set each task's
                   weight so the totals across all tasks sum to 100%.
                 </div>

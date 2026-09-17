@@ -1,5 +1,5 @@
 import React from "react";
-import { FaCheckCircle, FaThLarge } from "../../../components/icons.jsx";
+import { FaCheckCircle, FaSearch, FaThLarge } from "../../../components/icons.jsx";
 
 function safeNum(value) {
   const n = Number(value);
@@ -13,30 +13,32 @@ function fmtMoney(value) {
 // + text color. Ratified items get the brand colour so they read as
 // "signed off" — distinct from a regular 100% that's just sitting at full
 // progress without the binary tick.
-// The ramp, in his tokens: his ground at 0%, deepening into his action blue
-// as work progresses, and his accent (the colour of his full meter) once
-// ratified.
-const mix = (p) => `color-mix(in srgb, var(--action) ${p}%, var(--bg-alt))`;
-const RAMP = {
-  ratified: { bg: "var(--accent)", text: "#ffffff", label: "Ratified" },
-  none: { bg: "var(--bg-alt)", text: "var(--ink-3)", label: "Not started" },
-  started: { bg: mix(18), text: "var(--ink)", label: "Just started" },
-  half: { bg: mix(38), text: "var(--ink)", label: "In progress" },
-  threeQuarter: { bg: mix(58), text: "var(--action-ink)", label: "Well underway" },
-  almost: { bg: mix(78), text: "var(--action-ink)", label: "Almost done" },
-  full: { bg: "var(--action)", text: "var(--action-ink)", label: "Done (awaiting sign-off)" },
-};
-
 function cellColor(pct, ratified) {
-  if (ratified) return RAMP.ratified;
+  if (ratified) {
+    return {
+      bg: "#005be3", // adlm-blue-700
+      text: "#ffffff",
+      label: "Ratified",
+    };
+  }
   const p = Math.max(0, Math.min(100, safeNum(pct)));
-  if (p === 0) return RAMP.none;
-  if (p <= 25) return RAMP.started;
-  if (p <= 50) return RAMP.half;
-  if (p <= 75) return RAMP.threeQuarter;
-  if (p < 100) return RAMP.almost;
+  if (p === 0) {
+    return { bg: "#f1f5f9", text: "#94a3b8", label: "Not started" };
+  }
+  if (p <= 25) {
+    return { bg: "#fecaca", text: "#991b1b", label: "Just started" };
+  }
+  if (p <= 50) {
+    return { bg: "#fde68a", text: "#92400e", label: "In progress" };
+  }
+  if (p <= 75) {
+    return { bg: "#a7f3d0", text: "#065f46", label: "Well underway" };
+  }
+  if (p < 100) {
+    return { bg: "#34d399", text: "#064e3b", label: "Almost done" };
+  }
   // 100% but not ratified
-  return RAMP.full;
+  return { bg: "#10b981", text: "#ffffff", label: "Done (awaiting sign-off)" };
 }
 
 const GROUP_MODES = [
@@ -56,12 +58,12 @@ function HeatmapCell({ item, onHover, onLeave }) {
       onMouseLeave={onLeave}
       onFocus={(e) => onHover?.(item, e.currentTarget)}
       onBlur={onLeave}
-      className="relative flex h-9 w-9 items-center justify-center text-[10px] font-semibold transition hover:scale-110 hover:z-10"
-      style={{ backgroundColor: bg, color: text, border: "1px solid var(--line)", borderRadius: 8 }}
+      className="relative flex h-9 w-9 items-center justify-center rounded text-[10px] font-semibold transition hover:scale-110 hover:z-10 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-adlm-blue-700"
+      style={{ backgroundColor: bg, color: text }}
       aria-label={`${item.description || `Item ${item.sn}`}: ${ratified ? "ratified" : `${pct}% complete`}`}
     >
       {ratified ? (
-        <FaCheckCircle size={14} />
+        <FaCheckCircle className="text-[11px]" />
       ) : (
         <span className="leading-none">{Math.round(pct)}</span>
       )}
@@ -71,21 +73,21 @@ function HeatmapCell({ item, onHover, onLeave }) {
 
 function Legend() {
   const stops = [
-    { color: RAMP.none.bg, label: "0%" },
-    { color: RAMP.started.bg, label: "1-25%" },
-    { color: RAMP.half.bg, label: "26-50%" },
-    { color: RAMP.threeQuarter.bg, label: "51-75%" },
-    { color: RAMP.almost.bg, label: "76-99%" },
-    { color: RAMP.full.bg, label: "100%" },
-    { color: RAMP.ratified.bg, label: "Ratified" },
+    { color: "#f1f5f9", label: "0%" },
+    { color: "#fecaca", label: "1-25%" },
+    { color: "#fde68a", label: "26-50%" },
+    { color: "#a7f3d0", label: "51-75%" },
+    { color: "#34d399", label: "76-99%" },
+    { color: "#10b981", label: "100%" },
+    { color: "#005be3", label: "Ratified" },
   ];
   return (
-    <div className="wk-locnote flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-600">
       {stops.map((stop) => (
         <span key={stop.label} className="inline-flex items-center gap-1.5">
           <span
-            className="h-3 w-3"
-            style={{ backgroundColor: stop.color, border: "1px solid var(--line)", borderRadius: 3 }}
+            className="h-3 w-3 rounded"
+            style={{ backgroundColor: stop.color }}
           />
           {stop.label}
         </span>
@@ -126,26 +128,16 @@ function CellTooltip({ item, anchor, statusLabel }) {
 
   return (
     <div
-      className="pointer-events-none fixed z-50"
-      style={{
-        top: pos.top,
-        left: pos.left,
-        width: pos.width,
-        padding: 12,
-        borderRadius: 14,
-        border: "1px solid var(--line)",
-        background: "var(--bg)",
-        color: "var(--ink)",
-        boxShadow: "0 3px 10px rgba(var(--shadow-c),.08), 0 20px 46px rgba(var(--shadow-c),.20)",
-      }}
+      className="pointer-events-none fixed z-50 rounded-lg border border-slate-200 bg-white p-2.5 shadow-xl"
+      style={{ top: pos.top, left: pos.left, width: pos.width }}
     >
       <div className="text-xs font-semibold text-slate-900 leading-tight break-words">
         {item.description || `Item ${item.sn}`}
       </div>
       <div className="mt-1.5 flex items-center gap-2 text-[10px] text-slate-500">
         <span>#{item.sn}</span>
-        {item.category ? <span className="wk-src sm">{item.category}</span> : null}
-        {item.trade ? <span className="wk-src sm">{item.trade}</span> : null}
+        {item.category ? <span className="rounded bg-slate-100 px-1.5 py-0.5">{item.category}</span> : null}
+        {item.trade ? <span className="rounded bg-slate-100 px-1.5 py-0.5">{item.trade}</span> : null}
       </div>
       <div className="mt-2 grid grid-cols-2 gap-1 text-[11px]">
         <div className="text-slate-500">Qty</div>
@@ -157,11 +149,11 @@ function CellTooltip({ item, anchor, statusLabel }) {
         <div className="text-slate-500">Line total</div>
         <div className="text-right text-slate-900 font-medium">₦{fmtMoney(item.amount)}</div>
         <div className="text-slate-500">Progress</div>
-        <div className="text-right font-semibold" style={{ color: ratified ? "var(--accent)" : pct > 0 ? "var(--action)" : "var(--ink-3)" }}>
+        <div className="text-right font-semibold" style={{ color: ratified ? "#005be3" : pct > 0 ? "#059669" : "#94a3b8" }}>
           {ratified ? (statusLabel || "Ratified") : `${pct.toFixed(0)}%`}
         </div>
         <div className="text-slate-500">Valued</div>
-        <div className="text-right font-semibold" style={{ color: "var(--action)" }}>₦{fmtMoney(valued)}</div>
+        <div className="text-right text-emerald-700 font-semibold">₦{fmtMoney(valued)}</div>
       </div>
     </div>
   );
@@ -228,12 +220,12 @@ export default function PmBoqHeatmap({ boqItems = [], statusLabel = "Ratified" }
 
   if (!boqItems.length) {
     return (
-      <div className="wk-panel wk-empty" style={{ marginBottom: 0 }}>
-        <FaThLarge size={28} style={{ display: "block", margin: "0 auto", color: "var(--ink-3)" }} />
-        <b style={{ display: "block", marginTop: 12, fontWeight: 500, color: "var(--ink)" }}>
+      <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center">
+        <FaThLarge className="mx-auto text-3xl text-slate-300" />
+        <div className="mt-3 text-sm font-semibold text-slate-700">
           No BoQ items to map
-        </b>
-        <div style={{ marginTop: 4, fontSize: 13 }}>
+        </div>
+        <div className="mt-1 text-xs text-slate-500">
           Upload a takeoff in the Bill of Quantity tab first. The heatmap will populate automatically.
         </div>
       </div>
@@ -241,39 +233,41 @@ export default function PmBoqHeatmap({ boqItems = [], statusLabel = "Ratified" }
   }
 
   return (
-    <section className="wk-panel" style={{ marginBottom: 0 }}>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       {/* Header */}
-      <div className="wk-ph" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ minWidth: 0, flex: "1 1 240px" }}>
-          <h2>BoQ Progress Heatmap</h2>
-          <div className="wk-locnote" style={{ marginTop: 4 }}>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            BoQ Progress Heatmap
+          </div>
+          <div className="mt-0.5 text-[11px] text-slate-500">
             Every BoQ line as a cell: colour shows current progress, hover for detail.
           </div>
         </div>
-        <div className="wk-acts" style={{ alignItems: "center" }}>
-          <label className="wk-find" style={{ flex: "0 1 220px" }}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <use href="#hi-search" />
-            </svg>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative">
+            <FaSearch className="absolute left-2.5 top-2 text-slate-400 text-[10px]" />
             <input
-              type="search"
+              type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Filter items…"
-              aria-label="Filter BoQ items"
-              autoComplete="off"
+              className="rounded-lg border border-slate-200 pl-7 pr-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/30 focus:border-adlm-blue-700"
             />
-          </label>
+          </div>
           {/* Group toggle */}
-          <div className="wk-loc-sw" role="tablist" aria-label="Group heatmap">
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[11px]">
             {GROUP_MODES.map((mode) => (
               <button
                 key={mode.id}
                 type="button"
-                role="tab"
-                aria-selected={groupMode === mode.id}
                 onClick={() => setGroupMode(mode.id)}
-                className={groupMode === mode.id ? "on" : ""}
+                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                  groupMode === mode.id
+                    ? "bg-adlm-blue-700 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                }`}
               >
                 {mode.label}
               </button>
@@ -282,16 +276,15 @@ export default function PmBoqHeatmap({ boqItems = [], statusLabel = "Ratified" }
         </div>
       </div>
 
-      <div style={{ padding: "18px 20px 20px" }}>
       {/* Distribution band */}
-      <div className="mb-4 grid gap-1.5 text-[11px]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))" }}>
-        <StatChip tone={RAMP.ratified} label="Ratified" count={stats.ratified} total={stats.total} />
-        <StatChip tone={RAMP.full} label="100%" count={stats.full} total={stats.total} />
-        <StatChip tone={RAMP.almost} label="76-99%" count={stats.almost} total={stats.total} />
-        <StatChip tone={RAMP.threeQuarter} label="51-75%" count={stats.threeQuarter} total={stats.total} />
-        <StatChip tone={RAMP.half} label="26-50%" count={stats.half} total={stats.total} />
-        <StatChip tone={RAMP.started} label="1-25%" count={stats.started} total={stats.total} />
-        <StatChip tone={RAMP.none} label="Not started" count={stats.notStarted} total={stats.total} />
+      <div className="mb-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 text-[10px]">
+        <StatChip color="#005be3" textColor="#fff" label="Ratified" count={stats.ratified} total={stats.total} />
+        <StatChip color="#10b981" textColor="#fff" label="100%" count={stats.full} total={stats.total} />
+        <StatChip color="#34d399" textColor="#064e3b" label="76-99%" count={stats.almost} total={stats.total} />
+        <StatChip color="#a7f3d0" textColor="#065f46" label="51-75%" count={stats.threeQuarter} total={stats.total} />
+        <StatChip color="#fde68a" textColor="#92400e" label="26-50%" count={stats.half} total={stats.total} />
+        <StatChip color="#fecaca" textColor="#991b1b" label="1-25%" count={stats.started} total={stats.total} />
+        <StatChip color="#f1f5f9" textColor="#475569" label="Not started" count={stats.notStarted} total={stats.total} />
       </div>
 
       {/* Grid */}
@@ -300,10 +293,10 @@ export default function PmBoqHeatmap({ boqItems = [], statusLabel = "Ratified" }
           <div key={group.key}>
             {groupMode !== "none" ? (
               <div className="mb-1.5 flex items-center gap-2">
-                <p className="wk-grp" style={{ padding: 0, margin: 0 }}>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   {group.label}
-                </p>
-                <div className="h-px flex-1" style={{ background: "var(--line)" }} />
+                </div>
+                <div className="h-px flex-1 bg-slate-100" />
               </div>
             ) : null}
             <div className="flex flex-wrap gap-1">
@@ -319,16 +312,15 @@ export default function PmBoqHeatmap({ boqItems = [], statusLabel = "Ratified" }
           </div>
         ))}
         {groups.length === 0 || groups.every((g) => g.items.length === 0) ? (
-          <div className="wk-empty">
-            No items match “{query}”.
+          <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">
+            No items match "{query}".
           </div>
         ) : null}
       </div>
 
       {/* Legend */}
-      <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--line)" }}>
+      <div className="mt-4 border-t border-slate-100 pt-3">
         <Legend />
-      </div>
       </div>
 
       {/* Floating tooltip */}
@@ -337,16 +329,16 @@ export default function PmBoqHeatmap({ boqItems = [], statusLabel = "Ratified" }
         anchor={hovered?.anchor}
         statusLabel={statusLabel}
       />
-    </section>
+    </div>
   );
 }
 
-function StatChip({ tone, label, count, total }) {
+function StatChip({ color, textColor, label, count, total }) {
   const pct = total > 0 ? (count / total) * 100 : 0;
   return (
     <div
-      className="px-2 py-1.5 flex items-center justify-between"
-      style={{ backgroundColor: tone.bg, color: tone.text, border: "1px solid var(--line)", borderRadius: 9 }}
+      className="rounded-md px-2 py-1.5 flex items-center justify-between"
+      style={{ backgroundColor: color, color: textColor }}
     >
       <span className="font-semibold truncate">{label}</span>
       <span className="ml-1 tabular-nums font-bold">

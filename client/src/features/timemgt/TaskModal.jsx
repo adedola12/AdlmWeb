@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import WkModal from "../../ds/WkModal.jsx";
 
 const TRADES = [
   "Site Clearance","Ground works","Earthworks / Excavation","Backfilling / Compaction",
@@ -111,119 +110,141 @@ export default function TaskModal({ open, task, weather, onSave, onClose }) {
     }
   }
 
-  const snap = task?.weather ?? weather;
+  if (!open) return null;
 
-  // His modal (WkModal) and his modal form: a two-column grid of .wk-f
-  // fields, .half for the paired ones, ending in his .wk-modal-go button.
   return (
-    <WkModal
-      open={open}
-      title={isEdit ? "Edit Task" : "Add Task"}
-      sub="Labour, hours and output for one item of work."
-      onClose={onClose}
-      busy={saving}
-    >
-      <form onSubmit={submit}>
-        <label className="wk-f">
-          <span>Item of Work *</span>
-          <input
-            value={form.itemOfWork}
-            onChange={(e) => set("itemOfWork", e.target.value)}
-            placeholder="e.g. Lay 200mm concrete slab to Level 3"
-          />
-        </label>
-
-        <label className="wk-f">
-          <span>Trade</span>
-          <select value={form.trade} onChange={(e) => set("trade", e.target.value)}>
-            {TRADES.map((tr) => (
-              <option key={tr}>{tr}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="wk-f half">
-          <span>Start Date</span>
-          <input type="date" value={form.taskStartDate} onChange={(e) => set("taskStartDate", e.target.value)} />
-        </label>
-        <label className="wk-f half">
-          <span>End Date</span>
-          <input type="date" value={form.taskEndDate} onChange={(e) => set("taskEndDate", e.target.value)} />
-        </label>
-
-        <label className="wk-f half">
-          <span>Skilled Labour</span>
-          <input type="number" min="0" value={form.skilledLabor} onChange={(e) => numSet("skilledLabor", e.target.value)} />
-        </label>
-        <label className="wk-f half">
-          <span>Unskilled Labour</span>
-          <input type="number" min="0" value={form.unskilledLabor} onChange={(e) => numSet("unskilledLabor", e.target.value)} />
-        </label>
-
-        <label className="wk-f half">
-          <span>Hours Worked</span>
-          <input type="number" min="0" step="0.5" value={form.hoursWorked} onChange={(e) => numSet("hoursWorked", e.target.value)} />
-        </label>
-        <label className="wk-f half">
-          <span>Break Hours</span>
-          <input type="number" min="0" step="0.5" value={form.breakHours} onChange={(e) => numSet("breakHours", e.target.value)} />
-        </label>
-
-        <label className="wk-f half">
-          <span>Output</span>
-          <input type="number" min="0" step="any" value={form.output} onChange={(e) => numSet("output", e.target.value)} />
-        </label>
-        <label className="wk-f half">
-          <span>Output Unit</span>
-          <input value={form.outputUnit} onChange={(e) => set("outputUnit", e.target.value)} placeholder="m², units, m³…" />
-        </label>
-
-        <label className="wk-f">
-          <span>Equipment Used</span>
-          <input
-            value={form.equipmentUsed}
-            onChange={(e) => set("equipmentUsed", e.target.value)}
-            placeholder="e.g. Excavator CAT 320, Concrete pump"
-          />
-        </label>
-
-        {/* Weather snapshot */}
-        {snap && (
-          <p
-            className="mk-note"
-            style={{
-              gridColumn: "1 / -1",
-              margin: 0,
-              background: "var(--pal-light-wash)",
-              color: "var(--pal-light-key)",
-              borderColor: "var(--pal-light-line)",
-            }}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+            {isEdit ? "Edit Task" : "Add Task"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
           >
-            {snap.condition} · {snap.temperature}°C · {snap.windSpeed} km/h
-            {!task?.weather && " · saved with this task"}
-          </p>
-        )}
+            ✕
+          </button>
+        </div>
 
-        {error && (
-          <p
-            className="mk-note"
-            role="alert"
-            style={{
-              gridColumn: "1 / -1",
-              margin: 0,
-              background: "var(--pal-orange-wash)",
-              color: "var(--pal-orange-key)",
-              borderColor: "var(--pal-orange-line)",
-            }}
-          >
-            {error}
-          </p>
-        )}
+        <form onSubmit={submit} className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Item of Work */}
+          <div className="sm:col-span-2">
+            <label className="label">Item of Work *</label>
+            <input
+              className="field"
+              value={form.itemOfWork}
+              onChange={e => set("itemOfWork", e.target.value)}
+              placeholder="e.g. Lay 200mm concrete slab to Level 3"
+            />
+          </div>
 
-        <button type="submit" className="wk-modal-go" disabled={saving} style={{ opacity: saving ? 0.6 : 1 }}>
-          {saving ? "Saving…" : isEdit ? "Save Changes" : "Save Task"}
-        </button>
-      </form>
-    </WkModal>
+          {/* Trade */}
+          <div className="sm:col-span-2">
+            <label className="label">Trade</label>
+            <select className="field" value={form.trade} onChange={e => set("trade", e.target.value)}>
+              {TRADES.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+
+          {/* Dates */}
+          <div>
+            <label className="label">Start Date</label>
+            <input type="date" className="field" value={form.taskStartDate}
+              onChange={e => set("taskStartDate", e.target.value)} />
+          </div>
+          <div>
+            <label className="label">End Date</label>
+            <input type="date" className="field" value={form.taskEndDate}
+              onChange={e => set("taskEndDate", e.target.value)} />
+          </div>
+
+          {/* Labour */}
+          <div>
+            <label className="label">Skilled Labour</label>
+            <input type="number" min="0" className="field" value={form.skilledLabor}
+              onChange={e => numSet("skilledLabor", e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Unskilled Labour</label>
+            <input type="number" min="0" className="field" value={form.unskilledLabor}
+              onChange={e => numSet("unskilledLabor", e.target.value)} />
+          </div>
+
+          {/* Hours */}
+          <div>
+            <label className="label">Hours Worked</label>
+            <input type="number" min="0" step="0.5" className="field" value={form.hoursWorked}
+              onChange={e => numSet("hoursWorked", e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Break Hours</label>
+            <input type="number" min="0" step="0.5" className="field" value={form.breakHours}
+              onChange={e => numSet("breakHours", e.target.value)} />
+          </div>
+
+          {/* Output */}
+          <div>
+            <label className="label">Output</label>
+            <input type="number" min="0" step="any" className="field" value={form.output}
+              onChange={e => numSet("output", e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Output Unit</label>
+            <input className="field" value={form.outputUnit}
+              onChange={e => set("outputUnit", e.target.value)} placeholder="m², units, m³…" />
+          </div>
+
+          {/* Equipment */}
+          <div className="sm:col-span-2">
+            <label className="label">Equipment Used</label>
+            <input className="field" value={form.equipmentUsed}
+              onChange={e => set("equipmentUsed", e.target.value)}
+              placeholder="e.g. Excavator CAT 320, Concrete pump" />
+          </div>
+
+          {/* Weather snapshot */}
+          {(weather || task?.weather) && (
+            <div className="sm:col-span-2 flex items-center gap-2 text-sm rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-3 py-2">
+              <span>🌤</span>
+              <span>
+                {(task?.weather ?? weather).condition} ·{" "}
+                {(task?.weather ?? weather).temperature}°C ·{" "}
+                {(task?.weather ?? weather).windSpeed} km/h
+                {!task?.weather && " — will be saved with this task"}
+              </span>
+            </div>
+          )}
+
+          {error && (
+            <p className="sm:col-span-2 text-sm text-rose-600 dark:text-rose-400">{error}</p>
+          )}
+
+          <div className="sm:col-span-2 flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="px-5 py-2 rounded-lg bg-adlm-navy text-white text-sm font-semibold hover:brightness-110 disabled:opacity-50">
+              {saving ? "Saving…" : isEdit ? "Save Changes" : "Save Task"}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <style>{`
+        .label { display:block; font-size:.75rem; font-weight:600; margin-bottom:.25rem; color: var(--tw-color-slate-700,#344054); }
+        .dark .label { color: #94a3b8; }
+        .field {
+          width:100%; padding:.5rem .75rem; border-radius:.5rem;
+          border:1px solid #e2e8f0; background:#f8fafc; font-size:.875rem;
+          outline:none; transition:border-color .15s;
+        }
+        .field:focus { border-color:#0B1B33; }
+        .dark .field { background:#1e293b; border-color:#334155; color:#f1f5f9; }
+        .dark .field:focus { border-color:#60a5fa; }
+      `}</style>
+    </div>
   );
 }

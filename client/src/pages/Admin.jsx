@@ -30,9 +30,13 @@ const BOQ_IMPORT_PRODUCT_KEY = "boq-import";
 const BOQ_IMPORT_LEGACY_KEY = "quiv-boq-import";
 const BOQ_IMPORT_KEYS = [BOQ_IMPORT_PRODUCT_KEY, BOQ_IMPORT_LEGACY_KEY];
 
-// Products whose bills can be imported: HERON only (17 Sep 2026). A grant is
-// only useful to someone who already subscribes to it.
-const BOQ_IMPORT_PRODUCTS = [{ key: "planswift", label: "Heron" }];
+// Products whose bills can be imported. A grant is only useful to someone who
+// already subscribes to one of them.
+const BOQ_IMPORT_PRODUCTS = [
+  { key: "revit", label: "QUIV" },
+  { key: "planswift", label: "Heron" },
+  { key: "mep", label: "MEP" },
+];
 
 // Above this we skip the integrity hash rather than pull the whole file into a
 // single ArrayBuffer — SubtleCrypto has no streaming digest, and a browser tab
