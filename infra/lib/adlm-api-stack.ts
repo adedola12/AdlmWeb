@@ -743,6 +743,17 @@ export class AdlmApiStack extends Stack {
       );
     }
 
+    // The morning report also checks whether this account is still a member of
+    // the AWS Organization that pays its bills (util/opsDigest.js coverageState).
+    // There is no card on file, so leaving that org is the one billing event we
+    // must not miss. DescribeOrganization is an account-level read with no ARN.
+    scheduledFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["organizations:DescribeOrganization"],
+        resources: ["*"],
+      }),
+    );
+
     for (const fn of [scheduledFn, videoPollFn]) {
       fn.addToRolePolicy(sesSend);
       fn.addToRolePolicy(sesReadQuota);
