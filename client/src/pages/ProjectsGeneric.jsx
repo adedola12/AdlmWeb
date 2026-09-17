@@ -83,10 +83,10 @@ const BOQ_IMPORT_ENTITLEMENTS = ["boq-import", "quiv-boq-import"];
 // tool → { route segment on the API, entitlement that unlocks it }.
 // MEP is "mep" for the entitlement, the project bucket and the route alike —
 // "revitmep" is not a key any user actually holds.
+// Excel BoQ import is a HERON feature only. Projects imported earlier under
+// another product still open; they just cannot import again.
 const BOQ_IMPORT_TOOLS = {
-  revit: { route: "revit", entitlement: "revit" },
   planswift: { route: "planswift", entitlement: "planswift" },
-  mep: { route: "mep", entitlement: "mep" },
 };
 
 function entActive(ents, productKey) {
@@ -1204,9 +1204,8 @@ export default function ProjectsGeneric() {
   // Which API routes this tool's BoQ import uses (null = not available here).
   const boqImport = boqImportFor(authUser, toolNorm);
   const canBoqImport = Boolean(boqImport);
-  const boqRoute = boqImport?.route || "revit";
-  const boqImportBadge =
-    toolNorm === "planswift" ? "HERON" : toolNorm === "mep" ? "MEP" : "QUIV";
+  const boqRoute = boqImport?.route || "planswift";
+  const boqImportBadge = "HERON";
   const [boqImportOpen, setBoqImportOpen] = React.useState(false);
   const [boqImportBusy, setBoqImportBusy] = React.useState(false);
   const [boqImportFile, setBoqImportFile] = React.useState(null);
