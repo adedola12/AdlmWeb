@@ -34,23 +34,23 @@ const DISABLED = { status: "disabled" };
 test("no grant means no access, however many products are subscribed", () => {
   const u = user(ent("revit"), ent("planswift"), ent("mep"));
   assert.equal(hasBoqImportGrant(u), false);
-  assert.equal(canImportBoqFor(u, "revit"), false);
+  assert.equal(canImportBoqFor(u, "planswift"), false);
 });
 
 test("an expired or disabled grant does not unlock anything", () => {
   for (const over of [EXPIRED, DISABLED]) {
-    const u = user(ent(BOQ_IMPORT_ENTITLEMENT, over), ent("revit"));
+    const u = user(ent(BOQ_IMPORT_ENTITLEMENT, over), ent("planswift"));
     assert.equal(hasBoqImportGrant(u), false);
-    assert.equal(canImportBoqFor(u, "revit"), false);
+    assert.equal(canImportBoqFor(u, "planswift"), false);
   }
 });
 
 test("the pre-2026-08 quiv-boq-import key still works", () => {
   // Every grant issued before the feature covered Heron and MEP is under the
   // old key. Dropping it would silently cut off every existing customer.
-  const u = user(ent(BOQ_IMPORT_LEGACY_ENTITLEMENT), ent("revit"));
+  const u = user(ent(BOQ_IMPORT_LEGACY_ENTITLEMENT), ent("planswift"));
   assert.equal(hasBoqImportGrant(u), true);
-  assert.equal(canImportBoqFor(u, "revit"), true);
+  assert.equal(canImportBoqFor(u, "planswift"), true);
 });
 
 // ── the subscription ────────────────────────────────────────────────────────
@@ -71,17 +71,17 @@ test("access is per product: you import bills for what you subscribe to", () => 
 
 test("access lapses on its own when the subscription does", () => {
   // The whole point of the double gate: no admin has to remember to revoke.
-  const u = user(GRANT(), ent("revit", EXPIRED));
+  const u = user(GRANT(), ent("planswift", EXPIRED));
   assert.equal(hasBoqImportGrant(u), true);
-  assert.equal(canImportBoqFor(u, "revit"), false);
+  assert.equal(canImportBoqFor(u, "planswift"), false);
 });
 
-test("a granted user with all three products can import all three", () => {
+test("import is HERON only, even for a granted user with all three products", () => {
   const u = user(GRANT(), ent("revit"), ent("planswift"), ent("mep"));
-  assert.deepEqual(subscribedBoqProducts(u).sort(), ["mep", "planswift", "revit"]);
-  for (const p of ["revit", "planswift", "mep"]) {
-    assert.equal(canImportBoqFor(u, p), true, p);
-  }
+  assert.deepEqual(subscribedBoqProducts(u), ["planswift"]);
+  assert.equal(canImportBoqFor(u, "planswift"), true);
+  assert.equal(canImportBoqFor(u, "revit"), false, "QUIV import is off");
+  assert.equal(canImportBoqFor(u, "mep"), false, "MEP import is off");
 });
 
 test("the product keys are the ones users actually hold", () => {
@@ -94,20 +94,19 @@ test("the product keys are the ones users actually hold", () => {
     "planswift",
     "revit",
   ]);
-  assert.equal(canImportBoqFor(user(GRANT(), ent("mep")), "mep"), true);
   assert.equal(canImportBoqFor(user(GRANT(), ent("revitmep")), "revitmep"), false);
 });
 
 // ── who may be granted ──────────────────────────────────────────────────────
 
-test("eligibility needs a live QUIV, Heron or MEP subscription", () => {
+test("eligibility needs a live HERON subscription", () => {
   assert.equal(isBoqImportEligible(user()), false);
   assert.equal(isBoqImportEligible(user(ent("rategen"))), false, "wrong product");
   assert.equal(isBoqImportEligible(user(ent("revit", EXPIRED))), false, "expired");
   assert.equal(isBoqImportEligible(user(ent("revit", DISABLED))), false, "disabled");
-  for (const p of ["revit", "planswift", "mep"]) {
-    assert.equal(isBoqImportEligible(user(ent(p))), true, p);
-  }
+  assert.equal(isBoqImportEligible(user(ent("planswift"))), true);
+  assert.equal(isBoqImportEligible(user(ent("revit"))), false, "QUIV alone");
+  assert.equal(isBoqImportEligible(user(ent("mep"))), false, "MEP alone");
 });
 
 test("a non-importable product never grants import rights", () => {
@@ -127,7 +126,7 @@ test("missing or malformed entitlements are treated as no access", () => {
 test("an entitlement with no expiry is perpetual, not expired", () => {
   const u = user(
     ent(BOQ_IMPORT_ENTITLEMENT, { expiresAt: null }),
-    ent("revit", { expiresAt: null }),
+    ent("planswift", { expiresAt: null }),
   );
-  assert.equal(canImportBoqFor(u, "revit"), true);
+  assert.equal(canImportBoqFor(u, "planswift"), true);
 });
