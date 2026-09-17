@@ -18,71 +18,68 @@ function wmoIcon(code) {
   return "⛈";
 }
 
-// ── Stats card ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent }) {
+// ── Stats tile (his .dsh-stat) ───────────────────────────────────────────────
+function StatCard({ label, value, sub }) {
   return (
-    <div className={`rounded-2xl p-5 border ${accent ?? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60"}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{sub}</p>}
+    <div className="dsh-stat">
+      <span className="k">{label}</span>
+      <b>{value}</b>
+      {sub && <span className="ds-sub">{sub}</span>}
     </div>
   );
 }
 
-// ── Trade badge ───────────────────────────────────────────────────────────────
+// ── Trade chip (his .wk-src) ─────────────────────────────────────────────────
 function TradeBadge({ trade }) {
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-adlm-navy/10 dark:bg-white/10 text-adlm-navy dark:text-white/80">
-      {trade || "—"}
-    </span>
-  );
+  return <span className="wk-src sm">{trade || "–"}</span>;
 }
 
-// ── Task row ──────────────────────────────────────────────────────────────────
+// ── Task row (his bill row) ──────────────────────────────────────────────────
 function TaskRow({ task, onEdit, onDelete, deleting }) {
   const netHrs = Math.max(0, (task.hoursWorked ?? 0) - (task.breakHours ?? 0));
+  const details = [
+    dayjs(task.taskStartDate).format("D MMM YYYY"),
+    task.weather?.condition
+      ? `${task.weather.condition}${task.weather.temperature != null ? ` · ${task.weather.temperature}°C` : ""}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <tr className="group hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-      <td className="px-4 py-3 text-sm text-slate-900 dark:text-white font-medium max-w-[220px] truncate">
-        {task.itemOfWork}
-      </td>
-      <td className="px-4 py-3 hidden sm:table-cell">
+    <div className="wk-qr">
+      <span className="d">
+        <b style={{ display: "block", fontSize: 13.5, fontWeight: 400, color: "var(--ink)" }}>
+          {task.itemOfWork}
+        </b>
+        <em>{details}</em>
+      </span>
+      <span className="s">
         <TradeBadge trade={task.trade} />
-      </td>
-      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 text-center">
-        {netHrs.toFixed(1)}h
-      </td>
-      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 text-center hidden md:table-cell">
+      </span>
+      <span className="q">
+        {netHrs.toFixed(1)}
+        <i>h</i>
+      </span>
+      <span className="r">
         {task.output} {task.outputUnit}
-      </td>
-      <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 hidden lg:table-cell">
-        {dayjs(task.taskStartDate).format("D MMM YYYY")}
-      </td>
-      <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 text-center hidden lg:table-cell">
-        {task.weather?.condition ? (
-          <span title={`${task.weather.temperature}°C · ${task.weather.windSpeed} km/h`}>
-            {task.weather.condition}
-          </span>
-        ) : "—"}
-      </td>
-      <td className="px-4 py-3 text-right">
-        <div className="inline-flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => onEdit(task)}
-            className="px-2 py-1 rounded text-xs text-adlm-navy dark:text-blue-300 hover:bg-adlm-navy/10 dark:hover:bg-white/10"
-          >
+      </span>
+      <span className="ds-a">
+        <span className="wk-acts" style={{ justifyContent: "flex-end" }}>
+          <button type="button" onClick={() => onEdit(task)} className="ds-btn ds-btn-sm btn-o" style={{ padding: "4px 10px" }}>
             Edit
           </button>
           <button
+            type="button"
             onClick={() => onDelete(task)}
             disabled={deleting === task.taskKey}
-            className="px-2 py-1 rounded text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-40"
+            className="ds-btn ds-btn-sm btn-o"
+            style={{ padding: "4px 10px", color: "var(--pal-orange-key)" }}
           >
             {deleting === task.taskKey ? "…" : "Delete"}
           </button>
-        </div>
-      </td>
-    </tr>
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -152,143 +149,141 @@ export default function TimeManagement() {
     }
   }
 
+  const netTotal = visible.reduce(
+    (s, v) => s + Math.max(0, (v.hoursWorked ?? 0) - (v.breakHours ?? 0)),
+    0,
+  );
+
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Header band */}
-      <div className="bg-adlm-navy text-white px-4 sm:px-8 py-8">
-        <div className="max-w-6xl mx-auto">
-          <p className="text-sm text-white/60 font-medium mb-1">
-            Welcome back, {user?.firstName || user?.username || "there"}
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
+      <div className="wk-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h1>Time Log</h1>
+          <p className="wk-ref">
+            Welcome back, {user?.firstName || user?.username || "there"}. Track labour
+            hours, trades and site conditions: synced across desktop and web.
           </p>
-          <h1 className="text-2xl sm:text-3xl font-bold">Time Log</h1>
-          <p className="mt-1 text-white/60 text-sm">
-            Track labour hours, trades, and site conditions: synced across desktop and web.
-          </p>
+        </div>
+        <div className="wk-acts">
+          <button type="button" onClick={openAdd} className="ds-btn ds-btn-sm btn-p">
+            + Add Task
+          </button>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-8 pb-16">
-        {/* Weather + Stats row */}
-        <div className="mt-6 grid grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Weather widget */}
-          <div className="col-span-2 lg:col-span-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 p-5 flex flex-col">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Site Weather
-            </p>
-            {wLoading && (
-              <div className="mt-2 text-sm text-slate-400 animate-pulse">Detecting location…</div>
-            )}
-            {wError && !wLoading && (
-              <div className="mt-2">
-                <p className="text-xs text-rose-500 dark:text-rose-400">{wError}</p>
-                <button onClick={requestLocation}
-                  className="mt-2 text-xs text-adlm-navy dark:text-blue-400 underline">
-                  Retry
-                </button>
-              </div>
-            )}
-            {weather && !wLoading && (
-              <>
-                <p className="mt-2 text-4xl">{wmoIcon(weather.weatherCode)}</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
-                  {weather.temperature}{weather.unit}
-                </p>
-                <p className="text-sm text-slate-600 dark:text-slate-300">{weather.condition}</p>
-                <p className="text-xs text-slate-400 mt-0.5">💨 {weather.windSpeed} km/h</p>
-              </>
-            )}
-          </div>
-
-          {/* Stats */}
-          <StatCard label="Total Tasks" value={tasks.length} sub="all time" />
-          <StatCard label="Today's Tasks" value={stats.todayCount} sub="logged today" />
-          <StatCard label="Week Hours" value={`${stats.weekHrs.toFixed(1)}h`} sub="this week" />
-          <StatCard label="Trades" value={stats.tradeCount} sub="distinct trades" />
+      {/* Weather + figures, in his tiles */}
+      <div
+        className="dsh-stats"
+        style={{ marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}
+      >
+        <div className="dsh-stat">
+          <span className="k">Site weather</span>
+          {wLoading ? (
+            <span className="ds-sub animate-pulse">Detecting location…</span>
+          ) : wError ? (
+            <>
+              <span className="ds-sub" style={{ color: "var(--pal-orange-key)" }}>{wError}</span>
+              <button
+                type="button"
+                onClick={requestLocation}
+                className="ds-btn ds-btn-sm btn-o"
+                style={{ marginTop: 8, alignSelf: "flex-start" }}
+              >
+                Retry
+              </button>
+            </>
+          ) : weather ? (
+            <>
+              <b>
+                <span aria-hidden="true" style={{ marginRight: 8 }}>{wmoIcon(weather.weatherCode)}</span>
+                {weather.temperature}
+                {weather.unit}
+              </b>
+              <span className="ds-sub">
+                {weather.condition} · wind {weather.windSpeed} km/h
+              </span>
+            </>
+          ) : (
+            <span className="ds-sub">–</span>
+          )}
         </div>
+        <StatCard label="Total Tasks" value={tasks.length} sub="all time" />
+        <StatCard label="Today's Tasks" value={stats.todayCount} sub="logged today" />
+        <StatCard label="Week Hours" value={`${stats.weekHrs.toFixed(1)}h`} sub="this week" />
+        <StatCard label="Trades" value={stats.tradeCount} sub="distinct trades" />
+      </div>
 
+      <section className="wk-panel" style={{ marginBottom: 0 }}>
         {/* Toolbar */}
-        <div className="mt-8 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <div className="flex gap-2 w-full sm:w-auto">
+        <div className="wk-bar" style={{ margin: 0, padding: "16px 20px", borderBottom: "1px solid var(--line)" }}>
+          <label className="wk-find">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#hi-search" />
+            </svg>
             <input
               type="search"
               placeholder="Search tasks…"
               value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="flex-1 sm:w-64 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-adlm-navy dark:focus:border-blue-400"
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search tasks"
+              autoComplete="off"
             />
-            {tradeOptions.length > 0 && (
+          </label>
+          {tradeOptions.length > 0 && (
+            <label className="wk-f" style={{ flex: "0 1 200px", margin: 0 }}>
               <select
                 value={filterTrade}
-                onChange={e => setFilterTrade(e.target.value)}
-                className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none"
+                onChange={(e) => setFilterTrade(e.target.value)}
+                aria-label="Filter by trade"
+                style={{ padding: "10px 12px" }}
               >
                 <option value="">All trades</option>
-                {tradeOptions.map(t => <option key={t}>{t}</option>)}
+                {tradeOptions.map((tr) => (
+                  <option key={tr}>{tr}</option>
+                ))}
               </select>
-            )}
-          </div>
-          <button
-            onClick={openAdd}
-            className="flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-adlm-orange text-white text-sm font-semibold shadow-glow-orange hover:brightness-110 active:scale-[.98] transition"
-          >
-            <span className="text-lg leading-none">+</span> Add Task
-          </button>
-        </div>
-
-        {/* Table */}
-        <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900">
-          {loading ? (
-            <div className="py-16 text-center text-slate-400 animate-pulse text-sm">
-              Loading tasks…
-            </div>
-          ) : error ? (
-            <div className="py-16 text-center text-rose-500 text-sm">{error}</div>
-          ) : visible.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-3xl mb-2">🗂</p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">
-                {tasks.length === 0
-                  ? "No tasks yet. Add your first task to get started."
-                  : "No tasks match your filter."}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Item of Work</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide hidden sm:table-cell">Trade</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide text-center">Net Hrs</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide text-center hidden md:table-cell">Output</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide hidden lg:table-cell">Date</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide text-center hidden lg:table-cell">Weather</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {visible.map(task => (
-                    <TaskRow
-                      key={task.taskKey || task._id}
-                      task={task}
-                      onEdit={openEdit}
-                      onDelete={handleDelete}
-                      deleting={deleting}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            </label>
           )}
         </div>
 
+        {loading ? (
+          <div className="wk-empty animate-pulse">Loading tasks…</div>
+        ) : error ? (
+          <div className="wk-empty" style={{ color: "var(--pal-orange-key)" }}>{error}</div>
+        ) : visible.length === 0 ? (
+          <div className="wk-empty">
+            {tasks.length === 0
+              ? "No tasks yet. Add your first task to get started."
+              : "No tasks match your filter."}
+          </div>
+        ) : (
+          <div className="wk-qt" style={{ padding: "0 20px" }}>
+            <div className="wk-qhd">
+              <span>Item of work</span>
+              <span>Trade</span>
+              <span>Net hrs</span>
+              <span>Output</span>
+              <span />
+            </div>
+            {visible.map((task) => (
+              <TaskRow
+                key={task.taskKey || task._id}
+                task={task}
+                onEdit={openEdit}
+                onDelete={handleDelete}
+                deleting={deleting}
+              />
+            ))}
+          </div>
+        )}
+
         {visible.length > 0 && (
-          <p className="mt-3 text-xs text-slate-400 text-right">
+          <p className="wk-note" style={{ borderTop: "1px solid var(--line)", textAlign: "right" }}>
             Showing {visible.length} of {tasks.length} task{tasks.length !== 1 ? "s" : ""}
-            {" · "}Total net hours: {visible.reduce((s, t) => s + Math.max(0, (t.hoursWorked ?? 0) - (t.breakHours ?? 0)), 0).toFixed(1)}h
+            {" · "}Total net hours: {netTotal.toFixed(1)}h
           </p>
         )}
-      </div>
+      </section>
 
       <TaskModal
         open={modalOpen}
@@ -297,6 +292,6 @@ export default function TimeManagement() {
         onSave={handleSave}
         onClose={() => setModalOpen(false)}
       />
-    </main>
+    </div>
   );
 }

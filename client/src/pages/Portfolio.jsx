@@ -5,7 +5,8 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import { IconArrowLeft, IconArrowRight, IconLink } from "../components/icons.jsx";
+import { foldMaterials, isMaterialsKey, materialsBase } from "../lib/projectLinks.js";
+import { IconArrowRight, IconLink } from "../components/icons.jsx";
 
 dayjs.extend(relativeTime);
 
@@ -16,13 +17,14 @@ const PRODUCT_LABELS = {
   civil3d: "Civil 3D",
 };
 
-const SKIP_KEYS = new Set(["revit-materials", "planswift-materials"]);
-
+// A materials schedule is its bill's Budget: one with a bill is dropped, one
+// without is listed under its own product (see lib/projectLinks.js).
 function groupProjects(projects) {
   const groups = {};
-  for (const p of projects) {
-    const key = p.productKey || "other";
-    if (SKIP_KEYS.has(key)) continue;
+  for (const p of foldMaterials(projects)) {
+    const key = isMaterialsKey(p.productKey)
+      ? materialsBase(p.productKey)
+      : p.productKey || "other";
     if (!groups[key]) groups[key] = [];
     groups[key].push(p);
   }
@@ -33,38 +35,39 @@ function labelForKey(key) {
   return PRODUCT_LABELS[key] || key;
 }
 
+// Loading placeholder, in his card.
 function SkeletonCard() {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm p-5 animate-pulse">
-      <div className="h-4 bg-slate-200 rounded w-2/3 mb-3" />
-      <div className="h-3 bg-slate-100 rounded w-1/3" />
-    </div>
-  );
+  return <div className="wk-proj animate-pulse" aria-hidden="true" style={{ minHeight: 150 }} />;
 }
 
+// His project card (.wk-proj), as on /work/projects and the project list.
 function ProjectCard({ project, onClick }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="w-full text-left bg-white rounded-2xl shadow-sm p-5 hover:shadow-md transition-shadow border border-slate-100 group"
+      className="wk-proj"
+      style={{ textAlign: "left", font: "inherit", cursor: "pointer", width: "100%" }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-medium text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-2">
-          {project.name}
-        </span>
-        {project.publicShareEnabled && (
-          <span
-            title="Publicly shared"
-            className="flex-shrink-0 text-blue-500 mt-0.5"
-          >
-            <IconLink className="w-4 h-4" />
+      <div className="t">
+        <h3>{project.name}</h3>
+        {project.publicShareEnabled ? (
+          <span className="stage" title="Publicly shared">
+            <IconLink size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+            Shared
           </span>
-        )}
+        ) : null}
       </div>
-      <div className="mt-2 flex items-center gap-3 text-xs text-slate-400">
-        <span>{project.itemCount} item{project.itemCount !== 1 ? "s" : ""}</span>
-        <span>·</span>
-        <span>Updated {dayjs(project.updatedAt).fromNow()}</span>
+      <p className="c">{labelForKey(project.productKey)}</p>
+      <div className="f">
+        <div>
+          <b>{Number(project.itemCount || 0).toLocaleString()}</b>
+          <span>item{project.itemCount !== 1 ? "s" : ""}</span>
+        </div>
+        <div>
+          <b>{dayjs(project.updatedAt).fromNow()}</b>
+          <span>last updated</span>
+        </div>
       </div>
     </button>
   );
@@ -109,85 +112,85 @@ export default function Portfolio() {
   const groupKeys = Object.keys(groups).sort();
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-5xl mx-auto px-4 py-10">
-        {/* Back link */}
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors"
-        >
-          <IconArrowLeft className="w-4 h-4" />
-          Back to Dashboard
-        </Link>
-
-        {/* Header */}
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">All Projects</h1>
-        <p className="text-sm text-slate-500 mb-6">
-          Projects synced from your ADLM desktop plugins.
-        </p>
-
-        {/* QUIV PM Tracker banner */}
-        {hasRevit && (
-          <Link
-            to="/pm-tracker"
-            className="flex items-center justify-between gap-3 bg-blue-50 border border-blue-100 rounded-2xl px-5 py-3.5 mb-6 hover:bg-blue-100 transition-colors group"
-          >
-            <span className="text-sm text-blue-800">
-              <span className="font-semibold">QUIV users:</span> track your
-              project schedule in the PM Tracker
-            </span>
-            <IconArrowRight className="w-4 h-4 text-blue-500 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
+      <div className="wk-head" style={{ marginBottom: 0 }}>
+        <div>
+          <Link to="/dashboard" className="wk-back">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#hi-right" />
+            </svg>
+            Back to Dashboard
           </Link>
-        )}
-
-        {/* Error */}
-        {error && (
-          <div className="bg-rose-50 border border-rose-100 text-rose-700 rounded-2xl px-5 py-4 mb-6 text-sm">
-            {error}
-          </div>
-        )}
-
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && !error && projects.length === 0 && (
-          <div className="text-center py-20 text-slate-400 text-sm">
-            No projects yet. Open a project from your ADLM plugin to get
-            started.
-          </div>
-        )}
-
-        {/* Groups */}
-        {!loading &&
-          !error &&
-          groupKeys.map((key) => (
-            <section key={key} className="mb-10">
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                {labelForKey(key)}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {groups[key].map((project) => (
-                  <ProjectCard
-                    key={project._id || project.slug}
-                    project={project}
-                    onClick={() =>
-                      navigate(
-                        `/projects/${project.productKey}?project=${project.slug}`,
-                      )
-                    }
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+          <h1>All Projects</h1>
+          <p className="wk-ref">Projects synced from your ADLM desktop plugins.</p>
+        </div>
       </div>
+
+      {/* QUIV PM Tracker note */}
+      {hasRevit && (
+        <Link
+          to="/pm-tracker"
+          className="mk-note"
+          style={{
+            margin: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            textDecoration: "none",
+            background: "var(--pal-light-wash)",
+            color: "var(--pal-light-key)",
+            borderColor: "var(--pal-light-line)",
+          }}
+        >
+          <span>
+            <b style={{ fontWeight: 500 }}>QUIV users:</b> track your project schedule in
+            the PM Tracker
+          </span>
+          <IconArrowRight size={16} />
+        </Link>
+      )}
+
+      {error && (
+        <p className="mk-note" role="alert" style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)", borderColor: "var(--pal-orange-line)" }}>
+          {error}
+        </p>
+      )}
+
+      {loading && (
+        <div className="wk-projs">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      )}
+
+      {!loading && !error && projects.length === 0 && (
+        <div className="wk-panel wk-empty" style={{ marginBottom: 0 }}>
+          No projects yet. Open a project from your ADLM plugin to get started.
+        </div>
+      )}
+
+      {!loading &&
+        !error &&
+        groupKeys.map((key) => (
+          <section key={key}>
+            <p className="wk-grp" style={{ paddingTop: 0 }}>
+              {labelForKey(key)}
+            </p>
+            <div className="wk-projs">
+              {groups[key].map((project) => (
+                <ProjectCard
+                  key={project._id || project.slug}
+                  project={project}
+                  onClick={() =>
+                    navigate(`/projects/${project.productKey}?project=${project.slug}`)
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        ))}
     </div>
   );
 }

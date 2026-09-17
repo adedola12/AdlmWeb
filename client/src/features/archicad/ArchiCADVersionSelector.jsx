@@ -23,14 +23,13 @@ export default function ArchiCADVersionSelector({
   const viewingCurrent = !selectedVersionId || selectedVersionId === currentVersionId;
 
   return (
-    <div className="flex items-center gap-2">
-      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
-        Version
-      </label>
+    <div className="wk-acts" style={{ alignItems: "center" }}>
+      <label className="wk-f" style={{ margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ margin: 0 }}>Version</span>
       <select
         value={viewingCurrent ? "" : selectedVersionId}
         onChange={(e) => onSelect?.(e.target.value || null)}
-        className="rounded-adlm border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:border-adlm-blue-600 focus:outline-none dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-text"
+        style={{ padding: "8px 12px", width: "auto", maxWidth: 360 }}
       >
         <option value="">
           Current{sorted.length ? ` (v${sorted[0]?.versionNumber ?? "?"})` : ""}
@@ -45,6 +44,7 @@ export default function ArchiCADVersionSelector({
             </option>
           ))}
       </select>
+      </label>
 
       {viewingCurrent ? (
         <button
@@ -52,9 +52,9 @@ export default function ArchiCADVersionSelector({
           disabled={reapplying}
           onClick={() => onReapply?.()}
           title="Re-price the current BoQ with today's rates (creates a new version)"
-          className="inline-flex items-center gap-1.5 rounded-adlm border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-700 transition hover:border-adlm-blue-600 hover:text-adlm-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-text dark:hover:text-adlm-blue-300"
+          className="ds-btn ds-btn-sm btn-o"
         >
-          {reapplying ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
+          {reapplying ? <FaSpinner size={14} className="animate-spin" /> : <FaSyncAlt size={14} />}
           Reapply rates
         </button>
       ) : null}

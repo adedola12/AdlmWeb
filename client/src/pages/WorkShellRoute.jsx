@@ -20,14 +20,24 @@ import DsAppShell from "../ds/DsAppShell.jsx";
  * @param {string} props.title                for his top bar
  * @param {string} props.page                 his page name, so the rail marks
  *                                            the right item as current
+ * @param {boolean} [props.legacy]            wrap the screen in .wk-legacy, the
+ *                                            ds-local.css bridge that maps its
+ *                                            remaining Tailwind colours onto his
+ *                                            tokens
  */
-export default function WorkShellRoute({ screen: Screen, title, page }) {
+export default function WorkShellRoute({ screen: Screen, title, page, legacy = false }) {
   return (
     <DsAppShell title={title} page={page}>
       {/* His .dsh-in is the content gutter every other app screen sits in.
           Without it the wrapped page runs edge to edge against the rail. */}
       <div className="dsh-in">
-        <Screen />
+        {legacy ? (
+          <div className="wk-legacy">
+            <Screen />
+          </div>
+        ) : (
+          <Screen />
+        )}
       </div>
     </DsAppShell>
   );

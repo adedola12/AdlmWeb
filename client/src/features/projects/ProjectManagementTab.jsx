@@ -3,27 +3,23 @@ import PmDashboardView from "./pm/PmDashboardView.jsx";
 import PmDetailsView from "./pm/PmDetailsView.jsx";
 import { PmTaskModal, PmRiskModal, PmIssueModal, PmModalShell } from "./pm/PmModals.jsx";
 import PmMppHelperModal from "./pm/PmMppHelperModal.jsx";
-import { FaCog, FaSpinner, FaTimes } from "../../components/icons.jsx";
+import { FaCog } from "../../components/icons.jsx";
 
 // First-load skeleton — shown when the parent hasn't fetched the dashboard
 // yet. Without this users briefly see "0%" on every tile which looks broken.
+// Loading: his tile row and a panel, with the text in his .wk-empty.
 function PmLoadingSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="h-20 rounded-2xl bg-gradient-to-r from-adlm-blue-700/80 to-blue-800/80 animate-pulse" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-20 rounded-xl bg-slate-100 animate-pulse" />
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
+      <div className="dsh-stats" style={{ marginBottom: 0 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="dsh-stat animate-pulse" style={{ minHeight: 96 }} aria-hidden="true" />
         ))}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-24 rounded-2xl bg-slate-100 animate-pulse" />
-        ))}
-      </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 inline-flex items-center justify-center gap-2 w-full">
-        <FaSpinner className="animate-spin" />
-        Loading PM dashboard…
+      <div className="wk-panel" style={{ marginBottom: 0 }}>
+        <div className="wk-empty" role="status">
+          Loading PM dashboard…
+        </div>
       </div>
     </div>
   );
@@ -58,6 +54,8 @@ function genId(prefix) {
 //   • wbsFinish      → latest task endDate across the WBS; used to
 //     auto-prefill the finish input when the user changes start so the
 //     user doesn't have to compute it manually
+const HINT = { display: "block", marginTop: 6, fontSize: 12, fontWeight: 300, color: "var(--ink-3)" };
+
 function HeaderSettingsModal({
   open,
   initial,
@@ -121,39 +119,37 @@ function HeaderSettingsModal({
 
   return (
     <PmModalShell open={open} title="Project header" icon={FaCog} onClose={onClose} widthClass="max-w-md">
-      <div className="space-y-3">
-        <label className="block">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Project start</span>
+      {/* His .wk-f fields. Hints are <small>: .wk-f span would restyle a span
+          as a second label. */}
+      <div style={{ display: "grid", gap: 16 }}>
+        <label className="wk-f">
+          <span>Project start</span>
           <input
             type="date"
             value={start}
             onChange={(e) => handleStartChange(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm"
           />
           {wbsFinishStr ? (
-            <span className="mt-1 block text-[10px] text-slate-400">
-              WBS extends to <strong className="text-slate-600">{wbsFinishStr}</strong>, finish auto-fills from this when you change start.
-            </span>
+            <small className="wk-fx" style={HINT}>
+              WBS extends to <strong style={{ color: "var(--ink-2)" }}>{wbsFinishStr}</strong>, finish auto-fills from this when you change start.
+            </small>
           ) : null}
         </label>
-        <label className="block">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Project finish</span>
+        <label className="wk-f">
+          <span>Project finish</span>
           <input
             type="date"
             value={finish}
             onChange={(e) => handleFinishChange(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm"
           />
           {finishAuto ? (
-            <span className="mt-1 block text-[10px] text-emerald-600">
+            <small className="wk-fx" style={{ ...HINT, color: "var(--pal-light-key)" }}>
               Auto-picked from latest WBS task. Edit if needed.
-            </span>
+            </small>
           ) : null}
         </label>
-        <label className="block">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-            Total budget (BAC){contractLocked ? "" : " override"}
-          </span>
+        <label className="wk-f">
+          <span>Total budget (BAC){contractLocked ? "" : " override"}</span>
           <input
             type="number"
             min="0"
@@ -161,41 +157,44 @@ function HeaderSettingsModal({
             onChange={(e) => setBudget(Math.max(0, Number(e.target.value) || 0))}
             disabled={contractLocked}
             placeholder={contractLocked ? "" : "Leave 0 to auto-derive from BoQ / contract"}
-            className={`mt-1 w-full rounded-lg border px-2.5 py-1.5 text-sm text-right ${
-              contractLocked
-                ? "border-slate-200 bg-slate-100 text-slate-600 cursor-not-allowed"
-                : "border-slate-200"
-            }`}
+            style={{
+              textAlign: "right",
+              ...(contractLocked ? { opacity: 0.6, cursor: "not-allowed" } : null),
+            }}
           />
           {contractLocked ? (
-            <span className="mt-1 block text-[10px] text-amber-700">
+            <small className="wk-fx" style={{ ...HINT, color: "var(--pal-orange-key)" }}>
               <strong>Contract locked.</strong> Total Budget = BoQ total. Unlock the contract in the BoQ tab to adjust manually.
-            </span>
+            </small>
           ) : (
-            <span className="mt-1 block text-[10px] text-slate-400">
+            <small className="wk-fx" style={HINT}>
               Leave 0 to keep BAC equal to the BoQ total (recommended).
-            </span>
+            </small>
           )}
         </label>
         {/* Cascade toggle, only relevant when the start date has actually
             changed. Visible at all times so the option is discoverable, but
             disabled (and ignored) when start is unchanged. */}
         <label
-          className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] ${
-            startChanged
-              ? "border-blue-200 bg-blue-50/60 text-slate-700"
-              : "border-slate-200 bg-slate-50 text-slate-400"
-          }`}
+          className="mk-note"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            margin: 0,
+            opacity: startChanged ? 1 : 0.6,
+            cursor: startChanged ? "pointer" : "default",
+          }}
         >
           <input
             type="checkbox"
             checked={cascade}
             disabled={!startChanged}
             onChange={(e) => setCascade(e.target.checked)}
-            className="mt-0.5 rounded"
+            style={{ marginTop: 3 }}
           />
           <span>
-            <strong className={startChanged ? "text-adlm-blue-700" : ""}>
+            <strong style={{ color: "var(--ink)", fontWeight: 500 }}>
               Reschedule all tasks from new start date
             </strong>
             <br />
@@ -206,17 +205,27 @@ function HeaderSettingsModal({
           </span>
         </label>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 10,
+            paddingTop: 18,
+            borderTop: "1px solid var(--line)",
+          }}
+        >
           {!anyChanged && !saving ? (
-            <div className="mr-auto text-[10px] italic text-slate-400">
+            <span className="wk-locnote" style={{ marginRight: "auto" }}>
               No changes to apply.
-            </div>
+            </span>
           ) : null}
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+            className="ds-btn ds-btn-sm btn-o"
           >
             Cancel
           </button>
@@ -231,16 +240,9 @@ function HeaderSettingsModal({
                 cascadeReschedule: cascade,
               })
             }
-            className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="ds-btn ds-btn-sm btn-p"
           >
-            {saving ? (
-              <>
-                <span className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                Saving…
-              </>
-            ) : (
-              <>Apply{startChanged && cascade ? " & reschedule" : ""}</>
-            )}
+            {saving ? "Saving…" : <>Apply{startChanged && cascade ? " & reschedule" : ""}</>}
           </button>
         </div>
       </div>
@@ -508,7 +510,7 @@ export default function ProjectManagementTab({
   }
 
   return (
-    <div className="space-y-3">
+    <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" }}>
       {viewMode === "dashboard" ? (
         <PmDashboardView
           dashboard={liveDashboard}
@@ -637,11 +639,12 @@ export default function ProjectManagementTab({
 
       {/* Reset link, kept tiny since it's destructive */}
       {viewMode === "dashboard" ? (
-        <div className="text-right">
+        <div style={{ textAlign: "right" }}>
           <button
             type="button"
             onClick={onReset}
-            className="text-[10px] text-slate-400 hover:text-rose-600 hover:underline"
+            className="wk-locnote"
+            style={{ background: "none", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}
           >
             Reset PM data (clears tasks, risks, issues)
           </button>

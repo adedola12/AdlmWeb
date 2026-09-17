@@ -43,18 +43,25 @@ export default function ArchiCADConnectorStatus() {
           ? "The QUIV connector is running on this machine (localhost:4823)."
           : "Start the connector next to ArchiCAD with `node index.js`, then open the panel at http://localhost:4823."
       }
-      className={[
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
+      className="wk-src"
+      style={
         on
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-          : "border-slate-200 bg-slate-100 text-slate-500 dark:border-adlm-dark-border dark:bg-white/5 dark:text-adlm-dark-muted",
-      ].join(" ")}
+          ? {
+              background: "var(--pal-light-wash)",
+              color: "var(--pal-light-key)",
+              borderColor: "var(--pal-light-line)",
+            }
+          : undefined
+      }
     >
       <span
-        className={[
-          "h-2 w-2 rounded-full",
-          on ? "bg-emerald-500" : "bg-slate-400 dark:bg-adlm-dark-dim",
-        ].join(" ")}
+        aria-hidden="true"
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: on ? "var(--action)" : "var(--ink-3)",
+        }}
       />
       {on ? "Connector running" : "Connector not running"}
     </span>

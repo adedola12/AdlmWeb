@@ -15,6 +15,7 @@ const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
 
 // Lazy — pulls in three.js + the web-ifc wasm; only loads when the 3D tab opens.
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
+const WorkAreaView = React.lazy(() => import("./WorkAreaView.jsx"));
 
 // Close a popover on an outside press or Escape — the same behaviour as his
 // .wk-dd control (see ds/WkDropdown.jsx).
@@ -315,6 +316,12 @@ const TAB_OPTIONS = [
     group: "Commercial",
   },
   {
+    id: "work",
+    label: "Work area",
+    helper: "Model, bill, schedule and Ada together",
+    group: "Delivery",
+  },
+  {
     id: "model",
     label: "3D Model",
     helper: "View & verify the BIM model",
@@ -327,6 +334,24 @@ const TAB_OPTIONS = [
     group: "Delivery",
   },
 ];
+
+// Icons for the views sidebar, from the app sprite (DsAppSprite).
+const VIEW_ICONS = {
+  dashboard: "hi-overview",
+  bill: "hi-doc",
+  budget: "hi-billing",
+  valuation: "hi-cert",
+  work: "hi-products",
+  model: "hi-product",
+  pm: "hi-calendar",
+};
+// Whether the views sidebar is open, remembered per browser. Phones ignore it
+// and always start closed, so opening it on a phone never changes the desktop.
+const VIEWS_KEY = "adlm.projectViews.open";
+const NARROW = "(max-width: 1000px)";
+
+const isNarrowNow = () =>
+  typeof window !== "undefined" && Boolean(window.matchMedia?.(NARROW).matches);
 
 export default function ProjectOpenView({
   actualCoverageCount = 0,
@@ -500,6 +525,10 @@ export default function ProjectOpenView({
   showActualColumns = false,
   showDailyValuationLog = true,
   showMaterials = false,
+  // A standalone material & labour schedule (a "-materials" project): its
+  // lines ARE its budget, so the Bill view is named Budget and the separate
+  // (empty) Budget view is not offered.
+  materialsSchedule = false,
   showValuationSettings = true,
   statusLabel = "Completed",
   statusPastLabel = "Completed to date",
@@ -527,6 +556,42 @@ export default function ProjectOpenView({
   const [collabOpen, setCollabOpen] = React.useState(false);
   // null | "project" | "pm" — which report preview is open.
   const [reportOpen, setReportOpen] = React.useState(null);
+
+  // The views sidebar (Dashboard, Bill, Budget, ...). Open by default on a wide
+  // screen so nothing moves for anyone used to the tabs; closed by default on a
+  // phone, where it opens above the view and closes itself after a pick.
+  const [isNarrow, setIsNarrow] = React.useState(isNarrowNow);
+  const [viewsOpen, setViewsOpenState] = React.useState(() => {
+    if (isNarrowNow()) return false;
+    try {
+      const saved = window.localStorage.getItem(VIEWS_KEY);
+      if (saved === "0") return false;
+    } catch {
+      // storage blocked: fall back to open
+    }
+    return true;
+  });
+
+  React.useEffect(() => {
+    const mq = window.matchMedia?.(NARROW);
+    if (!mq) return undefined;
+    const onChange = () => {
+      setIsNarrow(mq.matches);
+      if (mq.matches) setViewsOpenState(false);
+    };
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
+  const setViewsOpen = (open) => {
+    setViewsOpenState(open);
+    if (isNarrow) return;
+    try {
+      window.localStorage.setItem(VIEWS_KEY, open ? "1" : "0");
+    } catch {
+      // storage blocked: the choice just is not remembered
+    }
+  };
 
   // Access flags (server-resolved). canEdit/canExport/canManage gate the action
   // buttons; canSeeRates drives the "rates hidden" notice. The server is the
@@ -557,8 +622,31 @@ export default function ProjectOpenView({
       !(
         t.id === "model" &&
         (String(productKey).startsWith("planswift") || isBoqImport)
-      ),
+      ) && !(materialsSchedule && (t.id === "budget" || t.id === "model")),
+  ).map((t) =>
+    materialsSchedule && t.id === "bill"
+      ? { ...t, label: "Budget", helper: "Material & labour lines" }
+      : t,
   );
+
+  // Groups in the order the table lists them (Overview, Commercial, Delivery).
+  const viewGroups = visibleTabs.reduce(
+    (acc, tab) => (acc.includes(tab.group) ? acc : [...acc, tab.group]),
+    [],
+  );
+  const activeView = visibleTabs.find((tab) => tab.id === activeTab) || null;
+  // Real counts beside a view, where the page already holds one.
+  const viewTail = (id) => {
+    const n =
+      id === "bill"
+        ? (items || []).length
+        : id === "valuation"
+          ? (valuations || []).length
+          : id === "budget"
+            ? (budgetItems || []).length
+            : 0;
+    return n > 0 ? n.toLocaleString() : null;
+  };
 
   function copyProjectId() {
     if (!selectedId || !navigator?.clipboard) return;
@@ -706,28 +794,121 @@ export default function ProjectOpenView({
         </p>
       </div>
 
-      {/* His .wk-tabs. The group and helper live in the tooltip: his tabs
-          are text only. */}
+      {/* The views, in a sidebar built from his app rail: .dsh-grp titles,
+          .dsh-nav links with his accent bar and .tail counts, .dsh-rule
+          between groups. Hide gives the bill the full width. */}
       <div
-        className="wk-tabs"
-        role="tablist"
-        aria-label="Project views"
-        style={{ justifySelf: "start", maxWidth: "100%", overflowX: "auto" }}
+        style={{
+          display: "grid",
+          gap: 18,
+          alignItems: "start",
+          gridTemplateColumns: viewsOpen && !isNarrow ? "220px minmax(0, 1fr)" : "minmax(0, 1fr)",
+        }}
       >
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={activeTab === tab.id ? "on" : ""}
-            title={`${tab.group} · ${tab.helper}`}
-            onClick={() => setActiveTab(tab.id)}
+        {viewsOpen ? (
+          <nav
+            id="project-views"
+            className="wk-panel"
+            aria-label="Project views"
+            style={{
+              padding: "4px 14px 14px",
+              position: isNarrow ? "static" : "sticky",
+              top: 16,
+            }}
           >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+                padding: "10px 0 0",
+              }}
+            >
+              <b style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", paddingLeft: 12 }}>
+                Views
+              </b>
+              <button
+                type="button"
+                className="ds-btn ds-btn-sm btn-o"
+                onClick={() => setViewsOpen(false)}
+                aria-controls="project-views"
+                aria-expanded="true"
+                title="Hide the views to give the bill the full width"
+              >
+                Hide
+              </button>
+            </div>
+            {viewGroups.map((group, gi) => (
+              <React.Fragment key={group}>
+                {gi > 0 ? <div className="dsh-rule" style={{ margin: "14px 0 0" }} /> : null}
+                <p className="dsh-grp" style={{ marginTop: gi > 0 ? 14 : 16 }}>
+                  {group}
+                </p>
+                <ul className="dsh-nav">
+                  {visibleTabs
+                    .filter((tab) => tab.group === group)
+                    .map((tab) => {
+                      const active = activeTab === tab.id;
+                      const tail = viewTail(tab.id);
+                      return (
+                        <li key={tab.id}>
+                          <a
+                            href={`#view-${tab.id}`}
+                            className={active ? "on" : undefined}
+                            aria-current={active ? "page" : undefined}
+                            title={tab.helper}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setActiveTab(tab.id);
+                              if (isNarrow) setViewsOpenState(false);
+                            }}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <use href={`#${VIEW_ICONS[tab.id] || "hi-doc"}`} />
+                            </svg>
+                            {tab.label}
+                            {tail ? <span className="tail">{tail}</span> : null}
+                          </a>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </React.Fragment>
+            ))}
+          </nav>
+        ) : null}
+
+        {/* .wk-legacy maps the older markup inside the views (budget, bill,
+            contract, PM) onto his tokens; see ds-local.css. */}
+        <div
+          className="wk-legacy"
+          style={{ display: "grid", gap: 18, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}
+        >
+          {!viewsOpen ? (
+            <div className="wk-bar" style={{ marginBottom: 0 }}>
+              <button
+                type="button"
+                className="ds-btn ds-btn-sm btn-o"
+                onClick={() => setViewsOpen(true)}
+                aria-controls="project-views"
+                aria-expanded="false"
+                title="Show the project views"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  style={{ width: 15, height: 15, fill: "none", stroke: "currentColor", strokeWidth: 1.8 }}
+                >
+                  <use href="#hi-menu" />
+                </svg>
+                Views
+              </button>
+              <span className="wk-locnote">
+                {activeView ? `${activeView.label} · ${activeView.helper}` : ""}
+              </span>
+            </div>
+          ) : null}
 
       {activeTab === "dashboard" ? (
         <>
@@ -902,6 +1083,24 @@ export default function ProjectOpenView({
             progressTotal={progressTotal}
           />
         </div>
+      ) : null}
+
+      {activeTab === "work" ? (
+        <React.Suspense fallback={<div className="wk-empty">Loading the work area…</div>}>
+          <WorkAreaView
+            projectName={projectName}
+            productKey={productKey}
+            projectId={projectId}
+            accessToken={accessToken}
+            items={items}
+            rows={computedShown}
+            projectModels={projectModels}
+            materialItems={materialItems}
+            budgetItems={budgetItems}
+            pmDashboard={pmDashboard}
+            canSeeRates={canSeeRates}
+          />
+        </React.Suspense>
       ) : null}
 
       {activeTab === "model" ? (
@@ -1205,6 +1404,9 @@ export default function ProjectOpenView({
           onRemoveCategory={onRemoveCategory}
         />
       ) : null}
+
+        </div>
+      </div>
 
       {canManage ? (
         <CollaboratorsModal

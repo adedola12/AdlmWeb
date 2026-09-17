@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
 import { FaPaperPlane, FaRegCommentDots, FaTimes } from "./icons.jsx";
+import { plainText } from "../lib/plainText.js";
 
 /**
  * ADLM AI Agent ("Ada") — a conversion-focused conversational assistant that
@@ -221,7 +222,7 @@ export default function AiAgent() {
                       : "bg-white dark:bg-adlm-dark-panel text-slate-900 dark:text-adlm-dark-text ring-black/5 dark:ring-white/10"
                   }`}
                 >
-                  <div>{m.text}</div>
+                  <div>{m.role === "assistant" ? plainText(m.text) : m.text}</div>
 
                   {m.role === "assistant" &&
                     Array.isArray(m.actions) &&

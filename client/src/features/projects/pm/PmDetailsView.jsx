@@ -1,5 +1,5 @@
 import React from "react";
-import { FaArrowLeft, FaBug, FaCalendarAlt, FaCheckCircle, FaExclamationTriangle, FaFileImport, FaLink, FaPencilAlt, FaPlus, FaSyncAlt, FaTasks, FaTrash } from "../../../components/icons.jsx";
+import { FaBug, FaCalendarAlt, FaCheckCircle, FaExclamationTriangle, FaFileImport, FaLink, FaPencilAlt, FaPlus, FaSyncAlt, FaTasks, FaTrash } from "../../../components/icons.jsx";
 import SectionRail from "../SectionRail.jsx";
 
 // A row is treated as a section anchor in the scroll-nav drawer if it's
@@ -24,47 +24,50 @@ function fmtMoney(v) {
   return safeNum(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 function fmtDateDisplay(v) {
-  if (!v) return "—";
+  if (!v) return "–";
   const d = v instanceof Date ? v : new Date(v);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "–";
   return d.toLocaleDateString();
 }
 
-// Status / priority badges so the table doesn't depend on cramped text.
+// His palettes, for chips and row states.
+function palChip(pal) {
+  return {
+    background: `var(--pal-${pal}-wash)`,
+    color: `var(--pal-${pal}-key)`,
+    borderColor: `var(--pal-${pal}-line)`,
+  };
+}
+const ROW_BTN = { padding: "4px 7px" };
+const EMPTY_INK = { color: "var(--ink-3)" };
+
+// Status / priority badges, as his .wk-src chips in his palettes: orange for
+// what needs attention, blues for work moving or done, plain for the rest.
 function PriorityBadge({ priority }) {
-  const cls = {
-    critical: "bg-rose-100 text-rose-800 border-rose-300",
-    high: "bg-orange-100 text-orange-800 border-orange-300",
-    medium: "bg-slate-100 text-slate-700 border-slate-300",
-    low: "bg-slate-50 text-slate-500 border-slate-200",
+  const style = {
+    critical: palChip("orange"),
+    high: palChip("deep"),
   }[priority || "medium"];
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}
-    >
+    <span className="wk-src sm" style={{ textTransform: "capitalize", ...style }}>
       {priority || "medium"}
     </span>
   );
 }
 
 function StatusBadge({ status }) {
-  const cls = {
-    "not-started": "bg-slate-100 text-slate-600 border-slate-300",
-    "in-progress": "bg-amber-100 text-amber-800 border-amber-300",
-    completed: "bg-emerald-100 text-emerald-800 border-emerald-300",
-    blocked: "bg-rose-100 text-rose-800 border-rose-300",
-    open: "bg-amber-100 text-amber-800 border-amber-300",
-    mitigating: "bg-sky-100 text-sky-800 border-sky-300",
-    accepted: "bg-slate-100 text-slate-700 border-slate-300",
-    closed: "bg-slate-100 text-slate-500 border-slate-200",
-    resolved: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  }[status] || "bg-slate-100 text-slate-600 border-slate-300";
+  const style = {
+    "in-progress": palChip("deep"),
+    completed: palChip("light"),
+    blocked: palChip("orange"),
+    open: palChip("orange"),
+    mitigating: palChip("grad"),
+    resolved: palChip("light"),
+  }[status];
 
   const label = String(status || "").replace(/-/g, " ");
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cls}`}
-    >
+    <span className="wk-src sm" style={style}>
       {label}
     </span>
   );
@@ -242,13 +245,16 @@ function TaskTable({
         scrollOffset={96}
       />
 
-      <div className="flex-1 min-w-0 rounded-xl border border-slate-200">
+      <div className="wk-panel" style={{ flex: 1, minWidth: 0, marginBottom: 0 }}>
       {summaryCount > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2 text-[11px] text-slate-600">
+        <div
+          className="wk-bar wk-locnote"
+          style={{ marginBottom: 0, justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--line)" }}
+        >
           <div>
             {hasCollapsed ? (
               <span>
-                <strong className="text-slate-900">{collapsedWbs.size}</strong>{" "}
+                <strong style={{ color: "var(--ink)" }}>{collapsedWbs.size}</strong>{" "}
                 of {summaryCount} summary {summaryCount === 1 ? "row" : "rows"} collapsed.
               </span>
             ) : (
@@ -257,11 +263,11 @@ function TaskTable({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="wk-acts">
             <button
               type="button"
               onClick={collapseAll}
-              className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
+              className="ds-btn ds-btn-sm btn-o"
             >
               Collapse all
             </button>
@@ -269,7 +275,7 @@ function TaskTable({
               type="button"
               onClick={expandAll}
               disabled={!hasCollapsed}
-              className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              className="ds-btn ds-btn-sm btn-o"
             >
               Expand all
             </button>
@@ -338,11 +344,11 @@ function TaskTable({
 
             // Visual treatment for summary rows — distinct background,
             // bold name, no input controls (they're read-only rollups).
-            const rowBgCls = isSummary
-              ? "bg-slate-100/80 hover:bg-slate-100 border-y border-slate-200"
+            const rowStyle = isSummary
+              ? { background: "var(--bg-alt)" }
               : overdue
-                ? "bg-rose-50/60 hover:bg-rose-50"
-                : "hover:bg-slate-50";
+                ? { background: "var(--pal-orange-wash)" }
+                : undefined;
 
             return (
               <tr
@@ -355,10 +361,10 @@ function TaskTable({
                       }
                     : undefined
                 }
-                className={rowBgCls}
+                style={rowStyle}
               >
                 <td className={`px-3 py-2 align-top text-xs font-mono ${isSummary ? "font-bold text-slate-900" : "text-slate-500"}`}>
-                  {task.wbs || "—"}
+                  {task.wbs || "–"}
                 </td>
                 <td className="px-3 py-2 align-top">
                   {/* Indent based on WBS depth so the hierarchy is visible.
@@ -380,7 +386,7 @@ function TaskTable({
                         </span>
                       </button>
                     ) : depth > 0 ? (
-                      <span className="mt-1 text-[10px] text-slate-300">└</span>
+                      <span className="mt-1 text-[10px]" style={EMPTY_INK}>└</span>
                     ) : null}
                     <div className="flex-1 min-w-0">
                       <div
@@ -393,30 +399,30 @@ function TaskTable({
                       >
                         {task.name || <span className="italic text-slate-400">(no name)</span>}
                       </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-slate-500">
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
                         {isSummary && rollup ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-adlm-blue-700 px-1.5 py-0.5 text-white font-semibold">
+                          <span className="wk-src sm" style={palChip("light")}>
                             Σ {rollup.leafCount} leaf{rollup.leafCount === 1 ? "" : "s"}
                           </span>
                         ) : null}
                         {isCollapsed && hiddenChildCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-slate-700 font-medium">
+                          <span className="wk-src sm">
                             ▶ {hiddenChildCount} hidden
                           </span>
                         ) : null}
                         {isSummary && rollup?.durationDays ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-slate-700">
+                          <span className="wk-src sm">
                             {rollup.durationDays}d
                           </span>
                         ) : null}
                         {linked ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-adlm-blue-700">
-                            <FaLink className="text-[8px]" />
+                          <span className="wk-src sm" style={palChip("light")}>
+                            <FaLink size={11} />
                             {task.linkedBoqIdentities.length} BoQ link{task.linkedBoqIdentities.length === 1 ? "" : "s"}
                           </span>
                         ) : null}
                         {task.isMilestone ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-purple-50 px-1.5 py-0.5 text-purple-700">
+                          <span className="wk-src sm" style={palChip("deep")}>
                             ◆ Milestone
                           </span>
                         ) : null}
@@ -428,7 +434,8 @@ function TaskTable({
                             criticality is a leaf property. */}
                         {!isSummary && task.criticalPath ? (
                           <span
-                            className="inline-flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 font-semibold text-rose-700"
+                            className="wk-src sm"
+                            style={palChip("orange")}
                             title={
                               safeNum(task.totalSlackDays) > 0
                                 ? `On critical path · ${safeNum(task.totalSlackDays)}d total slack`
@@ -446,19 +453,20 @@ function TaskTable({
                         safeNum(task.totalSlackDays) > 0 &&
                         safeNum(task.totalSlackDays) <= 1 ? (
                           <span
-                            className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-amber-700"
+                            className="wk-src sm"
+                            style={palChip("orange")}
                             title={`Only ${safeNum(task.totalSlackDays).toFixed(1)}d of slack, near critical`}
                           >
                             ⚠ Tight slack
                           </span>
                         ) : null}
                         {!isSummary && task.source && task.source !== "manual" ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">
+                          <span className="wk-src sm">
                             {task.source}
                           </span>
                         ) : null}
                         {overdue && !isSummary ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 font-semibold text-rose-700">
+                          <span className="wk-src sm" style={palChip("orange")}>
                             Overdue
                           </span>
                         ) : null}
@@ -493,14 +501,14 @@ function TaskTable({
                       // they'd double-count parallel work.
                       return (
                         <div className="text-slate-700">
-                          {planned > 0 ? `${planned}d` : "—"}
+                          {planned > 0 ? `${planned}d` : "–"}
                         </div>
                       );
                     }
                     return (
                       <div className="inline-flex flex-col items-end gap-0.5">
                         <span className="text-[10px] text-slate-500">
-                          P: {planned > 0 ? `${planned}d` : "—"}
+                          P: {planned > 0 ? `${planned}d` : "–"}
                         </span>
                         <input
                           type="number"
@@ -523,13 +531,15 @@ function TaskTable({
                         />
                         {actual > 0 && planned > 0 ? (
                           <span
-                            className={`text-[9px] font-semibold ${
-                              variance > 0
-                                ? "text-rose-600 dark:text-rose-400"
-                                : variance < 0
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-slate-500"
-                            }`}
+                            className="text-[9px] font-semibold"
+                            style={{
+                              color:
+                                variance > 0
+                                  ? "var(--pal-orange-key)"
+                                  : variance < 0
+                                    ? "var(--pal-light-key)"
+                                    : "var(--ink-3)",
+                            }}
                             title={
                               variance > 0
                                 ? `Slip, task ran ${variance}d longer than planned`
@@ -557,11 +567,10 @@ function TaskTable({
                       <span className="font-bold text-slate-900 text-sm">
                         {displayPercent.toFixed(0)}%
                       </span>
-                      <div className="mt-0.5 h-1 w-12 overflow-hidden rounded bg-slate-300">
-                        <div
-                          className="h-full bg-adlm-blue-700"
-                          style={{ width: `${Math.max(0, Math.min(100, displayPercent))}%` }}
-                        />
+                      <div className="dsh-meter" style={{ marginTop: 4 }}>
+                        <div className="track" style={{ width: 48, height: 4 }}>
+                          <i style={{ width: `${Math.max(0, Math.min(100, displayPercent))}%` }} />
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -630,19 +639,21 @@ function TaskTable({
                       type="button"
                       onClick={() => !isSummary && onEditTask?.(task)}
                       disabled={isSummary}
-                      className={`rounded p-1.5 ${isSummary ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:bg-blue-50 hover:text-adlm-blue-700"}`}
+                      className="ds-btn ds-btn-sm btn-o"
+                      style={ROW_BTN}
                       title={isSummary ? "Summary tasks are read-only. Delete or edit their child tasks instead." : "Edit"}
                     >
-                      <FaPencilAlt className="text-xs" />
+                      <FaPencilAlt size={13} />
                     </button>
                     <button
                       type="button"
                       onClick={() => !isSummary && onDeleteTask?.(task.taskId)}
                       disabled={isSummary}
-                      className={`rounded p-1.5 ${isSummary ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:bg-rose-50 hover:text-rose-600"}`}
+                      className="ds-btn ds-btn-sm btn-o"
+                      style={ROW_BTN}
                       title={isSummary ? "Delete child tasks first, summary rows can't be removed while they have descendants." : "Delete"}
                     >
-                      <FaTrash className="text-xs" />
+                      <FaTrash size={13} />
                     </button>
                   </div>
                 </td>
@@ -673,7 +684,7 @@ function RiskTable({ risks, onEditRisk, onDeleteRisk, onAddRisk }) {
     );
   }
   return (
-    <div className="overflow-auto rounded-xl border border-slate-200" style={{ maxHeight: "calc(100vh - 280px)" }}>
+    <div className="wk-panel" style={{ marginBottom: 0, overflow: "auto", maxHeight: "calc(100vh - 280px)" }}>
       <table className="w-full text-sm" style={{ minWidth: 900 }}>
         <thead className="sticky top-0 bg-slate-50 text-slate-600 z-10">
           <tr className="text-left">
@@ -719,18 +730,20 @@ function RiskTable({ risks, onEditRisk, onDeleteRisk, onAddRisk }) {
                   <button
                     type="button"
                     onClick={() => onEditRisk?.(risk)}
-                    className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-adlm-blue-700"
+                    className="ds-btn ds-btn-sm btn-o"
+                    style={ROW_BTN}
                     title="Edit"
                   >
-                    <FaPencilAlt className="text-xs" />
+                    <FaPencilAlt size={13} />
                   </button>
                   <button
                     type="button"
                     onClick={() => onDeleteRisk?.(risk.riskId)}
-                    className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    className="ds-btn ds-btn-sm btn-o"
+                    style={ROW_BTN}
                     title="Delete"
                   >
-                    <FaTrash className="text-xs" />
+                    <FaTrash size={13} />
                   </button>
                 </div>
               </td>
@@ -758,7 +771,7 @@ function IssueTable({ issues, onEditIssue, onDeleteIssue, onAddIssue }) {
     );
   }
   return (
-    <div className="overflow-auto rounded-xl border border-slate-200" style={{ maxHeight: "calc(100vh - 280px)" }}>
+    <div className="wk-panel" style={{ marginBottom: 0, overflow: "auto", maxHeight: "calc(100vh - 280px)" }}>
       <table className="w-full text-sm" style={{ minWidth: 900 }}>
         <thead className="sticky top-0 bg-slate-50 text-slate-600 z-10">
           <tr className="text-left">
@@ -804,18 +817,20 @@ function IssueTable({ issues, onEditIssue, onDeleteIssue, onAddIssue }) {
                   <button
                     type="button"
                     onClick={() => onEditIssue?.(issue)}
-                    className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-adlm-blue-700"
+                    className="ds-btn ds-btn-sm btn-o"
+                    style={ROW_BTN}
                     title="Edit"
                   >
-                    <FaPencilAlt className="text-xs" />
+                    <FaPencilAlt size={13} />
                   </button>
                   <button
                     type="button"
                     onClick={() => onDeleteIssue?.(issue.issueId)}
-                    className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    className="ds-btn ds-btn-sm btn-o"
+                    style={ROW_BTN}
                     title="Delete"
                   >
-                    <FaTrash className="text-xs" />
+                    <FaTrash size={13} />
                   </button>
                 </div>
               </td>
@@ -829,17 +844,13 @@ function IssueTable({ issues, onEditIssue, onDeleteIssue, onAddIssue }) {
 
 function EmptyState({ icon: Icon, title, helper, actionLabel, onAction }) {
   return (
-    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-12 text-center">
-      <Icon className="mx-auto text-3xl text-slate-300" />
-      <div className="mt-3 text-sm font-semibold text-slate-700">{title}</div>
-      <div className="mt-1 text-xs text-slate-500">{helper}</div>
+    <div className="wk-panel wk-empty" style={{ marginBottom: 0 }}>
+      <Icon size={28} style={{ display: "block", margin: "0 auto", color: "var(--ink-3)" }} />
+      <b style={{ display: "block", marginTop: 12, fontWeight: 500, color: "var(--ink)" }}>{title}</b>
+      <span style={{ display: "block", marginTop: 4, fontSize: 13 }}>{helper}</span>
       {actionLabel && onAction ? (
-        <button
-          type="button"
-          onClick={onAction}
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-adlm-blue-700 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-800"
-        >
-          <FaPlus />
+        <button type="button" onClick={onAction} className="ds-btn ds-btn-sm btn-p" style={{ marginTop: 16 }}>
+          <FaPlus size={13} />
           {actionLabel}
         </button>
       ) : null}
@@ -851,9 +862,9 @@ function EmptyState({ icon: Icon, title, helper, actionLabel, onAction }) {
 // Main details view — 3 sub-tabs
 // ─────────────────────────────────────────────────────────────────────
 const SUB_TABS = [
-  { id: "tasks", label: "WBS / Tasks", icon: FaTasks },
-  { id: "risks", label: "Risk Register", icon: FaExclamationTriangle },
-  { id: "issues", label: "Issue Log", icon: FaBug },
+  { id: "tasks", label: "WBS / Tasks" },
+  { id: "risks", label: "Risk Register" },
+  { id: "issues", label: "Issue Log" },
 ];
 
 export default function PmDetailsView({
@@ -897,125 +908,113 @@ export default function PmDetailsView({
   }, [tasks]);
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 px-4 py-3 text-white shadow">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"
-          >
-            <FaArrowLeft />
-            Back to Dashboard
-          </button>
-          <div>
-            <div className="text-xs uppercase tracking-widest opacity-80">PM Details</div>
-            <div className="text-sm font-bold">Schedule · Risks · Issues</div>
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
+      {/* Header, in his panel */}
+      <section className="wk-panel" style={{ marginBottom: 0 }}>
+        <div className="wk-ph" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+            <button
+              type="button"
+              onClick={onBack}
+              className="wk-back"
+              style={{ background: "none", border: 0, padding: 0, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#hi-right" />
+              </svg>
+              Back to Dashboard
+            </button>
+            <p className="wk-grp" style={{ padding: 0, margin: "8px 0 4px" }}>PM details</p>
+            <h2>Schedule · Risks · Issues</h2>
+          </div>
+          <div className="wk-acts" style={{ alignItems: "center" }}>
+            {/* Export to calendar, downloads the schedule as a .ics file.
+                Drop into Google Calendar / Outlook / Apple Calendar via the
+                app's "Import calendar" flow. Filename = project name. */}
+            {onExportCalendar ? (
+              <button
+                type="button"
+                onClick={onExportCalendar}
+                title="Download the schedule as a calendar (.ics) file. Import into Google Calendar, Outlook, or Apple Calendar."
+                className="ds-btn ds-btn-sm btn-o"
+              >
+                <FaCalendarAlt size={14} />
+                Export calendar
+              </button>
+            ) : null}
+            {/* Reschedule, explicit re-cascade. Useful after manually editing
+                durations or adding predecessor links, without having to bump
+                the project start to trigger the auto-cascade. */}
+            {onReschedule ? (
+              <button
+                type="button"
+                onClick={onReschedule}
+                title="Recompute every task's start/finish from the project start date, flowing through predecessor relationships."
+                className="ds-btn ds-btn-sm btn-o"
+              >
+                <FaSyncAlt size={14} />
+                Reschedule
+              </button>
+            ) : null}
+            {/* Delete-imports, only visible when MS Project tasks exist, so
+                the destructive control doesn't appear on a clean slate. */}
+            {importedTaskCount > 0 && onClearImports ? (
+              <button
+                type="button"
+                onClick={onClearImports}
+                title={`Delete all ${importedTaskCount} imported MS Project task(s). Manual & BoQ-linked tasks are preserved.`}
+                className="ds-btn ds-btn-sm btn-o"
+                style={{ color: "var(--pal-orange-key)" }}
+              >
+                <FaFileImport size={14} />
+                Delete imports · {importedTaskCount}
+              </button>
+            ) : null}
+            {dirty ? <span className="wk-dirty" style={{ marginRight: 4 }}>Unsaved</span> : null}
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving || !dirty}
+              className="ds-btn ds-btn-sm btn-p"
+            >
+              <FaCheckCircle size={14} />
+              {saving ? "Saving…" : "Save changes"}
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Export to calendar, downloads the schedule as a .ics file.
-              Drop into Google Calendar / Outlook / Apple Calendar via the
-              app's "Import calendar" flow. Filename = project name. */}
-          {onExportCalendar ? (
-            <button
-              type="button"
-              onClick={onExportCalendar}
-              title="Download the schedule as a calendar (.ics) file. Import into Google Calendar, Outlook, or Apple Calendar."
-              className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-white/20 transition"
-            >
-              <FaCalendarAlt className="text-[11px]" />
-              Export calendar
-            </button>
-          ) : null}
-          {/* Reschedule, explicit re-cascade. Useful after manually editing
-              durations or adding predecessor links, without having to bump
-              the project start to trigger the auto-cascade. */}
-          {onReschedule ? (
-            <button
-              type="button"
-              onClick={onReschedule}
-              title="Recompute every task's start/finish from the project start date, flowing through predecessor relationships."
-              className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-white/20 transition"
-            >
-              <FaSyncAlt className="text-[11px]" />
-              Reschedule
-            </button>
-          ) : null}
-          {/* Delete-imports, only visible when MS Project tasks exist, so
-              the destructive control doesn't appear on a clean slate. */}
-          {importedTaskCount > 0 && onClearImports ? (
-            <button
-              type="button"
-              onClick={onClearImports}
-              title={`Delete all ${importedTaskCount} imported MS Project task(s). Manual & BoQ-linked tasks are preserved.`}
-              className="inline-flex items-center gap-2 rounded-lg bg-rose-500/90 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-rose-600 transition"
-            >
-              <FaFileImport />
-              Delete imports
-              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold">
-                {importedTaskCount}
-              </span>
-            </button>
-          ) : null}
-          {dirty ? (
-            <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
-              Unsaved
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving || !dirty}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-emerald-600 transition disabled:opacity-50"
-          >
-            <FaCheckCircle />
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-        </div>
-      </div>
+      </section>
 
-      {/* Sub-tabs */}
-      <div className="rounded-xl border border-slate-200 bg-white p-1">
-        <div className="flex gap-1">
-          {SUB_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const active = subTab === tab.id;
-            const count = counts[tab.id];
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setSubTab(tab.id)}
-                className={[
-                  "flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition",
-                  active
-                    ? "bg-adlm-blue-700 text-white shadow-sm"
-                    : "text-slate-600 hover:bg-slate-50",
-                ].join(" ")}
-              >
-                <Icon className={active ? "text-white" : "text-slate-400"} />
-                <span>{tab.label}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                    active ? "bg-white/20" : "bg-slate-200 text-slate-700"
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      {/* Sub-tabs, in his tabs; the count follows in his muted ink. */}
+      <div
+        className="wk-tabs"
+        role="tablist"
+        aria-label="PM details"
+        style={{ maxWidth: "100%", overflowX: "auto", justifySelf: "start" }}
+      >
+        {SUB_TABS.map((tab) => {
+          const active = subTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setSubTab(tab.id)}
+              className={active ? "on" : ""}
+            >
+              {tab.label}
+              <span style={{ marginLeft: 6, color: "var(--ink-3)" }}>{counts[tab.id]}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab content */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-3">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold text-slate-700">
+      <section className="wk-panel" style={{ marginBottom: 0 }}>
+        <div className="wk-ph">
+          <h2>
             {subTab === "tasks" ? "WBS / Task list" : subTab === "risks" ? "Risk register" : "Issue log"}
-          </div>
+          </h2>
           <button
             type="button"
             onClick={
@@ -1025,12 +1024,13 @@ export default function PmDetailsView({
                   ? () => onAddRisk?.()
                   : () => onAddIssue?.()
             }
-            className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-blue-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-800"
+            className="ds-btn ds-btn-sm btn-p"
           >
-            <FaPlus className="text-[10px]" />
+            <FaPlus size={13} />
             {subTab === "tasks" ? "Add task" : subTab === "risks" ? "Add risk" : "Add issue"}
           </button>
         </div>
+        <div style={{ padding: 16 }}>
 
         {subTab === "tasks" ? (
           <TaskTable
@@ -1057,7 +1057,8 @@ export default function PmDetailsView({
             onAddIssue={onAddIssue}
           />
         )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

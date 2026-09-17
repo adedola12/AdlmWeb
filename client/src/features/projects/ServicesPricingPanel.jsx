@@ -2,10 +2,19 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../../http";
 
-function money(v) {
-  const n = Number(v) || 0;
-  return "₦" + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-}
+// His note tones: orange for a problem, light blue for a result.
+const NOTE_WARN = {
+  margin: 0,
+  background: "var(--pal-orange-wash)",
+  color: "var(--pal-orange-key)",
+  borderColor: "var(--pal-orange-line)",
+};
+const NOTE_GOOD = {
+  margin: 0,
+  background: "var(--pal-light-wash)",
+  color: "var(--pal-light-key)",
+  borderColor: "var(--pal-light-line)",
+};
 
 /**
  * Services pricing panel (web MEP Budget view, v1).
@@ -48,22 +57,21 @@ export default function ServicesPricingPanel({
   }
 
   return (
-    <div className="mt-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-adlm-dark-text">
-            Price services from RateGen
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+    <section className="wk-panel" style={{ marginBottom: 0 }}>
+      <div className="wk-ph" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+          <h2>Price services from RateGen</h2>
+          <div className="wk-locnote" style={{ marginTop: 4 }}>
             Builds material + labour rates for every services line from your
             RateGen prices, applying your Constants (standard lengths, connectors
             &amp; fittings), then updates the bill.
-          </p>
+          </div>
         </div>
         {canEdit && (
           <button
             type="button"
-            className="btn shrink-0"
+            className="ds-btn ds-btn-sm btn-p"
+            style={{ flex: "none" }}
             onClick={priceAll}
             disabled={busy}
           >
@@ -72,25 +80,30 @@ export default function ServicesPricingPanel({
         )}
       </div>
 
-      <div className="mt-2">
+      <div style={{ padding: "14px 20px 18px", display: "grid", gap: 12 }}>
         <Link
           to="/rategen/services-constants"
-          className="text-xs underline text-slate-500 dark:text-slate-400"
+          className="wk-locnote"
+          style={{ color: "var(--action)" }}
         >
           Edit services constants →
         </Link>
-      </div>
 
-      {error && <div className="mt-2 text-xs text-red-600">{error}</div>}
-      {result && !error && (
-        <div className="mt-2 text-xs text-green-700 dark:text-green-400">
-          Priced {result.billLinesUpdated} bill line
-          {result.billLinesUpdated === 1 ? "" : "s"}
-          {canSeeRates ? "" : " (rates hidden)"} from {result.budgetLines}{" "}
-          build-up line{result.budgetLines === 1 ? "" : "s"}. Open the Bill tab to
-          review.
-        </div>
-      )}
-    </div>
+        {error && (
+          <p className="mk-note" role="alert" style={NOTE_WARN}>
+            {error}
+          </p>
+        )}
+        {result && !error && (
+          <p className="mk-note" style={NOTE_GOOD}>
+            Priced {result.billLinesUpdated} bill line
+            {result.billLinesUpdated === 1 ? "" : "s"}
+            {canSeeRates ? "" : " (rates hidden)"} from {result.budgetLines}{" "}
+            build-up line{result.budgetLines === 1 ? "" : "s"}. Open the Bill tab to
+            review.
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
