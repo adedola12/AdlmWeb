@@ -11,6 +11,9 @@ import "./index.css";
 // is inert until a page opts in by wrapping its content in <div className="ds">
 // — see client/scripts/port-ds-css.mjs for why it is scoped that way.
 import "./styles/ds.css";
+// His toast and card system and the Appearance picker (17 Sep), loaded on every
+// page as his build.js does.
+import "./styles/ds-feedback.css";
 import "./styles/ds-local.css";
 
 // Apply the saved theme class BEFORE React mounts so users on dark mode

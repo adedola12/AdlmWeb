@@ -73,13 +73,18 @@ function makeScope() {
 }
 
 // ── theme toggle ───────────────────────────────────────────────────────────
-// His #tt button writes its own data-theme attribute and localStorage key.
-// This app already has ThemeProvider doing that against a `.dark` class, so
-// the button is wired to that instead of running a second, conflicting system.
-function initTheme(root, s, toggleTheme) {
+// His #tt button opens his four-way theme menu (17 Sep). ThemeProvider owns
+// the preference and renders the menu, so the button only says where to hang
+// it — one theme system rather than two fighting over <html>.
+function initTheme(root, s, openThemeMenu) {
   const tt = root.querySelector("#tt");
-  if (!tt || !toggleTheme) return;
-  s.on(tt, "click", toggleTheme);
+  if (!tt || !openThemeMenu) return;
+  tt.setAttribute("aria-haspopup", "menu");
+  tt.setAttribute("aria-expanded", "false");
+  s.on(tt, "click", (e) => {
+    e.stopPropagation();
+    openThemeMenu(tt);
+  });
 }
 
 // ── reveal on first sight ──────────────────────────────────────────────────
@@ -771,7 +776,7 @@ function initPicker(root, s) {
 // `mapHref(href, hisPage)` lets the caller redirect a link before it is
 // followed — the staged preview uses it to keep mobile taps inside the
 // redesign. Defaults to identity, so promoted pages navigate normally.
-export function useDsBehaviours(ref, { toggleTheme, mapHref } = {}) {
+export function useDsBehaviours(ref, { openThemeMenu, mapHref } = {}) {
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -788,7 +793,7 @@ export function useDsBehaviours(ref, { toggleTheme, mapHref } = {}) {
     const s = makeScope();
 
     const blocks = [
-      ["theme", () => initTheme(root, s, toggleTheme)],
+      ["theme", () => initTheme(root, s, openThemeMenu)],
       ["reveal", () => initReveal(root, reduce, s)],
       ["counters", () => initCounters(root, reduce, s)],
       ["tilt", () => initTilt(root, reduce, s)],
@@ -821,7 +826,7 @@ export function useDsBehaviours(ref, { toggleTheme, mapHref } = {}) {
       s.run();
       if (!hadJs) document.documentElement.classList.remove("js");
     };
-  }, [ref, toggleTheme, navigate, mapHref]);
+  }, [ref, openThemeMenu, navigate, mapHref]);
 }
 
 export default useDsBehaviours;

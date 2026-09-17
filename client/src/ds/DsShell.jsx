@@ -26,11 +26,10 @@ import { useTheme } from "../theme.jsx";
  */
 export default function DsShell({ children, mapHref }) {
   const ref = React.useRef(null);
-  // His nav carries a #tt theme button that writes its own data-theme
-  // attribute and localStorage key. Handing it ThemeProvider's toggle keeps
-  // one theme system rather than two fighting over <html>.
-  const { toggle } = useTheme();
-  useDsBehaviours(ref, { toggleTheme: toggle, mapHref });
+  // His nav carries a #tt theme button. It opens ThemeProvider's menu, so
+  // there is one theme system rather than two fighting over <html>.
+  const { openMenu } = useTheme();
+  useDsBehaviours(ref, { openThemeMenu: openMenu, mapHref });
 
   return (
     <div className="ds" ref={ref}>

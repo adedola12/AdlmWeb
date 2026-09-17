@@ -25,6 +25,7 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import ConnectedAccounts from "../components/ConnectedAccounts.jsx";
 import { uploadImage } from "../lib/uploadImage.js";
+import { ThemePicker } from "./ThemeMenu.jsx";
 
 const icon = (name) => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -735,6 +736,18 @@ export default function DsSettings() {
           {/* His Notifications. Real now: each switch writes to
               POST /me/notifications and the state comes back from the account
               rather than being remembered in this tab. */}
+          {/* His Appearance panel (17 Sep): the same four themes as the nav
+              menu. A device setting, so it saves on the spot, with no Save. */}
+          <section className="dsh-panel">
+            <div className="dsh-ph">
+              <h2>Appearance</h2>
+              <span className="when">This device</span>
+            </div>
+            <div className="dsh-body">
+              <ThemePicker />
+            </div>
+          </section>
+
           {notif && (
             <section className="dsh-panel">
               <div className="dsh-ph">
