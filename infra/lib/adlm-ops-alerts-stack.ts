@@ -23,8 +23,17 @@
 // Every email subscription sends a confirmation link that MUST be clicked
 // within three days, or AWS deletes it and alerts go nowhere again.
 
-import { Stack, StackProps, Duration, CfnOutput } from "aws-cdk-lib";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from "aws-cdk-lib";
 import { Construct } from "constructs";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as ses from "aws-cdk-lib/aws-ses";
+import * as sesActions from "aws-cdk-lib/aws-ses-actions";
+import * as cr from "aws-cdk-lib/custom-resources";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import * as events from "aws-cdk-lib/aws-events";
@@ -43,7 +52,14 @@ export interface AdlmOpsAlertsStackProps extends StackProps {
    * report has not been sent for two consecutive days.
    */
   digestLogGroupName?: string;
+  /**
+   * Receive DMARC aggregate reports at dmarc@<this domain>. Only meaningful in
+   * a region with SES email receiving (eu-west-1 has it).
+   */
+  dmarcReportDomain?: string;
 }
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export class AdlmOpsAlertsStack extends Stack {
   constructor(scope: Construct, id: string, props: AdlmOpsAlertsStackProps) {
@@ -125,6 +141,89 @@ export class AdlmOpsAlertsStack extends Stack {
       });
       missing.addAlarmAction(new actions.SnsAction(topic));
       missing.addOkAction(new actions.SnsAction(topic));
+    }
+
+    if (props.dmarcReportDomain) {
+      // DMARC aggregate reports: which servers send mail claiming to be from
+      // adlmstudio.net, and whether they pass. Until September 2026 these went
+      // to a third party nobody read, so a spoofer, a forgotten sending
+      // service or a broken DKIM key could not be seen. SES stores each report
+      // email, a small function reads it, and failures reach the ops inbox.
+      const bucket = new s3.Bucket(this, "DmarcReports", {
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        removalPolicy: RemovalPolicy.RETAIN,
+        lifecycleRules: [{ expiration: Duration.days(400) }],
+      });
+
+      const parserLogs = new logs.LogGroup(this, "DmarcParserLogs", {
+        retention: logs.RetentionDays.THREE_MONTHS,
+        removalPolicy: RemovalPolicy.DESTROY,
+      });
+
+      const parser = new NodejsFunction(this, "DmarcParser", {
+        entry: path.join(__dirname, "..", "lambda", "dmarc", "index.mjs"),
+        handler: "handler",
+        runtime: lambda.Runtime.NODEJS_22_X,
+        memorySize: 512,
+        timeout: Duration.seconds(60),
+        logGroup: parserLogs,
+        environment: {
+          BUCKET: bucket.bucketName,
+          RAW_PREFIX: "raw/",
+          TOPIC_ARN: topic.topicArn,
+        },
+        // The runtime ships the AWS SDK; nothing else is imported.
+        bundling: {
+          format: OutputFormat.ESM,
+          target: "node22",
+          minify: true,
+          externalModules: ["@aws-sdk/*"],
+        },
+      });
+      bucket.grantReadWrite(parser);
+      topic.grantPublish(parser);
+
+      const ruleSet = new ses.ReceiptRuleSet(this, "InboundRules");
+      ruleSet.addRule("DmarcReports", {
+        recipients: [props.dmarcReportDomain],
+        scanEnabled: true,
+        actions: [
+          // Order matters: SES stores the message first, then the function
+          // reads it back by message id.
+          new sesActions.S3({ bucket, objectKeyPrefix: "raw/" }),
+          new sesActions.Lambda({
+            function: parser,
+            invocationType: sesActions.LambdaInvocationType.EVENT,
+          }),
+        ],
+      });
+
+      // A region has at most one ACTIVE rule set, and CloudFormation cannot
+      // activate one. None was active in this account before this stack.
+      const activate: cr.AwsSdkCall = {
+        service: "SES",
+        action: "setActiveReceiptRuleSet",
+        parameters: { RuleSetName: ruleSet.receiptRuleSetName },
+        physicalResourceId: cr.PhysicalResourceId.of(`adlm-active-receipt-rule-set-${this.region}`),
+      };
+      new cr.AwsCustomResource(this, "ActivateInboundRules", {
+        onCreate: activate,
+        onUpdate: activate,
+        // Deactivates (no name) when the stack is deleted.
+        onDelete: { service: "SES", action: "setActiveReceiptRuleSet", parameters: {} },
+        policy: cr.AwsCustomResourcePolicy.fromStatements([
+          new iam.PolicyStatement({ actions: ["ses:SetActiveReceiptRuleSet"], resources: ["*"] }),
+        ]),
+        installLatestAwsSdk: false,
+      });
+
+      new CfnOutput(this, "DmarcReportAddress", { value: `dmarc@${props.dmarcReportDomain}` });
+      new CfnOutput(this, "DmarcReportMxRecord", {
+        value: `${props.dmarcReportDomain} MX 10 inbound-smtp.${this.region}.amazonaws.com`,
+      });
+      new CfnOutput(this, "DmarcReportsBucket", { value: bucket.bucketName });
     }
 
     new CfnOutput(this, "OpsAlertsTopicArn", { value: topic.topicArn });

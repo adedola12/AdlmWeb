@@ -83,6 +83,58 @@ The bootstrap is needed once: US East had never been used with CDK. Support case
 events and account-wide Health events are only emitted there. Then click the two
 confirmation emails.
 
+## Sender addresses
+
+Everything used to go out as admin@adlmstudio.net, which is also a person's
+inbox. `server/util/senders.js` now splits it:
+
+| Mail | From | Reply-To |
+|---|---|---|
+| Receipts, codes, licence and seat notices, the daily report | `notifications@adlmstudio.net` | `admin@adlmstudio.net` |
+| Anything tracked as a campaign or carrying an unsubscribe link | `news@adlmstudio.net` | `admin@adlmstudio.net` |
+
+Overrides: `EMAIL_FROM_NOTIFY`, `EMAIL_FROM_NEWS`, `EMAIL_REPLY_TO` in SSM. The
+old `EMAIL_FROM` is no longer read. No new mailbox is needed because replies
+go to admin@. Optionally add `notifications@` and `news@` as free aliases on
+the admin@ user in Google Workspace, so the odd reply sent to the From address
+still lands.
+
+## DMARC reports
+
+`_dmarc.adlmstudio.net` publishes `p=reject`, and until September 2026 its
+reports went only to `dmarcmanager@kudimail.net`, which nobody read. The
+`AdlmOpsAlertsEu` stack now receives them too:
+
+- SES receives mail for `reports.adlmstudio.net` (receipt rule set, activated
+  by the stack) and stores each message in the `DmarcReports` bucket under
+  `raw/`, kept 400 days.
+- `infra/lambda/dmarc` reads each one, writes a summary under `parsed/<day>/`,
+  and emails the ops topic when any message failed authentication.
+- Tests: `node --test infra/lambda/dmarc/parse.test.mjs`.
+
+DNS it needs, in Squarespace Domains (DNS -> Custom records; the zone moved there from Google Domains, which is why the nameservers are ns-cloud-*.googledomains.com):
+
+| Name | Type | Value |
+|---|---|---|
+| `reports.adlmstudio.net.` | MX | `10 inbound-smtp.eu-west-1.amazonaws.com.` |
+| `_dmarc.adlmstudio.net.` | TXT | `v=DMARC1; p=reject; pct=100; rua=mailto:dmarcmanager@kudimail.net,mailto:dmarc@reports.adlmstudio.net; ruf=mailto:dmarcmanager@kudimail.net` |
+
+Kudimail stays in both the DMARC record and the apex SPF record for now.
+Nobody knows whether anything still sends through it, and with `p=reject`
+removing it could get real mail refused. After two weeks of reports, if no
+passing source is a Kudimail server, remove it from both.
+
+A failing source is either someone forging the domain or a real service that
+is not set up for SPF or DKIM. Look up an unfamiliar IP before assuming either.
+
+## Google Postmaster Tools
+
+`postmaster.google.com` shows how Gmail rates adlmstudio.net: spam complaint
+rate, domain reputation, authentication. Gmail starts filtering bulk senders
+above a 0.3% complaint rate. Verifying the domain there adds one
+`google-site-verification=` TXT value at the apex. Add it as a SECOND value in
+the existing TXT record set; never replace the SPF value that is already there.
+
 ## AWS account contacts
 
 The account's operations, security and billing alternate contacts were empty
