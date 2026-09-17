@@ -238,7 +238,21 @@ app.use("/webhooks", webhooksRouter);
 app.use(express.json({ limit: "16mb" }));
 app.use(express.urlencoded({ extended: false, limit: "16mb" }));
 // Structured, parseable access logs in production; colourful logs locally.
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+//
+// COST: one log line per request is the single biggest CloudWatch item —
+// ~$122/mo of Logs INGESTION (about a quarter of the whole AWS bill), driven by
+// the warmup pings, health checks and routine 2xx traffic. In production we now
+// log only what is worth reading — anything >= 400 (errors) — which drops the
+// volume by roughly 90% without losing the signal a log is actually for. Set
+// LOG_ALL_REQUESTS=1 to restore full access logging temporarily when diagnosing.
+app.use(
+  morgan(process.env.NODE_ENV === "production" ? "combined" : "dev", {
+    skip: (req, res) =>
+      process.env.NODE_ENV === "production" &&
+      process.env.LOG_ALL_REQUESTS !== "1" &&
+      res.statusCode < 400,
+  }),
+);
 
 // Personal JSON is never cached and never answered with 304. Express would
 // otherwise ETag every body and hand a browser 304 on match, which is only
