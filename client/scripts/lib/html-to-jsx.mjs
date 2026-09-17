@@ -256,7 +256,11 @@ function renderAttr(name, value, tag, ctx) {
     if (value.startsWith("#")) return `${jsxName}="${value}"`;
     const resolved = resolveHref(value);
     if (resolved === null) return null;
-    if (tag === "a" && /^\//.test(resolved)) {
+    // A file is not a route. An <a download>, or any link to /docs/ or /ds/,
+    // stays a plain anchor: as a router <Link> the click is handled in the app
+    // and the PDF "download" landed on the not-found page.
+    const isFile = ctx.fileLink || /^\/(docs|ds)\//.test(resolved);
+    if (tag === "a" && /^\//.test(resolved) && !isFile) {
       ctx.usesLink = true;
       // Carry his own page name alongside the resolved route.
       //
@@ -272,6 +276,13 @@ function renderAttr(name, value, tag, ctx) {
         : `to="${resolved}"`;
     }
     return `${jsxName}="${resolved}"`;
+  }
+
+  // The document viewer reads data-doc as a URL. His value is relative
+  // ("docs/x.pdf"), which under /preview/learn resolved to /preview/docs/x.pdf
+  // and loaded the app into the viewer instead of the PDF.
+  if (name === "data-doc" && value) {
+    return `data-doc="${resolveHref(value) ?? value}"`;
   }
   if (value === null) {
     return BOOLEAN.has(jsxName) ? `${jsxName}={true}` : `${jsxName}=""`;
@@ -393,7 +404,9 @@ export function htmlToJsx(html, opts = {}) {
     }
 
     const attrs = [];
-    for (const [name, value] of parseAttrs(attrsRaw)) {
+    const parsedAttrs = parseAttrs(attrsRaw);
+    ctx.fileLink = tag === "a" && parsedAttrs.some(([n]) => n === "download");
+    for (const [name, value] of parsedAttrs) {
       const rendered = renderAttr(name, value, tag, ctx);
       if (rendered !== null) attrs.push(rendered);
     }

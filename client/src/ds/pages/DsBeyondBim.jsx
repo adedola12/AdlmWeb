@@ -2123,12 +2123,12 @@ export default function DsBeyondBim() {
               {" "}
               <div className="hero-cta" style={{ justifyContent: "flex-start" }}>
                 {" "}
-                <Link to="/ds/bb-poster.jpg" className="ds-btn btn-p" download="ADLM-Beyond-BIM-Oct-2026.jpg">
+                <a href="/ds/bb-poster.jpg" className="ds-btn btn-p" download="ADLM-Beyond-BIM-Oct-2026.jpg">
                   Download the flyer{" "}
                   <svg viewBox="0 0 24 24">
                     <use href="#bb-i-down" />
                   </svg>
-                </Link>
+                </a>
                 {" "}
                 <button type="button" className="ds-btn btn-o" id="bb-share">
                   Copy the link
@@ -2215,7 +2215,7 @@ export default function DsBeyondBim() {
                 <Link to="/learn#courses" data-ds-page="learn">
                   certificated courses
                 </Link>
-                {" "}are self-paced on the ADLM Studio platform and go deep on one discipline. Beyond BIM is a live cohort that runs one project end to end across every stage of the QS role.
+                {" "}are self-paced through Google Classroom and go deep on one discipline. Beyond BIM is a live cohort that runs one project end to end across every stage of the QS role.
               </div>
               {" "}
             </details>

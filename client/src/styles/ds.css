@@ -3164,3 +3164,109 @@
 .ds .promo-item.noart{grid-template-columns:1fr}
 .ds .promo-item.noart .promo-art{display:none}
 .ds .promo-item.noart .promo-copy{padding:52px 64px;max-width:840px}
+
+
+
+/* =========================================================
+   BLACK — the third theme (17 Sep 2026)
+   Painted as data-theme="dark" + data-shade="black", so every dark rule on the
+   site still applies and only the tokens below change. Neutral greys carry the
+   surfaces; the brand blue stays for actions, focus and the odd accent, which
+   is the one place a little navy earns its keep.
+   ========================================================= */
+:root[data-shade="black"], :root[data-shade="black"] .band-dark{
+  --bg:#070708; --bg-alt:#0E0E10; --bg-inset:#17171A;
+  --ink:#F4F4F5; --ink-2:#B9B9C0; --ink-3:#8A8A93;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.15);
+  --dot:rgba(255,255,255,.22); --glow:rgba(35,156,255,.14);
+  --shadow-c:0,0,0;
+  --card-fill:radial-gradient(128% 128% at 50% 6%,#0B0B0C 35%,#1A1A1E 100%);
+  --card-stroke:linear-gradient(100deg,#232327 0%,#239CFF 50%,#232327 100%);
+  --frag-fill:linear-gradient(180deg,#161618,#0F0F11);
+  --frag-line:rgba(255,255,255,.09);
+  --frag-k:#A1A1AA; --frag-v:#F4F4F5; --frag-t:#71717A;
+  --hero-fill:radial-gradient(120% 110% at 50% 0%,#18191C 0%,#070708 62%);
+  --navy-950:#08080A; --navy-900:#0F0F11; --navy-850:#141417; --navy-800:#1C1C20;
+  --pal-orange-fill:linear-gradient(180deg,#221308 0%,#140B05 100%);
+  --pal-deep-fill:linear-gradient(180deg,#1A1B1F 0%,#0D0D0F 100%);
+  --pal-deep-line:#2C2D33; --pal-deep-key:#6FC2FF; --pal-deep-wash:#151518;
+  --pal-light-fill:linear-gradient(180deg,#121A21 0%,#0B0D0F 100%);
+  --pal-light-line:#22394C; --pal-light-key:#A5D8FF; --pal-light-wash:#10161B;
+  --pal-grad-fill:linear-gradient(152deg,#1D1E22 0%,#131316 50%,#0A0A0B 100%);
+  --pal-grad-line:#2C2D33; --pal-grad-key:#45AEFF; --pal-grad-wash:#151518;
+}
+:root[data-shade="black"] .band-dark{background:#0B0B0C}
+:root[data-shade="black"] body{background:var(--bg)}
+:root[data-shade="black"] .cta{background:#0B0B0C}
+:root[data-shade="black"] .stage-in{background:#111113}
+
+
+/* the theme menu under the switch */
+.ds .tt-menu{position:fixed;z-index:300;width:236px;padding:6px;border-radius:14px;background:var(--bg);
+  border:1px solid var(--line-2);box-shadow:0 18px 50px rgba(var(--shadow-c),.28);
+  animation:tt-in 180ms var(--e-out)}
+@keyframes tt-in{from{opacity:0;transform:translateY(-4px)}}
+.ds .tt-k{display:block;padding:8px 10px 6px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.ds .tt-menu button{display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;border:0;border-radius:10px;
+  background:none;cursor:pointer;text-align:left;font-family:var(--font);color:var(--ink)}
+.ds .tt-menu button:hover, .ds .tt-menu button:focus-visible{background:var(--bg-alt);outline:0}
+.ds .tt-menu button[aria-checked="true"]{background:var(--bg-alt)}
+.ds .tt-menu button[aria-checked="true"]::after{content:"";margin-left:auto;width:5px;height:9px;flex:none;
+  border:solid var(--action);border-width:0 1.8px 1.8px 0;transform:rotate(45deg) translate(-2px,-2px)}
+.ds .tt-menu b{display:block;font-size:13px;font-weight:500}
+.ds .tt-menu em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);font-weight:300}
+.ds .sw{flex:none;width:26px;height:26px;border-radius:8px;border:1px solid var(--line-2);display:block}
+.ds .sw.light{background:linear-gradient(135deg,#FFFFFF 50%,#0B7FDB 50%)}
+.ds .sw.dark{background:linear-gradient(135deg,#091E39 50%,#239CFF 50%)}
+.ds .sw.black{background:linear-gradient(135deg,#0B0B0C 50%,#3A3A40 50%)}
+.ds .sw.system{background:linear-gradient(135deg,#FFFFFF 50%,#0B0B0C 50%)}
+
+
+/* =========================================================
+   GLOWS, SOFTENED (17 Sep 2026)
+   The ambient glows were plain two-stop radial gradients, so each one showed
+   its own elliptical edge — a lit disc sitting on the page rather than light
+   falling on it. Every glow now eases out over more stops and is blurred as a
+   layer, so there is no edge left to see. Peaks are a touch lower to match.
+   ========================================================= */
+.ds .amb::after{
+  background:
+    radial-gradient(ellipse 36% 50% at 6% 34%,
+      var(--glow) 0%,color-mix(in srgb,var(--glow) 55%,transparent) 32%,
+      color-mix(in srgb,var(--glow) 18%,transparent) 58%,transparent 80%),
+    radial-gradient(ellipse 36% 50% at 94% 30%,
+      var(--glow) 0%,color-mix(in srgb,var(--glow) 55%,transparent) 32%,
+      color-mix(in srgb,var(--glow) 18%,transparent) 58%,transparent 80%);
+  filter:blur(72px);will-change:opacity}
+.ds .hero-g{
+  background:radial-gradient(ellipse 50% 50% at 50% 50%,
+    var(--glow) 0%,color-mix(in srgb,var(--glow) 55%,transparent) 30%,
+    color-mix(in srgb,var(--glow) 18%,transparent) 56%,transparent 78%);
+  filter:blur(80px)}
+.ds .cta-g{
+  background:
+    radial-gradient(ellipse 34% 48% at 4% 42%,rgba(35,156,255,.26) 0%,rgba(35,156,255,.13) 32%,
+      rgba(35,156,255,.04) 58%,transparent 80%),
+    radial-gradient(ellipse 34% 48% at 96% 38%,rgba(35,156,255,.26) 0%,rgba(35,156,255,.13) 32%,
+      rgba(35,156,255,.04) 58%,transparent 80%);
+  filter:blur(64px);will-change:opacity}
+.ds .orb-core::before{inset:-44px;filter:blur(16px);
+  background:radial-gradient(circle,rgba(35,156,255,.30) 0%,rgba(35,156,255,.14) 36%,rgba(35,156,255,0) 72%)}
+.ds .adm-gate-art{filter:blur(60px)}
+
+
+/* =========================================================
+   FRAME OUTLINES (17 Sep 2026)
+   Inset frames that carry a gradient or a dark band (".frame", the closing
+   CTA, parallax plates, product heroes) get the same grey hairline the home
+   hero has, so the edge reads as a frame rather than a glow floating on the
+   page. The colour is set on the root and deliberately NOT redefined by
+   .band-dark — inside a dark band --line-2 is white, which vanishes on a
+   light page.
+   ========================================================= */
+:root{--frame-line:#CFDCE8}
+:root.dark{--frame-line:rgba(255,255,255,.14)}
+:root.dark{--frame-line:rgba(255,255,255,.14)}
+:root[data-shade="black"]{--frame-line:rgba(255,255,255,.13)}
+.ds .frame, .ds .frame-soft, .ds .cta, .ds .plx, .ds .phero{border:1px solid var(--frame-line)}
+.ds .phero{border-top:0}

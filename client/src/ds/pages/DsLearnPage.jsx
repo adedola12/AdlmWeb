@@ -171,7 +171,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · self-paced
+                  100% online · Google Classroom · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -244,7 +244,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · self-paced
+                  100% online · Google Classroom · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -381,7 +381,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · self-paced
+                  100% online · Google Classroom · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -1909,14 +1909,14 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <Link to="/docs/ADLM-Installer-Hub-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-Installer-Hub-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="docs/ADLM-Installer-Hub-User-Guide.pdf" data-title="Installer Hub">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-Installer-Hub-User-Guide.pdf" data-title="Installer Hub">
                     Preview
                   </button>
                   {" "}
@@ -1949,14 +1949,14 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <Link to="/docs/ADLM-QUIV-Revit-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-QUIV-Revit-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="docs/ADLM-QUIV-Revit-User-Guide.pdf" data-title="QUIV for Revit">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-QUIV-Revit-User-Guide.pdf" data-title="QUIV for Revit">
                     Preview
                   </button>
                   {" "}
@@ -1991,14 +1991,14 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <Link to="/docs/ADLM-RateGen-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-RateGen-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="docs/ADLM-RateGen-User-Guide.pdf" data-title="ADLM RateGen">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-RateGen-User-Guide.pdf" data-title="ADLM RateGen">
                     Preview
                   </button>
                   {" "}
@@ -2031,14 +2031,14 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <Link to="/docs/ADLM-Complete-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-Complete-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="docs/ADLM-Complete-User-Guide.pdf" data-title="Installer Hub &amp; HERON">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-Complete-User-Guide.pdf" data-title="Installer Hub &amp; HERON">
                     Preview
                   </button>
                   {" "}
@@ -2100,7 +2100,7 @@ export default function DsLearnPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Self-paced, delivered on the ADLM Studio platform, with weekly assessments to keep you moving. Support is available while you work through it.
+                Self-paced, delivered through Google Classroom, with weekly assessments to keep you moving. Support is available while you work through it.
               </div>
               {" "}
             </details>

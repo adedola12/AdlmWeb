@@ -90,6 +90,8 @@ const PAGES = [
   { src: "src/login.html", name: "DsLogin", slug: "login" },
   { src: "src/signup.html", name: "DsSignup", slug: "signup" },
   { src: "src/verify.html", name: "DsVerify", slug: "verify" },
+  // 17 Sep: the public certificate check a QR code on a certificate opens.
+  { src: "src/certificate.html", name: "DsCertificateCheck", slug: "certificate" },
   { src: "src/cart.html", name: "DsCart", slug: "cart" },
   { src: "src/checkout.html", name: "DsCheckout", slug: "checkout" },
   { src: "src/thanks.html", name: "DsThanks", slug: "thanks" },
@@ -104,6 +106,10 @@ const PAGES = [
   { src: "src/dash-learning.html", name: "DsDashLearning", slug: "dash-learning" },
   { src: "src/dash-course.html", name: "DsDashCourse", slug: "dash-course" },
   { src: "src/dash-certificates.html", name: "DsDashCertificates", slug: "dash-certificates" },
+  // Added upstream 17 September: assignments get a page of their own, and
+  // Guides & docs stops pointing at Downloads.
+  { src: "src/dash-assignments.html", name: "DsDashAssignments", slug: "dash-assignments" },
+  { src: "src/dash-guides.html", name: "DsDashGuides", slug: "dash-guides" },
   { src: "src/dash-settings.html", name: "DsDashSettings", slug: "dash-settings" },
   { src: "src/dash-support.html", name: "DsDashSupport", slug: "dash-support" },
   { src: "src/dash-team.html", name: "DsDashTeam", slug: "dash-team" },
@@ -114,6 +120,8 @@ const PAGES = [
   // ── Work surface (his work-*) ───────────────────────────────────────────
   { src: "src/work-home.html", name: "DsWorkHome", slug: "work-home" },
   { src: "src/work-projects.html", name: "DsWorkProjects", slug: "work-projects" },
+  // 17 Sep: the projects that started in one tool (QUIV, HERON, Revit MEP).
+  { src: "src/work-tool.html", name: "DsWorkTool", slug: "work-tool" },
   { src: "src/work-project.html", name: "DsWorkProject", slug: "work-project" },
   { src: "src/work-library.html", name: "DsWorkLibrary", slug: "work-library" },
   { src: "src/work-rate.html", name: "DsWorkRate", slug: "work-rate" },
@@ -564,8 +572,9 @@ const RAIL_EDITS = [
   { find: '<span class="dsh-avi">AP</span>', replace: '<span class="dsh-avi">@@d.initials@@</span>' },
   { find: "<b>Adeyemi &amp; Partners</b>", replace: "<b>@@d.orgName@@</b>" },
   { find: "<span>Quantity Surveyors · Lagos</span>", replace: "<span>@@d.orgSub@@</span>" },
-  { find: 'Projects <span class="tail">2</span>', replace: 'Projects <span class="tail">@@d.projects@@</span>' },
-  { find: 'Rate library <span class="tail">13</span>', replace: 'Rate library <span class="tail">@@d.rates@@</span>' },
+  // 17 Sep: the rate library left the rail (RateGen sits under My tools) and
+  // his sample project count went from 2 to 5.
+  { find: 'Projects <span class="tail">5</span>', replace: 'Projects <span class="tail">@@d.projects@@</span>' },
   { find: 'Certificates <span class="tail">1</span>', replace: 'Certificates <span class="tail">@@d.certificates@@</span>' },
   { find: 'seats <span class="tail">3 of 7</span>', replace: 'seats <span class="tail">@@d.seats@@</span>' },
   { find: 'Team <span class="tail">3/5</span>', replace: 'Team <span class="tail">@@d.team@@</span>' },

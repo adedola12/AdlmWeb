@@ -101,10 +101,17 @@ export const MAP = {
   // catalogue and this screen links there.
   "dash-learning": "/dash-learning",
   "dash-certificates": "/dash-certificates",
+  "dash-assignments": "/dash-assignments",
+  // Guides & docs, its own page since 17 Sep. Downloads keeps installers only.
+  "dash-guides": "/manage/guides",
+  // The public check a certificate's QR code opens.
+  certificate: "/certificate",
   "dash-course": "/dash-course/:sku",
   "dash-emails": null, // an internal email preview harness, not a public route
   "work-home": "/work",
   "work-projects": "/work/projects",
+  // One tool's projects; his ?t=quiv|heron|mep is kept on the link.
+  "work-tool": "/work/tool",
   "work-project": "/projects/:tool",
   // Rate library and Programme are RateGen and Time Pro under his names — the
   // screens exist, so these keep pointing at the real ones rather than growing

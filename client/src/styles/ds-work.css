@@ -900,3 +900,33 @@
 .ds .st-explain{margin:6px 0 0;font-size:12.5px;font-weight:300;color:var(--ink-3);line-height:1.65;
   max-width:80ch}
 .ds .st-explain b{font-weight:500;color:var(--ink-2)}
+
+
+/* ---- My tools: the collapsible group in the Work rail (17 Sep 2026) ----
+   Tools are where projects START (QUIV, HERON, Revit MEP) plus RateGen, which
+   prices anything. Tools the account does not pay for stay visible, greyed,
+   so the suite is legible; a small, dismissible card now and then says why
+   one might be worth having. */
+.ds .dsh-grp-b{display:flex;align-items:center;gap:11px;width:100%;padding:9px 12px;border:0;border-radius:11px;background:none;
+  font:400 14px var(--font);color:var(--ink-2);cursor:pointer;text-align:left}
+.ds .dsh-grp-b:hover{background:var(--pal-light-wash);color:var(--ink)}
+.ds .dsh-grp-b svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;opacity:.75}
+.ds .dsh-grp-b .caret{margin-left:auto;width:7px;height:7px;border-right:1.6px solid var(--ink-3);border-bottom:1.6px solid var(--ink-3);
+  transform:rotate(45deg) translate(-2px,-2px);transition:transform 220ms var(--e-out)}
+.ds .dsh-tools.shut .dsh-grp-b .caret{transform:rotate(-45deg)}
+.ds .dsh-tools.shut .dsh-sub, .ds .dsh-tools.shut .dsh-promo{display:none}
+.ds .dsh-tools.here > .dsh-grp-b{color:var(--ink);font-weight:500}
+.ds .dsh-promo{position:relative;margin:8px 4px 4px 12px;padding:12px 12px 12px;border-radius:12px;border:1px solid var(--line);
+  background-image:var(--card-fill);font-size:12px;line-height:1.5;color:var(--ink-2)}
+.ds .dsh-promo b{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-promo b img{width:18px;height:18px}
+.ds .dsh-promo p{margin:4px 0 8px;font-weight:300}
+.ds .dsh-promo a{font-size:12px;font-weight:500;color:var(--action);text-decoration:none}
+.ds .dsh-promo button{position:absolute;top:6px;right:6px;width:22px;height:22px;border:0;border-radius:6px;background:none;cursor:pointer;
+  color:var(--ink-3);font-size:15px;line-height:1}
+.ds .dsh-promo button:hover{background:var(--bg-alt)}
+.ds .rail-tight .dsh-grp-b{justify-content:center;padding:9px}
+.ds .rail-tight .dsh-grp-b .lb, .ds .rail-tight .dsh-grp-b .caret, .ds .rail-tight .dsh-promo{display:none}
+.ds .rail-tight .dsh-sub{padding-left:0}
+.ds .rail-tight .dsh-sub a{justify-content:center}
+.ds .rail-tight .dsh-sub .add, .ds .rail-tight .dsh-sub .soon{display:none}
