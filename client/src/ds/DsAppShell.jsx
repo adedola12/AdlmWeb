@@ -24,7 +24,8 @@ import { isStaff } from "../utils/roles.js";
 import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
-import DsRail from "./chrome/DsRail.jsx";
+import DsRailNav from "./DsRailNav.jsx";
+import { activeRailId } from "../lib/railActive.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
 
 // His app screens load dash.css and work.css on top of site.css. Importing
@@ -150,27 +151,15 @@ export default function DsAppShell({ children, title = "", page = "" }) {
     team: "",
   };
 
-  // His dash.js marks the current item with `.on` by comparing his page names.
-  // Two things have to match here, because the rail is used from two places:
-  // on a real route the current path is what identifies the screen, but under
-  // /preview/* the path is /preview/<slug> while the rail links at /manage/*,
-  // and comparing those marks nothing at all. His page name — which the porter
-  // records on every link as data-ds-page — identifies the screen in both.
+  // The current rail item: an exact match of this route against the rail
+  // config (lib/railActive.js), falling back to the screen's page name only
+  // when its route is not in the rail. One item at most (R04).
+  const activeId = activeRailId({
+    pathname: location.pathname,
+    search: location.search,
+    page,
+  });
   const railRef = React.useRef(null);
-  React.useEffect(() => {
-    const root = railRef.current;
-    if (!root) return;
-    const here = location.pathname;
-    root.querySelectorAll("a[href]").forEach((a) => {
-      const to = a.getAttribute("href");
-      const on = page
-        ? a.getAttribute("data-ds-page") === page
-        : to === here || (to !== "/" && here.startsWith(`${to}/`));
-      a.classList.toggle("on", on);
-      if (on) a.setAttribute("aria-current", "page");
-      else a.removeAttribute("aria-current");
-    });
-  }, [location.pathname, page, counts]);
 
   // Below 1000px his rail is a fixed drawer that slides in on `.open`. The
   // class has to land on .dsh-rail itself — the host above renders as
@@ -210,7 +199,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             if (e.target.closest("a")) setDrawer(false);
           }}
         >
-          <DsRail d={d} />
+          <DsRailNav activeId={activeId} d={d} onSignOut={signOut} />
         </div>
 
         <div className="dsh-main">

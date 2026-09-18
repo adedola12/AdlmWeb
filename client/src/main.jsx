@@ -134,6 +134,7 @@ const ManageProducts = React.lazy(() => import("./pages/ManageProducts.jsx"));
 const ManageTeam = React.lazy(() => import("./pages/ManageTeam.jsx"));
 const ManageBilling = React.lazy(() => import("./pages/ManageBilling.jsx"));
 const ManageDownloads = React.lazy(() => import("./pages/ManageDownloads.jsx"));
+const ManageGuides = React.lazy(() => import("./pages/ManageGuides.jsx"));
 const ManageSettings = React.lazy(() => import("./pages/ManageSettings.jsx"));
 const WorkHome = React.lazy(() => import("./pages/WorkHome.jsx"));
 const WorkProjects = React.lazy(() => import("./pages/WorkProjects.jsx"));
@@ -329,6 +330,7 @@ const router = createBrowserRouter([
         { path: "manage/team", el: <ManageTeam /> },
         { path: "manage/billing", el: <ManageBilling /> },
         { path: "manage/downloads", el: <ManageDownloads /> },
+        { path: "manage/guides", el: <ManageGuides /> },
         { path: "manage/settings", el: <ManageSettings /> },
         // The Work group. Organised by project rather than by product, which
         // is the whole architectural point of the surface.

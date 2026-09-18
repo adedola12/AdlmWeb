@@ -78,6 +78,16 @@ export default function AiAgent() {
   const { user, accessToken } = useAuth();
 
   const [open, setOpen] = React.useState(false);
+
+  // Richard's screens carry "Ask Ada" buttons marked data-ada-open (the rail,
+  // Guides & docs). Any of them opens this panel.
+  React.useEffect(() => {
+    const onClick = (e) => {
+      if (e.target.closest?.("[data-ada-open]")) setOpen(true);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [messages, setMessages] = React.useState(() => [

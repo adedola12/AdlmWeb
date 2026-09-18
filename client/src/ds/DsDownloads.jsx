@@ -304,43 +304,20 @@ export default function DsDownloads() {
         </div>
 
         <div>
+          {/* Guides moved to their own page on 17 Sep (his dash-guides), so
+              Downloads holds installers only and points across. */}
           <section className="dsh-panel">
             <div className="dsh-ph">
-              <h2>Guides</h2>
+              <h2>User guides</h2>
+              <Link className="more" to="/manage/guides">
+                Guides &amp; docs
+              </Link>
             </div>
             <div className="dsh-body">
-              {hub.guideUrl ? (
-                <div className="dsh-dl">
-                  <span className="ic">{icon("doc")}</span>
-                  <div className="nm">
-                    <b>Installer Hub user guide</b>
-                    <span>PDF · installing, updating and activation</span>
-                  </div>
-                  <a className="ds-btn btn-o ds-btn-sm" href={hub.guideUrl} target="_blank" rel="noreferrer">
-                    PDF
-                  </a>
-                </div>
-              ) : null}
-              <div className="dsh-dl">
-                <span className="ic">{icon("doc")}</span>
-                <div className="nm">
-                  <b>What&apos;s New</b>
-                  <span>Every change that has shipped, product by product</span>
-                </div>
-                <Link className="ds-btn btn-o ds-btn-sm" to="/whats-new">
-                  Read
-                </Link>
-              </div>
-              <div className="dsh-dl">
-                <span className="ic">{icon("doc")}</span>
-                <div className="nm">
-                  <b>Support</b>
-                  <span>Raise a ticket, or get a remote session</span>
-                </div>
-                <Link className="ds-btn btn-o ds-btn-sm" to="/support">
-                  Open
-                </Link>
-              </div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 300, color: "var(--ink-2)", lineHeight: 1.6 }}>
+                The guides for QUIV, RateGen, HERON and the Installer Hub live under Learn, where you can read
+                them in the browser as well as download them.
+              </p>
             </div>
           </section>
 
