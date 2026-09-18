@@ -1,0 +1,152 @@
+// Material, labour and plant prices for the sample projects (Naira, south-west
+// Nigeria, September 2026), and the unit build-up behind every bill rate.
+//
+// A bill rate is never typed in: it is the build-up's net cost plus overhead and
+// profit, the same arithmetic util/deriveBillRates.js applies to a real
+// project's Budget tab. So the sample's Bill and Budget always agree.
+
+export const OVERHEAD_PERCENT = 10;
+export const PROFIT_PERCENT = 15;
+
+// [name, unit, price, componentKind]
+export const PRICES = {
+  cement: ["Cement (50kg bag)", "bag", 9800, "Material"],
+  sand: ["Sharp sand", "m3", 24000, "Material"],
+  granite: ["Granite 3/4 inch", "m3", 58000, "Material"],
+  granite38: ["Granite 3/8 inch", "m3", 55000, "Material"],
+  rebar: ["High yield reinforcement bars", "kg", 1180, "Material"],
+  wire: ["Binding wire", "kg", 3200, "Material"],
+  brc: ["BRC mesh A142", "m2", 3600, "Material"],
+  plywood: ["Marine plywood 18mm", "sheet", 27500, "Material"],
+  hw2x3: ["Hardwood 2x3 inch x 12ft", "length", 4200, "Material"],
+  hw2x4: ["Hardwood 2x4 inch x 12ft", "length", 5800, "Material"],
+  hw2x6: ["Hardwood 2x6 inch x 12ft", "length", 9200, "Material"],
+  nails: ["Assorted nails", "kg", 2300, "Material"],
+  block9: ["225mm (9 inch) sandcrete block", "nr", 950, "Material"],
+  block6: ["150mm (6 inch) sandcrete block", "nr", 780, "Material"],
+  laterite: ["Laterite filling", "m3", 12500, "Material"],
+  dpm: ["Polythene DPM 1000 gauge", "m2", 850, "Material"],
+  termite: ["Anti-termite solution", "litre", 14000, "Material"],
+  emulsion: ["Emulsion paint", "litre", 3600, "Material"],
+  texcote: ["Textured coating (Texcote)", "litre", 5200, "Material"],
+  floorTile: ["Ceramic floor tiles 600x600", "m2", 13500, "Material"],
+  wallTile: ["Ceramic wall tiles 300x600", "m2", 14500, "Material"],
+  adhesive: ["Tile adhesive (20kg bag)", "bag", 11500, "Material"],
+  grout: ["Tile grout", "kg", 1800, "Material"],
+  pop: ["POP (plaster of Paris) powder", "bag", 7800, "Material"],
+  popFibre: ["POP fibre and binding", "item", 350, "Consumable"],
+  sheet: ["0.55mm longspan aluminium roofing sheet", "m2", 8200, "Material"],
+  screws: ["Roofing screws with washers", "nr", 60, "Material"],
+  fascia: ["PVC fascia board", "m", 9800, "Material"],
+  ridge: ["Aluminium ridge cap", "m", 7500, "Material"],
+  doorMain: ["Steel security double door 1200x2400", "nr", 520000, "Material"],
+  doorKitchen: ["Steel single door 900x2100", "nr", 295000, "Material"],
+  doorFlush: ["Flush door 900x2100 with hardwood frame", "nr", 98000, "Material"],
+  ironmongery: ["Lockset, hinges and door stop", "set", 32000, "Material"],
+  window12: ["Aluminium casement window 1200x1200", "nr", 138000, "Material"],
+  window18: ["Aluminium casement window 1800x1200", "nr", 196000, "Material"],
+  sealant: ["Silicone sealant", "tube", 4500, "Consumable"],
+  bentonite: ["Bentonite and temporary casing", "m", 3500, "Consumable"],
+  // Labour and plant, per unit of the bill line.
+  labConcrete: ["Mix, place and compact concrete", "m3", 22000, "Labour"],
+  labPile: ["Place pile concrete by tremie", "m3", 30000, "Labour"],
+  plantMixer: ["Concrete mixer and poker vibrator", "m3", 4500, "Plant"],
+  labRebar: ["Cut, bend and fix reinforcement", "kg", 170, "Labour"],
+  labBrc: ["Lay BRC mesh", "m2", 400, "Labour"],
+  labFormwork: ["Erect and strike formwork", "m2", 3200, "Labour"],
+  labBlock225: ["Lay 225mm blockwork", "m2", 2100, "Labour"],
+  labBlock150: ["Lay 150mm blockwork", "m2", 1800, "Labour"],
+  labExcavate: ["Excavate by hand", "m3", 6500, "Labour"],
+  plantExcavator: ["Excavator hire", "m3", 3800, "Plant"],
+  labSupport: ["Earthwork support", "m2", 1500, "Labour"],
+  labBackfill: ["Backfill and ram in layers", "m3", 3800, "Labour"],
+  plantCompactor: ["Plate compactor", "m3", 900, "Plant"],
+  plantTipper: ["Tipper to cart away", "m3", 5500, "Plant"],
+  labClear: ["Clear site and grub up roots", "m2", 450, "Labour"],
+  labHardcore: ["Spread and compact hardcore", "m3", 3200, "Labour"],
+  labDpm: ["Lay DPM with 150mm laps", "m2", 250, "Labour"],
+  labTermite: ["Apply anti-termite treatment", "m2", 300, "Labour"],
+  labPlaster: ["Plaster 15mm internal", "m2", 1900, "Labour"],
+  labRender: ["Render 20mm external", "m2", 2300, "Labour"],
+  labScreed: ["Lay 25mm screed", "m2", 1100, "Labour"],
+  labFloorTile: ["Lay floor tiles", "m2", 3200, "Labour"],
+  labWallTile: ["Fix wall tiles", "m2", 3600, "Labour"],
+  labSkirting: ["Fix tile skirting", "m", 700, "Labour"],
+  labPop: ["Fix POP ceiling", "m2", 2600, "Labour"],
+  labPaint: ["Apply three coats emulsion", "m2", 950, "Labour"],
+  labTexcote: ["Apply textured coating", "m2", 1200, "Labour"],
+  labRoofTimber: ["Roof carpentry", "m2", 2400, "Labour"],
+  labSheet: ["Fix roofing sheets", "m2", 1700, "Labour"],
+  labFascia: ["Fix fascia board", "m", 1200, "Labour"],
+  labRidge: ["Fix ridge cap", "m", 900, "Labour"],
+  labDoor: ["Hang door and fix ironmongery", "nr", 18000, "Labour"],
+  labDoorSteel: ["Install steel door", "nr", 35000, "Labour"],
+  labWindow: ["Install window", "nr", 15000, "Labour"],
+  plantPileRig: ["Piling rig and crew", "m", 26000, "Plant"],
+  labPileCut: ["Cut off pile head and trim reinforcement", "nr", 18000, "Labour"],
+};
+
+// Build-ups: [priceKey, quantity per ONE unit of the bill line].
+export const BUILDUPS = {
+  siteClear: [["labClear", 1]],
+  excavate: [["labExcavate", 0.6], ["plantExcavator", 0.4]],
+  support: [["hw2x3", 0.25], ["labSupport", 1]],
+  backfill: [["labBackfill", 1], ["plantCompactor", 1]],
+  disposal: [["plantTipper", 1]],
+  termite: [["termite", 0.06], ["labTermite", 1]],
+  blinding: [["cement", 4.3], ["sand", 0.47], ["granite38", 0.94], ["labConcrete", 0.8]],
+  concrete20: [["cement", 6.4], ["sand", 0.46], ["granite", 0.92], ["labConcrete", 1], ["plantMixer", 1]],
+  concrete25: [["cement", 8.0], ["sand", 0.44], ["granite", 0.88], ["labConcrete", 1], ["plantMixer", 1]],
+  concrete30: [["cement", 10.5], ["sand", 0.42], ["granite", 0.84], ["labPile", 1], ["plantMixer", 1]],
+  rebar: [["rebar", 1.05], ["wire", 0.012], ["labRebar", 1]],
+  brc: [["brc", 1.15], ["wire", 0.01], ["labBrc", 1]],
+  formwork: [["plywood", 0.3], ["hw2x3", 0.9], ["nails", 0.2], ["labFormwork", 1]],
+  block225: [["block9", 10.5], ["cement", 0.35], ["sand", 0.035], ["labBlock225", 1]],
+  block150: [["block6", 10.5], ["cement", 0.27], ["sand", 0.027], ["labBlock150", 1]],
+  hardcore: [["laterite", 1.3], ["labHardcore", 1], ["plantCompactor", 1]],
+  dpm: [["dpm", 1.15], ["labDpm", 1]],
+  pileBore: [["plantPileRig", 1], ["bentonite", 1]],
+  pileCut: [["labPileCut", 1]],
+  plaster: [["cement", 0.13], ["sand", 0.021], ["labPlaster", 1]],
+  render: [["cement", 0.2], ["sand", 0.026], ["labRender", 1]],
+  screed: [["cement", 0.25], ["sand", 0.03], ["labScreed", 1]],
+  floorTile: [["floorTile", 1.05], ["adhesive", 0.22], ["grout", 0.25], ["labFloorTile", 1]],
+  wallTile: [["wallTile", 1.08], ["adhesive", 0.25], ["grout", 0.3], ["labWallTile", 1]],
+  skirting: [["floorTile", 0.11], ["adhesive", 0.03], ["labSkirting", 1]],
+  pop: [["pop", 0.4], ["popFibre", 1], ["labPop", 1]],
+  paint: [["emulsion", 0.38], ["labPaint", 1]],
+  texcote: [["texcote", 0.45], ["labTexcote", 1]],
+  roofTimber: [["hw2x4", 0.55], ["hw2x3", 0.35], ["hw2x6", 0.08], ["nails", 0.15], ["termite", 0.03], ["labRoofTimber", 1]],
+  roofSheet: [["sheet", 1.12], ["screws", 6], ["labSheet", 1]],
+  fascia: [["fascia", 1.05], ["labFascia", 1]],
+  ridge: [["ridge", 1.05], ["labRidge", 1]],
+  doorMain: [["doorMain", 1], ["labDoorSteel", 1]],
+  doorKitchen: [["doorKitchen", 1], ["labDoorSteel", 1]],
+  doorFlush: [["doorFlush", 1], ["ironmongery", 1], ["labDoor", 1]],
+  window12: [["window12", 1], ["sealant", 1], ["labWindow", 1]],
+  window18: [["window18", 1], ["sealant", 1.5], ["labWindow", 1]],
+};
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// Net cost of ONE unit of a build-up, before overhead and profit.
+export function netUnitCost(buildupKey) {
+  const rows = BUILDUPS[buildupKey];
+  if (!rows) throw new Error(`Unknown build-up: ${buildupKey}`);
+  return rows.reduce((a, [k, coeff]) => a + coeff * PRICES[k][2], 0);
+}
+
+// The Budget lines behind one bill line of quantity `billQty`.
+export function budgetLinesFor(buildupKey, billQty) {
+  return BUILDUPS[buildupKey].map(([k, coeff]) => {
+    const [name, unit, price, kind] = PRICES[k];
+    return {
+      priceKey: k,
+      materialName: name,
+      unit,
+      qty: round2(coeff * billQty),
+      rate: price,
+      componentKind: kind,
+    };
+  });
+}

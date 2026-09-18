@@ -21,6 +21,7 @@ import { bestMatch, normalizeTaskName } from "../util/fuzzyMatch.js";
 import { TaskLinkLearned } from "../models/TaskLinkLearned.js";
 import { deriveItemCategory, UNCATEGORIZED } from "../util/boqCategory.js";
 import { isApprovedVariation } from "../util/variationStatus.js";
+import { rejectSampleWrites } from "../util/sampleProjects.js";
 
 const PM_IMPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 const importUpload = multer({
@@ -35,6 +36,8 @@ const importUpload = multer({
 
 const router = express.Router();
 router.use(requireAuth);
+// Sample projects are read-only for everyone (util/sampleProjects.js).
+router.param("id", rejectSampleWrites);
 
 function normalizeProductKey(v) {
   return String(v || "")
@@ -71,12 +74,13 @@ function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(String(id));
 }
 
-// Owner-or-collaborator read filter — mirrors accessFilter() in projects.js.
+// Owner-or-collaborator read filter — mirrors accessFilter() in projects.js,
+// including the read-only sample projects every subscriber can open.
 function accessFilter(id, userId, productKey) {
   return {
     _id: id,
     productKey,
-    $or: [{ userId }, { "collaborators.userId": userId }],
+    $or: [{ userId }, { "collaborators.userId": userId }, { isSample: true }],
   };
 }
 
@@ -288,6 +292,20 @@ async function loadProject(req, res, { requireEdit = false } = {}) {
   if (!project) {
     res.status(404).json({ error: "Not found" });
     return null;
+  }
+
+  // Samples are learning material: the whole schedule is on show (no RateGen
+  // gate), and nothing is editable.
+  if (project.isSample) {
+    if (requireEdit) {
+      res.status(403).json({
+        error: "Sample projects are read-only learning material.",
+        code: "SAMPLE_READ_ONLY",
+      });
+      return null;
+    }
+    if (!project.projectManagement) project.projectManagement = {};
+    return project;
   }
 
   const isOwner = project.userId && userId.equals(project.userId);

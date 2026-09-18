@@ -55,6 +55,7 @@ import {
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
 const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" };
 const NOTE_FULL = { gridColumn: "1 / -1", margin: 0 };
+import SampleProjectsStrip from "../features/projects/SampleProjectsStrip.jsx";
 import {
   allCategoriesForProductKey,
   deriveItemCategory,
@@ -1162,6 +1163,8 @@ export default function ProjectsGeneric() {
   // failure relabels an empty grid "your projects could not be listed".
   const [listFailed, setListFailed] = React.useState(false);
   const [storageInfo, setStorageInfo] = React.useState(null);
+  // Read-only learning samples for this product (GET /projects/:tool/samples).
+  const [samples, setSamples] = React.useState([]);
 
   // explorer selection
   const [selectedMap, setSelectedMap] = React.useState({});
@@ -2185,15 +2188,23 @@ export default function ProjectsGeneric() {
     setListFailed(false);
 
     try {
-      const [list, storage] = await Promise.all([
+      const [list, storage, sampleList] = await Promise.all([
         apiAuthed(endpoints.list, { token: accessToken }),
         isMaterialsTool(tool)
           ? Promise.resolve(null)
           : apiAuthed(`/projects/${normTool(tool)}/storage`, { token: accessToken }).catch(() => null),
+        isMaterialsTool(tool)
+          ? Promise.resolve([])
+          : apiAuthed(`/projects/${normTool(tool)}/samples`, { token: accessToken }).catch(() => []),
       ]);
       const safeList = Array.isArray(list) ? list : [];
+      const safeSamples = Array.isArray(sampleList) ? sampleList : [];
       if (storage) setStorageInfo(storage);
       setRows(safeList);
+      setSamples(safeSamples);
+      // Samples are openable like any project but never join the grid, so the
+      // bulk select / delete / merge actions can't reach them.
+      const openable = [...safeList, ...safeSamples];
 
       if (!keepSelection) setSelectedMap({});
 
@@ -2203,12 +2214,12 @@ export default function ProjectsGeneric() {
         const isObjectId = /^[a-f\d]{24}$/i.test(preselectKey);
         if (isObjectId) {
           // Legacy: load by ObjectId
-          const found = safeList.find((x) => rowId(x) === preselectKey);
+          const found = openable.find((x) => rowId(x) === preselectKey);
           if (found) await view(preselectKey);
           else closeProject();
         } else {
           // New: load by slug
-          const found = safeList.find((x) => x.slug === preselectKey);
+          const found = openable.find((x) => x.slug === preselectKey);
           if (found) await view(rowId(found));
           else {
             // Try loading by slug from server directly
@@ -2229,7 +2240,7 @@ export default function ProjectsGeneric() {
       } else {
         // keep current open project if still valid
         if (selectedId) {
-          const stillThere = safeList.some((x) => rowId(x) === selectedId);
+          const stillThere = openable.some((x) => rowId(x) === selectedId);
           if (!stillThere) closeProject();
         }
       }
@@ -5751,6 +5762,8 @@ export default function ProjectsGeneric() {
 
         <main>
             {!sel ? (
+              <>
+              <SampleProjectsStrip samples={samples} onOpenProject={view} />
               <ProjectExplorerGrid
                 rowsShown={rowsShown}
                 selectedIdsCount={selectedIds.length}
@@ -5786,6 +5799,7 @@ export default function ProjectsGeneric() {
                 hostName={gallerySource?.host || ""}
                 isMaterials={showMaterials}
               />
+              </>
             ) : (
               <ProjectOpenView
                 actualCoverageCount={actualCoverageCount}
@@ -5938,6 +5952,7 @@ export default function ProjectsGeneric() {
                 projectId={selectedId}
                 accessToken={accessToken}
                 access={sel?._access}
+                sampleInfo={sel?.isSample ? sel?.sample || {} : null}
                 linkedSummaries={sel?.linkedSummaries || []}
                 onLinkedChange={(updated) => setSel(updated)}
                 onDeleteItem={deleteItem}
