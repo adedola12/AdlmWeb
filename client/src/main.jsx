@@ -181,6 +181,7 @@ import { landingRoutes } from "./pages/landing/routes.jsx";
 // page never means editing this file.
 import DsPreview from "./ds/DsPreview.jsx";
 import DsPreviewGate from "./ds/DsPreviewGate.jsx";
+import PreviewHostGate from "./components/PreviewHostGate.jsx";
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
@@ -1179,7 +1180,10 @@ const tree = (
     <ThemeProvider>
       <AuthProvider>
         <StepUpProvider>
-          <RouterProvider router={router} />
+          {/* preview.adlmstudio.com and other non-live hosts: admin roles only. */}
+          <PreviewHostGate router={router}>
+            <RouterProvider router={router} />
+          </PreviewHostGate>
         </StepUpProvider>
       </AuthProvider>
     </ThemeProvider>
