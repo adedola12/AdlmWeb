@@ -1,4 +1,5 @@
 import express from "express";
+import { ensureCertificateRef } from "../util/certificateRef.js";
 import { alertCount } from "../util/assignmentAlerts.js";
 import { myAssignments } from "../util/myAssignments.js";
 import { checkSubmissionFile, submissionKey } from "../util/submissionFiles.js";
@@ -23,6 +24,27 @@ import { LessonNote } from "../models/LessonNote.js";
 
 const router = express.Router();
 router.use(requireAuth);
+
+// R14: the certificate shows the stored reference, the one GET /verify/:ref
+// checks. An issued certificate without one gets it now, saved.
+async function withStoredRef(enrollment) {
+  enrollment.certificateRef = await ensureCertificateRef(enrollment, (ref) =>
+    CourseEnrollment.updateOne({ _id: enrollment._id, certificateRef: { $in: ["", null] } }, { $set: { certificateRef: ref } }),
+  );
+  return enrollment;
+}
+
+// R14: light or dark, the holder's choice, changeable any time.
+router.post("/:sku/certificate-finish", async (req, res) => {
+  const finish = String(req.body?.finish || "");
+  if (!["dark", "light"].includes(finish)) return res.status(400).json({ error: "The finish is light or dark." });
+  const r = await CourseEnrollment.updateOne(
+    { userId: req.user._id, courseSku: req.params.sku },
+    { $set: { certificateFinish: finish } },
+  );
+  if (!r.matchedCount) return res.status(404).json({ error: "Not enrolled" });
+  res.json({ ok: true, finish });
+});
 
 // R11: every assignment across the learner's courses, with state (to do, due
 // soon, overdue, submitted, marked) and new alerts. Before /:sku routes so
@@ -253,18 +275,6 @@ async function loadCourseContext(userId, skus) {
  * Deterministic, so the card, the PDF and any future verification page all
  * quote the same string for the same enrolment.
  */
-function certificateRef(enrollment) {
-  if (!enrollment?.certificateIssuedAt && enrollment?.status !== "completed") return "";
-  const sku = String(enrollment.courseSku || "");
-  // The leading alpha run of the sku: "bim-bld-arch" -> BIM, "rates-2d" -> RATES.
-  const tag = (sku.match(/^[a-zA-Z]+/)?.[0] || "ADLM").toUpperCase().slice(0, 5);
-  const year = new Date(
-    enrollment.certificateIssuedAt || enrollment.updatedAt || Date.now(),
-  ).getFullYear();
-  const tail = String(enrollment._id || "").slice(-4).toUpperCase();
-  return `ADLM-${tag}-${year}-${tail}`;
-}
-
 function buildCourseResponse(enrollment, context) {
   const fallbackCourse = {
     sku: enrollment.courseSku,
@@ -314,7 +324,7 @@ function buildCourseResponse(enrollment, context) {
   return {
     enrollment: {
       ...enrollment,
-      certificateRef: certificateRef(enrollment),
+      certificateRef: enrollment.certificateRef || "",
       accessStartedAt: toIso(startedAt),
       accessExpiresAt: toIso(expiresAt),
       lastProgressAt: toIso(enrollment.lastProgressAt),
@@ -337,6 +347,7 @@ router.get("/", async (req, res) => {
 
   const skus = [...new Set(enrollments.map((item) => item.courseSku).filter(Boolean))];
   const context = await loadCourseContext(req.user._id, skus);
+  await Promise.all(enrollments.map(withStoredRef));
   const out = enrollments.map((enrollment) => buildCourseResponse(enrollment, context));
   res.json(out);
 });
@@ -458,6 +469,7 @@ router.get("/:sku", async (req, res) => {
   if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
 
   const context = await loadCourseContext(req.user._id, [sku]);
+  await withStoredRef(enrollment);
   const response = buildCourseResponse(enrollment, {
     ...context,
     coursesBySku: { ...context.coursesBySku, [sku]: course },

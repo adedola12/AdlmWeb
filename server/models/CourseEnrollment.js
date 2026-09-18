@@ -10,6 +10,9 @@ const CourseEnrollmentSchema = new mongoose.Schema(
     // When the learner last opened each assignment (R11): an alert older than
     // this is no longer new, so opening it clears the red dot.
     assignmentSeen: { type: Map, of: Date, default: {} },
+    // R14: the certificate's finish, chosen by the holder and changeable any
+    // time (Richard's light and dark templates). Only the look changes.
+    certificateFinish: { type: String, enum: ["dark", "light"], default: "dark" },
     certificateUrl: { type: String },
     certificateIssuedAt: { type: Date },
 

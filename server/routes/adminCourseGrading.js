@@ -1,4 +1,5 @@
 import express from "express";
+import { refFor } from "../util/certificateRef.js";
 import { withFileLinks } from "../util/submissionLinks.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
@@ -74,6 +75,8 @@ router.post("/submissions/:id/grade", async (req, res) => {
         enr.status = "completed";
         enr.certificateUrl = certUrl;
         enr.certificateIssuedAt = new Date();
+        // The reference the certificate prints and /verify checks (R14).
+        if (!enr.certificateRef) enr.certificateRef = refFor(enr._id);
       }
 
       await enr.save();

@@ -28,6 +28,9 @@ Disallow: /portfolio-dashboard
 Disallow: /pm-tracker
 Disallow: /revit-projects
 Disallow: /projects/
+# The certificate check (R14): one lookup per certificate, useless from a
+# search, and his page is noindex.
+Disallow: /certificate
 Disallow: /archicad
 Disallow: /model-check/
 

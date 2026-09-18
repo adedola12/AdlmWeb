@@ -1510,3 +1510,17 @@
 .ds .dsh-main .lx-side{top:calc(var(--dash-bar) + 14px);max-height:calc(100dvh - var(--dash-bar) - 28px);overflow:auto;overscroll-behavior:contain}
 /* A #target inside the app lands below the sticky bar, not under it. */
 .ds .dsh-main [id]{scroll-margin-top:calc(var(--dash-bar) + 16px)}
+
+/* R14 — the certificate's name face (his cert.css). The porter drops every
+   @font-face, so it lives here. TODO(adlm): confirm the BALLW web-embedding
+   licence (Richard supplied the file); until then it falls back to the
+   script faces listed in ds-cert.css. */
+@font-face{font-family:"ADLM Signature";src:url("/ds/fonts/ballw.ttf") format("truetype");font-display:swap}
+/* His print wrapper sits directly under <body> so his print rule can hide
+   everything else; it carries .ds itself for the sheet's own rules. */
+.cx-print.ds{display:none}
+@media print{:root.cx-printing .cx-print.ds{display:block}}
+/* index.css puts Lexend on every element with !important, which would print
+   the holder's name in Lexend. The name, on the sheet and on the claim card's
+   check, is his signature face. */
+.ds .cx-sheet .nm,.ds .cx-big{font-family:"ADLM Signature","Brush Script MT",cursive !important}

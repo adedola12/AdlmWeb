@@ -191,6 +191,7 @@ import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
 const DsFit = React.lazy(() => import("./ds/DsFit.jsx"));
+const DsCertificateVerify = React.lazy(() => import("./ds/DsCertificateVerify.jsx"));
 import { DS_PAGES } from "./ds/pages/manifest.js";
 
 const router = createBrowserRouter([
@@ -1154,6 +1155,22 @@ const router = createBrowserRouter([
           </DsShellLazy>
         </React.Suspense>
       </DsPreviewGate>
+    ),
+    errorElement: <AppError />,
+  },
+
+  // R14: the public check a certificate's QR code opens. NOT staff-gated,
+  // unlike the rest of the redesign: whoever scans a certificate is an
+  // employer or a school with no account here. It shows only what is printed
+  // on the certificate (routes/verify.js).
+  {
+    path: "/certificate",
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>
+          <DsCertificateVerify />
+        </DsShellLazy>
+      </React.Suspense>
     ),
     errorElement: <AppError />,
   },
