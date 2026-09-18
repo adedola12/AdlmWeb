@@ -1,4 +1,5 @@
 import React from "react";
+import DsLaunchStrip from "./ds/DsLaunchStrip.jsx";
 import { Link, Outlet, useLocation, ScrollRestoration } from "react-router-dom";
 import { useAuth } from "./store.jsx";
 import Nav from "./components/Nav.jsx";
@@ -96,6 +97,9 @@ export default function App() {
           and the two sets of navigation compete for the same job. His own
           build does exactly that; it is on the snag list for him rather than
           reproduced here. */}
+      {/* R20: the launch countdown strip, on every public page, above the
+          fixed nav; hidden until config/launch.js has a date. */}
+      {!appShellRoute && <DsLaunchStrip />}
       {!appShellRoute && <Nav />}
 
       {/* Signed in but the email is not confirmed: say so on every page

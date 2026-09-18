@@ -8,6 +8,7 @@
 // none of ds.css applies, which is precisely what keeps un-ported pages safe.
 
 import React from "react";
+import DsLaunchStrip from "./DsLaunchStrip.jsx";
 import DsSprite from "./chrome/DsSprite.jsx";
 import DsNav from "./chrome/DsNav.jsx";
 import DsFooter from "./chrome/DsFooter.jsx";
@@ -34,6 +35,8 @@ export default function DsShell({ children, mapHref }) {
   return (
     <div className="ds" ref={ref}>
       <DsSprite />
+      {/* R20: the launch countdown, above his fixed nav (config/launch.js). */}
+      <DsLaunchStrip />
       <DsNav />
       {/* Every form in his markup is `action="thanks" method="get"` and sends
           nothing anywhere. Wiring it here rather than per page means each
