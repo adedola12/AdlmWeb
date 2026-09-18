@@ -205,6 +205,9 @@ const UserSchema = new mongoose.Schema(
     // opts in with .select("+paymentMethod.authorizationCode").
     paymentMethod: {
       provider: { type: String, default: "paystack" },
+      // The Paystack account the card was saved on (R22, util/paystackKeys.js).
+      // Blank on cards saved before, which are the personal account's.
+      account: { type: String, default: "" },
       authorizationCode: { type: String, select: false },
       signature: { type: String, select: false },
       last4: { type: String, default: "" },
