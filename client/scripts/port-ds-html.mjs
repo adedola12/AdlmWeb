@@ -465,13 +465,13 @@ const PAGE_EDITS = {
     courseEdit("BIM for Building Works", "bimbld"),
     courseEdit("BIM for MEP &amp; HVAC", "bimmep"),
     {
-      // The rest of the YouTube channel, shelved by software, directly under
-      // his nine tiles and their "Show more lessons" control. His tiles and
-      // filter row are untouched; DsFreeLibrary renders the shelves in his
-      // .lgrid/.ltile vocabulary. Wrapper: src/ds/custom/DsLearn.jsx.
-      label: "the full video library under his free-lesson tiles",
-      findRe: /(<div class="lmore">[\s\S]*?<\/div>)/,
-      replace: "$1@@d.library@@",
+      // R02: his filter row, lesson grid and "Show more lessons", drawn from
+      // the real YouTube library by DsLessonGrid in his own markup, in place
+      // of his nine demo tiles. The whole channel lives inside this section;
+      // nothing spills out underneath it any more. Wrapper: ds/custom/DsLearn.jsx.
+      label: "his free-lesson filters, tiles and Show more, on the real library",
+      findRe: /<div class="filters rise" id="lesson-filters">[\s\S]*?<div class="lmore">[\s\S]*?<\/div>/,
+      replace: "@@d.lessons@@",
     },
   ],
 

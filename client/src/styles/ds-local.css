@@ -1544,3 +1544,10 @@
 /* The suggestions now sit under the input, always (R17). */
 .ds .ada-chips-under{padding-top:0}
 .ds .ada-chips-under button:disabled{opacity:.5;cursor:default}
+
+/* R02: real lesson titles run long ("How to Install ADLM Softwares & Plugins |
+   From Purchase to Setup in 7 Minutes"). Clamped so a tile never spills and
+   every row keeps his height. */
+.ds .lrows .ltile h4{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ds .lrows .ltile p{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.ds .lmore .lcount a{color:var(--action)}
