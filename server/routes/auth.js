@@ -516,9 +516,28 @@ function maskEmail(email) {
   return `${shown}${"*".repeat(Math.max(1, name.length - shown.length))}${domain}`;
 }
 
-// Email a fresh 6-digit OTP for a God login (reuses the StepUpOtp store). If a
-// still-valid code was issued in the last 60s we keep it (no spam) — the user
-// already has a working code. Throws if the email send fails.
+// Send a God login OTP WITHOUT blocking the caller. The sign-in response must
+// not wait on a mail round-trip: the code is verified against the StepUpOtp
+// store, never against the email, so the challenge can be handed back the moment
+// the code is persisted. A slow SES send used to sit inside POST /auth/login and
+// added ~1s (much more on a cold container) to every admin sign-in. Errors are
+// logged, not surfaced — the sign-in screen has already advanced and offers a
+// resend.
+function fireGodOtpEmail(user, code) {
+  const safeName = user.firstName || user.username || user.email.split("@")[0];
+  sendMail({
+    to: user.email,
+    ...breakGlassCode({ firstName: safeName, code }),
+  }).catch((err) =>
+    console.error("[/auth/login] god OTP mail send failed:", err?.message || err),
+  );
+}
+
+// Ensure a God login has a fresh 6-digit OTP, then email it (fire-and-forget).
+// Only the DB write is awaited, so the login response is not held for SES. If a
+// still-valid code was issued in the last 60s we reuse it rather than mint a new
+// one, and re-send THAT code — so a first send that failed self-heals when the
+// user re-submits, without spawning a second live code.
 async function issueGodLoginOtp(user, req) {
   const recent = await StepUpOtp.findOne({
     userId: user._id,
@@ -526,7 +545,10 @@ async function issueGodLoginOtp(user, req) {
     expiresAt: { $gt: new Date() },
     createdAt: { $gt: new Date(Date.now() - 60 * 1000) },
   });
-  if (recent) return;
+  if (recent) {
+    fireGodOtpEmail(user, recent.code);
+    return;
+  }
 
   const code = String(crypto.randomInt(100000, 999999));
   await StepUpOtp.create({
@@ -536,11 +558,7 @@ async function issueGodLoginOtp(user, req) {
     requestedFromIp: req.ip,
   });
 
-  const safeName = user.firstName || user.username || user.email.split("@")[0];
-  await sendMail({
-    to: user.email,
-    ...breakGlassCode({ firstName: safeName, code }),
-  });
+  fireGodOtpEmail(user, code);
 }
 
 // Mint a license token for a God account on ANY product / device, bypassing
@@ -637,9 +655,12 @@ router.post("/login", async (req, res) => {
       }
 
       try {
+        // Only the OTP persistence is awaited here; the email is fired inside
+        // without blocking. A throw means the code could not be stored (DB), which
+        // is worth failing the sign-in for — a mail hiccup is not.
         await issueGodLoginOtp(user, req);
-      } catch (mailErr) {
-        console.error("[/auth/login] god OTP mail error:", mailErr);
+      } catch (otpErr) {
+        console.error("[/auth/login] god OTP setup error:", otpErr);
         return res.status(500).json({ error: "Unable to send sign-in code" });
       }
 
