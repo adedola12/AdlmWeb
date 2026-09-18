@@ -192,6 +192,26 @@ import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
 const DsFit = React.lazy(() => import("./ds/DsFit.jsx"));
 const DsCertificateVerify = React.lazy(() => import("./ds/DsCertificateVerify.jsx"));
+const DsTrainingCalendar = React.lazy(() => import("./ds/DsTrainingCalendar.jsx"));
+const DsBeyondBimStyles = React.lazy(() => import("./ds/DsBeyondBimStyles.jsx"));
+import DsFlagRoute from "./ds/DsFlagRoute.jsx";
+import DsComingSoon from "./ds/DsComingSoon.jsx";
+import { FLAGS } from "./config/flags.js";
+
+const dsPage = (slug) => {
+  const Page = DS_PAGES.find((p) => p.slug === slug)?.Component;
+  return Page ? <Page /> : null;
+};
+const BEYOND_BIM_SOON = (
+  <DsComingSoon
+    eyebrow="Beyond BIM · coming soon"
+    title="Beyond BIM, the modern roles of a"
+    tone="Quantity Surveyor"
+    lede="The programme page and registration open here soon."
+    primary={{ label: "Ask about the programme", to: "/contact" }}
+    secondary={{ label: "Browse free lessons", to: "/learn" }}
+  />
+);
 import { DS_PAGES } from "./ds/pages/manifest.js";
 
 const router = createBrowserRouter([
@@ -1171,6 +1191,49 @@ const router = createBrowserRouter([
           <DsCertificateVerify />
         </DsShellLazy>
       </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  },
+
+  // R21: Beyond BIM and the training calendar, real public routes behind
+  // launch flags (config/flags.js). Off: "Coming soon" for the public, the
+  // real page for staff.
+  {
+    path: "/beyondbim",
+    element: (
+      <DsFlagRoute live={FLAGS.BEYOND_BIM_LIVE} styles={<DsBeyondBimStyles />} full={dsPage("beyondbim")} soon={BEYOND_BIM_SOON} />
+    ),
+    errorElement: <AppError />,
+  },
+  {
+    path: "/beyondbim/register",
+    element: (
+      <DsFlagRoute
+        live={FLAGS.BEYOND_BIM_LIVE}
+        styles={<DsBeyondBimStyles />}
+        full={dsPage("beyondbim-register")}
+        soon={BEYOND_BIM_SOON}
+      />
+    ),
+    errorElement: <AppError />,
+  },
+  {
+    path: "/learn/calendar",
+    element: (
+      <DsFlagRoute
+        live={FLAGS.TRAINING_CALENDAR_LIVE}
+        full={<DsTrainingCalendar />}
+        soon={
+          <DsComingSoon
+            eyebrow="Training calendar · coming soon"
+            title="The training calendar"
+            tone="is on its way"
+            lede="Scheduled trainings will be listed here by month. Firms can book an in-office programme now."
+            primary={{ label: "Book a programme", to: "/contact" }}
+            secondary={{ label: "See past events", to: "/trainings" }}
+          />
+        }
+      />
     ),
     errorElement: <AppError />,
   },
