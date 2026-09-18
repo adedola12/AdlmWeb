@@ -326,6 +326,7 @@ One commit per item (`R05: close dropdowns on outside click`).
 9. **R20.** Where should the countdown show: home hero only, or site-wide as a strip?
 
 ## Decisions (your answers, 17 Sep)
+- **Brand colours (18 Sep):** Richard's tokens win: navy `#091E39`, blue `#239CFF`, orange `#E86A27`, taken from the logo SVG. These replace the brief's #0D2240 / #1E6BCC / #F07020 / #40B0E0. They already live in the generated `ds.css`; new UI uses only those tokens.
 - **P0.4:** port his design onto our real data. His build runs only on demo data.
 - **R22:** Paystack stays. It is working, and it is on your personal account while the business account is being set up.
   - The relaunch keeps two ways to pay: card (Paystack) and transfer or invoice (already built).
