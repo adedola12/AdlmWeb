@@ -1,5 +1,7 @@
 // server/routes/me.js
 import express from "express";
+import cloudinary from "../cloudinary.js";
+import { checkAvatarUrl } from "../util/avatarCheck.js";
 import dayjs from "dayjs";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
@@ -701,6 +703,15 @@ router.post(
     }
 
     if (username !== undefined) u.username = username;
+    // A new photo must be a square photo of a face (R08, util/avatarCheck.js).
+    // Clearing it, or re-sending the one already saved, is not re-checked.
+    if (avatarUrl && avatarUrl !== u.avatarUrl) {
+      const refusal = await checkAvatarUrl(avatarUrl, {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        lookup: (publicId) => cloudinary.api.resource(publicId, { faces: true }),
+      });
+      if (refusal) return res.status(422).json({ error: refusal, field: "avatarUrl" });
+    }
     if (avatarUrl !== undefined) u.avatarUrl = avatarUrl;
 
     // State wins over zone. A state implies exactly one zone, so deriving it here
