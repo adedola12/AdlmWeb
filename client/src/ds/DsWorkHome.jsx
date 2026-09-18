@@ -470,10 +470,10 @@ export default function DsWorkHome() {
             <div className="dsh-stat">
               <span className="k">Work in hand</span>
               <b>{money(view$.value)}</b>
-              <span className="ds-sub">
+              <p className="ds-sub">
                 {view$.count} project{view$.count === 1 ? "" : "s"} at the rates they were
                 priced with
-              </span>
+              </p>
             </div>
             <div className="dsh-stat">
               <span className="k">Measured</span>
@@ -481,26 +481,26 @@ export default function DsWorkHome() {
                 {num(view$.items)}
                 <span className="u">items</span>
               </b>
-              <span className="ds-sub">
+              <p className="ds-sub">
                 across {sources.length} extraction source{sources.length === 1 ? "" : "s"}
-              </span>
+              </p>
             </div>
             <div className="dsh-stat">
               <span className="k">Valued to date</span>
               <b>{money(view$.valued)}</b>
-              <span className="ds-sub">
+              <p className="ds-sub">
                 {view$.value > 0
                   ? `${Math.round((view$.valued / view$.value) * 100)}% of the work in hand`
                   : "nothing valued yet"}
-              </span>
+              </p>
             </div>
-            {rail?.rates ? (
-              <div className="dsh-stat">
-                <span className="k">Rate library</span>
-                <b>{num(rail.rates)}</b>
-                <span className="ds-sub">build-ups you can price against</span>
-              </div>
-            ) : null}
+            <div className="dsh-stat">
+              <span className="k">Rate library</span>
+              <b>{num(rail?.rates || 0)}</b>
+              <p className="ds-sub">
+                {rail?.rates ? "build-ups you can price against" : "no rates saved yet"}
+              </p>
+            </div>
           </div>
 
           {view === "cards" && top && (

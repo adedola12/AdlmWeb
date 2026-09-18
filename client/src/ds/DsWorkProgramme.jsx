@@ -865,22 +865,22 @@ export default function DsWorkProgramme() {
                 {weeks}
                 <span className="u">weeks</span>
               </b>
-              <span className="ds-sub">{plan.end} working days, six-day week</span>
+              <p className="ds-sub">{plan.end} working days, six-day week</p>
             </div>
             <div className="dsh-stat">
               <span className="k">Start on site</span>
               <b>{fmt(start)}</b>
-              <span className="ds-sub">{start.getFullYear()}</span>
+              <p className="ds-sub">{start.getFullYear()}</p>
             </div>
             <div className="dsh-stat">
               <span className="k">Practical completion</span>
               <b>{fmt(finish)}</b>
-              <span className="ds-sub">{finish.getFullYear()}</span>
+              <p className="ds-sub">{finish.getFullYear()}</p>
             </div>
             <div className="dsh-stat">
               <span className="k">Peak gangs on site</span>
               <b>{plan.peak}</b>
-              <span className="ds-sub">across every trade running at once</span>
+              <p className="ds-sub">across every trade running at once</p>
             </div>
           </div>
 

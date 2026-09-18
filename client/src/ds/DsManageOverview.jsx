@@ -86,11 +86,20 @@ const ICONS = {
   civil3d: "/ds/ic-civiq.png",
 };
 
+// "HERON, QUIV and 4 more": the product's short name (before the colon in
+// "HERON: PlanSwift / 2D Drawings QS Software"), two of them, then a count.
+function activeLine(active) {
+  const names = active.map((e) => String(e.productName || e.productKey || "").split(":")[0].trim());
+  if (names.length <= 2) return names.join(" and ");
+  return `${names.slice(0, 2).join(", ")} and ${names.length - 2} more`;
+}
+
 export default function DsManageOverview() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
   const [courses, setCourses] = React.useState(null);
   const [activity, setActivity] = React.useState(null);
+  const [lessons, setLessons] = React.useState([]);
   const [catalogue, setCatalogue] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
 
@@ -116,6 +125,12 @@ export default function DsManageOverview() {
 
     // The activity trail recordActivity() has been writing at every project
     // and PM mutation. Six is what his panel shows.
+    // Learning history (R07): the free lessons this account opened most
+    // recently, from the watch log the lesson pages already keep.
+    apiAuthed("/me/free-lessons", { token: accessToken, params: { limit: 4 } })
+      .then((d) => alive && setLessons(Array.isArray(d) ? d : []))
+      .catch(() => alive && setLessons([]));
+
     apiAuthed("/me/activity", { token: accessToken, params: { limit: 6 } })
       .then((d) => alive && setActivity(d.items || []))
       // A feed is the last panel on the screen; it does not get to blank it.
@@ -338,10 +353,8 @@ export default function DsManageOverview() {
             Products active
           </span>
           <b>{view.active.length}</b>
-          <p className="ds-sub">
-            {view.active.length
-              ? view.active.map((e) => e.productName || e.productKey).join(", ")
-              : "Nothing active yet"}
+          <p className="ds-sub" title={view.active.map((e) => e.productName || e.productKey).join(", ")}>
+            {view.active.length ? activeLine(view.active) : "Nothing active yet"}
           </p>
         </div>
 
@@ -368,7 +381,7 @@ export default function DsManageOverview() {
             <svg viewBox="0 0 24 24"><use href="#hi-doc" /></svg>
             Next charge
           </span>
-          <b>{view.nextDate && view.nextAmount ? money(view.nextAmount) : "—"}</b>
+          <b>{view.nextDate && view.nextAmount ? money(view.nextAmount) : "–"}</b>
           <p className="ds-sub">
             {view.nextDate ? `Renews ${longDate(view.nextDate)}` : "Nothing scheduled"}
           </p>
@@ -576,12 +589,12 @@ export default function DsManageOverview() {
               loaded for the Courses tile. His progress bar is a percentage and
               so is ours; his "week 4 of 6" is modules, which is the unit we
               actually track. */}
-          {view.courses.length > 0 && (
+          {(view.courses.length > 0 || lessons.length > 0) && (
             <section className="dsh-panel">
               <div className="dsh-ph">
                 <h2>Your learning</h2>
-                <Link className="more" to="/learn">
-                  All courses
+                <Link className="more" to="/dash-learning">
+                  My learning
                 </Link>
               </div>
               <div className="dsh-body">
@@ -615,6 +628,28 @@ export default function DsManageOverview() {
                     </div>
                   );
                 })}
+                {/* Recently watched lessons. The watch log records when a
+                    lesson was opened and for how long the page was open, not
+                    playback, so it says when, not a percentage. */}
+                {lessons.map((l) => (
+                  <div className="dsh-course" key={`l-${l.id}`}>
+                    <div className="top">
+                      <b>
+                        {l.available ? <Link to={`/learn/free/${l.id}`}>{l.title}</Link> : l.title}
+                      </b>
+                      <span className="pc">lesson</span>
+                    </div>
+                    <p>
+                      {[
+                        l.productLabel || null,
+                        l.lastWatchedAt ? `watched ${longDate(l.lastWatchedAt)}` : null,
+                        l.opens > 1 ? `opened ${l.opens} times` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                ))}
               </div>
             </section>
           )}
