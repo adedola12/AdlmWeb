@@ -27,6 +27,7 @@ import { useAuth } from "../store.jsx";
 import ConnectedAccounts from "../components/ConnectedAccounts.jsx";
 import { uploadImage } from "../lib/uploadImage.js";
 import { ThemePicker } from "./ThemeMenu.jsx";
+import WhatsAppVerify from "./WhatsAppVerify.jsx";
 
 const icon = (name) => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -495,6 +496,11 @@ export default function DsSettings() {
                   <div className="ds-field">
                     <label htmlFor="st-tel">Phone</label>
                     <input id="st-tel" type="tel" value={form.whatsapp} onChange={set("whatsapp")} />
+                    <WhatsAppVerify
+                      accessToken={accessToken}
+                      savedNumber={profile.whatsapp || ""}
+                      typedNumber={form.whatsapp}
+                    />
                   </div>
                 </div>
                 <div className="ds-field">
