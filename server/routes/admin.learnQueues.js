@@ -25,6 +25,7 @@
 // looking broken. The field that decides a row is `gradeStatus`, not `grade`.
 
 import express from "express";
+import { withFileLinks } from "../util/submissionLinks.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { TrainingEnrollment } from "../models/TrainingEnrollment.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
@@ -135,7 +136,9 @@ router.get("/submissions", requireAuth, requirePermission("learn"), async (req, 
     const view = String(req.query.view || "pending").toLowerCase();
     const q = view === "all" ? {} : { gradeStatus: view };
 
-    const rows = await CourseSubmission.find(q).sort({ createdAt: -1 }).limit(500).lean();
+    const rows = await withFileLinks(
+      await CourseSubmission.find(q).sort({ createdAt: -1 }).limit(500).lean(),
+    );
 
     const [pending, approved, rejected, all] = await Promise.all([
       CourseSubmission.countDocuments({ gradeStatus: "pending" }),

@@ -1,4 +1,5 @@
 import React from "react";
+import { uploadSubmission, SUBMISSION_ACCEPT } from "../lib/submissionUpload.js";
 import dayjs from "dayjs";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { apiAuthed } from "../http.js";
@@ -316,53 +317,27 @@ export default function CourseDetail() {
     }
   }
 
-  async function uploadToCloudinary(file, resourceType = "raw") {
-    setUploading(true);
-    try {
-      const sig = await apiAuthed(`/me/media/sign`, {
-        token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resource_type: resourceType }),
-      });
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("api_key", sig.api_key);
-      fd.append("timestamp", sig.timestamp);
-      fd.append("signature", sig.signature);
-      if (sig.folder) fd.append("folder", sig.folder);
-
-      const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resourceType}/upload`;
-      const res = await fetch(endpoint, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok || !json.secure_url) {
-        throw new Error(json?.error?.message || "Upload failed");
-      }
-      return json.secure_url;
-    } finally {
-      setUploading(false);
-    }
-  }
-
+  // R12: PDF, Word, Excel or images, straight to private storage
+  // (lib/submissionUpload.js). It was images only.
   async function submitAssignment(moduleCode, file) {
     if (!file) return;
-    const ext = (file.name || "").split(".").pop().toLowerCase();
-    const isVideo = ["mp4", "mov", "avi", "mkv", "webm"].includes(ext);
-    const isImage = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext);
-    const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
-
+    setUploading(true);
     try {
-      const fileUrl = await uploadToCloudinary(file, resourceType);
-      await apiAuthed(`/me/courses/${encodeURIComponent(sku)}/submit`, {
+      const { fileName, submittedAt } = await uploadSubmission({
+        sku,
+        moduleCode,
+        file,
         token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ moduleCode, fileUrl }),
       });
       await load();
-      alert("Submitted!");
+      alert(
+        `Submitted: ${fileName} at ${submittedAt.toLocaleString()}. ` +
+          "Your instructor will mark it; the result and any comments appear here.",
+      );
     } catch (e) {
       alert(e.message || "Submit failed");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -783,10 +758,11 @@ export default function CourseDetail() {
                   <label className="row" style={{ cursor: uploading ? "wait" : "pointer" }}>
                     <IconPlus />
                     <b>{uploading ? "Uploading…" : "Upload your submission"}</b>
-                    <em>Any file the brief asks for</em>
+                    <em>PDF, Word, Excel or an image</em>
                     <input
                       type="file"
                       hidden
+                      accept={SUBMISSION_ACCEPT}
                       disabled={uploading}
                       onChange={(e) => submitAssignment(active.moduleCode, e.target.files?.[0])}
                     />
@@ -801,7 +777,7 @@ export default function CourseDetail() {
                     >
                       <IconLink />
                       <b>
-                        {(sub.fileUrl || "").split("/").pop() || "Submission"}
+                        {sub.fileName || (sub.fileUrl || "").split("?")[0].split("/").pop() || "Submission"}
                         {sub.feedback ? ` — ${sub.feedback}` : ""}
                       </b>
                       <em>{sub.gradeStatus || "submitted"}</em>

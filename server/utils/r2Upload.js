@@ -29,7 +29,9 @@ function normalizePublicBaseUrl() {
   return url.replace(/\/+$/, "");
 }
 
-function createClient() {
+// Exported for util/fileStore.js, which keeps private learner files here
+// until the AWS files bucket exists.
+export function createClient() {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
   const accessKeyId = requiredEnv("R2_ACCESS_KEY_ID");
   const secretAccessKey = requiredEnv("R2_SECRET_ACCESS_KEY");
