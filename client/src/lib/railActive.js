@@ -46,3 +46,21 @@ export function activeRailId({ pathname, search = "", page = "" }, rail = RAIL) 
   if (page && items.some((it) => it.id === page)) return page;
   return null;
 }
+
+// The tabs a group offers: its own items, with a folded group (My tools)
+// opened out in place, minus anything not built, not owned or not a page.
+export function sectionTabs(rail, activeId, owned) {
+  for (const g of rail) {
+    if (!g.group) continue;
+    const flat = g.items.flatMap((it) => (it.items ? it.items : [it]));
+    if (!flat.some((it) => it.id === activeId)) continue;
+    return flat.filter(
+      (it) =>
+        !it.action &&
+        !it.aliasOnly &&
+        it.ready !== false &&
+        !(it.product && owned && !owned.has(it.product)),
+    );
+  }
+  return [];
+}

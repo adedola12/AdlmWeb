@@ -25,6 +25,7 @@ import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
 import DsRailNav from "./DsRailNav.jsx";
+import DsSectionTabs from "./DsSectionTabs.jsx";
 import { activeRailId } from "../lib/railActive.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
 
@@ -160,6 +161,10 @@ export default function DsAppShell({ children, title = "", page = "" }) {
     page,
   });
   const railRef = React.useRef(null);
+  const owned = React.useMemo(
+    () => (Array.isArray(counts?.ownedKeys) ? new Set(counts.ownedKeys) : null),
+    [counts],
+  );
 
   // Below 1000px his rail is a fixed drawer that slides in on `.open`. The
   // class has to land on .dsh-rail itself — the host above renders as
@@ -199,12 +204,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             if (e.target.closest("a")) setDrawer(false);
           }}
         >
-          <DsRailNav
-            activeId={activeId}
-            d={d}
-            owned={Array.isArray(counts?.ownedKeys) ? new Set(counts.ownedKeys) : null}
-            onSignOut={signOut}
-          />
+          <DsRailNav activeId={activeId} d={d} owned={owned} onSignOut={signOut} />
         </div>
 
         <div className="dsh-main">
@@ -263,6 +263,8 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             </span>
           </header>
 
+          {/* R03: this section's destinations as tabs, from the rail config. */}
+          <DsSectionTabs activeId={activeId} owned={owned} />
           {children}
         </div>
 

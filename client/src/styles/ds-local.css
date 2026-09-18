@@ -1490,3 +1490,13 @@
    chip stretched to 86% of the card, squeezed the title to one word a line
    and ran past the card edge. The chip sizes to its text. */
 .ds .wk-proj .stage{width:auto;margin:0;white-space:nowrap}
+
+/* R03 section tabs — his .wk-tabs segmented control above each account
+   screen, padded to line up with .dsh-in at each of his breakpoints, and
+   scrolling sideways rather than wrapping on a phone. */
+.ds .dsh-sectabs{padding:24px 36px 0}
+.ds .dsh-sectabs .wk-tabs{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.ds .dsh-sectabs .wk-tabs::-webkit-scrollbar{display:none}
+.ds .dsh-sectabs + .dsh-in{padding-top:18px}
+@media (max-width:1000px){.ds .dsh-sectabs{padding:20px 20px 0}}
+@media (max-width:720px){.ds .dsh-sectabs{padding:16px 16px 0}.ds .dsh-sectabs .wk-tabs{display:flex}}
