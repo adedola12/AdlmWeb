@@ -501,8 +501,8 @@ export default function DsSupport() {
                 training problem rather than a support one. On-site sessions run on your own
                 projects.
               </p>
-              {/* His is a modal; ours goes to the training pages, which exist. */}
-              <Link className="ds-btn btn-o ds-btn-sm btn-full" to="/trainings" style={{ marginTop: 16 }}>
+              {/* His is a modal; ours goes to the events on the Learn page. */}
+              <Link className="ds-btn btn-o ds-btn-sm btn-full" to="/learn#events" style={{ marginTop: 16 }}>
                 Training for firms
               </Link>
             </div>

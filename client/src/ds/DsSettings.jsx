@@ -825,7 +825,7 @@ export default function DsSettings() {
                 <Link className="ds-btn btn-o ds-btn-sm" to="/profile">
                   Activity log
                 </Link>
-                <Link className="ds-btn btn-o ds-btn-sm" to="/support/request">
+                <Link className="ds-btn btn-o ds-btn-sm" to="/manage/support#ticket">
                   Ask for an export
                 </Link>
               </div>

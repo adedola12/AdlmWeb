@@ -250,7 +250,7 @@ export default function DsDownloads() {
                         Installer
                       </a>
                     ) : (
-                      <Link className="ds-btn btn-o ds-btn-sm" to="/support">
+                      <Link className="ds-btn btn-o ds-btn-sm" to="/manage/support#ticket">
                         Get help
                       </Link>
                     )}

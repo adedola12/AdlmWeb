@@ -28,6 +28,8 @@ import DsRailNav from "./DsRailNav.jsx";
 import { useDismiss } from "./dismiss.js";
 import DsSectionTabs from "./DsSectionTabs.jsx";
 import { activeRailId } from "../lib/railActive.js";
+import { RAIL, railItems } from "./railConfig.js";
+import { useFeedback } from "./feedback/feedbackContext.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
 
 // His app screens load dash.css and work.css on top of site.css. Importing
@@ -78,6 +80,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
       ? "Search projects, rates and programmes"
       : "Search products, invoices, people";
 
+  const fb = useFeedback();
   const [counts, setCounts] = React.useState(null);
   const [drawer, setDrawer] = React.useState(false);
   const [menu, setMenu] = React.useState(false);
@@ -166,6 +169,30 @@ export default function DsAppShell({ children, title = "", page = "" }) {
     page,
   });
   const railRef = React.useRef(null);
+  // Every page in the rail the search box can jump to.
+  const searchable = React.useMemo(
+    () =>
+      railItems(RAIL).filter(
+        (it) => !it.action && it.ready !== false && !it.aliasOnly,
+      ),
+    [],
+  );
+
+  // /manage/support#ticket and the like: the router does not scroll to a hash,
+  // and .dsh-main (not the window) is the scroller.
+  React.useEffect(() => {
+    const id = location.hash.replace(/^#/, "");
+    if (!id) return undefined;
+    // The screen may still be loading its data, so keep looking for the
+    // target for a few seconds rather than trying once.
+    let tries = 0;
+    const t = setInterval(() => {
+      const el = document.getElementById(decodeURIComponent(id));
+      if (el || ++tries > 25) clearInterval(t);
+      el?.scrollIntoView({ block: "start" });
+    }, 200);
+    return () => clearInterval(t);
+  }, [location.pathname, location.hash]);
   const owned = React.useMemo(
     () => (Array.isArray(counts?.ownedKeys) ? new Set(counts.ownedKeys) : null),
     [counts],
@@ -227,11 +254,32 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             <span className="sp" />
             <span className="dsh-search">
               {icon("search")}
+              {/* It had no handler at all. It now jumps to the account page
+                  whose name matches (R01), suggesting them as you type. */}
               <input
                 type="search"
                 placeholder={searchPlaceholder}
                 aria-label="Search this account"
+                list="dsh-search-pages"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  const q = e.currentTarget.value.trim().toLowerCase();
+                  if (!q) return;
+                  const hit = searchable.find((it) => it.label.toLowerCase() === q) ||
+                    searchable.find((it) => it.label.toLowerCase().includes(q));
+                  if (hit) {
+                    e.currentTarget.value = "";
+                    navigate(hit.to);
+                  } else {
+                    fb.toast({ tone: "info", title: `Nothing in your account is called "${e.currentTarget.value.trim()}"` });
+                  }
+                }}
               />
+              <datalist id="dsh-search-pages">
+                {searchable.map((it) => (
+                  <option key={it.id} value={it.label} />
+                ))}
+              </datalist>
             </span>
             {/* Not in his build: signal bars for the round trip to ADLM Cloud,
                 the same indicator the desktop products carry in their header. */}

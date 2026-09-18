@@ -156,7 +156,7 @@ export default function DsProducts() {
           <Link className="ds-btn btn-o ds-btn-sm" to="/products">
             See pricing
           </Link>
-          <Link className="ds-btn btn-p ds-btn-sm" to="/support/request">
+          <Link className="ds-btn btn-p ds-btn-sm" to="/manage/support#ticket">
             Talk to us about seats
           </Link>
         </div>
