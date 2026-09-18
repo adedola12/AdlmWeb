@@ -34,6 +34,7 @@ import {
   BOQ_IMPORT_LEGACY_ENTITLEMENT,
 } from "../util/boqImportAccess.js";
 import {
+import { blankToUndefined } from "../util/profileInput.js";
   verifySocialIdentity,
   exchangeCodeForIdToken,
   PROVIDER_FIELD,
@@ -676,10 +677,7 @@ router.post(
   requireAuth,
   asyncHandler(async (req, res) => {
     const {
-      username,
       avatarUrl,
-      zone,
-      state,
       firstName,
       lastName,
       whatsapp,
@@ -687,6 +685,12 @@ router.post(
       firmName,
       stepUpEnabled,
     } = req.body || {};
+    // Blank means "unchanged" (util/profileInput.js): most accounts have no
+    // state or zone yet, and every save used to fail on the empty one.
+    const username = blankToUndefined(req.body?.username);
+    const state = blankToUndefined(req.body?.state);
+    const zone = blankToUndefined(req.body?.zone);
+
     const u = await User.findById(req.user._id);
     if (!u) return res.status(404).json({ error: "User missing" });
 
