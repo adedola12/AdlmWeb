@@ -450,9 +450,9 @@ export default function Dashboard() {
                     "Please redownload the Installer Hub, watch the setup video, reinstall the Hub, and redownload all software updates. Your installed apps must be re-activated."}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {reinstall.installerHubUrl ? (
+                  {summary?.installerHub?.downloadUrl ? (
                     <a
-                      href={reinstall.installerHubUrl}
+                      href={summary.installerHub.downloadUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-700 text-white text-xs font-semibold hover:bg-red-800 transition"

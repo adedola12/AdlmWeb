@@ -344,6 +344,8 @@ app.get("/settings/mobile-app-url", async (_req, res) => {
 
 // Public force-reinstall broadcast — read by the site-wide banner.
 // Returns active=false (and no other fields) when nothing is broadcasting.
+// R16: no installer link here. This answers anyone who asks, and the link is
+// handed out signed in (/me/summary, /me/downloads/installer-hub).
 app.get("/settings/force-reinstall", async (_req, res) => {
   try {
     const s = await Setting.findOne({ key: "global" }).lean();
@@ -352,7 +354,6 @@ app.get("/settings/force-reinstall", async (_req, res) => {
       active: true,
       message: s.forceReinstallMessage || "",
       triggeredAt: s.forceReinstallAt || null,
-      installerHubUrl: s.installerHubUrl || "",
       installerHubVideoUrl: s.installerHubVideoUrl || "",
       installerHubGuideUrl: resolveUserGuideUrl(s.installerHubGuideUrl),
     });
