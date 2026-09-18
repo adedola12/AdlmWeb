@@ -2163,12 +2163,29 @@ router.get(
     // catalogue, so the rail reads "3 of 7" the way his design does — but with
     // 7 being however many products we sell today, not a number frozen into
     // the markup.
+    //
+    // Only LIVE licences for products we sell count. Every entitlement used to
+    // count, so add-on grants (boq-import, archicad) and expired licences read
+    // "7 of 6". ownedKeys lets the rail's My tools show what this account can
+    // open, rather than Richard's sample tenant.
+    const productKeys = await Product.find({ isCourse: { $ne: true } }, { key: 1 })
+      .lean()
+      .then((rows) => rows.map((r) => r.key).filter(Boolean))
+      .catch(() => []);
+    const sold = new Set(productKeys);
+    const now = dayjs();
     const owned = new Set(
-      (user?.entitlements || []).map((e) => e.productKey).filter(Boolean),
+      (user?.entitlements || [])
+        .filter(
+          (e) =>
+            e?.productKey &&
+            sold.has(e.productKey) &&
+            String(e.status || "").toLowerCase() === "active" &&
+            (!e.expiresAt || dayjs(e.expiresAt).isAfter(now)),
+        )
+        .map((e) => e.productKey),
     );
-    const catalogue = await Product.countDocuments({ isCourse: { $ne: true } }).catch(
-      () => 0,
-    );
+    const catalogue = productKeys.length;
 
     res.json({
       projects,
@@ -2178,6 +2195,7 @@ router.get(
       certificates,
       productsOwned: owned.size,
       productsTotal: catalogue,
+      ownedKeys: [...owned],
       name: user?.name || "",
       email: user?.email || "",
       organizationName: user?.organizationName || "",

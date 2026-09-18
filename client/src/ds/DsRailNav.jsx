@@ -26,15 +26,19 @@ function readFold(key) {
   }
 }
 
-function Item({ item, activeId, d, dots, onSignOut }) {
+function Item({ item, activeId, d, dots, owned, onSignOut }) {
   const on = item.id === activeId;
-  const cls = [item.state === "off" && "off", on && "on"].filter(Boolean).join(" ") || undefined;
+  // A tool this account holds no live licence for: his greyed look with
+  // "Add", pointing at the product page. Until /me/rail answers (owned is
+  // null) every tool shows as a plain link rather than flashing greyed.
+  const notOwned = Boolean(item.product && owned && !owned.has(item.product));
+  const cls = [notOwned && "off", on && "on"].filter(Boolean).join(" ") || undefined;
+  const to = notOwned ? `/product/${item.product}` : hrefOf(item);
   const inner = (
     <>
       {item.img ? <img src={item.img} alt="" /> : <Svg id={item.icon} />}
       {item.label}
-      {item.tag === "Add" && <span className="add">Add</span>}
-      {item.tag === "Soon" && <span className="soon">Soon</span>}
+      {notOwned && <span className="add">Add</span>}
       {item.badge && d[item.badge] ? <span className="tail">{d[item.badge]}</span> : null}
       {item.dot && dots?.[item.dot] ? (
         <i className="adlm-dot" role="status" aria-label={dots[item.dot].label} />
@@ -64,7 +68,7 @@ function Item({ item, activeId, d, dots, onSignOut }) {
   return (
     <li>
       <Link
-        to={hrefOf(item)}
+        to={to}
         className={cls}
         data-rail-id={item.id}
         aria-current={on ? "page" : undefined}
@@ -75,7 +79,7 @@ function Item({ item, activeId, d, dots, onSignOut }) {
   );
 }
 
-function Tools({ group, activeId, d, dots }) {
+function Tools({ group, activeId, d, dots, owned }) {
   const here = group.items.some((it) => it.id === activeId);
   const [open, setOpen] = React.useState(() => readFold(group.fold));
   // Opens on its own when the current page is one of the tools, so the
@@ -104,7 +108,7 @@ function Tools({ group, activeId, d, dots }) {
       </button>
       <ul className="dsh-sub">
         {group.items.map((it) => (
-          <Item key={it.id} item={it} activeId={activeId} d={d} dots={dots} />
+          <Item key={it.id} item={it} activeId={activeId} d={d} dots={dots} owned={owned} />
         ))}
       </ul>
     </li>
@@ -116,9 +120,10 @@ function Tools({ group, activeId, d, dots }) {
  * @param {string|null} props.activeId   from lib/railActive.js
  * @param {object} props.d               badges, initials, org name
  * @param {object} [props.dots]          { assignments: { label } } red dots
+ * @param {Set<string>|null} [props.owned]  productKeys with a live licence
  * @param {(e) => void} props.onSignOut
  */
-export default function DsRailNav({ activeId, d, dots, onSignOut, rail = RAIL }) {
+export default function DsRailNav({ activeId, d, dots, owned = null, onSignOut, rail = RAIL }) {
   return (
     <aside className="dsh-rail" aria-label="ADLM Studio">
       <Link className="dsh-brand" to="/work" aria-label="ADLM Studio">
@@ -158,7 +163,7 @@ export default function DsRailNav({ activeId, d, dots, onSignOut, rail = RAIL })
           <ul className="dsh-nav">
             {g.items.map((it) =>
               it.items ? (
-                <Tools key={it.id} group={it} activeId={activeId} d={d} dots={dots} />
+                <Tools key={it.id} group={it} activeId={activeId} d={d} dots={dots} owned={owned} />
               ) : (
                 <Item key={it.id} item={it} activeId={activeId} d={d} dots={dots} onSignOut={onSignOut} />
               ),

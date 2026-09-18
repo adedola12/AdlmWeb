@@ -199,7 +199,12 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             if (e.target.closest("a")) setDrawer(false);
           }}
         >
-          <DsRailNav activeId={activeId} d={d} onSignOut={signOut} />
+          <DsRailNav
+            activeId={activeId}
+            d={d}
+            owned={Array.isArray(counts?.ownedKeys) ? new Set(counts.ownedKeys) : null}
+            onSignOut={signOut}
+          />
         </div>
 
         <div className="dsh-main">

@@ -19,7 +19,9 @@
 //   icon     sprite id (<use href="#…">) or img: "/ds/…png"
 //   badge    key into the shell's counts (d.projects, d.certificates, …)
 //   dot      key into the shell's red-dot flags (R11: open assignments)
-//   state    "off" (greyed, still a link), with tag: "Add" | "Soon"
+//   product  a tool's productKey. Owned (a live licence, from /me/rail
+//            ownedKeys) → a normal link; not owned → greyed with "Add",
+//            linking to the product page. Never a fixed sample state.
 //   ready    false while the screen behind it is not built yet; rendered
 //            greyed and not a link, so the rail never offers a dead end
 
@@ -33,12 +35,14 @@ export const RAIL = [
         label: "My tools",
         icon: "wi-tools",
         fold: "adlm-tools",
+        // Each tool opens that tool's projects (the workspace at
+        // /projects/:tool). His /work-tool pages replace these routes in P0.4.
         items: [
-          { id: "tool-quiv", label: "QUIV", to: "/work/tool", query: { t: "quiv" }, img: "/ds/ic-quiv.png", ready: false },
-          { id: "tool-heron", label: "HERON", to: "/work/tool", query: { t: "heron" }, img: "/ds/ic-heron.png", ready: false },
+          { id: "tool-quiv", label: "QUIV", to: "/projects/revit", product: "revit", img: "/ds/ic-quiv.png" },
+          { id: "tool-heron", label: "HERON", to: "/projects/planswift", product: "planswift", img: "/ds/ic-heron.png" },
           { id: "work-library", label: "RateGen", to: "/work/library", img: "/ds/ic-rategen.png", also: ["/work/rate/:id"] },
-          { id: "tool-mep", label: "Revit MEP", to: "/work/tool", query: { t: "mep" }, img: "/ds/ic-mep.png", state: "off", tag: "Add", ready: false },
-          { id: "tool-civiq", label: "CIVIQ", to: "/manage/products", img: "/ds/ic-civiq.png", state: "off", tag: "Soon", aliasOnly: true },
+          { id: "tool-mep", label: "Revit MEP", to: "/projects/mep", product: "mep", img: "/ds/ic-mep.png" },
+          { id: "tool-civiq", label: "CIVIQ", to: "/projects/civil3d", product: "civil3d", img: "/ds/ic-civiq.png" },
         ],
       },
       {

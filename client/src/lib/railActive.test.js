@@ -18,16 +18,16 @@ describe("rail active state (R04)", () => {
     expect(at("/work")).toBe("work-home");
   });
 
-  it("tells the tool pages apart by their query", () => {
-    expect(at("/work/tool", { search: "?t=quiv" })).toBe("tool-quiv");
-    expect(at("/work/tool", { search: "?t=heron" })).toBe("tool-heron");
-    expect(at("/work/tool", { search: "?t=mep" })).toBe("tool-mep");
-    expect(at("/work/tool")).toBeNull();
+  it("lights the tool whose projects are open, not Projects", () => {
+    expect(at("/projects/revit")).toBe("tool-quiv");
+    expect(at("/projects/planswift", { search: "?project=block-a" })).toBe("tool-heron");
+    expect(at("/projects/mep")).toBe("tool-mep");
+    expect(at("/projects/civil3d")).toBe("tool-civiq");
   });
 
-  it("keeps a project page under Projects and a course under My learning", () => {
+  it("keeps other project pages under Projects and a course under My learning", () => {
     expect(at("/work/project/revit/abc123")).toBe("work-projects");
-    expect(at("/projects/planswift", { search: "?project=block-a" })).toBe("work-projects");
+    expect(at("/projects/archicad-materials")).toBe("work-projects");
     expect(at("/dash-course/BIM101")).toBe("dash-learning");
     expect(at("/work/rate/r1")).toBe("work-library");
   });
