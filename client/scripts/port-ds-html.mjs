@@ -391,6 +391,19 @@ const SLOTS = {
 };
 
 const PAGE_EDITS = {
+  // R19: Etti's card on About is his initials placeholder until a photo is
+  // supplied. TODO(adlm): Etti's photo. Save it as
+  // client/public/ds/team-etti.jpg (portrait, 960x1200 like the other three)
+  // and re-run this script; the card then shows it the way the others do.
+  "src/about.html": fs.existsSync(path.join(CLIENT, "public/ds/team-etti.jpg"))
+    ? [
+        {
+          find: '<div class="tshot"><span class="av">ET</span></div>',
+          replace:
+            '<div class="tshot"><img src="assets/img/team-etti.jpg" alt="Etti Taiwo" width="960" height="1200"></div>',
+        },
+      ]
+    : [],
   // His social buttons are two dead links — <a href="dash-home"> and
   // <a href="verify"> — with no logo on either and no Autodesk at all. They
   // are replaced by the live component, which draws each provider's real mark,
