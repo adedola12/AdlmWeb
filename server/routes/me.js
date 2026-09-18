@@ -2,6 +2,7 @@
 import express from "express";
 import cloudinary from "../cloudinary.js";
 import { checkAvatarUrl } from "../util/avatarCheck.js";
+import { WA_CODE_MINUTES, WA_RESEND_SECONDS, WA_MAX_ATTEMPTS, whatsappEnabled, toWhatsAppNumber, newWaCode, hashWaCode, sendWhatsAppCode } from "../util/whatsappVerify.js";
 import dayjs from "dayjs";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
@@ -749,8 +750,16 @@ router.post(
       if (firstName !== undefined) u.firstName = String(firstName || "").trim();
       if (lastName !== undefined) u.lastName = String(lastName || "").trim();
     }
-    if (whatsapp !== undefined)
-      u.whatsapp = String(whatsapp || "").replace(/[^\d+]/g, "");
+    if (whatsapp !== undefined) {
+      const nextWa = String(whatsapp || "").replace(/[^\d+]/g, "");
+      // A different number is an unproved number.
+      if (nextWa !== u.whatsapp) {
+        u.whatsappVerified = false;
+        u.whatsappVerifiedAt = null;
+        u.whatsappVerifiedNumber = "";
+      }
+      u.whatsapp = nextWa;
+    }
     if (location !== undefined) u.location = String(location || "").trim();
     if (firmName !== undefined) u.firmName = String(firmName || "").trim();
 
@@ -2558,5 +2567,95 @@ router.get("/free-lessons", requireAuth, async (req, res) => {
     }),
   );
 });
+
+/* ── WhatsApp number verification (util/whatsappVerify.js) ─────────────── */
+
+router.get(
+  "/whatsapp/verify",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const u = await User.findById(req.user._id, {
+      whatsapp: 1,
+      whatsappVerified: 1,
+      whatsappVerifiedNumber: 1,
+    }).lean();
+    if (!u) return res.status(404).json({ error: "User missing" });
+    res.json({
+      enabled: whatsappEnabled(),
+      number: u.whatsapp || "",
+      verified: !!u.whatsappVerified && u.whatsappVerifiedNumber === toWhatsAppNumber(u.whatsapp),
+    });
+  }),
+);
+
+router.post(
+  "/whatsapp/verify/start",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!whatsappEnabled()) {
+      return res.status(503).json({ error: "WhatsApp verification is not switched on yet.", code: "WA_OFF" });
+    }
+    const u = await User.findById(req.user._id);
+    if (!u) return res.status(404).json({ error: "User missing" });
+    const to = toWhatsAppNumber(u.whatsapp);
+    if (!to) {
+      return res.status(400).json({
+        error: "Save a WhatsApp number with its country code first, for example +234 803 000 0000.",
+      });
+    }
+    const since = u.whatsappCodeSentAt ? (Date.now() - u.whatsappCodeSentAt.getTime()) / 1000 : Infinity;
+    if (since < WA_RESEND_SECONDS) {
+      return res.status(429).json({ error: `Wait ${Math.ceil(WA_RESEND_SECONDS - since)} seconds before asking for another code.` });
+    }
+    const code = newWaCode();
+    try {
+      await sendWhatsAppCode(to, code);
+    } catch (err) {
+      console.error("[/me/whatsapp/verify/start]", err?.message || err);
+      return res.status(502).json({
+        error: "WhatsApp would not take the message. Check the number is on WhatsApp and try again.",
+      });
+    }
+    u.whatsappCodeHash = hashWaCode(code);
+    u.whatsappCodeExpires = new Date(Date.now() + WA_CODE_MINUTES * 60_000);
+    u.whatsappCodeSentAt = new Date();
+    u.whatsappCodeAttempts = 0;
+    await u.save();
+    res.json({ ok: true, to: `+${to}`, minutes: WA_CODE_MINUTES });
+  }),
+);
+
+router.post(
+  "/whatsapp/verify/confirm",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const u = await User.findById(req.user._id);
+    if (!u) return res.status(404).json({ error: "User missing" });
+    const code = String(req.body?.code || "").replace(/\D/g, "");
+    if (code.length !== 6) return res.status(400).json({ error: "The WhatsApp code is six digits." });
+    if (!u.whatsappCodeHash || !u.whatsappCodeExpires || u.whatsappCodeExpires.getTime() < Date.now()) {
+      return res.status(400).json({ error: "That code has expired or was never sent. Ask for a new one." });
+    }
+    if ((u.whatsappCodeAttempts || 0) >= WA_MAX_ATTEMPTS) {
+      return res.status(429).json({ error: "Too many wrong codes. Ask for a new one." });
+    }
+    if (hashWaCode(code) !== u.whatsappCodeHash) {
+      u.whatsappCodeAttempts = (u.whatsappCodeAttempts || 0) + 1;
+      await u.save();
+      const left = WA_MAX_ATTEMPTS - u.whatsappCodeAttempts;
+      return res.status(400).json({
+        error: left > 0 ? `That code is not right. ${left} ${left === 1 ? "try" : "tries"} left.` : "That code is not right. Ask for a new one.",
+      });
+    }
+    u.whatsappVerified = true;
+    u.whatsappVerifiedAt = new Date();
+    u.whatsappVerifiedNumber = toWhatsAppNumber(u.whatsapp) || "";
+    u.whatsappCodeHash = "";
+    u.whatsappCodeExpires = null;
+    u.whatsappCodeAttempts = 0;
+    await u.save();
+    res.json({ ok: true, verified: true });
+  }),
+);
 
 export default router;

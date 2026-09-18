@@ -109,6 +109,15 @@ const UserSchema = new mongoose.Schema(
     certificateLastName: { type: String, default: "", trim: true },
     certificateNameLockedAt: { type: Date, default: null },
     whatsapp: { type: String, default: "", trim: true },
+    // WhatsApp number proved by a code sent over WhatsApp (util/whatsappVerify.js).
+    // Tied to the exact number: changing the number clears it.
+    whatsappVerified: { type: Boolean, default: false },
+    whatsappVerifiedAt: { type: Date, default: null },
+    whatsappVerifiedNumber: { type: String, default: "" },
+    whatsappCodeHash: { type: String, default: "" },
+    whatsappCodeExpires: { type: Date, default: null },
+    whatsappCodeSentAt: { type: Date, default: null },
+    whatsappCodeAttempts: { type: Number, default: 0 },
 
     // Optional user-supplied profile details.
     location: { type: String, default: "", trim: true },
