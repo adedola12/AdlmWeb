@@ -33,8 +33,8 @@ import {
   BOQ_IMPORT_ENTITLEMENT,
   BOQ_IMPORT_LEGACY_ENTITLEMENT,
 } from "../util/boqImportAccess.js";
-import {
 import { blankToUndefined } from "../util/profileInput.js";
+import {
   verifySocialIdentity,
   exchangeCodeForIdToken,
   PROVIDER_FIELD,
