@@ -1524,3 +1524,23 @@
    the holder's name in Lexend. The name, on the sheet and on the claim card's
    check, is his signature face. */
 .ds .cx-sheet .nm,.ds .cx-big{font-family:"ADLM Signature","Brush Script MT",cursive !important}
+
+/* R17: Ada's replies, rendered by lib/chatMarkdown.jsx. index.css's reset
+   strips list markers, so the lists put theirs back. */
+.ds .ada-md > * + *{margin-top:8px}
+.ds .ada-md p{margin:0}
+.ds .ada-md ul,.ds .ada-md ol{margin:0;padding-left:18px;display:grid;gap:4px}
+.ds .ada-md ul{list-style:disc}
+.ds .ada-md ol{list-style:decimal}
+.ds .ada-md li::marker{color:var(--ink-3)}
+.ds .ada-md strong{color:var(--ink);font-weight:500}
+.ds .ada-md em{font-style:italic}
+.ds .ada-md a{color:var(--action);text-decoration:underline;text-underline-offset:2px}
+.ds .ada-md-tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.ds .ada-md table{border-collapse:collapse;width:100%;font-size:12.5px}
+.ds .ada-md th,.ds .ada-md td{padding:6px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+.ds .ada-md tbody tr:last-child td{border-bottom:0}
+.ds .ada-md th{font-weight:500;color:var(--ink);background:var(--bg-alt)}
+/* The suggestions now sit under the input, always (R17). */
+.ds .ada-chips-under{padding-top:0}
+.ds .ada-chips-under button:disabled{opacity:.5;cursor:default}

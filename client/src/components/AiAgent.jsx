@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
-import { plainText } from "../lib/plainText.js";
+import ChatMarkdown from "../lib/chatMarkdown.jsx";
 
 /**
  * ADLM AI Agent ("Ada") — a conversion-focused conversational assistant that
@@ -25,11 +25,13 @@ const SESSION_KEY = "adlm_agent_session";
 const GREETING =
   "I am Ada. Ask me what a product does, what it costs, or which one your drawings need. " +
   "I answer from what ADLM publishes: if I do not know, I will say so.";
+// R17: under the input at all times. A complete question sends; an open one
+// (material quantities) is put in the box for the visitor to finish.
 const SUGGESTIONS = [
-  "What does it cost?",
-  "Which tool do I need?",
-  "Build me a quotation",
-  "Do you do training?",
+  { label: "Products", ask: "What products does ADLM make, and which one do I need?" },
+  { label: "Trainings", ask: "What trainings do you run, and when is the next one?" },
+  { label: "Software downloads", ask: "Where do I download the software, and how do I install it?" },
+  { label: "Material quantities", prefill: "How many bags of cement do I need for " },
 ];
 
 /* -------------------- cart helper (mirrors Products.jsx) -------------------- */
@@ -95,6 +97,7 @@ export default function AiAgent() {
   ]);
 
   const sessionRef = React.useRef(getSessionId());
+  const inputRef = React.useRef(null);
   const scrollRef = React.useRef(null);
   const idRef = React.useRef(0);
 
@@ -242,9 +245,17 @@ export default function AiAgent() {
                 key={m._id ?? i2}
                 className={`ada-m ${m.role === "user" ? "ada-q" : "ada-a"}`}
               >
-                <div style={{ whiteSpace: "pre-line" }}>
-                  {m.role === "assistant" ? plainText(m.text) : m.text}
-                </div>
+                {m.role === "assistant" ? (
+                  <ChatMarkdown
+                    text={m.text}
+                    onNavigate={(to) => {
+                      setOpen(false);
+                      navigate(to);
+                    }}
+                  />
+                ) : (
+                  <div style={{ whiteSpace: "pre-line" }}>{m.text}</div>
+                )}
 
                 {m.role === "assistant" &&
                   Array.isArray(m.actions) &&
@@ -278,16 +289,6 @@ export default function AiAgent() {
             )}
           </div>
 
-          {messages.length === 1 && !busy && (
-            <div className="ada-chips">
-              {SUGGESTIONS.map((sug) => (
-                <button type="button" key={sug} onClick={() => send(sug)}>
-                  {sug}
-                </button>
-              ))}
-            </div>
-          )}
-
           <form
             className="ada-f"
             autoComplete="off"
@@ -297,6 +298,7 @@ export default function AiAgent() {
             }}
           >
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -315,6 +317,28 @@ export default function AiAgent() {
               </svg>
             </button>
           </form>
+
+          <div className="ada-chips ada-chips-under" aria-label="Suggestions">
+            {SUGGESTIONS.map((sug) => (
+              <button
+                type="button"
+                key={sug.label}
+                disabled={busy}
+                onClick={() => {
+                  if (sug.ask) return send(sug.ask);
+                  setInput(sug.prefill);
+                  requestAnimationFrame(() => {
+                    const el = inputRef.current;
+                    if (!el) return;
+                    el.focus();
+                    el.setSelectionRange(el.value.length, el.value.length);
+                  });
+                }}
+              >
+                {sug.label}
+              </button>
+            ))}
+          </div>
 
           <p className="ada-foot">
             Ada is part of the studio, not a product. Nothing here is a quote until you{" "}

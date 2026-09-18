@@ -20,7 +20,7 @@
 import React from "react";
 import { API_BASE } from "../../config";
 import { apiAuthed } from "../../http.js";
-import { plainText } from "../../lib/plainText.js";
+import ChatMarkdown from "../../lib/chatMarkdown.jsx";
 import { FaMagic } from "../../components/icons.jsx";
 
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
@@ -659,7 +659,11 @@ export default function WorkAreaView({
             {log.map((m, i) => (
               <div key={i} className={`ada-m ada-${m.who}`}>
                 {m.big ? <span className="ada-big">{m.big}</span> : null}
-                <p style={{ whiteSpace: "pre-wrap" }}>{m.who === "ada" ? plainText(m.text) : m.text}</p>
+                {m.who === "ada" ? (
+                  <ChatMarkdown text={m.text} />
+                ) : (
+                  <p style={{ whiteSpace: "pre-wrap" }}>{m.text}</p>
+                )}
                 {m.card?.length ? (
                   <div className="ada-card">
                     {m.card.map((c, j) => (
