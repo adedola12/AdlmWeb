@@ -30,14 +30,14 @@
 
 
 /* ---------------------------------------------------------------- toasts */
-.ds .fb-stack{position:fixed;right:22px;bottom:22px;z-index:400;display:flex;flex-direction:column;
+.ds .fb-stack{position:fixed;right:22px;top:76px;z-index:400;display:flex;flex-direction:column;
   align-items:flex-end;gap:10px;pointer-events:none;width:min(400px,calc(100vw - 32px))}
 .ds .fb-toast{--tone:var(--fb-info);pointer-events:auto;position:relative;width:100%;
   display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:start;
   padding:14px 14px 14px 14px;border-radius:14px;overflow:hidden;
   background:var(--bg);color:var(--ink);border:1px solid var(--line-2);
   box-shadow:0 2px 6px rgba(var(--shadow-c),.08),0 18px 44px rgba(var(--shadow-c),.22);
-  opacity:0;transform:translateY(12px) scale(.98);
+  opacity:0;transform:translateY(-12px) scale(.98);
   transition:opacity 220ms var(--e-soft),transform 320ms var(--e-out)}
 .ds .fb-toast.on{opacity:1;transform:none}
 .ds .fb-toast.out{opacity:0;transform:translateX(24px)}
@@ -114,7 +114,7 @@
 .ds .btn-o.fb-busy::after{border-color:var(--ink) var(--ink) transparent}
 @keyframes fb-spin{to{transform:rotate(360deg)}}
 @media (max-width:640px){
-.ds .fb-stack{left:16px;right:16px;bottom:16px;width:auto;align-items:stretch}
+.ds .fb-stack{left:16px;right:16px;top:70px;width:auto;align-items:stretch}
 .ds .fb-btns{flex-direction:column-reverse}
 }
 @media (prefers-reduced-motion:reduce){
@@ -147,4 +147,4 @@
 .ds .th-pick button[aria-checked="true"]{border-color:var(--action);box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 14%,transparent)}
 .ds .th-pick b{display:block;font-size:13px;font-weight:500}
 .ds .th-pick em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);font-weight:300}
-.ds .th-pick .sw{width:30px;height:30px}
+.ds .th-pick .tsw{width:30px;height:30px}

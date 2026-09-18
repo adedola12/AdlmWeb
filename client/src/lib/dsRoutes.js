@@ -112,6 +112,9 @@ export const MAP = {
   "work-projects": "/work/projects",
   // One tool's projects; his ?t=quiv|heron|mep is kept on the link.
   "work-tool": "/work/tool",
+  // Design references for the desktop add-ins; no route of their own.
+  "plugin-quiv": null,
+  "plugin-heron": null,
   "work-project": "/projects/:tool",
   // Rate library and Programme are RateGen and Time Pro under his names — the
   // screens exist, so these keep pointing at the real ones rather than growing

@@ -122,6 +122,12 @@ const PAGES = [
   { src: "src/work-projects.html", name: "DsWorkProjects", slug: "work-projects" },
   // 17 Sep: the projects that started in one tool (QUIV, HERON, Revit MEP).
   { src: "src/work-tool.html", name: "DsWorkTool", slug: "work-tool" },
+  // 17 Sep: plugin side one (QUIV in Revit, HERON in PlanSwift). His pages
+  // are a simulation for the desktop add-ins' design; staged under /preview
+  // as a reference, not a website feature. Behaviour (plugin-quiv.js) is not
+  // ported.
+  { src: "src/plugin-quiv.html", name: "DsPluginQuiv", slug: "plugin-quiv" },
+  { src: "src/plugin-heron.html", name: "DsPluginHeron", slug: "plugin-heron" },
   { src: "src/work-project.html", name: "DsWorkProject", slug: "work-project" },
   { src: "src/work-library.html", name: "DsWorkLibrary", slug: "work-library" },
   { src: "src/work-rate.html", name: "DsWorkRate", slug: "work-rate" },

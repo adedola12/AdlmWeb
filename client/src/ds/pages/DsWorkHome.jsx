@@ -559,15 +559,12 @@ export default function DsWorkHome() {
                 </h1>
                 {" "}
                 <p>
-                  Everything in hand, across every product on this account. The Installer Hub answers what you are paying for; this answers what you are in the middle of.
+                  What needs you today, then everything in hand: projects, money, programme and rates.
                 </p>
                 {" "}
               </div>
               {" "}
               <div className="wk-acts">
-                {" "}
-                <div className="wk-loc-sw" id="wh-view" aria-label="Choose a layout">
-                </div>
                 {" "}
                 <div className="wk-loc-sw" data-loc-switch="" aria-label="Price everything for a location">
                 </div>

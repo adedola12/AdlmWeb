@@ -845,7 +845,7 @@ export default function DsDashSettings() {
                     <div className="th-pick" role="radiogroup" aria-label="Theme">
                       {" "}
                       <button type="button" role="radio" data-theme-pick="light" aria-checked="false">
-                        <i className="sw light">
+                        <i className="tsw light">
                         </i>
                         <span>
                           <b>
@@ -858,7 +858,7 @@ export default function DsDashSettings() {
                       </button>
                       {" "}
                       <button type="button" role="radio" data-theme-pick="dark" aria-checked="false">
-                        <i className="sw dark">
+                        <i className="tsw dark">
                         </i>
                         <span>
                           <b>
@@ -871,7 +871,7 @@ export default function DsDashSettings() {
                       </button>
                       {" "}
                       <button type="button" role="radio" data-theme-pick="black" aria-checked="false">
-                        <i className="sw black">
+                        <i className="tsw black">
                         </i>
                         <span>
                           <b>
@@ -884,7 +884,7 @@ export default function DsDashSettings() {
                       </button>
                       {" "}
                       <button type="button" role="radio" data-theme-pick="system" aria-checked="false">
-                        <i className="sw system">
+                        <i className="tsw system">
                         </i>
                         <span>
                           <b>

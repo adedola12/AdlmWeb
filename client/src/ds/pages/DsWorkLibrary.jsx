@@ -570,7 +570,7 @@ export default function DsWorkLibrary() {
                 </div>
                 {" "}
                 <button type="button" className="ds-btn btn-p ds-btn-sm" id="lib-add">
-                  New rate
+                  Build a custom rate
                 </button>
                 {" "}
               </div>
@@ -592,7 +592,7 @@ export default function DsWorkLibrary() {
               <div className="wk-tabs">
                 {" "}
                 <button type="button" data-tab="rates" className="on">
-                  Rates
+                  Item of works
                 </button>
                 {" "}
                 <button type="button" data-tab="materials">
@@ -601,6 +601,10 @@ export default function DsWorkLibrary() {
                 {" "}
                 <button type="button" data-tab="labour">
                   Labour
+                </button>
+                {" "}
+                <button type="button" data-tab="plant">
+                  Plant
                 </button>
                 {" "}
               </div>

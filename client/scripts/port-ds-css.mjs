@@ -52,6 +52,9 @@ const SHEETS = [
   { in: "cert.css", out: "ds-cert.css" },
   { in: "feedback.css", out: "ds-feedback.css" },
   { in: "work-proj.css", out: "ds-work-proj.css" },
+  // 17 Sep: side one of the plugins, QUIV and HERON inside a simulated Revit
+  // and PlanSwift. A design reference for the desktop add-ins, staged only.
+  { in: "plugin-quiv.css", out: "ds-plugin.css" },
 ];
 
 const CSS_DIR = path.resolve(CLIENT, "../../ADLMWebNewUI/site/assets/css");
