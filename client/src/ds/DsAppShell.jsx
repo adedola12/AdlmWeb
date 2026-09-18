@@ -27,6 +27,7 @@ import DsLeaveStudio from "./DsLeaveStudio.jsx";
 import DsRailNav from "./DsRailNav.jsx";
 import { useDismiss } from "./dismiss.js";
 import DsSectionTabs from "./DsSectionTabs.jsx";
+import DsNotifBell from "./DsNotifBell.jsx";
 import { activeRailId } from "../lib/railActive.js";
 import { RAIL, railItems } from "./railConfig.js";
 import { useFeedback } from "./feedback/feedbackContext.js";
@@ -82,6 +83,8 @@ export default function DsAppShell({ children, title = "", page = "" }) {
 
   const fb = useFeedback();
   const [counts, setCounts] = React.useState(null);
+  // The rail's red dot: /me/rail's count on arrival, then the bell's live one.
+  const [bellN, setBellN] = React.useState(null);
   const [drawer, setDrawer] = React.useState(false);
   const [menu, setMenu] = React.useState(false);
   const accRef = React.useRef(null);
@@ -168,6 +171,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
     search: location.search,
     page,
   });
+  const alertN = bellN ?? Number(counts?.assignments || 0);
   const railRef = React.useRef(null);
   // Every page in the rail the search box can jump to.
   const searchable = React.useMemo(
@@ -236,7 +240,13 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             if (e.target.closest("a")) setDrawer(false);
           }}
         >
-          <DsRailNav activeId={activeId} d={d} owned={owned} onSignOut={signOut} />
+          <DsRailNav
+            activeId={activeId}
+            d={d}
+            dots={alertN ? { assignments: { label: `${alertN} assignment${alertN === 1 ? "" : "s"} need${alertN === 1 ? "s" : ""} you` } } : null}
+            owned={owned}
+            onSignOut={signOut}
+          />
         </div>
 
         <div className="dsh-main">
@@ -284,6 +294,8 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             {/* Not in his build: signal bars for the round trip to ADLM Cloud,
                 the same indicator the desktop products carry in their header. */}
             <NetworkIndicator />
+            {/* R11: assignment deadlines and marks. */}
+            <DsNotifBell accessToken={accessToken} onCount={setBellN} />
             <span className="dsh-acc" ref={accRef}>
               <button
                 type="button"

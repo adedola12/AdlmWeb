@@ -1,4 +1,6 @@
 import express from "express";
+import { alertCount } from "../util/assignmentAlerts.js";
+import { myAssignments } from "../util/myAssignments.js";
 import { checkSubmissionFile, submissionKey } from "../util/submissionFiles.js";
 import { fileStoreBackend, presignUpload, headFile } from "../util/fileStore.js";
 import { withFileLinks } from "../util/submissionLinks.js";
@@ -21,6 +23,31 @@ import { LessonNote } from "../models/LessonNote.js";
 
 const router = express.Router();
 router.use(requireAuth);
+
+// R11: every assignment across the learner's courses, with state (to do, due
+// soon, overdue, submitted, marked) and new alerts. Before /:sku routes so
+// "assignments" is never read as a course.
+router.get("/assignments", async (req, res) => {
+  const rows = await myAssignments(req.user._id);
+  res.json({ items: rows, alerts: alertCount(rows) });
+});
+
+// Opening an assignment clears its alert, and a marked one's result counts as
+// read (R11/R13).
+router.post("/assignments/seen", async (req, res) => {
+  const { courseSku, moduleCode } = req.body || {};
+  if (!courseSku || !moduleCode) return res.status(400).json({ error: "courseSku and moduleCode required" });
+  const now = new Date();
+  await CourseEnrollment.updateOne(
+    { userId: req.user._id, courseSku },
+    { $set: { [`assignmentSeen.${String(moduleCode).replace(/[.$]/g, "_")}`]: now } },
+  );
+  await CourseSubmission.updateMany(
+    { userId: req.user._id, courseSku, moduleCode, gradeStatus: { $ne: "pending" }, feedbackSeenAt: null },
+    { $set: { feedbackSeenAt: now } },
+  );
+  res.json({ ok: true });
+});
 
 // A stream is "live" if we heard from it recently. Heartbeats land every 30s,
 // so 90s tolerates one dropped beat before the seat is released — otherwise a

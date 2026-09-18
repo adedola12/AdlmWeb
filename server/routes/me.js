@@ -1,5 +1,7 @@
 // server/routes/me.js
 import express from "express";
+import { alertCount } from "../util/assignmentAlerts.js";
+import { myAssignments } from "../util/myAssignments.js";
 import cloudinary from "../cloudinary.js";
 import { checkAvatarUrl } from "../util/avatarCheck.js";
 import { WA_CODE_MINUTES, WA_RESEND_SECONDS, WA_MAX_ATTEMPTS, whatsappEnabled, toWhatsAppNumber, newWaCode, hashWaCode, sendWhatsAppCode } from "../util/whatsappVerify.js";
@@ -2217,6 +2219,10 @@ router.get(
       materials: rateLib.materials,
       gangs: rateLib.gangs,
       certificates,
+      // R11: assignments with a new alert (due soon, overdue, result in).
+      assignments: await myAssignments(userId, { links: false })
+        .then(alertCount)
+        .catch(() => 0),
       productsOwned: owned.size,
       productsTotal: catalogue,
       ownedKeys: [...owned],

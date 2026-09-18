@@ -30,8 +30,14 @@ describe("section tabs (R03)", () => {
     ]);
   });
 
-  it("leaves out screens that are not built yet", () => {
-    expect(labels("dash-learning")).not.toContain("Assignments");
+  it("shows every Learn destination, Assignments included now it is built", () => {
+    expect(labels("dash-learning")).toEqual([
+      "My learning",
+      "Assignments",
+      "Certificates",
+      "Lessons & events",
+      "Guides & docs",
+    ]);
   });
 
   it("shows nothing off the rail", () => {

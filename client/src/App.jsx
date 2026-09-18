@@ -37,7 +37,7 @@ export default function App() {
   // nav and footer. /admin joins the list because the admin section now has
   // his rail: two sets of navigation over one page compete for the same job,
   // and "Book a demo" does not belong above a refund queue.
-  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-course|projects|time-management|pm-tracker|revit-projects|portfolio|portfolio-dashboard|j|archicad|admin)(\/|$)/.test(
+  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-assignments|dash-course|projects|time-management|pm-tracker|revit-projects|portfolio|portfolio-dashboard|j|archicad|admin)(\/|$)/.test(
     location.pathname,
   );
 

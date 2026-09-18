@@ -1,6 +1,6 @@
 import express from "express";
 import { withFileLinks } from "../util/submissionLinks.js";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
@@ -9,7 +9,10 @@ import PDFDocument from "pdfkit";
 import cloudinary from "../utils/cloudinaryConfig.js";
 
 const router = express.Router();
-router.use(requireAuth, requireAdmin);
+// Staff with the "learn" area mark submissions: the same gate as the queue
+// they read them from (admin.learnQueues.js). requireAdmin here refused them
+// at the grade step after showing them the queue (R13).
+router.use(requireAuth, requirePermission("learn"));
 
 // list pending submissions
 router.get("/submissions", async (_req, res) => {
@@ -21,9 +24,13 @@ router.get("/submissions", async (_req, res) => {
 
 // grade
 router.post("/submissions/:id/grade", async (req, res) => {
-  const { status, feedback } = req.body || {};
+  const { status, feedback, score } = req.body || {};
   if (!["approved", "rejected"].includes(status))
     return res.status(400).json({ error: "status must be approved|rejected" });
+  const mark = score === undefined || score === null || score === "" ? null : Number(score);
+  if (mark !== null && (!Number.isFinite(mark) || mark < 0 || mark > 100)) {
+    return res.status(400).json({ error: "A mark is a number from 0 to 100." });
+  }
 
   const s = await CourseSubmission.findById(req.params.id);
   if (!s) return res.status(404).json({ error: "Submission not found" });
@@ -32,6 +39,15 @@ router.post("/submissions/:id/grade", async (req, res) => {
   s.feedback = feedback || "";
   s.gradedBy = req.user.email;
   s.gradedAt = new Date();
+  s.score = mark;
+  // The learner sees who marked it; a new mark is a new result to read.
+  s.feedbackSeenAt = null;
+  try {
+    const marker = await User.findById(req.user._id || req.user.id, { firstName: 1, lastName: 1 }).lean();
+    s.gradedByName = [marker?.firstName, marker?.lastName].filter(Boolean).join(" ") || "Your tutor";
+  } catch {
+    s.gradedByName = "Your tutor";
+  }
   await s.save();
 
   // if approved, mark module completed (idempotent)

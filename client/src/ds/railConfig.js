@@ -59,7 +59,7 @@ export const RAIL = [
     group: "Learn",
     items: [
       { id: "dash-learning", label: "My learning", to: "/dash-learning", icon: "hi-learning", also: ["/dash-course/:sku"] },
-      { id: "dash-assignments", label: "Assignments", to: "/dash-assignments", icon: "wi-task", dot: "assignments", ready: false },
+      { id: "dash-assignments", label: "Assignments", to: "/dash-assignments", icon: "wi-task", dot: "assignments" },
       { id: "dash-certificates", label: "Certificates", to: "/dash-certificates", icon: "hi-cert", badge: "certificates" },
       { id: "learn", label: "Lessons & events", to: "/learn", icon: "hi-play" },
       { id: "dash-guides", label: "Guides & docs", to: "/manage/guides", icon: "hi-doc" },

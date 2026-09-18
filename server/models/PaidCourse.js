@@ -37,6 +37,10 @@ const ModuleSchema = new mongoose.Schema(
     week: { type: Number, default: 0, min: 0 },
 
     requiresSubmission: { type: Boolean, default: false },
+    // When the submission is due (R11): a fixed date for a cohort, or a
+    // number of days after each learner enrolled. Neither = no due date.
+    dueAt: { type: Date, default: null },
+    dueAfterDays: { type: Number, default: 0, min: 0 },
     instructions: { type: String, default: "" },
     videoUrl: { type: String },
     durationSec: { type: Number },

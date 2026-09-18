@@ -144,6 +144,7 @@ const WorkProject = React.lazy(() => import("./pages/WorkProject.jsx"));
 const WorkProgramme = React.lazy(() => import("./pages/WorkProgramme.jsx"));
 const Learning = React.lazy(() => import("./pages/Learning.jsx"));
 const Certificates = React.lazy(() => import("./pages/Certificates.jsx"));
+const Assignments = React.lazy(() => import("./pages/Assignments.jsx"));
 const LearningCourse = React.lazy(() => import("./pages/LearningCourse.jsx"));
 const LearnCourseRedirect = React.lazy(() => import("./pages/LearnCourseRedirect.jsx"));
 const WorkShellRoute = React.lazy(() => import("./pages/WorkShellRoute.jsx"));
@@ -345,6 +346,7 @@ const router = createBrowserRouter([
         { path: "work/programme", el: <WorkProgramme /> },
         { path: "dash-learning", el: <Learning /> },
         { path: "dash-certificates", el: <Certificates /> },
+        { path: "dash-assignments", el: <Assignments /> },
         { path: "dash-course/:sku", el: <LearningCourse /> },
       ].map(({ path, el }) => ({
         path,
