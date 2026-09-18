@@ -54,12 +54,39 @@ export function verifyEmail({ firstName, code, minutes = 30 }) {
         codeBlock(code) +
         p(`It lasts ${minutes} minutes. If it expires, ask for another one.`) +
         p(
-          "Until the address is confirmed you can sign in and look around, but you cannot buy " +
-            "anything or download an installer — we will not sell a licence to an address we " +
-            "cannot reach.",
+          "Until the address is confirmed the account stays closed: you can sign in only to " +
+            "enter this code, ask for a new one, or correct the address.",
         ),
       footNote:
         "If you did not create an ADLM account, ignore this. Nothing happens until the code is used.",
+    }),
+  };
+}
+
+// The one reminder to accounts that signed up but never confirmed (sent by
+// scripts/email-verify-reminder.mjs). No code in it: a code lasts 30 minutes,
+// so the link opens the confirm screen, which sends a fresh one.
+export function confirmReminder({ firstName, days = 14 }) {
+  return {
+    subject: "Confirm your ADLM email to keep your account",
+    html: wrapEmail({
+      title: "One step left on your ADLM account",
+      preheader: `Confirm your email within ${days} days to keep the account.`,
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p(
+          "You created an ADLM account but the email address has not been confirmed yet. " +
+            "Our confirm screen was missing for a while, so this is on us, not you.",
+        ) +
+        p(
+          "Sign in, press Send a new code, and type the six digits we email you. It takes a minute.",
+        ) +
+        p(
+          `If the address is not confirmed within ${days} days the account is closed. ` +
+            "Nothing is deleted; write to us and we will reopen it.",
+        ),
+      cta: { label: "Confirm my email", href: `${SITE}/verify-email` },
+      footNote: "If you did not create an ADLM account, ignore this and it will close by itself.",
     }),
   };
 }

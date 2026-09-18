@@ -1,5 +1,6 @@
 import React from "react";
-import { Outlet, useLocation, ScrollRestoration } from "react-router-dom";
+import { Link, Outlet, useLocation, ScrollRestoration } from "react-router-dom";
+import { useAuth } from "./store.jsx";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import DesignModeBanner from "./components/DesignModeBanner.jsx";
@@ -15,6 +16,7 @@ import { initGA } from "./ga";
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
   const location = useLocation();
+  const { user: authUser } = useAuth();
 
   // Screens that render inside his app frame — rail, app bar, own scroll
   // container. They supply their own chrome and their own padding, so the
@@ -95,6 +97,17 @@ export default function App() {
           build does exactly that; it is on the snag list for him rather than
           reproduced here. */}
       {!appShellRoute && <Nav />}
+
+      {/* Signed in but the email is not confirmed: say so on every page
+          (a licensed account is prompted here rather than locked out). */}
+      {authUser?.emailVerified === false && location.pathname !== "/verify-email" && (
+        <div className="w-full bg-amber-50 text-amber-900 border-b border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-800 text-sm px-4 py-2 text-center">
+          Confirm your email address to use your account.{" "}
+          <Link className="underline font-semibold" to={`/verify-email?next=${encodeURIComponent(location.pathname)}`}>
+            Enter the code
+          </Link>
+        </div>
+      )}
 
       {/* Only renders for Design Access sessions, and only on /admin. */}
       <DesignModeBanner />
