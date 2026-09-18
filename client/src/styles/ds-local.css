@@ -1574,3 +1574,7 @@
 .ds .launch-strip .lab{flex-basis:100%;text-align:center}
 .ds .launch-strip .go{display:none}
 }
+
+/* P0.4: index.css paints every input in dark mode (.dark input:not(...)),
+   which outranks his transparent search field in the project gallery. */
+:root.dark .ds .pj-search input{background:none;color:var(--ink)}

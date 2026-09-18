@@ -23,6 +23,9 @@ describe("rail active state (R04)", () => {
     expect(at("/projects/planswift", { search: "?project=block-a" })).toBe("tool-heron");
     expect(at("/projects/mep")).toBe("tool-mep");
     expect(at("/projects/civil3d")).toBe("tool-civiq");
+    // P0.4: his tool pages light the same entry as the tool's workspace.
+    expect(at("/work/tool/quiv")).toBe("tool-quiv");
+    expect(at("/work/tool/heron")).toBe("tool-heron");
   });
 
   it("keeps other project pages under Projects and a course under My learning", () => {

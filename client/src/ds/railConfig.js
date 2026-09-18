@@ -35,14 +35,14 @@ export const RAIL = [
         label: "My tools",
         icon: "wi-tools",
         fold: "adlm-tools",
-        // Each tool opens that tool's projects (the workspace at
-        // /projects/:tool). His /work-tool pages replace these routes in P0.4.
+        // Each tool opens his tool page (/work/tool/:t, P0.4); the tool's
+        // workspace (/projects/:tool) still lights the same entry.
         items: [
-          { id: "tool-quiv", label: "QUIV", to: "/projects/revit", product: "revit", img: "/ds/ic-quiv.png" },
-          { id: "tool-heron", label: "HERON", to: "/projects/planswift", product: "planswift", img: "/ds/ic-heron.png" },
+          { id: "tool-quiv", label: "QUIV", to: "/work/tool/quiv", product: "revit", img: "/ds/ic-quiv.png", also: ["/projects/revit"] },
+          { id: "tool-heron", label: "HERON", to: "/work/tool/heron", product: "planswift", img: "/ds/ic-heron.png", also: ["/projects/planswift"] },
           { id: "work-library", label: "RateGen", to: "/work/library", img: "/ds/ic-rategen.png", also: ["/work/rate/:id"] },
-          { id: "tool-mep", label: "Revit MEP", to: "/projects/mep", product: "mep", img: "/ds/ic-mep.png" },
-          { id: "tool-civiq", label: "CIVIQ", to: "/projects/civil3d", product: "civil3d", img: "/ds/ic-civiq.png" },
+          { id: "tool-mep", label: "Revit MEP", to: "/work/tool/mep", product: "mep", img: "/ds/ic-mep.png", also: ["/projects/mep"] },
+          { id: "tool-civiq", label: "CIVIQ", to: "/work/tool/civiq", product: "civil3d", img: "/ds/ic-civiq.png", also: ["/projects/civil3d"] },
         ],
       },
       {

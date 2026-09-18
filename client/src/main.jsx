@@ -137,6 +137,7 @@ const ManageGuides = React.lazy(() => import("./pages/ManageGuides.jsx"));
 const ManageSettings = React.lazy(() => import("./pages/ManageSettings.jsx"));
 const WorkHome = React.lazy(() => import("./pages/WorkHome.jsx"));
 const WorkProjects = React.lazy(() => import("./pages/WorkProjects.jsx"));
+const WorkTool = React.lazy(() => import("./pages/WorkTool.jsx"));
 const ManageSupport = React.lazy(() => import("./pages/ManageSupport.jsx"));
 const WorkLibrary = React.lazy(() => import("./pages/WorkLibrary.jsx"));
 const WorkRate = React.lazy(() => import("./pages/WorkRate.jsx"));
@@ -360,6 +361,8 @@ const router = createBrowserRouter([
         // is the whole architectural point of the surface.
         { path: "work", el: <WorkHome /> },
         { path: "work/projects", el: <WorkProjects /> },
+        // P0.4: his tool pages, one tool's projects.
+        { path: "work/tool/:t", el: <WorkTool /> },
         { path: "manage/support", el: <ManageSupport /> },
         { path: "work/library", el: <WorkLibrary /> },
         { path: "work/rate/:id", el: <WorkRate /> },
