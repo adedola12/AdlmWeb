@@ -1500,3 +1500,13 @@
 .ds .dsh-sectabs + .dsh-in{padding-top:18px}
 @media (max-width:1000px){.ds .dsh-sectabs{padding:20px 20px 0}}
 @media (max-width:720px){.ds .dsh-sectabs{padding:16px 16px 0}.ds .dsh-sectabs .wk-tabs{display:flex}}
+
+/* R06 — sticky panels stop at their section's bounds.
+   .dsh-main is the scroller and his app bar sticks at its top, 64px tall
+   (--dash-bar). The course sidebar stuck at 14px, so it slid under the bar
+   and a long module list could never be scrolled to its end: it now sits
+   below the bar and scrolls inside itself. His narrow-screen rule
+   (.lx-side{position:static} under 1000px) still applies. */
+.ds .dsh-main .lx-side{top:calc(var(--dash-bar) + 14px);max-height:calc(100dvh - var(--dash-bar) - 28px);overflow:auto;overscroll-behavior:contain}
+/* A #target inside the app lands below the sticky bar, not under it. */
+.ds .dsh-main [id]{scroll-margin-top:calc(var(--dash-bar) + 16px)}

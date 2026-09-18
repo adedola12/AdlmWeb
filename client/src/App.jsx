@@ -73,7 +73,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-adlm-dark-bg text-slate-900 dark:text-adlm-dark-text transition-colors">
-      {!bannerDismissed && (
+      {/* Marketing pages only: above his app frame (a 100dvh grid with its
+          own scroller) the banner pushed the frame's foot off screen and
+          made the window scroll as well (R06). */}
+      {!bannerDismissed && !appShellRoute && (
         <CouponBanner
           banner={banner}
           onClose={() => setBannerDismissed(true)}
