@@ -100,7 +100,24 @@ export async function handler(event, context) {
     // is not a trade anybody would make, so infra points a second function
     // (VideoPollFn) at this same file — one copy of the code, two concurrency
     // budgets.
-    "video-poll": () => jobs.runVideoPoll(),
+    // R02/R10: new uploads onto the free lesson shelves first, from the
+    // channel's public feed (no API key), with its own try/catch so a feed
+    // hiccup never stops the announcement poll, and the other way round.
+    "video-poll": async () => {
+      let freeLibrary;
+      try {
+        const [{ runFreeLibraryAuto }, { FreeVideo }] = await Promise.all([
+          import("./util/freeLibraryAuto.js"),
+          import("./models/Learn.js"),
+        ]);
+        freeLibrary = await runFreeLibraryAuto({ FreeVideo });
+      } catch (err) {
+        console.error("[scheduled] free-library failed:", err?.message || err);
+        freeLibrary = { ok: false, error: String(err?.message || err) };
+      }
+      const poll = await jobs.runVideoPoll();
+      return { ...(poll && typeof poll === "object" ? poll : { poll }), freeLibrary };
+    },
     // Normally rides on expiry-notifier below; listed so it can be invoked by
     // hand with { "job": "ops-digest" } to resend a morning report.
     "ops-digest": () => jobs.runOpsDigest(),
