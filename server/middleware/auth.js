@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { mustVerifyEmail, allowedWhileUnverified, EMAIL_NOT_VERIFIED } from "../util/emailGate.js";
 import { User } from "../models/User.js";
 import { verifyStepUp } from "../util/jwt.js";
 import { roleHasArea } from "../util/rbac.js";
@@ -37,6 +38,10 @@ export function requireAuth(req, res, next) {
     // and lock the designer out of every screen, so keep what it set.
     if (req.designMode && req.user) return next();
     req.user = verifyAccess(token); // { id, email, role, isAdmin, ... }
+    // An unconfirmed email opens only the /auth routes (util/emailGate.js).
+    if (mustVerifyEmail(req.user) && !allowedWhileUnverified(req.originalUrl)) {
+      return res.status(403).json(EMAIL_NOT_VERIFIED);
+    }
     next();
   } catch {
     return safeJson(res, 401, "Unauthorized");

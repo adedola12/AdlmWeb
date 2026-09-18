@@ -123,6 +123,15 @@ export async function handler(event, context) {
       console.error("[scheduled] ops-digest failed:", err?.message || err);
       out.opsDigest = { ok: false, error: String(err?.message || err) };
     }
+    // Close accounts that were given 14 days to confirm their email and did
+    // not (util/unconfirmedSweep.js). Same daily slot, own try/catch.
+    try {
+      const { runUnconfirmedSweep } = await import("./util/unconfirmedSweep.js");
+      out.unconfirmedSweep = await runUnconfirmedSweep();
+    } catch (err) {
+      console.error("[scheduled] unconfirmed sweep failed:", err?.message || err);
+      out.unconfirmedSweep = { ok: false, error: String(err?.message || err) };
+    }
   }
 
   console.log(

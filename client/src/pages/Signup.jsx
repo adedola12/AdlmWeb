@@ -51,7 +51,9 @@ export default function Signup() {
       // a signup, and counting attempts here would inflate the only number
       // anyone checks on this page.
       trackEvent("sign_up", { method: "password" });
-      nav(AFTER_SIGN_IN);
+      // Straight to the code we just emailed; the account opens once it is
+      // confirmed.
+      nav(res?.user?.emailVerified === false ? `/verify-email?next=${encodeURIComponent(AFTER_SIGN_IN)}` : AFTER_SIGN_IN);
     } catch (e) {
       setErr(e.message || "Signup failed");
     } finally {

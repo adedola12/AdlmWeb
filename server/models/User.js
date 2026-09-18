@@ -165,6 +165,13 @@ const UserSchema = new mongoose.Schema(
     },
 
     disabled: { type: Boolean, default: false },
+    // Why and when, for a disable that was not done by hand (so an admin
+    // reading the account can tell a closed ghost from a banned user).
+    disabledReason: { type: String, default: "" },
+    disabledAt: { type: Date, default: null },
+    // The one "confirm your email or the account closes" reminder, and so the
+    // start of the 14-day clock (util/unconfirmedSweep.js).
+    emailVerifyReminderAt: { type: Date, default: null },
 
     // Break-glass "God" support account flag. On its own this does NOTHING —
     // God powers only activate when this is true AND the email is also listed

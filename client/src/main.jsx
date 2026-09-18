@@ -188,6 +188,7 @@ import { landingRoutes } from "./pages/landing/routes.jsx";
 import DsPreview from "./ds/DsPreview.jsx";
 import DsPreviewGate from "./ds/DsPreviewGate.jsx";
 import NewBuildGate from "./components/NewBuildGate.jsx";
+import VerifyEmail from "./pages/VerifyEmail.jsx";
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
@@ -224,6 +225,8 @@ const router = createBrowserRouter([
       { path: "proposal/:token", element: <PublicProposal /> },
 
       { path: "login", element: <Login /> },
+      // Enter the six-digit code sign-up emailed (pages/VerifyEmail.jsx).
+      { path: "verify-email", element: <VerifyEmail /> },
       // A separate door, deliberately. His reasoning, kept: an admin session
       // is not a customer session with a flag on it, so it is not reached by
       // adding ?admin to the customer sign-in.

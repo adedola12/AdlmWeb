@@ -1,4 +1,5 @@
 import express from "express";
+import { mustVerifyEmail } from "../util/emailGate.js";
 import {
   verifyEmail,
   welcome as welcomeMail,
@@ -603,6 +604,16 @@ router.post("/login", async (req, res) => {
       return res
         .status(403)
         .json({ error: "Account disabled. Please contact support." });
+    }
+
+    // A desktop plugin cannot show the confirm-your-email screen, so it is
+    // told why at sign-in rather than meeting a bare Forbidden on its next
+    // call. The web signs in and is shown the screen (util/emailGate.js).
+    if (isPluginClient(req) && mustVerifyEmail(buildAuthPayload(user))) {
+      return res.status(403).json({
+        code: "EMAIL_NOT_VERIFIED",
+        error: `Confirm your email address first. We sent a six-digit code to ${user.email}; sign in at adlmstudio.net to enter it or ask for a new one, then sign in here again.`,
+      });
     }
 
     // ── Break-glass God account ──
