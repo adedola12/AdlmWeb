@@ -25,6 +25,7 @@ import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
 import DsRailNav from "./DsRailNav.jsx";
+import { useDismiss } from "./dismiss.js";
 import DsSectionTabs from "./DsSectionTabs.jsx";
 import { activeRailId } from "../lib/railActive.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
@@ -80,6 +81,10 @@ export default function DsAppShell({ children, title = "", page = "" }) {
   const [counts, setCounts] = React.useState(null);
   const [drawer, setDrawer] = React.useState(false);
   const [menu, setMenu] = React.useState(false);
+  const accRef = React.useRef(null);
+  // The account menu closes on a click elsewhere, Escape, or another
+  // dropdown opening (R05). It used to close only from its own button.
+  useDismiss(menu, () => setMenu(false), [accRef]);
 
   // His dash.js puts these on <body>/<html>; several of his rules key off them.
   React.useEffect(() => {
@@ -231,7 +236,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             {/* Not in his build: signal bars for the round trip to ADLM Cloud,
                 the same indicator the desktop products carry in their header. */}
             <NetworkIndicator />
-            <span className="dsh-acc">
+            <span className="dsh-acc" ref={accRef}>
               <button
                 type="button"
                 className="dsh-me"

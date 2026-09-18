@@ -30,6 +30,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { resolveHref } from "../lib/dsRoutes.js";
+import { claimOpen } from "./dismiss.js";
 
 const isWide = () => window.innerWidth > 1000;
 
@@ -725,16 +726,21 @@ function initNavPanel(root, s) {
     groups[g.getAttribute("data-panel")] = g;
   }
   let closeT = 0;
+  // R05: while open it is registered with ds/dismiss.js, so a click outside
+  // the nav, Escape, or another dropdown opening closes it.
+  let release = null;
 
   const close = () => {
     navEl.classList.remove("np-open");
     npFrame.style.height = "0px";
     Object.values(groups).forEach((g) => g.classList.remove("on"));
+    if (release) { const r = release; release = null; r(); }
   };
   const show = (key) => {
     const g = groups[key];
     if (!g) { close(); return; }
     clearTimeout(closeT);
+    if (!release) release = claimOpen(close, { inside: () => [navEl, panel] });
     Object.entries(groups).forEach(([k, el]) => el.classList.toggle("on", k === key));
     navEl.classList.add("np-open");
     npFrame.style.height = `${g.offsetHeight}px`;
@@ -754,7 +760,7 @@ function initNavPanel(root, s) {
     const on = panel.querySelector(".npg.on");
     if (on) npFrame.style.height = `${on.offsetHeight}px`;
   });
-  s.add(() => clearTimeout(closeT));
+  s.add(() => { clearTimeout(closeT); close(); });
 }
 
 // ── expanding picker (products) ────────────────────────────────────────────

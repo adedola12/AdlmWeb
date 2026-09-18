@@ -1,4 +1,5 @@
 import React from "react";
+import { useDismiss as useSharedDismiss } from "../../ds/dismiss.js";
 import { FaCheck, FaCopy, FaTrash } from "../../components/icons.jsx";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
@@ -17,24 +18,11 @@ const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
 const WorkAreaView = React.lazy(() => import("./WorkAreaView.jsx"));
 
-// Close a popover on an outside press or Escape — the same behaviour as his
-// .wk-dd control (see ds/WkDropdown.jsx).
+// Close a popover on an outside press, Escape, or another dropdown opening:
+// the shared rule in ds/dismiss.js (R05), kept under this file's argument
+// order.
 function useDismiss(ref, open, onClose) {
-  React.useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e) => {
-      if (!ref.current?.contains(e.target)) onClose();
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [ref, open, onClose]);
+  useSharedDismiss(open, onClose, [ref]);
 }
 
 // A popover anchored to the right edge of its trigger, in his .wk-dd-m.

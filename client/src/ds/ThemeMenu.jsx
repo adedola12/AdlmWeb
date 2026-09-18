@@ -9,6 +9,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "../theme.jsx";
 import { THEMES } from "./themes.js";
+import { claimOpen } from "./dismiss.js";
 
 export default function ThemeMenu({ anchor, onClose }) {
   const { preference, setPreference } = useTheme();
@@ -31,24 +32,18 @@ export default function ThemeMenu({ anchor, onClose }) {
     return () => anchor.setAttribute("aria-expanded", "false");
   }, [anchor]);
 
-  // Shut on a click elsewhere, Escape, resize or scroll, as his does.
+  // Shut on a click elsewhere, Escape or another dropdown (ds/dismiss.js),
+  // and on resize or scroll, as his does.
   React.useEffect(() => {
-    const away = (e) => {
-      if (ref.current?.contains(e.target) || anchor?.contains(e.target)) return;
-      onClose();
-    };
+    const release = claimOpen(onClose, { inside: () => [ref.current, anchor] });
     const key = (e) => {
-      if (e.key === "Escape") {
-        onClose();
-        anchor?.focus();
-      }
+      if (e.key === "Escape") anchor?.focus();
     };
-    document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", key);
     window.addEventListener("resize", onClose);
     window.addEventListener("scroll", onClose, { passive: true, capture: true });
     return () => {
-      document.removeEventListener("pointerdown", away);
+      release();
       document.removeEventListener("keydown", key);
       window.removeEventListener("resize", onClose);
       window.removeEventListener("scroll", onClose, { capture: true });
