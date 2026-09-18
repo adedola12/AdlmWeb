@@ -1,5 +1,6 @@
 // server/routes/me.js
 import express from "express";
+import { resolveDownload } from "../util/downloadLinks.js";
 import { alertCount } from "../util/assignmentAlerts.js";
 import { myAssignments } from "../util/myAssignments.js";
 import cloudinary from "../cloudinary.js";
@@ -581,6 +582,11 @@ router.get(
         .lean(),
     ]);
 
+    // R15: from our own storage when the file is there, the Admin setting
+    // otherwise. An hour, because this sits on a page until it is clicked; the
+    // new Downloads screen asks /me/downloads/installer-hub for a fresh one.
+    const hubDownload = await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600 });
+
     return res.json({
       email: user.email,
       refreshVersion: user.refreshVersion || 1,
@@ -592,7 +598,7 @@ router.get(
 
       // Installer Hub settings (global, admin-configured)
       installerHub: {
-        downloadUrl: globalSettings?.installerHubUrl || "",
+        downloadUrl: hubDownload.url,
         videoUrl: globalSettings?.installerHubVideoUrl || "",
         // Always present — falls back to the copy bundled with the site.
         guideUrl: resolveUserGuideUrl(globalSettings?.installerHubGuideUrl),

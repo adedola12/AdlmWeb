@@ -108,6 +108,7 @@ import adminUsage from "./routes/admin.usage.js";
 import adminAiUsage from "./routes/admin.aiUsage.js";
 import adminCertificates from "./routes/admin.certificates.js";
 import verifyRoutes from "./routes/verify.js";
+import { publicDownloads, meDownloads } from "./routes/downloads.js";
 import telemetryTakeoff from "./routes/telemetry.takeoff.js";
 import adminTakeoff from "./routes/admin.takeoff.js";
 
@@ -281,6 +282,8 @@ app.use("/auth", authLimiter, authRoutes);
 app.use("/me/billing", meBillingRoutes);
 // Mounted before the catch-all /me router so its own routes win.
 app.use("/me/material-constants", materialConstantsRoutes);
+// Ahead of /me so its routes are reached before the catch-all me router (R15).
+app.use("/me/downloads", meDownloads);
 app.use("/me", meRoutes);
 app.use("/me/deployments", deviceLimiter, meDeploymentsRoutes);
 app.use("/me/courses", meCourses);
@@ -403,6 +406,7 @@ app.use("/admin/emails", adminEmails);
 app.use("/admin/certificates", adminCertificates);
 // Public on purpose: an employer checking a certificate has no account here.
 app.use("/verify", verifyRoutes);
+app.use("/downloads", publicDownloads);
 app.use("/admin/broadcast", adminBroadcast);
 app.use("/admin/campaigns", adminCampaigns);
 app.use("/admin/billboard", adminBillboard);

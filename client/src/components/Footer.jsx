@@ -1,21 +1,17 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
+import { API_BASE } from "../config.js";
 import { Link, useNavigate } from "react-router-dom";
 import appleLogo from "../assets/icons/apple-logo.png";
 import googlePlayLogo from "../assets/icons/playstore.png";
 import ComingSoonModal from "./ComingSoonModal.jsx";
 
-const FALLBACK_APP_URL =
-  "https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link";
+// R15: the app downloads from ADLM's own storage through the API, which
+// falls back to the link set in Admin until the file is uploaded. The old
+// relative fetch of /settings/mobile-app-url reached the web host, not the
+// API, so this always served a hard-coded, out-of-date Google Drive copy.
+const appUrl = `${API_BASE}/downloads/android`;
 
 export default function Footer() {
-  const [appUrl, setAppUrl] = useState(FALLBACK_APP_URL);
-
-  useEffect(() => {
-    fetch("/settings/mobile-app-url")
-      .then((r) => r.json())
-      .then((d) => { if (d?.mobileAppUrl) setAppUrl(d.mobileAppUrl); })
-      .catch(() => {});
-  }, []);
   const navigate = useNavigate();
 
   // ✅ routes that REALLY exist in your router

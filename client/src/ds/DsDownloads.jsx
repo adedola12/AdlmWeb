@@ -168,6 +168,19 @@ export default function DsDownloads() {
 
   const { hub } = view;
 
+  // R15: a fresh link from our storage at the moment of the click; the one on
+  // the page is the fallback, and it expires an hour after the page loaded.
+  const freshHub = async (e) => {
+    e.preventDefault();
+    const fallback = hub.downloadUrl;
+    try {
+      const r = await apiAuthed("/me/downloads/installer-hub", { token: accessToken });
+      window.location.assign(r?.url || fallback);
+    } catch {
+      window.location.assign(fallback);
+    }
+  };
+
   return (
     <div className="dsh-in">
       <div className="dsh-head">
@@ -181,7 +194,7 @@ export default function DsDownloads() {
         </div>
         {hub.downloadUrl && (
           <div className="dsh-acts">
-            <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl}>
+            <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl} onClick={freshHub}>
               Download the Installer Hub
             </a>
           </div>
@@ -195,7 +208,7 @@ export default function DsDownloads() {
           subscription covers, and keeps each product on its current build.
         </p>
         {hub.downloadUrl ? (
-          <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl}>
+          <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl} onClick={freshHub}>
             Download for Windows {icon("downloads")}
           </a>
         ) : (
