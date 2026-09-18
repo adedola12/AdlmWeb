@@ -1057,6 +1057,9 @@ export class AdlmApiStack extends Stack {
      * It is deliberately NOT behind the CloudFront distribution. Nothing
      * external calls it — only the API function does, server to server.
      */
+    // Hoisted so the ADLM-Live dashboard can include the converter's error
+    // metric when it is deployed, without reaching into this block's scope.
+    let mpxjErrorMetric: cloudwatch.IMetric | undefined;
     if (cfg.deployMpxj) {
       const mpxjLogs = new logs.LogGroup(this, "MpxjFnLogs", {
         retention: cfg.logRetentionDays,
@@ -1115,6 +1118,11 @@ export class AdlmApiStack extends Stack {
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       });
       mpxjErrors.addAlarmAction(notify);
+      mpxjErrorMetric = mpxjFn.metricErrors({
+        period: Duration.minutes(5),
+        statistic: "Sum",
+        label: "Programme (MPXJ)",
+      });
 
       new CfnOutput(this, "MpxjFunctionUrl", {
         value: mpxjUrl.url,
@@ -1163,6 +1171,84 @@ export class AdlmApiStack extends Stack {
       description: cfg.useReservedConcurrency
         ? `Max ${reservedConcurrency(cfg) * cfg.mongoMaxPool} Atlas connections of ${cfg.atlasConnectionLimit}`
         : `Atlas connections are capped at (account quota) x ${cfg.mongoMaxPool}. Raise the Lambda quota, then set useReservedConcurrency: true.`,
+    });
+
+    /* ─────────────────── Live dashboard ─────────────────── */
+    // One mobile-friendly view of the whole ADLM backend: API traffic and
+    // latency, errors across every function, whether the crons are still firing,
+    // and a live tail of the API log. Codifies the ADLM-Live dashboard that was
+    // first put up by hand, so it now moves with the stack.
+    const backendErrorMetrics: cloudwatch.IMetric[] = [
+      fn.metricErrors({ period: Duration.minutes(5), statistic: "Sum", label: "API" }),
+      scheduledFn.metricErrors({ period: Duration.minutes(5), statistic: "Sum", label: "Scheduled/cron" }),
+      videoPollFn.metricErrors({ period: Duration.minutes(5), statistic: "Sum", label: "Video poll" }),
+      mailEventsFn.metricErrors({ period: Duration.minutes(5), statistic: "Sum", label: "Mail events" }),
+    ];
+    if (mpxjErrorMetric) backendErrorMetrics.push(mpxjErrorMetric);
+
+    new cloudwatch.Dashboard(this, "LiveDashboard", {
+      dashboardName: "ADLM-Live",
+      defaultInterval: Duration.hours(3),
+      widgets: [
+        [
+          new cloudwatch.TextWidget({
+            markdown:
+              "# ADLM Live - eu-west-1 (Ireland). Keep the mobile app region on Europe (Ireland).",
+            width: 24,
+            height: 1,
+          }),
+        ],
+        [
+          new cloudwatch.GraphWidget({
+            title: "API traffic - requests & errors (per min)",
+            width: 12,
+            height: 6,
+            left: [
+              fn.metricInvocations({ period: Duration.minutes(1), statistic: "Sum", label: "Requests" }),
+              fn.metricErrors({ period: Duration.minutes(1), statistic: "Sum", label: "Errors", color: cloudwatch.Color.RED }),
+              fn.metricThrottles({ period: Duration.minutes(1), statistic: "Sum", label: "Throttles", color: cloudwatch.Color.ORANGE }),
+            ],
+          }),
+          new cloudwatch.GraphWidget({
+            title: "API latency (ms)",
+            width: 12,
+            height: 6,
+            left: [
+              fn.metricDuration({ period: Duration.minutes(1), statistic: "p50", label: "p50" }),
+              fn.metricDuration({ period: Duration.minutes(1), statistic: "p90", label: "p90" }),
+              fn.metricDuration({ period: Duration.minutes(1), statistic: "p99", label: "p99", color: cloudwatch.Color.RED }),
+            ],
+          }),
+        ],
+        [
+          new cloudwatch.GraphWidget({
+            title: "Backend errors - all functions (should stay flat at 0)",
+            width: 12,
+            height: 6,
+            left: backendErrorMetrics,
+          }),
+          new cloudwatch.GraphWidget({
+            title: "Background jobs - are the crons running?",
+            width: 12,
+            height: 6,
+            left: [
+              scheduledFn.metricInvocations({ period: Duration.hours(1), statistic: "Sum", label: "Scheduled/cron" }),
+              videoPollFn.metricInvocations({ period: Duration.hours(1), statistic: "Sum", label: "Video poll" }),
+              mailEventsFn.metricInvocations({ period: Duration.hours(1), statistic: "Sum", label: "Mail events" }),
+            ],
+          }),
+        ],
+        [
+          new cloudwatch.LogQueryWidget({
+            title: "Live API log - errors, mail sends, sign-ins",
+            width: 24,
+            height: 8,
+            logGroupNames: [apiLogs.logGroupName],
+            view: cloudwatch.LogQueryVisualizationType.TABLE,
+            queryLines: ["fields @timestamp, @message", "sort @timestamp desc", "limit 50"],
+          }),
+        ],
+      ],
     });
   }
 }
