@@ -375,3 +375,24 @@ One commit per item (`R05: close dropdowns on outside click`).
 - the market-fit placeholders (R18)
 - course levels (R02)
 - Etti's photo (R19)
+
+## Status at end of 18 Sep 2026 (branch fix/richard-review-sep16, not merged)
+
+| Item | Status | Commit |
+| --- | --- | --- |
+| P0.1, P0.1b, P0.2, P0.3 | done | 3a9a979, d1839cb, 7c0386c, 137fea0 |
+| R01 to R08 | done | a3e1231, 380846e (R02), ced0636, 9cf5d18 + 8684a03, b3d64e4, 12ab412, 4feb014, f56ae8e + 81cf7d8 |
+| R09 client logos | blocked: waiting for your go-ahead to fetch the ten logos | none |
+| R10 | done | 5742275 |
+| R11, R13 | done (one shared commit) | 0b6aadf |
+| R12 | done | bf99d77 |
+| R14 | done | 62a67b9 |
+| R15, R16, R17 | done | d145ed7, 2875d63, 0944aa6 |
+| R18 /fit | on hold: waiting for Richard's redesign | none |
+| R19, R20, R21, R22 | done | 13da590, 0db7de8, 54c1c30, 33a9a0b |
+| P0.4 | partial: gallery and tool pages done; tab-and-line resume and RateGen origin filter not done (no origin data) | f5fd9ba |
+| P0.5 | done | 0c26bd1 |
+
+Checks at the end: client lint 54 problems, all present before this branch (none added);
+client tests 55 pass; server tests 464 pass, 0 fail, 21 skipped; client production build OK;
+API and scheduled Lambda bundles OK. There is no TypeScript in this repo, so no type check.
