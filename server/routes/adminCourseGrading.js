@@ -1,4 +1,5 @@
 import express from "express";
+import { withFileLinks } from "../util/submissionLinks.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { PaidCourse } from "../models/PaidCourse.js";
@@ -15,7 +16,7 @@ router.get("/submissions", async (_req, res) => {
   const items = await CourseSubmission.find({ gradeStatus: "pending" })
     .sort({ createdAt: 1 })
     .lean();
-  res.json(items);
+  res.json(await withFileLinks(items));
 });
 
 // grade

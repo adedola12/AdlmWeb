@@ -1,4 +1,7 @@
 import express from "express";
+import { checkSubmissionFile, submissionKey } from "../util/submissionFiles.js";
+import { fileStoreBackend, presignUpload, headFile } from "../util/fileStore.js";
+import { withFileLinks } from "../util/submissionLinks.js";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
@@ -182,7 +185,7 @@ async function loadCourseContext(userId, skus) {
     Product.find({ isCourse: true, courseSku: { $in: skus } })
       .select("key name billingInterval courseSku thumbnailUrl blurb")
       .lean(),
-    CourseSubmission.find({ userId, courseSku: { $in: skus } }).lean(),
+    CourseSubmission.find({ userId, courseSku: { $in: skus } }).lean().then((rows) => withFileLinks(rows)),
   ]);
 
   const coursesBySku = Object.fromEntries(courses.map((course) => [course.sku, course]));
@@ -311,10 +314,51 @@ router.get("/", async (req, res) => {
   res.json(out);
 });
 
+// R12: ask for a place to upload an assignment file. The file goes straight
+// from the browser to private storage with the returned presigned PUT; the
+// submission is recorded by POST /:sku/submit with the returned key.
+router.post("/:sku/submission-upload", async (req, res) => {
+  const { moduleCode, fileName, fileType, fileSize } = req.body || {};
+  if (!moduleCode) return res.status(400).json({ error: "Which module is this for?" });
+  const check = checkSubmissionFile({ name: fileName, type: fileType, size: fileSize });
+  if (!check.ok) return res.status(400).json({ error: check.error });
+
+  const course = await PaidCourse.findOne({ sku: req.params.sku }).lean();
+  if (!course) return res.status(404).json({ error: "Course not found" });
+  if (!(course.modules || []).some((m) => m.code === moduleCode)) {
+    return res.status(400).json({ error: "Invalid module" });
+  }
+  const enrolled = await CourseEnrollment.exists({ userId: req.user._id, courseSku: req.params.sku });
+  if (!enrolled) return res.status(403).json({ error: "Not enrolled" });
+  if (!fileStoreBackend()) {
+    return res.status(503).json({ error: "Uploads are not available just now. Please try again later." });
+  }
+
+  const key = submissionKey({ userId: req.user._id, courseSku: req.params.sku, moduleCode, name: fileName });
+  const signed = await presignUpload({ key, contentType: check.contentType });
+  res.json({ ...signed, fileName, fileSize: Number(fileSize) || 0 });
+});
+
 router.post("/:sku/submit", async (req, res) => {
-  const { moduleCode, fileUrl, note } = req.body || {};
-  if (!moduleCode || !fileUrl) {
-    return res.status(400).json({ error: "moduleCode and fileUrl required" });
+  const { moduleCode, fileUrl, fileKey, fileName, note } = req.body || {};
+  if (!moduleCode || (!fileUrl && !fileKey)) {
+    return res.status(400).json({ error: "Attach a file before submitting." });
+  }
+
+  // A key from /submission-upload: it must be this learner's, for this
+  // course, and the file must really be there, of an accepted type and size.
+  let fileMeta = null;
+  if (fileKey) {
+    const prefix = submissionKey({ userId: req.user._id, courseSku: req.params.sku, moduleCode, name: "x", now: 0 }).replace(/0-x$/, "");
+    if (!String(fileKey).startsWith(prefix)) {
+      return res.status(400).json({ error: "That upload does not belong to this assignment." });
+    }
+    const storage = fileStoreBackend();
+    const head = storage ? await headFile({ key: fileKey, storage }) : null;
+    if (!head) return res.status(400).json({ error: "The file did not finish uploading. Please upload it again." });
+    const check = checkSubmissionFile({ name: fileName || fileKey, type: head.contentType, size: head.size });
+    if (!check.ok) return res.status(400).json({ error: check.error });
+    fileMeta = { fileKey, storage, fileName: String(fileName || "").slice(0, 200), fileSize: head.size, fileType: head.contentType };
   }
 
   const course = await PaidCourse.findOne({ sku: req.params.sku }).lean();
@@ -334,7 +378,7 @@ router.post("/:sku/submit", async (req, res) => {
     email: req.user.email,
     courseSku: req.params.sku,
     moduleCode,
-    fileUrl,
+    ...(fileMeta || { fileUrl }),
     note: note || "",
     gradeStatus: "pending",
   });
