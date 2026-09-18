@@ -399,6 +399,7 @@ router.get("/saved/:id", ...hub, async (req, res, next) => {
       to: d.to,
       from: d.from || "",
       source: d.source || "",
+      sign: d.sign || "line",
     });
   } catch (err) {
     next(err);
@@ -419,6 +420,7 @@ router.post("/saved", ...hub, async (req, res, next) => {
       from: String(b.from || "").trim(),
       source,
       blocks: n0(b.blocks),
+      sign: ["dolapo", "line", "none"].includes(b.sign) ? b.sign : "line",
       byId: req.user?._id,
       byEmail: req.user?.email || "",
     };
@@ -489,6 +491,7 @@ router.post("/saved/:id/duplicate", ...hub, async (req, res, next) => {
       to: src.to,
       source: src.source,
       blocks: src.blocks,
+      sign: src.sign || "line",
       byId: req.user?._id,
       byEmail: req.user?.email || "",
     });
