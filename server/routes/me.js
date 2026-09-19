@@ -36,6 +36,10 @@ import {
 } from "../util/boqImportAccess.js";
 import { blankToUndefined } from "../util/profileInput.js";
 import {
+  hubSharesAppIdentity,
+  isSchemeAwareBindingEnabled,
+} from "../util/deviceIdentity.js";
+import {
   verifySocialIdentity,
   exchangeCodeForIdToken,
   PROVIDER_FIELD,
@@ -162,6 +166,11 @@ function applyExpiryToUser(userDoc) {
   return changed;
 }
 
+// Kill switch: DEVICE_SCHEME_AWARE_BINDING=0 (util/deviceIdentity.js).
+function hideDevicesFromInstallerHub(productKey) {
+  return isSchemeAwareBindingEnabled() && !hubSharesAppIdentity(productKey);
+}
+
 function toEntitlementV2(ent) {
   normalizeLegacyEntitlement(ent);
   const act = activeDevices(ent);
@@ -191,7 +200,15 @@ function toEntitlementV2(ent) {
     // When seats are still available, return empty so the desktop client
     // allows the install (it checks devices.length > 0 to gate access).
     // The bind-device endpoint will properly register the new device.
-    devices: act.length >= maxSeats
+    //
+    // QUIV (revit) and ArchiCAD: never. The Installer Hub blocks Install and
+    // Update unless its own id is in this list, and those apps' rows carry a
+    // different id, so a full licence locked the customer out of updating
+    // their own PC. The app's sign-in enforces their seats; bind-device no
+    // longer writes rows for them. Regardless of client header, because the
+    // Hub caches summaries and older Hubs send none. seatsUsed is unchanged.
+    // The web shows machines from GET /me/devices, not from here.
+    devices: act.length >= maxSeats && !hideDevicesFromInstallerHub(ent.productKey)
       ? act.map((d) => ({
           fingerprint: String(d.fingerprint || ""),
           name: d.name || "",
@@ -2628,5 +2645,8 @@ router.post(
     res.json({ ok: true, verified: true });
   }),
 );
+
+// Exposed for tests only.
+export const __test = { toEntitlementV2 };
 
 export default router;

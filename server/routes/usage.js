@@ -12,6 +12,10 @@ import { requireAuth } from "../middleware/auth.js";
 import { UsageSession } from "../models/UsageSession.js";
 import { User } from "../models/User.js";
 import {
+  HUB_CLIENT,
+  isSchemeAwareBindingEnabled,
+} from "../util/deviceIdentity.js";
+import {
   DiagnosticLog,
   MAX_CONTENT_BYTES,
 } from "../models/DiagnosticLog.js";
@@ -129,12 +133,23 @@ router.post("/heartbeat", requireAuth, async (req, res) => {
 
     // Keep the bound device's lastSeenAt live so the admin Devices view
     // reflects actual use, not just the last login. Best-effort.
+    //
+    // A heartbeat is app use, so it also stamps appSeenAt: a row an app is
+    // running on is never adopted away by another sign-in
+    // (util/deviceBinding.js). Never from the Installer Hub, whose rows must
+    // stay adoptable. Kill switch: DEVICE_SCHEME_AWARE_BINDING=0.
     if (deviceFingerprint) {
+      const markAppUse =
+        isSchemeAwareBindingEnabled() &&
+        String(req.get("x-adlm-client") || "").trim().toLowerCase() !== HUB_CLIENT;
       User.updateOne(
         { _id: userId },
         {
           $set: {
             "entitlements.$[ent].devices.$[dev].lastSeenAt": now,
+            ...(markAppUse
+              ? { "entitlements.$[ent].devices.$[dev].appSeenAt": now }
+              : {}),
           },
         },
         {

@@ -7,11 +7,33 @@ const DeviceBindingSchema = new mongoose.Schema(
     boundAt: { type: Date, default: Date.now },
     lastSeenAt: { type: Date, default: Date.now },
     revokedAt: { type: Date, default: null },
-    // Fingerprint algorithm version:
-    //   1 = legacy SHA256(MachineName + MAC + Username)
-    //   2 = hardware-bound SHA256(CPUId + BIOS SN + Motherboard SN)
-    // Used for the seamless one-time migration from v1 → v2.
+    // Fingerprint algorithm version, as the client reports it:
+    //   1 = legacy, MAC-based (and the ArchiCAD client)
+    //   2 = a stable id, but NOT one recipe. The Installer Hub and most apps
+    //       send SHA256(CPUId|BIOS SN|Board SN) ("hw2"); the shipped QUIV
+    //       Revit plugin sends SHA256("v2|" + MachineGuid + "|" + UserName)
+    //       ("mgu2"). The same PC therefore has two different v2 ids.
+    // Used for the seamless one-time migration from v1 → v2. Which recipe a
+    // row holds is `scheme` below (util/deviceIdentity.js).
     fpVersion: { type: Number, default: 1, min: 1 },
+
+    // Provenance, recorded from DEVICE_SCHEME_AWARE_BINDING onwards (older
+    // rows have none of these; util/deviceIdentity.js infers them). No
+    // defaults on purpose: "absent" is what marks a row as written before.
+    //   source   "installer-hub" (bind-device) | "app" (a desktop sign-in)
+    //   scheme   "hw2" | "mgu2" | "v1": the recipe behind `fingerprint`
+    //   client   x-adlm-client header, or the User-Agent product token
+    source: { type: String, trim: true },
+    scheme: { type: String, trim: true },
+    client: { type: String, trim: true },
+    // Set when an app sign-in took this seat over from an Installer Hub row:
+    // the Hub's id and device name are kept here for support.
+    installerFingerprint: { type: String, trim: true },
+    installerName: { type: String },
+    adoptedAt: { type: Date },
+    // Last time an app sign-in matched or wrote this row. A row with this set
+    // is app use and is never adopted away from its machine.
+    appSeenAt: { type: Date },
   },
   { _id: false },
 );

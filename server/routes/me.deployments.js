@@ -9,6 +9,13 @@ import {
   isPrivateInstallerStorageEnabled,
   objectKeyFromPackageUri,
 } from "../utils/r2Upload.js";
+import {
+  HUB_CLIENT,
+  HUB_SCHEME,
+  HUB_SOURCE,
+  hubSharesAppIdentity,
+  isSchemeAwareBindingEnabled,
+} from "../util/deviceIdentity.js";
 
 const router = express.Router();
 
@@ -110,9 +117,26 @@ router.post(
       return res.status(404).json({ error: "Entitlement not found for this product" });
     }
 
-    normalizeLegacyEntitlement(ent);
-
     const fpVersion = Math.max(1, Number(req.get("x-adlm-fp-version")) || 1);
+    const schemeAware = isSchemeAwareBindingEnabled();
+
+    // QUIV (revit) and ArchiCAD never sign in with the id the Hub sends here,
+    // so a row written for them only ever took a seat away from the customer's
+    // own app (DEVICE_LIMIT_REACHED / DEVICE_MISMATCH on their own PC). For
+    // those products the app's own sign-in binds the machine; the Hub only
+    // needs a 2xx to carry on. No row is written or changed, and no v1 swap
+    // runs. Kill switch: DEVICE_SCHEME_AWARE_BINDING=0 (util/deviceIdentity.js).
+    if (schemeAware && !hubSharesAppIdentity(key)) {
+      console.log(
+        `[/me/deployments/bind-device] deferred to app: user=${user.email} ` +
+          `product=${key} fpVersion=${fpVersion} ` +
+          `client=${String(req.get("x-adlm-client") || "-")} ` +
+          `fp=${fp.slice(0, 10)}…`,
+      );
+      return res.json({ ok: true, bound: false, deferredToApp: true });
+    }
+
+    normalizeLegacyEntitlement(ent);
 
     const active = (ent.devices || []).filter((d) => !d.revokedAt);
     const maxSeats = Math.max(parseInt(ent.seats || 1, 10), 1);
@@ -161,6 +185,14 @@ router.post(
       lastSeenAt: new Date(),
       revokedAt: null,
       fpVersion: Math.max(1, Number(fpVersion) || 1),
+      // Provenance: this row is the Hub's, never an app sign-in.
+      ...(schemeAware
+        ? {
+            source: HUB_SOURCE,
+            scheme: fpVersion >= 2 ? HUB_SCHEME : "v1",
+            client: HUB_CLIENT,
+          }
+        : {}),
     });
 
     // Also set legacy field for backward compat

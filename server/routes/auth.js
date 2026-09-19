@@ -47,6 +47,18 @@ import {
   exchangeCodeForIdToken,
   PROVIDER_FIELD,
 } from "../util/socialIdentity.js";
+import {
+  normalizeLegacyEnt,
+  enforceDeviceBinding,
+  adoptionEvidenceNeeded,
+} from "../util/deviceBinding.js";
+import {
+  clientLabel,
+  clientScheme,
+  entitlementsWithoutDeviceProvenance,
+  isSchemeAwareBindingEnabled,
+} from "../util/deviceIdentity.js";
+import { clearInstallerRowsForAdoption } from "../util/deviceAppEvidence.js";
 
 const router = express.Router();
 
@@ -73,7 +85,9 @@ function buildAuthPayload(user) {
     // state chosen on the website, so a QS who moves job changes it in one place
     // and the desktop reprices on its next sync.
     state: user.state || "",
-    entitlements: user.entitlements || [],
+    // Device rows without their provenance fields: this payload is the access
+    // token, sent on every request (util/deviceIdentity.js explains).
+    entitlements: entitlementsWithoutDeviceProvenance(user.entitlements),
     firstName: user.firstName || "",
     lastName: user.lastName || "",
     whatsapp: user.whatsapp || "",
@@ -118,169 +132,12 @@ function normalizeExpiryMaybe(value) {
   return date;
 }
 
-function normalizeLegacyEnt(entitlement) {
-  if (!entitlement) return;
-
-  if (!entitlement.seats || entitlement.seats < 1) entitlement.seats = 1;
-  if (!Array.isArray(entitlement.devices)) entitlement.devices = [];
-
-  const seats = Math.max(Number(entitlement.seats || 1), 1);
-  const licenseType = String(entitlement.licenseType || "").toLowerCase();
-  if (licenseType !== "organization" && seats > 1) {
-    entitlement.licenseType = "organization";
-  }
-  if (!entitlement.licenseType) {
-    entitlement.licenseType = seats > 1 ? "organization" : "personal";
-  }
-
-  if (entitlement.devices.length === 0 && entitlement.deviceFingerprint) {
-    entitlement.devices.push({
-      fingerprint: entitlement.deviceFingerprint,
-      name: "",
-      boundAt: entitlement.deviceBoundAt || new Date(),
-      lastSeenAt: new Date(),
-      revokedAt: null,
-    });
-  }
-}
-
-function activeDevices(entitlement) {
-  return (entitlement?.devices || []).filter((device) => !device.revokedAt);
-}
-
 // Password complexity lives in util/passwordPolicy.js — see the note there
 // on why it is not defined in each route that sets a password.
 
-// Fingerprint v1→v2 migration: clients sending x-adlm-fp-version >= 2 that
-// don't match any existing device may transparently replace the user's
-// single legacy (v1) device. There is deliberately NO calendar deadline:
-// v1 fingerprints are MAC-based and drift whenever the user switches
-// network adapters, so a v1-bound user can show up needing migration at
-// any time (the original fixed 90-day window expired 2026-07-16 and
-// permanently locked such users out with DEVICE_MISMATCH). The migration
-// self-closes per entitlement: once its devices are v2, tryMigrate finds
-// no legacy device and normal binding enforcement applies.
-
-// enforceDeviceBinding enforces seat limits and, for personal (1-seat)
-// licenses, single-device binding. The `fpVersion` (from the
-// x-adlm-fp-version header) lets us auto-migrate users seamlessly from
-// the legacy MAC-based fingerprint to the new hardware-bound one
-// without locking them out when their fingerprint changes shape.
-function enforceDeviceBinding(entitlement, incomingFingerprint, fpVersion = 1) {
-  const fingerprint = String(incomingFingerprint || "").trim();
-  if (!fingerprint) {
-    return {
-      ok: false,
-      status: 400,
-      code: "DFP_REQUIRED",
-      error: "device_fingerprint required",
-    };
-  }
-
-  normalizeLegacyEnt(entitlement);
-
-  const seats = Math.max(Number(entitlement.seats || 1), 1);
-  const isOrg =
-    String(entitlement.licenseType || "").toLowerCase() === "organization" ||
-    seats > 1;
-
-  // Helper: try to migrate an existing v1 device to the new v2 fingerprint.
-  // Only runs when there is exactly one active v1 device (prevents
-  // accidental swaps on org licenses).
-  function tryMigrate(v2Fp) {
-    if (fpVersion < 2) return false;
-
-    const active = activeDevices(entitlement);
-    const legacy = active.filter((d) => (d.fpVersion || 1) < 2);
-    if (legacy.length !== 1) return false;
-
-    const target = legacy[0];
-    target.fingerprint = v2Fp;
-    target.fpVersion = 2;
-    target.lastSeenAt = new Date();
-    // Update legacy top-level mirror so older code paths stay consistent
-    entitlement.deviceFingerprint = v2Fp;
-    return true;
-  }
-
-  if (isOrg) {
-    const devices = activeDevices(entitlement);
-    const existing = devices.find((device) => device.fingerprint === fingerprint);
-
-    if (existing) {
-      existing.lastSeenAt = new Date();
-      if (fpVersion >= 2 && (existing.fpVersion || 1) < 2) existing.fpVersion = 2;
-      return { ok: true, changed: true };
-    }
-
-    if (devices.length < seats) {
-      entitlement.devices.push({
-        fingerprint,
-        name: "",
-        boundAt: new Date(),
-        lastSeenAt: new Date(),
-        revokedAt: null,
-        fpVersion: Math.max(1, Number(fpVersion) || 1),
-      });
-
-      if (!entitlement.deviceFingerprint) entitlement.deviceFingerprint = fingerprint;
-      if (!entitlement.deviceBoundAt) entitlement.deviceBoundAt = new Date();
-
-      return { ok: true, changed: true };
-    }
-
-    // At seat limit — last chance: migrate a lone legacy device in-place.
-    if (tryMigrate(fingerprint)) {
-      return { ok: true, changed: true, migrated: true };
-    }
-
-    return {
-      ok: false,
-      status: 403,
-      code: "DEVICE_LIMIT_REACHED",
-      error: "Device limit reached for this subscription.",
-    };
-  }
-
-  // Personal (single-seat) license
-  if (entitlement.deviceFingerprint && entitlement.deviceFingerprint !== fingerprint) {
-    // Attempt seamless migration for the v1 → v2 transition.
-    if (tryMigrate(fingerprint)) {
-      return { ok: true, changed: true, migrated: true };
-    }
-    return {
-      ok: false,
-      status: 403,
-      code: "DEVICE_MISMATCH",
-      error: "This subscription is already bound to another device.",
-    };
-  }
-
-  if (!entitlement.deviceFingerprint) {
-    entitlement.deviceFingerprint = fingerprint;
-    entitlement.deviceBoundAt = new Date();
-  }
-
-  const devices = activeDevices(entitlement);
-  if (!devices.some((device) => device.fingerprint === fingerprint)) {
-    entitlement.devices.push({
-      fingerprint,
-      name: "",
-      boundAt: entitlement.deviceBoundAt || new Date(),
-      lastSeenAt: new Date(),
-      revokedAt: null,
-      fpVersion: Math.max(1, Number(fpVersion) || 1),
-    });
-  } else {
-    const device = devices.find((item) => item.fingerprint === fingerprint);
-    if (device) {
-      device.lastSeenAt = new Date();
-      if (fpVersion >= 2 && (device.fpVersion || 1) < 2) device.fpVersion = 2;
-    }
-  }
-
-  return { ok: true, changed: true };
-}
+// Seat and device enforcement (normalizeLegacyEnt, enforceDeviceBinding, the
+// v1→v2 fingerprint migration and the scheme-aware Installer Hub adoption)
+// lives in util/deviceBinding.js so it can be unit-tested on its own.
 
 function getLicenseJwtSecret() {
   // Accept either historical name (LICENSE_JWT_SECRET) or the name used in .env
@@ -781,11 +638,60 @@ router.post("/login", async (req, res) => {
       // God gets the same pass: its whole purpose is activating on a customer's
       // machine, and a synthesized entitlement has no device list to bind to.
       if (!isAdminUser && !isGod) {
+        // Scheme-aware binding (util/deviceIdentity.js; kill switch
+        // DEVICE_SCHEME_AWARE_BINDING=0): which id recipe this request carries
+        // decides whether it may take over a seat the Installer Hub holds with
+        // an id this app can never present.
+        const schemeAware = isSchemeAwareBindingEnabled();
+        const clientHeader = String(req.get("x-adlm-client") || "")
+          .trim()
+          .toLowerCase();
+        const userAgent = String(req.get("user-agent") || "");
+        const scheme = clientScheme({
+          productKey: chosenProductKey,
+          clientHeader,
+          userAgent,
+          fpVersion,
+        });
+        const client = clientLabel({ clientHeader, userAgent });
+
+        // Only a sign-in that would otherwise be refused, with an adoptable Hub
+        // row in the way, pays for this lookup; everyone else gets [] back.
+        let clearedInstallerRows;
+        if (schemeAware) {
+          clearedInstallerRows = await clearInstallerRowsForAdoption({
+            userId: user._id,
+            productKey: chosenProductKey,
+            fingerprints: adoptionEvidenceNeeded(entitlement, {
+              productKey: chosenProductKey,
+              scheme,
+              fingerprint: chosenFingerprint,
+            }),
+            onError: (err) =>
+              console.warn(
+                `[/auth/login] device app-use lookup failed, not adopting: ` +
+                  `user=${user.email} product=${chosenProductKey} ` +
+                  `err=${err?.message || err}`,
+              ),
+          });
+        }
+
         const binding = enforceDeviceBinding(
           entitlement,
           chosenFingerprint,
           fpVersion,
+          {
+            enabled: schemeAware,
+            productKey: chosenProductKey,
+            scheme,
+            client,
+            deviceName: String(req.body?.deviceName || req.body?.device_name || ""),
+            clearedInstallerRows,
+          },
         );
+        const schemeLog = schemeAware
+          ? ` scheme=${scheme} client=${client || "-"} decision=${binding.decision}`
+          : "";
         if (!binding.ok) {
           // Structured mismatch diagnostics: enough to triage a lockout from
           // logs alone (which scheme the client used, what it sent vs what is
@@ -804,18 +710,35 @@ router.post("/login", async (req, res) => {
               `clientFpVersion=${fpVersion} ` +
               `incoming=${chosenFingerprint.slice(0, 10)}… ` +
               `bound=${String(entitlement.deviceFingerprint || "").slice(0, 10)}… ` +
-              `devices=[${devs}]`,
+              `devices=[${devs}]` +
+              schemeLog,
           );
+          // `message` is what the desktop clients show (QUIV reads it before
+          // `error`); `holder` says who holds the seat. Neither carries a
+          // fingerprint. Both are absent with the kill switch off.
           return res.status(binding.status).json({
             error: binding.error,
             code: binding.code,
+            ...(binding.message ? { message: binding.message } : {}),
+            ...(binding.holder ? { holder: binding.holder } : {}),
           });
+        }
+        if (binding.adopted) {
+          console.log(
+            `[/auth/login] device seat adopted from installer-hub row: ` +
+              `user=${user.email} product=${chosenProductKey} ` +
+              `new=${chosenFingerprint.slice(0, 10)}… ` +
+              `installer=${String(binding.adoptedFrom?.fingerprint || "").slice(0, 10)}… ` +
+              `installerName=${JSON.stringify(binding.adoptedFrom?.name || "")}` +
+              schemeLog,
+          );
         }
         if (binding.migrated) {
           console.log(
             `[/auth/login] device fingerprint migrated v1→v2: ` +
               `user=${user.email} product=${chosenProductKey} ` +
-              `new=${chosenFingerprint.slice(0, 10)}…`,
+              `new=${chosenFingerprint.slice(0, 10)}…` +
+              schemeLog,
           );
         }
         changed ||= !!binding.changed;
