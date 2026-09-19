@@ -51,6 +51,25 @@ function ses() {
 }
 
 /**
+ * A client that sends each request exactly once.
+ *
+ * The SDK's default strategy retries a timeout, a reset connection and a 5xx
+ * on its own, and after any of those SES may already have accepted the message
+ * and lost only the answer, so a retry can deliver it twice. The release
+ * notifier (util/releaseNotifier.js) does not accept that: it retries only
+ * what SES certainly refused (throttling), itself, and leaves anything in
+ * doubt for an admin. So its sends go through this client, and every other
+ * sender keeps the default one.
+ */
+let _singleAttemptClient = null;
+export function singleAttemptSesClient() {
+  if (!_singleAttemptClient) {
+    _singleAttemptClient = new SESv2Client({ region: SES_REGION, maxAttempts: 1 });
+  }
+  return _singleAttemptClient;
+}
+
+/**
  * Whether SES should carry the mail.
  *
  * Read at call time, never captured at import: on Lambda the SSM secrets land
@@ -146,6 +165,16 @@ export function forgetSendRate() {
   _rateAt = 0;
 }
 
+/**
+ * The account as SES describes it: sandbox or production, paused or not, and
+ * the quotas. Uncached and unforgiving on purpose - the release notifier asks
+ * this before a mailshot, and "could not tell" must stop the send rather than
+ * be guessed past. Throws whatever SES throws.
+ */
+export async function getSesAccount() {
+  return ses().send(new GetAccountCommand({}));
+}
+
 /* ───────────────────────────────────────────────────────────── sending ── */
 
 /**
@@ -234,6 +263,19 @@ export async function sendViaSes(message) {
 
   const out = await ses().send(
     new SendEmailCommand(sesSendInput({ ...message, configurationSetName: set })),
+  );
+  return out?.MessageId || "";
+}
+
+/**
+ * sendViaSes with no SDK retries: one SendEmail request per call, whatever
+ * happens. For the release notifier, which must never repeat a send SES may
+ * already have accepted (see singleAttemptSesClient above). Same message
+ * shape, same configuration set; release mail is never tracked.
+ */
+export async function sendViaSesOnce(message) {
+  const out = await singleAttemptSesClient().send(
+    new SendEmailCommand(sesSendInput({ ...message, configurationSetName: configurationSet() })),
   );
   return out?.MessageId || "";
 }

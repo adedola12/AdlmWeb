@@ -17,6 +17,7 @@
 // can fail while somebody is waiting to be told their password was reset.
 
 import { wrapEmail, wrapMarketingEmail, emailBrand } from "./emailLayout.js";
+import { buildReleaseMessage, productFor } from "./releaseEmail.js";
 
 const { SITE } = emailBrand;
 
@@ -524,4 +525,22 @@ export const PREVIEW = {
     trainingProposed({ firstName: "Adaeze", courseName: "BIM for Building Works", dates: "22–24 September 2026" }),
   "training.confirmed": () =>
     trainingConfirmed({ firstName: "Adaeze", courseName: "BIM for Building Works", dates: "22–24 September 2026", venue: "ADLM Studio, Lagos" }),
+  "release.update": () =>
+    buildReleaseMessage({
+      firstName: "Adaeze",
+      product: productFor("revit"),
+      version: "3.1.11",
+      notes: {
+        source: "changelog",
+        title: "Faster takeoffs",
+        highlight: "Linked models are measured in one pass.",
+        groups: [
+          { type: "new", items: ["Take off linked models in the same run"] },
+          { type: "fixed", items: ["Budget totals no longer drift after a re-run"] },
+        ],
+        paragraphs: [],
+      },
+      // A preview only: the real link is per recipient (util/campaigns.js).
+      unsubscribeUrl: "#",
+    }),
 };

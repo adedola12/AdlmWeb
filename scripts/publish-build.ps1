@@ -235,9 +235,14 @@ Good "Uploaded to $($upload.storageProvider): $($upload.packageUri)"
 $payload.packageUri = $upload.packageUri
 
 try {
-    $saved = (Invoke-RestMethod -Method Put -Uri "$ApiBaseUrl/admin/deployments/$key" `
+    $putResp = Invoke-RestMethod -Method Put -Uri "$ApiBaseUrl/admin/deployments/$key" `
         -Headers $headers -ContentType "application/json" `
-        -Body ($payload | ConvertTo-Json -Depth 6)).item
+        -Body ($payload | ConvertTo-Json -Depth 6)
+    $saved = $putResp.item
+    # The "new version is ready" email the server queued for this PUT, if any
+    # (server/util/releaseNotifier.js). The fifteen-minute job holds it for ten
+    # minutes, so a failed check below can cancel it before anyone is mailed.
+    $releaseNotice = $putResp.releaseNotice
 } catch {
     Fail @"
 Upload succeeded but the record update FAILED: $($_.Exception.Message)
@@ -264,10 +269,29 @@ if (@($saved.envVars.PSObject.Properties).Count -lt @($current.envVars.PSObject.
 if ($problems.Count) {
     Write-Host ""
     foreach ($p in $problems) { Write-Host "  PROBLEM: $p" -ForegroundColor Red }
+    # Nobody is to be emailed about a build that failed its own check.
+    if ($releaseNotice -and $releaseNotice.key) {
+        try {
+            Invoke-RestMethod -Method Post -Uri "$ApiBaseUrl/admin/release-notifications/$([uri]::EscapeDataString($releaseNotice.key))/cancel" `
+                -Headers $headers -ContentType "application/json" -Body "{}" | Out-Null
+            Note "Release email $($releaseNotice.key) cancelled."
+        } catch {
+            Write-Host "  Could NOT cancel release email $($releaseNotice.key): $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "  Cancel it now in the admin API (POST /admin/release-notifications/<key>/cancel)" -ForegroundColor Red
+            Write-Host "  or the fifteen-minute job will mail customers about this build." -ForegroundColor Red
+        }
+    }
     Fail "Published, but the record is not what was intended. Fix it in the admin UI before anyone installs."
 }
 
 Good "`n$key is live on $Version."
+if ($releaseNotice -and $releaseNotice.key) {
+    Note "Release email $($releaseNotice.key) queued ($($releaseNotice.status)): customers are mailed in 10-25 minutes."
+    Note "To hold it until you have verified below: POST $ApiBaseUrl/admin/release-notifications/$($releaseNotice.key)/cancel"
+    Note "now, and afterwards POST $ApiBaseUrl/admin/release-notifications with {productKey, version} to reopen it."
+} elseif ($releaseNotice) {
+    Note "No release email queued ($($releaseNotice.reason))."
+}
 Write-Host @"
 
   Next: verify on ONE machine before announcing.

@@ -57,20 +57,39 @@ function ready() {
     await loadSecretsIntoEnv();
     const { connectDB } = await import("./db.js");
     await connectDB(process.env.MONGO_URI);
-    const [{ runExpiryNotifier }, { runAutoRenewals }, { runVideoPoll }, { runOpsDigest }] =
-      await Promise.all([
-        import("./util/expiryNotifier.js"),
-        import("./util/autoRenew.js"),
-        import("./util/videoNotifier.js"),
-        import("./util/opsDigest.js"),
-      ]);
-    return { runExpiryNotifier, runAutoRenewals, runVideoPoll, runOpsDigest };
+    const [
+      { runExpiryNotifier },
+      { runAutoRenewals },
+      { runVideoPoll },
+      { runOpsDigest },
+      { runReleaseNoticeDrain },
+    ] = await Promise.all([
+      import("./util/expiryNotifier.js"),
+      import("./util/autoRenew.js"),
+      import("./util/videoNotifier.js"),
+      import("./util/opsDigest.js"),
+      import("./util/releaseNotifier.js"),
+    ]);
+    return { runExpiryNotifier, runAutoRenewals, runVideoPoll, runOpsDigest, runReleaseNoticeDrain };
   })().catch((err) => {
     _readyPromise = null;
     throw err;
   });
 
   return _readyPromise;
+}
+
+/**
+ * When the release drain must stop: five minutes at most, and always a minute
+ * before this invocation's own timeout, so a batch is never cut off mid-send.
+ */
+function drainDeadline(context) {
+  const budget = Number(process.env.RELEASE_DRAIN_BUDGET_MS || 5 * 60 * 1000);
+  const remaining =
+    typeof context?.getRemainingTimeInMillis === "function"
+      ? context.getRemainingTimeInMillis()
+      : 9 * 60 * 1000;
+  return Date.now() + Math.max(0, Math.min(budget, remaining - 60 * 1000));
 }
 
 export async function handler(event, context) {
@@ -83,12 +102,21 @@ export async function handler(event, context) {
   // Throwing sends the event to the scheduler's dead-letter queue, where the
   // DLQ-depth alarm surfaces it. Silently succeeding would hide a broken rule
   // until someone noticed nobody had been renewed.
-  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll", "ops-digest"];
+  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll", "ops-digest", "release-notices"];
   if (!KNOWN.includes(job)) {
     throw new Error(`Unknown job "${job}". Expected one of: ${KNOWN.join(", ")}.`);
   }
 
   const jobs = await ready();
+  return runJob(job, jobs, context);
+}
+
+/**
+ * One job, with the functions it calls passed in: the handler passes the real
+ * ones (ready()), the tests (scheduled.test.js) pass stand-ins, so what rides
+ * on what, and which error surfaces, is testable without SSM or a database.
+ */
+export async function runJob(job, jobs, context) {
   const run = {
     "auto-renew": () => jobs.runAutoRenewals(),
     "expiry-notifier": () => jobs.runExpiryNotifier(),
@@ -104,12 +132,47 @@ export async function handler(event, context) {
     // Normally rides on expiry-notifier below; listed so it can be invoked by
     // hand with { "job": "ops-digest" } to resend a morning report.
     "ops-digest": () => jobs.runOpsDigest(),
+    // Normally rides on video-poll below; listed so the release emails can be
+    // pushed by hand with { "job": "release-notices" }.
+    "release-notices": () => jobs.runReleaseNoticeDrain({ deadlineAt: drainDeadline(context) }),
   }[job];
+  if (!run) throw new Error(`Unknown job "${job}".`);
 
   const startedAt = Date.now();
   console.log(`[scheduled] ${job} starting`);
 
-  const out = await run();
+  // video-poll is caught here, not left to throw, only so the release drain
+  // below still runs when YouTube has a bad quarter of an hour. The error is
+  // rethrown after it, so the retries, the DLQ and the alarms see exactly what
+  // they saw before.
+  let out;
+  let runError = null;
+  try {
+    out = await run();
+  } catch (err) {
+    if (job !== "video-poll") throw err;
+    runError = err;
+  }
+
+  // "QUIV 3.1.11 is ready" emails (util/releaseNotifier.js) ride on the
+  // fifteen-minute video poll, for the same reason the ops digest rides on the
+  // expiry job: no new schedule, so no change to the shared AdlmApi stack. Own
+  // lock, own try/catch, and a deadline inside this function's timeout, so a
+  // slow mailshot can never fail the poll or be killed mid-batch.
+  if (job === "video-poll") {
+    let releaseNotices;
+    try {
+      releaseNotices = await jobs.runReleaseNoticeDrain({ deadlineAt: drainDeadline(context) });
+    } catch (err) {
+      console.error("[scheduled] release-notices failed:", err?.message || err);
+      releaseNotices = { ok: false, error: String(err?.message || err) };
+    }
+    if (runError) {
+      console.log("[scheduled] release-notices:", JSON.stringify(releaseNotices));
+      throw runError;
+    }
+    if (out && typeof out === "object") out.releaseNotices = releaseNotices;
+  }
 
   // The morning operations report (util/opsDigest.js) runs straight after the
   // daily expiry job instead of on a schedule of its own. A new schedule would
@@ -126,7 +189,8 @@ export async function handler(event, context) {
     // Close accounts that were given 14 days to confirm their email and did
     // not (util/unconfirmedSweep.js). Same daily slot, own try/catch.
     try {
-      const { runUnconfirmedSweep } = await import("./util/unconfirmedSweep.js");
+      const runUnconfirmedSweep =
+        jobs.runUnconfirmedSweep ?? (await import("./util/unconfirmedSweep.js")).runUnconfirmedSweep;
       out.unconfirmedSweep = await runUnconfirmedSweep();
     } catch (err) {
       console.error("[scheduled] unconfirmed sweep failed:", err?.message || err);

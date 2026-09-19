@@ -155,6 +155,18 @@ export const EMAILS = [
       "so there is nothing fixed to rewrite. Change what it says in util/videoEmail.js.",
   },
   {
+    key: "release.update",
+    name: "New version ready to install",
+    when:
+      "A product's deployment moves to a higher version; sent to everyone with an active, " +
+      "unexpired licence for it who has not turned product updates off",
+    file: "util/releaseEmail.js",
+    editable: false,
+    why:
+      "Built per release from the release notes or the What's New entry, with update steps " +
+      "that name the app to close for each product. Change what it says in util/releaseEmail.js.",
+  },
+  {
     key: "entitlement.boq-import",
     name: "BoQ Import activated",
     when: "An admin grants the BoQ Import entitlement",

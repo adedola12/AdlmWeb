@@ -154,6 +154,27 @@ export function parseSnsRecords(event) {
 /* ─────────────────────────────────────────────────────────────── applying ── */
 
 /**
+ * What a spam complaint switches off: every list with an unsubscribe link.
+ *
+ * The newsletter and video switches live in emailPrefs; the "a new version is
+ * ready" emails (util/releaseNotifier.js) read notifications.productUpdates,
+ * the switch on the settings screen and the one their own unsubscribe link
+ * writes. Leaving that one on would keep mailing somebody who reported that
+ * very email as spam. Receipts, licence and security mail have no switch here
+ * and keep arriving.
+ */
+export function complaintOptOut(at = new Date()) {
+  return {
+    "emailPrefs.marketing": false,
+    "emailPrefs.marketingChangedAt": at,
+    "emailPrefs.marketingOffReason": "complained",
+    "emailPrefs.videoUpdates": false,
+    "emailPrefs.videoUpdatesChangedAt": at,
+    "notifications.productUpdates": false,
+  };
+}
+
+/**
  * Act on one parsed event, and write down what was done.
  *
  * The MailEvent row is written for EVERY event, including the ones that change
@@ -242,18 +263,7 @@ export async function applyFeedback(ev, { log = console } = {}) {
     // complaintFeedbackType "not-spam". Recorded, deliberately not acted on.
     action = "not-spam report, no change";
   } else {
-    await User.updateOne(
-      { _id: user._id },
-      {
-        $set: {
-          "emailPrefs.marketing": false,
-          "emailPrefs.marketingChangedAt": new Date(),
-          "emailPrefs.marketingOffReason": "complained",
-          "emailPrefs.videoUpdates": false,
-          "emailPrefs.videoUpdatesChangedAt": new Date(),
-        },
-      },
-    );
+    await User.updateOne({ _id: user._id }, { $set: complaintOptOut(new Date()) });
     // NOT emailUndeliverable. The address works; the person is telling us to
     // stop sending things they did not ask for, which their receipts are not.
     action = "opted out of all non-essential mail";

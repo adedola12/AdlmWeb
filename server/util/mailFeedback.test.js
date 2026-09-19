@@ -19,7 +19,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseFeedback, parseSnsRecords } from "./mailFeedback.js";
+import { complaintOptOut, parseFeedback, parseSnsRecords } from "./mailFeedback.js";
 
 const bounce = (over = {}) => ({
   eventType: "Bounce",
@@ -125,6 +125,21 @@ test("a complaint with no stated type is still a complaint", () => {
   // Providers are not obliged to say why, and an absent reason is not consent.
   const [ev] = parseFeedback(complaint({ complaintFeedbackType: undefined }));
   assert.equal(ev.wantsOut, true);
+});
+
+test("a complaint switches off every list with an unsubscribe link, release emails included", () => {
+  const at = new Date("2026-09-19T10:00:00Z");
+  const set = complaintOptOut(at);
+  assert.equal(set["emailPrefs.marketing"], false);
+  assert.equal(set["emailPrefs.marketingOffReason"], "complained");
+  assert.equal(set["emailPrefs.videoUpdates"], false);
+  // The switch util/releaseNotifier.js reads. Left on, somebody who reported
+  // a release email as spam would get the next one too.
+  assert.equal(set["notifications.productUpdates"], false);
+  assert.equal(set["emailPrefs.marketingChangedAt"], at);
+  // Consent only: the address works, so it is not marked undeliverable, and
+  // receipts and licence mail have no switch here at all.
+  assert.ok(!Object.keys(set).some((k) => /undeliverable|billing/i.test(k)));
 });
 
 /* ──────────────────────────────────────────────────────────────── envelope ── */

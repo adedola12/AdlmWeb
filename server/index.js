@@ -21,6 +21,7 @@ import { ensureRolesSeeded } from "./util/rbac.js";
 import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
+import { buildCorsOptions } from "./util/corsPolicy.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
@@ -93,8 +94,12 @@ import adminBroadcast from "./routes/admin.broadcast.js";
 import adminCampaigns from "./routes/admin.campaigns.js";
 import adminBillboard, { publicBillboard } from "./routes/admin.billboard.js";
 import { sweepStaleOrders } from "./util/staleOrders.js";
-import unsubscribeRouter, { videoUnsubscribeRouter } from "./routes/unsubscribe.js";
+import unsubscribeRouter, {
+  videoUnsubscribeRouter,
+  productUpdatesUnsubscribeRouter,
+} from "./routes/unsubscribe.js";
 import adminVideos from "./routes/admin.videos.js";
+import adminReleaseNotifications from "./routes/admin.releaseNotifications.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -130,44 +135,10 @@ const __dirname = path.dirname(__filename);
 app.set("trust proxy", 1);
 
 /* -------- CORS (MUST be BEFORE body parsers) -------- */
-const IS_PROD = process.env.NODE_ENV === "production";
-
-// Base whitelist from env, plus explicit production origins
-const envWhitelist = (process.env.CORS_ORIGINS || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-// Exact, vetted production origins — no wildcards
-const PROD_ORIGINS = [
-  "https://adlmstudio.net",
-  "https://www.adlmstudio.net",
-  "https://adlm-web.vercel.app",
-];
-
-const whitelist = Array.from(new Set([...envWhitelist, ...PROD_ORIGINS]));
-
-const corsOptions = {
-  origin(origin, cb) {
-    if (!origin) return cb(null, true);
-    if (whitelist.includes(origin)) return cb(null, true);
-    // Localhost only allowed in non-production for dev work
-    if (!IS_PROD && /^http:\/\/localhost:\d+$/.test(origin)) {
-      return cb(null, true);
-    }
-    return cb(new Error(`Not allowed by CORS: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "x-admin-key",
-    "x-adlm-client",
-    "x-adlm-fp-version",
-    "X-Requested-With",
-  ],
-};
+// CORS_ORIGINS from env, the vetted production origins, and the API's own
+// origin (API_BASE_URL), so the unsubscribe pages it serves can post their
+// own form. See util/corsPolicy.js.
+const corsOptions = buildCorsOptions(process.env);
 
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
@@ -418,6 +389,9 @@ app.use("/admin/certificates", adminCertificates);
 // Public on purpose: an employer checking a certificate has no account here.
 app.use("/verify", verifyRoutes);
 app.use("/admin/broadcast", adminBroadcast);
+// "QUIV 3.1.11 is ready" emails, recorded by the deployment PUT. See
+// util/releaseNotifier.js.
+app.use("/admin/release-notifications", adminReleaseNotifications);
 app.use("/admin/campaigns", adminCampaigns);
 app.use("/admin/billboard", adminBillboard);
 // Public and unauthenticated: it is what every page of the site reads to draw
@@ -429,6 +403,9 @@ app.use("/unsubscribe", unsubscribeRouter);
 // Same reasoning, one list rather than all of them: opened from a video
 // announcement, in a browser nobody is signed in to. The token carries the
 // topic, so this link cannot be edited into a general unsubscribe.
+// The product-updates list is mounted first; its paths have two segments, so
+// the video router's /:token could not match them either way.
+app.use("/api/email/unsubscribe/product-updates", productUpdatesUnsubscribeRouter);
 app.use("/api/email/unsubscribe", videoUnsubscribeRouter);
 app.use("/admin/videos", adminVideos);
 app.use("/admin/rategen-v2/library", adminRateGenLibrary);

@@ -12,6 +12,7 @@ import {
 } from "../utils/r2Upload.js";
 import { deleteAsset } from "../utils/cloudinary.js";
 import cloudinary from "../utils/cloudinaryConfig.js";
+import { recordDeploymentRelease, recordDeploymentWithdrawn } from "../util/releaseNotifier.js";
 
 const router = express.Router();
 const upload = multer({
@@ -430,6 +431,15 @@ router.put(
     const productKey = String(req.params.productKey || "").trim().toLowerCase();
     const normalized = normalizeDeployment(req.body || {}, productKey);
 
+    // The version this PUT replaces, read before the write overwrites it, so a
+    // version that went UP can be announced to the product's licence holders.
+    // `undefined` (not null) when the read itself failed: "could not tell" must
+    // never be mistaken for "first deployment", and must never fail the release.
+    const previous = await ProductDeployment.findOne({ productKey })
+      .select("version enabled packageUri")
+      .lean()
+      .catch(() => undefined);
+
     const item = await ProductDeployment.findOneAndUpdate(
       { productKey },
       {
@@ -448,7 +458,33 @@ router.put(
       },
     );
 
-    return res.json({ ok: true, item });
+    // Records at most one "new version is ready" notice and sends nothing: the
+    // mail goes out from POST /admin/release-notifications/:id/send or the
+    // fifteen-minute job (util/releaseNotifier.js), which holds a new notice
+    // for ten minutes so the release script can check the build and cancel.
+    // A PUT that switches the product off, leaves it with no package, or rolls
+    // it back cancels the unfinished announcements it makes untrue. Body
+    // extras, both optional and ignored by normalizeDeployment:
+    // notifySubscribers:false for silence, releaseNotes (markdown) for what
+    // changed. Nothing in here can fail the release script's PUT.
+    let releaseNotice;
+    try {
+      releaseNotice =
+        previous === undefined
+          ? { created: false, reason: "previous-version-unreadable" }
+          : await recordDeploymentRelease({
+              previous,
+              item: item?.toObject ? item.toObject() : item,
+              body: req.body || {},
+              demoMode: !!req.demoMode,
+              actor,
+            });
+    } catch (err) {
+      console.error(`[release-mail] ${productKey}: could not record a notice:`, err?.message || err);
+      releaseNotice = { created: false, error: String(err?.message || err) };
+    }
+
+    return res.json({ ok: true, item, releaseNotice });
   }),
 );
 
@@ -460,6 +496,21 @@ router.delete(
 
     if (!out) {
       return res.status(404).json({ error: "Deployment not found" });
+    }
+
+    // Nobody is to be emailed about a build that can no longer be downloaded:
+    // cancel the product's unfinished "new version is ready" notices
+    // (util/releaseNotifier.js, which also re-checks the deployment before
+    // every batch). Never fails the delete.
+    let releaseNoticesCancelled;
+    try {
+      releaseNoticesCancelled = await recordDeploymentWithdrawn({
+        productKey,
+        reason: `Deployment deleted by ${String(req.user?.email || "admin").trim()}`,
+        demoMode: !!req.demoMode,
+      });
+    } catch (err) {
+      console.error(`[release-mail] ${productKey}: could not cancel notices:`, err?.message || err);
     }
 
     // Clean up cloud-stored package file
@@ -488,6 +539,7 @@ router.delete(
     return res.json({
       ok: true,
       cleanupErrors: cleanupErrors.length > 0 ? cleanupErrors : undefined,
+      releaseNoticesCancelled,
     });
   }),
 );
