@@ -1,4 +1,6 @@
 import React from "react";
+import { useSearchParams } from "react-router-dom";
+import { rememberPlace } from "../../lib/lastPlace.js";
 import { useDismiss as useSharedDismiss } from "../../ds/dismiss.js";
 import { FaCheck, FaCopy, FaTrash } from "../../components/icons.jsx";
 import ProjectBillTable from "./ProjectBillTable.jsx";
@@ -591,9 +593,48 @@ export default function ProjectOpenView({
   const accessRole = access?.role || "owner";
   const isShared = accessRole !== "owner";
 
+  // P0.4, his "continue where you left off": a link from the Work overview
+  // carries ?tab= (and &line= for the bill). They are used once, when that
+  // project opens, then cleared, so the next project still starts on its
+  // Dashboard as before.
+  const [params, setParams] = useSearchParams();
+  const [focusLine, setFocusLine] = React.useState("");
+  const [line, setLine] = React.useState(null);
   React.useEffect(() => {
-    setActiveTab("dashboard");
+    const want = params.get("tab") || "";
+    const valid = TAB_OPTIONS.some((t) => t.id === want);
+    setActiveTab(valid ? want : "dashboard");
+    setFocusLine(valid && want === "bill" ? params.get("line") || "" : "");
+    setLine(null);
+    if (params.has("tab") || params.has("line")) {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("tab");
+          next.delete("line");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+    // Only a newly opened project reads the URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // Remember where this is, for "Pick up where you left off" on Work.
+  React.useEffect(() => {
+    if (!selectedId || !productKey) return;
+    const tab = TAB_OPTIONS.find((t) => t.id === activeTab);
+    rememberPlace({
+      productKey,
+      key: String(selectedId),
+      name: projectName,
+      tab: activeTab,
+      tabLabel: tab?.label || "",
+      line: activeTab === "bill" && line ? line.key : "",
+      lineLabel: activeTab === "bill" && line ? line.label : "",
+    });
+  }, [selectedId, productKey, projectName, activeTab, line]);
 
   // Budget tab is available for every source (QUIV/Revit, Heron/PlanSwift,
   // MEP, CIVIQ). It shows whatever material/labour breakdown the plugin
@@ -1290,6 +1331,8 @@ export default function ProjectOpenView({
 
       {activeTab === "bill" ? (
         <ProjectBillTable
+          focusLine={focusLine}
+          onLine={(key, label) => setLine((cur) => (cur?.key === key ? cur : { key, label }))}
           actualQtyInputs={actualQtyInputs}
           actualRateInputs={actualRateInputs}
           actualTrackedAmount={actualTrackedAmount}

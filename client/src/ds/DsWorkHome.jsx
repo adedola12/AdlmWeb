@@ -28,6 +28,7 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkPrefs from "./WkPrefs.jsx";
 import { foldMaterials, normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { placeHref, readPlace } from "../lib/lastPlace.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -409,6 +410,15 @@ export default function DsWorkHome() {
   }
 
   const top = view$.recent[0] || null;
+  // P0.4: the exact place last worked on (tab and line), when this browser
+  // remembers one and the project is still on the account; otherwise the
+  // most recently touched project.
+  const place = (() => {
+    const pl = readPlace();
+    if (!pl || !projects) return null;
+    const hit = projects.find((p) => String(p.id) === String(pl.key) || String(p.slug || "") === String(pl.key));
+    return hit ? { ...pl, name: hit.name || pl.name } : null;
+  })();
 
   return (
     <div className="dsh-in">
@@ -510,15 +520,26 @@ export default function DsWorkHome() {
                 <span className="wk-locnote">Across every product on this account</span>
               </div>
               <div className="wh-cont">
-                <Link className="wh-go" to={projectHref(top)}>
-                  {icon("wi-projects")}
-                  <span className="k">Project</span>
-                  <b>{top.name}</b>
-                  <span className="s">
-                    {num(top.itemCount)} items · {money(top.totalCost)} · touched{" "}
-                    {when(top.updatedAt)}
-                  </span>
-                </Link>
+                {place ? (
+                  <Link className="wh-go" to={placeHref(place)}>
+                    {icon("wi-projects")}
+                    <span className="k">{place.tabLabel ? `Project · ${place.tabLabel}` : "Project"}</span>
+                    <b>{place.name}</b>
+                    <span className="s">
+                      {place.lineLabel ? `Back to ${place.lineLabel}` : "Back where you were"}
+                    </span>
+                  </Link>
+                ) : (
+                  <Link className="wh-go" to={projectHref(top)}>
+                    {icon("wi-projects")}
+                    <span className="k">Project</span>
+                    <b>{top.name}</b>
+                    <span className="s">
+                      {num(top.itemCount)} items · {money(top.totalCost)} · touched{" "}
+                      {when(top.updatedAt)}
+                    </span>
+                  </Link>
+                )}
                 <Link className="wh-go" to="/rategen">
                   {icon("wi-library")}
                   <span className="k">Rate library</span>
