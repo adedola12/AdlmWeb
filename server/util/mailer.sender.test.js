@@ -25,14 +25,20 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const mailerSrc = fs.readFileSync(path.join(here, "mailer.js"), "utf8");
+// The default addresses moved to senders.js when receipts and announcements
+// were split onto separate addresses, so both files are the source now.
+const mailerSrc =
+  [
+    fs.readFileSync(path.join(here, "mailer.js"), "utf8"),
+    fs.readFileSync(path.join(here, "senders.js"), "utf8"),
+  ].join("\n");
 
 test("the hard-coded sender names say ADLM Studio", () => {
   // Both of them: the primary fallback used when EMAIL_FROM is unset, and the
   // resend.dev one used when the domain is not verified. The second is the one
   // that gets forgotten, and it is the one a customer sees on the day the
   // domain verification lapses.
-  assert.ok(!/ADLM Services/.test(mailerSrc), 'no "ADLM Services" anywhere in mailer.js');
+  assert.ok(!/ADLM Services/.test(mailerSrc), 'no "ADLM Services" in mailer.js or senders.js');
 
   const senders = [...mailerSrc.matchAll(/ADLM [A-Za-z]+ </g)].map((m) => m[0]);
   assert.ok(senders.length >= 2, `expected both fallbacks, found ${senders.length}`);

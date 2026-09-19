@@ -37,6 +37,7 @@ import { ClientNetError } from "../models/ClientNetError.js";
 import { rebuildFollowUps } from "./followUps.js";
 import { sendViaSes } from "./sesTransport.js";
 import { wrapEmail } from "./emailLayout.js";
+import { senderFor, replyToAddress } from "./senders.js";
 
 const SITE = process.env.PUBLIC_SITE_URL || "https://www.adlmstudio.net";
 const DEFAULT_TO = "dolapo836@gmail.com";
@@ -468,7 +469,8 @@ export async function runOpsDigest({ now = new Date(), dryRun = false } = {}) {
     for (const addr of to) {
       try {
         await sendViaSes({
-          from: process.env.EMAIL_FROM || "ADLM Studio <admin@adlmstudio.net>",
+          from: senderFor(),
+          replyTo: replyToAddress(),
           to: [addr],
           subject: mail.subject,
           html: mail.html,

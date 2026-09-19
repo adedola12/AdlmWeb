@@ -24,6 +24,7 @@ import { EmailTemplate } from "../models/EmailTemplate.js";
 import { EmailSend, hashRecipient } from "../models/EmailSend.js";
 import { canEdit } from "./emailCatalogue.js";
 import { isSesSelected, sendViaSes } from "./sesTransport.js";
+import { senderFor, replyToAddress } from "./senders.js";
 
 // strip HTML → text
 function toText(html = "") {
@@ -259,9 +260,11 @@ export async function sendMail({
   // to open it. Two names for one firm in an inbox is how mail from a domain
   // starts looking like mail about it. (util/mailer.sender.test.js enforces
   // this by reading this file, so do not write the old name even in a comment.)
-  const primaryFrom =
-    process.env.EMAIL_FROM ||
-    `ADLM Studio <${process.env.SMTP_USER || "noreply@adlmstudio.net"}>`;
+  // Announcements and receipts come from different addresses so a complaint
+  // about one never lands on the other; both reply to the real inbox. See
+  // util/senders.js. A tracked or unsubscribable send is an announcement.
+  const primaryFrom = senderFor({ marketing: Boolean(track || listUnsubscribe) });
+  const replyTo = replyToAddress();
   const fallbackFrom = "ADLM Studio <onboarding@resend.dev>"; // valid for testing
 
   const over = await withOverride(templateKey, subject, html);
@@ -304,6 +307,7 @@ export async function sendMail({
         // rewriting the links in anybody's password reset.
         tracked: Boolean(track),
         from: primaryFrom,
+        replyTo,
         to: body.to,
         bcc: body.bcc,
         subject,
@@ -330,7 +334,7 @@ export async function sendMail({
   // 1) Resend first
   if (apiKey) {
     for (const from of [primaryFrom, fallbackFrom]) {
-      const payload = { from, ...body };
+      const payload = { from, reply_to: replyTo, ...body };
       if (listHeaders) payload.headers = listHeaders;
       if (hasAttachments) {
         payload.attachments = attachments.map((a) => ({
@@ -373,7 +377,7 @@ export async function sendMail({
   }
 
   // 2) SMTP fallback
-  const message = { from: primaryFrom, ...body };
+  const message = { from: primaryFrom, replyTo, ...body };
   if (listHeaders) message.headers = listHeaders;
   if (hasAttachments) {
     message.attachments = attachments.map((a) => ({

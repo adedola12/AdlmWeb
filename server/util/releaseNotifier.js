@@ -58,6 +58,7 @@
 // asserted about a mock of Mongoose.
 
 import mongoose from "mongoose";
+import { senderFor, replyToAddress as defaultReplyTo } from "./senders.js";
 import dayjs from "dayjs";
 import { User } from "../models/User.js";
 import { ChangelogProduct } from "../models/Changelog.js";
@@ -134,18 +135,14 @@ export const isDryRun = () =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Mail that carries an unsubscribe link goes out as news@ once the sender split
-// in docs/OPS_WATCH.md lands (EMAIL_FROM_NEWS / EMAIL_REPLY_TO); until then the
-// same EMAIL_FROM every other message uses. Any @adlmstudio.net address is
-// covered by the verified domain identity and the API role's SES policy.
+// Mail that carries an unsubscribe link is an announcement, so it goes out as
+// news@ with replies to the real inbox (util/senders.js). RELEASE_MAIL_FROM and
+// RELEASE_MAIL_REPLY_TO still override for this mail alone.
 const fromAddress = () =>
-  process.env.RELEASE_MAIL_FROM ||
-  process.env.EMAIL_FROM_NEWS ||
-  process.env.EMAIL_FROM ||
-  "ADLM Studio <noreply@adlmstudio.net>";
+  String(process.env.RELEASE_MAIL_FROM || "").trim() || senderFor({ marketing: true });
 
 const replyToAddress = () =>
-  String(process.env.RELEASE_MAIL_REPLY_TO || process.env.EMAIL_REPLY_TO || "").trim();
+  String(process.env.RELEASE_MAIL_REPLY_TO || "").trim() || defaultReplyTo();
 
 /* ─────────────────────────────────────────────────── should we announce ── */
 
