@@ -4,6 +4,8 @@ import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
+import { ReleaseCandidate } from "../models/ReleaseCandidate.js";
+import { getGateConfig, isApprover } from "../util/releaseGate.js";
 import {
   createPresignedGetUrl,
   isPrivateInstallerStorageEnabled,
@@ -257,6 +259,24 @@ router.get(
       }
     }
 
+    // RELEASE GATE PREVIEW (docs/RELEASE_GATE.md). The release approver's own
+    // Hub is offered every pending build, so they can install and test exactly
+    // what they are being asked to sign off. Nobody else ever sees a pending
+    // build here. Secrets (envVars) still follow the entitlement rule below.
+    const pendingByKey = new Map();
+    try {
+      const cfg = await getGateConfig();
+      if (isApprover(cfg, req.user?.email)) {
+        const pending = await ReleaseCandidate.find({ status: "pending" }).lean();
+        for (const c of pending) {
+          pendingByKey.set(c.productKey, c);
+          allowedKeys.add(c.productKey);
+        }
+      }
+    } catch (err) {
+      console.error("[me/deployments] release preview lookup failed:", err?.message || err);
+    }
+
     if (allowedKeys.size === 0) {
       return res.json({ ok: true, items: [] });
     }
@@ -273,6 +293,22 @@ router.get(
     // product. localRandomVars is safe to return to anyone (the actual
     // values are generated on the client). The sha256 integrity hash is
     // also safe to expose.
+    // Overlay the approver's pending builds on the live rows (or add them when
+    // the product has never shipped). `preview` tells the Hub it is unreleased.
+    for (const [key, c] of pendingByKey) {
+      const live = rawItems.find((r) => r.productKey === key);
+      const staged = {
+        ...(live || {}),
+        ...c.payload,
+        productKey: key,
+        preview: true,
+        previewCandidateId: String(c._id),
+        liveVersion: live?.version || "",
+      };
+      if (live) rawItems[rawItems.indexOf(live)] = staged;
+      else rawItems.push(staged);
+    }
+
     const items = rawItems.map((item) => {
       const key = String(item?.productKey || "").trim().toLowerCase();
       if (entitledKeys.has(key)) return item;

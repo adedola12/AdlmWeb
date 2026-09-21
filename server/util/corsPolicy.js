@@ -22,6 +22,9 @@ export const PROD_ORIGINS = [
   "https://adlmstudio.net",
   "https://www.adlmstudio.net",
   "https://adlm-web.vercel.app",
+  // Staff preview of the pending release (docs/RELEASE_GATE.md). The page
+  // itself only opens for staff and the release approver once signed in.
+  "https://preview.adlmstudio.net",
 ];
 
 /** The origin of API_BASE_URL, e.g. "https://api.adlmstudio.net"; "" when unset or unreadable. */

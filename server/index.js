@@ -100,6 +100,7 @@ import unsubscribeRouter, {
 } from "./routes/unsubscribe.js";
 import adminVideos from "./routes/admin.videos.js";
 import adminReleaseNotifications from "./routes/admin.releaseNotifications.js";
+import adminReleases from "./routes/admin.releases.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -392,6 +393,7 @@ app.use("/admin/broadcast", adminBroadcast);
 // "QUIV 3.1.11 is ready" emails, recorded by the deployment PUT. See
 // util/releaseNotifier.js.
 app.use("/admin/release-notifications", adminReleaseNotifications);
+app.use("/admin/releases", adminReleases);
 app.use("/admin/campaigns", adminCampaigns);
 app.use("/admin/billboard", adminBillboard);
 // Public and unauthenticated: it is what every page of the site reads to draw

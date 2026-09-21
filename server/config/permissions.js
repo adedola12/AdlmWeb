@@ -50,6 +50,10 @@ export const ADMIN_AREAS = [
   // it exposes cost data and can throttle every AI feature on the platform.
   { key: "aiusage", label: "AI Usage & Credit", group: "Core", staffGrantable: false },
   { key: "roles", label: "Roles & Access (UAC)", group: "Core", staffGrantable: false },
+  // Release sign-off desk (docs/RELEASE_GATE.md). Held by super-admins and by
+  // the built-in release_approver role. Seeing it is not approving: only the
+  // named approver can sign a release off.
+  { key: "releases", label: "Release sign-off", group: "Core", staffGrantable: false },
 ];
 
 export const ALL_AREA_KEYS = ADMIN_AREAS.map((a) => a.key);

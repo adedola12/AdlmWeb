@@ -109,6 +109,7 @@ import AdminWaitlist from "./pages/AdminWaitlist.jsx";
 import AdminFollowUps from "./pages/AdminFollowUps.jsx";
 import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
 import AdminAuditLog from "./pages/AdminAuditLog.jsx";
+import AdminReleases from "./pages/AdminReleases.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
@@ -977,6 +978,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute shell={false} roles={["admin"]}>
             <AdminRoles />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Release sign-off (docs/RELEASE_GATE.md): super-admins + the release approver
+      {
+        path: "admin/releases",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminReleases />
           </AdminRoute>
         ),
       },
