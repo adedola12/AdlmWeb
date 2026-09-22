@@ -12,6 +12,10 @@ import ServicesPricingPanel from "./ServicesPricingPanel.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
+import {
+  approvedVariationsEarned,
+  approvedVariationsTotal,
+} from "../../lib/variations.js";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
 const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
@@ -1180,10 +1184,12 @@ export default function ProjectOpenView({
               (Number(contract?.preliminaryPercent) || 0)) /
             100
           }
-          variations={(variations || []).reduce(
-            (acc, v) => acc + Number(v?.qty || 0) * Number(v?.rate || 0),
-            0,
-          )}
+          // S18 valuations: the panel labels this figure "Approved
+          // variations" and the final account settles on it, so it has to be
+          // the approved net — summing every row would have settled a
+          // variation nobody has approved. A row with no status is approved,
+          // so no existing project's figure moves.
+          variations={approvedVariationsTotal(variations)}
           // Contingency / Tax — full QS cascade. Inline calc mirrors
           // the BoQ Project Total card so the Final Account stays in
           // sync without re-fetching from the server.
@@ -1220,7 +1226,9 @@ export default function ProjectOpenView({
           // Actual spent — measured-valued + executed PC + completed
           // prelims + executed variations. Drives the over-run vs
           // planned comparison so the final-account figure reflects
-          // real spend, not BoQ drift.
+          // real spend, not BoQ drift. A variation counts here only when it
+          // is BOTH approved and executed, which is the server's rule too
+          // (approvedVariationsEarned in util/variationStatus.js).
           actualSpent={
             (valuedAmount || 0) +
             (provisionalSums || []).reduce(
@@ -1228,13 +1236,7 @@ export default function ProjectOpenView({
                 s?.completed ? acc + (Number(s?.amount) || 0) : acc,
               0,
             ) +
-            (variations || []).reduce(
-              (acc, v) =>
-                v?.completed
-                  ? acc + Number(v?.qty || 0) * Number(v?.rate || 0)
-                  : acc,
-              0,
-            ) +
+            approvedVariationsEarned(variations) +
             (() => {
               const items = preliminaryItems || [];
               const totalAlloc = items.reduce(
