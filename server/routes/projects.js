@@ -1054,7 +1054,12 @@ function sanitizeProvisionalSums(sums) {
       }
       if (!completedAt) completedAt = new Date();
     }
-    out.push({ description, amount, completed, completedAt });
+    // S18 bill: keep the group a sum belongs to. Anything that is not the
+    // literal "pc" is a provisional sum, which is how the whole list has
+    // always been treated, so a client that does not send `kind` (every
+    // desktop plugin today) leaves its rows exactly as they were.
+    const kind = String(s.kind || "").trim().toLowerCase() === "pc" ? "pc" : "provisional";
+    out.push({ description, amount, completed, completedAt, kind });
   }
   return out;
 }
@@ -2302,6 +2307,69 @@ async function listProjects(req, res) {
               },
             },
           },
+          // ── S18 bill: what stage a project is at, from what it holds ─────
+          // The gallery used to guess the stage from progressPercent, so a
+          // finished job with no final account read as "Final account". These
+          // five facts let it read the stage instead of inferring it. They are
+          // additive fields on a row the desktop plugins parse as a bare
+          // array, alongside shared/accessLevel/mergedPartCount, which those
+          // parsers already ignore.
+          contractLocked: { $ifNull: ["$contract.locked", false] },
+          tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
+          finalized: { $ifNull: ["$finalAccount.finalized", false] },
+          certificateCount: { $size: { $ifNull: ["$certificates", []] } },
+          contractSum: { $ifNull: ["$contract.contractSum", 0] },
+          // ── S18 bill: the pieces of the estimated total ──────────────────
+          // The card's "Estimated" figure was totalCost, which is measured
+          // work alone. These carry the rest of the grand summary so the
+          // gallery can show the same total the Bill does, using the one
+          // formula (client/src/features/projects/lib/projectTotals.js).
+          // Defaults match the model's, so a project that predates a field
+          // reads exactly as the project page reads it.
+          provisionalTotal: {
+            $sum: {
+              $map: {
+                input: { $ifNull: ["$provisionalSums", []] },
+                as: "s",
+                in: {
+                  $convert: { input: "$$s.amount", to: "double", onError: 0, onNull: 0 },
+                },
+              },
+            },
+          },
+          // Approved variations only. A row with no status is work that has
+          // always counted, so a missing status reads as approved — the same
+          // defensive rule the client uses.
+          approvedVariationsTotal: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: { $ifNull: ["$variations", []] },
+                    as: "v",
+                    cond: {
+                      $not: {
+                        $in: [
+                          { $ifNull: ["$$v.status", "approved"] },
+                          ["pending", "rejected"],
+                        ],
+                      },
+                    },
+                  },
+                },
+                as: "v",
+                in: {
+                  $multiply: [
+                    { $convert: { input: "$$v.qty", to: "double", onError: 0, onNull: 0 } },
+                    { $convert: { input: "$$v.rate", to: "double", onError: 0, onNull: 0 } },
+                  ],
+                },
+              },
+            },
+          },
+          preliminaryPercent: { $ifNull: ["$contract.preliminaryPercent", 7.5] },
+          contingencyPercent: { $ifNull: ["$contract.contingencyPercent", 5] },
+          taxPercent: { $ifNull: ["$contract.taxPercent", 7.5] },
           // Ownership badge: true when this row was shared with the requester.
           shared: { $ne: ["$userId", userId] },
           accessLevel: {
@@ -2396,6 +2464,66 @@ async function listProjects(req, res) {
               { $gt: ["$itemCount", 0] },
               { $multiply: [{ $divide: ["$progressShare", "$itemCount"] }, 100] },
               0,
+            ],
+          },
+        },
+      },
+      // S18 bill: the grand-summary cascade, one step per stage because a
+      // $addFields cannot read a field it is defining. Same order as the Bill
+      // and as lockContract(): prelims on measured + sums, contingency on the
+      // sub-total, VAT on sub-total + contingency, approved variations last.
+      {
+        $addFields: {
+          preliminaryTotal: {
+            $divide: [
+              {
+                $multiply: [
+                  { $add: ["$totalCost", "$provisionalTotal"] },
+                  "$preliminaryPercent",
+                ],
+              },
+              100,
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          estimateSubtotal: {
+            $add: ["$totalCost", "$provisionalTotal", "$preliminaryTotal"],
+          },
+        },
+      },
+      {
+        $addFields: {
+          contingencyTotal: {
+            $divide: [{ $multiply: ["$estimateSubtotal", "$contingencyPercent"] }, 100],
+          },
+        },
+      },
+      {
+        $addFields: {
+          taxTotal: {
+            $divide: [
+              {
+                $multiply: [
+                  { $add: ["$estimateSubtotal", "$contingencyTotal"] },
+                  "$taxPercent",
+                ],
+              },
+              100,
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          estimatedTotal: {
+            $add: [
+              "$estimateSubtotal",
+              "$contingencyTotal",
+              "$taxTotal",
+              "$approvedVariationsTotal",
             ],
           },
         },
@@ -3817,6 +3945,75 @@ async function unlockContract(req, res) {
     res.json({ ok: true, contract: contractOut, version: project.version });
   } catch (err) {
     console.error("POST unlock error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── "Mark as tendered" (S18 bill, PR2-25) ────────────────────────────────
+// Records the day the priced bill went out to tender, which is the one thing
+// nothing in the data held. It moves the project to the Tendered stage between
+// Priced and Contract locked and changes no figure whatsoever: nothing reads
+// contract.tenderedAt except stageOf().
+//
+// Sending { tendered: false } takes it back, for the day it is set by mistake.
+// A locked contract is past tendering, so it refuses rather than pretending.
+async function setTendered(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
+
+    const tendered = req.body?.tendered === undefined ? true : Boolean(req.body.tendered);
+
+    if (tendered && project.contract?.locked) {
+      return res.status(409).json({
+        error: "This contract is already locked, which is past the tender stage.",
+        code: "CONTRACT_LOCKED",
+      });
+    }
+
+    let tenderedAt = null;
+    if (tendered) {
+      const supplied = req.body?.tenderedAt ? new Date(req.body.tenderedAt) : null;
+      tenderedAt =
+        supplied && !Number.isNaN(supplied.getTime()) ? supplied : new Date();
+    }
+
+    if (!project.contract) project.contract = {};
+    project.contract.tenderedAt = tenderedAt;
+    project.version += 1;
+    await project.save();
+
+    const contractOut = project.contract?.toObject
+      ? project.contract.toObject()
+      : { ...project.contract };
+    delete contractOut.lockPinHash;
+    recordActivity(
+      req,
+      project,
+      tendered ? ACT.CONTRACT_TENDERED : ACT.CONTRACT_UNTENDERED,
+      tendered ? "Marked the bill as tendered" : "Took back the tendered mark",
+      tendered ? { tenderedAt } : undefined,
+    );
+    res.json({ ok: true, contract: contractOut, version: project.version });
+  } catch (err) {
+    console.error("POST tendered error:", err);
     res.status(500).json({ error: "Server error" });
   }
 }
@@ -6619,6 +6816,14 @@ router.post(
   requireEntitlementParam,
   requireStepUp,
   unlockContract,
+);
+
+// S18 bill: no step-up here — this records a date, it does not move money.
+router.post(
+  "/:productKey/:id/contract/tendered",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  setTendered,
 );
 
 router.post(

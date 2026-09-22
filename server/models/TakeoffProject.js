@@ -103,6 +103,18 @@ const ProvisionalSumSchema = new mongoose.Schema(
     // "Done" buckets. Matches preliminary-item semantics.
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null },
+    // S18 bill: which of the two named groups this sum belongs to. "pc" is a
+    // prime-cost sum for a nominated supplier or subcontractor; "provisional"
+    // is an allowance for work that is not yet defined. The website has always
+    // shown one list under both names, so the field is optional and every
+    // existing row reads as "provisional" — the combined figure, and therefore
+    // every total and every export, is unchanged. Additive with a default, so
+    // the desktop plugins round-trip these rows exactly as they do today.
+    kind: {
+      type: String,
+      enum: ["pc", "provisional"],
+      default: "provisional",
+    },
   },
   { _id: false },
 );
@@ -514,6 +526,12 @@ const ContractSchema = new mongoose.Schema(
     lockedAt: { type: Date, default: null },
     lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     approvedAt: { type: Date, default: null },
+    // S18 bill: when the bill went out to tender. Set by hand from the project
+    // ("Mark as tendered"), cleared the same way, and read only to place the
+    // project at the Tendered stage between Priced and Contract locked. It
+    // changes no figure and is null on every existing project, which is why
+    // those projects keep the stage they show today.
+    tenderedAt: { type: Date, default: null },
     // Preliminaries as a percentage of (measured work + provisional sums).
     // Typical range in Nigerian practice is 5 – 10%. Stored as whole number.
     preliminaryPercent: { type: Number, default: 7.5 },
