@@ -39,12 +39,26 @@ const GROUPS = [
   {
     title: "Work surface",
     note: "His work-* screens, against his own sample data.",
-    slugs: ["work-home", "work-projects", "work-project", "work-library", "work-rate", "work-programme"],
+    slugs: [
+      "work-home", "work-projects", "work-project", "work-tool", "work-library",
+      "work-rate", "work-programme",
+    ],
+  },
+  {
+    // These two were ported and routable but linked from nowhere, so the only
+    // way to see them was to know the URL.
+    title: "Plugins (side one)",
+    note:
+      "Design references for the desktop add-ins: QUIV inside Revit, HERON inside PlanSwift. " +
+      "They render bare, as his build does — no nav, no footer, no Ada. The behaviour they " +
+      "picture lives in the C# plugins, not here.",
+    badge: "design reference",
+    slugs: ["plugin-quiv", "plugin-heron"],
   },
   { title: "Other", slugs: ["ada", "doc-preview"] },
 ];
 
-function Row({ slug }) {
+function Row({ slug, badge }) {
   const live = MAP[SLUG_TO_KEY[slug] || slug] ?? null;
   // A route this app does not have yet — the redesign adds it.
   const isNew =
@@ -63,7 +77,9 @@ function Row({ slug }) {
       <span className="flex-1" />
       {isNew ? (
         <span className="text-xs px-2 py-0.5 rounded bg-adlm-orange/15 text-adlm-orange">
-          new route
+          {/* "new route" is wrong for a page that will never become one — the
+              plugin references have no live counterpart by design. */}
+          {badge || "new route"}
         </span>
       ) : (
         <a href={live} className="text-sm text-slate-500 hover:underline">
@@ -110,7 +126,7 @@ export default function DsPreviewIndex() {
             {g.slugs
               .filter((s) => DS_PAGES.some((p) => p.slug === s))
               .map((s) => (
-                <Row key={s} slug={s} />
+                <Row key={s} slug={s} badge={g.badge} />
               ))}
           </ul>
         </section>

@@ -32,7 +32,30 @@ const APP_SCREEN = /^(dash|work)-/;
 // that is part of the page, not stamped around it. So they get no shell of
 // ours at all: DsShell would put the marketing nav above an admin panel, and
 // DsAppShell would put the Manage rail beside his admin rail.
-const BARE_SCREEN = /^admin-/;
+//
+// The plugin side-one pages are the same shape for a different reason: they
+// are full-window simulations of QUIV inside Revit and HERON inside PlanSwift,
+// so a marketing nav, a launch strip and a footer around a Revit ribbon is
+// simply wrong. This list is his: the two prefixes below are exactly the set
+// of pages carrying "nochrome": true in his meta blocks (site/build.js), which
+// is 32 admin-* plus plugin-quiv and plugin-heron.
+const BARE_SCREEN = /^(admin|plugin)-/;
+
+/** Does this staged page render with no shell of ours around it? */
+export const isBareScreen = (slug) => BARE_SCREEN.test(String(slug || ""));
+
+/**
+ * Does this staged page get our floating Ada?
+ *
+ * His adaFor() leaves her off dash-, work-, doc-, admin- and, since 17 Sep,
+ * plugin- pages. We keep her on the preview app screens on purpose (see the
+ * note at the mount), but not on the plugin references: those simulate a panel
+ * docked inside Revit or PlanSwift, where a floating web chat button has
+ * nothing to float over and only misleads a reviewer into thinking the desktop
+ * add-in ships one.
+ */
+export const hasFloatingAda = (slug) => !/^plugin-/.test(String(slug || ""));
+
 const NEEDS_LEARN = new Set(["dash-learning", "dash-course", "dash-certificates", "work-home"]);
 const NEEDS_AUTH = new Set(["login", "signup", "verify"]);
 const NEEDS_DOC = new Set(["doc-preview", "quote"]);
@@ -118,7 +141,8 @@ export default function DsPreview({ page }) {
   // "Book a demo" above a signed-in dashboard — which is what his own build
   // does, and is on the snag list for him rather than reproduced here.
   const isApp = APP_SCREEN.test(page.slug);
-  const isBare = BARE_SCREEN.test(page.slug);
+  const isBare = isBareScreen(page.slug);
+  const hasAda = hasFloatingAda(page.slug);
   const Shell = isBare ? React.Fragment : isApp ? DsAppShell : DsShell;
   const shellProps = isBare
     ? {}
@@ -152,7 +176,7 @@ export default function DsPreview({ page }) {
             Ours, not his. His answers from keywords over published copy; this
             one is Claude-backed through /agent/chat, grounded in the
             catalogue, and already works signed out. */}
-        <AiAgent />
+        {hasAda && <AiAgent />}
       </React.Suspense>
     </div>
   );
