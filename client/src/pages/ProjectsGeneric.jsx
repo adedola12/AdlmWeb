@@ -18,6 +18,7 @@ import {
   approvedVariationsEarned,
   approvedVariationsTotal,
   normalizeVariationStatus,
+  selAfterVariationWrite,
   variationStatusLabel,
 } from "../lib/variations.js";
 import {
@@ -3908,11 +3909,15 @@ export default function ProjectsGeneric() {
     return (Array.isArray(rows) ? rows : []).map(variationRow);
   }
 
-  function adoptVariations(rows) {
+  // The whole response, not just its rows: a raise and a decision each bump
+  // the document version, and the held project has to move with it or the next
+  // ordinary Bill save is refused as a conflict. See selAfterVariationWrite.
+  function adoptVariations(result) {
+    const rows = Array.isArray(result?.variations) ? result.variations : [];
     const next = variationsFromServer(rows);
     setVariations(next);
     setBaseVariations(next.map((v) => ({ ...v })));
-    setSel((prev) => (prev ? { ...prev, variations: rows } : prev));
+    setSel((prev) => selAfterVariationWrite(prev, result));
   }
 
   // A raise/decide replaces the whole list from the server, so unsaved edits
@@ -3934,7 +3939,7 @@ export default function ProjectsGeneric() {
         method: "POST",
         body: body || {},
       });
-      if (result?.variations) adoptVariations(result.variations);
+      if (result?.variations) adoptVariations(result);
       return result;
     } catch (e) {
       setErr(e?.message || "Failed to add the variation");
@@ -3950,7 +3955,7 @@ export default function ProjectsGeneric() {
         endpoints.variationDecision(selectedId, index),
         { token: accessToken, method: "PATCH", body: { status } },
       );
-      if (result?.variations) adoptVariations(result.variations);
+      if (result?.variations) adoptVariations(result);
       return result;
     } catch (e) {
       setErr(e?.message || "Failed to record the decision");
