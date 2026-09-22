@@ -6,6 +6,7 @@ import {
   approvedVariationsEarned,
   variationKpis,
   variationRowsNewestFirst,
+  selAfterVariationWrite,
   variationStatusLabel,
   variationStatusClass,
 } from "./variations.js";
@@ -78,5 +79,59 @@ describe("variation approval status", () => {
   it("is worth nothing, not NaN, when the numbers are unusable", () => {
     expect(approvedVariationsTotal([{ qty: "x", rate: "y" }])).toBe(0);
     expect(approvedVariationsTotal(null)).toBe(0);
+  });
+});
+
+// ── Raising a variation must not cost the QS their unsaved Bill ──────────
+//
+// A raise and a decision are server writes: both bump the document version.
+// The page merges the response into the project it is holding, and if it takes
+// only the rows it keeps a version the server has already moved past. The very
+// next Bill save sends that stale number as baseVersion and is refused as a
+// conflict — and with it goes everything typed since the raise.
+describe("adopting a variation raise or decision", () => {
+  const held = { _id: "p1", name: "Ikeja tower", version: 7, variations: [] };
+  const raised = {
+    ok: true,
+    index: 0,
+    variations: [
+      { description: "Extra soakaway", qty: 1, unit: "item", rate: 450_000, status: "pending" },
+    ],
+    version: 8,
+  };
+
+  // The save the QS does next. The server refuses any baseVersion that is not
+  // the one it holds — routes/projects.js: 409 "Version conflict".
+  function save(sel, serverVersion) {
+    return sel.version === serverVersion
+      ? { ok: true }
+      : { status: 409, error: "Version conflict" };
+  }
+
+  it("carries the new version through, so the next ordinary save succeeds", () => {
+    const after = selAfterVariationWrite(held, raised);
+    expect(after.version).toBe(8);
+    expect(save(after, 8)).toEqual({ ok: true });
+  });
+
+  it("takes the rows the server returned", () => {
+    const after = selAfterVariationWrite(held, raised);
+    expect(after.variations).toEqual(raised.variations);
+    expect(after.name).toBe("Ikeja tower");
+  });
+
+  it("would lose the save if the version were dropped", () => {
+    // The shape of the bug, pinned so it cannot come back unnoticed.
+    const dropped = { ...held, variations: raised.variations };
+    expect(save(dropped, 8).status).toBe(409);
+  });
+
+  it("keeps the version it already had when a response carries none", () => {
+    const after = selAfterVariationWrite(held, { variations: raised.variations });
+    expect(after.version).toBe(7);
+  });
+
+  it("leaves an unloaded project alone", () => {
+    expect(selAfterVariationWrite(null, raised)).toBe(null);
   });
 });

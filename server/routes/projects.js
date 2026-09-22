@@ -3075,7 +3075,10 @@ async function applyMergedLineWrite({ req, container, userId, body, canSeeRates 
     postLockVariations = extraVariations;
   }
 
-  const { bySource, unroutable } = splitMergedWrite(container, workingBody);
+  const { bySource, container: containerBucket, unroutable } = splitMergedWrite(
+    container,
+    workingBody,
+  );
 
   if (unroutable.length) {
     return {
@@ -3166,22 +3169,39 @@ async function applyMergedLineWrite({ req, container, userId, body, canSeeRates 
     });
   }
 
+  // ── The container's own contract-level rows ──
+  // A variation raised against the whole job belongs to the container, which
+  // is the commercial entity holding the contract — resolveMergedProject hands
+  // those rows to the client tagged with the container's id, and this is where
+  // they come home. Through the same sanitizer the sources use, so a status,
+  // a quantity and a rate round-trip identically either side of the merge.
+  let containerDirty = false;
+  if (Array.isArray(containerBucket?.variations)) {
+    container.variations = sanitizeVariations(containerBucket.variations);
+    container.markModified("variations");
+    containerDirty = true;
+  }
+
   // Post-lock scope belongs to the CONTAINER, not to any one discipline: a
   // variation is raised against the merged contract, and the container is what
   // holds that contract, its certificates and its final account. Filing it on
   // a source would post it to the wrong account and quietly distort that
-  // discipline's own history.
+  // discipline's own history. Appended AFTER the payload above so the two
+  // compose: the QS's edits set the list, and new post-lock scope lands on top
+  // of what they saved rather than being overwritten by it.
   if (postLockVariations.length) {
     container.variations = sanitizeVariations([
       ...(Array.isArray(container.variations) ? container.variations : []),
       ...postLockVariations,
     ]);
     container.markModified("variations");
-    await container.save();
+    containerDirty = true;
     recordActivity(req, container, ACT.VARIATION_ADDED, "Added post-lock scope as variations", {
       count: postLockVariations.length,
     });
   }
+
+  if (containerDirty) await container.save();
 
   recordActivity(req, container, ACT.BILL_UPDATED, "Updated the merged bill & budget", {
     disciplines: applied.length,

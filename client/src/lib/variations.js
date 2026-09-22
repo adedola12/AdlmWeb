@@ -102,6 +102,23 @@ export function variationStatusLabel(status) {
   return "Approved";
 }
 
+/**
+ * Merge a raise/decide response into the project document the page is holding.
+ *
+ * Raising a variation and deciding one are both writes: the server bumps the
+ * document version and returns the new one alongside the rows. A page that
+ * takes the rows and drops the version is left holding a number the server has
+ * moved past, and the QS's next ordinary Bill save is refused as a version
+ * conflict — taking with it every edit typed since the raise. Carry the
+ * version through, and fall back to the one already held when a response
+ * carries none, so nothing regresses if a route ever stops sending it.
+ */
+export function selAfterVariationWrite(prev, result) {
+  if (!prev) return prev;
+  const rows = Array.isArray(result?.variations) ? result.variations : [];
+  return { ...prev, variations: rows, version: result?.version ?? prev.version };
+}
+
 /** His stage-pill modifier for a status. */
 export function variationStatusClass(status) {
   const s = normalizeVariationStatus(status);
