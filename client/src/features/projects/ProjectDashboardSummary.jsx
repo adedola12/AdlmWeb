@@ -37,6 +37,10 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+// His tiles are four fixed columns, sized for short figures. A full naira
+// figure at his tile size is ~210px, so the tiles wrap at a width that fits one.
+const FIT_TILES = { marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" };
+
 function Tile({ label, value, sub, tone }) {
   return (
     <div className={`dsh-stat${tone ? ` ${tone}` : ""}`}>
@@ -108,7 +112,7 @@ export default function ProjectDashboardSummary({
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
-      <div className="dsh-stats" style={{ marginBottom: 0 }}>
+      <div className="dsh-stats" style={FIT_TILES}>
         <Tile
           label="Planned total"
           value={money(grossAmount + linkedGrandTotal)}
@@ -183,7 +187,7 @@ export default function ProjectDashboardSummary({
         </div>
       </section>
 
-      <div className="dsh-stats" style={{ marginBottom: 0 }}>
+      <div className="dsh-stats" style={FIT_TILES}>
         <Tile
           label="Actual tracked value"
           value={money(actualTrackedAmount)}

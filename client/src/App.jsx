@@ -1,9 +1,9 @@
 import React from "react";
-import { Link, Outlet, useLocation, ScrollRestoration } from "react-router-dom";
-import { useAuth } from "./store.jsx";
+import { Outlet, useLocation, ScrollRestoration } from "react-router-dom";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import DesignModeBanner from "./components/DesignModeBanner.jsx";
+import { isClassicAdminPath } from "./lib/classicAdminPaths.js";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import AiAgent from "./components/AiAgent.jsx";
@@ -16,7 +16,6 @@ import { initGA } from "./ga";
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
   const location = useLocation();
-  const { user: authUser } = useAuth();
 
   // Screens that render inside his app frame — rail, app bar, own scroll
   // container. They supply their own chrome and their own padding, so the
@@ -28,17 +27,20 @@ export default function App() {
   // half stays at /learn with the marketing chrome, because it is a page for
   // people who have not signed in.
   //
-  // /projects/* and /time-management are on this list because they are now
-  // wrapped in the same frame (see pages/WorkShellRoute.jsx), even though they
-  // are our screens rather than ported ones. Leaving them off put the
-  // marketing nav and "Book a demo" above a signed-in rail.
+  // /projects/*, /time-management, /pm-tracker, /revit-projects, /portfolio*,
+  // /j/:code and /archicad/* are on this list because they are wrapped in the
+  // same frame (see pages/WorkShellRoute.jsx), even though they are our
+  // screens rather than ported ones.
   // Routes that carry their own chrome and must not also get the marketing
   // nav and footer. /admin joins the list because the admin section now has
   // his rail: two sets of navigation over one page compete for the same job,
   // and "Book a demo" does not belong above a refund queue.
-  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-course|projects|time-management|admin)(\/|$)/.test(
-    location.pathname,
-  );
+  // Classic admin screens (lib/classicAdminPaths.js) are the exception until
+  // go-live: they render without his frame, so they need the site nav back.
+  const appShellRoute =
+    /^\/(manage|work|dash-learning|dash-certificates|dash-course|projects|time-management|pm-tracker|revit-projects|portfolio|portfolio-dashboard|j|archicad|admin)(\/|$)/.test(
+      location.pathname,
+    ) && !isClassicAdminPath(location.pathname);
 
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
@@ -93,17 +95,6 @@ export default function App() {
           build does exactly that; it is on the snag list for him rather than
           reproduced here. */}
       {!appShellRoute && <Nav />}
-
-      {/* Signed in but the email is not confirmed: say so on every page
-          (a licensed account is prompted here rather than locked out). */}
-      {authUser?.emailVerified === false && location.pathname !== "/verify-email" && (
-        <div className="w-full bg-amber-50 text-amber-900 border-b border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-800 text-sm px-4 py-2 text-center">
-          Confirm your email address to use your account.{" "}
-          <Link className="underline font-semibold" to={`/verify-email?next=${encodeURIComponent(location.pathname)}`}>
-            Enter the code
-          </Link>
-        </div>
-      )}
 
       {/* Only renders for Design Access sessions, and only on /admin. */}
       <DesignModeBanner />

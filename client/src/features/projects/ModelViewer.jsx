@@ -64,6 +64,13 @@ export default function ModelViewer({
   productKey = "",
   projectId = "",
   accessToken = "",
+  // Work area: a canvas-only viewer driven from outside. `highlightIds` are
+  // the element IDs to light up (empty clears), `onPickElement` reports a
+  // click on the model, and `height` sizes the canvas.
+  compact = false,
+  height = 600,
+  highlightIds = null,
+  onPickElement = null,
 }) {
   // Disciplines that actually have an attached model.
   const available = React.useMemo(
@@ -103,6 +110,24 @@ export default function ModelViewer({
   const [error, setError] = React.useState("");
   const [selectedItemKey, setSelectedItemKey] = React.useState(null);
   const [pickedId, setPickedId] = React.useState(0);
+  // The latest pick callback, read by the viewer without re-creating it.
+  const pickRef = React.useRef(onPickElement);
+  React.useEffect(() => {
+    pickRef.current = onPickElement;
+  }, [onPickElement]);
+
+  // Highlight driven from outside (the work area). Re-applied once the model
+  // is ready, since a selection can be made while it is still loading.
+  const highlightKey = Array.isArray(highlightIds) ? highlightIds.join(",") : null;
+  React.useEffect(() => {
+    if (highlightKey === null || status !== "ready") return;
+    const v = viewerRef.current;
+    if (!v) return;
+    if (highlightIds.length) v.highlight(highlightIds);
+    else v.clearHighlight();
+    // highlightKey stands in for the array's contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightKey, status]);
 
   // (Re)create the viewer whenever the selected model changes.
   React.useEffect(() => {
@@ -133,7 +158,10 @@ export default function ModelViewer({
       setError(e?.message || "WebGL isn't available in this browser.");
       return undefined;
     }
-    viewer.onPick = (id) => setPickedId(id);
+    viewer.onPick = (id) => {
+      setPickedId(id);
+      pickRef.current?.(id);
+    };
     viewerRef.current = viewer;
 
     // Fetch the IFC through the SAME-ORIGIN API proxy (not the R2 URL directly):
@@ -218,18 +246,19 @@ export default function ModelViewer({
 
   if (available.length === 0) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-depth">
+      <div className="wk-panel wk-empty" style={{ marginBottom: 0 }}>
         No model attached yet. Upload a validated IFC from the{" "}
-        <span className="font-semibold">Bill of Quantity</span> tab to view it
+        <b style={{ fontWeight: 500, color: "var(--ink)" }}>Bill of Quantity</b> tab to view it
         here.
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth">
-      {/* Discipline selector */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+    <section className="wk-panel" style={{ marginBottom: 0 }}>
+      {/* Discipline selector, in his switch */}
+      <div className="wk-ph" style={{ flexWrap: "wrap" }}>
+        <div className="wk-loc-sw" role="tablist" aria-label="Model discipline">
         {available.map((d) => {
           const v = projectModels?.[d]?.validation;
           const active = d === discipline;
@@ -237,43 +266,53 @@ export default function ModelViewer({
             <button
               key={d}
               type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => setDiscipline(d)}
-              className={[
-                "rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
-                active
-                  ? "border-adlm-blue-700 bg-adlm-blue-700 text-white"
-                  : "border-slate-200 text-slate-700 hover:bg-slate-50",
-              ].join(" ")}
+              className={active ? "on" : ""}
+              title={v?.status === "valid" ? "Element IDs verified" : undefined}
             >
               {DISCIPLINE_LABELS[d] || d}
               {v?.status === "valid" ? (
-                <span className={active ? "ml-1 text-emerald-200" : "ml-1 text-emerald-600"}>✓</span>
+                <span style={{ marginLeft: 6, color: "var(--action)" }}>✓</span>
               ) : null}
             </button>
           );
         })}
-        <div className="ml-auto text-[11px] text-slate-500">
-          {model?.sourceFile}
         </div>
+        <span className="wk-locnote" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+          {model?.sourceFile}
+        </span>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[1fr_320px]">
+      <div
+        className={compact ? "grid" : "grid gap-3 md:grid-cols-[1fr_320px]"}
+        style={{ padding: compact ? 12 : 16 }}
+      >
         {/* 3D canvas */}
-        <div className="relative h-[600px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+        <div
+          className="relative overflow-hidden"
+          style={{ height, borderRadius: 14, border: "1px solid var(--line)", background: "var(--bg-alt)" }}
+        >
           <div ref={containerRef} className="absolute inset-0" />
           {status === "loading" ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100/80 text-sm text-slate-600">
-              <div className="h-1.5 w-48 overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className="h-full bg-adlm-blue-700 transition-all"
-                  style={{ width: `${Math.round(progress * 100)}%` }}
-                />
+            <div
+              className="wk-locnote absolute inset-0 flex flex-col items-center justify-center gap-2"
+              style={{ background: "color-mix(in srgb, var(--bg-alt) 85%, transparent)", fontSize: 13 }}
+            >
+              <div className="dsh-meter" style={{ width: 192 }}>
+                <div className="track">
+                  <i style={{ width: `${Math.round(progress * 100)}%` }} />
+                </div>
               </div>
               Loading model… {Math.round(progress * 100)}%
             </div>
           ) : null}
           {status === "error" ? (
-            <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-red-700">
+            <div
+              className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm"
+              style={{ color: "var(--pal-orange-key)" }}
+            >
               {error}
             </div>
           ) : null}
@@ -281,24 +320,35 @@ export default function ModelViewer({
             <button
               type="button"
               onClick={clearSelection}
-              className="absolute right-2 top-2 rounded-md bg-white/90 dark:bg-slate-900/85 px-2 py-1 text-[11px] font-semibold text-slate-700 shadow hover:bg-white dark:hover:bg-slate-900"
+              className="ds-btn ds-btn-sm btn-o absolute right-2 top-2"
+              style={{ background: "var(--bg)" }}
             >
               Clear highlight
             </button>
           ) : null}
         </div>
 
-        {/* Side panel: BoQ lines + pick info */}
-        <div className="flex h-[600px] flex-col gap-3">
+        {/* Side panel: BoQ lines + pick info (the work area shows its own) */}
+        {compact ? null : (
+        <div className="flex flex-col gap-3" style={{ height }}>
           {/* Clicked element trace: this element's own BoQ qty + materials */}
           {pickedId ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px]">
-              <div className="font-semibold text-amber-900">
+            <div
+              className="mk-note"
+              style={{
+                margin: 0,
+                fontSize: 12,
+                background: "var(--pal-orange-wash)",
+                color: "var(--pal-orange-key)",
+                borderColor: "var(--pal-orange-line)",
+              }}
+            >
+              <div style={{ fontWeight: 500, color: "var(--ink)" }}>
                 Element ID {pickedId}
               </div>
 
               {pickedBoqCost > 0 || pickedBudgetCost > 0 ? (
-                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-amber-800">
+                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
                   {pickedBoqCost > 0 ? (
                     <span>
                       Cost{" "}
@@ -320,10 +370,10 @@ export default function ModelViewer({
 
               {pickedBoqItems.length ? (
                 <div className="mt-1.5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                  <p className="wk-grp" style={{ padding: 0, margin: 0, color: "inherit" }}>
                     Bill of Quantity
-                  </div>
-                  <ul className="mt-0.5 space-y-0.5 text-amber-900">
+                  </p>
+                  <ul className="mt-0.5 space-y-0.5" style={{ color: "var(--ink-2)" }}>
                     {pickedBoqItems.slice(0, 8).map((it, i) => {
                       const q = elementQtyFor(it, pickedId);
                       const cost = elementCostFor(it, pickedId);
@@ -341,7 +391,7 @@ export default function ModelViewer({
                               {fmtQty(q.qty)} {it.unit || ""}
                             </span>
                             {cost > 0 ? (
-                              <span className="block text-[10px] font-semibold text-amber-700">
+                              <span className="block text-[11px] font-semibold" style={{ color: "var(--pal-orange-key)" }}>
                                 {fmtMoney(cost)}
                               </span>
                             ) : null}
@@ -355,10 +405,10 @@ export default function ModelViewer({
 
               {pickedMaterialItems.length ? (
                 <div className="mt-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                  <p className="wk-grp" style={{ padding: 0, margin: 0, color: "inherit" }}>
                     Material breakdown
-                  </div>
-                  <ul className="mt-0.5 space-y-0.5 text-amber-900">
+                  </p>
+                  <ul className="mt-0.5 space-y-0.5" style={{ color: "var(--ink-2)" }}>
                     {pickedMaterialItems.slice(0, 12).map((it, i) => {
                       const q = elementQtyFor(it, pickedId);
                       const cost = elementCostFor(it, pickedId);
@@ -376,7 +426,7 @@ export default function ModelViewer({
                               {fmtQty(q.qty)} {it.unit || ""}
                             </span>
                             {cost > 0 ? (
-                              <span className="block text-[10px] font-semibold text-amber-700">
+                              <span className="block text-[11px] font-semibold" style={{ color: "var(--pal-orange-key)" }}>
                                 {fmtMoney(cost)}
                               </span>
                             ) : null}
@@ -389,24 +439,24 @@ export default function ModelViewer({
               ) : null}
 
               {!pickedBoqItems.length && !pickedMaterialItems.length ? (
-                <div className="mt-1 text-amber-700">
+                <div className="mt-1">
                   Not referenced by any quantity in this project.
                 </div>
               ) : (
-                <div className="mt-1.5 text-[10px] text-amber-600">
+                <div className="mt-1.5 text-[11px]" style={{ opacity: 0.85 }}>
                   ≈ = estimated (even split across this line&apos;s elements)
                 </div>
               )}
             </div>
           ) : null}
 
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <p className="wk-grp" style={{ padding: 0, margin: 0 }}>
             {DISCIPLINE_LABELS[discipline] || discipline} quantities (
             {disciplineItems.length})
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200">
+          </p>
+          <div className="min-h-0 flex-1 overflow-y-auto" style={{ borderRadius: 14, border: "1px solid var(--line)" }}>
             {disciplineItems.length === 0 ? (
-              <div className="p-3 text-[11px] text-slate-500">
+              <div className="wk-empty" style={{ padding: 18, fontSize: 13 }}>
                 No quantities with element links in this discipline.
               </div>
             ) : (
@@ -419,15 +469,18 @@ export default function ModelViewer({
                     type="button"
                     disabled={status !== "ready"}
                     onClick={() => selectItem(it, key)}
-                    className={[
-                      "block w-full border-b border-slate-100 px-2.5 py-2 text-left text-[11px] transition last:border-b-0 disabled:opacity-50",
-                      active ? "bg-orange-50 dark:bg-orange-500/15" : "hover:bg-slate-50",
-                    ].join(" ")}
+                    className="block w-full px-3 py-2 text-left text-[12px] disabled:opacity-50"
+                    style={{
+                      border: 0,
+                      borderBottom: "1px solid var(--line)",
+                      cursor: "pointer",
+                      background: active ? "var(--pal-orange-wash)" : "transparent",
+                    }}
                   >
-                    <div className="truncate font-medium text-slate-800" title={itemLabel(it)}>
+                    <div className="truncate" style={{ fontWeight: 500, color: "var(--ink)" }} title={itemLabel(it)}>
                       {itemLabel(it)}
                     </div>
-                    <div className="text-slate-500">
+                    <div style={{ color: "var(--ink-3)" }}>
                       {Number(it.qty) || 0} {it.unit || ""} ·{" "}
                       {(it.elementIds || []).length} element
                       {(it.elementIds || []).length === 1 ? "" : "s"}
@@ -437,12 +490,13 @@ export default function ModelViewer({
               })
             )}
           </div>
-          <div className="text-[10px] text-slate-400">
+          <div className="wk-locnote">
             Tip: click a line to highlight its elements, or click an element in
             the model to see its quantities.
           </div>
         </div>
+        )}
       </div>
-    </div>
+    </section>
   );
 }
