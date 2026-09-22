@@ -578,7 +578,16 @@ const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   vatPct: 7.5,
   withholdingPct: 2.5,
   basis: "boq",
+  // S18: the buy schedule's procurement lead time, in days.
+  procurementLeadDays: 14,
 });
+
+// A lead time is a whole number of days, 0-120. Same clamp as the server.
+function clampLeadDays(value, fallback = 14) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(120, Math.round(n)));
+}
 
 function clampPercentage(value, fallback = 0) {
   const num = Number(value);
@@ -624,6 +633,10 @@ function normalizeValuationSettings(settings) {
       source.basis === "budget" || source.basis === "boq"
         ? source.basis
         : DEFAULT_VALUATION_SETTINGS.basis,
+    procurementLeadDays: clampLeadDays(
+      source.procurementLeadDays,
+      DEFAULT_VALUATION_SETTINGS.procurementLeadDays,
+    ),
   };
 }
 
@@ -639,7 +652,8 @@ function valuationSettingsEqual(a, b) {
     safeNum(A.vatPct) === safeNum(B.vatPct) &&
     safeNum(A.withholdingPct) === safeNum(B.withholdingPct) &&
     A.rateSyncEnabled === B.rateSyncEnabled &&
-    A.basis === B.basis
+    A.basis === B.basis &&
+    safeNum(A.procurementLeadDays) === safeNum(B.procurementLeadDays)
   );
 }
 
@@ -2691,6 +2705,8 @@ export default function ProjectsGeneric() {
         next[field] = clampPercentage(value, next[field]);
       } else if (field === "rateSyncEnabled") {
         next.rateSyncEnabled = Boolean(value);
+      } else if (field === "procurementLeadDays") {
+        next.procurementLeadDays = clampLeadDays(value, next.procurementLeadDays);
       }
       return { ...next };
     });

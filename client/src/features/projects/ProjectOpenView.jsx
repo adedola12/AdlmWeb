@@ -1014,6 +1014,13 @@ export default function ProjectOpenView({
           canRateGen={budgetRateGenReady}
           contractLocked={Boolean(contract?.locked)}
           onRebuildSchedule={onRebuildSchedule}
+          // S18: the buy schedule's lead time, saved on the project.
+          leadDays={valuationSettings?.procurementLeadDays}
+          onLeadDaysChange={
+            canEdit
+              ? (days) => onValuationSettingChange?.("procurementLeadDays", days)
+              : null
+          }
         />
       ) : null}
 
