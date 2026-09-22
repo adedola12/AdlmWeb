@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { buildDecisions, headline, pickNextLesson, projectTabHref, taskState, watDay } from "./workOverview.js";
+import {
+  buildDecisions,
+  decisionsNote,
+  headline,
+  pickNextLesson,
+  projectTabHref,
+  taskState,
+  watDay,
+} from "./workOverview.js";
 
 // 22 Sep 2026, 10:00 WAT.
 const NOW = new Date("2026-09-22T09:00:00Z").getTime();
@@ -260,6 +268,70 @@ describe("needs a decision", () => {
     // Arrived: now the answer is complete.
     expect(buildDecisions({ projects: [], overview: { counts: {} }, now: NOW }).partial).toBe(false);
   });
+
+  it("says so when the summary failed, instead of dropping the install row", () => {
+    // /me/summary is the only thing that knows what is installed here. With
+    // that call dead the install row simply is not in the list, and the total
+    // was quietly one short with nothing on screen to say why.
+    const d = buildDecisions({
+      projects: [],
+      overview: { counts: {} },
+      summary: null,
+      summaryFailed: true,
+      products: { revit: "QUIV" },
+      now: NOW,
+    });
+    expect(d.partial).toBe(true);
+    expect(d.missing.failed).toEqual(["what is installed here"]);
+    expect(decisionsNote(d.missing)).toBe("What is installed here could not be loaded");
+  });
+
+  it("waits for the summary rather than answering without it", () => {
+    const d = buildDecisions({
+      projects: [],
+      overview: { counts: {} },
+      summary: null,
+      summaryPending: true,
+      now: NOW,
+    });
+    expect(d.partial).toBe(true);
+    expect(d.missing.pending).toEqual(["what is installed here"]);
+  });
+
+  it("names both when both are missing, and neither when neither is", () => {
+    const both = buildDecisions({
+      projects: [],
+      overview: null,
+      overviewFailed: true,
+      summaryFailed: true,
+      now: NOW,
+    });
+    expect(decisionsNote(both.missing)).toBe(
+      "Valuations, variations and the programme, and what is installed here could not be loaded",
+    );
+
+    const mixed = buildDecisions({
+      projects: [],
+      overview: null,
+      overviewFailed: true,
+      summaryPending: true,
+      now: NOW,
+    });
+    // A call that failed and a call that has not answered are different
+    // things, and the line keeps them apart.
+    expect(decisionsNote(mixed.missing)).toBe(
+      "Valuations, variations and the programme could not be loaded · still checking what is installed here",
+    );
+
+    const complete = buildDecisions({
+      projects: [],
+      overview: { counts: {} },
+      summary: { installations: [], entitlements: [] },
+      now: NOW,
+    });
+    expect(complete.partial).toBe(false);
+    expect(decisionsNote(complete.missing)).toBe("");
+  });
 });
 
 describe("headline figures", () => {
@@ -305,6 +377,37 @@ describe("headline figures", () => {
 
   it("leaves a read-only project out of the work waiting for a rate", () => {
     expect(headline([p(1, 0, 5, "view")]).unpriced).toBe(0);
+  });
+
+  it("leaves a project whose money is hidden out of every money total", () => {
+    // The rollup still sends measured work on a shared project — only the
+    // figures the Work branch added are masked — but the row tells the reader
+    // its money is hidden. A total that quietly included it would contradict
+    // the very row it is built from.
+    const h = headline([
+      p(10_000_000, 4_000_000, 2),
+      p(30_000_000, 6_000_000, 0, "view", {
+        moneyHidden: true,
+        workValue: 0,
+        certifiedToDate: 0,
+      }),
+    ]);
+    expect(h.measured).toBe(10_000_000);
+    expect(h.certified).toBe(4_000_000);
+    expect(h.value).toBe(10_000_000);
+    // Both are still projects; only the money is withheld.
+    expect(h.count).toBe(2);
+    expect(h.counted).toBe(1);
+    expect(h.hidden).toBe(1);
+  });
+
+  it("has no total at all when every project's money is hidden", () => {
+    const h = headline([p(30_000_000, 0, 0, "view", { moneyHidden: true })]);
+    expect(h.counted).toBe(0);
+    expect(h.hidden).toBe(1);
+    // Nothing to show. The screen reads this as an en dash, never ₦0.
+    expect(h.measured).toBe(0);
+    expect(h.certifiedPct).toBe(0);
   });
 });
 

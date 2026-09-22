@@ -55,10 +55,19 @@ import "../styles/ds-work-proj.css";
 import { FaChevronRight } from "../components/icons.jsx";
 import { foldMaterials, normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
 import { placeHref, readPlaces } from "../lib/lastPlace.js";
-import { SOURCES, STAGES, compact, short, sourceOf, stageOf } from "../lib/projectGallery.js";
+import {
+  SOURCES,
+  STAGES,
+  compact,
+  isMoneyHidden,
+  short,
+  sourceOf,
+  stageOf,
+} from "../lib/projectGallery.js";
 import { anchorOf, niceDate } from "../lib/assignments.js";
 import {
   buildDecisions,
+  decisionsNote,
   headline,
   pickNextLesson,
   projectTabHref,
@@ -185,9 +194,11 @@ export default function DsWorkHome() {
   const [overviewFailed, setOverviewFailed] = React.useState(false);
   const [rates, setRates] = React.useState(null);
   const [ratesFailed, setRatesFailed] = React.useState(false);
+  const [summaryFailed, setSummaryFailed] = React.useState(false);
   const [assignments, setAssignments] = React.useState(null);
   const [assignmentsFailed, setAssignmentsFailed] = React.useState(false);
   const [courses, setCourses] = React.useState(null);
+  const [coursesFailed, setCoursesFailed] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
 
   React.useEffect(() => {
@@ -204,9 +215,12 @@ export default function DsWorkHome() {
       .then((d) => alive && setOverview(d))
       .catch(() => alive && setOverviewFailed(true));
 
+    // What is installed on this machine, which is one of the six kinds of
+    // decision. A failure here used to be swallowed, and the decision total
+    // simply came out a row short.
     apiAuthed("/me/summary", { token: accessToken })
       .then((d) => alive && setSummary(d))
-      .catch(() => alive && setSummary(null));
+      .catch(() => alive && setSummaryFailed(true));
 
     apiAuthed("/rategen-v2/library/custom-rates", { token: accessToken })
       .then((d) => alive && setRates(Array.isArray(d.items) ? d.items : []))
@@ -216,9 +230,11 @@ export default function DsWorkHome() {
       .then((d) => alive && setAssignments(Array.isArray(d.items) ? d.items : []))
       .catch(() => alive && setAssignmentsFailed(true));
 
+    // The next lesson. An empty list used to stand in for a failed call, so a
+    // dead courses read looked exactly like somebody enrolled on nothing.
     apiAuthed("/me/courses", { token: accessToken })
       .then((d) => alive && setCourses(Array.isArray(d) ? d : []))
-      .catch(() => alive && setCourses([]));
+      .catch(() => alive && setCoursesFailed(true));
 
     return () => {
       alive = false;
@@ -234,10 +250,14 @@ export default function DsWorkHome() {
         overview,
         overviewFailed,
         summary,
+        summaryFailed,
+        // Asked for, and no answer yet: the install row is unknown rather
+        // than absent, exactly as the overview's three kinds are.
+        summaryPending: !summary && !summaryFailed,
         products: PRODUCT,
         cap: 8,
       }),
-    [projects, overview, overviewFailed, summary],
+    [projects, overview, overviewFailed, summary, summaryFailed],
   );
 
   // Where this browser remembers being, filtered to projects still on the
@@ -334,6 +354,16 @@ export default function DsWorkHome() {
 
   const loading = overview === null && !overviewFailed ? "Loading…" : null;
   const moneyState = overviewFailed ? "That could not be loaded just now." : loading;
+
+  // Projects whose money this reader may not see are left out of every total
+  // above, and the tiles say so rather than quietly under-reporting.
+  const withheldNote = kpi.hidden
+    ? ` · ${num(kpi.hidden)} shared project${kpi.hidden === 1 ? "" : "s"}, money hidden, not counted`
+    : "";
+
+  // Which of the two calls behind "Needs a decision" could not be counted.
+  const decisionsFailed = decisions.missing.failed.length > 0;
+  const decisionsSub = decisionsNote(decisions.missing);
 
   const ratesPanel = (
     <Panel
@@ -454,10 +484,14 @@ export default function DsWorkHome() {
           <div className="oh-kpis">
             <Link to="/work/projects">
               <span>Measured work, all projects</span>
-              <b>{compact(kpi.measured)}</b>
+              {/* Money the reader may not see is not in this sum, and with
+                  every project withheld there is no sum to show at all. */}
+              <b>{kpi.counted ? compact(kpi.measured) : DASH}</b>
               <em>
-                {num(kpi.count)} project{kpi.count === 1 ? "" : "s"} at the rates they were priced
-                with
+                {kpi.counted
+                  ? `${num(kpi.counted)} project${kpi.counted === 1 ? "" : "s"} at the rates they were priced with`
+                  : "Nothing here can be totalled"}
+                {withheldNote}
               </em>
             </Link>
             <Link to="/work/projects">
@@ -472,6 +506,7 @@ export default function DsWorkHome() {
                 {kpi.value > 0
                   ? `${Math.round(kpi.certifiedPct)}% of the work's value`
                   : "Nothing measured yet"}
+                {withheldNote}
               </em>
             </Link>
             <Link to="/work/library">
@@ -483,14 +518,15 @@ export default function DsWorkHome() {
                   : "Everything measured has a rate"}
               </em>
             </Link>
-            {/* Three of the six kinds of decision come from the overview. Until
-                it arrives this tile does not know the answer, and a count of
-                what we happen to hold would read as "nothing to decide". */}
+            {/* Three of the six kinds of decision come from the overview and
+                one from the summary. Until both arrive this tile does not know
+                the answer, and a count of what we happen to hold would read as
+                "nothing to decide". */}
             <a href="#oh-att" className={decisions.urgent ? "warn" : undefined}>
               <span>Needs a decision</span>
               <b>{decisions.partial ? DASH : num(decisions.total)}</b>
               <em>
-                {overviewFailed
+                {decisionsFailed
                   ? "Part of this could not be loaded"
                   : decisions.partial
                     ? "Still checking"
@@ -506,15 +542,13 @@ export default function DsWorkHome() {
             <Panel
               id="oh-att"
               title="Needs a decision"
-              // What the sub line may claim depends on what is known. With the
-              // overview missing, valuations, variations and the programme are
-              // simply not in this list, and the line says so rather than
-              // quoting a total that is only part of one.
+              // What the sub line may claim depends on what is known. With
+              // either call missing, the kinds it answers are simply not in
+              // this list, and the line names them rather than quoting a total
+              // that is only part of one.
               sub={
                 decisions.partial
-                  ? overviewFailed
-                    ? "Valuations, variations and the programme could not be loaded"
-                    : "Still checking valuations, variations and the programme"
+                  ? decisionsSub
                   : decisions.total > decisions.rows.length
                     ? `${num(decisions.total)} open · showing the ${decisions.rows.length} most pressing`
                     : `${num(decisions.total)} open · each opens where it is resolved`
@@ -532,7 +566,7 @@ export default function DsWorkHome() {
                 // true when everything that feeds it actually answered.
                 state={
                   decisions.rows.length === 0 && decisions.partial
-                    ? overviewFailed
+                    ? decisionsFailed
                       ? "That could not be loaded just now."
                       : "Loading…"
                     : null
@@ -558,7 +592,14 @@ export default function DsWorkHome() {
             {/* 3 — continue where you left off */}
             <Panel
               title="Continue where you left off"
-              sub="Where this browser last had you"
+              // The next lesson comes from /me/courses. If that call failed,
+              // the row is missing rather than absent, and the line says so
+              // instead of leaving it looking like nothing is enrolled.
+              sub={
+                coursesFailed
+                  ? "Where this browser last had you · the next lesson could not be loaded"
+                  : "Where this browser last had you"
+              }
             >
               {continues.length === 0 && !lesson ? (
                 <p className="oh-empty">Nothing opened yet.</p>
@@ -666,9 +707,16 @@ export default function DsWorkHome() {
                         <Bar value={p.progressPercent} tone="ok" />
                         <em>{pct(p.progressPercent)}%</em>
                       </td>
-                      <td className="n">{compact(p.totalCost)}</td>
+                      {/* The row's own meta line says this project's money is
+                          hidden, so the row must not then print it. The API
+                          still sends measured work on a shared project — only
+                          the figures this branch added are masked — and
+                          printing it here would contradict the same row. */}
+                      <td className="n">{isMoneyHidden(p) ? DASH : compact(p.totalCost)}</td>
                       <td className="n">
-                        {Number(p.certifiedToDate) > 0 ? compact(p.certifiedToDate) : DASH}
+                        {!isMoneyHidden(p) && Number(p.certifiedToDate) > 0
+                          ? compact(p.certifiedToDate)
+                          : DASH}
                       </td>
                       <td className="n mute">{short(p.updatedAt)}</td>
                     </tr>
