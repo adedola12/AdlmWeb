@@ -14,7 +14,23 @@ import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
 import WkModal from "../ds/WkModal.jsx";
 import { useFeedback } from "../ds/feedback/feedbackContext.js";
-import { normalizeVariationStatus } from "../lib/variations.js";
+import {
+  approvedVariationsEarned,
+  approvedVariationsTotal,
+  normalizeVariationStatus,
+  variationStatusLabel,
+} from "../lib/variations.js";
+import {
+  newPreliminaryItemRow,
+  newProvisionalSumRow,
+  newVariationRow,
+  preliminaryItemForSave,
+  preliminaryItemRow,
+  provisionalSumForSave,
+  provisionalSumRow,
+  variationForSave,
+  variationRow,
+} from "../features/projects/lib/projectRows.js";
 
 // His orange palette, for a note that is a warning rather than information.
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
@@ -527,13 +543,21 @@ function categoryMapsEqual(a, b) {
   return true;
 }
 
+// Every field a sum stores is compared, not just the two the first editor
+// had: ticking "Executed" or moving a row between the PC and provisional
+// groups is an edit, and a comparison that ignored it left the page reading
+// "nothing to save" while the change sat there unsaved.
 function provisionalSumsEqual(a, b) {
   const A = Array.isArray(a) ? a : [];
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    if (String(A[i]?.description || "") !== String(B[i]?.description || "")) return false;
-    if (Number(A[i]?.amount || 0) !== Number(B[i]?.amount || 0)) return false;
+    const X = provisionalSumRow(A[i]);
+    const Y = provisionalSumRow(B[i]);
+    if (X.description !== Y.description) return false;
+    if (X.amount !== Y.amount) return false;
+    if (X.kind !== Y.kind) return false;
+    if (X.completed !== Y.completed) return false;
   }
   return true;
 }
@@ -543,12 +567,14 @@ function preliminaryItemsEqual(a, b) {
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    const X = A[i] || {};
-    const Y = B[i] || {};
-    if (String(X.name || "") !== String(Y.name || "")) return false;
-    if (Number(X.allocation || 0) !== Number(Y.allocation || 0)) return false;
-    if (Boolean(X.completed) !== Boolean(Y.completed)) return false;
-    if (String(X.notes || "") !== String(Y.notes || "")) return false;
+    const X = preliminaryItemRow(A[i]);
+    const Y = preliminaryItemRow(B[i]);
+    if (X.name !== Y.name) return false;
+    if (X.allocation !== Y.allocation) return false;
+    if (X.completed !== Y.completed) return false;
+    if (X.notes !== Y.notes) return false;
+    // The QS's recorded spend is an edit like any other.
+    if (X.actualAmount !== Y.actualAmount) return false;
   }
   return true;
 }
@@ -558,16 +584,18 @@ function variationsEqual(a, b) {
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    const X = A[i] || {};
-    const Y = B[i] || {};
-    if (String(X.description || "") !== String(Y.description || "")) return false;
-    if (Number(X.qty || 0) !== Number(Y.qty || 0)) return false;
-    if (String(X.unit || "") !== String(Y.unit || "")) return false;
-    if (Number(X.rate || 0) !== Number(Y.rate || 0)) return false;
-    if (String(X.reference || "") !== String(Y.reference || "")) return false;
-    if (String(X.issuedAt || "") !== String(Y.issuedAt || "")) return false;
-    if (normalizeVariationStatus(X.status) !== normalizeVariationStatus(Y.status))
-      return false;
+    const X = variationRow(A[i]);
+    const Y = variationRow(B[i]);
+    if (X.description !== Y.description) return false;
+    if (X.qty !== Y.qty) return false;
+    if (X.unit !== Y.unit) return false;
+    if (X.rate !== Y.rate) return false;
+    if (X.reference !== Y.reference) return false;
+    if (X.issuedAt !== Y.issuedAt) return false;
+    if (X.status !== Y.status) return false;
+    // "Executed on site" is the tick that earns a variation its value, so a
+    // page that ignored it here called itself clean and never saved it.
+    if (X.completed !== Y.completed) return false;
   }
   return true;
 }
@@ -1455,41 +1483,28 @@ export default function ProjectsGeneric() {
     setCategoryMap(uiCategories);
     setBaseTradeMap(baseTrades);
     setTradeMap(uiTrades);
+    // Rows travel whole (features/projects/lib/projectRows.js): a sum keeps
+    // its group and its "executed" tick, a variation keeps its approval trail,
+    // and on a merged project both keep the source tag the server routes them
+    // home by. Rebuilding them field by field was what erased all of that on
+    // the next save.
     const sums = Array.isArray(project?.provisionalSums)
-      ? project.provisionalSums.map((s) => ({
-          description: String(s?.description || ""),
-          amount: Number(s?.amount) || 0,
-        }))
+      ? project.provisionalSums.map(provisionalSumRow)
       : [];
     setProvisionalSums(sums);
     setBaseProvisionalSums(sums.map((s) => ({ ...s })));
+    // S18 valuations: the approval status travels through load AND save —
+    // without it a save would send the row back with no status, the server
+    // would read that as approved, and a variation still waiting for approval
+    // would silently start moving money. So do `completed`, `source` and the
+    // decidedAt / decidedBy decision trail.
     const vars = Array.isArray(project?.variations)
-      ? project.variations.map((v) => ({
-          description: String(v?.description || ""),
-          qty: Number(v?.qty) || 0,
-          unit: String(v?.unit || ""),
-          rate: Number(v?.rate) || 0,
-          reference: String(v?.reference || ""),
-          issuedAt: v?.issuedAt
-            ? new Date(v.issuedAt).toISOString().slice(0, 10)
-            : "",
-          // S18 valuations: carry the approval status through load AND save.
-          // Without it a save would send the row back with no status, the
-          // server would read that as approved, and a variation still waiting
-          // for approval would silently start moving money.
-          status: normalizeVariationStatus(v?.status),
-        }))
+      ? project.variations.map(variationRow)
       : [];
     setVariations(vars);
     setBaseVariations(vars.map((v) => ({ ...v })));
     const prelimItems = Array.isArray(project?.preliminaryItems)
-      ? project.preliminaryItems.map((p) => ({
-          name: String(p?.name || ""),
-          allocation: Number(p?.allocation) || 0,
-          completed: Boolean(p?.completed),
-          completedAt: p?.completedAt || null,
-          notes: String(p?.notes || ""),
-        }))
+      ? project.preliminaryItems.map(preliminaryItemRow)
       : [];
     setPreliminaryItems(prelimItems);
     setBasePreliminaryItems(prelimItems.map((p) => ({ ...p })));
@@ -2543,14 +2558,9 @@ export default function ProjectsGeneric() {
   // what it added before. The row starts with a name because the server's
   // sanitiser drops a row with no description and no amount.
   function handleAddProvisionalSum(kind) {
-    const isPc = String(kind) === "pc";
     setProvisionalSums((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      {
-        description: isPc ? "New PC sum" : "New provisional sum",
-        amount: 0,
-        kind: isPc ? "pc" : "provisional",
-      },
+      newProvisionalSumRow(kind),
     ]);
   }
   // Put a removed sum back exactly where it was, for the toast's Undo.
@@ -2587,17 +2597,16 @@ export default function ProjectsGeneric() {
       return next;
     });
   }
+  // A variation raised from the Bill starts PENDING, exactly like one raised
+  // on the Valuation tab's Variations view. It is worth nothing until someone
+  // approves it there, so no user action can create money in an approved
+  // state. (It used to be added with no status, which the server reads as
+  // approved, so keying a row straight into the Bill moved the project total
+  // with no decision behind it.)
   function handleAddVariation() {
     setVariations((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      {
-        description: "",
-        qty: 0,
-        unit: "",
-        rate: 0,
-        reference: "",
-        issuedAt: "",
-      },
+      newVariationRow(),
     ]);
   }
   function handleUpdateVariation(idx, patch) {
@@ -2644,7 +2653,7 @@ export default function ProjectsGeneric() {
   function handleAddPreliminaryItem() {
     setPreliminaryItems((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      { name: "", allocation: 0, completed: false, completedAt: null, notes: "", actualAmount: 0 },
+      newPreliminaryItemRow(),
     ]);
   }
   function handleRemovePreliminaryItem(idx) {
@@ -2835,22 +2844,16 @@ export default function ProjectsGeneric() {
         items: updatedItems,
         valuationSettings: normalizeValuationSettings(valuationSettings),
         clientName: String(clientName || "").trim(),
+        // Whole rows, not a hand-written field list. The PUT replaces both
+        // arrays outright, so anything missing here is deleted — which is how
+        // a PC sum used to come back as a provisional sum and an executed
+        // variation used to un-execute itself. The server's sanitiser is the
+        // one whitelist.
         provisionalSums: provisionalSums
-          .map((s) => ({
-            description: String(s?.description || "").trim(),
-            amount: Number(s?.amount) || 0,
-          }))
+          .map(provisionalSumForSave)
           .filter((s) => s.description || s.amount > 0),
         variations: variations
-          .map((v) => ({
-            description: String(v?.description || "").trim(),
-            qty: Number(v?.qty) || 0,
-            unit: String(v?.unit || "").trim(),
-            rate: Number(v?.rate) || 0,
-            reference: String(v?.reference || "").trim(),
-            issuedAt: v?.issuedAt || null,
-            status: normalizeVariationStatus(v?.status),
-          }))
+          .map(variationForSave)
           .filter((v) => v.description || v.qty > 0 || v.rate > 0),
         preliminaryPercent: Number(contract?.preliminaryPercent) || 0,
         // Contingency + tax (VAT) percentages — only sent when not
@@ -2858,15 +2861,9 @@ export default function ProjectsGeneric() {
         // these (the at-lock values stay frozen).
         contingencyPercent: Number(contract?.contingencyPercent) || 0,
         taxPercent: Number(contract?.taxPercent) || 0,
-        preliminaryItems: preliminaryItems.map((p) => ({
-          name: String(p?.name || "").trim(),
-          allocation: Number(p?.allocation) || 0,
-          completed: Boolean(p?.completed),
-          completedAt: p?.completedAt || null,
-          notes: String(p?.notes || "").trim(),
-          // actualAmount — QS-recorded spend (added in earlier session)
-          actualAmount: Number(p?.actualAmount) || 0,
-        })),
+        // Same rule for the preliminaries: whole rows, so the QS's recorded
+        // spend (actualAmount) survives a save instead of being sent as 0.
+        preliminaryItems: preliminaryItems.map(preliminaryItemForSave),
       };
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
@@ -3908,17 +3905,7 @@ export default function ProjectsGeneric() {
   // for the same reason certificates do: a decision is an act, not a draft
   // edit. The response is the truth, so local state is replaced from it.
   function variationsFromServer(rows) {
-    return (Array.isArray(rows) ? rows : []).map((v) => ({
-      description: String(v?.description || ""),
-      qty: Number(v?.qty) || 0,
-      unit: String(v?.unit || ""),
-      rate: Number(v?.rate) || 0,
-      reference: String(v?.reference || ""),
-      issuedAt: v?.issuedAt
-        ? new Date(v.issuedAt).toISOString().slice(0, 10)
-        : "",
-      status: normalizeVariationStatus(v?.status),
-    }));
+    return (Array.isArray(rows) ? rows : []).map(variationRow);
   }
 
   function adoptVariations(rows) {
@@ -4421,14 +4408,14 @@ export default function ProjectsGeneric() {
   const provDoneAmount = (Array.isArray(provisionalSums) ? provisionalSums : [])
     .reduce((acc, p) => acc + (p?.completed ? safeNum(p?.amount) : 0), 0);
 
-  const variationsTotalForOverview = (Array.isArray(variations) ? variations : [])
-    .reduce((acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate), 0);
-  const variationsDoneAmount = (Array.isArray(variations) ? variations : [])
-    .reduce(
-      (acc, v) =>
-        v?.completed ? acc + safeNum(v?.qty) * safeNum(v?.rate) : acc,
-      0,
-    );
+  // S18 valuations: only an APPROVED variation counts toward a total, and
+  // only an approved one that has been executed counts as earned. A row with
+  // no status is approved (that is every row written before the field
+  // existed), so no existing project's figures move. The server's rollups use
+  // the same rule — without it the Overview would quote a total the PM
+  // dashboard and the certificates disagree with.
+  const variationsTotalForOverview = approvedVariationsTotal(variations);
+  const variationsDoneAmount = approvedVariationsEarned(variations);
 
   const preliminaryPctForOverview = safeNum(contract?.preliminaryPercent) || 7.5;
   const preliminaryPoolForOverview =
@@ -4521,11 +4508,7 @@ export default function ProjectsGeneric() {
     (acc, s) => (s?.completed ? acc + safeNum(s?.amount) : acc),
     0,
   );
-  const variationActualTracked = (variations || []).reduce(
-    (acc, v) =>
-      v?.completed ? acc + safeNum(v?.qty) * safeNum(v?.rate) : acc,
-    0,
-  );
+  const variationActualTracked = approvedVariationsEarned(variations);
   const actualTrackedAmount =
     measuredActualTracked +
     prelimActualTracked +
@@ -4980,15 +4963,16 @@ export default function ProjectsGeneric() {
         rate: Number(v?.rate) || 0,
         reference: String(v?.reference || "").trim(),
         issuedAt: String(v?.issuedAt || ""),
+        // S18 valuations: an exported bill that totalled a variation still
+        // waiting for approval would be quoting money nobody has agreed to.
+        // Each row says where it stands, and the total is the approved net.
+        status: normalizeVariationStatus(v?.status),
       }))
       .filter((v) => v.description || v.qty > 0 || v.rate > 0);
-    const variationsTotal = cleanedVariations.reduce(
-      (acc, v) => acc + v.qty * v.rate,
-      0,
-    );
+    const variationsTotal = approvedVariationsTotal(cleanedVariations);
     if (cleanedVariations.length) {
       const varAoa = [
-        ["S/N", "Reference", "Description", "Qty", "Unit", "Rate", "Amount", "Issued"],
+        ["S/N", "Reference", "Description", "Qty", "Unit", "Rate", "Amount", "Status", "Issued"],
         ...cleanedVariations.map((v, i) => [
           i + 1,
           v.reference,
@@ -4997,9 +4981,20 @@ export default function ProjectsGeneric() {
           v.unit,
           Number(v.rate.toFixed(2)),
           Number((v.qty * v.rate).toFixed(2)),
+          variationStatusLabel(v.status),
           v.issuedAt,
         ]),
-        ["", "", "", "", "", "TOTAL", Number(variationsTotal.toFixed(2)), ""],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "TOTAL (approved)",
+          Number(variationsTotal.toFixed(2)),
+          "",
+          "",
+        ],
       ];
       const varWs = XLSX.utils.aoa_to_sheet(varAoa);
       varWs["!cols"] = [
@@ -5010,6 +5005,7 @@ export default function ProjectsGeneric() {
         { wch: 8 },
         { wch: 14 },
         { wch: 16 },
+        { wch: 12 },
         { wch: 12 },
       ];
       XLSX.utils.book_append_sheet(wb, varWs, "Variations");

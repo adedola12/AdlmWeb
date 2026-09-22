@@ -1062,7 +1062,10 @@ function sanitizeItems(items, productKey = "") {
   return safe;
 }
 
-function sanitizeProvisionalSums(sums) {
+// Exported for its unit test (projects.sanitize.test.js). The PUT replaces
+// the whole array with what comes back from this function, so what it keeps
+// is exactly what survives a save.
+export function sanitizeProvisionalSums(sums) {
   if (!Array.isArray(sums)) return [];
   const out = [];
   for (let i = 0; i < sums.length && out.length < 200; i += 1) {
@@ -1235,7 +1238,8 @@ function sanitizePreliminaryItems(items) {
   return out;
 }
 
-function sanitizeVariations(variations) {
+// Exported for its unit test — see sanitizeProvisionalSums above.
+export function sanitizeVariations(variations) {
   if (!Array.isArray(variations)) return [];
   const out = [];
   for (let i = 0; i < variations.length && out.length < 500; i += 1) {
