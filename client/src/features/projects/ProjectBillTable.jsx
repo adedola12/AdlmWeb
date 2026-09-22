@@ -1146,11 +1146,9 @@ export default function ProjectBillTable({
   rateGenPoolLoaded = false,
   onReloadRateGenPool,
   rates = {},
-  remainingAmount = 0,
   showActualColumns = false,
   showMaterials = false,
   statusLabel = "Completed",
-  valuedAmount = 0,
   linkedSummaries = [],
   onRemoveCategory,
 }) {
@@ -1492,6 +1490,29 @@ export default function ProjectBillTable({
       };
     });
   }, [groupedRows]);
+
+  // ── What the table's own money columns add up to (S18 review) ───────────
+  // Every money column in this table lists the MEASURED WORK: one row per item
+  // of work, priced qty × rate. So the row that closes those columns, and the
+  // total under "Summary by category", add up those same rows.
+  //
+  // They used to print the whole project scope instead — measured work plus
+  // the sums plus preliminaries plus approved variations — which is a larger
+  // and different figure, so the Bill contradicted itself on one screen. The
+  // estimated total, the full cascade, is the Summary box's job and it is
+  // labelled as such; these are labelled "measured work".
+  const shownTotals = React.useMemo(
+    () =>
+      sortedShown.reduce(
+        (acc, row) => ({
+          full: acc.full + safeNum(row.fullAmount),
+          valued: acc.valued + safeNum(row.valuedAmount),
+          balance: acc.balance + safeNum(row.amount),
+        }),
+        { full: 0, valued: 0, balance: 0 },
+      ),
+    [sortedShown],
+  );
 
   const totalCols = showActualColumns ? 14 : 10;
 
@@ -3189,8 +3210,12 @@ export default function ProjectBillTable({
 
               <tfoot>
                 <tr style={TOTAL_ROW}>
-                  <td className="px-2 py-2" colSpan={6}>
-                    Totals
+                  <td
+                    className="px-2 py-2"
+                    colSpan={6}
+                    title="The measured work these columns list. Preliminaries, PC and provisional sums, contingency, VAT and approved variations are in the Summary below, which gives the estimated total."
+                  >
+                    Totals · measured work
                   </td>
                   {showActualColumns ? <td className="px-2 py-2" /> : null}
                   {showActualColumns ? <td className="px-2 py-2" /> : null}
@@ -3200,11 +3225,11 @@ export default function ProjectBillTable({
                     </td>
                   ) : null}
                   {showActualColumns ? <td className="px-2 py-2" /> : null}
-                  <td className="px-2 py-2">{money(grossAmount)}</td>
+                  <td className="px-2 py-2">{money(shownTotals.full)}</td>
                   <td className="px-2 py-2 text-emerald-700">
-                    {money(valuedAmount)}
+                    {money(shownTotals.valued)}
                   </td>
-                  <td className="px-2 py-2">{money(remainingAmount)}</td>
+                  <td className="px-2 py-2">{money(shownTotals.balance)}</td>
                   <td className="px-2 py-2" />
                 </tr>
               </tfoot>
@@ -3220,7 +3245,7 @@ export default function ProjectBillTable({
             (s, l) => s + (Number(l.live?.total ?? l.snapshot?.total) || 0),
             0,
           );
-          const grandTotal = grossAmount + linkedGrandTotal;
+          const grandTotal = shownTotals.full + linkedGrandTotal;
           return (
             <div className="wk-panel">
               <div className="wk-ph">
@@ -3301,8 +3326,13 @@ export default function ProjectBillTable({
                   </tbody>
                   <tfoot className="bg-slate-50 font-semibold text-slate-900">
                     <tr className="border-t">
-                      <td className="px-2 py-2">
-                        {activeSummaries.length > 0 ? "Grand Total (incl. linked)" : "Total"}
+                      <td
+                        className="px-2 py-2"
+                        title="The measured work in the column above. The estimated total, with preliminaries, sums, contingency and VAT, is in the Summary."
+                      >
+                        {activeSummaries.length > 0
+                          ? "Grand Total (incl. linked)"
+                          : "Measured work total"}
                       </td>
                       <td className="px-2 py-2 text-right">
                         {categoryTotals.reduce((acc, t) => acc + t.count, 0)}
@@ -3311,10 +3341,10 @@ export default function ProjectBillTable({
                         {money(grandTotal)}
                       </td>
                       <td className="px-2 py-2 text-right text-emerald-700">
-                        {money(valuedAmount)}
+                        {money(shownTotals.valued)}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {money(remainingAmount + linkedGrandTotal)}
+                        {money(shownTotals.balance + linkedGrandTotal)}
                       </td>
                       {onRemoveCategory && <td />}
                     </tr>
@@ -4052,7 +4082,14 @@ export default function ProjectBillTable({
             title="VAT as a percentage of the sub-total plus contingency."
           />
 
-          <div className="r t">
+          {/* Named in full, because the table above ends in a "measured work"
+            total and the two are different questions: that one is what the
+            items of work come to, this one is what the project is estimated
+            to cost once everything in this box is on top. */}
+          <div
+            className="r t"
+            title="Measured work plus preliminaries, PC and provisional sums, contingency, VAT and approved variations. The table above totals the measured work alone."
+          >
             <span className="l">Estimated total</span>
             <b>{money(totals.total)}</b>
           </div>

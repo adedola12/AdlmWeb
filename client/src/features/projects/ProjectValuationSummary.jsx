@@ -241,7 +241,13 @@ function buildWorkbookDashboardSheet({
     ["Project name", projectName],
     ["Overall progress", `${safeNum(progressPercent).toFixed(1)}%`],
     ["Marked lines", `${safeNum(progressCount)} of ${safeNum(progressTotal)}`],
-    ["Total project cost", safeNum(grossAmount)],
+    // S18 review: this figure is the project SCOPE — measured work, PC and
+    // provisional sums, preliminaries and approved variations. It is not the
+    // Bill's estimated total, which cascades contingency and VAT on top, so it
+    // says what it sums rather than claiming a name it does not carry. The
+    // figure itself is unchanged: the three rows here still reconcile with one
+    // another, and with the certificates this workbook is built from.
+    ["Project scope (measured, sums, prelims and approved variations)", safeNum(grossAmount)],
     [`${statusLabel} value`, safeNum(valuedAmount)],
     ["Amount left", safeNum(remainingAmount)],
     [],
