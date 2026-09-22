@@ -42,6 +42,8 @@ export function planNewUploads(feed, knownIds) {
 export async function runFreeLibraryAuto({
   FreeVideo,
   fetchFeed = fetchChannelFeed,
+  // YouTube ids an admin deleted from the library: never re-filed.
+  ignoredIds = async () => [],
   env = process.env,
   log = console,
 } = {}) {
@@ -51,7 +53,8 @@ export async function runFreeLibraryAuto({
   const feed = await fetchFeed(channelIdNow(env));
   const ids = feed.map((v) => v.youtubeId);
   const known = await FreeVideo.find({ youtubeId: { $in: ids } }).select("youtubeId").lean();
-  const rows = planNewUploads(feed, known.map((k) => k.youtubeId));
+  const ignored = (await ignoredIds()) || [];
+  const rows = planNewUploads(feed, [...known.map((k) => k.youtubeId), ...ignored]);
   for (const row of rows) {
     await FreeVideo.updateOne({ youtubeId: row.youtubeId }, { $setOnInsert: row }, { upsert: true });
     log.log?.(`[free-library] filed ${row.youtubeId} on "${row.section || "More lessons"}": ${row.title}`);

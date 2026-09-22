@@ -106,11 +106,19 @@ export async function handler(event, context) {
     "video-poll": async () => {
       let freeLibrary;
       try {
-        const [{ runFreeLibraryAuto }, { FreeVideo }] = await Promise.all([
+        const [{ runFreeLibraryAuto }, { FreeVideo }, { Setting }] = await Promise.all([
           import("./util/freeLibraryAuto.js"),
           import("./models/Learn.js"),
+          import("./models/Setting.js"),
         ]);
-        freeLibrary = await runFreeLibraryAuto({ FreeVideo });
+        freeLibrary = await runFreeLibraryAuto({
+          FreeVideo,
+          ignoredIds: () =>
+            Setting.findOne({ key: "global" })
+              .select("freeLibraryIgnored")
+              .lean()
+              .then((s) => s?.freeLibraryIgnored || []),
+        });
       } catch (err) {
         console.error("[scheduled] free-library failed:", err?.message || err);
         freeLibrary = { ok: false, error: String(err?.message || err) };

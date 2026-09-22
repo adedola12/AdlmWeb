@@ -59,3 +59,20 @@ test("the job writes only what is new, once, and can be switched off", async () 
   });
   assert.equal(off.skipped, true);
 });
+
+test("a video an admin deleted is never filed again", async () => {
+  const writes = [];
+  const FreeVideo = {
+    find: () => ({ select: () => ({ lean: async () => [] }) }),
+    updateOne: async (q) => writes.push(q.youtubeId),
+  };
+  const out = await runFreeLibraryAuto({
+    FreeVideo,
+    fetchFeed: async () => parseFeed(FEED),
+    ignoredIds: async () => ["AAA111bbb22"],
+    env: {},
+    log: {},
+  });
+  assert.deepEqual(writes, ["OLD00000000"]);
+  assert.equal(out.added, 1);
+});
