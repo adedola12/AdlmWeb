@@ -32,6 +32,7 @@ import { activeRailId } from "../lib/railActive.js";
 import { RAIL, railItems } from "./railConfig.js";
 import { useFeedback } from "./feedback/feedbackContext.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
+import Seo from "../components/Seo.jsx";
 
 // His app screens load dash.css and work.css on top of site.css. Importing
 // them here rather than in main.jsx is what keeps ~91 KB of dashboard styling
@@ -218,6 +219,17 @@ export default function DsAppShell({ children, title = "", page = "" }) {
 
   return (
     <div className="ds">
+      {/* Every screen inside this shell is behind ProtectedRoute: a crawler
+          that reaches one can only be redirected to /login, so indexing it
+          spends crawl budget to publish a page nobody can open. robots.txt
+          disallows these paths too, but that is only an instruction about
+          fetching — this is the instruction about indexing, for anything that
+          fetches the page anyway (a crawler that ignores robots.txt, or one
+          arriving from a link rather than from the path list).
+          index.html ships a default index,follow and Seo always overwrites the
+          tag outright, so one mount here covers the whole signed-in app rather
+          than every screen remembering for itself. */}
+      <Seo title={title || undefined} noindex />
       <div className="dsh">
         {/* His "leaving the studio" card. Renders nothing until a link to a
             public page is clicked; the listener is on the document, so this

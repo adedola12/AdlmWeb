@@ -13,6 +13,7 @@ import { ScrollRestoration, useNavigate } from "react-router-dom";
 import { MAP } from "../lib/dsRoutes.js";
 import { DS_PAGES } from "./pages/manifest.js";
 import AiAgent from "../components/AiAgent.jsx";
+import { isBareScreen, hasFloatingAda } from "./previewShell.js";
 
 const DsShell = React.lazy(() => import("./DsShell.jsx"));
 const DsAppShell = React.lazy(() => import("./DsAppShell.jsx"));
@@ -28,11 +29,9 @@ const DsPluginStyles = React.lazy(() => import("./DsPluginStyles.jsx"));
 // and the document renderer with no styling of their own whatsoever.
 const APP_SCREEN = /^(dash|work)-/;
 
-// His admin screens bring their own chrome — .adm-shell wraps an .adm-rail
-// that is part of the page, not stamped around it. So they get no shell of
-// ours at all: DsShell would put the marketing nav above an admin panel, and
-// DsAppShell would put the Manage rail beside his admin rail.
-const BARE_SCREEN = /^admin-/;
+// Which pages get no shell of ours at all, and which get Ada, both live in
+// previewShell.js — see that file for why each answer is what it is.
+
 const NEEDS_LEARN = new Set(["dash-learning", "dash-course", "dash-certificates", "work-home"]);
 const NEEDS_AUTH = new Set(["login", "signup", "verify"]);
 const NEEDS_DOC = new Set(["doc-preview", "quote"]);
@@ -118,7 +117,8 @@ export default function DsPreview({ page }) {
   // "Book a demo" above a signed-in dashboard — which is what his own build
   // does, and is on the snag list for him rather than reproduced here.
   const isApp = APP_SCREEN.test(page.slug);
-  const isBare = BARE_SCREEN.test(page.slug);
+  const isBare = isBareScreen(page.slug);
+  const hasAda = hasFloatingAda(page.slug);
   const Shell = isBare ? React.Fragment : isApp ? DsAppShell : DsShell;
   const shellProps = isBare
     ? {}
@@ -152,7 +152,7 @@ export default function DsPreview({ page }) {
             Ours, not his. His answers from keywords over published copy; this
             one is Claude-backed through /agent/chat, grounded in the
             catalogue, and already works signed out. */}
-        <AiAgent />
+        {hasAda && <AiAgent />}
       </React.Suspense>
     </div>
   );

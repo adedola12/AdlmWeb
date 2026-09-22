@@ -1575,6 +1575,20 @@
 .ds .launch-strip .go{display:none}
 }
 
+/* CHR-3: the toast stack moved to the top right on 17 Sep (his feedback.css:
+   top:76px, 70px under 640px), which assumes the nav starts at y=0. The strip
+   above pushes the nav down by --launch-strip-h, so on a public page the
+   toasts were landing over the lower half of the nav. Offset them by the same
+   variable. It is unset everywhere the strip does not render — the app and
+   admin shells, and every page after 1 Oct 10:00 WAT — so the calc falls back
+   to his own numbers and this is a no-op. ds-local.css is imported after
+   ds-feedback.css (main.jsx), so equal specificity resolves our way, and the
+   narrow rule sits after the wide one for the same reason. */
+.ds .fb-stack{top:calc(76px + var(--launch-strip-h,0px))}
+@media (max-width:640px){
+.ds .fb-stack{top:calc(70px + var(--launch-strip-h,0px))}
+}
+
 /* P0.4: index.css paints every input in dark mode (.dark input:not(...)),
    which outranks his transparent search field in the project gallery. */
 :root.dark .ds .pj-search input{background:none;color:var(--ink)}
