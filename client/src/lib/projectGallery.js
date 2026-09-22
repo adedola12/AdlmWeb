@@ -10,19 +10,51 @@ export const SOURCES = {
   archicad: { name: "ArchiCAD", icon: "", host: "ArchiCAD", slug: "archicad" },
 };
 
+// His six stages (work.js STAGES, 17 Sep 2026). Each one is now read from
+// something the project actually holds, rather than guessed from how much of
+// the bill is ticked off (S18, PR2-24 and PR2-25).
 export const STAGES = [
   { id: "takeoff", name: "Takeoff" },
   { id: "priced", name: "Priced" },
+  { id: "tendered", name: "Tendered" },
+  { id: "locked", name: "Contract locked" },
   { id: "valuing", name: "Valuations" },
   { id: "final", name: "Final account" },
 ];
 export const STAGE_ORDER = Object.fromEntries(STAGES.map((s, i) => [s.id, i]));
 
+/**
+ * Where a project has got to.
+ *
+ * Read the furthest thing that has happened, newest first. Before S18 this
+ * guessed from progressPercent, which said "Final account" for any job whose
+ * lines were all ticked — including one that had never issued a certificate,
+ * let alone closed its account. The list endpoint now returns the five facts
+ * below, so the stage is read rather than inferred.
+ *
+ * An older API response carries none of them; it then falls back to priced or
+ * takeoff, which are the two stages that never needed them.
+ */
 export function stageOf(p) {
-  const pct = Number(p.progressPercent) || 0;
-  if (pct >= 100) return "final";
-  if (pct > 0) return "valuing";
-  return Number(p.totalCost) > 0 ? "priced" : "takeoff";
+  if (p?.finalized) return "final";
+  if ((Number(p?.certificateCount) || 0) > 0) return "valuing";
+  if (p?.contractLocked) return "locked";
+  if (p?.tenderedAt) return "tendered";
+  return Number(p?.totalCost) > 0 ? "priced" : "takeoff";
+}
+
+/**
+ * The one figure the gallery calls "Estimated": the whole grand summary, the
+ * same total the Bill shows, computed server side (the list's estimatedTotal).
+ *
+ * A row from an older API has no estimatedTotal. Rather than invent one from
+ * fields it does not carry, fall back to totalCost, the measured work — which
+ * is what the card showed before S18.
+ */
+export function estimatedOf(p) {
+  const estimated = Number(p?.estimatedTotal);
+  if (Number.isFinite(estimated)) return estimated;
+  return Number(p?.totalCost) || 0;
 }
 
 export const sourceOf = (p) => p.baseProductKey || p.productKey || "";

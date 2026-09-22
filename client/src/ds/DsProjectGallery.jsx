@@ -18,7 +18,16 @@ import WkDropdown from "./WkDropdown.jsx";
 // His work-proj.css (ported in P0.3), which nothing loaded until now.
 import "../styles/ds-work-proj.css";
 import { projectWorkspaceHref } from "../lib/projectLinks.js";
-import { SOURCES, STAGES, STAGE_ORDER, compact, short, sourceOf, stageOf } from "../lib/projectGallery.js";
+import {
+  SOURCES,
+  STAGES,
+  STAGE_ORDER,
+  compact,
+  estimatedOf,
+  short,
+  sourceOf,
+  stageOf,
+} from "../lib/projectGallery.js";
 
 const ICON = {
   grid: (
@@ -100,7 +109,7 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
       return true;
     });
     out.sort((a, b) => {
-      if (sort === "value") return (Number(b.totalCost) || 0) - (Number(a.totalCost) || 0);
+      if (sort === "value") return estimatedOf(b) - estimatedOf(a);
       if (sort === "name") return String(a.name || "").localeCompare(String(b.name || ""));
       if (sort === "stage") return STAGE_ORDER[stageOf(a)] - STAGE_ORDER[stageOf(b)];
       return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
@@ -118,7 +127,11 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
   };
 
   const filtered = !!q.trim() || stage !== "all" || (!fixedTool && tool !== "all");
-  const total = list.reduce((a, p) => a + (Number(p.totalCost) || 0), 0);
+  // A first run is an account (or a tool page) with nothing in it at all —
+  // not a filter that happens to match nothing. Keeping the two apart is the
+  // whole point of rec-05: the same words cannot serve both.
+  const firstRun = !filtered && !(projects || []).some((p) => !fixedTool || sourceOf(p) === fixedTool);
+  const total = list.reduce((a, p) => a + estimatedOf(p), 0);
   const src = SOURCES[fixedTool];
 
   return (
@@ -189,27 +202,58 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
 
       <div className="pj-out">
         {!projects ? null : !list.length ? (
-          <div className="pj-empty">
-            <b>No projects match</b>
-            <p>
-              {fixedTool && !filtered && src
-                ? `Projects start in ${src.host}. Open ${src.name} there, measure, and save to ADLM Cloud: the project appears here.`
-                : "Nothing matches those filters."}
-            </p>
-            {filtered ? (
-              <button
-                type="button"
-                className="ds-btn btn-o ds-btn-sm"
-                onClick={() => {
-                  setQ("");
-                  setStage("all");
-                  if (!fixedTool) setTool("all");
-                }}
-              >
-                Clear filters
-              </button>
-            ) : null}
-          </div>
+          firstRun ? (
+            // Nothing is filtered and there is nothing to filter: this account
+            // has no projects at all. "Nothing matches those filters" was a
+            // false message on somebody's first morning (rec-05). Say how a
+            // project actually starts instead.
+            <div className="pj-empty">
+              <b>No projects yet</b>
+              {fixedTool && src ? (
+                <p>
+                  Projects start in {src.host}. Open {src.name} there, measure, and save to ADLM
+                  Cloud: the project appears here.
+                </p>
+              ) : (
+                <p>
+                  Projects start in the plugins. Measure in QUIV, HERON or Revit MEP, then save to
+                  ADLM Cloud and the project appears here to price, plan and value.
+                </p>
+              )}
+              {fixedTool ? null : (
+                <div className="b">
+                  <Link className="ds-btn btn-o ds-btn-sm" to="/work/tool/quiv">
+                    How QUIV projects start
+                  </Link>
+                  <Link className="ds-btn btn-o ds-btn-sm" to="/work/tool/heron">
+                    How HERON projects start
+                  </Link>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="pj-empty">
+              <b>No projects match</b>
+              <p>
+                {fixedTool && !filtered && src
+                  ? `Projects start in ${src.host}. Open ${src.name} there, measure, and save to ADLM Cloud: the project appears here.`
+                  : "Nothing matches those filters."}
+              </p>
+              {filtered ? (
+                <button
+                  type="button"
+                  className="ds-btn btn-o ds-btn-sm"
+                  onClick={() => {
+                    setQ("");
+                    setStage("all");
+                    if (!fixedTool) setTool("all");
+                  }}
+                >
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
+          )
         ) : view === "grid" ? (
           <div className="pj-grid">
             {list.map((p) => {
@@ -232,7 +276,7 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
                   <div className="ft">
                     <div>
                       <span>Estimated</span>
-                      <b>{compact(p.totalCost)}</b>
+                      <b>{compact(estimatedOf(p))}</b>
                     </div>
                     <div>
                       <span>Updated</span>
@@ -284,7 +328,7 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
                     <em>Valued {pct}%</em>
                   </span>
                   <span className="n">
-                    <b>{compact(p.totalCost)}</b>
+                    <b>{compact(estimatedOf(p))}</b>
                   </span>
                   <span className="n">{short(p.updatedAt)}</span>
                 </Link>
