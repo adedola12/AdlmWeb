@@ -11,6 +11,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { LAUNCH } from "../config/launch.js";
+import { useHydrated } from "../lib/useHydrated.js";
 
 const KEY = "adlm-launch-strip-closed";
 
@@ -33,7 +34,13 @@ export default function DsLaunchStrip({ launch = LAUNCH }) {
     }
   });
   const ref = React.useRef(null);
-  const t = launch.at && !closed ? left(launch.at, now) : null;
+  // Nothing on the server and nothing in the first client render of a
+  // server-rendered page, so the two agree; the strip appears a tick later.
+  // The countdown depends on the viewer's clock, which the server cannot
+  // know (review, 2026-09-22).
+  const hydrated = useHydrated();
+  const client = typeof window !== "undefined";
+  const t = client && hydrated && launch.at && !closed ? left(launch.at, now) : null;
 
   React.useEffect(() => {
     if (!launch.at || closed) return undefined;
