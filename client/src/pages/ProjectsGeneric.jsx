@@ -207,6 +207,7 @@ function getEndpoints(tool) {
       share: (id) => "/projects/revit/materials/" + id + "/share",
       lock: (id) => "/projects/revit/materials/" + id + "/contract/lock",
       unlock: (id) => "/projects/revit/materials/" + id + "/contract/unlock",
+      tendered: (id) => "/projects/revit/materials/" + id + "/contract/tendered",
       ...pmEndpoints,
     };
   }
@@ -221,6 +222,7 @@ function getEndpoints(tool) {
       share: (id) => "/projects/planswift/materials/" + id + "/share",
       lock: (id) => "/projects/planswift/materials/" + id + "/contract/lock",
       unlock: (id) => "/projects/planswift/materials/" + id + "/contract/unlock",
+      tendered: (id) => "/projects/planswift/materials/" + id + "/contract/tendered",
       ...pmEndpoints,
     };
   }
@@ -240,6 +242,7 @@ function getEndpoints(tool) {
     share: (id) => "/projects/" + t + "/" + id + "/share",
     lock: (id) => "/projects/" + t + "/" + id + "/contract/lock",
     unlock: (id) => "/projects/" + t + "/" + id + "/contract/unlock",
+    tendered: (id) => "/projects/" + t + "/" + id + "/contract/tendered",
     budget: (id) => "/projects/" + t + "/" + id + "/budget",
     certificates: (id) => "/projects/" + t + "/" + id + "/certificates",
     certificate: (id, n) =>
@@ -2491,11 +2494,31 @@ export default function ProjectsGeneric() {
     const key = itemKey(it, rowIndex);
     setActualRateMap((prev) => ({ ...(prev || {}), [key]: value }));
   }
-  function handleAddProvisionalSum() {
+  // S18 bill: a sum is added into one of the two named groups. Anything that
+  // is not the literal "pc" is a provisional sum, which is what the whole list
+  // has always been, so the ribbon's plain "Add sum" button still adds exactly
+  // what it added before. The row starts with a name because the server's
+  // sanitiser drops a row with no description and no amount.
+  function handleAddProvisionalSum(kind) {
+    const isPc = String(kind) === "pc";
     setProvisionalSums((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      { description: "", amount: 0 },
+      {
+        description: isPc ? "New PC sum" : "New provisional sum",
+        amount: 0,
+        kind: isPc ? "pc" : "provisional",
+      },
     ]);
+  }
+  // Put a removed sum back exactly where it was, for the toast's Undo.
+  function handleRestoreProvisionalSum(idx, sum) {
+    if (!sum) return;
+    setProvisionalSums((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      const at = Math.max(0, Math.min(next.length, Number(idx) || 0));
+      next.splice(at, 0, sum);
+      return next;
+    });
   }
   function handleUpdateProvisionalSum(idx, patch) {
     setProvisionalSums((prev) => {
@@ -3716,6 +3739,40 @@ export default function ProjectsGeneric() {
       return null;
     } finally {
       setContractBusy(false);
+    }
+  }
+
+  // S18 bill (PR2-25): record, or take back, the day the priced bill went out
+  // to tender. It moves the project to the Tendered stage and changes no
+  // figure at all — no step-up, because no money moves.
+  async function handleMarkTendered(on = true) {
+    if (!selectedId || !accessToken) return null;
+    try {
+      const result = await apiAuthed(endpoints.tendered(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: { tendered: Boolean(on) },
+      });
+      if (result?.contract) {
+        setContract((prev) => ({
+          ...(prev || {}),
+          tenderedAt: result.contract.tenderedAt || null,
+        }));
+        setSel((prev) =>
+          prev
+            ? { ...prev, contract: result.contract, version: result.version ?? prev.version }
+            : prev,
+        );
+        setNotice(
+          on
+            ? "Marked as tendered. The project now shows at the Tendered stage."
+            : "Tender mark removed.",
+        );
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Could not update the tender date");
+      return null;
     }
   }
 
@@ -5533,6 +5590,9 @@ export default function ProjectsGeneric() {
                 onDeleteModel={handleDeleteModel}
                 provisionalSums={provisionalSums}
                 onAddProvisionalSum={handleAddProvisionalSum}
+                onRestoreProvisionalSum={handleRestoreProvisionalSum}
+                onMarkTendered={handleMarkTendered}
+                measuredAmount={grossAmount}
                 onUpdateProvisionalSum={handleUpdateProvisionalSum}
                 onRemoveProvisionalSum={handleRemoveProvisionalSum}
                 variations={variations}

@@ -442,6 +442,19 @@ export default function ProjectOpenView({
   onLockContract,
   onUnlockContract,
   onPreliminaryPercentChange,
+  // S18 bill: the contingency and VAT percentages reached this component from
+  // ProjectsGeneric but were never forwarded, so the Bill fell back to its own
+  // defaults and its two inputs were read-only. They now reach the Summary.
+  contingencyPercent,
+  taxPercent,
+  onContingencyPercentChange,
+  onTaxPercentChange,
+  // S18 bill: the measured work on its own. `grossAmount` here is the whole
+  // project scope (the Overview needs it that way), which is not the base the
+  // grand summary is built on.
+  measuredAmount = null,
+  onMarkTendered,
+  onRestoreProvisionalSum,
   certificates = [],
   certBusy = false,
   onIssueCertificate,
@@ -961,6 +974,12 @@ export default function ProjectOpenView({
             chartMode={dashboardChartMode}
             comparisonRows={comparisonRows}
             grossAmount={grossAmount}
+            measuredAmount={measuredAmount}
+            provisionalSums={provisionalSums}
+            variations={variations}
+            preliminaryPercent={contract?.preliminaryPercent}
+            contingencyPercent={contingencyPercent}
+            taxPercent={taxPercent}
             onChartModeChange={onDashboardChartModeChange}
             progressCount={progressCount}
             progressPercent={progressPercent}
@@ -1380,6 +1399,21 @@ export default function ProjectOpenView({
               ? Number(contract.preliminaryPercent)
               : 7.5
           }
+          contingencyPercent={
+            Number.isFinite(Number(contingencyPercent))
+              ? Number(contingencyPercent)
+              : 5
+          }
+          taxPercent={
+            Number.isFinite(Number(taxPercent)) ? Number(taxPercent) : 7.5
+          }
+          onContingencyPercentChange={onContingencyPercentChange}
+          onTaxPercentChange={onTaxPercentChange}
+          measuredAmount={measuredAmount}
+          tenderedAt={contract?.tenderedAt || null}
+          onMarkTendered={onMarkTendered}
+          onRestoreProvisionalSum={onRestoreProvisionalSum}
+          onOpenVariations={() => setActiveTab("valuation")}
           contractBusy={contractBusy}
           stepUpEnabled={stepUpEnabled}
           onLockContract={onLockContract}

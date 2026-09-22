@@ -1578,3 +1578,20 @@
 /* P0.4: index.css paints every input in dark mode (.dark input:not(...)),
    which outranks his transparent search field in the project gallery. */
 :root.dark .ds .pj-search input{background:none;color:var(--ink)}
+
+/* S18 bill (PR2-01): the Summary's "Executed" tick.
+   His .pj-sumbox has no equivalent — a sum in his prototype is a figure and
+   nothing else — but ours records whether the allowance has actually been
+   executed, which is what lets it count toward earned value. It rides inside
+   his .r.s row, so it is sized and coloured from his tokens and never grows
+   the generic `.pj-sumbox input` box the text and number fields use. */
+.ds .pj-sumbox .r.s .pj-sum-done{display:inline-flex;align-items:center;gap:6px;flex:none;
+  font-size:11.5px;color:var(--ink-3);white-space:nowrap;cursor:pointer}
+.ds .pj-sumbox .r.s .pj-sum-done input{width:14px;height:14px;padding:0;border-radius:4px;
+  accent-color:var(--action);background:none;flex:none}
+.ds .pj-sumbox .r.s .pj-sum-done:hover{color:var(--ink-2)}
+/* His .r.s already wraps under 900px; keep the tick with the amount rather
+   than letting it start a line of its own on a phone. */
+@media (max-width:900px){
+.ds .pj-sumbox .r.s .pj-sum-done{font-size:11px}
+}
