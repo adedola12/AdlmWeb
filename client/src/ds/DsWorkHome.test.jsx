@@ -1,0 +1,265 @@
+// The rebuilt Work overview (S18/WH-01 to WH-13), rendered on stubbed reads.
+//
+// What is checked here is what the screen SAYS, because that is where this
+// change can go wrong: a tile that claims an estimate we do not compute, a
+// certificate summed instead of read, a variation given an approval state we
+// do not store, or a panel that takes the page down with it when its own call
+// fails.
+import React from "react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, cleanup, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+
+const responses = {};
+const failing = new Set();
+
+vi.mock("../api.js", () => ({
+  apiAuthed: vi.fn(async (path) => {
+    const key = String(path).split("?")[0];
+    if (failing.has(key)) throw new Error("nope");
+    if (!(key in responses)) throw new Error(`no stub for ${key}`);
+    return responses[key];
+  }),
+}));
+
+vi.mock("../store.jsx", () => ({ useAuth: () => ({ accessToken: "t", user: {} }) }));
+
+// The zone/currency control reads the profile of its own accord; it is not
+// what this screen is being tested for.
+vi.mock("./WkPrefs.jsx", () => ({ default: () => <div data-testid="wkprefs" /> }));
+
+const { default: DsWorkHome } = await import("./DsWorkHome.jsx");
+
+const project = (extra) => ({
+  id: "p1",
+  name: "MOREMI ESTATE BLOCK A",
+  slug: "moremi",
+  productKey: "planswift",
+  baseProductKey: "planswift",
+  updatedAt: "2026-09-20T10:00:00Z",
+  itemCount: 120,
+  pricedCount: 100,
+  unpricedCount: 20,
+  totalCost: 40_000_000,
+  certifiedToDate: 10_000_000,
+  certificateCount: 2,
+  progressPercent: 25,
+  accessLevel: "owner",
+  clientName: "Lagos State",
+  ...extra,
+});
+
+const base = () => {
+  responses["/me/projects-rollup"] = { projects: [project()] };
+  responses["/me/work-overview"] = {
+    certificates: [],
+    draftCertificates: [],
+    variations: [],
+    pendingVariations: [],
+    tasks: [],
+    rateUsage: [],
+  };
+  responses["/me/summary"] = { installations: [], entitlements: [] };
+  responses["/rategen-v2/library/custom-rates"] = { items: [] };
+  responses["/me/courses/assignments"] = { items: [] };
+  responses["/me/courses"] = [];
+};
+
+const mount = () =>
+  render(
+    <MemoryRouter>
+      <DsWorkHome />
+    </MemoryRouter>,
+  );
+
+beforeEach(() => {
+  cleanup();
+  failing.clear();
+  base();
+});
+afterEach(cleanup);
+
+describe("the Work overview, rebuilt as one dashboard", () => {
+  it("has no Cards / Register switch left", async () => {
+    mount();
+    await screen.findByText("Projects");
+    expect(screen.queryByRole("button", { name: "Register" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cards" })).toBeNull();
+  });
+
+  it("names the first tile for what it really sums", async () => {
+    mount();
+    // Not "Estimated": the rollup is qty x rate, with no prelims, contingency,
+    // VAT or linked services in it.
+    const tile = (await screen.findByText("Measured work, all projects")).closest("a");
+    expect(screen.queryByText(/Estimated, all projects/)).toBeNull();
+    expect(within(tile).getByText("₦40.0m")).toBeTruthy();
+    expect(within(tile).getByText(/1 project at the rates they were priced with/)).toBeTruthy();
+  });
+
+  it("shows certified value as a share of measured work", async () => {
+    mount();
+    const tile = (await screen.findByText("Certified to date")).closest("a");
+    expect(within(tile).getByText("₦10.0m")).toBeTruthy();
+    expect(within(tile).getByText("25% of measured work")).toBeTruthy();
+  });
+
+  it("shows an en dash, never a guess, where nothing is certified", async () => {
+    responses["/me/projects-rollup"] = { projects: [project({ certifiedToDate: 0 })] };
+    mount();
+    await screen.findByText("Certified to date");
+    const table = screen.getByText("Projects").closest("section");
+    expect(within(table).getAllByText("–").length).toBeGreaterThan(0);
+  });
+
+  it("calls a draft certificate a draft, and never says awaiting approval", async () => {
+    responses["/me/work-overview"] = {
+      ...responses["/me/work-overview"],
+      certificates: [
+        {
+          projectId: "p1",
+          name: "MOREMI ESTATE BLOCK A",
+          slug: "moremi",
+          productKey: "planswift",
+          number: 3,
+          date: "2026-09-10T00:00:00Z",
+          netPayable: 4_250_000,
+          status: "draft",
+        },
+      ],
+      draftCertificates: [
+        {
+          projectId: "p1",
+          name: "MOREMI ESTATE BLOCK A",
+          slug: "moremi",
+          productKey: "planswift",
+          number: 3,
+          date: "2026-09-10T00:00:00Z",
+          netPayable: 4_250_000,
+          status: "draft",
+        },
+      ],
+    };
+    mount();
+    await screen.findByText("IPC 3");
+    expect(screen.getByText("Draft")).toBeTruthy();
+    expect(screen.queryByText("Awaiting")).toBeNull();
+    expect(screen.getByText("IPC 3 is a draft, not yet approved")).toBeTruthy();
+  });
+
+  it("reads a variation's own sign and status, inventing neither", async () => {
+    responses["/me/work-overview"] = {
+      ...responses["/me/work-overview"],
+      variations: [
+        {
+          projectId: "p1",
+          name: "MOREMI ESTATE BLOCK A",
+          slug: "moremi",
+          productKey: "planswift",
+          reference: "V2",
+          description: "Omit paving",
+          amount: -450_000,
+          issuedAt: "2026-09-05T00:00:00Z",
+          status: "approved",
+        },
+      ],
+    };
+    mount();
+    await screen.findByText("V2");
+    // U+2212, his minus sign, not a hyphen.
+    expect(screen.getByText(/−/)).toBeTruthy();
+    expect(screen.getByText("Approved")).toBeTruthy();
+  });
+
+  it("puts an overdue task in Needs a decision, marked urgent", async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    responses["/me/work-overview"] = {
+      ...responses["/me/work-overview"],
+      tasks: [
+        {
+          projectId: "p1",
+          name: "MOREMI ESTATE BLOCK A",
+          slug: "moremi",
+          productKey: "planswift",
+          task: "Roof covering",
+          endDate: yesterday,
+          percentComplete: 40,
+          assignedTo: "",
+          status: "in-progress",
+        },
+      ],
+    };
+    mount();
+    await screen.findByText("Roof covering is past its end date");
+    expect(screen.getByText("Overdue")).toBeTruthy();
+    expect(screen.getByText("No owner")).toBeTruthy();
+    // The tile agrees with the table it anchors to.
+    expect(screen.getByText("1 urgent")).toBeTruthy();
+  });
+
+  it("keeps the rest of the dashboard when one panel's call fails", async () => {
+    failing.add("/me/work-overview");
+    mount();
+    await screen.findByText("Projects");
+    expect(screen.getByText("Measured work, all projects")).toBeTruthy();
+    expect(screen.getAllByText("That could not be loaded just now.").length).toBe(2);
+  });
+
+  it("takes the page down only when the rollup itself fails", async () => {
+    failing.add("/me/projects-rollup");
+    mount();
+    await screen.findByText("Your work could not be loaded just now. Please refresh.");
+  });
+
+  it("says a rate's usage in bill lines, or nothing at all", async () => {
+    responses["/rategen-v2/library/custom-rates"] = {
+      items: [
+        {
+          id: "r1",
+          title: "Concrete grade 25 in slabs",
+          description: "Concrete grade 25 in slabs",
+          sectionLabel: "Concrete work",
+          unit: "m3",
+          totalCost: 185_000,
+          updatedAt: "2026-09-19T00:00:00Z",
+        },
+        {
+          id: "r2",
+          title: "Blockwork 225mm",
+          description: "Blockwork 225mm",
+          unit: "m2",
+          totalCost: 12_000,
+          updatedAt: "2026-09-18T00:00:00Z",
+        },
+      ],
+    };
+    responses["/me/work-overview"] = {
+      ...responses["/me/work-overview"],
+      rateUsage: [{ key: "Concrete grade 25 in slabs", lines: 12 }],
+    };
+    mount();
+    await screen.findByText("Concrete grade 25 in slabs");
+    expect(screen.getByText("12 lines")).toBeTruthy();
+    // Nothing matched, so nothing is claimed.
+    const rate = screen.getByText("Blockwork 225mm").closest("tr");
+    expect(within(rate).getByText("–")).toBeTruthy();
+  });
+
+  it("offers the empty states rather than blank panels on a new account", async () => {
+    responses["/me/projects-rollup"] = { projects: [] };
+    mount();
+    await screen.findByText(/Nothing here yet/);
+    expect(screen.getByText("No assignments due.")).toBeTruthy();
+    expect(screen.getByText("No rates of your own yet.")).toBeTruthy();
+  });
+
+  it("does not offer to price a project somebody can only look at", async () => {
+    responses["/me/projects-rollup"] = {
+      projects: [project({ accessLevel: "view", unpricedCount: 20 })],
+    };
+    mount();
+    await screen.findByText("Nothing is waiting on you.");
+    expect(screen.getByText(/· view only/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Everything measured has a rate")).toBeTruthy());
+  });
+});
