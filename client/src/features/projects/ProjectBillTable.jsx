@@ -7,6 +7,11 @@ import {
   projectTotals,
   splitProvisionalSums,
 } from "./lib/projectTotals.js";
+import {
+  variationKpis,
+  variationStatusClass,
+  variationStatusLabel,
+} from "../../lib/variations.js";
 
 /**
  * Draggable column-resize handle.
@@ -1518,10 +1523,15 @@ export default function ProjectBillTable({
     ],
   );
 
-  // Approved variations only. Nothing carries a status yet, so this is the
-  // same figure as before; once the valuations stream lands its editor, a
-  // pending variation stops moving the total until somebody approves it.
+  // Approved variations only (S18 valuations). A row with no status is
+  // approved — that is every row written before the field existed — so no
+  // existing project's figure moves. A pending one is worth nothing here
+  // until somebody approves it on the Valuation tab.
   const variationsTotal = totals.variations;
+  const variationCounts = React.useMemo(
+    () => variationKpis(variations),
+    [variations],
+  );
   const provisionalTotal = totals.sums;
   const preliminaryAmount = totals.prelims;
 
@@ -2140,15 +2150,23 @@ export default function ProjectBillTable({
                         30,
                       );
                     }}
-                    title="Add a variation from a site instruction"
+                    title="Add a variation from a site instruction. It waits for approval before it counts."
                   />
                   <RibbonButton
                     icon={FaListUl}
                     label="Go to list"
                     onClick={() => scrollToRef(variationsSectionRef.current)}
                   />
+                  {onOpenVariations ? (
+                    <RibbonButton
+                      icon={FaClipboardList}
+                      label="Approve / reject"
+                      onClick={onOpenVariations}
+                      title="Open the Valuation tab's Variations view, where variations are decided"
+                    />
+                  ) : null}
                   <div className="text-[11px] text-slate-600">
-                    Current total:{" "}
+                    Approved total:{" "}
                     <b
                       className={
                         variationsTotal > 0
@@ -3313,26 +3331,46 @@ export default function ProjectBillTable({
             className="wk-panel scroll-mt-24"
             style={{ padding: 20 }}
           >
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div style={{ minWidth: 0, flex: "1 1 320px" }}>
                 <div className="text-sm font-semibold text-slate-900">
                   Variations, Site Instructions / Change Orders
                 </div>
+                {/* S18: one rule for variations, wherever they are keyed in.
+                    A new one is raised WAITING FOR APPROVAL and is worth
+                    nothing until it is approved on the Valuation tab, which
+                    is where approving and rejecting live. This section keeps
+                    the working columns the Valuation view has no answer for —
+                    the quantity and rate behind the figure, the instruction
+                    reference, and the tick that says the work was executed on
+                    site — and shows, read-only, where each row stands. */}
                 <div className="text-[11px] text-slate-500">
                   Log variations that come from architect's instructions, client
-                  changes or site directives. These are tracked against the
-                  project total separately from measured-work variance (which is
-                  captured per item via actual qty / rate).
+                  changes or site directives. A new variation waits for
+                  approval and moves nothing until it is approved on the
+                  Valuation tab; only approved ones are in the project total.
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn btn-xs"
-                onClick={onAddVariation}
-                title="Add variation row"
-              >
-                + Add variation
-              </button>
+              <div className="flex items-center gap-3">
+                {onOpenVariations ? (
+                  <button
+                    type="button"
+                    className="pj-lnk"
+                    onClick={onOpenVariations}
+                    title="Approve or reject variations on the Valuation tab"
+                  >
+                    Approve or reject
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-xs"
+                  onClick={onAddVariation}
+                  title="Add a variation. It waits for approval before it counts."
+                >
+                  + Add variation
+                </button>
+              </div>
             </div>
 
             {variations.length ? (
@@ -3347,6 +3385,12 @@ export default function ProjectBillTable({
                       <th className="px-2 py-2 w-20">Unit</th>
                       <th className="px-2 py-2 w-28 text-right">Rate</th>
                       <th className="px-2 py-2 w-32 text-right">Amount</th>
+                      <th
+                        className="px-2 py-2 w-28"
+                        title="Approved on the Valuation tab. Only an approved variation counts."
+                      >
+                        Status
+                      </th>
                       <th className="px-2 py-2 w-28">Issued</th>
                       <th
                         className="px-2 py-2 w-16 text-center"
@@ -3446,6 +3490,21 @@ export default function ProjectBillTable({
                           <td className="px-2 py-2 text-right font-medium text-slate-900">
                             {money(amount)}
                           </td>
+                          {/* Read-only on purpose: a decision is an act, and
+                              it is taken on the Valuation tab's Variations
+                              view, never by typing in the bill. */}
+                          <td className="px-2 py-2">
+                            <span
+                              className={`pj-stage ${variationStatusClass(v?.status)}`}
+                              title={
+                                onOpenVariations
+                                  ? "Approve or reject this on the Valuation tab"
+                                  : undefined
+                              }
+                            >
+                              {variationStatusLabel(v?.status)}
+                            </span>
+                          </td>
                           <td className="px-2 py-2">
                             <input
                               className="input !h-8 w-full !px-2 text-xs"
@@ -3488,12 +3547,16 @@ export default function ProjectBillTable({
                   <tfoot className="bg-slate-50 font-semibold text-slate-900">
                     <tr className="border-t">
                       <td className="px-2 py-2" colSpan={6}>
-                        Total variations
+                        Total approved variations
                       </td>
                       <td className="px-2 py-2 text-right">
                         {money(variationsTotal)}
                       </td>
-                      <td colSpan={2}></td>
+                      <td className="px-2 py-2 text-[11px] font-normal text-slate-500" colSpan={4}>
+                        {variationCounts.pendingCount
+                          ? `${variationCounts.pendingCount} waiting for approval, not counted`
+                          : EN_DASH}
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
@@ -3501,7 +3564,8 @@ export default function ProjectBillTable({
             ) : (
               <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                 No variations logged yet. Click "+ Add variation" to record a
-                site instruction or change order.
+                site instruction or change order: it waits for approval on the
+                Valuation tab before it counts toward the project total.
               </div>
             )}
           </div>
