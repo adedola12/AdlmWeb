@@ -127,7 +127,9 @@ export default function DsWorkTool() {
       {failed ? (
         <p className="ds-sub">Your projects could not be loaded just now. Please refresh.</p>
       ) : (
-        <DsProjectGallery projects={projects} fixedTool={key} />
+        // Keyed by tool: moving from /work/tool/quiv to /work/tool/heron must
+        // not carry QUIV's filter, search or stage over (review, 2026-09-22).
+        <DsProjectGallery key={key} projects={projects} fixedTool={key} />
       )}
     </div>
   );
