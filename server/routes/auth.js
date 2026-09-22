@@ -11,6 +11,15 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ensureDb } from "../db.js";
+import { SignupThrottle } from "../models/SignupThrottle.js";
+import {
+  REFUSAL as SIGNUP_REFUSAL,
+  honeypotTripped,
+  issueTicket,
+  throttleProblem,
+  ticketProblem,
+  visitorIp,
+} from "../util/signupGuard.js";
 import { User } from "../models/User.js";
 import { Refresh } from "../models/Refresh.js";
 import { PasswordReset } from "../models/PasswordReset.js";
@@ -251,11 +260,28 @@ function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
   return jwt.sign(payload, secret, { ...commonOptions, algorithm: "HS256" });
 }
 
+// The sign-up form's ticket (util/signupGuard.js): asked for when the form
+// opens, required by POST /signup.
+router.get("/signup-ticket", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ ticket: issueTicket() });
+});
+
 router.post("/signup", async (req, res) => {
   try {
     await ensureDb();
     const { email, username, password, zone, firstName, lastName, whatsapp } =
       req.body || {};
+
+    // Bots first (2026-09-22): the hidden field, the form ticket, then the
+    // per-visitor cap. One answer for every refusal.
+    const blocked = honeypotTripped(req.body)
+      ? "honeypot"
+      : ticketProblem(req.body?.ticket) || (await throttleProblem(SignupThrottle, visitorIp(req)));
+    if (blocked) {
+      console.warn(`[/auth/signup] refused: ${blocked}`);
+      return res.status(400).json({ error: SIGNUP_REFUSAL, code: "SIGNUP_CHECK" });
+    }
 
     if (!email || !password) {
       return res.status(400).json({ error: "email and password required" });
