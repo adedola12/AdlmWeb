@@ -44,6 +44,21 @@ export function stageOf(p) {
 }
 
 /**
+ * Is this row's money being withheld from this reader?
+ *
+ * GET /me/projects-rollup sets `moneyHidden` on a project somebody else owns
+ * when the reader may not see rates, and zeroes the money it added. It does
+ * NOT zero totalCost, valuedAmount or remainingAmount — those predate the
+ * flag, other screens read them, and whether to mask them API-wide is a
+ * product decision nobody has taken.
+ *
+ * So the screens draw the line themselves: wherever a row says its money is
+ * hidden, the figure is an en dash and the row is left out of the totals. A
+ * screen must never print money it is telling the reader it is withholding.
+ */
+export const isMoneyHidden = (p) => p?.moneyHidden === true;
+
+/**
  * The one figure the gallery calls "Estimated": the whole grand summary, the
  * same total the Bill shows, computed server side (the list's estimatedTotal).
  *
