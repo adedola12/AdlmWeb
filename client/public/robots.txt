@@ -15,6 +15,23 @@ Disallow: /admin/
 # Signed-in areas: personal, and useless to anyone arriving from a search
 Disallow: /dashboard
 Disallow: /profile
+# The redesigned app surfaces. /manage is what /dashboard became, /work is the
+# project surface, the dash-* routes are the learning screens, and /rategen is
+# the customer rate library. All four sit behind ProtectedRoute and can only
+# redirect a crawler back to /login.
+#
+# A prefix here matches from the start of the path, so none of these touch the
+# marketing pages: /product/rategen and /how-it-works are unaffected.
+Disallow: /manage
+Disallow: /work
+Disallow: /rategen
+Disallow: /dash-learning
+Disallow: /dash-certificates
+Disallow: /dash-assignments
+Disallow: /dash-course
+# The product finder. Staff-gated while it is being proven, so a crawler can
+# only ever see the gate.
+Disallow: /fit
 # Both sit behind ProtectedRoute. They were in the sitemap until now, which
 # invited crawlers to spend budget on pages that can only redirect them away.
 Disallow: /freebies

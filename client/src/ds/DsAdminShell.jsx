@@ -23,6 +23,7 @@ import DsSprite from "./chrome/DsSprite.jsx";
 import DsAdminSprite from "./chrome/DsAdminSprite.jsx";
 import { NAV, titleFor } from "./adminNav.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
+import Seo from "../components/Seo.jsx";
 import "../styles/ds-admin.css";
 
 const RAIL_KEY = "adlm-adm-rail";
@@ -195,6 +196,10 @@ export default function DsAdminShell({ children, title }) {
 
   return (
     <div className="ds">
+      {/* robots.txt has disallowed /admin since it existed, but that is an
+          instruction about fetching, not about indexing, and it does not bind
+          a crawler that ignores it. Say it in the page as well. */}
+      <Seo title={title || titleFor(loc.pathname)} noindex />
       {/* Both, because his build injects the marketing sprite into every page
           it generates — admin included — and the header's theme button uses
           #i-moon and #i-sun from it. The admin sprite alone leaves those two
