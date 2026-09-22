@@ -3,6 +3,11 @@ import { FaBoxes, FaCubes, FaHardHat, FaLayerGroup, FaTimes, FaTools } from "../
 import SectionRail from "./SectionRail.jsx";
 import { RateCell } from "./ProjectBillTable.jsx";
 import { resolveAll, normalizeTitle } from "../../lib/budgetBillLink.js";
+import {
+  buyByDate,
+  buyScheduleGroups,
+  clampLeadDays,
+} from "../../lib/buySchedule.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Project Budget tab — Material & Labour build-up of each Bill line.
@@ -22,6 +27,10 @@ function safeNum(v) {
 
 function money(v) {
   return safeNum(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function naira(v) {
+  return "₦" + money(v);
 }
 
 function lineDone(it) {
@@ -136,9 +145,13 @@ export default function ProjectBudgetTab({
   // Rebuild the material & labour schedule from the current constants library.
   // Absent (null) for products/projects where regeneration does not apply.
   onRebuildSchedule = null,
+  // S18: the procurement lead time is saved on the project now, so it
+  // survives a reload. The default is the same 14 days it always was.
+  leadDays: leadDaysProp = 14,
+  onLeadDaysChange = null,
 }) {
   const [view, setView] = React.useState("breakdown");
-  const [leadDays, setLeadDays] = React.useState(14);
+  const leadDays = clampLeadDays(leadDaysProp);
   const [query, setQuery] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [rebuilding, setRebuilding] = React.useState(false);
@@ -534,16 +547,19 @@ export default function ProjectBudgetTab({
   // ── Buy schedule — "what to buy & when" ────────────────────────────────
   const buyRows = React.useMemo(() => {
     const tasks = pmDashboard?.tasks || [];
-    const codeToStart = new Map();
+    // code → the earliest linked task, so a row can name the task it is for.
+    const codeToTask = new Map();
     for (const t of tasks) {
-      const s = t?.startDate ? new Date(t.startDate) : null;
-      if (!s || Number.isNaN(s.getTime())) continue;
+      const start = t?.startDate ? new Date(t.startDate) : null;
+      if (!start || Number.isNaN(start.getTime())) continue;
       for (const ident of t?.linkedBoqIdentities || []) {
         const norm = String(ident).split("::")[1];
         const code = (norm || "").trim().toLowerCase();
         if (!code) continue;
-        const cur = codeToStart.get(code);
-        if (!cur || s < cur) codeToStart.set(code, s);
+        const cur = codeToTask.get(code);
+        if (!cur || start < cur.start) {
+          codeToTask.set(code, { start, name: String(t?.name || "").trim() });
+        }
       }
     }
     const rows = [];
@@ -552,16 +568,19 @@ export default function ProjectBudgetTab({
       const code = String(it?.billIdentity || it?.sourceTakeoffCode || "")
         .trim()
         .toLowerCase();
-      const needBy = code ? codeToStart.get(code) || null : null;
-      const buyBy = needBy
-        ? new Date(needBy.getTime() - leadDays * 86400000)
-        : null;
+      const task = code ? codeToTask.get(code) || null : null;
+      const needBy = task ? task.start : null;
+      const buyBy = buyByDate(needBy, leadDays);
       rows.push({
         key: keyOf(it),
+        line: it,
         name: lineName(it),
         qty: safeNum(it?.qty),
         unit: it?.unit || "",
         forLine: groupLabel(it),
+        taskName: task?.name || "",
+        // What this material is worth, on the same rate the breakdown uses.
+        amount: safeNum(it?.qty) * safeNum(it?.rate),
         needBy,
         buyBy,
         done: lineDone(it),
@@ -578,8 +597,12 @@ export default function ProjectBudgetTab({
 
   const scheduledCount = buyRows.filter((r) => r.buyBy).length;
 
+  // The three groups his KPI row counts, measured against TODAY — the real
+  // date, not a fixed one. A row already ticked as bought is in none of them.
+  const buyGroups = React.useMemo(() => buyScheduleGroups(buyRows), [buyRows]);
+
   function fmtDate(d) {
-    if (!d) return "—";
+    if (!d) return "–";
     try {
       return d.toLocaleDateString(undefined, {
         day: "numeric",
@@ -587,7 +610,7 @@ export default function ProjectBudgetTab({
         year: "numeric",
       });
     } catch {
-      return "—";
+      return "–";
     }
   }
 
@@ -815,110 +838,126 @@ export default function ProjectBudgetTab({
           appears in the <span className="font-semibold">Materials</span> view.
         </div>
       ) : view === "schedule" ? (
-        <div className="wk-panel" style={NO_MB}>
-          <div className="wk-ph" style={{ flexWrap: "wrap" }}>
-            <div style={{ minWidth: 0 }}>
-              <h2>Procurement buy schedule</h2>
-              <div className="wk-locnote" style={{ marginTop: 4 }}>
-                What to buy &amp; when, materials timed off the Program of
-                Works. {scheduledCount} of {buyRows.length} dated.
-              </div>
+        <div style={{ display: "grid", gap: 14 }}>
+          <div className="pj-kpi c4">
+            <div className={buyGroups.late.length ? "warn" : ""}>
+              <span>Should already be bought</span>
+              <b>{buyGroups.late.length}</b>
+              <em>
+                {buyGroups.late.length
+                  ? `${naira(buyGroups.lateValue)} of materials`
+                  : "Nothing late"}
+              </em>
             </div>
-            <label className="wk-locnote" style={INLINE_FIELD}>
-              Lead time
-              <input
-                type="number"
-                min="0"
-                value={leadDays}
-                onChange={(e) =>
-                  setLeadDays(Math.max(0, Number(e.target.value) || 0))
-                }
-                className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
-              />
-              days
-            </label>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 dark:bg-white/5 text-left text-slate-600 dark:text-adlm-dark-muted">
-                <tr>
-                  <th className="px-3 py-2">Buy by</th>
-                  <th className="px-3 py-2">Need on site</th>
-                  <th className="px-3 py-2">Material</th>
-                  <th className="px-3 py-2 text-right">Qty</th>
-                  <th className="px-3 py-2">Unit</th>
-                  <th className="px-3 py-2">For</th>
-                  <th className="px-3 py-2 text-center">Procured</th>
-                </tr>
-              </thead>
-              <tbody>
-                {buyRows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-3 py-6 text-center text-slate-500 dark:text-adlm-dark-muted"
-                    >
-                      No materials to buy on this project.
-                    </td>
-                  </tr>
+            <div>
+              <span>Buy this week</span>
+              <b>{buyGroups.week.length}</b>
+              <em>
+                {buyGroups.week.length ? naira(buyGroups.weekValue) : "Nothing due"}
+              </em>
+            </div>
+            <div>
+              <span>Not yet scheduled</span>
+              <b>{buyGroups.unscheduled.length}</b>
+              <em>
+                {buyGroups.unscheduled.length
+                  ? "Their bill lines are in no task"
+                  : "Every line is in a task"}
+              </em>
+            </div>
+            <div>
+              <span>Lead time</span>
+              <b>
+                {onLeadDaysChange ? (
+                  <>
+                    <input
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={leadDays}
+                      aria-label="Lead time in days"
+                      onChange={(e) => onLeadDaysChange(e.target.value)}
+                    />{" "}
+                    days
+                  </>
                 ) : (
-                  buyRows.map((r) => (
-                    <tr
-                      key={r.key}
-                      className={[
-                        "border-t border-slate-100 dark:border-adlm-dark-border",
-                        r.done ? "opacity-60" : "",
-                      ].join(" ")}
-                    >
-                      <td className="px-3 py-2 font-semibold text-slate-900 dark:text-white">
-                        {r.buyBy ? (
-                          fmtDate(r.buyBy)
-                        ) : (
-                          <span className="text-slate-400 dark:text-adlm-dark-dim">
-                            Not scheduled
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
-                        {fmtDate(r.needBy)}
-                      </td>
-                      <td className="px-3 py-2 font-medium text-slate-800 dark:text-adlm-dark-text">
-                        <span className="line-clamp-1" title={r.name}>
-                          {r.name}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
-                        {money(r.qty)}
-                      </td>
-                      <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
-                        {r.unit}
-                      </td>
-                      <td className="px-3 py-2 text-slate-500 dark:text-adlm-dark-muted">
-                        <span className="line-clamp-1" title={r.forLine}>
-                          {r.forLine}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {r.done ? (
-                          <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                            ✓
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-adlm-dark-dim">
-–
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  `${leadDays} days`
                 )}
-              </tbody>
-            </table>
+              </b>
+              <em>Bought this long before work starts</em>
+            </div>
           </div>
-          <p className="wk-note" style={{ borderTop: "1px solid var(--line)" }}>
-            “Need on site” is the earliest Program-of-Works task linked to each
-            item’s bill line; “Buy by” subtracts the lead time. Link bill lines
-            to tasks on the PM Dashboard to schedule the “Not scheduled” items.
+
+          {buyRows.length === 0 ? (
+            <div className="pj-empty">
+              <b>Nothing to buy yet</b>
+              <p>
+                Price the bill first: the buy schedule is built from each bill
+                line’s material build-up.
+              </p>
+            </div>
+          ) : (
+            <div className="pj-buy" role="table" aria-label="Buy schedule">
+              <div className="hd" role="row">
+                <span />
+                <span>Buy by</span>
+                <span>Material</span>
+                <span className="n">Quantity</span>
+                <span>For</span>
+              </div>
+              {buyRows.map((r) => {
+                const state = r.done
+                  ? "got"
+                  : !r.buyBy
+                    ? "none"
+                    : r.buyBy < buyGroups.today
+                      ? "late"
+                      : "";
+                return (
+                  <label className={`rw ${state}`.trim()} role="row" key={r.key}>
+                    <input
+                      type="checkbox"
+                      checked={r.done}
+                      disabled={!canEdit || saving}
+                      aria-label={`Bought: ${r.name}`}
+                      title={
+                        contractLocked
+                          ? "The contract is locked, procurement is frozen."
+                          : canEdit
+                            ? "Tick when this material has been bought"
+                            : "You cannot edit this project"
+                      }
+                      onChange={() => toggleLine(r.line)}
+                    />
+                    <span className="by">
+                      {r.buyBy ? fmtDate(r.buyBy) : "Not scheduled"}
+                      {r.needBy ? <em>on site {fmtDate(r.needBy)}</em> : null}
+                    </span>
+                    <span className="m">
+                      <b title={r.name}>{r.name}</b>
+                      <em>{r.amount ? naira(r.amount) : "–"}</em>
+                    </span>
+                    <span className="n">
+                      {money(r.qty)} {r.unit || ""}
+                    </span>
+                    <span className="f" title={r.forLine}>
+                      {r.forLine}
+                      {r.taskName ? <em>{r.taskName}</em> : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="pj-foot">
+            “On site” is the start of the earliest Program-of-Works task linked
+            to the material’s bill line; “Buy by” takes the lead time off it.
+            Link bill lines to tasks on the PM Dashboard to date the
+            unscheduled ones. {scheduledCount} of {buyRows.length} dated.
+            {onLeadDaysChange
+              ? " The lead time is saved with the project when you save."
+              : ""}
           </p>
         </div>
       ) : (

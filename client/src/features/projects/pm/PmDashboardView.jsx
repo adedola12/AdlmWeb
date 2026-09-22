@@ -465,6 +465,8 @@ export default function PmDashboardView({
   onAddRisk,
   onAddIssue,
   onGenerateFromBoq,
+  // S18 PR2-18: plan the bill lines that are in no task, one task per element.
+  onPlanUnlinked,
   onImportFile,
   onClearImports,
   onViewDetails,
@@ -795,6 +797,8 @@ export default function PmDashboardView({
       <BoqCoveragePanel
         coverage={dashboard?.boqCoverage}
         onViewDetails={onViewDetails}
+        onPlanUnlinked={onPlanUnlinked}
+        planning={generating}
       />
 
       {/* EVM summary */}
@@ -991,7 +995,7 @@ function ContractMovementPanel({ dashboard }) {
 // specific row they need to fix. The segmented bar shows the same
 // proportions in one glance.
 // ────────────────────────────────────────────────────────────────────
-function BoqCoveragePanel({ coverage, onViewDetails }) {
+function BoqCoveragePanel({ coverage, onViewDetails, onPlanUnlinked, planning = false }) {
   if (!coverage || !coverage.totalCount) {
     return null;
   }
@@ -1057,10 +1061,26 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
             hint="entries balanced at 100%"
             tone="good"
           />
+          {/* S18 PR2-18: the bill lines that are in no task, with what they
+              are worth, and a way to plan them without leaving the tile. */}
           <CoverageStat
-            label="Unlinked"
+            label="Bill not in any task"
             value={`${coverage.unlinkedCount}`}
-            hint={`₦${fmtMoney(unlinked)} unallocated`}
+            hint={`₦${fmtMoney(unlinked)} in no task`}
+            tone={coverage.unlinkedCount > 0 ? "warn" : ""}
+            action={
+              onPlanUnlinked && coverage.unlinkedCount > 0 ? (
+                <button
+                  type="button"
+                  className="pj-lnk"
+                  disabled={planning}
+                  onClick={onPlanUnlinked}
+                  title="Add one task per element for the bill lines that are in no task, after the current programme"
+                >
+                  {planning ? "Planning…" : "Plan them"}
+                </button>
+              ) : null
+            }
             // Hover reveals every unlinked BoQ row — including the
             // zero-cost ones. Answers the user's "show me what I missed"
             // question without forcing them to scroll into the offender
@@ -1262,6 +1282,8 @@ function CoverageStat({
   tone = "",
   details = null, // optional array of { description, kind, amount }
   detailsLabel = "Items",
+  // S18: an optional link under the figure, e.g. "Plan them".
+  action = null,
 }) {
   const [open, setOpen] = React.useState(false);
   const hasDetails = Array.isArray(details) && details.length > 0;
@@ -1295,6 +1317,7 @@ function CoverageStat({
       {hasDetails ? (
         <span className="ds-sub" style={{ color: "var(--action)" }}>Hover for list ▾</span>
       ) : null}
+      {action ? <span className="ds-sub">{action}</span> : null}
 
       {/* Floating list of the offender rows, in his dropdown surface.
           Positioned below the tile so it doesn't get clipped on narrow

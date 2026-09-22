@@ -257,6 +257,13 @@ import {
   canImportBoqFor,
   isBoqImportProduct,
 } from "../util/boqImportAccess.js";
+import {
+  normalizeVariationStatus,
+  isApprovedVariation,
+  variationAmount,
+  approvedVariationsTotal,
+  approvedVariationsEarned,
+} from "../util/variationStatus.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
 // IFC files; we can raise this per-tier later via an entitlement flag.
@@ -482,8 +489,8 @@ function computeProjectRollup(project) {
   for (const it of items) measured += safeNum(it?.qty) * safeNum(it?.rate);
   let provisional = 0;
   for (const p of project?.provisionalSums || []) provisional += safeNum(p?.amount);
-  let variations = 0;
-  for (const v of project?.variations || []) variations += safeNum(v?.qty) * safeNum(v?.rate);
+  // S18 valuations: only approved variations are part of the works cost.
+  const variations = approvedVariationsTotal(project?.variations);
   return {
     measured,
     provisional,
@@ -833,6 +840,8 @@ const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   vatPct: 7.5,
   withholdingPct: 2.5,
   basis: "boq",
+  // S18 valuations: procurement lead time, in days, for the buy schedule.
+  procurementLeadDays: 14,
 });
 
 function clampPercentage(value, fallback = 0) {
@@ -884,7 +893,23 @@ function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTIN
         : base.basis === "budget"
           ? "budget"
           : "boq",
+    // S18 valuations: clamped 0-120 days. Anything unusable falls back to
+    // what the project already had, then to the 14-day default.
+    procurementLeadDays: clampLeadDays(
+      source.procurementLeadDays,
+      clampLeadDays(
+        base.procurementLeadDays,
+        DEFAULT_VALUATION_SETTINGS.procurementLeadDays,
+      ),
+    ),
   };
+}
+
+// S18 valuations: a procurement lead time is a whole number of days, 0-120.
+function clampLeadDays(value, fallback = 14) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(120, Math.round(n)));
 }
 
 function itemIdentity(item, index) {
@@ -1236,10 +1261,20 @@ function sanitizeVariations(variations) {
       }
       if (!completedAt) completedAt = new Date();
     }
+    // S18 valuations: a row with no status — everything written before the
+    // field existed, and everything the post-lock auto-add raises — reads
+    // back as approved, so no existing total moves.
+    const status = normalizeVariationStatus(v.status);
+    let decidedAt = null;
+    if (v.decidedAt) {
+      const d = new Date(v.decidedAt);
+      if (!Number.isNaN(d.getTime())) decidedAt = d;
+    }
+    const decidedBy = isValidObjectId(v.decidedBy) ? v.decidedBy : null;
     if (!description && qty === 0 && rate === 0) continue;
     out.push({
       description, qty, unit, rate, reference, issuedAt, source,
-      completed, completedAt,
+      completed, completedAt, status, decidedAt, decidedBy,
     });
   }
   return out;
@@ -1638,7 +1673,8 @@ function buildValuationLogs(project, productKey) {
     : [];
   for (let i = 0; i < projectVariations.length; i += 1) {
     const v = projectVariations[i];
-    if (!v?.completed) continue;
+    // S18 valuations: earned only when approved AND executed on site.
+    if (!v?.completed || !isApprovedVariation(v)) continue;
     const amount = safeNum(v?.qty) * safeNum(v?.rate);
     if (amount <= 0) continue;
     // Use completedAt if present, else fall back to issuedAt, else today.
@@ -4054,17 +4090,9 @@ function computeValueToDate(project) {
   // to the BAC (project total) regardless, but only contribute to earned
   // value (cumulativeValue) once flagged as executed. This matches how
   // preliminary items already work.
-  const variationsTotal = (project.variations || []).reduce(
-    (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
-    0,
-  );
-  const variationsEarned = (project.variations || []).reduce(
-    (acc, v) =>
-      v?.completed
-        ? acc + safeNum(v?.qty) * safeNum(v?.rate)
-        : acc,
-    0,
-  );
+  // S18 valuations: a pending or rejected variation is in neither figure.
+  const variationsTotal = approvedVariationsTotal(project.variations);
+  const variationsEarned = approvedVariationsEarned(project.variations);
   const provisionalTotal = (project.provisionalSums || []).reduce(
     (acc, s) => acc + safeNum(s?.amount),
     0,
@@ -4363,6 +4391,201 @@ async function deleteCertificate(req, res) {
   }
 }
 
+// ── Variations (S18 valuations) ────────────────────────────────────────────
+// A variation is raised PENDING and moves no money until someone with edit
+// access approves it. Both routes are additive: the desktop plugins keep
+// writing the whole variations array through PUT /:productKey/:id, and a row
+// they write with no status reads back as approved, exactly as before.
+//
+// Loads the project and checks edit access — the same check that guards a
+// contract change. Returns the loaded doc + access, or null having already
+// answered the request.
+async function loadProjectForVariationWrite(req, res) {
+  const productKey = requestedProductKey(req);
+  const id = String(req.params.id || "").trim();
+  if (!isValidObjectId(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return null;
+  }
+  const userId = getUserObjectId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Invalid user id" });
+    return null;
+  }
+  const project = await TakeoffProject.findOne(
+    accessFilter(id, userId, productKey),
+  );
+  if (!project) {
+    res.status(404).json({ error: "Not found" });
+    return null;
+  }
+  const access = await resolveProjectAccess(req, project);
+  if (!access.canEdit) {
+    res.status(403).json({
+      error: "View-only access cannot edit this project.",
+      code: "VIEW_ONLY",
+    });
+    return null;
+  }
+  if (project.finalAccount?.finalized) {
+    res.status(400).json({
+      error: "Final account is closed. Reopen it before changing variations.",
+      code: "FINAL_ACCOUNT_CLOSED",
+    });
+    return null;
+  }
+  return { project, access };
+}
+
+// One variation, shaped for the client. Money is zeroed for a collaborator
+// who may edit but may not see rates — the same rule maskRates() enforces.
+function variationForClient(v, index, canSeeRates) {
+  const plain = typeof v?.toObject === "function" ? v.toObject() : { ...(v || {}) };
+  return {
+    ...plain,
+    index,
+    rate: canSeeRates ? safeNum(plain.rate) : 0,
+    amount: canSeeRates ? variationAmount(plain) : 0,
+    status: normalizeVariationStatus(plain.status),
+  };
+}
+
+function variationsForClient(list, canSeeRates) {
+  return (Array.isArray(list) ? list : []).map((v, i) =>
+    variationForClient(v, i, canSeeRates),
+  );
+}
+
+// POST /:productKey/:id/variations — raise a variation, pending approval.
+async function addVariation(req, res) {
+  try {
+    const loaded = await loadProjectForVariationWrite(req, res);
+    if (!loaded) return;
+    const { project, access } = loaded;
+
+    const description = String(req.body?.description || "").trim().slice(0, 500);
+    if (!description) {
+      return res.status(400).json({ error: "Say what changed." });
+    }
+    const reference = String(req.body?.reference || "").trim().slice(0, 120);
+
+    // Two shapes are accepted: an explicit qty/unit/rate, or a single signed
+    // value with a kind ("addition" | "omission"), which is what the
+    // Variations view sends. An omission is a negative rate.
+    let qty = Number(req.body?.qty);
+    let rate = Number(req.body?.rate);
+    let unit = String(req.body?.unit || "").trim().slice(0, 40);
+    if (!Number.isFinite(qty) || qty === 0 || !Number.isFinite(rate)) {
+      const amount = Math.abs(Number(req.body?.amount));
+      if (!Number.isFinite(amount) || amount === 0) {
+        return res.status(400).json({ error: "Enter the value of the variation." });
+      }
+      qty = 1;
+      unit = unit || "item";
+      rate =
+        String(req.body?.kind || "").trim().toLowerCase() === "omission"
+          ? -amount
+          : amount;
+    }
+
+    const entry = {
+      description,
+      qty,
+      unit,
+      rate,
+      reference,
+      issuedAt: new Date(),
+      source: "manual",
+      completed: false,
+      completedAt: null,
+      status: "pending",
+      decidedAt: null,
+      decidedBy: null,
+    };
+
+    project.variations = sanitizeVariations([
+      ...(Array.isArray(project.variations) ? project.variations : []),
+      entry,
+    ]);
+    project.markModified("variations");
+    project.version += 1;
+    await project.save();
+
+    const index = project.variations.length - 1;
+    recordActivity(
+      req,
+      project,
+      ACT.VARIATION_ADDED,
+      `Raised variation V${index + 1}, pending approval`,
+      { description, reference },
+    );
+    res.json({
+      ok: true,
+      index,
+      variation: variationForClient(project.variations[index], index, access.canSeeRates),
+      variations: variationsForClient(project.variations, access.canSeeRates),
+      version: project.version,
+    });
+  } catch (err) {
+    console.error("POST variation error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// PATCH /:productKey/:id/variations/:index — approve or reject one.
+// Only a pending variation can be decided: an approved one already counts
+// toward the contract value, and un-approving it would move a total that
+// certificates have already been issued against.
+async function decideVariation(req, res) {
+  try {
+    const loaded = await loadProjectForVariationWrite(req, res);
+    if (!loaded) return;
+    const { project, access } = loaded;
+
+    const index = Number(req.params.index);
+    const list = Array.isArray(project.variations) ? project.variations : [];
+    if (!Number.isInteger(index) || index < 0 || index >= list.length) {
+      return res.status(404).json({ error: "Variation not found" });
+    }
+    const decision = String(req.body?.status || "").trim().toLowerCase();
+    if (decision !== "approved" && decision !== "rejected") {
+      return res.status(400).json({ error: "Decision must be approved or rejected." });
+    }
+    const entry = list[index];
+    if (normalizeVariationStatus(entry.status) !== "pending") {
+      return res.status(409).json({
+        error: "Only a variation waiting for approval can be decided.",
+        code: "VARIATION_ALREADY_DECIDED",
+      });
+    }
+
+    entry.status = decision;
+    entry.decidedAt = new Date();
+    entry.decidedBy = getUserObjectId(req);
+    project.markModified("variations");
+    project.version += 1;
+    await project.save();
+
+    recordActivity(
+      req,
+      project,
+      decision === "approved" ? ACT.VARIATION_APPROVED : ACT.VARIATION_REJECTED,
+      `${decision === "approved" ? "Approved" : "Rejected"} variation V${index + 1}`,
+      { description: String(entry.description || "") },
+    );
+    res.json({
+      ok: true,
+      index,
+      variation: variationForClient(project.variations[index], index, access.canSeeRates),
+      variations: variationsForClient(project.variations, access.canSeeRates),
+      version: project.version,
+    });
+  } catch (err) {
+    console.error("PATCH variation error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── Final Account ──
 // Finalizing snapshots the actual project settlement and freezes edits.
 async function finalizeAccount(req, res) {
@@ -4392,10 +4615,8 @@ async function finalizeAccount(req, res) {
       (acc, s) => acc + safeNum(s?.amount),
       0,
     );
-    const variationsFinal = (project.variations || []).reduce(
-      (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
-      0,
-    );
+    // S18 valuations: the final account settles the approved variations only.
+    const variationsFinal = approvedVariationsTotal(project.variations);
     const measuredWorkFinal = rollup.measured;
     // Preliminary final = the full preliminary pool (done portion already
     // certified; outstanding portion still due at closeout).
@@ -5042,11 +5263,9 @@ async function getPublicDashboard(req, res) {
       (acc, p) => acc + (Number(p?.amount) || 0),
       0,
     );
-    const variationsTotal = (project.variations || []).reduce(
-      (acc, v) =>
-        acc + (Number(v?.qty) || 0) * (Number(v?.rate) || 0),
-      0,
-    );
+    // S18 valuations: approved variations only, so this agrees with the
+    // bill, the certificates and the final account.
+    const variationsTotal = approvedVariationsTotal(project.variations);
     const preliminaryPercent = Number(contract?.preliminaryPercent || 0);
     // If we have a locked contract we use the baked-in figures so the
     // contract sum the client sees matches what was signed, not whatever
@@ -5108,13 +5327,7 @@ async function getPublicDashboard(req, res) {
     // drawn, which misled the public dashboard into showing a
     // "₦2,100,000 actual cost" on projects with PC sums declared but
     // nothing drawn.
-    const variationsEarned = (project.variations || []).reduce(
-      (acc, v) =>
-        v?.completed
-          ? acc + (Number(v?.qty) || 0) * (Number(v?.rate) || 0)
-          : acc,
-      0,
-    );
+    const variationsEarned = approvedVariationsEarned(project.variations);
     const provisionalEarned = (project.provisionalSums || []).reduce(
       (acc, p) => (p?.completed ? acc + (Number(p?.amount) || 0) : acc),
       0,
@@ -6845,6 +7058,21 @@ router.delete(
   mapEntitlementParam,
   requireEntitlementParam,
   deleteCertificate,
+);
+
+// S18 valuations: raise a variation (pending) and decide one.
+router.post(
+  "/:productKey/:id/variations",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  addVariation,
+);
+
+router.patch(
+  "/:productKey/:id/variations/:index",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  decideVariation,
 );
 
 router.post(

@@ -326,6 +326,16 @@ function TaskTable({
             const displayPercent = isSummary && rollup
               ? safeNum(rollup.percentComplete)
               : safeNum(task.percentComplete);
+            // S18: the server's read-only "what the bill says" figure, and
+            // whether the task has drifted more than a point from it.
+            const fromBill =
+              !isSummary && task?.computed?.billPercentComplete != null
+                ? safeNum(task.computed.billPercentComplete)
+                : null;
+            const billLineCount = safeNum(task?.computed?.billLineCount);
+            const billDrift =
+              fromBill != null &&
+              Math.abs(fromBill - safeNum(task.percentComplete)) >= 1;
             const displayBaseline = isSummary && rollup
               ? rollup.baselineCost
               : (task.computed?.baselineCost ?? task.baselineCost);
@@ -574,16 +584,39 @@ function TaskTable({
                       </div>
                     </div>
                   ) : (
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={safeNum(task.percentComplete)}
-                      onChange={(e) =>
-                        onPercentChange?.(task.taskId, Math.max(0, Math.min(100, Number(e.target.value) || 0)))
-                      }
-                      className="w-14 rounded border-slate-200 px-1 py-0.5 text-xs text-right"
-                    />
+                    <div className="inline-flex flex-col items-end gap-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={safeNum(task.percentComplete)}
+                        onChange={(e) =>
+                          onPercentChange?.(task.taskId, Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+                        }
+                        className="w-14 rounded border-slate-200 px-1 py-0.5 text-xs text-right"
+                      />
+                      {/* S18: what this task's own bill lines read, weighted
+                          by value. Read only — progress is still recorded
+                          here and pushed down to the lines. Shown so a task
+                          that has drifted from its bill is visible. */}
+                      {fromBill != null ? (
+                        <span
+                          className="text-[10px]"
+                          style={{
+                            color: billDrift
+                              ? "var(--pal-orange-key)"
+                              : "var(--ink-3)",
+                          }}
+                          title={
+                            billDrift
+                              ? `This task says ${safeNum(task.percentComplete).toFixed(0)}%, its ${billLineCount} bill line${billLineCount === 1 ? "" : "s"} add up to ${fromBill.toFixed(0)}%. Recording progress here updates the lines.`
+                              : `Read from ${billLineCount} bill line${billLineCount === 1 ? "" : "s"}, weighted by value`
+                          }
+                        >
+                          From the bill: {fromBill.toFixed(0)}%
+                        </span>
+                      ) : null}
+                    </div>
                   )}
                 </td>
                 <td className={`px-3 py-2 align-top text-right text-xs whitespace-nowrap ${isSummary ? "font-bold text-slate-900" : ""}`}>
