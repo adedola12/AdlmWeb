@@ -104,7 +104,7 @@ export function welcome({ firstName }) {
           "Your email is confirmed and the account is open. Everything you buy, every project " +
             "you keep and every certificate you earn lives in one place.",
         ),
-      cta: { label: "Open your account", href: `${SITE}/dashboard` },
+      cta: { label: "Open your account", href: `${SITE}/manage` },
       footNote: "Questions go to support from inside your account, and reach a person.",
     }),
   };

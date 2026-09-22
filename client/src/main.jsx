@@ -119,9 +119,6 @@ import JoinProject from "./pages/JoinProject.jsx";
 import RateGenLibrary from "./pages/RateGenLibrary.jsx";
 import AdminRateLibrary from "./pages/AdminRateLibrary.jsx";
 import AdminAddRate from "./pages/AdminAddRate.jsx";
-// Classic RateGen admin screens, restored until the new build goes live.
-import AdminRateGen from "./pages/AdminRateGen.jsx";
-import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import RateGenUpdates from "./pages/RateGenUpdates.jsx";
 import ServiceConstants from "./pages/ServiceConstants.jsx";
 import MaterialConstants from "./pages/MaterialConstants.jsx";
@@ -146,9 +143,7 @@ const WorkProgramme = React.lazy(() => import("./pages/WorkProgramme.jsx"));
 const Learning = React.lazy(() => import("./pages/Learning.jsx"));
 const Certificates = React.lazy(() => import("./pages/Certificates.jsx"));
 const LearningCourse = React.lazy(() => import("./pages/LearningCourse.jsx"));
-// Unused until go-live, when /learn/course/:sku points back at it.
 const LearnCourseRedirect = React.lazy(() => import("./pages/LearnCourseRedirect.jsx"));
-import CourseDetailClassic from "./pages/CourseDetailClassic.jsx";
 const WorkShellRoute = React.lazy(() => import("./pages/WorkShellRoute.jsx"));
 import UserInvoice from "./pages/UserInvoice.jsx";
 
@@ -204,14 +199,17 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Home /> },
 
-      // Classic page, no app frame, until the new build goes fully live. The
-      // 15 Sept release put this inside WorkShellRoute (title "Programme",
-      // page "work-programme"); go-live puts it back.
       {
         path: "time-management",
         element: (
           <ProtectedRoute>
-            <TimeManagement />
+            <LazyScreen>
+              <WorkShellRoute
+                screen={TimeManagement}
+                title="Programme"
+                page="work-programme"
+              />
+            </LazyScreen>
           </ProtectedRoute>
         ),
       },
@@ -237,9 +235,7 @@ const router = createBrowserRouter([
       { path: "learn", element: <Learn /> },
       // The player moved to /dash-course/:sku. This resolves rather than
       // 404s, because the URL is in emails and in people's history.
-      // The course page customers have, until the new build goes fully live.
-      // Go-live points this back at LearnCourseRedirect (to /dash-course).
-      { path: "learn/course/:sku", element: <CourseDetailClassic /> },
+      { path: "learn/course/:sku", element: <LearnCourseRedirect /> },
       { path: "learn/free/:id", element: <FreeVideoDetail /> },
 
       { path: "about", element: <AboutADLM /> },
@@ -460,14 +456,17 @@ const router = createBrowserRouter([
           return { element: <ModelCheckReport /> };
         },
       },
-      // Classic page, no app frame, until the new build goes fully live. The
-      // 15 Sept release put this inside WorkShellRoute (title "Projects",
-      // page "work-projects"); go-live puts it back.
       {
         path: "projects/:tool",
         element: (
           <ProtectedRoute>
-            <ProjectsGeneric />
+            <LazyScreen>
+              <WorkShellRoute
+                screen={ProjectsGeneric}
+                title="Projects"
+                page="work-projects"
+              />
+            </LazyScreen>
           </ProtectedRoute>
         ),
       },
@@ -556,11 +555,10 @@ const router = createBrowserRouter([
       // what this replaces is the hub's front page, which was a tab strip over
       // the same lists rather than a view of what needs doing.
       {
-        // Classic screen until the new build goes live (release: AdminToday).
         path: "admin",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin />
+          <AdminRoute permission="adminhub">
+            <AdminToday />
           </AdminRoute>
         ),
       },
@@ -568,47 +566,45 @@ const router = createBrowserRouter([
       // inline at the bottom of /admin. Same <Admin /> component, driven by the
       // `section` prop so all existing data-loading/effects keep working.
       {
-        // Classic screen until the new build goes live (release: AdminPurchases).
+        // His Purchases queue. The path stays /admin/pending because that is
+        // what the old hub used and what people have bookmarked; the rail
+        // calls it Purchases, as he does.
         path: "admin/pending",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="pending" />
+          <AdminRoute permission="adminhub">
+            <AdminPurchases />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsEntitlements).
         path: "admin/active",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="active" />
+          <AdminRoute permission="adminhub">
+            <AdminDsEntitlements />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsOrganisations).
         path: "admin/organizations",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="organizations" />
+          <AdminRoute permission="adminhub">
+            <AdminDsOrganisations />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcEvents).
         path: "admin/physical-training",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="ptrainings" />
+          <AdminRoute permission="adminhub">
+            <AdminLcEvents />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsSubscriptions).
         path: "admin/subscriptions",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="subscriptions" />
+          <AdminRoute permission="adminhub">
+            <AdminDsSubscriptions />
           </AdminRoute>
         ),
       },
@@ -647,28 +643,25 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminStorage).
         path: "admin/storage",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="storage" />
+          <AdminRoute permission="adminhub">
+            <AdminStorage />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminInstallationsQueue).
         path: "admin/installations",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="installations" />
+          <AdminRoute permission="adminhub">
+            <AdminInstallationsQueue />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: Admin).
         path: "admin/training-locations",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
+          <AdminRoute permission="adminhub">
             <Admin section="tlocations" />
           </AdminRoute>
         ),
@@ -684,20 +677,18 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDocSystem).
         path: "admin/settings",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="settings" />
+          <AdminRoute permission="adminhub">
+            <AdminDocSystem />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcCourses).
         path: "admin/courses",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminCourses />
+          <AdminRoute roles={["admin"]}>
+            <AdminLcCourses />
           </AdminRoute>
         ),
       },
@@ -732,29 +723,26 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminCatProducts).
         path: "admin/products",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminProducts />
+          <AdminRoute roles={["admin"]}>
+            <AdminCatProducts />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminProductEdit).
         path: "admin/products/:id/edit",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
+          <AdminRoute roles={["admin"]}>
             <AdminProductEdit />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsCoupons).
         path: "admin/coupons",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminCoupons />
+          <AdminRoute roles={["admin"]}>
+            <AdminDsCoupons />
           </AdminRoute>
         ),
       },
@@ -772,11 +760,10 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsInvoices).
         path: "admin/invoices",
         element: (
-          <AdminRoute shell={false} permission="invoices">
-            <AdminInvoices />
+          <AdminRoute permission="invoices">
+            <AdminDsInvoices />
           </AdminRoute>
         ),
       },
@@ -828,72 +815,67 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsQuotations).
         path: "admin/proposals",
         element: (
-          <AdminRoute shell={false} permission="proposals">
-            <AdminProposals />
+          <AdminRoute permission="proposals">
+            <AdminDsQuotations />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminSubmissions).
         path: "admin/course-grading",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminCourseGrading />
+          <AdminRoute roles={["admin"]}>
+            <AdminSubmissions />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminCourseCockpit).
         path: "admin/course-cockpit",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
+          <AdminRoute roles={["admin"]}>
             <AdminCourseCockpit />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcQuizzes).
         path: "admin/quizzes",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminQuizzes />
+          <AdminRoute roles={["admin"]}>
+            <AdminLcQuizzes />
           </AdminRoute>
         ),
       },
 
       // ✅ STAFF (admin + mini_admin)
       {
-        // Classic screen until the new build goes live (release: AdminTrainings).
         path: "admin/trainings",
         element: (
-          <AdminRoute shell={false} permission="trainings">
+          <AdminRoute permission="trainings">
             <AdminTrainings />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcLessons).
         path: "admin/learn",
         element: (
-          <AdminRoute shell={false} permission="learn">
-            <AdminLearn />
+          <AdminRoute permission="learn">
+            <AdminLcLessons />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminYoutube).
-          // The YouTube channel beside the free library: what is filed, held,
-          // missing, and whether each video still plays.
-          path: "admin/youtube",
-          element: (
-            <AdminRoute shell={false} permission="learn">
-              <AdminYoutubeStatus />
-            </AdminRoute>
-          ),
-        },
+        // The YouTube channel beside the free library: what is filed, held,
+        // missing, and whether each video still plays. His design at
+        // /admin/youtube; the older build's screen is kept reachable beside
+        // it for the two admins to be compared.
+        path: "admin/youtube",
+        element: (
+          <AdminRoute permission="learn">
+            <AdminYoutube />
+          </AdminRoute>
+        ),
+      },
       {
         path: "admin/youtube/classic",
         element: (
@@ -903,78 +885,72 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminPeople).
+        // His People register. The path stays /admin/users-lite because that
+        // is what the rail and people's bookmarks already point at.
         path: "admin/users-lite",
         element: (
-          <AdminRoute shell={false} permission="users">
-            <AdminUsersLite />
+          <AdminRoute permission="users">
+            <AdminPeople />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcShowcase).
         path: "admin/showcase",
         element: (
-          <AdminRoute shell={false} permission="showcase">
-            <AdminShowcase />
+          <AdminRoute permission="showcase">
+            <AdminLcShowcase />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcChangelogs).
         path: "admin/changelogs",
         element: (
-          <AdminRoute shell={false} permission="changelogs">
-            <AdminChangelogs />
+          <AdminRoute permission="changelogs">
+            <AdminLcChangelogs />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminRateLibrary).
         path: "admin/rategen",
         element: (
-          <AdminRoute shell={false} permission="rategen">
-            <AdminRateGen />
+          <AdminRoute permission="rategen">
+            <AdminRateLibrary />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminAddRate).
         path: "admin/rategen/add-rate",
         element: (
-          <AdminRoute shell={false} permission="rategen">
+          <AdminRoute permission="rategen">
             <AdminAddRate />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminCatRates).
         path: "admin/rategen-master",
         element: (
-          <AdminRoute shell={false} permission="rategen">
-            <AdminRateGenMaster />
+          <AdminRoute permission="rategen">
+            <AdminCatRates />
           </AdminRoute>
         ),
       },
 
       // ✅ Physical trainings admin
       {
-        // Classic screen until the new build goes live (release: AdminEnrolments).
         path: "admin/ptrainings",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminPTrainings />
+          <AdminRoute roles={["admin"]}>
+            <AdminEnrolments />
           </AdminRoute>
         ),
       },
 
       // ✅ Roles & Access Control (UAC) — admin-only
       {
-        // Classic screen until the new build goes live (release: AdminDsRoles).
         path: "admin/roles",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminRoles />
+          <AdminRoute roles={["admin"]}>
+            <AdminDsRoles />
           </AdminRoute>
         ),
       },
@@ -991,11 +967,10 @@ const router = createBrowserRouter([
 
       // ✅ AI spend, per-user allocations & AWS credit burn-down (admin-only)
       {
-        // Classic screen until the new build goes live (release: AdminDocAi).
         path: "admin/ai-usage",
         element: (
-          <AdminRoute shell={false} permission="aiusage">
-            <AdminAiUsage />
+          <AdminRoute permission="aiusage">
+            <AdminDocAi />
           </AdminRoute>
         ),
       },
@@ -1012,11 +987,10 @@ const router = createBrowserRouter([
 
       // ✅ Support tickets — staff-grantable ("support" area)
       {
-        // Classic screen until the new build goes live (release: AdminDsSupport).
         path: "admin/support-tickets",
         element: (
-          <AdminRoute shell={false} permission="support">
-            <AdminSupportTickets />
+          <AdminRoute permission="support">
+            <AdminDsSupport />
           </AdminRoute>
         ),
       },
@@ -1044,35 +1018,40 @@ const router = createBrowserRouter([
 
       // ✅ Renewal follow-up calls — staff-grantable ("followups" area)
       {
-        // Classic screen until the new build goes live (release: AdminFollowUpsDesk).
         path: "admin/follow-ups",
         element: (
-          <AdminRoute shell={false} permission="followups">
-            <AdminFollowUps />
+          <AdminRoute permission="followups">
+            <AdminFollowUpsDesk />
           </AdminRoute>
         ),
       },
 
       // ✅ Renewal follow-up calls — staff-grantable ("followups" area)
+      {
+        path: "admin/follow-ups",
+        element: (
+          <AdminRoute permission="followups">
+            <AdminFollowUps />
+          </AdminRoute>
+        ),
+      },
 
       // ✅ Audit log & break-glass management — super-admin only ("audit" area)
       {
-        // Classic screen until the new build goes live (release: AdminDocAudit).
         path: "admin/audit-log",
         element: (
-          <AdminRoute shell={false} permission="audit">
-            <AdminAuditLog />
+          <AdminRoute permission="audit">
+            <AdminDocAudit />
           </AdminRoute>
         ),
       },
 
       // ✅ Mini-admin / staff freebies
       {
-        // Classic screen until the new build goes live (release: AdminLcFreebies).
         path: "admin/freebies",
         element: (
-          <AdminRoute shell={false} permission="freebies">
-            <AdminFreebies />
+          <AdminRoute permission="freebies">
+            <AdminLcFreebies />
           </AdminRoute>
         ),
       },
@@ -1080,13 +1059,12 @@ const router = createBrowserRouter([
       // ✅ Mini-admin / staff flyer engine (lazy — keeps html2canvas/jspdf/jszip
       // out of the main bundle; only loaded when an admin opens the engine)
       {
-        // Classic screen until the new build goes live (release: AdminFlyers).
         path: "admin/flyers",
         async lazy() {
-          const { default: AdminFlyers } = await import("./pages/AdminFlyers.jsx");
+          const { default: AdminFlyers } = await import("./pages/AdminLcFlyers.jsx");
           return {
             element: (
-              <AdminRoute shell={false} permission="flyers">
+              <AdminRoute permission="flyers">
                 <AdminFlyers />
               </AdminRoute>
             ),

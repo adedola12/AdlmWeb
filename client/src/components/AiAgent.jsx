@@ -2,7 +2,6 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
-import { FaPaperPlane, FaRegCommentDots, FaTimes } from "./icons.jsx";
 
 /**
  * ADLM AI Agent ("Ada") — a conversion-focused conversational assistant that
@@ -10,15 +9,26 @@ import { FaPaperPlane, FaRegCommentDots, FaTimes } from "./icons.jsx";
  * sign up or purchase. Replaces the old keyword HelpBot.
  */
 
+// His mark. One glyph at two sizes: 26px on the launcher, 32px in the header.
+const MARK = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 3l2.2 5.1L19.5 10l-5.3 1.9L12 17l-2.2-5.1L4.5 10l5.3-1.9L12 3z" />
+  </svg>
+);
+
 const SUPPORT_WHATSAPP = "2348106503524";
 const SESSION_KEY = "adlm_agent_session";
+// His greeting and his chips, word for word. The claim in the second sentence
+// is one we can actually keep: /agent/chat is grounded in the catalogue and
+// says so when it does not know.
 const GREETING =
-  "Hi 👋 I'm Ada, ADLM's product specialist. Tell me what you do: estimating, take-off, BIM, training, and I'll point you to the right tool and price. What are you working on?";
+  "I am Ada. Ask me what a product does, what it costs, or which one your drawings need. " +
+  "I answer from what ADLM publishes: if I do not know, I will say so.";
 const SUGGESTIONS = [
-  "I do rate build-ups / BOQs",
-  "Take-off from Revit drawings",
-  "Show me your trainings",
-  "What does RateGen cost?",
+  "What does it cost?",
+  "Which tool do I need?",
+  "Build me a quotation",
+  "Do you do training?",
 ];
 
 /* -------------------- cart helper (mirrors Products.jsx) -------------------- */
@@ -171,133 +181,144 @@ export default function AiAgent() {
   }
 
   return (
-    <>
-      {/* Launcher */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="fixed right-5 bottom-5 z-50 flex items-center gap-2 rounded-full pl-4 pr-5 py-3 shadow-xl
-          bg-gradient-to-br from-adlm-blue-700 to-adlm-navy text-white hover:brightness-110
-          active:scale-95 transition-transform ring-1 ring-white/15"
-        aria-label={open ? "Close ADLM assistant" : "Open ADLM assistant"}
-        title={open ? "Close assistant" : "Ask Ada, ADLM assistant"}
-      >
-        {open ? <FaTimes className="text-lg" /> : <FaRegCommentDots className="text-lg" />}
-        {!open && <span className="text-sm font-semibold">Ask Ada</span>}
-      </button>
-
-      {open && (
-        <div
-          className="fixed bottom-24 right-5 z-50 w-[390px] max-w-[94vw] rounded-2xl overflow-hidden
-            bg-white dark:bg-adlm-dark-panel shadow-2xl ring-1 ring-black/10 dark:ring-white/10 flex flex-col"
-          style={{ height: "min(70vh, 620px)" }}
+    // Richard's Ada, on our answers.
+    //
+    // His markup and his classes throughout — .ada-w / .ada-btn / .ada-mk /
+    // .ada-p / .ada-h / .ada-log / .ada-m / .ada-chips / .ada-f / .ada-go /
+    // .ada-foot — all of which the CSS porter already brought across into
+    // ds.css. The .ds wrapper is what scopes them; without it this renders
+    // unstyled.
+    //
+    // What is NOT his is everything behind it. His Ada scores keywords against
+    // published copy and picks a canned answer. This one posts to /agent/chat,
+    // which is Claude with the live catalogue and the caller's own entitlements
+    // in front of it, and can return actions — add to cart, sign up, open
+    // WhatsApp — that his cannot. His .ada-links styling is what those actions
+    // wear, because he drew a place for them and it fits.
+    <div className="ds">
+      <div className={open ? "ada-w on" : "ada-w"}>
+        <button
+          type="button"
+          className="ada-btn"
+          aria-expanded={open}
+          aria-controls="ada-panel"
+          onClick={() => setOpen((v) => !v)}
         >
-          {/* Header */}
-          <div className="px-4 py-3 bg-gradient-to-r from-adlm-navy to-adlm-blue-700 text-white flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-white/15 grid place-items-center ring-1 ring-white/25">
-              <FaRegCommentDots />
-            </div>
-            <div className="leading-tight">
-              <div className="font-semibold">Ada · ADLM Assistant</div>
-              <div className="text-[11px] opacity-80">
-                Products, pricing, trainings. Ask anything
-              </div>
-            </div>
-          </div>
+          <span className="ada-mk">{MARK}</span>
+          <span className="ada-lb">Ask Ada</span>
+        </button>
 
-          {/* Messages */}
-          <div
-            ref={scrollRef}
-            className="flex-1 overflow-auto p-3 space-y-3 bg-slate-50 dark:bg-adlm-dark-bg"
-          >
-            {messages.map((m, i) => (
+        <section className="ada-p" id="ada-panel" hidden={!open} aria-label="Ask Ada">
+          <header className="ada-h">
+            <span className="ada-mk sm">{MARK}</span>
+            <div>
+              <b>Ada</b>
+              <span>Answers from ADLM, not the internet</span>
+            </div>
+            <button
+              type="button"
+              className="ada-x"
+              aria-label="Close"
+              onClick={() => setOpen(false)}
+            >
+              ×
+            </button>
+          </header>
+
+          <div className="ada-log" ref={scrollRef} role="log" aria-live="polite">
+            {messages.map((m, i2) => (
               <div
-                key={m._id ?? i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                key={m._id ?? i2}
+                className={`ada-m ${m.role === "user" ? "ada-q" : "ada-a"}`}
               >
-                <div
-                  className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm whitespace-pre-line ring-1 ${
-                    m.role === "user"
-                      ? "bg-adlm-blue-700 text-white ring-adlm-blue-700/20"
-                      : "bg-white dark:bg-adlm-dark-panel text-slate-900 dark:text-adlm-dark-text ring-black/5 dark:ring-white/10"
-                  }`}
-                >
-                  <div>{m.text}</div>
+                <div style={{ whiteSpace: "pre-line" }}>{m.text}</div>
 
-                  {m.role === "assistant" &&
-                    Array.isArray(m.actions) &&
-                    m.actions.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {m.actions.map((a, idx) => {
-                          const primary = a.type === "buy" || a.type === "signup";
-                          return (
-                            <button
-                              key={idx}
-                              onClick={() => runAction(a)}
-                              className={`text-xs px-3 py-1.5 rounded-full font-medium transition active:scale-95 ${
-                                primary
-                                  ? "bg-adlm-orange text-white hover:brightness-110 shadow"
-                                  : "bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-adlm-dark-text ring-1 ring-black/10 dark:ring-white/10 hover:bg-slate-200 dark:hover:bg-white/15"
-                              }`}
-                            >
-                              {a.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                </div>
+                {m.role === "assistant" &&
+                  Array.isArray(m.actions) &&
+                  m.actions.length > 0 && (
+                    <div className="ada-links">
+                      {m.actions.map((a, idx) => (
+                        <a
+                          key={idx}
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            runAction(a);
+                          }}
+                        >
+                          {a.label}
+                        </a>
+                      ))}
+                    </div>
+                  )}
               </div>
             ))}
 
-            {/* First-run suggestion chips */}
-            {messages.length === 1 && !busy && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => send(s)}
-                    className="text-xs px-3 py-1.5 rounded-full bg-white dark:bg-white/10 text-slate-700 dark:text-adlm-dark-text ring-1 ring-black/10 dark:ring-white/10 hover:bg-slate-100 dark:hover:bg-white/15"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
-
             {busy && (
-              <div className="flex justify-start">
-                <div className="rounded-2xl px-3 py-2 bg-white dark:bg-adlm-dark-panel ring-1 ring-black/5 dark:ring-white/10">
-                  <span className="inline-flex gap-1">
-                    <span className="h-2 w-2 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
-                    <span className="h-2 w-2 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
-                    <span className="h-2 w-2 rounded-full bg-slate-400 animate-bounce" />
-                  </span>
-                </div>
+              <div className="ada-m ada-a" aria-label="Ada is typing">
+                <span className="ada-dots">
+                  <i />
+                  <i />
+                  <i />
+                </span>
               </div>
             )}
           </div>
 
-          {/* Input */}
-          <div className="p-3 border-t border-black/5 dark:border-white/10 bg-white dark:bg-adlm-dark-panel flex gap-2">
+          {messages.length === 1 && !busy && (
+            <div className="ada-chips">
+              {SUGGESTIONS.map((sug) => (
+                <button type="button" key={sug} onClick={() => send(sug)}>
+                  {sug}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <form
+            className="ada-f"
+            autoComplete="off"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send();
+            }}
+          >
             <input
-              className="flex-1 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-adlm-dark-text ring-1 ring-black/10 dark:ring-white/10 outline-none focus:ring-2 focus:ring-adlm-blue-700"
+              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about products, pricing, trainings…"
+              placeholder="Ask about a product, a price, training…"
+              aria-label="Ask Ada a question"
               disabled={busy}
-              onKeyDown={(e) => e.key === "Enter" && send()}
             />
             <button
-              className="rounded-xl px-3 py-2 text-sm bg-adlm-blue-700 text-white hover:brightness-110 disabled:opacity-50"
-              onClick={() => send()}
-              disabled={busy || !input.trim()}
+              type="submit"
+              className="ada-go"
               aria-label="Send"
+              disabled={busy || !input.trim()}
             >
-              <FaPaperPlane />
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 12h15M13 6l6 6-6 6" />
+              </svg>
             </button>
-          </div>
-        </div>
-      )}
-    </>
+          </form>
+
+          <p className="ada-foot">
+            Ada is part of the studio, not a product. Nothing here is a quote until you{" "}
+            <a
+              href="/quote"
+              onClick={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                navigate("/quote");
+              }}
+            >
+              build one
+            </a>
+            .
+          </p>
+        </section>
+      </div>
+    </div>
   );
 }
