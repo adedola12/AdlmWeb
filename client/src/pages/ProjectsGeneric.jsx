@@ -1266,6 +1266,12 @@ export default function ProjectsGeneric() {
   const [boqImportName, setBoqImportName] = React.useState("");
   const [boqImportErr, setBoqImportErr] = React.useState("");
   const boqReimportInputRef = React.useRef(null);
+  // Rates are hidden on a project shared with someone who has no RateGen
+  // subscription (server: resolveProjectAccess → maskRates). The server also
+  // REFUSES every write that would re-price such a project, so the controls
+  // that do that are disabled here with the reason, rather than offered and
+  // then answered with a 403.
+  const ratesHidden = sel?._access?.canSeeRates === false;
 
   // "Add shared project" (claim a project shared with me by code)
   const [claimOpen, setClaimOpen] = React.useState(false);
@@ -5475,8 +5481,15 @@ export default function ProjectsGeneric() {
                   <button
                     type="button"
                     onClick={() => boqReimportInputRef.current?.click()}
-                    disabled={boqImportBusy}
-                    title="Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
+                    // A re-import REPLACES the bill with the workbook's own
+                    // rates, so the server refuses it for a collaborator who
+                    // cannot see the prices (RATES_MASKED). Same rule here.
+                    disabled={boqImportBusy || ratesHidden}
+                    title={
+                      ratesHidden
+                        ? "Rates are hidden on this shared project, so you cannot re-import its bill."
+                        : "Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
+                    }
                     className="ds-btn ds-btn-sm btn-o"
                   >
                     {boqImportBusy ? "Updating…" : "Update from Excel"}

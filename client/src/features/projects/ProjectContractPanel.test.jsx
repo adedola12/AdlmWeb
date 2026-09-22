@@ -89,6 +89,26 @@ describe("contract administration panel (S18)", () => {
     expect(screen.getByRole("button", { name: /Add variation/ })).toBeTruthy();
   });
 
+  it("does not offer to raise a variation when rates are hidden", () => {
+    // A variation is born with a value and there is no stored figure to
+    // restore onto one, so the server answers RATES_MASKED for a collaborator
+    // without RateGen. The button must not be a live button that can only
+    // fail — it is disabled, and says why.
+    render(
+      <ProjectContractPanel
+        {...baseProps}
+        variationRows={rows}
+        canEditProject
+        canSeeRates={false}
+        onRaiseVariation={vi.fn()}
+      />,
+    );
+    openVariations();
+    const add = screen.getByRole("button", { name: /Add variation/ });
+    expect(add.disabled).toBe(true);
+    expect(add.getAttribute("title")).toMatch(/Rates are hidden/i);
+  });
+
   it("raises a variation as an addition or an omission, and refuses an empty one", async () => {
     const onRaise = vi.fn().mockResolvedValue({ index: 3 });
     render(

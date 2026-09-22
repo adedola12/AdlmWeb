@@ -326,9 +326,17 @@ test("deleting a line is not a refusal — the rows that remain keep their rates
   assert.equal(body.items[0].rate, 180000);
 });
 
-test("a description edited on a line that also moved still finds its own rate", () => {
-  // Equal leftovers on both sides, but not at the same index: pass 3 pairs
-  // them in order, which is the only pairing that keeps them in sequence.
+test("a description edited on a line that also moved is refused, not guessed at", () => {
+  // This case USED to pass, by pairing the two leftovers in order on the
+  // grounds that both sides had one left. That reasoning was wrong: equal
+  // leftover counts do not make two rows the same row. The very same shape —
+  // one row unmatched on each side, at different indexes — is what a viewer
+  // produces by deleting one line and adding another, and there the old
+  // pairing handed the new line the deleted line's rate.
+  //
+  // Nothing here distinguishes the two, so the save is refused. The viewer
+  // reloads and saves the rename and the move separately, and each of those
+  // on its own still works (see the re-order and in-place-edit tests above).
   const incoming = masked("items", [
     { ...STORED_ITEMS[1] },
     { ...STORED_ITEMS[0], description: "Excavate trenches n.e. 1.5m deep" },
@@ -338,11 +346,191 @@ test("a description edited on a line that also moved still finds its own rate", 
     access: MASKED,
     body: { items: incoming },
   });
+  assert.equal(body, undefined);
+  assert.equal(error.status, 409);
+  assert.equal(error.body.code, "RATES_MASKED_UNSAFE_MERGE");
+});
+
+/* ── one save that deletes a line and adds another ──────────────────────── */
+
+// The shape that made this review: in ONE save a full-access collaborator
+// without RateGen deletes a priced line and adds a new one. Identity pairs
+// everything else, leaving exactly one row unmatched on each side — which the
+// old third pass read as "these two must be each other" and paired, so the new
+// line was written carrying the deleted line's rate, net cost and O&P. Nobody
+// typed that money; it simply appeared on a quantity the viewer chose.
+//
+// Every array the guard covers is reachable this way (the bill and variations
+// from the bill screen, the budget from the budget PUT, provisional sums from
+// the contract panel), so each one is pinned here.
+const DELETE_AND_ADD = {
+  items: {
+    stored: [
+      { sn: 1, code: "A1", description: "Excavate trenches", unit: "m3", qty: 100, rate: 5000, netUnitCost: 4000, overheadPercent: 10, profitPercent: 15 },
+      { sn: 2, code: "A2", description: "Concrete 1:2:4", unit: "m3", qty: 50, rate: 180000, netUnitCost: 150000, overheadPercent: 10, profitPercent: 10 },
+      { sn: 3, code: "A3", description: "Hardcore filling", unit: "m2", qty: 30, rate: 9000, netUnitCost: 8000, overheadPercent: 10, profitPercent: 10 },
+    ],
+    // Deleted the middle line; added a line of their own at the end.
+    added: { sn: 3, code: "A9", description: "Sand blinding", unit: "m2", qty: 20 },
+    money: "rate",
+  },
+  budgetItems: {
+    stored: [
+      { billIdentity: "A1", componentKind: "Material", description: "Cement", unit: "bag", qty: 40, rate: 9500, netUnitCost: 9500, budgetRate: 9500 },
+      { billIdentity: "A1", componentKind: "Labour", description: "Mason", unit: "hr", qty: 16, rate: 2500, netUnitCost: 2500, budgetRate: 2500 },
+      { billIdentity: "A2", componentKind: "Material", description: "Sharp sand", unit: "m3", qty: 8, rate: 45000, netUnitCost: 45000, budgetRate: 45000 },
+    ],
+    added: { billIdentity: "A2", componentKind: "Labour", description: "Labourer", unit: "hr", qty: 24 },
+    money: "rate",
+  },
+  provisionalSums: {
+    stored: [
+      { description: "Lift installation", kind: "pc", amount: 5_000_000 },
+      { description: "Statutory fees", kind: "provisional", amount: 750_000 },
+      { description: "Landscaping", kind: "pc", amount: 2_000_000 },
+    ],
+    added: { description: "External signage", kind: "pc" },
+    money: "amount",
+  },
+  variations: {
+    stored: [
+      { reference: "VO-01", description: "Extra soakaway", unit: "item", qty: 1, rate: 1_250_000 },
+      { reference: "VO-02", description: "Omit render", unit: "item", qty: 1, rate: -300_000 },
+      { reference: "VO-03", description: "Additional manhole", unit: "nr", qty: 2, rate: 400_000 },
+    ],
+    added: { reference: "VO-04", description: "Re-route services", unit: "item", qty: 1 },
+    money: "rate",
+  },
+};
+
+for (const [kind, fixture] of Object.entries(DELETE_AND_ADD)) {
+  test(`${kind}: deleting one row and adding another in one save is refused`, () => {
+    const kept = [fixture.stored[0], fixture.stored[2]];
+    const incoming = masked(kind, kept).concat(masked(kind, [fixture.added]));
+
+    const { body, error } = guardMaskedWrite({
+      project: { [kind]: fixture.stored },
+      access: MASKED,
+      body: { [kind]: incoming },
+    });
+
+    assert.equal(body, undefined, "the save must not be applied");
+    assert.equal(error.status, 409);
+    assert.equal(error.body.code, "RATES_MASKED_UNSAFE_MERGE");
+    assert.equal(error.body.details.array, kind);
+  });
+
+  test(`${kind}: the same save from someone who can see rates writes what they typed`, () => {
+    // The other half of the rule: none of this applies to a user with RateGen.
+    // Same delete-and-add, their own figures — including a deliberate 0, which
+    // must be written as 0 and not mistaken for a masked blank.
+    const f = fixture.money;
+    const incoming = [
+      { ...fixture.stored[0], [f]: 7250 },
+      { ...fixture.stored[2], [f]: 0 },
+      { ...fixture.added, [f]: 123456 },
+    ];
+    const { body, error } = guardMaskedWrite({
+      project: { [kind]: fixture.stored },
+      access: OWNER,
+      body: { [kind]: incoming },
+    });
+    assert.equal(error, undefined);
+    assert.equal(body[kind][0][f], 7250);
+    assert.equal(body[kind][1][f], 0);
+    assert.equal(body[kind][2][f], 123456);
+  });
+}
+
+test("two rows swapped in order keep their own rates, not each other's", () => {
+  // A pure re-order matches on identity, so the money travels with the row.
+  const stored = [
+    { ...STORED_ITEMS[0] },
+    { ...STORED_ITEMS[1] },
+    { sn: 3, code: "A3", description: "Hardcore filling", unit: "m2", qty: 30, rate: 9000 },
+  ];
+  const incoming = masked("items", [
+    { ...stored[1], sn: 1 },
+    { ...stored[0], sn: 2 },
+    { ...stored[2], sn: 3 },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: stored },
+    access: MASKED,
+    body: { items: incoming },
+  });
   assert.equal(error, undefined);
-  assert.equal(body.items[0].code, "A2");
-  assert.equal(body.items[0].rate, 180000);
-  assert.equal(body.items[1].code, "A1");
-  assert.equal(body.items[1].rate, 5000);
+  assert.deepEqual(
+    body.items.map((r) => [r.code, r.rate]),
+    [["A2", 180000], ["A1", 5000], ["A3", 9000]],
+  );
+});
+
+test("a row edited into another row's identity is refused, not paired by order", () => {
+  // The second shape the old third pass got wrong. Editing line A1 so that it
+  // reads exactly like line A2 makes both incoming rows claim A2's identity;
+  // one of them wins it, and the old code then handed the loser whatever was
+  // left over — so the two rates came back exchanged. Now it refuses.
+  const incoming = masked("items", [
+    { ...STORED_ITEMS[0], code: "A2", description: "Concrete 1:2:4", unit: "m3" },
+    { ...STORED_ITEMS[1] },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: STORED_ITEMS },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(body, undefined);
+  assert.equal(error.status, 409);
+  assert.equal(error.body.code, "RATES_MASKED_UNSAFE_MERGE");
+});
+
+test("an unmatched row is never handed another row's money", () => {
+  // The general statement of the fix, one level below the routes: whatever
+  // cannot be paired is NEW, and new means blank. Here there is nothing priced
+  // left over, so the save is allowed — and the added line carries nothing.
+  const stored = [
+    { ...STORED_ITEMS[0] },
+    // An unpriced line: deleting it loses no money, so it is not worth a 409.
+    { sn: 2, code: "A2", description: "Concrete 1:2:4", unit: "m3", qty: 50, rate: 0, netUnitCost: null },
+  ];
+  const incoming = masked("items", [
+    stored[0],
+    { sn: 2, code: "A9", description: "Sand blinding", unit: "m2", qty: 20, rate: 999999 },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: stored },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(error, undefined);
+  assert.equal(body.items[0].rate, 5000);
+  assert.equal(body.items[1].code, "A9");
+  assert.equal(body.items[1].rate, 0);
+});
+
+test("a row replaced in its own slot keeps that slot's money — the known limit", () => {
+  // Pinned deliberately, so the limit is a decision and not a surprise. These
+  // rows have no stable id (every money subdocument is _id:false), so "row 2
+  // was replaced" and "row 2's description and unit were edited" arrive as the
+  // same request. The guard reads it as the edit, which is the common case.
+  //
+  // What that is worth to a viewer who cannot see rates is exactly what the
+  // feature already lets them do — edit a line's text and its quantity — and
+  // no more: money still never moves from one POSITION to another, which is
+  // the transplant this review closed. A client-supplied row id is what would
+  // close the rest.
+  const incoming = masked("items", [
+    STORED_ITEMS[0],
+    { sn: 2, code: "A9", description: "Sand blinding", unit: "m2", qty: 20 },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: STORED_ITEMS },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(error, undefined);
+  assert.equal(body.items[1].rate, 180000);
 });
 
 test("a masked line save against a merged project is refused outright", () => {

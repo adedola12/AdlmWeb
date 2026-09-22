@@ -208,6 +208,18 @@ function moneyFreeKey(kind, row, index) {
   return `#${index}`;
 }
 
+// Does this stored row hold money that a save has to carry forward? Every
+// protected field is a figure, so "money" is any of them holding a number that
+// is not zero — a negative rate (an omission variation) counts. A row that is
+// all zeros and nulls has nothing to lose, so losing it is not worth refusing
+// a save over.
+function rowCarriesMoney(row, fields) {
+  return fields.some((f) => {
+    const v = row?.[f];
+    return typeof v === "number" && Number.isFinite(v) && v !== 0;
+  });
+}
+
 // Restore the money a rate-masked viewer was never shown.
 //
 // `stored` is what the project holds today, `incoming` is the array that came
@@ -219,13 +231,29 @@ function moneyFreeKey(kind, row, index) {
 // Pairing, in order:
 //   1. same identity (money-free), bucketed so duplicates pair one-for-one and
 //      a pure re-order still matches completely;
-//   2. leftovers that sit at the same index on both sides — the ordinary
-//      "edited a description in place" case;
-//   3. any remaining leftovers, in order, but ONLY when both sides have the
-//      same number left. Unequal leftovers mean rows were added AND edited at
-//      once, where pairing in order would move one line's money onto another;
-//      that is the case we refuse.
-// A row with no counterpart at all is new, and gets blank money.
+//   2. leftovers that sit at the same index on BOTH sides, and only while the
+//      two sides have the same number of leftovers — the ordinary "edited a
+//      description in place" case, where position still means something.
+// There is no third pass. There used to be one — any remaining leftovers
+// paired in order whenever the counts happened to match — and it was wrong:
+// equal leftover counts do NOT mean the leftovers correspond. Delete one line
+// and add another in the same save and the added line inherited the deleted
+// line's rate; edit one line's description into another's and the two rates
+// came back exchanged. Neither is a figure anyone typed.
+//
+// So a row with no counterpart is NEW and gets blank money, never another
+// row's. And if treating it as new would leave a stored row whose money
+// nobody carried forward, we refuse the whole save instead: a 409 the viewer
+// can recover from by reloading beats a silent transplant. Deleting a line is
+// still an ordinary save — the money goes with the line the viewer meant to
+// delete, and no incoming row is left holding somebody else's figure.
+//
+// Known limit, and it is inherent: these rows have no stable id (every money
+// subdocument is `_id: false`), so a row REPLACED in its own slot is
+// indistinguishable from the same row edited in place, and keeps that slot's
+// money. Money never crosses from one position to another, which is what the
+// third pass was doing. Closing the last of it needs a row id the client
+// round-trips.
 export function preserveMaskedMoney(stored, incoming, kind) {
   const blanks = MASKED_MONEY_BLANKS[kind];
   if (!blanks) {
@@ -255,8 +283,7 @@ export function preserveMaskedMoney(stored, incoming, kind) {
 
   // Whatever is left on each side is either a row whose identity the viewer
   // edited, a row they added, or a row they deleted — and from here we cannot
-  // tell which. Only when the two sides have the SAME number left is a pairing
-  // possible at all; anything else would put one line's rate on another line.
+  // tell which.
   let leftIn = [];
   rows.forEach((_, i) => {
     if (sourceFor[i] < 0) leftIn.push(i);
@@ -266,32 +293,38 @@ export function preserveMaskedMoney(stored, incoming, kind) {
     if (!storedTaken[i]) leftStored.add(i);
   });
 
-  if (leftIn.length && leftStored.size) {
-    if (leftIn.length !== leftStored.size) {
-      return {
-        rows: null,
-        unsafe: true,
-        reason:
-          `${kind}: ${leftIn.length} changed row(s) cannot be matched to ` +
-          `${leftStored.size} stored row(s)`,
-      };
-    }
-
-    // 2. leftovers that sit at the same index on both sides — the ordinary
-    //    "edited this row in place" case.
+  // 2. leftovers that sit at the same index on both sides — the ordinary
+  //    "edited this row in place" case. Only while the two sides have the same
+  //    number of leftovers: an unequal count means rows were added or removed
+  //    around the edit, and then index i on one side is not index i on the
+  //    other (delete a line and the line below it slides up into its place).
+  if (leftIn.length && leftIn.length === leftStored.size) {
     leftIn = leftIn.filter((i) => {
       if (!leftStored.has(i)) return true;
       sourceFor[i] = i;
       leftStored.delete(i);
       return false;
     });
+  }
 
-    // 3. the rest in order, which is the only pairing left that preserves
-    //    which row came before which.
-    const leftStoredList = [...leftStored].sort((a, b) => a - b);
-    leftIn.forEach((i, n) => {
-      sourceFor[i] = leftStoredList[n];
-    });
+  // Everything still unpaired on the incoming side is about to be treated as a
+  // brand-new row. That is safe on its own — a new row gets blanks. It is only
+  // unsafe if a stored row is ALSO left over still holding money, because then
+  // we cannot tell a new row from that row edited, and blanking would drop a
+  // figure the viewer could not see. Refuse, and say which array.
+  if (leftIn.length) {
+    const orphaned = [...leftStored].filter((i) =>
+      rowCarriesMoney(storedRows[i], fields),
+    );
+    if (orphaned.length) {
+      return {
+        rows: null,
+        unsafe: true,
+        reason:
+          `${kind}: ${leftIn.length} row(s) could not be matched to a stored ` +
+          `row, and ${orphaned.length} priced stored row(s) were left over`,
+      };
+    }
   }
 
   rows.forEach((row, i) => {
@@ -492,6 +525,11 @@ import {
   splitMergedWrite,
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
+import {
+  maskSharedMoney,
+  readerMaySeeRates,
+  PROJECT_LIST_MONEY_FIELDS,
+} from "../util/sharedMoney.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import {
@@ -2844,7 +2882,21 @@ async function listProjects(req, res) {
       { $sort: { updatedAt: -1 } },
     ]);
 
-    res.json(list);
+    // The same rule the project itself is served under: a row someone else
+    // owns shows no money unless the reader holds RateGen. Opening one of
+    // these projects already masks every figure (maskRates), and
+    // /me/projects-rollup already masks its equivalent fields — this list was
+    // the way round it, handing a collaborator without RateGen the contract
+    // sum and the whole estimate cascade on a project that is not theirs.
+    //
+    // Own rows are never masked, so a user's own list is untouched, and the
+    // lookup is skipped entirely unless a shared row is actually present.
+    const shared = list.some((p) => p?.shared);
+    const out = shared
+      ? maskSharedMoney(list, await readerMaySeeRates(userId), PROJECT_LIST_MONEY_FIELDS)
+      : list;
+
+    res.json(out);
   } catch (err) {
     console.error("GET projects error:", err);
     res.status(500).json({ error: "Server error" });

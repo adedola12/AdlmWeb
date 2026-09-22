@@ -364,11 +364,17 @@ function VariationsSection({
               type="button"
               className="ds-btn ds-btn-sm btn-p"
               onClick={() => setAdding(true)}
-              disabled={disabled}
+              // A variation is born with a value, and there is no stored figure
+              // to restore onto one, so the server refuses to raise a variation
+              // for a viewer who cannot see rates (RATES_MASKED). Offer the
+              // reason instead of a button that can only fail.
+              disabled={disabled || !canSeeRates}
               title={
                 disabled
                   ? "The final account is closed. Reopen it to raise a variation."
-                  : "Raise a variation against this contract"
+                  : !canSeeRates
+                    ? "Rates are hidden on this shared project, so you cannot raise a variation."
+                    : "Raise a variation against this contract"
               }
             >
               <FaPlus size={12} /> Add variation
