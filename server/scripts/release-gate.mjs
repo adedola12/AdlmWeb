@@ -147,10 +147,16 @@ async function nameApprover({ email, name, github, reason, action }) {
   const before = await getGateConfig();
   say(`Naming ${name || email} <${email}> (GitHub ${github || "-"}) as release approver.`);
 
-  await step(`set ${email} role ${user.role} -> release_approver`, async () => {
-    user.role = "release_approver";
-    await user.save();
-  });
+  // Design Access already opens the sign-off desk, and designMode.js unmasks
+  // that one path for the named approver, so a designer keeps their role.
+  if (user.role === "design" || user.role === "release_approver") {
+    say(`  keeping role ${user.role} (it opens the sign-off desk)`);
+  } else {
+    await step(`set ${email} role ${user.role} -> release_approver`, async () => {
+      user.role = "release_approver";
+      await user.save();
+    });
+  }
   await step(`ReleaseGateConfig approver ${before.approverEmail || "(none)"} -> ${email}`, () =>
     ReleaseGateConfig.findByIdAndUpdate(
       GATE_ID,
