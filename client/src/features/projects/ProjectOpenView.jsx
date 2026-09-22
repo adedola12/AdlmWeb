@@ -12,10 +12,8 @@ import ServicesPricingPanel from "./ServicesPricingPanel.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
-import {
-  approvedVariationsEarned,
-  approvedVariationsTotal,
-} from "../../lib/variations.js";
+import { approvedVariationsEarned } from "../../lib/variations.js";
+import { projectTotals } from "./lib/projectTotals.js";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
 const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
@@ -658,6 +656,67 @@ export default function ProjectOpenView({
     });
   }, [selectedId, productKey, projectName, activeTab, line]);
 
+  // ── One project, one cascade (S18 review, findings A and C) ────────────
+  // This screen is handed two money figures and they are not the same thing:
+  //
+  //   grossAmount     the WHOLE project scope — measured work plus the sums
+  //                   plus preliminaries plus approved variations
+  //   measuredAmount  the measured work on its own
+  //
+  // Both the Bill's Summary and the contract panel build the grand summary
+  // themselves from a measured base, so handing either of them `grossAmount`
+  // counts the sums, the preliminaries and the variations a second time. The
+  // contract panel was handed exactly that, which is why every locked contract
+  // showed an over-run against its own contract sum and the final account
+  // disagreed with the Bill for the same project.
+  //
+  // The percentages are resolved once, here, with the same fallbacks the Bill
+  // uses (and the same ones the server's schema defaults to), so the Overview
+  // tile, the Bill's Summary and the final account cannot drift apart.
+  const measuredWork =
+    measuredAmount == null ? Number(grossAmount) || 0 : Number(measuredAmount) || 0;
+  const preliminaryPct = Number.isFinite(Number(contract?.preliminaryPercent))
+    ? Number(contract.preliminaryPercent)
+    : 7.5;
+  const contingencyPct = Number.isFinite(Number(contingencyPercent))
+    ? Number(contingencyPercent)
+    : 5;
+  const taxPct = Number.isFinite(Number(taxPercent)) ? Number(taxPercent) : 7.5;
+  const totals = React.useMemo(
+    () =>
+      projectTotals({
+        measured: measuredWork,
+        provisionalSums,
+        variations,
+        preliminaryPercent: preliminaryPct,
+        contingencyPercent: contingencyPct,
+        taxPercent: taxPct,
+        linkedSummaries,
+      }),
+    [
+      measuredWork,
+      provisionalSums,
+      variations,
+      preliminaryPct,
+      contingencyPct,
+      taxPct,
+      linkedSummaries,
+    ],
+  );
+
+  // The share of the preliminary pool earned by the preliminary items ticked
+  // complete, pro-rated by allocation. The server does the same sum.
+  const preliminaryEarned = React.useMemo(() => {
+    const rows = Array.isArray(preliminaryItems) ? preliminaryItems : [];
+    const allocated = rows.reduce((acc, p) => acc + (Number(p?.allocation) || 0), 0);
+    const base = allocated > 0 ? allocated : 100;
+    return rows.reduce(
+      (acc, p) =>
+        p?.completed ? acc + (totals.prelims * (Number(p?.allocation) || 0)) / base : acc,
+      0,
+    );
+  }, [preliminaryItems, totals.prelims]);
+
   // Budget tab is available for every source (QUIV/Revit, Heron/PlanSwift,
   // MEP, CIVIQ). It shows whatever material/labour breakdown the plugin
   // pushed (and an empty-state prompt when none has been pushed yet).
@@ -983,17 +1042,16 @@ export default function ProjectOpenView({
             chartMode={dashboardChartMode}
             comparisonRows={comparisonRows}
             grossAmount={grossAmount}
-            measuredAmount={measuredAmount}
+            measuredAmount={measuredWork}
             provisionalSums={provisionalSums}
             variations={variations}
-            preliminaryPercent={contract?.preliminaryPercent}
-            contingencyPercent={contingencyPercent}
-            taxPercent={taxPercent}
+            preliminaryPercent={preliminaryPct}
+            contingencyPercent={contingencyPct}
+            taxPercent={taxPct}
             onChartModeChange={onDashboardChartModeChange}
             progressCount={progressCount}
             progressPercent={progressPercent}
             progressTotal={progressTotal}
-            remainingAmount={remainingAmount}
             statusLabel={statusLabel}
             statusPastLabel={statusPastLabel}
             valuedAmount={valuedAmount}
@@ -1170,59 +1228,24 @@ export default function ProjectOpenView({
           hideModels={isBoqImport}
           contractLocked={Boolean(contract?.locked)}
           contractSum={Number(contract?.contractSum) || 0}
-          measured={grossAmount}
-          provisional={(provisionalSums || []).reduce(
-            (acc, s) => acc + (Number(s?.amount) || 0),
-            0,
-          )}
-          preliminary={
-            ((grossAmount +
-              (provisionalSums || []).reduce(
-                (acc, s) => acc + (Number(s?.amount) || 0),
-                0,
-              )) *
-              (Number(contract?.preliminaryPercent) || 0)) /
-            100
-          }
-          // S18 valuations: the panel labels this figure "Approved
-          // variations" and the final account settles on it, so it has to be
-          // the approved net — summing every row would have settled a
-          // variation nobody has approved. A row with no status is approved,
-          // so no existing project's figure moves.
-          variations={approvedVariationsTotal(variations)}
-          // Contingency / Tax — full QS cascade. Inline calc mirrors
-          // the BoQ Project Total card so the Final Account stays in
-          // sync without re-fetching from the server.
-          contingency={(() => {
-            const grsp = (provisionalSums || []).reduce(
-              (a, s) => a + (Number(s?.amount) || 0),
-              0,
-            );
-            const prelim =
-              ((grossAmount + grsp) *
-                (Number(contract?.preliminaryPercent) || 0)) /
-              100;
-            const sub = grossAmount + grsp + prelim;
-            return (sub * (Number(contract?.contingencyPercent) || 0)) / 100;
-          })()}
-          tax={(() => {
-            const grsp = (provisionalSums || []).reduce(
-              (a, s) => a + (Number(s?.amount) || 0),
-              0,
-            );
-            const prelim =
-              ((grossAmount + grsp) *
-                (Number(contract?.preliminaryPercent) || 0)) /
-              100;
-            const sub = grossAmount + grsp + prelim;
-            const cont =
-              (sub * (Number(contract?.contingencyPercent) || 0)) / 100;
-            return (
-              ((sub + cont) * (Number(contract?.taxPercent) || 0)) / 100
-            );
-          })()}
-          contingencyPercent={Number(contract?.contingencyPercent) || 0}
-          taxPercent={Number(contract?.taxPercent) || 0}
+          // S18 review (finding A): the MEASURED WORK, not the whole project
+          // scope. The panel adds the sums, the preliminaries, the contingency
+          // and the VAT to whatever it is given here, so `grossAmount` — which
+          // already contains the sums, the preliminaries and the variations —
+          // produced a fabricated figure on every locked contract. These five
+          // now come off the same cascade the Bill's Summary shows.
+          measured={totals.measured}
+          provisional={totals.sums}
+          preliminary={totals.prelims}
+          // The panel labels this "Approved variations" and the final account
+          // settles on it, so it is the approved net — summing every row would
+          // settle a variation nobody has approved. A row with no status is
+          // approved, so no existing project's figure moves.
+          variations={totals.variations}
+          contingency={totals.contingency}
+          tax={totals.tax}
+          contingencyPercent={contingencyPct}
+          taxPercent={taxPct}
           // Actual spent — measured-valued + executed PC + completed
           // prelims + executed variations. Drives the over-run vs
           // planned comparison so the final-account figure reflects
@@ -1237,29 +1260,7 @@ export default function ProjectOpenView({
               0,
             ) +
             approvedVariationsEarned(variations) +
-            (() => {
-              const items = preliminaryItems || [];
-              const totalAlloc = items.reduce(
-                (a, p) => a + Number(p?.allocation || 0),
-                0,
-              );
-              const base = totalAlloc > 0 ? totalAlloc : 100;
-              const grsp = (provisionalSums || []).reduce(
-                (a, s) => a + (Number(s?.amount) || 0),
-                0,
-              );
-              const pool =
-                ((grossAmount + grsp) *
-                  (Number(contract?.preliminaryPercent) || 0)) /
-                100;
-              return items.reduce(
-                (a, p) =>
-                  p?.completed
-                    ? a + (pool * Number(p?.allocation || 0)) / base
-                    : a,
-                0,
-              );
-            })()
+            preliminaryEarned
           }
           // S18 valuations: the variation rows, and who may act on them.
           variationRows={variations}
@@ -1415,22 +1416,12 @@ export default function ProjectOpenView({
           contractLockedAt={contract?.lockedAt || null}
           contractApprovedAt={contract?.approvedAt || null}
           contractSum={contract?.contractSum || 0}
-          preliminaryPercent={
-            Number.isFinite(Number(contract?.preliminaryPercent))
-              ? Number(contract.preliminaryPercent)
-              : 7.5
-          }
-          contingencyPercent={
-            Number.isFinite(Number(contingencyPercent))
-              ? Number(contingencyPercent)
-              : 5
-          }
-          taxPercent={
-            Number.isFinite(Number(taxPercent)) ? Number(taxPercent) : 7.5
-          }
+          preliminaryPercent={preliminaryPct}
+          contingencyPercent={contingencyPct}
+          taxPercent={taxPct}
           onContingencyPercentChange={onContingencyPercentChange}
           onTaxPercentChange={onTaxPercentChange}
-          measuredAmount={measuredAmount}
+          measuredAmount={measuredWork}
           tenderedAt={contract?.tenderedAt || null}
           onMarkTendered={onMarkTendered}
           onRestoreProvisionalSum={onRestoreProvisionalSum}
@@ -1470,11 +1461,9 @@ export default function ProjectOpenView({
           onPickBoqCandidate={onPickBoqCandidate}
           rateInfoText={rateInfoText}
           rates={rates}
-          remainingAmount={remainingAmount}
           showActualColumns={showActualColumns}
           showMaterials={showMaterials}
           statusLabel={statusLabel}
-          valuedAmount={valuedAmount}
           canRateGenBoq={canRateGenBoq}
           autoFillBoqRates={autoFillBoqRates}
           autoFillBoqBusy={autoFillBoqBusy}
