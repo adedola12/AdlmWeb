@@ -42,6 +42,14 @@ design makes every bypass **visible and permanent** instead:
   API, that `main` is protected, was not force-pushed, and that every commit on
   it came through a PR the approver approved. Disabling Actions does not stop it.
 
+## Other protected repositories
+
+`adlm-ai-service` (main) and `ADLMRateGen-SingleUser` (may30-version) have the same
+branch protection and CODEOWNERS, and the hourly watcher checks them too
+(`repos` in `infra/bin/adlm.ts`). Private repositories cannot be protected on
+GitHub Free; the plugin release gate on the API still covers what they ship.
+Offboarding: remove the approver from these repos as well.
+
 ## The locked audit trail
 
 Stack `AdlmReleaseGate` (eu-west-1) owns an S3 bucket with **Object Lock in
