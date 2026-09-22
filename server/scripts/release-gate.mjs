@@ -87,7 +87,21 @@ function setEnvironmentReviewer(login) {
     reviewers: login ? [{ type: "User", id: ghUserId(login) }] : [],
     deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
   };
-  gh(["api", "-X", "PUT", `repos/${REPO}/environments/${ENVIRONMENT}`, "--input", "-"], JSON.stringify(body));
+  try {
+    gh(["api", "-X", "PUT", `repos/${REPO}/environments/${ENVIRONMENT}`, "--input", "-"], JSON.stringify(body));
+    return true;
+  } catch (err) {
+    // GitHub only accepts a reviewer who already has access, so a fresh
+    // invitee cannot be set until they accept. Lock out admin bypass anyway;
+    // main's branch protection still requires their review of every merge.
+    gh(
+      ["api", "-X", "PUT", `repos/${REPO}/environments/${ENVIRONMENT}`, "--input", "-"],
+      JSON.stringify({ wait_timer: 0, can_admins_bypass: false, reviewers: [], deployment_branch_policy: body.deployment_branch_policy }),
+    );
+    say(`  ! ${login} is not a reviewer yet (${String(err.stderr || err.message).trim().split("\n").pop()}).`);
+    say("    Re-run set-approver after they accept the GitHub invite.");
+    return false;
+  }
 }
 
 function codeownersFor(login) {
