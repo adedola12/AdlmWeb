@@ -145,6 +145,10 @@ export default function ProjectBudgetTab({
   // Rebuild the material & labour schedule from the current constants library.
   // Absent (null) for products/projects where regeneration does not apply.
   onRebuildSchedule = null,
+  // False on a shared project whose money this viewer may not see. Regenerating
+  // re-prices the whole schedule from the CALLER's constants, so the server
+  // refuses it for them (RATES_MASKED) — the control says so instead.
+  canSeeRates = true,
   // S18: the procurement lead time is saved on the project now, so it
   // survives a reload. The default is the same 14 days it always was.
   leadDays: leadDaysProp = 14,
@@ -806,7 +810,7 @@ export default function ProjectBudgetTab({
           </span>
           <button
             type="button"
-            disabled={!canEdit || saving || rebuilding}
+            disabled={!canEdit || saving || rebuilding || !canSeeRates}
             onClick={async () => {
               setRebuilding(true);
               try {
@@ -816,7 +820,11 @@ export default function ProjectBudgetTab({
               }
             }}
             className="ds-btn ds-btn-sm btn-p"
-            title="Re-derive every generated material and labour row from the current Material Constants"
+            title={
+              canSeeRates
+                ? "Re-derive every generated material and labour row from the current Material Constants"
+                : "Rates are hidden on this shared project, so you cannot rebuild its schedule."
+            }
           >
             {rebuilding ? "Rebuilding…" : "Rebuild schedule"}
           </button>
