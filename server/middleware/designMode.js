@@ -20,6 +20,7 @@
 import { User } from "../models/User.js";
 import { verifyAccess } from "./auth.js";
 import { isDesignRole } from "../util/rbac.js";
+import { getGateConfig, isApprover } from "../util/releaseGate.js";
 
 /* ────────────────────────── seeded value generation ───────────────────────── */
 
@@ -297,7 +298,17 @@ function tokenFrom(req) {
 // The middleware, with its two external lookups injectable. Production uses
 // the defaults; the tests swap them so the whole request path can be driven
 // over real HTTP without a Mongo connection.
-export function makeDesignMode({ findRole, isDesign } = {}) {
+// The release approver may hold Design Access for their design work. The
+// sign-off desk (docs/RELEASE_GATE.md) must show them REAL releases and let
+// them really approve, so for that one path, and only for the named approver,
+// the mask steps aside. Every other admin path stays masked for them.
+const RELEASE_DESK = /^\/admin\/releases(\/|$)/;
+async function defaultIsReleaseApprover(email) {
+  return isApprover(await getGateConfig(), email);
+}
+
+export function makeDesignMode({ findRole, isDesign, isReleaseApprover } = {}) {
+  const approverCheck = isReleaseApprover || defaultIsReleaseApprover;
   const lookupRole =
     findRole ||
     (async (uid) => (await User.findById(uid).select("role").lean())?.role);
@@ -329,6 +340,17 @@ export function makeDesignMode({ findRole, isDesign } = {}) {
     req.resolvedRole = roleKey;
     if (!designCheck(roleKey)) return next();
 
+    const path = req.originalUrl.split("?")[0];
+    if (RELEASE_DESK.test(path)) {
+      try {
+        if (await approverCheck(decoded?.email)) return next();
+      } catch (err) {
+        // Could not tell: stay masked. Failing closed here only costs the
+        // approver a retry; failing open would unmask a design session.
+        console.error("[designMode] release approver check failed:", err?.message || err);
+      }
+    }
+
     req.designMode = true;
     req.designRole = roleKey;
 
@@ -339,7 +361,6 @@ export function makeDesignMode({ findRole, isDesign } = {}) {
 
     res.set("X-Design-Mode", "1");
 
-    const path = req.originalUrl.split("?")[0];
     const policy = designPolicy(req.method, path);
 
     if (policy === "block") {
