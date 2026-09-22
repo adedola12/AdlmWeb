@@ -9,7 +9,13 @@
 //      the .ds scope to reach the rest of the app.
 //   3. Every link and image in his markup resolves, and every asset exists.
 //   4. Every icon a page references exists in the sprite.
-//   5. Deliberate divergences are listed, not hidden — so "faithful" never
+//   5. Every ds class our HAND-WRITTEN components render still exists in the
+//      generated CSS. Checks 2-4 only compare his markup against his CSS, so
+//      they cannot see this: on 17 Sep he renamed the theme swatch .sw -> .tsw,
+//      we regenerated the sheets from his HEAD, and ThemeMenu.jsx kept
+//      emitting .sw. Every swatch on the site rendered as a bordered line and
+//      nothing complained. That is the class of bug this section exists for.
+//   6. Deliberate divergences are listed, not hidden — so "faithful" never
 //      quietly comes to mean "whatever we ended up with".
 import fs from "node:fs";
 import path from "node:path";
@@ -149,7 +155,172 @@ const missingIcons = [...used].filter((u) => !ids.has(u));
 if (missingIcons.length) fail(`icon(s) referenced but not in the sprite: ${missingIcons.join(", ")}`);
 else ok(`all ${used.size} icon references resolve in the sprite`);
 
-console.log("\n5. Deliberate divergences from his build");
+// Hand-written components that live in the .ds world. ds/pages, ds/chrome and
+// ds/custom are excluded on purpose: those are generated from his markup, so
+// checks 2-4 already cover them, and a porter re-run would overwrite anything
+// said about them here.
+const HAND_WRITTEN_DIRS = ["src/ds", "src/ds/feedback", "src/ds/cert"];
+
+// Class names our components write that no .ds stylesheet defines, and which
+// are fine: Tailwind used on purpose, or a marker something else reads. Every
+// entry needs a reason.
+const UNSTYLED_OK = [
+  // Tailwind, deliberately. DsPreviewIndex says in its own header that it is a
+  // review tool styled with the app's Tailwind rather than the ported design
+  // system, precisely so it is not mistaken for one of his pages.
+  ["text-2xl", "Tailwind (DsPreviewIndex is a review tool, not a ported page)"],
+  ["text-sm", "Tailwind (DsPreviewIndex)"],
+  ["text-xs", "Tailwind (DsPreviewIndex)"],
+  ["gap-3", "Tailwind (DsPreviewIndex)"],
+  ["mb-1", "Tailwind (DsPreviewIndex)"],
+  ["mb-2", "Tailwind (DsPreviewIndex)"],
+  ["mb-8", "Tailwind (DsPreviewIndex)"],
+  ["rounded", "Tailwind (DsPreviewIndex)"],
+  ["rounded-xl", "Tailwind (DsAdminOrgVideos thumbnail)"],
+
+  // Marker classes. Never styled; something else reads them.
+  ["sh-leave", "marker on his wk-modal so DsLeaveStudio can find its own dialog"],
+  ["ct", "cert dialog hook (ds/cert), styled through .cx-* not .ct"],
+];
+
+// Known gaps: written by a component, defined by no sheet. Recorded, not
+// blessed — each one is a CHR-1 in miniature, and each belongs to the stream
+// that owns the file. Delete the entry when the rule lands. The point of
+// listing them is that the check still fails for anything NEW.
+const TRACKED_GAPS = [
+  ["adm-h1", "DsAdminShell page heading: no rule, so the h1 falls back to UA styling"],
+  ["adm-burn", "DsAdminAiUsage credit burn-down block"],
+  ["adm-x", "DsDocComposer close control"],
+  ["ds-input", "DsAdminVideos text field"],
+  ["dsh-note", "DsManageOverview"],
+  ["dsh-notice", "DsManageOverview banner, with its --body and --cta parts"],
+  ["dsh-notice-body", "DsManageOverview"],
+  ["dsh-notice-cta", "DsManageOverview"],
+  ["lx-cont-in", "DsLearning continue strip"],
+  ["pj-out", "DsProjectGallery"],
+  ["qt-close", "DsQuoteDoc"],
+  ["qt-saved", "DsQuoteBuilder"],
+  ["sform-status", "WaitlistForm status line"],
+];
+
+// Bases whose variants are sibling classes rather than compounds, so
+// `base ${variant}` is correct even though no `.base.variant` selector exists.
+const SIBLING_MODIFIER_BASES = [
+  ["pill", "his pill variants are .pill-a / .pill-b / .pill-d, not .pill.a"],
+];
+
+/** Every class the .ds stylesheets define, and which of them take modifiers. */
+function readDsStylesheets() {
+  const dir = path.join(CLIENT, "src/styles");
+  const defined = new Set();
+  const compounds = new Map();
+  for (const file of fs.readdirSync(dir).filter((f) => /^ds.*\.css$/.test(f))) {
+    const css = strip(fs.readFileSync(path.join(dir, file), "utf8"));
+    for (const m of css.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) defined.add(m[1]);
+    // ".a.b" — a modifier is only ever reachable as a compound.
+    for (const m of css.matchAll(/\.(-?[_a-zA-Z][\w-]*)\.(-?[_a-zA-Z][\w-]*)/g)) {
+      if (!compounds.has(m[1])) compounds.set(m[1], new Set());
+      compounds.get(m[1]).add(m[2]);
+    }
+  }
+  return { defined, compounds };
+}
+
+/** className="..." and className={`...`}, with the literals inside ${}. */
+function readClassUses(src) {
+  const statics = [];
+  const dynamic = [];
+  for (const m of src.matchAll(/className="([^"]*)"/g)) statics.push(m[1]);
+  for (const m of src.matchAll(/className=\{`([^`]*)`\}/g)) {
+    const lit = m[1];
+    statics.push(lit.replace(/\$\{[^}]*\}/g, " "));
+    // A ternary inside the template still names its classes outright.
+    for (const e of lit.matchAll(/\$\{([^}]*)\}/g)) {
+      if (/["']/.test(e[1])) {
+        for (const s of e[1].matchAll(/["']([^"']*)["']/g)) statics.push(s[1]);
+      } else {
+        dynamic.push(lit);
+      }
+    }
+  }
+  return { statics, dynamic };
+}
+
+const tokensOf = (s) =>
+  s
+    .split(/\s+/)
+    // Lower-case, hyphenated names only: that is what his CSS is written in.
+    // A trailing hyphen is the left half of a name completed at runtime
+    // ("is-${band}"), which cannot be checked from here.
+    .filter((t) => /^[a-z][a-z0-9-]*$/.test(t) && !t.endsWith("-"));
+
+function checkHandWrittenClasses() {
+  const { defined, compounds } = readDsStylesheets();
+  // "His namespace" is anything sharing a first segment with a class the
+  // sheets define. It keeps the check off our own and Tailwind's names without
+  // needing a list of either.
+  const families = new Set([...defined].map((c) => c.split("-")[0]));
+  const allowed = new Set([...UNSTYLED_OK, ...TRACKED_GAPS].map(([c]) => c));
+  const siblings = new Set(SIBLING_MODIFIER_BASES.map(([c]) => c));
+
+  const files = [];
+  for (const rel of HAND_WRITTEN_DIRS) {
+    const dir = path.join(CLIENT, rel);
+    if (!fs.existsSync(dir)) continue;
+    for (const f of fs.readdirSync(dir)) {
+      if (f.endsWith(".jsx") && !f.endsWith(".test.jsx")) files.push([rel, f, path.join(dir, f)]);
+    }
+  }
+
+  const stale = new Map();
+  const unmodifiable = [];
+  for (const [, name, full] of files) {
+    const src = fs.readFileSync(full, "utf8");
+    const { statics, dynamic } = readClassUses(src);
+
+    for (const chunk of statics) {
+      for (const t of tokensOf(chunk)) {
+        if (defined.has(t) || allowed.has(t)) continue;
+        if (!families.has(t.split("-")[0])) continue;
+        if (!stale.has(t)) stale.set(t, new Set());
+        stale.get(t).add(name);
+      }
+    }
+
+    // The CHR-1 shape: a base plus a modifier only known at runtime. If the
+    // sheets give that base no modifiers at all, the modifier can never land.
+    for (const lit of dynamic) {
+      const base = tokensOf(lit.replace(/\$\{[^}]*\}/g, " ")).pop();
+      if (!base || !defined.has(base) || siblings.has(base)) continue;
+      if (!compounds.has(base)) {
+        unmodifiable.push(`${name}: \`${lit.replace(/\s+/g, " ")}\` — .${base} takes no modifier`);
+      }
+    }
+  }
+
+  if (stale.size) {
+    for (const [t, where] of [...stale].sort()) {
+      fail(`.${t} is rendered by ${[...where].sort().join(", ")} but no .ds stylesheet defines it`);
+    }
+  } else {
+    ok(
+      `${files.length} hand-written components render no undefined ds class ` +
+        `(${UNSTYLED_OK.length} allowed by design, ${TRACKED_GAPS.length} tracked gaps)`,
+    );
+  }
+  for (const [c, why] of TRACKED_GAPS) console.log(`        gap: .${c} — ${why}`);
+
+  if (unmodifiable.length) {
+    for (const line of unmodifiable) fail(line);
+  } else {
+    ok("every runtime class modifier has a matching compound selector");
+  }
+}
+
+console.log("\n5. Hand-written components against the generated CSS");
+checkHandWrittenClasses();
+
+console.log("\n6. Deliberate divergences from his build");
 for (const [what, why] of DIVERGENCES) console.log(`  •  ${what}\n       ${why}`);
 
 console.log(`\n${failures === 0 ? "PASS" : `FAIL — ${failures} problem(s)`}\n`);
