@@ -71,7 +71,7 @@ export default function DsTrainingCalendar() {
               No sessions are scheduled right now. Firms can book an in-office programme at any time.
             </p>
             <div style={{ display: "flex", gap: 9, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
-              <Link className="ds-btn btn-p" to="/contact">
+              <Link className="ds-btn btn-p" to="/support">
                 Book a programme
               </Link>
               <Link className="ds-btn btn-o" to="/learn">

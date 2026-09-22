@@ -209,7 +209,7 @@ const BEYOND_BIM_SOON = (
     title="Beyond BIM, the modern roles of a"
     tone="Quantity Surveyor"
     lede="The programme page and registration open here soon."
-    primary={{ label: "Ask about the programme", to: "/contact" }}
+    primary={{ label: "Ask about the programme", to: "/support" }}
     secondary={{ label: "Browse free lessons", to: "/learn" }}
   />
 );
