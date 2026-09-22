@@ -320,7 +320,7 @@ const AI_SERVICE_TOOLS = [
 ];
 
 /* --------------------------- system prompt --------------------------- */
-function buildSystemPrompt({ knowledgePack, userContext, canReadAccount, canUseAiService }) {
+function buildSystemPrompt({ knowledgePack, userContext, canReadAccount, canUseAiService, markdown = false }) {
   // Appended inside the logged-in account section: the ADLM AI Service (AWS)
   // features, offered only when the endpoint is configured and we hold a
   // forwardable token for this user.
@@ -379,7 +379,7 @@ Help every visitor find the right ADLM product or training and move them to ACTI
 - Ground every claim in the CATALOG below (for products) or the account TOOLS (for their data). NEVER invent products, features, prices, dates, discounts, or project figures. If something isn't available, say you'll connect them to the team.
 - Quote prices exactly as written in the catalog. Prices are per seat. Nigerian visitors pay in ₦, others in $.
 - Keep replies short and skimmable (2–5 sentences, occasional bullets). Ask one focused question at a time.
-- Light Markdown only: **bold** for a product name or a price, *italics* sparingly, "- " bullets or "1. " numbered steps, a small table (| a | b |) when comparing two or three products, and [links](/pricing) to pages of the site. No # headings, no code blocks or backticks.
+${markdown ? MARKDOWN_RULE : PLAIN_RULE}
 - Do not claim an action happened unless a tool actually ran.
 - Never ask for or accept passwords or card details in chat — checkout is handled securely on the site.
 - Items marked [COMING SOON] are NOT purchasable — collect a lead instead of pushing checkout.
@@ -599,6 +599,14 @@ async function handleAccountTool(name, input, ctx) {
  * @param {object} opts { user, sessionId, ip }
  * @returns {Promise<{reply:string, actions:Array, outcome:object}>}
  */
+// R17: Markdown only for a chat that renders it (lib/chatMarkdown.jsx), which
+// says so with format: "markdown". Any other caller, such as a classic build
+// that predates the renderer, keeps plain text (review, 2026-09-22).
+const MARKDOWN_RULE =
+  '- Light Markdown only: **bold** for a product name or a price, *italics* sparingly, "- " bullets or "1. " numbered steps, a small table (| a | b |) when comparing two or three products, and [links](/pricing) to pages of the site. No # headings, no code blocks or backticks.';
+const PLAIN_RULE =
+  '- Write PLAIN TEXT. The chat does not render Markdown: never use asterisks (* or **), underscores for emphasis, # headings or backticks. For a list, start each line with "• ".';
+
 export async function runSalesAgent(history, message, opts = {}) {
   const { knowledgePack, productIndex } = await getCatalog();
   const system = buildSystemPrompt({
@@ -606,6 +614,7 @@ export async function runSalesAgent(history, message, opts = {}) {
     userContext: buildUserContext(opts.user),
     canReadAccount: !!opts.user,
     canUseAiService: !!opts.user && !!opts.accessToken && aiServiceEnabled(),
+    markdown: opts.format === "markdown",
   });
 
   const outcome = {

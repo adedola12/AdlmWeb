@@ -407,7 +407,7 @@ export default function WorkAreaView({
         method: "POST",
         credentials: "include",
         headers,
-        body: JSON.stringify({ message, history, sessionId: sessionRef.current }),
+        body: JSON.stringify({ message, history, sessionId: sessionRef.current, format: "markdown" }),
       });
       const json = await res.json().catch(() => ({}));
       say({ who: "ada", text: json?.reply || json?.error || "I couldn't answer that just now. Please try again." });

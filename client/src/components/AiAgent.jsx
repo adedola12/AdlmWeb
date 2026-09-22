@@ -140,6 +140,8 @@ export default function AiAgent() {
           message: text,
           history,
           sessionId: sessionRef.current,
+          // This chat renders light Markdown (lib/chatMarkdown.jsx).
+          format: "markdown",
         }),
       });
 
