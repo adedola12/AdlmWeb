@@ -15,16 +15,32 @@
 // .wk-grp per group, .wk-bl per line, and .wk-sub / .wk-tot for the closing
 // rows.
 //
-// His percentage inputs are NOT reproduced. On his build they are live and
-// recompute the rate as you type; ours would have to write back through
-// /rategen-v2/library/user-rates, and a control that looks editable but throws
-// the edit away on reload is worse than a figure. The rate is read here and
-// edited in RateGen, and the screen says so.
+// EDITING (S18, RG-05). The percentages and quantities are now live, and
+// "Save to my library" writes the result to the CUSTOMER's own copy of the
+// rate (PUT /rategen-v2/library/user-rates/override/:id). It never touches the
+// master rate: master material, labour and rate prices are published from Rate
+// Gen desktop and the server refuses a master write from here. What is saved
+// is the user's own override, which the desktop picks up on its next sync.
+// Projects already priced keep the figure they were priced with — nothing on
+// this screen can move money that has already been certified — and the copy on
+// the page says exactly that rather than the prototype's "every project using
+// this rate has moved with it".
 
 import React from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
+import { useFeedback } from "./feedback/feedbackContext.js";
+import {
+  componentsOf,
+  groupComponents,
+  groupForKind,
+  totalsFrom,
+  unexplainedNet,
+  toNum,
+} from "./rategen/rateMath.js";
+
+const DASH = "–"; // en dash: an empty value, never an em dash, never "N/A"
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -45,59 +61,274 @@ const longDate = (d) =>
       })
     : "";
 
-// His two groups, plus a third for anything that is neither. refKind is a free
-// string on the model rather than an enum, so unknown kinds are grouped rather
-// than dropped — a component nobody can see is a component nobody can check.
-const GROUPS = [
-  { id: "material", label: "Materials", match: (k) => k === "material" || k === "consumable" },
-  { id: "labour", label: "Labour", match: (k) => k === "labour" },
-  { id: "plant", label: "Plant and other", match: () => true },
-];
+const clampPc = (v) => Math.max(0, Math.min(60, toNum(v)));
 
 export default function DsWorkRate() {
   const { id } = useParams();
   const { accessToken } = useAuth();
+  const fb = useFeedback();
   const [rates, setRates] = React.useState(null);
+  const [mine, setMine] = React.useState(null); // { overrides, customs, version }
   const [failed, setFailed] = React.useState(false);
+
+  // The edit buffer. Empty means "as published" — an untouched screen writes
+  // nothing and claims nothing.
+  const [edit, setEdit] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+
+  const load = React.useCallback(() => {
+    if (!accessToken) return Promise.resolve();
+    return Promise.all([
+      apiAuthed("/rategen-v2/library/rates/sync", {
+        token: accessToken,
+        params: { limit: 500 },
+      }).then((d) => (Array.isArray(d.items) ? d.items : [])),
+      apiAuthed("/rategen-v2/library/user-rates", { token: accessToken })
+        .then((d) => ({
+          overrides: Array.isArray(d.rateOverrides) ? d.rateOverrides : [],
+          customs: Array.isArray(d.customRates) ? d.customRates : [],
+          version: d?.meta?.ratesVersion ?? 1,
+          customRatesVersion: d?.meta?.customRatesVersion ?? 1,
+        }))
+        // A user with no library of their own is not an error.
+        .catch(() => ({ overrides: [], customs: [], version: 1, customRatesVersion: 1 })),
+    ]).then(([items, own]) => {
+      setRates(items);
+      setMine(own);
+    });
+  }, [accessToken]);
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
     let alive = true;
-    apiAuthed("/rategen-v2/library/rates/sync", {
-      token: accessToken,
-      params: { limit: 500 },
-    })
-      .then((d) => alive && setRates(Array.isArray(d.items) ? d.items : []))
-      .catch(() => alive && setFailed(true));
+    load().catch(() => alive && setFailed(true));
     return () => {
       alive = false;
     };
-  }, [accessToken]);
+  }, [accessToken, load]);
 
-  const rate = React.useMemo(
-    () => (rates ? rates.find((r) => String(r.id) === String(id)) || null : null),
-    [rates, id],
+  // A custom rate is addressed as /work/rate/custom:<id> so it cannot collide
+  // with a master rate's ObjectId.
+  const customId = String(id || "").startsWith("custom:")
+    ? String(id).slice("custom:".length)
+    : null;
+
+  // What is shown: the user's own copy of the rate when they have one, the
+  // published rate otherwise. The two are never blended.
+  const { rate, isOwn, isCustom, published } = React.useMemo(() => {
+    if (!rates || !mine) return { rate: null, isOwn: false, isCustom: false, published: null };
+    if (customId) {
+      const c = mine.customs.find((x) => String(x.customRateId || x.id) === customId) || null;
+      return { rate: c, isOwn: true, isCustom: true, published: null };
+    }
+    const master = rates.find((r) => String(r.id) === String(id)) || null;
+    const ov = mine.overrides.find(
+      (o) => String(o.rateId || o.id) === String(id),
+    );
+    return {
+      rate: ov || master,
+      isOwn: Boolean(ov),
+      isCustom: false,
+      published: master,
+    };
+  }, [rates, mine, id, customId]);
+
+  // The lines actually on screen: the edit buffer if the user has touched
+  // anything, otherwise the rate as it stands.
+  const baseComponents = React.useMemo(() => componentsOf(rate || {}), [rate]);
+  const components = edit ? edit.components : baseComponents;
+  const overheadPercent = edit ? edit.overheadPercent : toNum(rate?.overheadPercent);
+  const profitPercent = edit ? edit.profitPercent : toNum(rate?.profitPercent);
+
+  const freshEdit = React.useCallback(
+    () => ({
+      components: baseComponents.map((c) => ({ ...c })),
+      overheadPercent: toNum(rate?.overheadPercent),
+      profitPercent: toNum(rate?.profitPercent),
+    }),
+    [baseComponents, rate],
   );
 
+  const startEdit = React.useCallback(() => {
+    setEdit((cur) => cur || freshEdit());
+  }, [freshEdit]);
+
+  // What the user typed is kept exactly as typed, and only READ as a number.
+  // Coercing on every keystroke makes "1.5" impossible to type: the "." is
+  // stripped the moment it is entered and the caret never gets to the "5".
+  const setQuantity = (index, value) => {
+    startEdit();
+    setEdit((cur) => {
+      const base = cur || freshEdit();
+      const next = base.components.map((c, i) =>
+        i === index
+          ? { ...c, quantity: value, amount: Math.max(0, toNum(value)) * toNum(c.unitPrice) }
+          : c,
+      );
+      return { ...base, components: next };
+    });
+  };
+
+  const setPercent = (which, value) => {
+    startEdit();
+    setEdit((cur) => ({ ...(cur || freshEdit()), [which]: value }));
+  };
+
+  // Indexes are stable because `components` and `grouped` come from the same
+  // array in the same order.
   const grouped = React.useMemo(() => {
-    if (!rate) return [];
-    const rows = Array.isArray(rate.breakdown) ? rate.breakdown : [];
-    const taken = new Set();
-    return GROUPS.map((g) => {
-      const items = rows.filter((r, i) => {
-        if (taken.has(i)) return false;
-        const kind = String(r.refKind || "").toLowerCase();
-        if (!g.match(kind)) return false;
-        taken.add(i);
-        return true;
+    const withIndex = components.map((c, i) => ({ ...c, index: i }));
+    return groupComponents(withIndex);
+  }, [components]);
+
+  // The percentages are clamped HERE rather than as they are typed, so the
+  // figure shown and the figure saved are the same one, and 0 to 60 is the
+  // range the build-up has always applied.
+  const ohPc = clampPc(overheadPercent);
+  const prPc = clampPc(profitPercent);
+
+  const totals = React.useMemo(
+    () => totalsFrom(components, ohPc, prPc),
+    [components, ohPc, prPc],
+  );
+
+  // An untouched rate shows what the server stored, so the page and the
+  // library agree to the kobo. Only once the user edits does the screen start
+  // showing its own arithmetic.
+  const net = edit ? totals.netCost : toNum(rate?.netCost);
+  const overhead = edit ? totals.overheadValue : toNum(rate?.overheadValue);
+  const profit = edit ? totals.profitValue : toNum(rate?.profitValue);
+  const total = edit ? totals.totalCost : toNum(rate?.totalCost);
+
+  const plantGroup = grouped.find((g) => g.id === "plant");
+
+  async function save() {
+    if (!edit || saving || !rate) return;
+    setSaving(true);
+    try {
+      const breakdown = edit.components.map((c) => ({
+        componentName: c.name,
+        quantity: Math.max(0, toNum(c.quantity)),
+        unit: c.unit,
+        unitPrice: c.unitPrice,
+        lineTotal: c.amount,
+        refKind: c.kind || "",
+        refSn: c.refSn ?? null,
+        refName: c.refName || c.name,
+        priceAsOf: c.priceAsOf ?? null,
+      }));
+
+      if (isCustom) {
+        // A custom rate carries materials[] and labour[] as well as the
+        // breakdown, because that pair is what the desktop and the plugins
+        // read for its composition. They are rebuilt from the edited lines
+        // rather than sent empty, which would quietly strip a saved rate of
+        // its composition everywhere outside this screen.
+        const asLine = (c) => ({
+          description: c.name,
+          quantity: Math.max(0, toNum(c.quantity)),
+          unit: c.unit || "",
+          unitPrice: c.unitPrice,
+          totalCost: c.amount,
+          refSn: c.refSn ?? null,
+          refName: c.refName || c.name,
+        });
+        await apiAuthed(`/rategen-v2/library/custom-rates/${encodeURIComponent(customId)}`, {
+          method: "PUT",
+          token: accessToken,
+          body: {
+            customRateId: customId,
+            sectionKey: rate.sectionKey || "",
+            sectionLabel: rate.sectionLabel || "",
+            title: rate.title || rate.description || "",
+            description: rate.description || "",
+            unit: rate.unit || "",
+            materials: edit.components
+              .filter((c) => groupForKind(c.kind) === "material")
+              .map((c) => ({ ...asLine(c), rateType: "material" })),
+            labour: edit.components
+              .filter((c) => groupForKind(c.kind) === "labour")
+              .map((c) => ({ ...asLine(c), rateType: "labour" })),
+            breakdown,
+            customRatesBaseVersion: mine?.customRatesVersion ?? 1,
+            netCost: totals.netCost,
+            overheadPercent: ohPc,
+            profitPercent: prPc,
+          },
+        });
+      } else {
+        await apiAuthed(
+          `/rategen-v2/library/user-rates/override/${encodeURIComponent(String(id))}`,
+          {
+            method: "PUT",
+            token: accessToken,
+            body: {
+              rateId: String(id),
+              sectionKey: rate.sectionKey || "",
+              sectionLabel: rate.sectionLabel || "",
+              itemNo: rate.itemNo ?? null,
+              code: rate.code || "",
+              description: rate.description || "",
+              unit: rate.unit || "",
+              netCost: totals.netCost,
+              overheadPercent: ohPc,
+              profitPercent: prPc,
+              breakdown,
+              sourceUpdatedAt: published?.updatedAt || rate.updatedAt || null,
+              ratesBaseVersion: mine?.version ?? 1,
+            },
+          },
+        );
+      }
+
+      setEdit(null);
+      await load();
+      fb.toast({
+        title: "Saved to your library",
+        msg:
+          "This is your own copy of the rate. Rate Gen, QUIV and HERON pick it up on their next sync. Projects already priced keep the figure they were priced with.",
+        ms: 5200,
       });
-      return {
-        ...g,
-        items,
-        total: items.reduce((n, r) => n + (Number(r.totalPrice) || 0), 0),
-      };
-    }).filter((g) => g.items.length > 0);
-  }, [rate]);
+    } catch (e) {
+      const conflict = String(e?.message || "").toLowerCase().includes("conflict");
+      fb.toast({
+        tone: "error",
+        title: conflict ? "Someone else changed your library" : "That did not save",
+        msg: conflict
+          ? "Refresh the page to pick up the newer version, then make the change again."
+          : "Nothing was written. Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resetToPublished() {
+    if (!isOwn || isCustom || saving) return;
+    const answer = await fb.card({
+      tone: "warning",
+      title: "Go back to the published rate",
+      msg:
+        "Your own copy of this rate is removed and the published figure comes back. Projects already priced are not touched.",
+      secondary: "Keep mine",
+      primary: { label: "Remove my copy", danger: true },
+    });
+    if (answer !== "primary") return;
+    setSaving(true);
+    try {
+      await apiAuthed(
+        `/rategen-v2/library/user-rates/override/${encodeURIComponent(String(id))}`,
+        { method: "DELETE", token: accessToken, params: { ratesBaseVersion: mine?.version ?? 1 } },
+      );
+      setEdit(null);
+      await load();
+      fb.toast({ title: "Back to the published rate" });
+    } catch {
+      fb.toast({ tone: "error", title: "That did not reset", msg: "Nothing was changed." });
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (failed) {
     return (
@@ -106,7 +337,7 @@ export default function DsWorkRate() {
       </div>
     );
   }
-  if (!rates) {
+  if (!rates || !mine) {
     return (
       <div className="dsh-in">
         <p className="ds-sub">Loading the rate…</p>
@@ -117,7 +348,7 @@ export default function DsWorkRate() {
     return (
       <div className="dsh-in">
         <p className="wk-back">
-          <Link to="/work/library">← Rate library</Link>
+          <Link to="/work/library">← RateGen</Link>
         </p>
         <p className="ds-sub">
           That rate is not in this library. It may have been removed, or it belongs to another
@@ -127,37 +358,39 @@ export default function DsWorkRate() {
     );
   }
 
-  const net = Number(rate.netCost) || 0;
-  const overhead = Number(rate.overheadValue) || 0;
-  const profit = Number(rate.profitValue) || 0;
-  const total = Number(rate.totalCost) || 0;
-
-  // The components should add up to the net cost. When they do not, the rate
-  // carries a figure its own build-up cannot explain — which is exactly the
-  // thing this screen exists to make visible, so it is stated rather than
-  // hidden behind a rounding tolerance.
-  const componentSum = grouped.reduce((n, g) => n + g.total, 0);
-  const unexplained = Math.round((net - componentSum) * 100) / 100;
+  const unexplained = edit ? 0 : unexplainedNet(net, components);
 
   return (
     <div className="dsh-in">
       <p className="wk-back">
-        <Link to="/work/library">← Rate library</Link>
+        <Link to="/work/library">← RateGen</Link>
       </p>
 
       <div className="wk-head">
         <div>
-          <h1>{rate.description || rate.itemNo || "Rate"}</h1>
+          <h1>{rate.description || rate.title || rate.itemNo || "Rate"}</h1>
           <p className="wk-ref">
-            {[rate.itemNo, rate.sectionLabel, rate.unit ? `per ${rate.unit}` : null]
+            {[
+              rate.itemNo,
+              rate.sectionLabel,
+              rate.unit ? `per ${rate.unit}` : null,
+              isCustom ? "your own rate" : isOwn ? "your own copy" : null,
+            ]
               .filter(Boolean)
               .join(" · ")}
           </p>
         </div>
         <div className="wk-acts">
-          <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
-            Edit in RateGen
-          </Link>
+          {isOwn && !isCustom ? (
+            <button
+              type="button"
+              className="ds-btn btn-o ds-btn-sm"
+              onClick={resetToPublished}
+              disabled={saving}
+            >
+              Reset to published
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -185,18 +418,25 @@ export default function DsWorkRate() {
                 {grouped.map((g) => (
                   <React.Fragment key={g.id}>
                     <div className="wk-grp">{g.label}</div>
-                    {g.items.map((c, i) => (
-                      <div className="wk-bl" key={`${g.id}-${i}`}>
+                    {g.items.map((c) => (
+                      <div className="wk-bl" key={`${g.id}-${c.index}`}>
                         <span className="nm">
-                          {c.componentName || c.refName || "Component"}
+                          {c.name || "Component"}
                           {c.priceAsOf ? <em>priced {longDate(c.priceAsOf)}</em> : null}
                         </span>
                         <span className="qt">
-                          {qty(c.quantity)}
-                          <i>{c.unit || ""}</i>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={c.quantity}
+                            onChange={(e) => setQuantity(c.index, e.target.value)}
+                            aria-label={`Quantity of ${c.name || "component"}`}
+                          />
+                          <i>{c.unit || DASH}</i>
                         </span>
                         <span className="pr">{money(c.unitPrice)}</span>
-                        <span className="am">{money(c.totalPrice)}</span>
+                        <span className="am">{money(c.amount)}</span>
                       </div>
                     ))}
                   </React.Fragment>
@@ -221,20 +461,42 @@ export default function DsWorkRate() {
                   <span className="am">{money(net)}</span>
                 </div>
 
-                <div className="wk-bl">
-                  <span className="nm">Overhead</span>
+                <div className="wk-bl wk-calc">
+                  <span className="nm">
+                    Overhead
+                    <em>this rate</em>
+                  </span>
                   <span className="qt">
-                    {qty(rate.overheadPercent)}
+                    <input
+                      type="number"
+                      min="0"
+                      max="60"
+                      step="0.5"
+                      value={overheadPercent}
+                      onChange={(e) => setPercent("overheadPercent", e.target.value)}
+                      aria-label="Overhead percentage"
+                    />
                     <i>%</i>
                   </span>
                   <span className="pr">on {money(net)}</span>
                   <span className="am">{money(overhead)}</span>
                 </div>
 
-                <div className="wk-bl">
-                  <span className="nm">Profit</span>
+                <div className="wk-bl wk-calc">
+                  <span className="nm">
+                    Profit
+                    <em>this rate</em>
+                  </span>
                   <span className="qt">
-                    {qty(rate.profitPercent)}
+                    <input
+                      type="number"
+                      min="0"
+                      max="60"
+                      step="0.5"
+                      value={profitPercent}
+                      onChange={(e) => setPercent("profitPercent", e.target.value)}
+                      aria-label="Profit percentage"
+                    />
                     <i>%</i>
                   </span>
                   <span className="pr">on {money(net)}</span>
@@ -256,6 +518,37 @@ export default function DsWorkRate() {
                 </p>
               </div>
             )}
+
+            {grouped.length ? (
+              <div className="wk-pf">
+                {edit ? (
+                  <>
+                    <span className="wk-dirty">Edited — not saved</span>
+                    <button
+                      type="button"
+                      className="ds-btn btn-o ds-btn-sm"
+                      onClick={() => setEdit(null)}
+                      disabled={saving}
+                    >
+                      Discard
+                    </button>
+                    <button
+                      type="button"
+                      className="ds-btn btn-p ds-btn-sm"
+                      onClick={save}
+                      disabled={saving}
+                    >
+                      {saving ? "Saving…" : "Save to my library"}
+                    </button>
+                  </>
+                ) : (
+                  <span className="wk-clean">
+                    Every figure above is live. Change one and the rate recalculates, then save
+                    it as your own copy.
+                  </span>
+                )}
+              </div>
+            ) : null}
           </section>
         </div>
 
@@ -268,15 +561,15 @@ export default function DsWorkRate() {
               <div className="dsh-kv">
                 <div>
                   <span>Item number</span>
-                  <b>{rate.itemNo || "—"}</b>
+                  <b>{rate.itemNo || DASH}</b>
                 </div>
                 <div>
                   <span>Section</span>
-                  <b>{rate.sectionLabel || "—"}</b>
+                  <b>{rate.sectionLabel || DASH}</b>
                 </div>
                 <div>
                   <span>Unit</span>
-                  <b>{rate.unit || "—"}</b>
+                  <b>{rate.unit || DASH}</b>
                 </div>
                 <div>
                   <span>Priced for</span>
@@ -284,11 +577,29 @@ export default function DsWorkRate() {
                 </div>
                 <div>
                   <span>Components</span>
-                  <b>{(rate.breakdown || []).length}</b>
+                  <b>{components.length || DASH}</b>
                 </div>
+                {plantGroup ? (
+                  <div>
+                    <span>Plant</span>
+                    <b>{money(plantGroup.total)}</b>
+                  </div>
+                ) : null}
+                {ohPc ? (
+                  <div>
+                    <span>Overhead · {qty(ohPc)}%</span>
+                    <b>{money(overhead)}</b>
+                  </div>
+                ) : null}
+                {prPc ? (
+                  <div>
+                    <span>Profit · {qty(prPc)}%</span>
+                    <b>{money(profit)}</b>
+                  </div>
+                ) : null}
                 <div>
                   <span>Last changed</span>
-                  <b>{longDate(rate.updatedAt) || "—"}</b>
+                  <b>{longDate(rate.updatedAt) || DASH}</b>
                 </div>
               </div>
             </div>
@@ -308,13 +619,14 @@ export default function DsWorkRate() {
                   lineHeight: 1.65,
                 }}
               >
-                This is the rate as it stands, read from the library. Editing happens in
-                RateGen, and a change there reaches every product on this account and every
-                project priced against it afterwards. Projects already priced keep the figure
+                What you save here is your own copy of the rate, held against this account. The
+                published rate is not touched: master material, labour and rate prices are
+                corrected in Rate Gen and published from there. Rate Gen, QUIV and HERON pick
+                your copy up on their next sync, and projects already priced keep the figure
                 they were priced with.
               </p>
               <Link className="ds-btn btn-o ds-btn-sm" to="/rategen" style={{ marginTop: 16 }}>
-                Edit in RateGen
+                Open RateGen
               </Link>
             </div>
           </section>
