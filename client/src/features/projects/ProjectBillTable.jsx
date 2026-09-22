@@ -1158,6 +1158,10 @@ export default function ProjectBillTable({
     ? "Save to log this purchase date and deduct it from the balance."
     : "Save to log this completion date and deduct it from the balance.";
 
+  // The site-wide toast (his feedback.js). Declared before the callbacks that
+  // close over it, so its dependency arrays can name it.
+  const fb = useFeedback();
+
   const handleColResize = useColResize();
 
   // Column sorting state
@@ -1182,8 +1186,11 @@ export default function ProjectBillTable({
       setDragIdx(null);
       setDragOverIdx(null);
       setDragOverCat(null);
+      // His "Moved to X" (PR2-12). Dropping a row onto a section is a small
+      // gesture with no other confirmation, so it says what it did.
+      fb.toast({ tone: "info", title: `Moved to ${category}`, ms: 2200 });
     },
-    [dragIdx, groupByMode, onTradeChange, onCategoryChange],
+    [dragIdx, groupByMode, onTradeChange, onCategoryChange, fb],
   );
 
   // Ribbon tab state — mirrors MS Office ribbon (Home / Rates / Navigate / Extras)
@@ -1550,8 +1557,6 @@ export default function ProjectBillTable({
     [provisionalSums],
   );
 
-  const fb = useFeedback();
-
   // His toast after every Summary edit, so a change to a percentage or a sum
   // reports what it did to the figure that matters.
   const sayUpdated = React.useCallback(() => {
@@ -1799,7 +1804,7 @@ export default function ProjectBillTable({
               }}
             >
               <span className="wk-locnote">
-                Measured <b style={READING}>{money(grossAmount)}</b>
+                Measured <b style={READING}>{money(totals.measured)}</b>
               </span>
               {provisionalTotal > 0 ? (
                 <span className="wk-locnote">
@@ -1877,7 +1882,7 @@ export default function ProjectBillTable({
                         className={!isTradeGrouping && !isSourceGrouping ? "on" : ""}
                         title="Group by building element (Substructure / Superstructure / HVAC / Plumbing / Electrical)"
                       >
-                        Category
+                        By element
                       </button>
                       <button
                         type="button"
@@ -1885,7 +1890,7 @@ export default function ProjectBillTable({
                         className={isTradeGrouping ? "on" : ""}
                         title="Group by trade / work section (Concrete Works, Formwork, Reinforcement, Masonry, Finishes, etc.)"
                       >
-                        Trade
+                        By trade
                       </button>
                       {sourceOptions.length ? (
                         <button
@@ -1900,7 +1905,7 @@ export default function ProjectBillTable({
                     </div>
                     <div className="wk-fx" style={{ maxWidth: 220, lineHeight: 1.45 }}>
                       {isSourceGrouping
-                        ? "Grouped by the discipline project each line came from. Switch to Category or Trade to arrange the combined bill the usual way."
+                        ? "Grouped by the discipline project each line came from. Switch to element or trade to arrange the combined bill the usual way."
                         : isTradeGrouping
                         ? "Grouped by the work being done. Drag a row onto a section to re-file it, learned for next time."
                         : "Grouped by the element they belong to. Drag a row onto a category to re-file it, learned for next time."}
@@ -3847,7 +3852,7 @@ export default function ProjectBillTable({
         <section
           ref={provisionalSectionRef}
           className="pj-sumbox scroll-mt-24"
-          aria-label="Summary"
+          aria-label="Bill summary"
         >
           <div className="hd">
             <h3>Summary</h3>

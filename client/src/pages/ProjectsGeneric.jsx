@@ -13,6 +13,7 @@ import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
 import WkModal from "../ds/WkModal.jsx";
+import { useFeedback } from "../ds/feedback/feedbackContext.js";
 
 // His orange palette, for a note that is a warning rather than information.
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
@@ -1301,6 +1302,10 @@ export default function ProjectsGeneric() {
     // Reset the override when moving between projects.
     setMergeGroupOverride(null);
   }, [selectedId]);
+
+  // The site-wide toast (his feedback.js), for the actions on this page that
+  // do something a user would want reporting back — and undoing.
+  const fb = useFeedback();
 
   function itemKey(it, i) {
     const sn = it?.sn ?? i + 1;
@@ -3257,6 +3262,70 @@ export default function ProjectsGeneric() {
       : [];
   }
 
+  // ── S18 bill (PR2-10): pricing one line prices the matching unpriced ones ─
+  //
+  // His assign() (work-proj.js): when a rate is assigned, every other unpriced
+  // line that reads the same gets it too. "The same" here is our existing
+  // similarity group — the one the "Link similar items" toggle already uses —
+  // so the lines that follow are the lines the bill already treats as alike.
+  //
+  // Two rules keep it safe. A line that already carries a rate is never
+  // touched, so a deliberate difference survives. And a locked contract is
+  // left alone entirely.
+  //
+  // Returns the number of lines that followed, so the caller can say so.
+  function priceMatchingUnpricedLines(rowIndex, value) {
+    if (contract?.locked) return 0;
+    const rate = safeNum(value);
+    if (!rate) return 0;
+    const groupId = groupIdForIndex(rowIndex);
+    if (!groupId) return 0;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+
+    // Work out which lines follow from the rates on screen now, outside the
+    // state updater: an updater can be replayed, and a replay would record
+    // the "before" values it had just written.
+    const current = rates || {};
+    const before = [];
+    for (let j = 0; j < its.length; j += 1) {
+      if (j === rowIndex) continue;
+      if (groupIdForIndex(j) !== groupId) continue;
+      const kj = itemKey(its[j], j);
+      // The rate showing on the line right now: the unsaved input if there is
+      // one, otherwise what is stored.
+      const typed = String(current[kj] ?? "").trim();
+      const shown = typed === "" ? safeNum(its[j]?.rate) : safeNum(current[kj]);
+      if (shown !== 0) continue; // already priced — leave it alone
+      before.push([kj, current[kj]]);
+    }
+    if (!before.length) return 0;
+
+    setRates((prev) => {
+      const next = { ...(prev || {}) };
+      for (const [k] of before) next[k] = String(rate);
+      return next;
+    });
+
+    fb.toast({
+      tone: "info",
+      title: `${before.length} matching line${before.length === 1 ? "" : "s"} priced with it`,
+      msg: "Lines that already had a rate were left alone.",
+      action: {
+        label: "Undo",
+        run: () =>
+          setRates((prev) => {
+            const next = { ...(prev || {}) };
+            for (const [k, was] of before) {
+              if (was === undefined) delete next[k];
+              else next[k] = was;
+            }
+            return next;
+          }),
+      },
+    });
+    return before.length;
+  }
+
   function handlePickCandidate(rowIndex, candidate) {
     if (!candidate) return;
     const it = items[rowIndex];
@@ -3269,7 +3338,9 @@ export default function ProjectsGeneric() {
       ...(prev || {}),
       [mk]: pk,
     }));
-    handleRateChange(rowIndex, String(safeNum(candidate.price) || 0));
+    const price = String(safeNum(candidate.price) || 0);
+    handleRateChange(rowIndex, price);
+    priceMatchingUnpricedLines(rowIndex, price);
     setOpenPickKey(null);
   }
 
@@ -3418,7 +3489,9 @@ export default function ProjectsGeneric() {
 
   function handlePickBoqCandidate(rowIndex, candidate) {
     if (!candidate) return;
-    handleRateChange(rowIndex, String(safeNum(candidate.totalCost) || 0));
+    const price = String(safeNum(candidate.totalCost) || 0);
+    handleRateChange(rowIndex, price);
+    priceMatchingUnpricedLines(rowIndex, price);
     setOpenBoqPickKey(null);
   }
 
