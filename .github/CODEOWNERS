@@ -1,0 +1,5 @@
+# Every change needs the release approver's review before it reaches main.
+# Managed by server/scripts/release-gate.mjs. See docs/RELEASE_GATE.md.
+* @RichardEnoch
+/.github/ @RichardEnoch
+/docs/RELEASE_GATE.md @RichardEnoch

@@ -23,6 +23,7 @@ import { config } from "../config.js";
 import { AdlmEdgeStack } from "../lib/adlm-edge-stack.js";
 import { AdlmApiStack } from "../lib/adlm-api-stack.js";
 import { AdlmOpsAlertsStack } from "../lib/adlm-ops-alerts-stack.js";
+import { AdlmReleaseGateStack } from "../lib/adlm-release-gate-stack.js";
 
 const app = new App();
 
@@ -136,3 +137,22 @@ new AdlmOpsAlertsStack(app, "AdlmOpsAlertsEu", {
 Tags.of(app).add("app", "adlm-cloud");
 Tags.of(app).add("env", "prod");
 Tags.of(app).add("managed-by", "cdk");
+
+// Release gate (docs/RELEASE_GATE.md): the locked audit bucket, the hourly
+// watcher and the GitHub alert role. Its own stack so an AdlmApi deploy can
+// never take it with it. Deploy alone:  npx cdk deploy AdlmReleaseGate
+new AdlmReleaseGateStack(app, "AdlmReleaseGate", {
+  env: { account: config.account, region: config.region },
+  description: "ADLM release gate - locked audit trail and main-branch watcher",
+  terminationProtection: true,
+  repo: "adedola12/AdlmWeb",
+  mailDomain: "adlmstudio.net",
+  fromAddress: "ADLM Studio <notifications@adlmstudio.net>",
+  ownerEmail: "admin@adlmstudio.net",
+  // The API function's execution role (AdlmApi-ApiFn). It keeps its name
+  // across AdlmApi deploys; if AdlmApi is ever rebuilt from scratch, update it.
+  apiRoleArn: "arn:aws:iam::065634457992:role/AdlmApi-ApiFnServiceRoleD18AAE0E-uu6SwJf1pQr7",
+  // Three years. COMPLIANCE mode: nobody, root included, can shorten this for
+  // an object once written.
+  retentionDays: 1095,
+});

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { isSsrPath } from "../lib/ssrPaths.js";
 import { PAGE_META, fullTitle } from "../lib/pageMeta.js";
+import { isGatedHost } from "../lib/previewHost.js";
 
 const INDEX_CANDIDATES = [
   process.env.INDEX_HTML_PATH,
@@ -443,7 +444,10 @@ export default async function handler(req, res) {
     // Gated on the explicit list, not on whether the router finds a match.
     // Every app route — dashboard, admin, projects, login — falls straight
     // through to the client shell it has always been served.
-    const ssr = isSsrPath(pathname) ? await loadSsr() : null;
+    // A staff-only preview host (components/PreviewHostGate.jsx) gets the bare
+    // shell: its pages must not arrive pre-rendered before the gate decides.
+    const reqHost = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(":")[0];
+    const ssr = isSsrPath(pathname) && !isGatedHost(reqHost) ? await loadSsr() : null;
     if (ssr?.render) {
       const rendered = await ssr.render(new URL(pathname, baseUrl).toString());
       if (rendered?.html) {

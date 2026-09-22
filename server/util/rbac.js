@@ -93,6 +93,17 @@ export async function ensureRolesSeeded() {
       permissions: [...STAFF_GRANTABLE_KEYS],
     },
     { key: "user", name: "User", system: true, isSuperAdmin: false, permissions: [] },
+    // Release approver (docs/RELEASE_GATE.md) — the release sign-off desk and
+    // nothing else. Being in this role opens the screen and the staff preview;
+    // the right to approve comes from being the named approver in
+    // ReleaseGateConfig, not from the role.
+    {
+      key: "release_approver",
+      name: "Release Approver",
+      system: true,
+      isSuperAdmin: false,
+      permissions: ["releases"],
+    },
     // Designer — sees every admin screen, read-only, with all identities and
     // figures replaced by placeholders. `permissions` stays empty on purpose:
     // access comes from the demoMode flag (see decideAccess above), so nobody
@@ -134,6 +145,10 @@ export async function ensureRolesSeeded() {
     // built-in role that lost it would silently start serving real data.
     if (d.demoMode && !existing.demoMode) {
       existing.demoMode = true;
+      changed = true;
+    }
+    if (d.key === "release_approver" && !(existing.permissions || []).includes("releases")) {
+      existing.permissions = [...(existing.permissions || []), "releases"];
       changed = true;
     }
     if (d.key === "design" && !existing.designAccess) {

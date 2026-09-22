@@ -13,6 +13,8 @@ import {
 import { deleteAsset } from "../utils/cloudinary.js";
 import cloudinary from "../utils/cloudinaryConfig.js";
 import { recordDeploymentRelease, recordDeploymentWithdrawn } from "../util/releaseNotifier.js";
+import { getGateConfig, isGatedChange, recordGateEvent } from "../util/releaseGate.js";
+import { stageRelease } from "../util/releaseGateFlow.js";
 
 const router = express.Router();
 const upload = multer({
@@ -440,6 +442,37 @@ router.put(
       .lean()
       .catch(() => undefined);
 
+    // RELEASE GATE. A change that puts something new in front of customers is
+    // queued for the release approver instead of going live (docs/RELEASE_GATE.md).
+    // There is no flag, header or role that skips this; the only way past it is
+    // POST /admin/releases/:id/emergency, which is recorded and emailed.
+    // A read failure here must not wave a release through, so it rethrows.
+    const current = await ProductDeployment.findOne({ productKey }).lean();
+    if (!req.demoMode && isGatedChange(current, normalized)) {
+      const candidate = await stageRelease({
+        productKey,
+        normalized,
+        previous: current,
+        body: req.body || {},
+        actor: actor.toLowerCase(),
+        req,
+      });
+      const cfg = await getGateConfig();
+      return res.status(202).json({
+        ok: true,
+        pendingApproval: true,
+        candidateId: String(candidate._id),
+        // `item` is the STAGED build, so release scripts that download
+        // item.packageUri to verify it still check the right bytes.
+        item: { ...normalized, productKey },
+        live: current ? { version: current.version, packageUri: current.packageUri } : null,
+        message:
+          `Staged ${productKey} v${normalized.version || "?"} for sign-off by ` +
+          `${cfg.approverName || cfg.approverEmail || "the release approver (none set)"}. ` +
+          `Customers keep v${current?.version || "-"} until it is approved.`,
+      });
+    }
+
     const item = await ProductDeployment.findOneAndUpdate(
       { productKey },
       {
@@ -496,6 +529,16 @@ router.delete(
 
     if (!out) {
       return res.status(404).json({ error: "Deployment not found" });
+    }
+
+    // Withdrawing a product is a safety action and never waits for sign-off,
+    // but it is recorded like every other gate event.
+    if (!req.demoMode) {
+      await recordGateEvent(
+        "deployment.deleted",
+        { productKey, version: out.version || "", packageUri: out.packageUri || "" },
+        req,
+      );
     }
 
     // Nobody is to be emailed about a build that can no longer be downloaded:

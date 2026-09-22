@@ -109,6 +109,7 @@ import AdminWaitlist from "./pages/AdminWaitlist.jsx";
 import AdminFollowUps from "./pages/AdminFollowUps.jsx";
 import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
 import AdminAuditLog from "./pages/AdminAuditLog.jsx";
+import AdminReleases from "./pages/AdminReleases.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
@@ -189,6 +190,7 @@ import DsPreview from "./ds/DsPreview.jsx";
 import DsPreviewGate from "./ds/DsPreviewGate.jsx";
 import NewBuildGate from "./components/NewBuildGate.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
+import PreviewHostGate from "./components/PreviewHostGate.jsx";
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
@@ -980,6 +982,16 @@ const router = createBrowserRouter([
         ),
       },
 
+      // ✅ Release sign-off (docs/RELEASE_GATE.md): super-admins + the release approver
+      {
+        path: "admin/releases",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminReleases />
+          </AdminRoute>
+        ),
+      },
+
       // ✅ AI spend, per-user allocations & AWS credit burn-down (admin-only)
       {
         // Classic screen until the new build goes live (release: AdminDocAi).
@@ -1146,7 +1158,10 @@ const tree = (
     <ThemeProvider>
       <AuthProvider>
         <StepUpProvider>
-          <RouterProvider router={router} />
+          {/* preview.adlmstudio.com and other non-live hosts: admin roles only. */}
+          <PreviewHostGate router={router}>
+            <RouterProvider router={router} />
+          </PreviewHostGate>
         </StepUpProvider>
       </AuthProvider>
     </ThemeProvider>
