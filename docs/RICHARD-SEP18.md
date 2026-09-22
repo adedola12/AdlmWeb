@@ -33,7 +33,21 @@ customers have already seen, or a contract the desktop plugins rely on.
 
 1. **Our totals formula wins everywhere.** His prototype and ours cascade preliminaries,
    contingency, variations and VAT in a different order. Every screen now reads one module,
-   `client/src/features/projects/lib/projectTotals.js`, and no existing project's total moves.
+   `client/src/features/projects/lib/projectTotals.js`.
+
+   **The formula did not change; its input was wrong, and the Bill's estimated total therefore
+   falls on some projects.** Before this branch, the Bill cascaded on `fullProjectTotal` — a
+   figure that already contained the provisional and PC sums, the preliminaries and the
+   variations — so those were counted twice and preliminaries were charged on the doubled
+   block. Measured ₦120m with ₦18.5m of sums, 7.5% preliminaries, 5% contingency and 7.5% VAT
+   read ₦203.1m; it now reads ₦168.1m, and a bill of preliminaries alone falls by 7%.
+
+   Nothing anyone has signed moves. `lockContract()` on the server has always frozen the
+   contract sum on the true measured base, so a locked contract, every issued certificate,
+   every payment, the PM dashboard and the public project dashboard already carried the lower,
+   correct figure. The change closes a gap between the Bill screen and the contract rather than
+   opening one. The exposure is a quotation taken off the Bill screen without locking a
+   contract: that quote was too high, and a re-quote comes in lower.
 2. **Variations get an approval status**, `pending | approved | rejected`. Everything that
    exists today, and anything raised automatically, reads as approved, so no total moves.
    Only an approved variation counts anywhere.
