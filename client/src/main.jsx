@@ -1275,7 +1275,7 @@ const tree = (
       <FeedbackProvider>
         <AuthProvider>
           <StepUpProvider>
-            {/* preview.adlmstudio.com and other non-live hosts: admin roles only. */}
+            {/* preview.adlmstudio.net and other non-live hosts: admin roles only. */}
             <PreviewHostGate router={router}>
               <RouterProvider router={router} />
             </PreviewHostGate>

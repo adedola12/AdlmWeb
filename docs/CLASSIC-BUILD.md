@@ -11,7 +11,7 @@ build (Richard Enoch's redesign, branch `feat/video-notifications`) goes live.
 |---|---|---|
 | adlmstudio.net | Classic only. `/manage`, `/work` and `/dash-*` send them to the classic page for the same job (`client/src/components/NewBuildGate.jsx`). | Classic, plus the new-build screens by URL |
 | `/preview/*`, `/fit` | Sent home | The staged redesign |
-| preview.adlmstudio.com | Sign-in page only | The whole new build |
+| preview.adlmstudio.net | Sign-in page only | The whole new build |
 
 ## At go-live: retire, do not delete
 
