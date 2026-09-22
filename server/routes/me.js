@@ -43,6 +43,9 @@ import { blankToUndefined } from "../util/profileInput.js";
 import {
   baseProductKeyExpr,
   buildWorkOverviewPipeline,
+  certifiedToDateExpr,
+  contractValueExprs,
+  hasActiveEntitlement,
   shapeWorkOverview,
 } from "../util/workOverview.js";
 import {
@@ -1472,6 +1475,47 @@ router.get(
   }),
 );
 
+// May this reader see money on work they do not own?
+//
+// One question, asked the same way as the project routes ask it
+// (routes/projects.js resolveProjectAccess): the owner always may, and a
+// collaborator only with an active RateGen subscription. Everyone else gets a
+// payload with the money zeroed, exactly as maskRates() zeroes it on the
+// project itself.
+async function readerMaySeeRates(userId) {
+  const me = await User.findById(userId, { entitlements: 1 }).lean();
+  return hasActiveEntitlement(me, "rategen");
+}
+
+/**
+ * Hide the money on rollup rows the reader does not own, when they may not see
+ * rates. The row stays — a collaborator is meant to see the project, its
+ * quantities and its progress — but every figure the project API would have
+ * masked reads zero here too, and `moneyHidden` says so rather than letting a
+ * zero be mistaken for "nothing certified".
+ *
+ * Only the fields this branch added are masked. totalCost / valuedAmount /
+ * remainingAmount have been on this route (and on the per-product list route)
+ * since long before it, are read by screens that are not part of this change,
+ * and are left exactly as they were.
+ */
+function maskSharedMoney(rows, canSeeRates) {
+  if (canSeeRates) return rows;
+  return rows.map((p) =>
+    p.shared
+      ? {
+          ...p,
+          certifiedToDate: 0,
+          provisionalTotal: 0,
+          approvedVariationsTotal: 0,
+          preliminaryTotal: 0,
+          workValue: 0,
+          moneyHidden: true,
+        }
+      : p,
+  );
+}
+
 // GET /me/projects-rollup — every project the user owns OR collaborates on,
 // across ALL products (QUIV/HERON/MEP/Civil + their -materials siblings),
 // each with the same cost/valuation rollup the per-product /projects/:key
@@ -1487,6 +1531,7 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const canSeeRates = await readerMaySeeRates(userId);
 
     const num = (path) => ({
       $convert: { input: path, to: "double", onError: 0, onNull: 0 },
@@ -1706,32 +1751,34 @@ router.get(
           },
 
           certificateCount: { $size: { $ifNull: ["$certificates", []] } },
-          // Certified to date is the cumulative value of the highest-numbered
-          // certificate that has actually been approved or paid. It is NOT a
-          // sum of certificates: each one already carries the value to date,
-          // so adding them would certify the same work again and again. A
-          // draft is excluded, because a draft certifies nothing.
-          certifiedAgg: {
-            $reduce: {
-              input: {
-                $filter: {
-                  input: { $ifNull: ["$certificates", []] },
-                  as: "c",
-                  cond: {
-                    $in: [{ $ifNull: ["$$c.status", "draft"] }, ["approved", "paid"]],
-                  },
-                },
-              },
-              initialValue: { n: -1, v: 0 },
-              in: {
-                $cond: [
-                  { $gt: [num("$$this.number"), "$$value.n"] },
-                  { n: num("$$this.number"), v: num("$$this.cumulativeValue") },
-                  "$$value",
-                ],
-              },
-            },
-          },
+          // Certified to date: what the approved and paid certificates add up
+          // to, which is the figure the project's own Contract tab shows
+          // (client ProjectContractPanel) and the one the PDF reports print
+          // (services/reportEngine). It used to be the cumulative value of the
+          // highest-numbered approved certificate, which agrees only while
+          // approval runs contiguously from certificate 1 — with cert 1 left a
+          // draft, the dashboard certified work nobody had approved. The
+          // expression lives in util/workOverview.js so the two /me routes
+          // cannot drift apart again.
+          certifiedToDate: certifiedToDateExpr(),
+
+          // ── What the stage is read from (S18 bill, PR2-24) ───────────────
+          // client/src/lib/projectGallery.js stageOf() reads these three plus
+          // certificateCount. Without them the gallery and the overview could
+          // only ever report Takeoff, Priced or Valuations, so a finalised job
+          // read "Valuations" and filtering by Tendered returned nothing. Same
+          // fields, same $ifNull defaults, as the per-product list route.
+          contractLocked: { $ifNull: ["$contract.locked", false] },
+          tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
+          finalized: { $ifNull: ["$finalAccount.finalized", false] },
+
+          // ── The rest of the work's value ─────────────────────────────────
+          // Measured work alone is not what a certificate certifies: a
+          // certificate's cumulative value also carries provisional sums,
+          // preliminaries and approved variations. Carrying them lets the
+          // dashboard show certified value as a share of the same whole,
+          // instead of dividing by qty x rate and reading high.
+          ...contractValueExprs(),
         },
       },
       {
@@ -1744,14 +1791,41 @@ router.get(
               0,
             ],
           },
-          certifiedToDate: { $ifNull: ["$certifiedAgg.v", 0] },
+          // The preliminary pool is a percentage of measured work plus the
+          // declared provisional sums — the same order the Bill, the contract
+          // lock and computeValueToDate() use.
+          preliminaryTotal: {
+            $divide: [
+              {
+                $multiply: [
+                  { $add: ["$totalCost", "$provisionalTotal"] },
+                  "$preliminaryPercent",
+                ],
+              },
+              100,
+            ],
+          },
         },
       },
-      { $unset: "certifiedAgg" },
+      {
+        $addFields: {
+          // What the work is worth, on the same cascade a certificate is built
+          // from. Contingency and VAT are deliberately out: neither is ever
+          // certified.
+          workValue: {
+            $add: [
+              "$totalCost",
+              "$provisionalTotal",
+              "$preliminaryTotal",
+              "$approvedVariationsTotal",
+            ],
+          },
+        },
+      },
       { $sort: { updatedAt: -1 } },
     ]);
 
-    return res.json({ projects: list });
+    return res.json({ projects: maskSharedMoney(list, canSeeRates) });
   }),
 );
 
@@ -1764,6 +1838,10 @@ router.get(
 // writes, and every figure is read exactly as stored (a certificate's
 // netPayable, a variation's qty x rate) so no total anywhere moves.
 //
+// Money on somebody else's project is hidden on the same rule the project
+// itself uses, so the dashboard can never show a figure the project page would
+// have masked.
+//
 // Each panel is independent on the client, so a facet that comes back empty
 // simply shows that panel's empty state.
 router.get(
@@ -1771,10 +1849,11 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
-    const raw = await TakeoffProject.aggregate(
-      buildWorkOverviewPipeline(userId, { now: new Date() }),
-    );
-    return res.json(shapeWorkOverview(raw));
+    const [raw, canSeeRates] = await Promise.all([
+      TakeoffProject.aggregate(buildWorkOverviewPipeline(userId, { now: new Date() })),
+      readerMaySeeRates(userId),
+    ]);
+    return res.json(shapeWorkOverview(raw, { canSeeRates }));
   }),
 );
 
