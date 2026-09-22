@@ -34,6 +34,7 @@ import { useFeedback } from "./feedback/feedbackContext.js";
 import {
   componentsOf,
   groupComponents,
+  groupForKind,
   totalsFrom,
   unexplainedNet,
   toNum,
@@ -87,9 +88,10 @@ export default function DsWorkRate() {
           overrides: Array.isArray(d.rateOverrides) ? d.rateOverrides : [],
           customs: Array.isArray(d.customRates) ? d.customRates : [],
           version: d?.meta?.ratesVersion ?? 1,
+          customRatesVersion: d?.meta?.customRatesVersion ?? 1,
         }))
         // A user with no library of their own is not an error.
-        .catch(() => ({ overrides: [], customs: [], version: 1 })),
+        .catch(() => ({ overrides: [], customs: [], version: 1, customRatesVersion: 1 })),
     ]).then(([items, own]) => {
       setRates(items);
       setMine(own);
@@ -138,27 +140,29 @@ export default function DsWorkRate() {
   const overheadPercent = edit ? edit.overheadPercent : toNum(rate?.overheadPercent);
   const profitPercent = edit ? edit.profitPercent : toNum(rate?.profitPercent);
 
-  const startEdit = React.useCallback(() => {
-    setEdit((cur) =>
-      cur || {
-        components: baseComponents.map((c) => ({ ...c })),
-        overheadPercent: toNum(rate?.overheadPercent),
-        profitPercent: toNum(rate?.profitPercent),
-      },
-    );
-  }, [baseComponents, rate]);
+  const freshEdit = React.useCallback(
+    () => ({
+      components: baseComponents.map((c) => ({ ...c })),
+      overheadPercent: toNum(rate?.overheadPercent),
+      profitPercent: toNum(rate?.profitPercent),
+    }),
+    [baseComponents, rate],
+  );
 
+  const startEdit = React.useCallback(() => {
+    setEdit((cur) => cur || freshEdit());
+  }, [freshEdit]);
+
+  // What the user typed is kept exactly as typed, and only READ as a number.
+  // Coercing on every keystroke makes "1.5" impossible to type: the "." is
+  // stripped the moment it is entered and the caret never gets to the "5".
   const setQuantity = (index, value) => {
     startEdit();
     setEdit((cur) => {
-      const base = cur || {
-        components: baseComponents.map((c) => ({ ...c })),
-        overheadPercent: toNum(rate?.overheadPercent),
-        profitPercent: toNum(rate?.profitPercent),
-      };
+      const base = cur || freshEdit();
       const next = base.components.map((c, i) =>
         i === index
-          ? { ...c, quantity: Math.max(0, toNum(value)), amount: Math.max(0, toNum(value)) * toNum(c.unitPrice) }
+          ? { ...c, quantity: value, amount: Math.max(0, toNum(value)) * toNum(c.unitPrice) }
           : c,
       );
       return { ...base, components: next };
@@ -167,14 +171,7 @@ export default function DsWorkRate() {
 
   const setPercent = (which, value) => {
     startEdit();
-    setEdit((cur) => {
-      const base = cur || {
-        components: baseComponents.map((c) => ({ ...c })),
-        overheadPercent: toNum(rate?.overheadPercent),
-        profitPercent: toNum(rate?.profitPercent),
-      };
-      return { ...base, [which]: clampPc(value) };
-    });
+    setEdit((cur) => ({ ...(cur || freshEdit()), [which]: value }));
   };
 
   // Indexes are stable because `components` and `grouped` come from the same
@@ -184,9 +181,15 @@ export default function DsWorkRate() {
     return groupComponents(withIndex);
   }, [components]);
 
+  // The percentages are clamped HERE rather than as they are typed, so the
+  // figure shown and the figure saved are the same one, and 0 to 60 is the
+  // range the build-up has always applied.
+  const ohPc = clampPc(overheadPercent);
+  const prPc = clampPc(profitPercent);
+
   const totals = React.useMemo(
-    () => totalsFrom(components, overheadPercent, profitPercent),
-    [components, overheadPercent, profitPercent],
+    () => totalsFrom(components, ohPc, prPc),
+    [components, ohPc, prPc],
   );
 
   // An untouched rate shows what the server stored, so the page and the
@@ -205,7 +208,7 @@ export default function DsWorkRate() {
     try {
       const breakdown = edit.components.map((c) => ({
         componentName: c.name,
-        quantity: c.quantity,
+        quantity: Math.max(0, toNum(c.quantity)),
         unit: c.unit,
         unitPrice: c.unitPrice,
         lineTotal: c.amount,
@@ -216,6 +219,20 @@ export default function DsWorkRate() {
       }));
 
       if (isCustom) {
+        // A custom rate carries materials[] and labour[] as well as the
+        // breakdown, because that pair is what the desktop and the plugins
+        // read for its composition. They are rebuilt from the edited lines
+        // rather than sent empty, which would quietly strip a saved rate of
+        // its composition everywhere outside this screen.
+        const asLine = (c) => ({
+          description: c.name,
+          quantity: Math.max(0, toNum(c.quantity)),
+          unit: c.unit || "",
+          unitPrice: c.unitPrice,
+          totalCost: c.amount,
+          refSn: c.refSn ?? null,
+          refName: c.refName || c.name,
+        });
         await apiAuthed(`/rategen-v2/library/custom-rates/${encodeURIComponent(customId)}`, {
           method: "PUT",
           token: accessToken,
@@ -226,12 +243,17 @@ export default function DsWorkRate() {
             title: rate.title || rate.description || "",
             description: rate.description || "",
             unit: rate.unit || "",
-            materials: [],
-            labour: [],
+            materials: edit.components
+              .filter((c) => groupForKind(c.kind) === "material")
+              .map((c) => ({ ...asLine(c), rateType: "material" })),
+            labour: edit.components
+              .filter((c) => groupForKind(c.kind) === "labour")
+              .map((c) => ({ ...asLine(c), rateType: "labour" })),
             breakdown,
+            customRatesBaseVersion: mine?.customRatesVersion ?? 1,
             netCost: totals.netCost,
-            overheadPercent: edit.overheadPercent,
-            profitPercent: edit.profitPercent,
+            overheadPercent: ohPc,
+            profitPercent: prPc,
           },
         });
       } else {
@@ -249,8 +271,8 @@ export default function DsWorkRate() {
               description: rate.description || "",
               unit: rate.unit || "",
               netCost: totals.netCost,
-              overheadPercent: edit.overheadPercent,
-              profitPercent: edit.profitPercent,
+              overheadPercent: ohPc,
+              profitPercent: prPc,
               breakdown,
               sourceUpdatedAt: published?.updatedAt || rate.updatedAt || null,
               ratesBaseVersion: mine?.version ?? 1,
@@ -563,15 +585,15 @@ export default function DsWorkRate() {
                     <b>{money(plantGroup.total)}</b>
                   </div>
                 ) : null}
-                {overheadPercent ? (
+                {ohPc ? (
                   <div>
-                    <span>Overhead · {qty(overheadPercent)}%</span>
+                    <span>Overhead · {qty(ohPc)}%</span>
                     <b>{money(overhead)}</b>
                   </div>
                 ) : null}
-                {profitPercent ? (
+                {prPc ? (
                   <div>
-                    <span>Profit · {qty(profitPercent)}%</span>
+                    <span>Profit · {qty(prPc)}%</span>
                     <b>{money(profit)}</b>
                   </div>
                 ) : null}
