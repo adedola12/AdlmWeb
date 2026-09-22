@@ -12,7 +12,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import cors from "cors";
-import { apiOrigin, buildCorsOptions, corsWhitelist } from "../util/corsPolicy.js";
+import { apiOrigin, buildCorsOptions, corsRejectionHandler, corsWhitelist } from "../util/corsPolicy.js";
 import {
   productUpdatesUnsubscribeUrl,
   readTopicUnsubscribeToken,
@@ -109,10 +109,8 @@ test("the page's own button gets through the real CORS policy, whatever the CORS
       optOut: async (id) => (id === ID ? { email: "qs@firm.test" } : null),
     }),
   );
-  // index.js answers a CORS refusal with this.
-  app.use((err, _req, res, next) =>
-    err && /Not allowed by CORS/.test(err.message) ? res.status(403).json({ error: err.message }) : next(err),
-  );
+  // index.js answers a CORS refusal with this (its log line goes nowhere here).
+  app.use(corsRejectionHandler(() => {}));
   let srv;
   await new Promise((resolve) => {
     srv = app.listen(0, "127.0.0.1", resolve);
