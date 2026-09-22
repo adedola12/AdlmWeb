@@ -19,6 +19,7 @@ import { parseMsProjectFile } from "../util/msProjectParser.js";
 import { generateIcs, suggestedIcsFilename } from "../util/icsExporter.js";
 import { bestMatch, normalizeTaskName } from "../util/fuzzyMatch.js";
 import { TaskLinkLearned } from "../models/TaskLinkLearned.js";
+import { isApprovedVariation } from "../util/variationStatus.js";
 
 const PM_IMPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 const importUpload = multer({
@@ -519,7 +520,9 @@ async function updatePm(req, res) {
           const idx = Number(varMatch[1]);
           const arr = project.variations || [];
           const entry = arr[idx];
-          if (entry && pct >= 100 && !entry.completed) {
+          // S18 valuations: a pending or rejected variation is not part of
+          // the works, so a task cannot mark it executed on site.
+          if (entry && pct >= 100 && !entry.completed && isApprovedVariation(entry)) {
             entry.completed = true;
             entry.completedAt = new Date();
             variationsDirty = true;

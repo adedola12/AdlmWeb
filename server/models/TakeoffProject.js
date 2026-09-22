@@ -8,6 +8,8 @@ const DefaultValuationSettings = Object.freeze({
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
+  // S18 valuations: default procurement lead time, in days.
+  procurementLeadDays: 14,
 });
 
 const ValuationSettingsSchema = new mongoose.Schema(
@@ -51,6 +53,16 @@ const ValuationSettingsSchema = new mongoose.Schema(
       type: String,
       enum: ["boq", "budget"],
       default: "boq",
+    },
+    // S18 valuations: how many days before a material is needed on site the
+    // buy schedule says to order it. Was React state only, so it was lost on
+    // reload. Optional with a default, so a project saved before this field
+    // existed behaves exactly as it does today (14 days).
+    procurementLeadDays: {
+      type: Number,
+      default: DefaultValuationSettings.procurementLeadDays,
+      min: 0,
+      max: 120,
     },
   },
   { _id: false },
@@ -217,6 +229,19 @@ const VariationSchema = new mongoose.Schema(
     // toward earned value only when ticked. Same semantics as PC sums.
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null },
+    // S18 valuations: approval status. A variation only moves money once it
+    // is approved. The default is "approved" on purpose — every row written
+    // before this field existed, and every row the post-lock auto-add flow
+    // raises, reads back as approved, so no existing project's total moves.
+    // `completed` above stays a separate flag: approved = it counts toward
+    // the contract value, completed = it has been executed on site.
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "approved",
+    },
+    decidedAt: { type: Date, default: null },
+    decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   },
   { _id: false },
 );

@@ -21,6 +21,8 @@
 // Tasks with no baselineCost contribute 0 to the EVM math but still count
 // toward Tasks Done %.
 
+import { isApprovedVariation } from "../util/variationStatus.js";
+
 const MS_DAY = 24 * 60 * 60 * 1000;
 
 function safeNum(value) {
@@ -199,17 +201,23 @@ export function computeProjectScope(project) {
   // ── Variations ────────────────────────────────────────────────────────
   // Same rule as PC sums: instruction-issued contributes to BAC; executed
   // (completed flag set) contributes to EV.
+  // S18 valuations: only an APPROVED variation moves money, so a pending or
+  // rejected one is not a virtual item at all — it is in neither the BAC nor
+  // the earned value. Its index is kept in the identity so `var::N` still
+  // points at the same row of project.variations.
   const variations = Array.isArray(project?.variations) ? project.variations : [];
   let variationsTotal = 0;
   let variationsEarned = 0;
-  const variationsVirtual = variations.map((v, idx) => {
+  const variationsVirtual = [];
+  variations.forEach((v, idx) => {
+    if (!isApprovedVariation(v)) return;
     const qty = safeNum(v?.qty);
     const rate = safeNum(v?.rate);
     const amount = qty * rate;
     const isDone = Boolean(v?.completed);
     variationsTotal += amount;
     if (isDone) variationsEarned += amount;
-    return {
+    variationsVirtual.push({
       identity: `var::${idx}`,
       kind: "variation",
       sn: idx + 1,
@@ -224,7 +232,7 @@ export function computeProjectScope(project) {
       completed: isDone,
       purchased: false,
       percentComplete: isDone ? 100 : 0,
-    };
+    });
   });
 
   // ── Preliminaries (BESMM4 checklist) ─────────────────────────────────
