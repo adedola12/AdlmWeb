@@ -28,20 +28,45 @@
 // an admin asks. A missed
 // message is a support question. A duplicate is a customer wondering why the
 // studio mails them twice.
+//
+// THE WEEKLY DIGEST (util/releaseDigest.js)
+//
+// Since the weekly digest, a recorded notice waits ("pending") for the next
+// Monday digest instead of being mailed on its own. The digest takes it by a
+// conditional update (pending/failed -> "digesting", digestKey set), so a
+// notice is in exactly one digest, and the per-notice send refuses a notice
+// a digest has taken. The digest's own ledger is models/ReleaseDigest.js: one
+// row per customer per week, listing every update that customer holds. The
+// per-notice ledger below is only written by the per-notice send, which is
+// now an emergency path (POST .../:id/send with bypassDigest:true).
+//
+// A "hub" notice (kind "hub", productKey "hub") is a new Installation Center
+// build: recorded when an admin points Setting.installerHubUrl at a new
+// ADLMInstallerHub-vX.Y.Z file, or by hand, and told to everybody with a live
+// licence for software the Installation Center installs (not a course, not a
+// web-only key), inside the same weekly email. It is never sent on its own.
 
 import mongoose from "mongoose";
 
 export const NOTICE_STATUSES = [
-  "pending", // recorded, nothing sent yet
-  "sending", // the ledger is being worked through
+  "pending", // recorded, nothing sent yet (waits for the weekly digest)
+  "sending", // the per-notice ledger is being worked through (emergency path)
+  "digesting", // taken by a weekly digest (digestKey); only that digest mails it
   "done", // nobody is still owed the message
   "failed", // SES refused (sandbox, paused, denied); resumable by an admin
   "superseded", // a newer version of the product was announced first
   "cancelled", // the build was pulled (rolled back below this version, switched off, left with no package, or deleted), or an admin stopped it
 ];
 
-/** Statuses that may still send. */
-export const OPEN_STATUSES = ["pending", "sending", "failed"];
+/** Statuses that may still send. A pulled build cancels any of these. */
+export const OPEN_STATUSES = ["pending", "sending", "failed", "digesting"];
+
+/**
+ * The statuses a newer version supersedes. Not "digesting": a notice a digest
+ * has already started mailing is finished by that digest, so its remaining
+ * recipients are not left with neither version.
+ */
+export const SUPERSEDABLE_STATUSES = ["pending", "sending", "failed"];
 
 const ChangeGroupSchema = new mongoose.Schema(
   {
@@ -73,7 +98,21 @@ const ReleaseNoticeSchema = new mongoose.Schema(
 
     status: { type: String, enum: NOTICE_STATUSES, default: "pending", index: true },
 
-    // Where it came from: "deployment" (the PUT) or "manual" (an admin).
+    // "product" (a deployment) or "hub" (a new Installation Center build,
+    // told to everybody with a live licence for software it installs).
+    kind: { type: String, enum: ["product", "hub"], default: "product" },
+    // Hub notices: the setup file the admin published, for the record. The
+    // email links the customer dashboard (its "Download Installer Hub"
+    // button), not this file.
+    downloadUrl: { type: String, default: "" },
+
+    // The weekly digest that took it ("digest@2026-W40"), and when. Empty
+    // until a digest takes it; a notice is in one digest at most.
+    digestKey: { type: String, default: "", index: true },
+    digestedAt: { type: Date, default: null },
+
+    // Where it came from: "deployment" (the PUT), "manual" (an admin),
+    // "installer-hub-setting" (Setting.installerHubUrl changed).
     source: { type: String, default: "deployment" },
     createdBy: { type: String, default: "" },
 

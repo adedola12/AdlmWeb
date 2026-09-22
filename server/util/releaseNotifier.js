@@ -1,7 +1,8 @@
 // server/util/releaseNotifier.js
 //
-// "QUIV 3.1.11 is ready": one email to everybody licensed for a product, each
-// time a newer version of it is published to the Installation Center.
+// "QUIV 3.1.11 is ready": the record that a newer version of a product was
+// published to the Installation Center, and (for emergencies only) the
+// per-release email to everybody licensed for it.
 //
 // HOW A RELEASE BECOMES AN EMAIL
 //
@@ -10,13 +11,17 @@
 //      replaced and, only when it went UP, records a ReleaseNotice keyed
 //      "<key>@<canonical version>". Nothing is sent inside the PUT, and
 //      nothing here can fail it.
-//   2. The notice is worked through by sendReleaseNotice(): from the
-//      fifteen-minute job (scheduled.js, after video-poll) once it is
-//      RELEASE_HOLD_MS (10 minutes) old, and from
-//      POST /admin/release-notifications/:id/send, which a release script calls
-//      in a loop once its own checks of the published build have passed (and
-//      it calls /cancel when they fail). Each call sends a bounded amount and
-//      stops before its Lambda would, so the ledger is the only state.
+//   2. The notice waits for the WEEKLY DIGEST (util/releaseDigest.js): once a
+//      week, Monday 09:00 Lagos time by default, the fifteen-minute job
+//      (scheduled.js, after video-poll) takes every notice still live and
+//      sends each customer ONE email listing the updates for the software
+//      they hold. The fifteen-minute job no longer mails a notice on its own.
+//   3. sendReleaseNotice() below, the per-release send, is now the emergency
+//      path only: POST /admin/release-notifications/:id/send with
+//      {bypassDigest:true}. Each call sends a bounded amount and stops before
+//      its Lambda would, so the ledger is the only state. It refuses a notice
+//      a digest has taken ("digesting"), and a digest never takes a notice it
+//      has started, so nobody hears about one release twice.
 //
 // A PULLED BUILD IS NEVER ANNOUNCED
 //
@@ -68,6 +73,7 @@ import {
   ReleaseNotice,
   ReleaseNoticeRecipient,
   OPEN_STATUSES,
+  SUPERSEDABLE_STATUSES,
 } from "../models/ReleaseNotice.js";
 import { sendViaSesOnce, getSesAccount, isRetryableSesError } from "./sesTransport.js";
 import { mapWithPool } from "./sendPool.js";
@@ -99,14 +105,14 @@ const RETRY_BASE_MS = 500;
 export const BATCH_SIZE = Number(process.env.RELEASE_BATCH_SIZE || 50);
 
 /** Most sends in flight at once, whatever SES allows. */
-const MAX_CONCURRENCY = 10;
+export const MAX_CONCURRENCY = 10;
 
 /**
  * Every send so far refused, and this many of them: something is wrong with
  * the account or the message, not with the addresses. Stop and say so rather
  * than burning through the whole list.
  */
-const REFUSALS_BEFORE_STOP = 10;
+export const REFUSALS_BEFORE_STOP = 10;
 
 /** A row claimed this long ago and never settled belongs to a run that died. */
 export const IN_FLIGHT_STALE_MS = 15 * 60 * 1000;
@@ -133,15 +139,24 @@ export function releaseHoldMs() {
 export const isDryRun = () =>
   /^(1|true|yes)$/i.test(String(process.env.DRY_RUN || "").trim());
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * A new Installation Center build ("hub@1.0.3", util/releaseDigest.js). It has
+ * no ProductDeployment and no licence of its own, so the per-release send
+ * below cannot judge or address it: it only ever goes out in the weekly digest.
+ */
+export const isHubNotice = (n) =>
+  n?.kind === "hub" || String(n?.productKey || "").trim().toLowerCase() === "hub";
+
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Mail that carries an unsubscribe link is an announcement, so it goes out as
 // news@ with replies to the real inbox (util/senders.js). RELEASE_MAIL_FROM and
-// RELEASE_MAIL_REPLY_TO still override for this mail alone.
-const fromAddress = () =>
+// RELEASE_MAIL_REPLY_TO still override for this mail alone (and for the weekly
+// digest, util/releaseDigest.js, which uses these same two).
+export const fromAddress = () =>
   String(process.env.RELEASE_MAIL_FROM || "").trim() || senderFor({ marketing: true });
 
-const replyToAddress = () =>
+export const replyToAddress = () =>
   String(process.env.RELEASE_MAIL_REPLY_TO || "").trim() || defaultReplyTo();
 
 /* ─────────────────────────────────────────────────── should we announce ── */
@@ -389,7 +404,7 @@ export function sesAccountVerdict(acct = {}, region = "") {
   return { ok: true, code: "ok", message: "", ratePerSecond, remaining24h };
 }
 
-const errText = (err) =>
+export const errText = (err) =>
   `${err?.name && err.name !== "Error" ? `${err.name}: ` : ""}${err?.message || err || "unknown error"}`.slice(0, 500);
 
 /**
@@ -525,9 +540,16 @@ export async function recordDeploymentWithdrawn({
   return cancelled;
 }
 
-/** Back in the queue after a cancel, with the hold starting again. */
+/**
+ * Back in the queue after a cancel, with the hold starting again.
+ *
+ * Not a notice a weekly digest has carried (digestKey set): some customers may
+ * already have had it in that digest, and a notice is in one digest only, so
+ * it stays cancelled. A newer version is announced as usual.
+ */
 async function reopenIfCancelled(store, key, notice, now) {
   if (notice?.status !== "cancelled") return notice;
+  if (notice.digestKey) return notice;
   return (
     (await store.setNotice(key, { status: "pending", cancelledReason: "", openedAt: now() }, "cancelled")) ||
     notice
@@ -604,8 +626,29 @@ export async function recordDeploymentRelease({
   // Rows already sent stay sent, so nobody hears about it twice.
   const current = created ? notice : await reopenIfCancelled(store, key, notice, now);
 
+  // Carried by a weekly digest and cancelled since: never queued again, and it
+  // supersedes nothing (it will not be announced, so the older ones stand).
+  if (current?.status === "cancelled" && current?.digestKey) {
+    log.log?.(`[release-mail] ${key}: was in ${current.digestKey} and cancelled; not queued again`);
+    return {
+      ...out,
+      created: false,
+      key,
+      id: current?._id ? String(current._id) : "",
+      status: "cancelled",
+      reason: "already-in-digest",
+      digestKey: current.digestKey,
+      // This server mails releases in the weekly digest; this one it will not
+      // mail again (publish-build.ps1 says so).
+      deliveredBy: "weekly-digest",
+    };
+  }
+
+  // Not a notice a weekly digest is already mailing: that digest finishes it,
+  // and this one waits for the next.
   out.superseded = await store.closeOpenNotices(productKey, {
     exceptKey: key,
+    statuses: SUPERSEDABLE_STATUSES,
     match: (v) => compareVersions(v, version) < 0,
     set: { status: "superseded", supersededBy: key },
   });
@@ -622,6 +665,8 @@ export async function recordDeploymentRelease({
     id: current?._id ? String(current._id) : "",
     status: current?.status || "pending",
     notesSource: notes.source,
+    // Mailed in the next weekly digest, not now (util/releaseDigest.js).
+    deliveredBy: "weekly-digest",
   };
 }
 
@@ -668,7 +713,18 @@ export async function createManualNotice({
         ? `${product.name} ${lastAnnounced} is already announced (${existingKey}, ${existing?.status || "recorded"}). ` +
             "Nothing new was created. To resume it, POST .../send; to mail failed rows again, POST .../retry-failed."
         : `${product.name} ${lastAnnounced} has already been announced, which is newer than ${v}. Nothing was created.`,
-      { code: "already-announced", key: existingKey, lastAnnounced, status: existing?.status || "" },
+      {
+        code: "already-announced",
+        key: existingKey,
+        lastAnnounced,
+        status: existing?.status || "",
+        // Whether a per-release send has written its audience down (so some
+        // customers may have it), and the digest holding it, if any: a
+        // "failed" notice that was never enrolled is still queued for the
+        // digest, not a per-release email to finish.
+        enrolled: !!existing?.enrolledAt,
+        digestKey: existing?.digestKey || "",
+      },
     );
   }
 
@@ -695,8 +751,16 @@ export async function createManualNotice({
   });
 
   const current = created ? notice : await reopenIfCancelled(store, key, notice, now);
+  if (current?.status === "cancelled" && current?.digestKey) {
+    throw conflict(
+      `${product.name} ${v} was in ${current.digestKey} and then cancelled, so some customers may already have it. ` +
+        "It is not queued again. Nothing was created; publish a newer version to announce it.",
+      { code: "already-in-digest", key, digestKey: current.digestKey },
+    );
+  }
   const superseded = await store.closeOpenNotices(key0, {
     exceptKey: key,
+    statuses: SUPERSEDABLE_STATUSES,
     match: (x) => compareVersions(x, v) < 0,
     set: { status: "superseded", supersededBy: key },
   });
@@ -830,6 +894,17 @@ export async function sendReleaseNotice(
 
   if (TERMINAL.has(notice.status)) {
     return { ok: true, skipped: true, key, reason: `already-${notice.status}` };
+  }
+  // An Installation Center build: there is no "hub" deployment to check it
+  // against (the check below would cancel it as deleted) and no "hub" licence
+  // to address it to. Left exactly as it is, for the weekly digest.
+  if (isHubNotice(notice)) {
+    return { ok: true, skipped: true, key, reason: "hub-in-digest-only" };
+  }
+  // A weekly digest has taken it (util/releaseDigest.js): that digest mails
+  // it, once per customer, and nothing here may mail it as well.
+  if (notice.status === "digesting" || notice.digestKey) {
+    return { ok: true, skipped: true, key, reason: "in-digest", digestKey: notice.digestKey || "" };
   }
   if (notice.status === "failed" && !resume) {
     return { ok: true, skipped: true, key, reason: "failed-needs-resume", error: notice.error };
@@ -1145,7 +1220,7 @@ export async function sendReleaseNotice(
 
 /* ────────────────────────────────────────────────────────── the drain ── */
 
-async function acquireJobLock(lockId, ttlMinutes) {
+export async function acquireJobLock(lockId, ttlMinutes) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + ttlMinutes * 60 * 1000);
   const col = mongoose.connection.collection("job_locks");
@@ -1163,7 +1238,7 @@ async function acquireJobLock(lockId, ttlMinutes) {
   }
 }
 
-async function releaseJobLock(lockId) {
+export async function releaseJobLock(lockId) {
   try {
     await mongoose.connection.collection("job_locks").deleteOne({ _id: lockId });
   } catch {
@@ -1175,11 +1250,14 @@ async function releaseJobLock(lockId) {
 export const DRAIN_BUDGET_MS = Number(process.env.RELEASE_DRAIN_BUDGET_MS || 5 * 60 * 1000);
 
 /**
- * Every notice still owed a send, oldest first, until the time runs out.
+ * Every notice still owed a per-release send, oldest first, until the time
+ * runs out.
  *
- * Rides on the fifteen-minute video-poll invocation (scheduled.js), so a
- * release that nobody pushed by hand still goes out within a quarter of an
- * hour, with no new schedule and no change to the AdlmApi stack. The lock TTL
+ * NO LONGER SCHEDULED. Until the weekly digest (util/releaseDigest.js) this
+ * rode on the fifteen-minute video-poll invocation; scheduled.js now runs the
+ * digest tick there instead, so a release is mailed once a week inside the
+ * customer's one digest email. Kept, and tested, because it is the per-notice
+ * send loop's own driver; nothing in the app calls it on a timer. The lock TTL
  * (10 min) outlives VideoPollFn's 9-minute timeout, so a run killed mid-way
  * cannot leave the lock held against the next one for long.
  *
@@ -1296,15 +1374,17 @@ export const mongoStore = {
     return ReleaseNotice.findOneAndUpdate(filter, { $set: set }, { new: true }).lean();
   },
 
-  async closeOpenNotices(productKey, { exceptKey = "", match, set }) {
-    const open = await ReleaseNotice.find({ productKey, status: { $in: OPEN_STATUSES } })
+  async closeOpenNotices(productKey, { exceptKey = "", match, set, statuses = OPEN_STATUSES }) {
+    const open = await ReleaseNotice.find({ productKey, status: { $in: statuses } })
       .select("key version")
       .lean();
     const hit = open.filter((n) => n.key !== exceptKey && match(n.version));
+    const closed = [];
     for (const n of hit) {
-      await ReleaseNotice.updateOne({ key: n.key, status: { $in: OPEN_STATUSES } }, { $set: set });
+      const r = await ReleaseNotice.updateOne({ key: n.key, status: { $in: statuses } }, { $set: set });
+      if ((r?.modifiedCount ?? 0) > 0) closed.push(n.key);
     }
-    return hit.map((n) => n.key);
+    return closed;
   },
 
   listOpenNotices() {

@@ -14,6 +14,12 @@
 // own tests use, with SES stubbed: nothing here sends mail, reaches AWS or
 // needs a database. The one database call the gate makes (User.findById) is
 // answered from a map, the way middleware/requireAdmin.test.js does it.
+//
+// Since the weekly digest (util/releaseDigest.js) the per-release /send is an
+// emergency path: refused unless the body says {"bypassDigest":true}, so the
+// loop-contract tests below send it. The digest endpoints (/digest,
+// /digest/preview, /digest/send-now, /digest/cancel, /digest/hub) run the real
+// digest code against the same store, on a Tuesday-morning clock.
 import { test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
@@ -45,6 +51,10 @@ let base;
 let sendReleaseNotice;
 let recordDeploymentRelease;
 
+/** Tuesday 22 Sep 2026, 07:00 WAT: the next digest is Monday 28 Sep, 09:00 WAT. */
+const TUESDAY = "2026-09-22T06:00:00.000Z";
+const clock = () => new Date(TUESDAY);
+
 before(async () => {
   const { registerDemoTenancy } = await import("../models/demoTenancy.js");
   registerDemoTenancy();
@@ -53,6 +63,7 @@ before(async () => {
 
   const notifier = await import("../util/releaseNotifier.js");
   ({ sendReleaseNotice, recordDeploymentRelease } = notifier);
+  const digest = await import("../util/releaseDigest.js");
   const { makeReleaseNotificationsRouter } = await import("./admin.releaseNotifications.js");
 
   const storeProxy = new Proxy(
@@ -86,6 +97,27 @@ before(async () => {
     listNotices: async ({ productKey, limit }) =>
       [...world.store.notices.values()].filter((n) => !productKey || n.productKey === productKey).slice(0, limit),
     rowsIn: async (key, status) => world.store.rows.filter((r) => r.noticeKey === key && r.status === status),
+    digest: {
+      status: () => digest.digestStatus({ store: world.store, now: clock, holdMs: 0, log: quiet }),
+      preview: (o) => digest.previewSendNow({ ...o, store: world.store, now: clock, log: quiet }),
+      sendNow: (o) => {
+        world.sendNowCalls.push(o);
+        return digest.sendDigestNow({
+          ...o,
+          store: world.store,
+          send: world.ses.send,
+          sesAccount: world.sesAccount,
+          pause: noPause,
+          lock: false,
+          now: clock,
+          log: quiet,
+          // dryRun and enabled left to DRY_RUN and RELEASE_DIGEST_ENABLED, as in production.
+        });
+      },
+      cancel: (o) => digest.cancelQueuedNotice({ ...o, store: world.store }),
+      createHub: (o) => digest.createManualHubNotice({ ...o, store: world.store, now: clock, log: quiet }),
+      next: () => digest.nextDigestRun({ store: world.store, now: clock }),
+    },
   });
 
   const app = express();
@@ -108,12 +140,14 @@ after(() => new Promise((resolve) => server.close(resolve)));
 
 beforeEach(async () => {
   delete process.env.DRY_RUN;
+  delete process.env.RELEASE_DIGEST_ENABLED;
   accounts.clear();
   accounts.set("admin1", { role: "admin", disabled: false });
   world.store = memoryStore({ users: [person(1), person(2), person(3)] });
   world.ses = stubSes();
   world.sesAccount = async () => PRODUCTION;
   world.sendCalls = [];
+  world.sendNowCalls = [];
   world.store.deployments.set("revit", put("3.1.11"));
   await recordDeploymentRelease({ previous: put("3.1.10"), item: put("3.1.11"), store: world.store, log: quiet });
 });
@@ -144,7 +178,8 @@ async function call(method, path, { body, token = tokenFor("admin1"), headers = 
 }
 
 const KEY = "revit@3.1.11";
-const send = (body = {}) => call("POST", `/${encodeURIComponent(KEY)}/send`, { body });
+/** The per-release send, as an emergency: the only way it still sends. */
+const send = (body = {}) => call("POST", `/${encodeURIComponent(KEY)}/send`, { body: { bypassDigest: true, ...body } });
 
 /* ════════════════════════════════════════════════════════════ the gate ══ */
 
@@ -168,8 +203,230 @@ test("the gate: the database's admin, and nobody else", async () => {
   assert.equal((await call("GET", "/", { token: tokenFor("mini", { role: "mini_admin" }) })).status, 403);
 
   // A demo session is admitted by requireAdmin for viewing, and refused here.
-  const demo = await call("POST", `/${encodeURIComponent(KEY)}/send`, { body: {}, headers: { "x-test-demo": "1" } });
+  const demo = await call("POST", `/${encodeURIComponent(KEY)}/send`, {
+    body: { bypassDigest: true },
+    headers: { "x-test-demo": "1" },
+  });
   assert.equal(demo.status, 403);
+  // ...and from the digest's endpoints, the emergency send above all.
+  const demoNow = await call("POST", "/digest/send-now", { body: { confirm: "SEND" }, headers: { "x-test-demo": "1" } });
+  assert.equal(demoNow.status, 403);
+  accounts.set("mini", { role: "mini_admin", disabled: false });
+  const miniNow = await call("POST", "/digest/send-now", {
+    body: { confirm: "SEND" },
+    token: tokenFor("mini", { role: "mini_admin" }),
+  });
+  assert.equal(miniNow.status, 403);
+  assert.equal(world.ses.calls.length, 0);
+});
+
+/* ═══════════════════════════════════════ /send is not how releases go out ══ */
+
+test("/send without bypassDigest: 409, the digest's message, nothing sent, the notice still queued", async () => {
+  for (const body of [{}, { bypassDigest: "true" }, { bypassDigest: 1 }, { limit: 5 }]) {
+    const r = await call("POST", `/${encodeURIComponent(KEY)}/send`, { body });
+    assert.equal(r.status, 409, JSON.stringify(body));
+    assert.equal(r.json.error, "release emails now go out in the weekly digest; use /digest/send-now");
+    assert.equal(r.json.code, "weekly-digest");
+    assert.match(r.json.note, /Mon 28 Sep 2026, 09:00 WAT/);
+    assert.match(r.json.note, /bypassDigest/);
+  }
+  assert.equal(world.ses.calls.length, 0);
+  assert.equal(world.sendCalls.length, 0, "the send loop was never entered");
+  assert.equal(world.store.notices.get(KEY).status, "pending");
+});
+
+test("/send with bypassDigest for a notice a digest has taken: 409 in-digest, nothing sent twice", async () => {
+  const now = await call("POST", "/digest/send-now", { body: { confirm: "SEND" } });
+  assert.equal(now.status, 200);
+  assert.equal(world.ses.calls.length, 3);
+
+  const r = await send();
+  assert.equal(r.status, 409);
+  assert.equal(r.json.code, "in-digest");
+  assert.match(r.json.digestKey, /^digest@2026-W39-now-/);
+  assert.equal(world.ses.calls.length, 3);
+});
+
+/* ═════════════════════════════════════════════════════ the weekly digest ══ */
+
+test("GET /digest: when it runs next, what is queued for it, and roughly how many get it", async () => {
+  const r = await call("GET", "/digest");
+  assert.equal(r.status, 200);
+  assert.equal(r.json.enabled, true);
+  assert.equal(r.json.nextRunAt, "2026-09-28T08:00:00.000Z");
+  assert.equal(r.json.nextRunLagos, "Mon 28 Sep 2026, 09:00 WAT");
+  assert.equal(r.json.thisWeek.key, "digest@2026-W39");
+  assert.deepEqual(r.json.queued.map((u) => [u.key, u.status]), [[KEY, "pending"]]);
+  assert.equal(r.json.recipientsEstimate, 3);
+  assert.equal(world.ses.calls.length, 0);
+});
+
+test("POST /digest/preview: counts and one customer's email, as a dry run", async () => {
+  const before = world.store.writes.length;
+  const first = await call("POST", "/digest/preview", { body: {} });
+  assert.equal(first.status, 200);
+  assert.equal(first.json.recipients, 3);
+  assert.equal(first.json.sample.to, "user1@firm.test");
+  assert.equal(first.json.sample.subject, "QUIV 3.1.11 is ready — update from the Installation Center");
+  assert.match(first.json.note, /Dry run/);
+
+  const two = await call("POST", "/digest/preview", { body: { userId: "u2" } });
+  assert.equal(two.json.sample.to, "user2@firm.test");
+  const nobody = await call("POST", "/digest/preview", { body: { userId: "not-an-id" } });
+  assert.equal(nobody.status, 200);
+  assert.equal(nobody.json.sample, null);
+  assert.equal(world.ses.calls.length, 0);
+  assert.equal(world.store.writes.length, before, "a preview writes nothing");
+});
+
+test("POST /digest/send-now: refused without confirm SEND; then one email per customer, marked so Monday skips it", async () => {
+  const unconfirmed = await call("POST", "/digest/send-now", { body: {} });
+  assert.equal(unconfirmed.status, 400);
+  assert.equal(unconfirmed.json.code, "confirm-required");
+  assert.equal(world.sendNowCalls.length, 0);
+
+  const r = await call("POST", "/digest/send-now", { body: { confirm: "SEND", limit: 5000 } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.status, "done");
+  // Done, and a word that the Monday digest may still mail these customers about anything newer.
+  assert.match(r.json.note, /^Complete\. Sent now\. The weekly digest on Mon 28 Sep 2026, 09:00 WAT will not repeat these updates/);
+  assert.equal(r.json.weeklyNote, r.json.note.replace(/^Complete\. /, ""));
+  assert.equal(world.sendNowCalls[0].limit, 1000, "the limit is clamped");
+  assert.deepEqual(world.ses.calls.map((m) => m.to[0]).sort(), ["user1@firm.test", "user2@firm.test", "user3@firm.test"]);
+  const n = world.store.notices.get(KEY);
+  assert.equal(n.status, "done");
+  assert.match(n.digestKey, /^digest@2026-W39-now-/);
+
+  const again = await call("POST", "/digest/send-now", { body: { confirm: "SEND" } });
+  assert.equal(again.status, 200);
+  assert.equal(again.json.note, "Nothing is queued for the digest. Nothing was sent.");
+  assert.equal(world.ses.calls.length, 3);
+});
+
+test("POST /digest/send-now: 409 while RELEASE_DIGEST_ENABLED is off, and under DRY_RUN it sends nothing", async () => {
+  process.env.RELEASE_DIGEST_ENABLED = "false";
+  try {
+    const off = await call("POST", "/digest/send-now", { body: { confirm: "SEND" } });
+    assert.equal(off.status, 409);
+    assert.equal(off.json.code, "digest-disabled");
+    assert.match(off.json.note, /RELEASE_DIGEST_ENABLED is off/);
+  } finally {
+    delete process.env.RELEASE_DIGEST_ENABLED;
+  }
+  process.env.DRY_RUN = "1";
+  try {
+    const before = world.store.writes.length;
+    const dry = await call("POST", "/digest/send-now", { body: { confirm: "SEND" } });
+    assert.equal(dry.status, 200);
+    assert.equal(dry.json.dryRun, true);
+    assert.match(dry.json.note, /DRY RUN: would mail 3 customer\(s\)/);
+    assert.equal(world.store.writes.length, before);
+  } finally {
+    delete process.env.DRY_RUN;
+  }
+  assert.equal(world.ses.calls.length, 0);
+  assert.equal(world.store.digests.size, 0);
+});
+
+test("POST /digest/cancel takes a notice out of the queue; POST /digest/hub adds a new Installation Center", async () => {
+  assert.equal((await call("POST", "/digest/cancel", { body: {} })).status, 400);
+  assert.equal((await call("POST", "/digest/cancel", { body: { key: "revit@9.9.9" } })).status, 404);
+  const c = await call("POST", "/digest/cancel", { body: { key: KEY } });
+  assert.equal(c.status, 200);
+  assert.equal(c.json.status, "cancelled");
+  assert.equal((await call("POST", "/digest/cancel", { body: { key: KEY } })).status, 409);
+
+  world.store.hub.url = "https://cdn.test/adlm/installer-hub/1727000000000-ADLMInstallerHub-v1.0.4.zip";
+  const h = await call("POST", "/digest/hub", { body: { version: "1.0.4", releaseNotes: "- Clearer update list" } });
+  assert.equal(h.status, 201);
+  assert.equal(h.json.key, "hub@1.0.4");
+  assert.match(h.json.note, /Mon 28 Sep 2026, 09:00 WAT, to everybody with an active licence for software it installs\. Nothing has been sent\./);
+  assert.equal((await call("POST", "/digest/hub", { body: { version: "1.0.4" } })).status, 409);
+  assert.equal((await call("POST", "/digest/hub", { body: { version: "soon" } })).status, 400);
+
+  const status = await call("GET", "/digest");
+  assert.deepEqual(status.json.queued.map((u) => u.key), ["hub@1.0.4"]);
+  assert.equal(world.ses.calls.length, 0);
+});
+
+test("POST /digest/preview shows an unfinished digest that still holds updates, and /digest/send-now refuses it until the call names it", async () => {
+  // A send-now that SES refuses part way: one customer mailed, then AccessDenied.
+  let k = 0;
+  world.ses = stubSes({ failFor: () => (++k > 1 ? sesErr("AccessDeniedException", "not authorized", 403) : null) });
+  process.env.MAIL_SEND_RATE_PER_SEC = "1";
+  let stopped;
+  try {
+    stopped = await call("POST", "/digest/send-now", { body: { confirm: "SEND" } });
+  } finally {
+    delete process.env.MAIL_SEND_RATE_PER_SEC;
+  }
+  assert.equal(stopped.status, 409);
+  assert.equal(stopped.json.stopped, true);
+  const key = stopped.json.digestKey;
+  assert.match(key, /^digest@2026-W39-now-/);
+  const told = world.ses.calls[0].to[0];
+
+  // A new release is recorded meanwhile.
+  world.store.deployments.set("rategen", put("2.9.3", { productKey: "rategen", displayName: "" }));
+  await recordDeploymentRelease({
+    previous: put("2.9.2", { productKey: "rategen", displayName: "" }),
+    item: put("2.9.3", { productKey: "rategen", displayName: "" }),
+    store: world.store,
+    log: quiet,
+  });
+  world.store.users.forEach((u) => u.entitlements.push({ productKey: "rategen", status: "active" }));
+
+  // The preview shows THAT digest, the customers still owed it, and its name.
+  world.ses = stubSes();
+  const p = await call("POST", "/digest/preview", { body: {} });
+  assert.equal(p.status, 200);
+  assert.equal(p.json.action, "resume");
+  assert.equal(p.json.digestKey, key);
+  assert.equal(p.json.requiresDigestKey, true);
+  assert.deepEqual(p.json.updates.map((u) => u.key), [KEY]);
+  assert.equal(p.json.recipients, 2);
+  assert.deepEqual(p.json.stillQueued, ["rategen@2.9.3"]);
+  assert.match(p.json.note, /only when the call names it/);
+  const status = await call("GET", "/digest");
+  assert.equal(status.json.sendNow.digestKey, key);
+  assert.equal(status.json.sendNow.requiresDigestKey, true);
+
+  // SEND without the name: 409, nothing sent.
+  const unnamed = await call("POST", "/digest/send-now", { body: { confirm: "SEND" } });
+  assert.equal(unnamed.status, 409);
+  assert.equal(unnamed.json.code, "unfinished-digest");
+  assert.equal(unnamed.json.digestKey, key);
+  assert.equal(world.ses.calls.length, 0);
+
+  // Named: it finishes, and says what is still queued.
+  const named = await call("POST", "/digest/send-now", { body: { confirm: "SEND", digestKey: key } });
+  assert.equal(named.status, 200);
+  assert.equal(named.json.continued, key);
+  assert.equal(named.json.status, "done");
+  assert.match(named.json.note, /^Complete\. Still queued: rategen@2\.9\.3, for the weekly digest on Mon 28 Sep 2026, 09:00 WAT/);
+  assert.match(named.json.weeklyNote, /^Sent now\. The weekly digest on Mon 28 Sep 2026, 09:00 WAT will not repeat these updates/);
+  assert.equal(world.ses.calls.length, 2);
+  assert.ok(world.ses.calls.every((m) => m.to[0] !== told), "nobody twice");
+
+  const last = await call("POST", "/digest/send-now", { body: { confirm: "SEND", digestKey: key } });
+  assert.equal(last.status, 200);
+  assert.equal(last.json.skipped, true);
+  assert.equal(last.json.reason, "already-done");
+  assert.equal(world.ses.calls.length, 2);
+});
+
+test("/send refuses an Installation Center notice, bypassDigest or not: 409 hub-in-digest-only, and it stays queued", async () => {
+  world.store.hub.url = "https://cdn.test/adlm/installer-hub/1727000000000-ADLMInstallerHub-v1.0.4.zip";
+  assert.equal((await call("POST", "/digest/hub", { body: { version: "1.0.4" } })).status, 201);
+  for (const body of [{ bypassDigest: true }, {}]) {
+    const r = await call("POST", `/${encodeURIComponent("hub@1.0.4")}/send`, { body });
+    assert.equal(r.status, 409);
+    assert.equal(r.json.code, "hub-in-digest-only");
+    assert.match(r.json.note, /digest\/send-now/);
+  }
+  assert.equal(world.sendCalls.length, 0, "the per-release send was never entered");
+  assert.equal(world.store.notices.get("hub@1.0.4").status, "pending", "not cancelled as a deleted deployment");
   assert.equal(world.ses.calls.length, 0);
 });
 
@@ -266,7 +523,7 @@ test("/send under DRY_RUN says what it would do, and sends and writes nothing", 
   process.env.DRY_RUN = "1";
   try {
     const before = world.store.writes.length;
-    const r = await call("POST", `/${encodeURIComponent(KEY)}/send`, { body: {} });
+    const r = await send();
     assert.equal(r.status, 200);
     assert.equal(r.json.dryRun, true);
     assert.equal(r.json.note, "DRY RUN: would mail 3 licence holder(s). Nothing sent, nothing written.");
@@ -347,7 +604,8 @@ test("a manual announcement: 409 for a version already announced however it is s
   const made = await call("POST", "/", { body: { productKey: "rategen", version: "2.9.1" } });
   assert.equal(made.status, 201);
   assert.equal(made.json.key, "rategen@2.9.1");
-  assert.match(made.json.note, /Nothing has been sent/);
+  assert.equal(made.json.deliveredBy, "weekly-digest");
+  assert.match(made.json.note, /Nothing has been sent: it goes out in the weekly digest on Mon 28 Sep 2026, 09:00 WAT\./);
   assert.equal(world.ses.calls.length, 0);
 });
 

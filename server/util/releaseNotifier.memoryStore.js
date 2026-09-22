@@ -11,10 +11,23 @@
 // "SES refusing stops the run" and "a pulled build is never announced" are
 // exercised end to end rather than asserted about a mock of Mongoose.
 
+//
+// The weekly digest (util/releaseDigest.js) runs against the same store: one
+// digest per key, one ledger row per (digest, user) and per (digest, address),
+// the same conditional claim, and the Installation Center link as the
+// dashboard has it (`hub.url`, Setting.installerHubUrl). `armedAt` is when
+// the digest went live (the first tick): long ago by default, so a test's
+// Monday is a normal Monday; pass `armedAt: null` for a store no tick has
+// seen yet (a fresh deploy). The digest's take (takeNoticeForDigest) and its
+// candidates (digestCandidates) share one test, `takeable`, written to the
+// Mongo filter's meaning (releaseDigest.js takeableFilter), and a digest that
+// took nothing is closed only while claimedAt is still null
+// (closeUnclaimedDigest), as its Mongo filter says.
+
 import { tallyCounts } from "./releaseNotifier.js";
 import { maxVersion } from "./releaseVersion.js";
 
-const OPEN = ["pending", "sending", "failed"];
+const OPEN = ["pending", "sending", "failed", "digesting"];
 const clone = (x) => (x == null ? x : structuredClone(x));
 const startOfDay = (d) => {
   const x = new Date(d);
@@ -22,16 +35,36 @@ const startOfDay = (d) => {
   return x;
 };
 
-export function memoryStore({ users = [], changelogs = {}, deployments = {} } = {}) {
+export function memoryStore({
+  users = [],
+  changelogs = {},
+  deployments = {},
+  hubUrl = "",
+  armedAt = new Date(0),
+} = {}) {
   const notices = new Map();
   const rows = [];
   const writes = [];
   const sendLog = [];
   const deps = new Map(Object.entries(deployments));
+  const digests = new Map();
+  const digestRows = [];
+  const digestSendLog = [];
+  const hub = { url: hubUrl };
+  const state = { armedAt: armedAt ? new Date(armedAt) : null };
   let seq = 0;
   const id = () => `id${String((seq += 1)).padStart(6, "0")}`;
   const statusOk = (doc, where) =>
     !where || (Array.isArray(where) ? where.includes(doc.status) : doc.status === where);
+  const liveFor = (keys, now) => (e) =>
+    (keys === null || keys.includes(e.productKey)) &&
+    e.status === "active" &&
+    (!e.expiresAt || new Date(e.expiresAt) >= startOfDay(now));
+  const takeable = (n, staleBefore) =>
+    !n.digestKey &&
+    !n.enrolledAt &&
+    (["pending", "failed"].includes(n.status) ||
+      (n.status === "sending" && (!n.lastRunAt || new Date(n.lastRunAt) < new Date(staleBefore))));
 
   return {
     notices,
@@ -40,6 +73,11 @@ export function memoryStore({ users = [], changelogs = {}, deployments = {} } = 
     sendLog,
     users,
     deployments: deps,
+    digests,
+    digestRows,
+    digestSendLog,
+    hub,
+    state,
 
     async findNotice(k) {
       for (const n of notices.values()) if (n._id === k || n.key === k) return clone(n);
@@ -62,10 +100,10 @@ export function memoryStore({ users = [], changelogs = {}, deployments = {} } = 
       Object.assign(n, clone(set));
       return clone(n);
     },
-    async closeOpenNotices(pk, { exceptKey = "", match, set }) {
+    async closeOpenNotices(pk, { exceptKey = "", match, set, statuses = OPEN }) {
       const hit = [];
       for (const n of notices.values()) {
-        if (n.productKey === pk && OPEN.includes(n.status) && n.key !== exceptKey && match(n.version)) {
+        if (n.productKey === pk && statuses.includes(n.status) && n.key !== exceptKey && match(n.version)) {
           writes.push("closeOpenNotices");
           Object.assign(n, clone(set));
           hit.push(n.key);
@@ -154,6 +192,154 @@ export function memoryStore({ users = [], changelogs = {}, deployments = {} } = 
     },
     logSend(entry) {
       sendLog.push(entry);
+    },
+
+    /* ── the weekly digest ── */
+
+    async findDigest(key) {
+      return clone(digests.get(key) ?? null);
+    },
+    async insertDigest(doc) {
+      writes.push("insertDigest");
+      if (digests.has(doc.key)) return { digest: clone(digests.get(doc.key)), created: false }; // unique key
+      const d = {
+        _id: id(),
+        claimedAt: null,
+        enrolledAt: null,
+        startedAt: null,
+        finishedAt: null,
+        error: "",
+        noticeKeys: [],
+        items: [],
+        createdAt: new Date(Date.now() + seq),
+        ...clone(doc),
+      };
+      digests.set(doc.key, d);
+      return { digest: clone(d), created: true };
+    },
+    async setDigest(key, set, where = null) {
+      writes.push("setDigest");
+      const d = digests.get(key);
+      if (!d || !statusOk(d, where)) return null;
+      Object.assign(d, clone(set));
+      return clone(d);
+    },
+    // Only while it has taken nothing (claimedAt null), like the Mongo filter.
+    async closeUnclaimedDigest(key, set, where) {
+      writes.push("closeUnclaimedDigest");
+      const d = digests.get(key);
+      if (!d || d.claimedAt || !statusOk(d, where)) return null;
+      Object.assign(d, clone(set));
+      return clone(d);
+    },
+    async unfinishedDigests() {
+      return [...digests.values()]
+        .filter((d) => ["enrolling", "sending", "failed"].includes(d.status))
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map(clone);
+    },
+    async recentDigests(limit = 5) {
+      return [...digests.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, limit).map(clone);
+    },
+    // The Mongo filters, written out again: never mailed by anybody (no
+    // per-release enrolment, in no digest), and pending, refused before
+    // enrolment, or claimed by a per-release run that died before enrolling
+    // (`sending`, last run before `staleBefore`).
+    async digestCandidates({ staleBefore = new Date(0) } = {}) {
+      return [...notices.values()]
+        .filter((n) => takeable(n, staleBefore))
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map(clone);
+    },
+    // The same test and the write in one step, like findOneAndUpdate.
+    async takeNoticeForDigest(key, set, { staleBefore = new Date(0) } = {}) {
+      writes.push("takeNoticeForDigest");
+      const n = notices.get(key);
+      if (!n || !takeable(n, staleBefore)) return null;
+      Object.assign(n, clone(set));
+      return clone(n);
+    },
+    async noticesInDigest(key) {
+      return [...notices.values()].filter((n) => n.digestKey === key).sort((a, b) => a.createdAt - b.createdAt).map(clone);
+    },
+    async noticesForProduct(pk) {
+      return [...notices.values()].filter((n) => n.productKey === pk).map(clone);
+    },
+    async legacyInProgress({ staleBefore = new Date(0) } = {}) {
+      return [...notices.values()]
+        .filter(
+          (n) =>
+            !n.digestKey &&
+            ((["pending", "sending", "failed"].includes(n.status) && n.enrolledAt) ||
+              (n.status === "sending" && !n.enrolledAt && n.lastRunAt && new Date(n.lastRunAt) >= staleBefore)),
+        )
+        .map(clone);
+    },
+    // Written once, like the $setOnInsert upsert in the Mongo store.
+    async armDigest(at) {
+      if (!state.armedAt) {
+        writes.push("armDigest");
+        state.armedAt = new Date(at);
+      }
+      return new Date(state.armedAt);
+    },
+    async peekArmedAt() {
+      return state.armedAt ? new Date(state.armedAt) : null;
+    },
+    async hubState() {
+      return { url: hub.url };
+    },
+    // Written to the Mongo filter's meaning, independently of the code under
+    // test: not disabled, has an address, ONE live entitlement for one of the
+    // keys (any key when `keys` is null).
+    async digestAudience(keys, now) {
+      return users
+        .filter((u) => u.disabled !== true && u.email && (u.entitlements || []).some(liveFor(keys, now)))
+        .map(clone);
+    },
+    async enrolDigest(newRows) {
+      writes.push("enrolDigest");
+      const ordered = [...newRows].sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1));
+      for (const r of ordered) {
+        // the unique indexes: (digestKey, userId) and (digestKey, emailHash)
+        if (
+          digestRows.some(
+            (x) =>
+              x.digestKey === r.digestKey && (String(x.userId) === String(r.userId) || x.emailHash === r.emailHash),
+          )
+        ) {
+          continue;
+        }
+        digestRows.push({ _id: id(), attempts: 0, claimedAt: null, error: "", sentNoticeKeys: [], ...clone(r) });
+      }
+    },
+    async pendingDigestBatch(key, limit) {
+      return digestRows.filter((r) => r.digestKey === key && r.status === "pending").slice(0, limit).map(clone);
+    },
+    async claimDigestRow(rowId, at) {
+      const r = digestRows.find((x) => x._id === rowId);
+      if (!r || r.status !== "pending") return false;
+      r.status = "sending";
+      r.claimedAt = at;
+      r.attempts += 1;
+      return true;
+    },
+    async settleDigestRow(rowId, set, from) {
+      const r = digestRows.find((x) => x._id === rowId);
+      if (!r || r.status !== from) return false;
+      Object.assign(r, clone(set));
+      return true;
+    },
+    async digestCounts(key) {
+      const groups = new Map();
+      for (const r of digestRows.filter((x) => x.digestKey === key)) {
+        const g = `${r.status}|${r.skipReason || ""}`;
+        groups.set(g, (groups.get(g) || 0) + 1);
+      }
+      return tallyCounts([...groups].map(([g, n]) => ({ status: g.split("|")[0], skipReason: g.split("|")[1], n })));
+    },
+    logDigestSend(entry) {
+      digestSendLog.push(entry);
     },
   };
 }

@@ -240,8 +240,10 @@ try {
         -Body ($payload | ConvertTo-Json -Depth 6)
     $saved = $putResp.item
     # The "new version is ready" email the server queued for this PUT, if any
-    # (server/util/releaseNotifier.js). The fifteen-minute job holds it for ten
-    # minutes, so a failed check below can cancel it before anyone is mailed.
+    # (server/util/releaseNotifier.js). It waits for the weekly release digest
+    # (server/util/releaseDigest.js, Monday 09:00 Lagos by default; an older
+    # server mails it after a ten-minute hold), so a failed check below can
+    # cancel it before anyone is mailed.
     $releaseNotice = $putResp.releaseNotice
 } catch {
     Fail @"
@@ -278,14 +280,35 @@ if ($problems.Count) {
         } catch {
             Write-Host "  Could NOT cancel release email $($releaseNotice.key): $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "  Cancel it now in the admin API (POST /admin/release-notifications/<key>/cancel)" -ForegroundColor Red
-            Write-Host "  or the fifteen-minute job will mail customers about this build." -ForegroundColor Red
+            $whenMailed = if ($releaseNotice.nextDigestLagos) { "weekly digest, $($releaseNotice.nextDigestLagos)" } `
+                elseif ($releaseNotice.deliveredBy -eq "weekly-digest") { "in the next weekly digest" } `
+                else { "within 25 minutes" }
+            Write-Host "  or customers will be mailed about this build ($whenMailed)." -ForegroundColor Red
         }
     }
     Fail "Published, but the record is not what was intended. Fix it in the admin UI before anyone installs."
 }
 
-Good "`n$key is live on $Version."
-if ($releaseNotice -and $releaseNotice.key) {
+if ($putResp.pendingApproval) {
+    # Release gate (docs/RELEASE_GATE.md): the PUT answered 202 and customers keep the old build.
+    Good "`n$key $Version is STAGED for release sign-off, not live: $($putResp.message)"
+    Note "No release email yet: the server records it when the approver signs it off, for the weekly digest."
+} else {
+    Good "`n$key is live on $Version."
+}
+if ($putResp.pendingApproval) {
+    # Nothing to say about a release email until it is approved.
+} elseif ($releaseNotice -and $releaseNotice.key -and $releaseNotice.deliveredBy -eq "weekly-digest" -and $releaseNotice.reason -eq "already-in-digest") {
+    Note "Release email $($releaseNotice.key) is NOT queued: it went out in $($releaseNotice.digestKey) and was cancelled"
+    Note "since, so some customers already have it. It is not announced again; publish a newer version to announce one."
+} elseif ($releaseNotice -and $releaseNotice.key -and ($releaseNotice.deliveredBy -eq "weekly-digest" -or $releaseNotice.nextDigestLagos)) {
+    $when = if ($releaseNotice.nextDigestLagos) { $releaseNotice.nextDigestLagos } else { "the next one (GET $ApiBaseUrl/admin/release-notifications/digest says when)" }
+    Note "Release email $($releaseNotice.key) queued ($($releaseNotice.status)) for the weekly digest: $when."
+    Note "Each customer gets ONE email that week listing every update they hold. Nothing is mailed before then."
+    Note "If the check below fails: POST $ApiBaseUrl/admin/release-notifications/digest/cancel {""key"":""$($releaseNotice.key)""}"
+    Note "(before the digest, POST $ApiBaseUrl/admin/release-notifications with {productKey, version} queues it again)."
+} elseif ($releaseNotice -and $releaseNotice.key) {
+    # An older server, without the weekly digest (no deliveredBy in its answer).
     Note "Release email $($releaseNotice.key) queued ($($releaseNotice.status)): customers are mailed in 10-25 minutes."
     Note "To hold it until you have verified below: POST $ApiBaseUrl/admin/release-notifications/$($releaseNotice.key)/cancel"
     Note "now, and afterwards POST $ApiBaseUrl/admin/release-notifications with {productKey, version} to reopen it."

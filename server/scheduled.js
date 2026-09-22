@@ -62,15 +62,15 @@ function ready() {
       { runAutoRenewals },
       { runVideoPoll },
       { runOpsDigest },
-      { runReleaseNoticeDrain },
+      { runReleaseDigestTick },
     ] = await Promise.all([
       import("./util/expiryNotifier.js"),
       import("./util/autoRenew.js"),
       import("./util/videoNotifier.js"),
       import("./util/opsDigest.js"),
-      import("./util/releaseNotifier.js"),
+      import("./util/releaseDigest.js"),
     ]);
-    return { runExpiryNotifier, runAutoRenewals, runVideoPoll, runOpsDigest, runReleaseNoticeDrain };
+    return { runExpiryNotifier, runAutoRenewals, runVideoPoll, runOpsDigest, runReleaseDigestTick };
   })().catch((err) => {
     _readyPromise = null;
     throw err;
@@ -80,7 +80,7 @@ function ready() {
 }
 
 /**
- * When the release drain must stop: five minutes at most, and always a minute
+ * When the release digest must stop: five minutes at most, and always a minute
  * before this invocation's own timeout, so a batch is never cut off mid-send.
  */
 function drainDeadline(context) {
@@ -102,7 +102,7 @@ export async function handler(event, context) {
   // Throwing sends the event to the scheduler's dead-letter queue, where the
   // DLQ-depth alarm surfaces it. Silently succeeding would hide a broken rule
   // until someone noticed nobody had been renewed.
-  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll", "ops-digest", "release-notices"];
+  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll", "ops-digest", "release-digest", "release-notices"];
   if (!KNOWN.includes(job)) {
     throw new Error(`Unknown job "${job}". Expected one of: ${KNOWN.join(", ")}.`);
   }
@@ -132,9 +132,14 @@ export async function runJob(job, jobs, context) {
     // Normally rides on expiry-notifier below; listed so it can be invoked by
     // hand with { "job": "ops-digest" } to resend a morning report.
     "ops-digest": () => jobs.runOpsDigest(),
-    // Normally rides on video-poll below; listed so the release emails can be
-    // pushed by hand with { "job": "release-notices" }.
-    "release-notices": () => jobs.runReleaseNoticeDrain({ deadlineAt: drainDeadline(context) }),
+    // Normally rides on video-poll below; listed so the weekly release digest
+    // can be ticked by hand with { "job": "release-digest" }. A tick by hand is
+    // still a tick: it carries on a digest under way, or starts this week's
+    // inside its window, and otherwise does nothing (the emergency send is
+    // POST /admin/release-notifications/digest/send-now). "release-notices",
+    // the old name, is the same tick: it no longer mails a release on its own.
+    "release-digest": () => jobs.runReleaseDigestTick({ deadlineAt: drainDeadline(context) }),
+    "release-notices": () => jobs.runReleaseDigestTick({ deadlineAt: drainDeadline(context) }),
   }[job];
   if (!run) throw new Error(`Unknown job "${job}".`);
 
@@ -154,24 +159,27 @@ export async function runJob(job, jobs, context) {
     runError = err;
   }
 
-  // "QUIV 3.1.11 is ready" emails (util/releaseNotifier.js) ride on the
+  // The weekly release digest (util/releaseDigest.js) rides on the
   // fifteen-minute video poll, for the same reason the ops digest rides on the
-  // expiry job: no new schedule, so no change to the shared AdlmApi stack. Own
-  // lock, own try/catch, and a deadline inside this function's timeout, so a
-  // slow mailshot can never fail the poll or be killed mid-batch.
+  // expiry job: no new schedule, so no change to the shared AdlmApi stack.
+  // Almost every tick does nothing; once a week, at the digest slot (Monday
+  // 09:00 Lagos by default), one tick starts the week's digest and later
+  // ticks finish it. It no longer mails a release on its own the moment it is
+  // recorded. Own lock, own try/catch, and a deadline inside this function's
+  // timeout, so a slow mailshot can never fail the poll or be killed mid-batch.
   if (job === "video-poll") {
-    let releaseNotices;
+    let releaseDigest;
     try {
-      releaseNotices = await jobs.runReleaseNoticeDrain({ deadlineAt: drainDeadline(context) });
+      releaseDigest = await jobs.runReleaseDigestTick({ deadlineAt: drainDeadline(context) });
     } catch (err) {
-      console.error("[scheduled] release-notices failed:", err?.message || err);
-      releaseNotices = { ok: false, error: String(err?.message || err) };
+      console.error("[scheduled] release-digest failed:", err?.message || err);
+      releaseDigest = { ok: false, error: String(err?.message || err) };
     }
     if (runError) {
-      console.log("[scheduled] release-notices:", JSON.stringify(releaseNotices));
+      console.log("[scheduled] release-digest:", JSON.stringify(releaseDigest));
       throw runError;
     }
-    if (out && typeof out === "object") out.releaseNotices = releaseNotices;
+    if (out && typeof out === "object") out.releaseDigest = releaseDigest;
   }
 
   // The morning operations report (util/opsDigest.js) runs straight after the

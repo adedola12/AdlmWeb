@@ -2,8 +2,10 @@ import express from "express";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { Setting } from "../models/Setting.js";
 import { User } from "../models/User.js";
+import { recordInstallerHubChange } from "../util/releaseDigest.js";
+import { withoutDemo } from "../util/demoContext.js";
 
-function requireAdminOrMiniAdmin(req, res, next) {
+export function requireAdminOrMiniAdmin(req, res, next) {
   // See server/middleware/demoMode.js — read-only, masked demo sessions view only.
   if (req.demoMode) return next();
   const role = req.user?.role;
@@ -64,38 +66,123 @@ router.get("/installer-hub", async (_req, res) => {
   });
 });
 
+/**
+ * May this request queue customer mail? Only an admin, as on every other
+ * release-mail path (the deployment PUT and /admin/release-notifications are
+ * requireAdmin): the role read from the database, not trusted from the token,
+ * and never a demo or Design Access session. A mini-admin may still change the
+ * Installer Hub links; they just cannot mail the customer base by doing so.
+ */
+export async function canQueueReleaseMail(req) {
+  if (req.demoMode || req.designMode) return false;
+  if (String(req.user?.role || "").trim().toLowerCase() !== "admin") return false;
+  const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
+  if (!uid) return false;
+  try {
+    const doc = await withoutDemo(() => User.findById(uid).select("role disabled").lean());
+    return !!doc && !doc.disabled && doc.role === "admin";
+  } catch {
+    return false; // could not tell: no mail
+  }
+}
+
+const settingStore = {
+  installerHubUrl: () =>
+    Setting.findOne({ key: "global" }).select("installerHubUrl").lean(),
+  update: (update) =>
+    Setting.findOneAndUpdate({ key: "global" }, update, { upsert: true, new: true }),
+};
+
 // POST set installer hub settings
 // { installerHubUrl?, installerHubVideoUrl?, installerHubGuideUrl? }
-router.post("/installer-hub", async (req, res) => {
-  const update = {};
-  if (typeof req.body?.installerHubUrl === "string") {
-    update.installerHubUrl = req.body.installerHubUrl.trim();
-  }
-  if (typeof req.body?.installerHubVideoUrl === "string") {
-    update.installerHubVideoUrl = req.body.installerHubVideoUrl.trim();
-  }
-  if (typeof req.body?.installerHubGuideUrl === "string") {
-    update.installerHubGuideUrl = req.body.installerHubGuideUrl.trim();
-  }
-  if (!Object.keys(update).length) {
-    return res.status(400).json({
-      error:
-        "Provide installerHubUrl, installerHubVideoUrl or installerHubGuideUrl",
-    });
-  }
+//
+// When an ADMIN points installerHubUrl at a new versioned setup file
+// (ADLMInstallerHub-v1.0.3.zip), that queues "a new Installation Center is
+// ready" for the next weekly release digest, to everybody with an active
+// licence for software it installs (util/releaseDigest.js). Nothing is sent
+// from here, an admin can cancel it before Monday
+// (POST /admin/release-notifications/digest/cancel), and a failure to record
+// it never fails the save. A mini-admin's change is saved and queues nothing
+// (hubNotice.reason "not-admin"): an admin announces it with
+// POST /admin/release-notifications/digest/hub {version}.
+export function makeInstallerHubHandler({
+  settings = settingStore,
+  recordHubChange = recordInstallerHubChange,
+  canQueueMail = canQueueReleaseMail,
+  log = console,
+} = {}) {
+  return async (req, res, next) => {
+    try {
+      const update = {};
+      if (typeof req.body?.installerHubUrl === "string") {
+        update.installerHubUrl = req.body.installerHubUrl.trim();
+      }
+      if (typeof req.body?.installerHubVideoUrl === "string") {
+        update.installerHubVideoUrl = req.body.installerHubVideoUrl.trim();
+      }
+      if (typeof req.body?.installerHubGuideUrl === "string") {
+        update.installerHubGuideUrl = req.body.installerHubGuideUrl.trim();
+      }
+      if (!Object.keys(update).length) {
+        return res.status(400).json({
+          error:
+            "Provide installerHubUrl, installerHubVideoUrl or installerHubGuideUrl",
+        });
+      }
 
-  const s = await Setting.findOneAndUpdate(
-    { key: "global" },
-    update,
-    { upsert: true, new: true },
-  );
-  res.json({
-    ok: true,
-    installerHubUrl: s.installerHubUrl,
-    installerHubVideoUrl: s.installerHubVideoUrl,
-    installerHubGuideUrl: s.installerHubGuideUrl,
-  });
-});
+      // The link it replaces, read before the write, so a new version can be
+      // told apart from a re-save. `undefined` when the read failed: no guess.
+      const previous =
+        update.installerHubUrl === undefined
+          ? undefined
+          : await Promise.resolve()
+              .then(() => settings.installerHubUrl())
+              .catch(() => undefined);
+
+      const s = await settings.update(update);
+
+      let hubNotice;
+      if (update.installerHubUrl !== undefined && previous !== undefined) {
+        const previousUrl = String(previous?.installerHubUrl || "");
+        if (previousUrl !== update.installerHubUrl) {
+          if (!(await canQueueMail(req))) {
+            hubNotice = {
+              created: false,
+              reason: "not-admin",
+              note:
+                "Saved. Only an admin can tell customers about a new Installation Center, so nothing was " +
+                "queued: ask an admin to POST /admin/release-notifications/digest/hub with its version.",
+            };
+          } else {
+            try {
+              hubNotice = await recordHubChange({
+                previousUrl,
+                nextUrl: update.installerHubUrl,
+                actor: String(req.user?.email || "admin"),
+                demoMode: !!req.demoMode,
+              });
+            } catch (err) {
+              log.error?.("[release-digest] could not record the Installation Center change:", err?.message || err);
+              hubNotice = { created: false, error: String(err?.message || err) };
+            }
+          }
+        }
+      }
+
+      res.json({
+        ok: true,
+        installerHubUrl: s.installerHubUrl,
+        installerHubVideoUrl: s.installerHubVideoUrl,
+        installerHubGuideUrl: s.installerHubGuideUrl,
+        ...(hubNotice ? { hubNotice } : {}),
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+router.post("/installer-hub", makeInstallerHubHandler());
 
 // GET force-reinstall broadcast state (admin/mini-admin)
 router.get("/force-reinstall", async (_req, res) => {

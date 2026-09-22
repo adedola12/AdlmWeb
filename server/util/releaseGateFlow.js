@@ -6,6 +6,7 @@
 import { ProductDeployment } from "../models/ProductDeployment.js";
 import { ReleaseCandidate } from "../models/ReleaseCandidate.js";
 import { recordDeploymentRelease } from "./releaseNotifier.js";
+import { withNextDigest } from "./releaseDigest.js";
 import {
   describeCandidate,
   esc,
@@ -72,17 +73,27 @@ export async function stageRelease({ productKey, normalized, previous, body, act
 
 /**
  * Write a candidate's payload to the live deployment and hand it to the
- * existing release notifier (which holds customer mail for ten minutes, as it
- * always has). Returns the updated deployment.
+ * release notifier, which records the "new version is ready" notice and sends
+ * nothing: customers are told in the next WEEKLY DIGEST (util/releaseDigest.js,
+ * Monday 09:00 Lagos by default), one email each listing every update they
+ * hold. The notice comes back with that date (nextDigestAt, nextDigestLagos),
+ * the same fields the deployment PUT returns, so the approve and emergency
+ * responses say when customers hear. Returns the updated deployment.
+ *
+ * `deployments`, `record` and `annotate` are for the tests.
  */
-export async function applyCandidate(candidate, { actor, demoMode = false }) {
+export async function applyCandidate(
+  candidate,
+  { actor, demoMode = false, deployments = ProductDeployment, record = recordDeploymentRelease, annotate = withNextDigest } = {},
+) {
   const productKey = candidate.productKey;
-  const previous = await ProductDeployment.findOne({ productKey })
+  const previous = await deployments
+    .findOne({ productKey })
     .select("version enabled packageUri")
     .lean()
     .catch(() => undefined);
 
-  const item = await ProductDeployment.findOneAndUpdate(
+  const item = await deployments.findOneAndUpdate(
     { productKey },
     { $set: { ...candidate.payload, updatedBy: actor }, $setOnInsert: { createdBy: candidate.submittedBy || actor } },
     { new: true, upsert: true, runValidators: true },
@@ -93,7 +104,7 @@ export async function applyCandidate(candidate, { actor, demoMode = false }) {
     releaseNotice =
       previous === undefined
         ? { created: false, reason: "previous-version-unreadable" }
-        : await recordDeploymentRelease({
+        : await record({
             previous,
             item: item?.toObject ? item.toObject() : item,
             body: candidate.notifyBody || {},
@@ -102,6 +113,12 @@ export async function applyCandidate(candidate, { actor, demoMode = false }) {
           });
   } catch (err) {
     releaseNotice = { created: false, error: String(err?.message || err) };
+  }
+  // When the weekly digest will mail it. Never fails the approval.
+  try {
+    releaseNotice = await annotate(releaseNotice);
+  } catch {
+    /* keep the notice as recorded */
   }
   return { item, releaseNotice };
 }

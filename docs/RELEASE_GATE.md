@@ -85,6 +85,19 @@ refuses, it says so and sends nothing else). Every step is recorded.
 With no successor, releases stay **blocked**: the gate never opens because
 nobody is approving. The visible emergency path still works for real outages.
 
+## Customer release email
+
+Approving a plugin release (or forcing it with *Emergency release*) makes it
+live and records the customers' "new version is ready" notice
+(`server/util/releaseGateFlow.js` `applyCandidate`). Nothing is emailed to
+customers at that moment: the notice waits for the **weekly release digest**
+(`server/util/releaseDigest.js`, Monday 09:00 Lagos time by default), which
+sends each customer one email listing every update for the software they
+hold. The approve and emergency responses carry `releaseNotice.nextDigestLagos`
+with that date, as the deployment PUT does. The emergency send-now for the
+digest (`POST /admin/release-notifications/digest/send-now`) is admin-only and
+separate from this gate.
+
 ## Mail
 
 All gate mail goes through SES (eu-west-1) and nothing else. The account has

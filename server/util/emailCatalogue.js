@@ -158,13 +158,28 @@ export const EMAILS = [
     key: "release.update",
     name: "New version ready to install",
     when:
-      "A product's deployment moves to a higher version; sent to everyone with an active, " +
+      "The weekly release digest when a customer's week has exactly one product update (and no new " +
+      "Installation Center); also the emergency per-release send. To everyone with an active, " +
       "unexpired licence for it who has not turned product updates off",
     file: "util/releaseEmail.js",
     editable: false,
     why:
       "Built per release from the release notes or the What's New entry, with update steps " +
       "that name the app to close for each product. Change what it says in util/releaseEmail.js.",
+  },
+  {
+    key: "release.digest",
+    name: "This week's updates",
+    when:
+      "Once a week (Monday 09:00 Lagos by default) when a customer holds more than one product " +
+      "updated that week, or a new Installation Center was published (to holders of software it " +
+      "installs); one email per customer, listing only what they hold",
+    file: "util/releaseDigestEmail.js",
+    editable: false,
+    why:
+      "Assembled per customer from each release's notes and update steps; a new Installation " +
+      'Center links the customer dashboard and its "Download Installer Hub" button. Change what ' +
+      "it says in util/releaseDigestEmail.js.",
   },
   {
     key: "entitlement.boq-import",

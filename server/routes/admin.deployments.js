@@ -15,6 +15,7 @@ import cloudinary from "../utils/cloudinaryConfig.js";
 import { recordDeploymentRelease, recordDeploymentWithdrawn } from "../util/releaseNotifier.js";
 import { getGateConfig, isGatedChange, recordGateEvent } from "../util/releaseGate.js";
 import { stageRelease } from "../util/releaseGateFlow.js";
+import { withNextDigest } from "../util/releaseDigest.js";
 
 const router = express.Router();
 const upload = multer({
@@ -492,9 +493,9 @@ router.put(
     );
 
     // Records at most one "new version is ready" notice and sends nothing: the
-    // mail goes out from POST /admin/release-notifications/:id/send or the
-    // fifteen-minute job (util/releaseNotifier.js), which holds a new notice
-    // for ten minutes so the release script can check the build and cancel.
+    // mail goes out in the next WEEKLY DIGEST (util/releaseDigest.js, Monday
+    // 09:00 Lagos by default), one email per customer listing every update
+    // they hold. The release script can check the build and cancel meanwhile.
     // A PUT that switches the product off, leaves it with no package, or rolls
     // it back cancels the unfinished announcements it makes untrue. Body
     // extras, both optional and ignored by normalizeDeployment:
@@ -516,6 +517,11 @@ router.put(
       console.error(`[release-mail] ${productKey}: could not record a notice:`, err?.message || err);
       releaseNotice = { created: false, error: String(err?.message || err) };
     }
+
+    // When it will be mailed (nextDigestAt, nextDigestLagos), for the release
+    // script to print. The release gate's approve and emergency paths add the
+    // same (util/releaseGateFlow.js applyCandidate). Never fails the release.
+    releaseNotice = await withNextDigest(releaseNotice);
 
     return res.json({ ok: true, item, releaseNotice });
   }),

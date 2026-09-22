@@ -18,6 +18,7 @@
 
 import { wrapEmail, wrapMarketingEmail, emailBrand } from "./emailLayout.js";
 import { buildReleaseMessage, productFor } from "./releaseEmail.js";
+import { buildDigestMessage, HUB_PRODUCT } from "./releaseDigestEmail.js";
 
 const { SITE } = emailBrand;
 
@@ -541,6 +542,37 @@ export const PREVIEW = {
         paragraphs: [],
       },
       // A preview only: the real link is per recipient (util/campaigns.js).
+      unsubscribeUrl: "#",
+    }),
+  "release.digest": () =>
+    buildDigestMessage({
+      firstName: "Adaeze",
+      items: [
+        {
+          kind: "hub",
+          product: HUB_PRODUCT,
+          version: "1.0.3",
+          notes: { source: "generic", title: "", highlight: "", groups: [], paragraphs: ["Faster downloads and a clearer update list."] },
+        },
+        {
+          kind: "product",
+          product: productFor("revit"),
+          version: "3.1.11",
+          notes: {
+            source: "changelog",
+            title: "Faster takeoffs",
+            highlight: "",
+            groups: [{ type: "new", items: ["Take off linked models in the same run"] }],
+            paragraphs: [],
+          },
+        },
+        {
+          kind: "product",
+          product: productFor("rategen"),
+          version: "2.9.2",
+          notes: { source: "generic", title: "", highlight: "", groups: [], paragraphs: ["This update brings fixes and improvements to RateGen."] },
+        },
+      ],
       unsubscribeUrl: "#",
     }),
 };
