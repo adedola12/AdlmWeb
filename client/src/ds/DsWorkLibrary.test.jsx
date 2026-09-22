@@ -230,7 +230,37 @@ describe("the composition card for a customer's own copy", () => {
 
     fireEvent.click(row.closest("a"));
     await waitFor(() => expect(document.querySelector(".fb-card")).toBeTruthy());
-    expect(document.querySelector(".fb-card").textContent).toContain("Sandcrete block");
+    const card = document.querySelector(".fb-card");
+    expect(card.textContent).toContain("Sandcrete block");
+    // 7,000 + 2,000 + 1,000 IS the 10,000 net, so there is nothing to carry.
+    expect(card.textContent).not.toContain("Not itemised");
+  });
+
+  // ── S18 review, finding 3 ─────────────────────────────────────────────────
+  // The card listed components adding to less than the Net cost printed under
+  // them and said nothing about the difference, so a rate that adds up read as
+  // a broken one — and the remainder the build-up carries was invisible here.
+  it("shows what the net cost carries that no component explains", async () => {
+    const withRemainder = {
+      ...masterRate,
+      composition: {
+        components: [
+          { name: "Sandcrete block", kind: "material", quantity: 10, unit: "no", unitPrice: 700, totalCost: 7000 },
+          { name: "Mason gang", kind: "labour", quantity: 0.05, unit: "day", unitPrice: 20000, totalCost: 1000 },
+        ],
+      },
+    };
+    stub({ rates: [withRemainder] });
+    const { findByText } = mountWithCards();
+    const row = await findByText("Blockwork 225mm in cement mortar");
+
+    fireEvent.click(row.closest("a"));
+    await waitFor(() => expect(document.querySelector(".fb-card")).toBeTruthy());
+    const card = document.querySelector(".fb-card");
+    // 10,000 net, 8,000 of it itemised: the other 2,000 is said out loud, in
+    // the build-up's words, above the net cost it is part of.
+    expect(card.textContent).toContain("Not itemised");
+    expect(card.textContent).toContain("2,000.00");
   });
 });
 

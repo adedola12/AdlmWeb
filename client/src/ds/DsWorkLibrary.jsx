@@ -40,7 +40,7 @@ import {
   emptyDraft,
   newCustomRateId,
 } from "./rategen/customRateDraft.js";
-import { componentsOf, toNum } from "./rategen/rateMath.js";
+import { componentsOf, toNum, unexplainedNet } from "./rategen/rateMath.js";
 import { mergeRateRows } from "./rategen/mergeRateRows.js";
 import { fetchAllRates } from "./rategen/fetchRates.js";
 
@@ -315,6 +315,12 @@ export default function DsWorkLibrary() {
     if (!comps.length) return; // nothing to show: let the link navigate
     e.preventDefault();
 
+    // The part of the net cost no component accounts for. Without it the card
+    // lists lines that come to less than the Net cost printed under them, and
+    // a rate that adds up reads as a broken one. Same figure and same words as
+    // the build-up (DsWorkRate), which explains there that your copy keeps it.
+    const unexplained = unexplainedNet(toNum(r.netCost), comps);
+
     const rows2 = [
       ...comps.map((c) => [
         `${c.name} · ${qty(c.quantity)} ${c.unit || ""} × ${money(c.unitPrice)}`.replace(
@@ -323,6 +329,7 @@ export default function DsWorkLibrary() {
         ),
         money(c.amount),
       ]),
+      ...(unexplained !== 0 ? [["Not itemised", money(unexplained)]] : []),
       ["Net cost", money(r.netCost)],
       [`Overhead · ${pc(r.overheadPercent)}`, money(r.overheadValue)],
       [`Profit · ${pc(r.profitPercent)}`, money(r.profitValue)],
