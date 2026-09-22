@@ -13,7 +13,8 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import DsProjectGallery from "./DsProjectGallery.jsx";
 import { useProjects } from "./useProjects.js";
-import { SOURCES, compact, short, sourceOf } from "../lib/projectGallery.js";
+import { FaChevronRight, FaLock } from "../components/icons.jsx";
+import { SOURCES, compact, estimatedOf, short, sourceOf } from "../lib/projectGallery.js";
 
 const BY_SLUG = Object.fromEntries(Object.entries(SOURCES).map(([key, s]) => [s.slug, key]));
 
@@ -23,18 +24,6 @@ const STEPS = {
   mep: ["Open the services model in Revit", "Run Revit MEP and extract", "Save to ADLM Cloud"],
   civil3d: ["Open the corridor in Civil 3D", "Run CIVIQ and extract", "Save to ADLM Cloud"],
 };
-
-const Lock = () => (
-  <svg viewBox="0 0 24 24">
-    <rect x="5" y="11" width="14" height="9" rx="2" />
-    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-  </svg>
-);
-const Chev = () => (
-  <svg viewBox="0 0 24 24">
-    <path d="M9 6l6 6-6 6" />
-  </svg>
-);
 
 export default function DsWorkTool() {
   const { t } = useParams();
@@ -61,7 +50,9 @@ export default function DsWorkTool() {
   if (!S || !STEPS[key]) return <Navigate to="/work/projects" replace />;
 
   const mine = (projects || []).filter((p) => sourceOf(p) === key);
-  const total = mine.reduce((a, p) => a + (Number(p.totalCost) || 0), 0);
+  // The same "Estimated" figure the gallery and the Bill show: the whole
+  // grand summary, not measured work alone (S18, PR2-08).
+  const total = mine.reduce((a, p) => a + estimatedOf(p), 0);
   const last = mine.map((p) => p.updatedAt).filter(Boolean).sort().pop();
   const holds = !owned || owned.has(key);
 
@@ -96,7 +87,7 @@ export default function DsWorkTool() {
 
       {holds ? null : (
         <div className="pj-note warn">
-          <Lock />
+          <FaLock size={18} aria-hidden="true" />
           <div>
             <b>{S.name} is not on this account.</b> Projects a consultant shares with you still open here.{" "}
             <Link to="/manage/products">Add {S.name}</Link>
@@ -110,7 +101,7 @@ export default function DsWorkTool() {
           <React.Fragment key={s}>
             {i ? (
               <span className="ar">
-                <Chev />
+                <FaChevronRight size={14} aria-hidden="true" />
               </span>
             ) : null}
             <span className="st">
