@@ -26,6 +26,7 @@ before(async () => {
   );
   app.get("/admin/releases", (req, res) => res.json({ designMode: !!req.designMode, row: REAL }));
   app.post("/admin/releases/:id/approve", (req, res) => res.json({ reached: true, designMode: !!req.designMode }));
+  app.get("/admin/work", (req, res) => res.json({ designMode: !!req.designMode, row: REAL }));
   app.get("/admin/users-lite", (req, res) => res.json({ row: REAL }));
   server = app.listen(0);
   base = `http://127.0.0.1:${server.address().port}`;
@@ -59,4 +60,12 @@ test("any other design user stays masked on the release desk", async () => {
 test("the approver stays masked everywhere else", async () => {
   const body = await get("/admin/users-lite", "approver@example.com");
   assert.notEqual(body.row.company, REAL.company);
+});
+
+test("the named approver sees the real work board; other designers stay masked", async () => {
+  const mine = await get("/admin/work", "approver@example.com");
+  assert.equal(mine.designMode, false);
+  assert.equal(mine.row.company, REAL.company);
+  const theirs = await get("/admin/work", "designer@example.com");
+  assert.notEqual(theirs.row.company, REAL.company);
 });

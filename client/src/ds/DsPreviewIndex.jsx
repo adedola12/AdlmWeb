@@ -12,6 +12,7 @@ import React from "react";
 import { Link, ScrollRestoration } from "react-router-dom";
 import { DS_PAGES } from "./pages/manifest.js";
 import { MAP } from "../lib/dsRoutes.js";
+import { WorkInFlight } from "../features/work/WorkBoard.jsx";
 
 // The staged slug and the key it has in the route map differ for the home
 // page only: his file is index.html, the preview path is /preview/home.
@@ -85,6 +86,13 @@ export default function DsPreviewIndex() {
         <code className="mx-1 px-1 rounded bg-slate-100 dark:bg-slate-800">/preview/</code>
         tree is disallowed in robots.txt.
       </p>
+
+      {/* The reviewer's view of the code side: what is being built while he
+          designs, and what is waiting for his decision. Needs the release-desk
+          permission; anyone else sees a one-line notice instead. */}
+      <section className="mb-8">
+        <WorkInFlight title="What is being built right now" />
+      </section>
 
       <section className="mb-8">
         <h2 className="text-sm uppercase tracking-wide text-slate-500 mb-1">New experiences</h2>

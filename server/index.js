@@ -101,6 +101,7 @@ import unsubscribeRouter, {
 import adminVideos from "./routes/admin.videos.js";
 import adminReleaseNotifications from "./routes/admin.releaseNotifications.js";
 import adminReleases from "./routes/admin.releases.js";
+import adminWork from "./routes/admin.work.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -394,6 +395,8 @@ app.use("/admin/broadcast", adminBroadcast);
 // util/releaseNotifier.js.
 app.use("/admin/release-notifications", adminReleaseNotifications);
 app.use("/admin/releases", adminReleases);
+// The work board: what is in flight, and approval before a new feature is built.
+app.use("/admin/work", adminWork);
 app.use("/admin/campaigns", adminCampaigns);
 app.use("/admin/billboard", adminBillboard);
 // Public and unauthenticated: it is what every page of the site reads to draw

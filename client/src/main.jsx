@@ -110,6 +110,7 @@ import AdminFollowUps from "./pages/AdminFollowUps.jsx";
 import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
 import AdminAuditLog from "./pages/AdminAuditLog.jsx";
 import AdminReleases from "./pages/AdminReleases.jsx";
+import AdminWork from "./pages/AdminWork.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
@@ -988,6 +989,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute shell={false} permission="releases">
             <AdminReleases />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Work board (docs/WORK_BOARD.md): same audience as the release desk
+      {
+        path: "admin/work",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminWork />
           </AdminRoute>
         ),
       },
