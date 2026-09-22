@@ -1,34 +1,69 @@
 // His Work overview, on real projects.
 //
-// The line in his brief that decides this screen: Work is organised BY PROJECT,
-// NOT BY PRODUCT. Once data is extracted it stops belonging to one tool — a
-// Revit extraction gives quantities, RateGen prices them, that becomes a
-// valuation, Time Pro schedules against it. So the question this answers is
-// "what am I in the middle of", where Manage answers "what am I paying for".
+// Rebuilt 17 Sep 2026 (S18/WH-01 to WH-13) from work-home.js. The Cards /
+// Register pair is gone: this is ONE dashboard, read top to bottom in the
+// order a working day runs.
 //
-// His markup: .wk-head / .wk-acts / .dsh-stats / .dsh-stat / .wk-panel /
-// .wk-ph / .wh-cont / .wh-go, and his two layouts — cards and a register —
-// with the choice remembered, because somebody who prefers a register does not
-// want to pick it again every morning.
+//   1  Headline figures     measured work, certified, work to price, decisions
+//   2  Needs a decision     one table; every row opens where it is resolved
+//   3  Continue             back to the exact tab each project was left on
+//   4  Projects             source, stage, priced, complete, measured, certified
+//   5  Valuations and variations
+//   6  Programme            overdue, due within a fortnight, or under way
+//   7  RateGen              rates changed recently, and where they are used
+//   8  Learning             assignments due
 //
-// Every figure is from GET /me/projects-rollup, which is the aggregate the old
-// dashboard already used: item counts, total cost, what has been valued and
-// what is left. His sample tenant had four projects with typed totals; ours has
-// whatever the account holds, including none.
+// The line in his brief that decides this screen: Work is organised BY
+// PROJECT, NOT BY PRODUCT. Once data is extracted it stops belonging to one
+// tool — a Revit extraction gives quantities, RateGen prices them, that becomes
+// a valuation, Time Pro schedules against it. So this answers "what am I in the
+// middle of", where Manage answers "what am I paying for". That is also why
+// the "Your work, by product" cards are gone: products live in the My tools
+// rail and the tool pages.
 //
-// His location switch is NOT reproduced. It re-prices a whole portfolio into
-// another geopolitical zone, and our rates are already stored priced to a zone
-// — the switch would have to re-run RateGen against every item, which is a
-// server job and not a display preference. Left for when there is an endpoint
-// that can answer it honestly.
+// Where his figures and ours differ, ours win and the label says what ours
+// really is:
+//
+//   Estimated    his sums a full estimate, including preliminaries and linked
+//                services. Ours is the rollup's qty x rate — measured work
+//                only — so the tile reads "Measured work", not "Estimated".
+//   Certified    the cumulative value of the highest APPROVED or PAID
+//                certificate. Certificates carry value-to-date, so they are
+//                never added together.
+//   Awaiting     we store draft / approved / paid and no "awaiting approval",
+//                so the decision row says a certificate is a draft.
+//   Model drift  we keep no model versions, so his "Model vN changed N
+//                quantities" row has no honest counterpart and is left out.
+//
+// Two decision kinds are ours rather than his, and both are real: a bill
+// nobody has opened in three months, and a product on the plan that is not
+// installed on this machine.
+//
+// His location switch stays in the header as a profile control. It does NOT
+// re-price the portfolio: our rates are stored already priced to a zone, and
+// a re-price is a server job, so nothing here claims the figures move when it
+// changes.
 
 import React from "react";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkPrefs from "./WkPrefs.jsx";
+// His work-proj.css carries every .oh-* rule this screen uses. Only the
+// project gallery imported it, so a cold load of /work had no dashboard styles.
+import "../styles/ds-work-proj.css";
+import { FaChevronRight } from "../components/icons.jsx";
 import { foldMaterials, normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
-import { placeHref, readPlace } from "../lib/lastPlace.js";
+import { placeHref, readPlaces } from "../lib/lastPlace.js";
+import { SOURCES, STAGES, compact, short, sourceOf, stageOf } from "../lib/projectGallery.js";
+import { anchorOf, niceDate } from "../lib/assignments.js";
+import {
+  buildDecisions,
+  headline,
+  pickNextLesson,
+  projectTabHref,
+  taskState,
+} from "../lib/workOverview.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -39,41 +74,10 @@ const money = (n) =>
 
 const num = (n) => new Intl.NumberFormat("en-NG").format(Number(n) || 0);
 
-const when = (d) =>
-  d
-    ? new Date(d).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : "";
+/** An empty value is an en dash. Never a zero somebody could mistake for one. */
+const DASH = "–";
 
-// The catalogue keys are the legacy CAD-host slugs; these are the names people
-// actually use for the products.
-/**
- * His product marks, already in public/ds. Keyed by OUR product key, which is
- * the legacy CAD-host slug — /product/revit is QUIV, planswift is HERON.
- */
-const PRODUCT_ICON = {
-  revit: "/ds/ic-quiv.png",
-  planswift: "/ds/ic-heron.png",
-  rategen: "/ds/ic-rategen.png",
-  "qs-takeoff": "/ds/ic-timepro.png",
-  mep: "/ds/ic-mep.png",
-  civil3d: "/ds/ic-civiq.png",
-};
-
-/** His second line, for a product with no work of its own to report. */
-const OFF_SUB = {
-  revit: "Measurement straight off the 3D model",
-  rategen: "Prices everything the other products measure",
-  planswift: "Flat drawings, landing on the same work items",
-  "qs-takeoff": "Durations come from gang output already held in the rates",
-  mep: "Services measured against the same bill",
-  civil3d: "Civil and infrastructure measurement",
-  archicad: "Measurement from the ArchiCAD model",
-};
-
+/** The products that actually install, for the "not installed here" row. */
 const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
@@ -84,315 +88,233 @@ const PRODUCT = {
   archicad: "ArchiCAD",
 };
 
-const icon = (name) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <use href={`#${name}`} />
-  </svg>
+const pct = (n) => Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
+
+const Bar = ({ value, tone }) => (
+  <span className={tone ? `oh-bar ${tone}` : "oh-bar"}>
+    <i style={{ width: `${pct(value)}%` }} />
+  </span>
 );
 
-const VIEW_KEY = "adlm-wh-view";
+const SourceMark = ({ p }) => {
+  const s = SOURCES[sourceOf(p)];
+  return (
+    <span className="oh-src">
+      {s?.icon ? <img src={s.icon} alt="" /> : null}
+      {s?.name || sourceOf(p) || DASH}
+    </span>
+  );
+};
 
-// Where a project opens: the full workspace, by slug (see lib/projectLinks.js).
-const projectHref = projectWorkspaceHref;
+/** His panel: section.oh-panel > header > div > h2 + span, with an optional link. */
+function Panel({ id, title, sub, more, className, children }) {
+  return (
+    <section className={className ? `oh-panel ${className}` : "oh-panel"} id={id}>
+      <header>
+        <div>
+          <h2>{title}</h2>
+          {sub ? <span>{sub}</span> : null}
+        </div>
+        {more ? (
+          <Link className="more" to={more[1]}>
+            {more[0]}
+          </Link>
+        ) : null}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * His table, including the leading ">" that right-aligns a column.
+ * `state` carries a panel's own loading or failure line, so one failed call
+ * never blanks the dashboard.
+ */
+function OhTable({ head, rows, empty, state }) {
+  if (state) return <p className="oh-empty">{state}</p>;
+  if (!rows.length) return <p className="oh-empty">{empty}</p>;
+  return (
+    <div className="oh-scroll">
+      <table className="oh-t">
+        <thead>
+          <tr>
+            {head.map((h) => (
+              <th key={h} className={h.startsWith(">") ? "n" : undefined}>
+                {h.replace(/^>/, "")}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{rows}</tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The project cell every table shares: icon, name, link back to the work. */
+const ProjectCell = ({ p, tab, bold }) => (
+  <Link className={bold ? "oh-p b" : "oh-p"} to={projectTabHref(p, tab)}>
+    {SOURCES[sourceOf(p)]?.icon ? <img src={SOURCES[sourceOf(p)].icon} alt="" /> : null}
+    {p.name || "Untitled project"}
+  </Link>
+);
+
+/** The certificate and variation pills, on his .pj-stage v-* classes. */
+const CERT_PILL = {
+  draft: ["v-awaiting", "Draft"],
+  approved: ["v-approved", "Approved"],
+  paid: ["v-approved", "Paid"],
+};
+const VAR_PILL = {
+  approved: ["v-approved", "Approved"],
+  pending: ["v-awaiting", "Pending"],
+  rejected: ["v-rejected", "Rejected"],
+};
+
+const stageName = (p) => STAGES.find((s) => s.id === stageOf(p))?.name || "";
+
+/** How many lines a project actually has to price: the ones with a quantity. */
+const measurable = (p) => (Number(p.pricedCount) || 0) + (Number(p.unpricedCount) || 0);
 
 export default function DsWorkHome() {
   const { accessToken } = useAuth();
   const [projects, setProjects] = React.useState(null);
-  const [rail, setRail] = React.useState(null);
   const [summary, setSummary] = React.useState(null);
+  const [overview, setOverview] = React.useState(null);
+  const [overviewFailed, setOverviewFailed] = React.useState(false);
+  const [rates, setRates] = React.useState(null);
+  const [ratesFailed, setRatesFailed] = React.useState(false);
+  const [assignments, setAssignments] = React.useState(null);
+  const [assignmentsFailed, setAssignmentsFailed] = React.useState(false);
+  const [courses, setCourses] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
-  const [view, setView] = React.useState(() => {
-    if (typeof window === "undefined") return "cards";
-    try {
-      return window.localStorage.getItem(VIEW_KEY) === "table" ? "table" : "cards";
-    } catch {
-      return "cards";
-    }
-  });
-
-  const chooseView = (v) => {
-    setView(v);
-    try {
-      window.localStorage.setItem(VIEW_KEY, v);
-    } catch {
-      /* a remembered preference is a nicety, not a requirement */
-    }
-  };
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
     let alive = true;
 
+    // Five independent reads, in parallel. Only the rollup can take the page
+    // down; every other panel carries its own failure.
     apiAuthed("/me/projects-rollup", { token: accessToken })
       .then((d) => alive && setProjects(foldMaterials(normaliseRollup(d.projects))))
       .catch(() => alive && setFailed(true));
 
-    // His last "Needs a decision" card is about what is on the plan but not
-    // installed on this machine, which is what /me/summary carries.
+    apiAuthed("/me/work-overview", { token: accessToken })
+      .then((d) => alive && setOverview(d))
+      .catch(() => alive && setOverviewFailed(true));
+
     apiAuthed("/me/summary", { token: accessToken })
       .then((d) => alive && setSummary(d))
       .catch(() => alive && setSummary(null));
 
-    apiAuthed("/me/rail", { token: accessToken })
-      .then((d) => alive && setRail(d))
-      // The rate count is one stat, not the screen.
-      .catch(() => alive && setRail({}));
+    apiAuthed("/rategen-v2/library/custom-rates", { token: accessToken })
+      .then((d) => alive && setRates(Array.isArray(d.items) ? d.items : []))
+      .catch(() => alive && setRatesFailed(true));
+
+    apiAuthed("/me/courses/assignments", { token: accessToken })
+      .then((d) => alive && setAssignments(Array.isArray(d.items) ? d.items : []))
+      .catch(() => alive && setAssignmentsFailed(true));
+
+    apiAuthed("/me/courses", { token: accessToken })
+      .then((d) => alive && setCourses(Array.isArray(d) ? d : []))
+      .catch(() => alive && setCourses([]));
 
     return () => {
       alive = false;
     };
   }, [accessToken]);
 
-  const view$ = React.useMemo(() => {
-    if (!projects) return null;
+  const kpi = React.useMemo(() => (projects ? headline(projects) : null), [projects]);
 
-    const value = projects.reduce((a, p) => a + (Number(p.totalCost) || 0), 0);
-    const items = projects.reduce((a, p) => a + (Number(p.itemCount) || 0), 0);
-    const valued = projects.reduce((a, p) => a + (Number(p.valuedAmount) || 0), 0);
-
-    // What each product has actually produced for this account, which is his
-    // "measured from models" line read off the projects rather than typed.
-    const bySource = {};
-    for (const p of projects) {
-      const k = p.baseProductKey || p.productKey || "other";
-      bySource[k] = bySource[k] || { projects: 0, items: 0, value: 0 };
-      bySource[k].projects += 1;
-      bySource[k].items += Number(p.itemCount) || 0;
-      bySource[k].value += Number(p.totalCost) || 0;
-    }
-
-    const recent = [...projects].sort(
-      (a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0),
-    );
-
-    // His register is sorted by value, biggest first — the question it answers
-    // is "where is the money", not "what did I touch last".
-    const byValue = [...projects].sort(
-      (a, b) => (Number(b.totalCost) || 0) - (Number(a.totalCost) || 0),
-    );
-
-    return { value, items, valued, bySource, recent, byValue, count: projects.length };
-  }, [projects]);
-
-  // Memoised because productCards depends on it; a fresh array every render
-  // would rebuild those cards on every render too.
-  const sources = React.useMemo(
-    () => (view$ ? Object.entries(view$.bySource) : []),
-    [view$],
+  const decisions = React.useMemo(
+    () =>
+      buildDecisions({
+        projects: projects || [],
+        overview,
+        summary,
+        products: PRODUCT,
+        cap: 8,
+      }),
+    [projects, overview, summary],
   );
 
-  // His "Your work, by product": one card per product we sell, owned or not,
-  // with what this account has actually produced in it. `on` is whether the
-  // account holds it — his `.off` class dims the rest rather than hiding them,
-  // because "you do not have this yet" is the point of showing it.
-  // His "Your work, by product", card for card.
-  //
-  // The six he lists, in his order, each line phrased in that product's OWN
-  // units rather than one generic "N items from M projects" for all of them:
-  // QUIV counts elements out of Revit models, HERON counts items off sheets,
-  // RateGen counts what is in the library, Time Pro counts programmes. That is
-  // the whole point of the panel — it says what each one has actually done.
-  //
-  // ArchiCAD is not in his list because his build has no such product. It is
-  // appended only when this account has ArchiCAD work, so the common case
-  // matches him exactly and real work is never hidden.
-  const productCards = React.useMemo(() => {
-    const s2 = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
-    const last = {};
-    const named = {};
-    for (const x of view$?.recent || []) {
-      const k = x.baseProductKey || x.productKey || "other";
-      if (!last[k] && x.updatedAt) last[k] = x.updatedAt;
-      if (!named[k]) named[k] = x.name;
+  // Where this browser remembers being, filtered to projects still on the
+  // account, topped up with the most recently touched ones. The top-up rows
+  // say "Recently updated" rather than naming a tab nobody was on.
+  const continues = React.useMemo(() => {
+    if (!projects) return [];
+    const byKey = new Map();
+    for (const p of projects) {
+      byKey.set(String(p.id), p);
+      if (p.slug) byKey.set(String(p.slug), p);
     }
-
-    const build = (key, line, sub, cta, go) => {
-      const src = view$?.bySource?.[key];
-      return {
-        key,
-        name: PRODUCT[key],
-        on: !!src,
-        line: src ? line(src) : "Not on this account",
-        sub: src ? sub(src) : OFF_SUB[key],
-        cta: src ? cta : "Add it",
-        go: src ? go : "/manage/products",
-      };
-    };
-
-    const cards = [
-      build(
-        "revit",
-        (v) => `${s2(v.items, "element", "elements")} from ${s2(v.projects, "Revit model", "Revit models")}`,
-        () => (last.revit ? `Last read ${when(last.revit)}` : OFF_SUB.revit),
-        "Projects",
-        "/work/projects",
-      ),
-      {
-        key: "rategen",
-        name: PRODUCT.rategen,
-        // RateGen is the one product whose work is not projects — it is the
-        // library itself, which is why his line counts rates rather than
-        // takeoffs. /me/rail already carries that number for the sidebar.
-        on: !!rail?.rates,
-        // His line: "13 rates, 20 materials, 8 gangs". All three come off the
-        // one library document /me/rail already reads. A part with none of
-        // something is left out rather than shown as a zero — "0 gangs" tells
-        // nobody anything.
-        line: rail?.rates
-          ? [
-              s2(rail.rates, "rate", "rates"),
-              rail.materials ? s2(rail.materials, "material", "materials") : null,
-              rail.gangs ? s2(rail.gangs, "gang", "gangs") : null,
-            ]
-              .filter(Boolean)
-              .join(", ")
-          : "Not on this account",
-        sub: OFF_SUB.rategen,
-        cta: rail?.rates ? "Library" : "Add it",
-        go: rail?.rates ? "/work/library" : "/manage/products",
-      },
-      build(
-        "planswift",
-        (v) => `${s2(v.items, "item", "items")} off ${s2(v.projects, "sheet set", "sheet sets")}`,
-        () => OFF_SUB.planswift,
-        "See them",
-        "/work/projects",
-      ),
-      build(
-        "qs-takeoff",
-        (v) => `${s2(v.projects, "programme", "programmes")}, derived from the quantities`,
-        () => OFF_SUB["qs-takeoff"],
-        "Programme",
-        "/work/programme",
-      ),
-      build(
-        "mep",
-        (v) =>
-          `${s2(v.items, "services item", "services items")}${
-            named.mep ? ` from ${named.mep}` : ""
-          }`,
-        () => (last.mep ? `Last read ${when(last.mep)}` : OFF_SUB.mep),
-        "See them",
-        "/work/projects",
-      ),
-      build(
-        "civil3d",
-        (v) => `${s2(v.items, "item", "items")} from ${s2(v.projects, "alignment", "alignments")}`,
-        () => (last.civil3d ? `Last read ${when(last.civil3d)}` : OFF_SUB.civil3d),
-        "Projects",
-        "/work/projects",
-      ),
-    ];
-
-    if (view$?.bySource?.archicad) {
-      cards.push(
-        build(
-          "archicad",
-          (v) => `${s2(v.items, "item", "items")} from ${s2(v.projects, "model", "models")}`,
-          () => (last.archicad ? `Last read ${when(last.archicad)}` : OFF_SUB.archicad),
-          "Projects",
-          "/work/projects",
-        ),
-      );
+    const rows = [];
+    const used = new Set();
+    for (const pl of readPlaces()) {
+      const hit = byKey.get(String(pl.key));
+      if (!hit || used.has(String(hit.id))) continue;
+      used.add(String(hit.id));
+      rows.push({ project: hit, href: placeHref(pl), eyebrow: pl.tabLabel || "Project", tab: pl.tab });
+      if (rows.length >= 3) break;
     }
-    return cards;
-  }, [view$, rail]);
-
-  const attention = React.useMemo(() => {
-    const out = [];
-    const projects = view$?.recent || [];
-
-    // His cards are keyed by the SUBJECT — the project, the course, the Hub —
-    // not by a category. "MOREMI ESTATE BLOCK A / HERON data is 7 days older
-    // than the project" tells you which thing needs the decision before it
-    // tells you what kind of decision it is.
-    // Capped, because his panel is a summary and ours is not a mock.
-    //
-    // Unbounded, this account produced FORTY-EIGHT cards — every old project it
-    // has ever had, five of them called "Road Earthworks — New Road Design".
-    // A wall of identical rows is not a list of decisions; it is a list you
-    // stop reading. His shows four. These take the few that most deserve a
-    // look: the biggest unpriced takeoffs, and the longest untouched.
-    const unpriced = projects
-      .filter((y) => (y.itemCount || 0) > 0 && !(Number(y.totalCost) || 0))
-      .sort((a, b) => (b.itemCount || 0) - (a.itemCount || 0));
-
-    for (const x of unpriced.slice(0, 2)) {
-      out.push({
-        k: x.name,
-        t: "Measured, but nothing is priced against it",
-        d: `${num(x.itemCount)} item${x.itemCount === 1 ? "" : "s"} taken off${
-          x.updatedAt ? `, last touched ${when(x.updatedAt)}` : ""
-        }. The rate library is what turns them into money.`,
-        cta: "Open the project",
-        go: projectHref(x),
+    for (const p of projects) {
+      if (rows.length >= 3) break;
+      if (used.has(String(p.id))) continue;
+      used.add(String(p.id));
+      rows.push({
+        project: p,
+        href: projectWorkspaceHref(p),
+        eyebrow: "Recently updated",
+        tab: "",
       });
     }
+    return rows;
+  }, [projects]);
 
-    if (unpriced.length > 2) {
-      out.push({
-        k: "Rate library",
-        t: `${unpriced.length - 2} more project${
-          unpriced.length - 2 === 1 ? " is" : "s are"
-        } measured but not priced`,
-        d: "Everything measured turns into money through the same library.",
-        cta: "Open the library",
-        go: "/work/library",
-      });
+  const lesson = React.useMemo(() => (courses ? pickNextLesson(courses) : null), [courses]);
+
+  // His merged "money in motion" list: certificates and variations together,
+  // newest first. Both are read exactly as stored.
+  const inMotion = React.useMemo(() => {
+    const rows = [];
+    for (const c of overview?.certificates || []) {
+      rows.push({ at: c.date, kind: "cert", row: c });
     }
-
-    const OLD = 90 * 86400000;
-    const stale = projects
-      .filter((y) => y.updatedAt && Date.now() - new Date(y.updatedAt).getTime() > OLD)
-      .sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt));
-
-    for (const x of stale.slice(0, 1)) {
-      const days = Math.round((Date.now() - new Date(x.updatedAt).getTime()) / 86400000);
-      out.push({
-        k: x.name,
-        t: `Not opened in ${days} days`,
-        d: `Last read ${when(x.updatedAt)}. Anything drawn since then is not in this bill.`,
-        cta: "Open the project",
-        go: projectHref(x),
-      });
+    for (const v of overview?.variations || []) {
+      rows.push({ at: v.issuedAt, kind: "var", row: v });
     }
+    return rows
+      .sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0))
+      .slice(0, 6);
+  }, [overview]);
 
-    if (stale.length > 1) {
-      out.push({
-        k: "Projects",
-        t: `${stale.length - 1} more have not been opened in three months`,
-        d: "Anything drawn since they were last read is not in those bills.",
-        cta: "See them",
-        go: "/work/projects",
-      });
-    }
+  const rateUsage = React.useMemo(() => {
+    const m = new Map();
+    for (const u of overview?.rateUsage || []) m.set(u.key, u.lines);
+    return m;
+  }, [overview]);
 
-    // His Installer Hub card: on the plan, but not on this machine.
-    const installedKeys = new Set(
-      (summary?.installations || []).map((i) => i.installationProductKey).filter(Boolean),
-    );
-    // PRODUCT is the map of things that actually install. A feature grant like
-    // boq-import is an entitlement with no installer behind it, and telling
-    // somebody to install one is not a decision they can act on — the Manage
-    // overview already learned this the same way, where it produced "1 of your
-    // 1 boq-import seat is not installed anywhere".
-    const notInstalled = (summary?.entitlements || [])
-      .filter((e) => !e.isCourse && PRODUCT[e.productKey] && !installedKeys.has(e.productKey))
-      .map((e) => PRODUCT[e.productKey]);
-    if (notInstalled.length) {
-      out.push({
-        k: "Installer Hub",
-        t: `${notInstalled.length} product${
-          notInstalled.length === 1 ? " is" : "s are"
-        } on the plan but not installed here`,
-        d: `${notInstalled.join(", ")}. The Hub installs what this account already pays for.`,
-        cta: "Install them",
-        go: "/manage/downloads",
-      });
-    }
+  const recentRates = React.useMemo(
+    () =>
+      [...(rates || [])]
+        .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+        .slice(0, 5),
+    [rates],
+  );
 
-    return out;
-  }, [view$, summary]);
+  const dueAssignments = React.useMemo(
+    () =>
+      (assignments || [])
+        .filter((a) => ["overdue", "due-soon", "todo"].includes(a.state))
+        .sort((a, b) => {
+          if (!a.dueAt) return 1;
+          if (!b.dueAt) return -1;
+          return new Date(a.dueAt) - new Date(b.dueAt);
+        })
+        .slice(0, 6),
+    [assignments],
+  );
 
   if (failed) {
     return (
@@ -401,7 +323,7 @@ export default function DsWorkHome() {
       </div>
     );
   }
-  if (!view$) {
+  if (!projects || !kpi) {
     return (
       <div className="dsh-in">
         <p className="ds-sub">Loading your work…</p>
@@ -409,16 +331,74 @@ export default function DsWorkHome() {
     );
   }
 
-  const top = view$.recent[0] || null;
-  // P0.4: the exact place last worked on (tab and line), when this browser
-  // remembers one and the project is still on the account; otherwise the
-  // most recently touched project.
-  const place = (() => {
-    const pl = readPlace();
-    if (!pl || !projects) return null;
-    const hit = projects.find((p) => String(p.id) === String(pl.key) || String(p.slug || "") === String(pl.key));
-    return hit ? { ...pl, name: hit.name || pl.name } : null;
-  })();
+  const loading = overview === null && !overviewFailed ? "Loading…" : null;
+  const moneyState = overviewFailed ? "That could not be loaded just now." : loading;
+
+  const ratesPanel = (
+    <Panel
+      title="RateGen"
+      sub="Recently changed rates"
+      more={["Open RateGen", "/work/library"]}
+    >
+      <OhTable
+        head={["Rate", ">Rate", ">Used", ">Changed"]}
+        empty="No rates of your own yet."
+        state={ratesFailed ? "Your rates could not be loaded just now." : rates === null ? "Loading…" : null}
+        rows={recentRates.map((r) => {
+          const used = rateUsage.get(r.description) ?? rateUsage.get(r.title);
+          return (
+            <tr key={r.id}>
+              <td className="tw">
+                <Link className="oh-p b" to={`/work/rate/${encodeURIComponent(r.id)}`}>
+                  {r.title || r.description || "Untitled rate"}
+                </Link>
+                {r.sectionLabel ? <em>{r.sectionLabel}</em> : null}
+              </td>
+              <td className="n">
+                {money(r.totalCost)}
+                {r.unit ? <em>per {r.unit}</em> : null}
+              </td>
+              <td className="n">{used ? `${num(used)} line${used === 1 ? "" : "s"}` : DASH}</td>
+              <td className="n mute">{short(r.updatedAt)}</td>
+            </tr>
+          );
+        })}
+      />
+    </Panel>
+  );
+
+  const learningPanel = (
+    <Panel title="Learning" sub="Assignments due" more={["My learning", "/dash-learning"]}>
+      <OhTable
+        head={["Assignment", "Due", ">"]}
+        empty="No assignments due."
+        state={
+          assignmentsFailed
+            ? "Your assignments could not be loaded just now."
+            : assignments === null
+              ? "Loading…"
+              : null
+        }
+        rows={dueAssignments.map((a) => (
+          <tr key={anchorOf(a)} className={a.state === "overdue" ? "urgent" : undefined}>
+            <td className="tw">
+              {a.moduleTitle}
+              <em>{a.courseTitle}</em>
+            </td>
+            <td className={a.state === "overdue" ? "oh-late" : undefined}>
+              {a.dueAt ? niceDate(a.dueAt) : "No deadline"}
+            </td>
+            <td className="n">
+              <Link className="oh-go" to={`/dash-assignments#${anchorOf(a)}`}>
+                Open
+                <FaChevronRight />
+              </Link>
+            </td>
+          </tr>
+        ))}
+      />
+    </Panel>
+  );
 
   return (
     <div className="dsh-in">
@@ -426,45 +406,25 @@ export default function DsWorkHome() {
         <div>
           <h1>Your work</h1>
           <p>
-            Everything in hand, across every product on this account. Manage answers what you
-            are paying for; this answers what you are in the middle of.
+            What needs you today, then everything in hand: projects, money, programme and rates.
           </p>
         </div>
-        {view$.count > 0 && (
-          <div className="wk-acts">
-            <div className="wk-loc-sw" aria-label="Choose a layout">
-              {[
-                ["cards", "Cards"],
-                ["table", "Register"],
-              ].map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={view === id ? "on" : ""}
-                  onClick={() => chooseView(id)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* His zone and currency dropdowns, beside the layout switch.
-                Zone is what the rate library is priced against, so this is
-                not decoration — changing it changes every number below. */}
-            <WkPrefs />
-          </div>
-        )}
+        <div className="wk-acts">
+          {/* His zone and currency dropdowns. Both are profile settings, so
+              they read and write the account rather than this screen. */}
+          <WkPrefs />
+        </div>
       </div>
 
-      {view$.count === 0 ? (
-        <section className="wk-panel">
-          <div style={{ padding: "16px 20px" }}>
-            <p style={{ margin: 0, fontSize: 14, color: "var(--ink-3)" }}>
+      {kpi.count === 0 ? (
+        <>
+          <section className="oh-panel wide">
+            <p className="oh-empty">
               Nothing here yet. A project appears the moment one of the plugins sends its first
-              extraction up: measure in QUIV or HERON, price it in RateGen, and it shows here
-              with what it is worth.
+              extraction up: measure in QUIV or HERON, price it in RateGen, and it shows here with
+              what it is worth.
             </p>
-            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 10, padding: "0 18px 18px", flexWrap: "wrap" }}>
               <Link className="ds-btn btn-p ds-btn-sm" to="/manage/downloads">
                 Install the plugins
               </Link>
@@ -472,218 +432,288 @@ export default function DsWorkHome() {
                 Open the rate library
               </Link>
             </div>
+          </section>
+          <div className="oh-two">
+            {ratesPanel}
+            {learningPanel}
           </div>
-        </section>
+        </>
       ) : (
         <>
-          <div className="dsh-stats">
-            <div className="dsh-stat">
-              <span className="k">Work in hand</span>
-              <b>{money(view$.value)}</b>
-              <p className="ds-sub">
-                {view$.count} project{view$.count === 1 ? "" : "s"} at the rates they were
-                priced with
-              </p>
-            </div>
-            <div className="dsh-stat">
-              <span className="k">Measured</span>
-              <b>
-                {num(view$.items)}
-                <span className="u">items</span>
-              </b>
-              <p className="ds-sub">
-                across {sources.length} extraction source{sources.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <div className="dsh-stat">
-              <span className="k">Valued to date</span>
-              <b>{money(view$.valued)}</b>
-              <p className="ds-sub">
-                {view$.value > 0
-                  ? `${Math.round((view$.valued / view$.value) * 100)}% of the work in hand`
-                  : "nothing valued yet"}
-              </p>
-            </div>
-            <div className="dsh-stat">
-              <span className="k">Rate library</span>
-              <b>{num(rail?.rates || 0)}</b>
-              <p className="ds-sub">
-                {rail?.rates ? "build-ups you can price against" : "no rates saved yet"}
-              </p>
-            </div>
+          {/* 1 — headline figures */}
+          <div className="oh-kpis">
+            <Link to="/work/projects">
+              <span>Measured work, all projects</span>
+              <b>{compact(kpi.measured)}</b>
+              <em>
+                {num(kpi.count)} project{kpi.count === 1 ? "" : "s"} at the rates they were priced
+                with
+              </em>
+            </Link>
+            <Link to="/work/projects">
+              <span>Certified to date</span>
+              <b>{kpi.certified > 0 ? compact(kpi.certified) : DASH}</b>
+              <Bar value={kpi.certifiedPct} tone="ok" />
+              <em>
+                {kpi.measured > 0
+                  ? `${Math.round(kpi.certifiedPct)}% of measured work`
+                  : "Nothing measured yet"}
+              </em>
+            </Link>
+            <Link to="/work/library">
+              <span>Items waiting for a rate</span>
+              <b>{num(kpi.unpriced)}</b>
+              <em>
+                {kpi.unpricedProjects
+                  ? `Across ${num(kpi.unpricedProjects)} project${kpi.unpricedProjects === 1 ? "" : "s"}`
+                  : "Everything measured has a rate"}
+              </em>
+            </Link>
+            <a href="#oh-att" className={decisions.urgent ? "warn" : undefined}>
+              <span>Needs a decision</span>
+              <b>{num(decisions.total)}</b>
+              <em>{decisions.urgent ? `${num(decisions.urgent)} urgent` : "Nothing urgent"}</em>
+            </a>
           </div>
 
-          {view === "cards" && top && (
-            <section className="wk-panel">
-              <div className="wk-ph">
-                <h2>Pick up where you left off</h2>
-                <span className="wk-locnote">Across every product on this account</span>
-              </div>
-              <div className="wh-cont">
-                {place ? (
-                  <Link className="wh-go" to={placeHref(place)}>
-                    {icon("wi-projects")}
-                    <span className="k">{place.tabLabel ? `Project · ${place.tabLabel}` : "Project"}</span>
-                    <b>{place.name}</b>
-                    <span className="s">
-                      {place.lineLabel ? `Back to ${place.lineLabel}` : "Back where you were"}
-                    </span>
-                  </Link>
-                ) : (
-                  <Link className="wh-go" to={projectHref(top)}>
-                    {icon("wi-projects")}
-                    <span className="k">Project</span>
-                    <b>{top.name}</b>
-                    <span className="s">
-                      {num(top.itemCount)} items · {money(top.totalCost)} · touched{" "}
-                      {when(top.updatedAt)}
-                    </span>
-                  </Link>
-                )}
-                <Link className="wh-go" to="/rategen">
-                  {icon("wi-library")}
-                  <span className="k">Rate library</span>
-                  <b>{rail?.rates ? `${num(rail.rates)} build-ups` : "Your rates"}</b>
-                  <span className="s">
-                    Priced to the zone each project sits in, shared by every product
-                  </span>
-                </Link>
-                <Link className="wh-go" to="/work/projects">
-                  {icon("wi-gantt")}
-                  <span className="k">Everything else</span>
-                  <b>All projects</b>
-                  <span className="s">
-                    {view$.count} in hand, newest first, with what each is worth
-                  </span>
-                </Link>
-              </div>
-            </section>
-          )}
+          <div className="oh-grid">
+            {/* 2 — needs a decision */}
+            <Panel
+              id="oh-att"
+              title="Needs a decision"
+              sub={
+                decisions.total > decisions.rows.length
+                  ? `${num(decisions.total)} open · showing the ${decisions.rows.length} most pressing`
+                  : `${num(decisions.total)} open · each opens where it is resolved`
+              }
+              more={decisions.total > decisions.rows.length ? ["All projects", "/work/projects"] : null}
+            >
+              <OhTable
+                head={["Type", "What", "Project", ">"]}
+                empty="Nothing is waiting on you."
+                rows={decisions.rows.map((a) => (
+                  <tr key={a.id} className={a.urgent ? "urgent" : undefined}>
+                    <td>
+                      <span className={`oh-kind k-${a.kind.toLowerCase()}`}>{a.kind}</span>
+                    </td>
+                    <td className="tw">{a.text}</td>
+                    <td>{a.project ? <ProjectCell p={a.project} /> : <span className="mute">{DASH}</span>}</td>
+                    <td className="n">
+                      <Link className="oh-go" to={a.href}>
+                        {a.cta}
+                        <FaChevronRight />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              />
+            </Panel>
 
-          {/* His register, and only in the register view — his cards layout
-              does not contain it. */}
-          {view === "table" && (
-            <section className="wk-panel">
-              <div className="wk-ph">
-                <h2>Projects</h2>
-                <Link className="more" to="/work/projects">
-                  See all
-                </Link>
-              </div>
-
-              {/* His register: .wh-thd for the head row, .wh-row per project.
-                  The bar is share of the whole portfolio by value, which is what
-                  his `share` is — not progress, which gets its own column. */}
-              <div className="wh-tbl">
-                <div className="wh-thd">
-                  <span>Project</span>
-                  <span>From</span>
-                  <span>Items</span>
-                  <span>Share</span>
-                  <span>Touched</span>
-                  <span>Valued</span>
-                  <span>Value</span>
-                </div>
-                {(view === "table" ? view$.byValue : view$.recent.slice(0, 6)).map((p) => {
-                  const share = view$.value ? (Number(p.totalCost) || 0) / view$.value * 100 : 0;
-                  return (
-                    <Link className="wh-row" to={projectHref(p)} key={p.id}>
-                      <span className="n">
-                        <b>{p.name}</b>
-                        <em>{p.shared ? "Shared with you" : PRODUCT[p.baseProductKey] || ""}</em>
+            {/* 3 — continue where you left off */}
+            <Panel
+              title="Continue where you left off"
+              sub="Where this browser last had you"
+            >
+              {continues.length === 0 && !lesson ? (
+                <p className="oh-empty">Nothing opened yet.</p>
+              ) : (
+                <div className="oh-cont">
+                  {continues.map((c) => {
+                    const p = c.project;
+                    const m = measurable(p);
+                    const line =
+                      c.tab === "pm"
+                        ? `${pct(p.progressPercent)}% complete`
+                        : c.tab === "valuation"
+                          ? `${num(p.certificateCount || 0)} certificate${
+                              (p.certificateCount || 0) === 1 ? "" : "s"
+                            }`
+                          : m
+                            ? `${num(p.pricedCount || 0)} of ${num(m)} priced`
+                            : `${num(p.itemCount || 0)} item${(p.itemCount || 0) === 1 ? "" : "s"}`;
+                    const src = SOURCES[sourceOf(p)];
+                    return (
+                      <Link key={p.id} to={c.href}>
+                        {src?.icon ? (
+                          <img src={src.icon} alt="" />
+                        ) : (
+                          <span style={{ width: 24, flex: "none" }} />
+                        )}
+                        <span>
+                          <em>{c.eyebrow}</em>
+                          <b>{p.name}</b>
+                          <i>{line}</i>
+                        </span>
+                        <FaChevronRight />
+                      </Link>
+                    );
+                  })}
+                  {lesson ? (
+                    <Link to={lesson.href}>
+                      {/* His lesson row keeps the icon slot but leaves it
+                          empty, so the three project rows above stay aligned. */}
+                      <span style={{ width: 24, flex: "none" }} />
+                      <span>
+                        <em>Next lesson</em>
+                        <b>{lesson.moduleTitle}</b>
+                        <i>{lesson.courseTitle}</i>
                       </span>
-                      <span className="src">
-                      {PRODUCT[p.baseProductKey] || p.baseProductKey || ""}
-                      {p.isMaterials ? <i> · materials</i> : null}
-                    </span>
-                      <span className="it">
-                        {num(p.itemCount)}
-                        <i>items</i>
-                      </span>
-                      <span className="pg">
-                        <i style={{ width: `${share.toFixed(1)}%` }} />
-                        <em>{Math.round(share)}%</em>
-                      </span>
-                      <span className="up">{when(p.updatedAt)}</span>
-                      <span className="st">
-                        <em className={(p.progressPercent || 0) > 0 ? "b" : "a"}>
-                          {Math.round(p.progressPercent || 0)}%
-                        </em>
-                      </span>
-                      <span className="vl">{money(p.totalCost)}</span>
+                      <FaChevronRight />
                     </Link>
+                  ) : null}
+                </div>
+              )}
+            </Panel>
+          </div>
+
+          {/* 4 — every project */}
+          <Panel
+            className="wide"
+            title="Projects"
+            sub="Every project, whichever tool it started in"
+            more={["All projects", "/work/projects"]}
+          >
+            <OhTable
+              head={[
+                "Project",
+                "Source",
+                "Stage",
+                "Priced",
+                "Complete",
+                ">Measured",
+                ">Certified",
+                ">Updated",
+              ]}
+              empty="No projects yet. Save one from QUIV or HERON."
+              rows={[...projects]
+                .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+                .slice(0, 10)
+                .map((p) => {
+                  const m = measurable(p);
+                  const priced = m ? ((Number(p.pricedCount) || 0) / m) * 100 : 0;
+                  const meta = [
+                    p.clientName || null,
+                    p.mergedInto ? "linked services" : null,
+                    p.accessLevel === "view" ? "view only" : null,
+                    p.isMaterials ? "material schedule" : null,
+                  ].filter(Boolean);
+                  return (
+                    <tr key={p.id}>
+                      <td className="tw">
+                        <ProjectCell p={p} bold />
+                        {meta.length ? <em>{meta.join(" · ")}</em> : null}
+                      </td>
+                      <td>
+                        <SourceMark p={p} />
+                      </td>
+                      <td>
+                        <span className={`pj-stage s-${stageOf(p)}`}>{stageName(p)}</span>
+                      </td>
+                      <td className="g">
+                        <Bar value={priced} />
+                        <em>{m ? `${pct(priced)}%` : DASH}</em>
+                      </td>
+                      <td className="g">
+                        <Bar value={p.progressPercent} tone="ok" />
+                        <em>{pct(p.progressPercent)}%</em>
+                      </td>
+                      <td className="n">{compact(p.totalCost)}</td>
+                      <td className="n">
+                        {Number(p.certifiedToDate) > 0 ? compact(p.certifiedToDate) : DASH}
+                      </td>
+                      <td className="n mute">{short(p.updatedAt)}</td>
+                    </tr>
                   );
                 })}
-              </div>
-            </section>
-          )}
+            />
+          </Panel>
 
-          {/* His "Your work, by product". A card per product we sell, owned or
-              not: .off dims the ones this account does not hold rather than
-              hiding them, which is his point — the panel is also how somebody
-              discovers what else measures into the same bill. */}
-          {view === "cards" && (
-            <section className="wk-panel">
-              <div className="wk-ph">
-                <h2>Your work, by product</h2>
-                <Link className="more" to="/manage/products">
-                  Manage products
-                </Link>
-              </div>
-              <div className="wh-prods">
-                {productCards.map((c) => (
-                  <article className={`wh-prod${c.on ? "" : " off"}`} key={c.key}>
-                    {/* His card carries an <img>, and .wh-prod img is what sizes
-                        it to 34px — an inline SVG here gets no sizing rule at
-                        all and renders at whatever it likes. */}
-                    {PRODUCT_ICON[c.key] ? (
-                      <img src={PRODUCT_ICON[c.key]} alt="" />
-                    ) : (
-                      icon(c.key)
-                    )}
-                    <div>
-                      <b>{c.name}</b>
-                      <span>{c.line}</span>
-                      <em>{c.sub}</em>
-                    </div>
-                    <Link className="ds-btn btn-o ds-btn-sm" to={c.go}>
-                      {c.cta}
-                    </Link>
-                  </article>
-                ))}
-              </div>
-              <p className="wk-note">
-                One extraction feeds all of them. QUIV reads the model once; RateGen prices it,
-                Time Pro sequences it, and a valuation is the same numbers on a date. Nothing is
-                measured twice.
-              </p>
-            </section>
-          )}
+          <div className="oh-two">
+            {/* 5 — money in motion */}
+            <Panel title="Valuations and variations" sub="Most recent first">
+              <OhTable
+                head={["Ref", "Item", "Date", ">Amount", "Status"]}
+                empty="No certificates or variations yet."
+                state={moneyState}
+                rows={inMotion.map(({ kind, row }) => {
+                  if (kind === "cert") {
+                    const [cls, label] = CERT_PILL[row.status] || CERT_PILL.draft;
+                    return (
+                      <tr key={`c-${row.projectId}-${row.number}`}>
+                        <td>IPC {row.number}</td>
+                        <td className="tw">
+                          <ProjectCell p={row} tab="valuation" />
+                        </td>
+                        <td className="mute">{short(row.date)}</td>
+                        <td className="n">{money(row.netPayable)}</td>
+                        <td>
+                          <span className={`pj-stage ${cls}`}>{label}</span>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  const [cls, label] = VAR_PILL[row.status] || VAR_PILL.approved;
+                  return (
+                    <tr key={`v-${row.projectId}-${row.reference}-${row.issuedAt}`}>
+                      <td>{row.reference || "Variation"}</td>
+                      <td className="tw">
+                        <Link className="oh-p" to={projectTabHref(row, "valuation")}>
+                          {row.description || "Variation"}
+                        </Link>
+                        <em>{row.name}</em>
+                      </td>
+                      <td className="mute">{short(row.issuedAt)}</td>
+                      <td className="n">
+                        {row.amount < 0 ? "−" : "+"}
+                        {money(Math.abs(row.amount))}
+                      </td>
+                      <td>
+                        <span className={`pj-stage ${cls}`}>{label}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              />
+            </Panel>
 
-          {/* His "Needs a decision". Every row is derived from this account's
-              own work — a project measured but never priced, one nobody has
-              opened in three months — rather than a fixed list. */}
-          {view === "cards" && attention.length > 0 && (
-            <section className="wk-panel">
-              <div className="wk-ph">
-                <h2>Needs a decision</h2>
-                <span className="wk-locnote">{attention.length} open</span>
-              </div>
-              <div className="wh-att">
-                {attention.map((a) => (
-                  <div className="wh-a" key={a.k + a.t}>
-                    <span className="k">{a.k}</span>
-                    <b>{a.t}</b>
-                    <p>{a.d}</p>
-                    <Link className="ds-btn btn-o ds-btn-sm" to={a.go}>
-                      {a.cta}
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+            {/* 6 — programme */}
+            <Panel title="Programme" sub="Overdue, due in the next two weeks, or under way">
+              <OhTable
+                head={["Task", "Project", "Ends", "Progress", "Status"]}
+                empty="No tasks are due."
+                state={moneyState}
+                rows={(overview?.tasks || []).slice(0, 6).map((t, i) => {
+                  const st = taskState(t);
+                  return (
+                    <tr key={`${t.projectId}-${t.task}-${i}`} className={st.late ? "urgent" : undefined}>
+                      <td className="tw">
+                        {t.isMilestone ? "◆ " : ""}
+                        {t.task || "Untitled task"}
+                        <em>{t.assignedTo || "No owner"}</em>
+                      </td>
+                      <td>
+                        <ProjectCell p={t} tab="pm" />
+                      </td>
+                      <td className="mute">{short(t.endDate)}</td>
+                      <td className="g">
+                        <Bar value={t.percentComplete} tone={st.late ? "bad" : "ok"} />
+                        <em>{pct(t.percentComplete)}%</em>
+                      </td>
+                      <td>
+                        {st.late ? <span className="oh-late">Overdue</span> : st.label}
+                      </td>
+                    </tr>
+                  );
+                })}
+              />
+            </Panel>
+          </div>
 
+          <div className="oh-two">
+            {/* 7 and 8 */}
+            {ratesPanel}
+            {learningPanel}
+          </div>
         </>
       )}
     </div>
