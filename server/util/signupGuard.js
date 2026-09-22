@@ -15,9 +15,12 @@
 //      MAX_AGE_MS. A script posting straight to the API has no ticket.
 //   3. A cap per visitor, counted in the database so it holds across Lambda
 //      instances, on the visitor address CloudFront saw (not one a bot can
-//      forge). Generous enough for a training room signing up together.
+//      forge), an IPv6 visitor by its /64 network. Only accounts actually
+//      created count, and the counter is atomic, so neither junk requests nor
+//      a burst in parallel gets round it. Generous enough for a training room.
 //
 // Every refusal answers the same way, so a bot learns nothing from it.
+// SIGNUP_GUARD=off switches all three off (an emergency valve, logged).
 
 import crypto from "node:crypto";
 
@@ -59,6 +62,10 @@ export function ticketProblem(ticket, { now = Date.now(), env = process.env } = 
   return "";
 }
 
+export function guardOff(env = process.env) {
+  return /^(off|0|false|no)$/i.test(String(env.SIGNUP_GUARD || "").trim());
+}
+
 export function honeypotTripped(body) {
   return String(body?.[HONEYPOT_FIELD] ?? "").trim() !== "";
 }
@@ -80,28 +87,71 @@ export function visitorIp(req) {
   return String(req?.ip || xff[0] || "").replace(/^::ffff:/, "");
 }
 
+/**
+ * What the cap counts: an IPv4 address whole, an IPv6 address by its /64
+ * network (one household or server gets a whole /64 and can rotate through
+ * it freely).
+ */
+export function visitorNetwork(ip) {
+  const s = String(ip || "").trim().replace(/%.*$/, "").replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, "");
+  if (!s.includes(":")) return s || "unknown";
+  const [head, tail] = s.split("::");
+  const h = head ? head.split(":") : [];
+  const t = tail === undefined ? null : tail ? tail.split(":") : [];
+  const full = t === null ? h : [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
+  return `${full
+    .slice(0, 4)
+    .map((x) => (x || "0").toLowerCase().replace(/^0+(?=.)/, ""))
+    .join(":")}::/64`;
+}
+
 /** The throttle key: a hash, so no visitor address is stored. */
 export function ipKey(ip, env = process.env) {
   return crypto
     .createHash("sha256")
-    .update(`${secret(env)}|${String(ip || "unknown")}`)
+    .update(`${secret(env)}|${visitorNetwork(ip)}`)
     .digest("base64url")
     .slice(0, 32);
 }
 
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+async function bump(SignupThrottle, key, bucket, by, expireAt) {
+  const q = { key, bucket };
+  const u = { $inc: { n: by }, ...(by > 0 ? { $setOnInsert: { expireAt } } : {}) };
+  try {
+    return await SignupThrottle.findOneAndUpdate(q, u, { upsert: by > 0, new: true, lean: true });
+  } catch (err) {
+    // Two first requests racing to create the same counter: one wins, the
+    // other retries into it.
+    if (err?.code === 11000) return SignupThrottle.findOneAndUpdate(q, u, { new: true, lean: true });
+    throw err;
+  }
+}
+
 /**
- * "" when this visitor may sign up now, otherwise "per-ip". Records the
- * attempt. `SignupThrottle` holds one short-lived row per accepted sign-up.
+ * Reserve a sign-up for this visitor: an atomic count in an hour bucket and a
+ * day bucket. Over either cap, the reservation is handed back and the answer
+ * is "per-ip". Call it just before the account is created, and call
+ * `release()` if creating it then fails, so only real accounts count.
  */
-export async function throttleProblem(SignupThrottle, ip, { now = new Date() } = {}) {
+export async function reserveSignup(SignupThrottle, ip, { now = new Date() } = {}) {
   const key = ipKey(ip);
-  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const [hour, day] = await Promise.all([
-    SignupThrottle.countDocuments({ key, at: { $gte: hourAgo } }),
-    SignupThrottle.countDocuments({ key, at: { $gte: dayAgo } }),
-  ]);
-  if (hour >= PER_IP_HOUR || day >= PER_IP_DAY) return "per-ip";
-  await SignupThrottle.create({ key, at: now });
-  return "";
+  const t = now.getTime();
+  const buckets = [
+    { bucket: `h${Math.floor(t / HOUR)}`, cap: PER_IP_HOUR, expireAt: new Date(t + 2 * HOUR) },
+    { bucket: `d${Math.floor(t / DAY)}`, cap: PER_IP_DAY, expireAt: new Date(t + DAY + HOUR) },
+  ];
+  const taken = [];
+  const release = () => Promise.all(taken.map((b) => bump(SignupThrottle, key, b, -1)));
+  for (const b of buckets) {
+    const doc = await bump(SignupThrottle, key, b.bucket, 1, b.expireAt);
+    taken.push(b.bucket);
+    if ((doc?.n || 0) > b.cap) {
+      await release();
+      return { problem: "per-ip", release: async () => {} };
+    }
+  }
+  return { problem: "", release };
 }

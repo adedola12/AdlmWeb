@@ -5,7 +5,9 @@ import {
   ticketProblem,
   honeypotTripped,
   visitorIp,
-  throttleProblem,
+  reserveSignup,
+  visitorNetwork,
+  guardOff,
   MIN_FILL_MS,
   MAX_AGE_MS,
   PER_IP_HOUR,
@@ -47,14 +49,57 @@ test("the visitor is the address CloudFront saw, not one the client made up", ()
   assert.equal(visitorIp({ headers: {}, ip: "::ffff:10.0.0.5" }), "10.0.0.5");
 });
 
-test("a visitor may sign up a room's worth an hour, then waits", async () => {
-  const rows = [];
-  const SignupThrottle = {
-    countDocuments: async (q) => rows.filter((r) => r.key === q.key && r.at >= q.at.$gte).length,
-    create: async (r) => rows.push(r),
+function fakeCounters() {
+  const rows = new Map();
+  return {
+    rows,
+    findOneAndUpdate: async (q, u, o) => {
+      const k = `${q.key}|${q.bucket}`;
+      if (!rows.has(k)) {
+        if (!o.upsert) return null;
+        rows.set(k, { ...q, n: 0, ...(u.$setOnInsert || {}) });
+      }
+      const r = rows.get(k);
+      r.n += u.$inc.n;
+      return { ...r };
+    },
   };
+}
+
+test("a visitor may create a room's worth of accounts an hour, then waits", async () => {
+  const SignupThrottle = fakeCounters();
   const now = new Date("2026-09-22T10:00:00Z");
-  for (let i = 0; i < PER_IP_HOUR; i++) assert.equal(await throttleProblem(SignupThrottle, "41.58.10.20", { now }), "");
-  assert.equal(await throttleProblem(SignupThrottle, "41.58.10.20", { now }), "per-ip");
-  assert.equal(await throttleProblem(SignupThrottle, "41.58.10.21", { now }), "");
+  for (let i = 0; i < PER_IP_HOUR; i++) assert.equal((await reserveSignup(SignupThrottle, "41.58.10.20", { now })).problem, "");
+  assert.equal((await reserveSignup(SignupThrottle, "41.58.10.20", { now })).problem, "per-ip");
+  assert.equal((await reserveSignup(SignupThrottle, "41.58.10.21", { now })).problem, "");
+});
+
+test("parallel requests cannot all slip under the cap", async () => {
+  const SignupThrottle = fakeCounters();
+  const now = new Date("2026-09-22T10:00:00Z");
+  const got = await Promise.all(Array.from({ length: PER_IP_HOUR + 10 }, () => reserveSignup(SignupThrottle, "41.58.10.20", { now })));
+  assert.equal(got.filter((g) => !g.problem).length, PER_IP_HOUR);
+});
+
+test("a sign-up that then fails hands its place back", async () => {
+  const SignupThrottle = fakeCounters();
+  const now = new Date("2026-09-22T10:00:00Z");
+  for (let i = 0; i < PER_IP_HOUR; i++) {
+    const slot = await reserveSignup(SignupThrottle, "41.58.10.20", { now });
+    await slot.release();
+  }
+  assert.equal((await reserveSignup(SignupThrottle, "41.58.10.20", { now })).problem, "");
+});
+
+test("an IPv6 visitor counts by its /64 network", () => {
+  assert.equal(visitorNetwork("2001:db8:abcd:12::1"), "2001:db8:abcd:12::/64");
+  assert.equal(visitorNetwork("2001:db8:abcd:12:ffff:1:2:3"), "2001:db8:abcd:12::/64");
+  assert.equal(visitorNetwork("2001:db8::1"), "2001:db8:0:0::/64");
+  assert.equal(visitorNetwork("::ffff:41.58.10.20"), "41.58.10.20");
+  assert.equal(visitorNetwork("41.58.10.20"), "41.58.10.20");
+});
+
+test("SIGNUP_GUARD=off is the emergency valve", () => {
+  assert.equal(guardOff({ SIGNUP_GUARD: "off" }), true);
+  assert.equal(guardOff({}), false);
 });

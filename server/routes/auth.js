@@ -14,9 +14,10 @@ import { ensureDb } from "../db.js";
 import { SignupThrottle } from "../models/SignupThrottle.js";
 import {
   REFUSAL as SIGNUP_REFUSAL,
+  guardOff,
   honeypotTripped,
   issueTicket,
-  throttleProblem,
+  reserveSignup,
   ticketProblem,
   visitorIp,
 } from "../util/signupGuard.js";
@@ -273,11 +274,12 @@ router.post("/signup", async (req, res) => {
     const { email, username, password, zone, firstName, lastName, whatsapp } =
       req.body || {};
 
-    // Bots first (2026-09-22): the hidden field, the form ticket, then the
-    // per-visitor cap. One answer for every refusal.
-    const blocked = honeypotTripped(req.body)
-      ? "honeypot"
-      : ticketProblem(req.body?.ticket) || (await throttleProblem(SignupThrottle, visitorIp(req)));
+    // Bots first (2026-09-22): the hidden field and the form ticket. The
+    // per-visitor cap comes just before the account is created, so only real
+    // accounts count against it. One answer for every refusal.
+    const guard = !guardOff();
+    if (!guard) console.warn("[/auth/signup] SIGNUP_GUARD is off");
+    const blocked = !guard ? "" : honeypotTripped(req.body) ? "honeypot" : ticketProblem(req.body?.ticket);
     if (blocked) {
       console.warn(`[/auth/signup] refused: ${blocked}`);
       return res.status(400).json({ error: SIGNUP_REFUSAL, code: "SIGNUP_CHECK" });
@@ -318,17 +320,28 @@ router.post("/signup", async (req, res) => {
     if (exists) return res.status(409).json({ error: "User exists" });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({
-      email: normalizedEmail,
-      username: normalizedUsername,
-      passwordHash,
-      role: "user",
-      zone: zone || null,
-      firstName: String(firstName || "").trim(),
-      lastName: String(lastName || "").trim(),
-      whatsapp: normalizeWhatsApp(whatsapp),
-      entitlements: [],
-    });
+    const slot = guard ? await reserveSignup(SignupThrottle, visitorIp(req)) : { problem: "", release: async () => {} };
+    if (slot.problem) {
+      console.warn(`[/auth/signup] refused: ${slot.problem}`);
+      return res.status(400).json({ error: SIGNUP_REFUSAL, code: "SIGNUP_CHECK" });
+    }
+    let user;
+    try {
+      user = await User.create({
+        email: normalizedEmail,
+        username: normalizedUsername,
+        passwordHash,
+        role: "user",
+        zone: zone || null,
+        firstName: String(firstName || "").trim(),
+        lastName: String(lastName || "").trim(),
+        whatsapp: normalizeWhatsApp(whatsapp),
+        entitlements: [],
+      });
+    } catch (createErr) {
+      await slot.release().catch(() => {});
+      throw createErr;
+    }
 
     // The address has not been proved yet, so the WELCOME does not go now — it
     // goes when the code comes back. Sending "your account is ready" to an
@@ -1430,6 +1443,9 @@ router.post("/social", authLimiter, async (req, res) => {
 const VERIFY_MINUTES = 30;
 /** How long before another code may be asked for. */
 const VERIFY_RESEND_SECONDS = 60;
+// Per unconfirmed account (2026-09-22): codes a day, and address changes ever.
+const VERIFY_RESENDS_PER_DAY = 5;
+const EMAIL_CHANGES_MAX = 3;
 /** Wrong guesses before the code is thrown away. */
 const VERIFY_MAX_ATTEMPTS = 6;
 
@@ -1538,10 +1554,23 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
       });
     }
 
+    // How many codes an unconfirmed account may have sent in a day, and how
+    // many times it may change its address. Without these, one account that
+    // got past the sign-up checks could mail any address, every minute
+    // (review of the sign-up protection, 2026-09-22).
+    const today = new Date().toISOString().slice(0, 10);
+    const sentToday = user.emailVerifyResendDay === today ? user.emailVerifyResends || 0 : 0;
+    if (sentToday >= VERIFY_RESENDS_PER_DAY) {
+      return res.status(429).json({ error: "That is the most codes we send in a day. Try again tomorrow, or contact support." });
+    }
+
     // An address change is allowed here, because the commonest reason a code
     // never arrives is that the address was typed wrongly.
     const wanted = String(req.body?.email || "").trim().toLowerCase();
     if (wanted && wanted !== user.email) {
+      if ((user.emailChangeCount || 0) >= EMAIL_CHANGES_MAX) {
+        return res.status(429).json({ error: "The address has been changed too many times. Contact support to finish setting up." });
+      }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(wanted)) {
         return res.status(400).json({ error: "That email does not look right." });
       }
@@ -1549,7 +1578,10 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
         return res.status(409).json({ error: "Another account already uses that address." });
       }
       user.email = wanted;
+      user.emailChangeCount = (user.emailChangeCount || 0) + 1;
     }
+    user.emailVerifyResendDay = today;
+    user.emailVerifyResends = sentToday + 1;
 
     const code = newVerifyCode();
     user.emailVerifyHash = hashCode(code);
