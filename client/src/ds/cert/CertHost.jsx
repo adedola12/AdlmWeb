@@ -13,7 +13,11 @@ import { CertClaim, CertView, PrintSheet } from "./CertDialogs.jsx";
  */
 export default function CertHost({ open, cn, token, onFinish, onClose }) {
   const [mode, setMode] = React.useState(null);
+  // The finish chosen in this claim: `open.row` was captured at the click, so
+  // it still holds the old one (review, 2026-09-22).
+  const [chosen, setChosen] = React.useState(null);
   React.useEffect(() => {
+    setChosen(null);
     setMode(open ? (open.action === "claim" || !cn.locked ? "claim" : open.action) : null);
     // Only a new request resets the mode; a claim finishing moves it on itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -26,7 +30,7 @@ export default function CertHost({ open, cn, token, onFinish, onClose }) {
     ref: row.certificateRef,
     title: row.title,
     issuedAt: row.issuedAt,
-    finish: row.finish,
+    finish: chosen || row.finish,
   };
 
   if (mode === "claim") {
@@ -36,9 +40,11 @@ export default function CertHost({ open, cn, token, onFinish, onClose }) {
         name={cn.name}
         locked={cn.locked}
         token={token}
+        onLocked={(name) => cn.lock(name)}
         onDone={({ name, finish }) => {
           cn.lock(name);
           onFinish(row.sku, finish);
+          setChosen(finish);
           setMode("view");
         }}
         onClose={onClose}
@@ -46,9 +52,18 @@ export default function CertHost({ open, cn, token, onFinish, onClose }) {
     );
   }
   if (mode === "download") {
-    return <PrintSheet cert={cert} name={cn.name} finish={row.finish} onDone={onClose} />;
+    return <PrintSheet cert={cert} name={cn.name} finish={cert.finish} onDone={onClose} />;
   }
   return (
-    <CertView cert={cert} name={cn.name} token={token} onFinish={(k) => onFinish(row.sku, k)} onClose={onClose} />
+    <CertView
+      cert={cert}
+      name={cn.name}
+      token={token}
+      onFinish={(k) => {
+        setChosen(k);
+        onFinish(row.sku, k);
+      }}
+      onClose={onClose}
+    />
   );
 }

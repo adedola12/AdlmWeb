@@ -227,7 +227,7 @@ export default function DsCertificateVerify() {
                   >
                     Report a suspected fake
                   </a>
-                  <a className="ds-btn btn-o ds-btn-sm" href="/contact">
+                  <a className="ds-btn btn-o ds-btn-sm" href="/support">
                     Contact ADLM
                   </a>
                 </div>

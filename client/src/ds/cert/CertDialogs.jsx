@@ -51,7 +51,7 @@ async function saveFinish(token, sku, finish) {
  * @param {string} p.name      the account's name as it stands
  * @param {boolean} p.locked   the account's certificate name is already set
  */
-export function CertClaim({ cert, name: startName, locked, token, onDone, onClose }) {
+export function CertClaim({ cert, name: startName, locked, token, onLocked, onDone, onClose }) {
   const fb = useFeedback();
   const on = useOnFrame();
   const [step, setStep] = React.useState(locked ? 3 : 1);
@@ -91,10 +91,22 @@ export function CertClaim({ cert, name: startName, locked, token, onDone, onClos
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(splitName(name)),
       });
+      // The page learns the name is locked now, not only when the claim
+      // finishes: closing at step 3 must not leave a later claim to hit the
+      // server's "already locked" refusal (review, 2026-09-22).
+      onLocked?.(name);
       fb.toast({ tone: "success", title: "Name confirmed", msg: `Your certificates are issued to ${name}.` });
       setStep(3);
     } catch (e) {
-      fb.toast({ tone: "error", title: e.message || "The name could not be saved." });
+      if (e?.status === 403 && e?.data?.locked) {
+        const was = [e.data.certificateFirstName, e.data.certificateLastName].filter(Boolean).join(" ") || name;
+        onLocked?.(was);
+        setName(was);
+        fb.toast({ tone: "info", title: "Your name was already confirmed", msg: `Certificates are issued to ${was}.` });
+        setStep(3);
+      } else {
+        fb.toast({ tone: "error", title: e.message || "The name could not be saved." });
+      }
     } finally {
       setBusy(false);
     }
