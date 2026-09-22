@@ -25,16 +25,37 @@
 // this screen can move money that has already been certified — and the copy on
 // the page says exactly that rather than the prototype's "every project using
 // this rate has moved with it".
+//
+// THE REMAINDER IS CARRIED, NEVER DROPPED (S18 review, finding 1)
+//
+// A master rate's stored net cost is frequently larger than the sum of its
+// itemised lines: rounding, legacy rates imported without a full build-up,
+// allowances nobody itemised. The screen has always shown that gap as "Not
+// itemised". It is now part of the arithmetic as well, so editing a quantity
+// rebuilds the net cost from the lines PLUS the remainder and the rate keeps
+// its value. It used to be rebuilt from the lines alone, which quietly cut the
+// customer's own copy by the remainder and made every bill priced from it
+// afterwards cheaper than the library said. The footer also states the rate
+// before and after, so nothing about the saved figure is a surprise.
+//
+// PERCENTAGES ARE SAVED AS TYPED (S18 review, findings 2 and 4)
+//
+// Overhead and profit used to be clamped to 60% here while the input still
+// showed the typed figure, and the custom-rate builder did not clamp at all.
+// The clamp is gone — see percentProblem() in rategen/rateMath.js, which both
+// screens now share.
 
 import React from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { useFeedback } from "./feedback/feedbackContext.js";
+import { fetchAllRates } from "./rategen/fetchRates.js";
 import {
   componentsOf,
   groupComponents,
   groupForKind,
+  percentProblem,
   totalsFrom,
   unexplainedNet,
   toNum,
@@ -61,13 +82,12 @@ const longDate = (d) =>
       })
     : "";
 
-const clampPc = (v) => Math.max(0, Math.min(60, toNum(v)));
-
 export default function DsWorkRate() {
   const { id } = useParams();
   const { accessToken } = useAuth();
   const fb = useFeedback();
   const [rates, setRates] = React.useState(null);
+  const [ratesTruncated, setRatesTruncated] = React.useState(false);
   const [mine, setMine] = React.useState(null); // { overrides, customs, version }
   const [failed, setFailed] = React.useState(false);
 
@@ -79,10 +99,14 @@ export default function DsWorkRate() {
   const load = React.useCallback(() => {
     if (!accessToken) return Promise.resolve();
     return Promise.all([
-      apiAuthed("/rategen-v2/library/rates/sync", {
-        token: accessToken,
-        params: { limit: 500 },
-      }).then((d) => (Array.isArray(d.items) ? d.items : [])),
+      // Every page of the library, because the rate being opened may sit past
+      // the first one. One page made a real rate read as "not in this library".
+      fetchAllRates(({ limit, cursor }) =>
+        apiAuthed("/rategen-v2/library/rates/sync", {
+          token: accessToken,
+          params: cursor ? { limit, cursor } : { limit },
+        }),
+      ),
       apiAuthed("/rategen-v2/library/user-rates", { token: accessToken })
         .then((d) => ({
           overrides: Array.isArray(d.rateOverrides) ? d.rateOverrides : [],
@@ -92,8 +116,9 @@ export default function DsWorkRate() {
         }))
         // A user with no library of their own is not an error.
         .catch(() => ({ overrides: [], customs: [], version: 1, customRatesVersion: 1 })),
-    ]).then(([items, own]) => {
-      setRates(items);
+    ]).then(([paged, own]) => {
+      setRates(paged.items);
+      setRatesTruncated(paged.truncated);
       setMine(own);
     });
   }, [accessToken]);
@@ -140,13 +165,22 @@ export default function DsWorkRate() {
   const overheadPercent = edit ? edit.overheadPercent : toNum(rate?.overheadPercent);
   const profitPercent = edit ? edit.profitPercent : toNum(rate?.profitPercent);
 
+  // The part of the stored net cost that no line explains. Read once off the
+  // rate as it was published, and then carried through every edit, so the
+  // customer's own copy is worth what the library said it was worth.
+  const baseCarried = React.useMemo(
+    () => unexplainedNet(toNum(rate?.netCost), baseComponents),
+    [rate, baseComponents],
+  );
+
   const freshEdit = React.useCallback(
     () => ({
       components: baseComponents.map((c) => ({ ...c })),
       overheadPercent: toNum(rate?.overheadPercent),
       profitPercent: toNum(rate?.profitPercent),
+      carried: baseCarried,
     }),
-    [baseComponents, rate],
+    [baseComponents, rate, baseCarried],
   );
 
   const startEdit = React.useCallback(() => {
@@ -181,15 +215,16 @@ export default function DsWorkRate() {
     return groupComponents(withIndex);
   }, [components]);
 
-  // The percentages are clamped HERE rather than as they are typed, so the
-  // figure shown and the figure saved are the same one, and 0 to 60 is the
-  // range the build-up has always applied.
-  const ohPc = clampPc(overheadPercent);
-  const prPc = clampPc(profitPercent);
+  // Read as typed, and saved as read. Nothing is clamped: a figure that cannot
+  // be a percentage is refused out loud at save, and a figure that can is the
+  // one that goes to the server.
+  const ohPc = toNum(overheadPercent);
+  const prPc = toNum(profitPercent);
+  const carried = edit ? edit.carried : baseCarried;
 
   const totals = React.useMemo(
-    () => totalsFrom(components, ohPc, prPc),
-    [components, ohPc, prPc],
+    () => totalsFrom(components, ohPc, prPc, carried),
+    [components, ohPc, prPc, carried],
   );
 
   // An untouched rate shows what the server stored, so the page and the
@@ -204,6 +239,22 @@ export default function DsWorkRate() {
 
   async function save() {
     if (!edit || saving || !rate) return;
+
+    // The figure on screen is the figure that gets stored, so a figure that
+    // cannot be stored is refused here rather than quietly turned into another
+    // one. Same rule, same words, in the custom-rate builder.
+    const problem =
+      percentProblem("Overhead", overheadPercent) ||
+      percentProblem("Profit", profitPercent);
+    if (problem) {
+      fb.toast({
+        tone: "error",
+        title: problem,
+        msg: "Nothing was saved. Put a percentage the rate can carry in the box and save again.",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const breakdown = edit.components.map((c) => ({
@@ -224,12 +275,36 @@ export default function DsWorkRate() {
         // read for its composition. They are rebuilt from the edited lines
         // rather than sent empty, which would quietly strip a saved rate of
         // its composition everywhere outside this screen.
+        // The category a line was filed under lives on materials[]/labour[],
+        // not on the breakdown this screen reads, so re-saving from here used
+        // to blank it on every line. Carried across by the same name-and-unit
+        // key the catalogue is identified by.
+        // (priceAsOf is not carried because it is not stored: neither
+        // BreakdownLineSchema nor UserCustomRateLineSchema in
+        // server/models/RateGenLibrary.js has the field, so a user rate has
+        // never held one.)
+        const filedUnder = new Map();
+        for (const l of [...(rate.materials || []), ...(rate.labour || [])]) {
+          const k = `${String(l.description || "").trim().toLowerCase()}|${String(
+            l.unit || "",
+          )
+            .trim()
+            .toLowerCase()}`;
+          if (l.category) filedUnder.set(k, l.category);
+        }
+
         const asLine = (c) => ({
           description: c.name,
           quantity: Math.max(0, toNum(c.quantity)),
           unit: c.unit || "",
           unitPrice: c.unitPrice,
           totalCost: c.amount,
+          category:
+            filedUnder.get(
+              `${String(c.name || "").trim().toLowerCase()}|${String(c.unit || "")
+                .trim()
+                .toLowerCase()}`,
+            ) || "",
           refSn: c.refSn ?? null,
           refName: c.refName || c.name,
         });
@@ -351,14 +426,23 @@ export default function DsWorkRate() {
           <Link to="/work/library">← RateGen</Link>
         </p>
         <p className="ds-sub">
-          That rate is not in this library. It may have been removed, or it belongs to another
-          account.
+          {ratesTruncated
+            ? "That rate was not in the part of the library this screen could load, and the library is larger than it holds. Open Rate Gen to reach it."
+            : "That rate is not in this library. It may have been removed, or it belongs to another account."}
         </p>
       </div>
     );
   }
 
-  const unexplained = edit ? 0 : unexplainedNet(net, components);
+  // Shown whether or not the screen is being edited, because it is part of the
+  // net cost in both states.
+  const unexplained = carried;
+  const storedTotal = toNum(rate.totalCost);
+
+  // What the PUBLISHED rate is made of, used only to say why a customer's own
+  // copy with no build-up of its own is showing no lines.
+  const publishedComponents = componentsOf(published || {});
+  const publishedNet = toNum(published?.netCost);
 
   return (
     <div className="dsh-in">
@@ -446,7 +530,9 @@ export default function DsWorkRate() {
                   <div className="wk-bl">
                     <span className="nm">
                       Not itemised
-                      <em>carried in the net cost without a component behind it</em>
+                      <em>
+                        in the net cost with no component behind it — your copy keeps it
+                      </em>
                     </span>
                     <span className="qt" />
                     <span className="pr" />
@@ -470,7 +556,6 @@ export default function DsWorkRate() {
                     <input
                       type="number"
                       min="0"
-                      max="60"
                       step="0.5"
                       value={overheadPercent}
                       onChange={(e) => setPercent("overheadPercent", e.target.value)}
@@ -491,7 +576,6 @@ export default function DsWorkRate() {
                     <input
                       type="number"
                       min="0"
-                      max="60"
                       step="0.5"
                       value={profitPercent}
                       onChange={(e) => setPercent("profitPercent", e.target.value)}
@@ -516,6 +600,18 @@ export default function DsWorkRate() {
                   This rate has no components stored against it, so there is nothing to break
                   down. It carries {money(total)} per {rate.unit || "unit"} as a flat figure.
                 </p>
+                {/* The published rate's lines are the published rate's. They add
+                    up to ITS net cost, so showing them here would read as an
+                    itemisation of a figure they do not explain. Said instead. */}
+                {isOwn && !isCustom && publishedComponents.length ? (
+                  <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--ink-3)" }}>
+                    The published rate is built up from {publishedComponents.length}{" "}
+                    component{publishedComponents.length === 1 ? "" : "s"} adding to{" "}
+                    {money(publishedNet)}. Those lines belong to the published rate, not to
+                    your copy, so they are not listed against your figure. Reset to published
+                    to go back to them.
+                  </p>
+                ) : null}
               </div>
             )}
 
@@ -523,7 +619,15 @@ export default function DsWorkRate() {
               <div className="wk-pf">
                 {edit ? (
                   <>
-                    <span className="wk-dirty">Edited — not saved</span>
+                    <span className="wk-dirty">
+                      {/* To the kobo, so a float artefact never invents a
+                          change the customer cannot see. */}
+                      {Math.round(total * 100) === Math.round(storedTotal * 100)
+                        ? "Edited — not saved"
+                        : `Edited — not saved · ${money(storedTotal)} → ${money(total)} per ${
+                            rate.unit || "unit"
+                          }`}
+                    </span>
                     <button
                       type="button"
                       className="ds-btn btn-o ds-btn-sm"

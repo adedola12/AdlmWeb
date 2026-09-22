@@ -21,6 +21,30 @@
 // per-trade default that does not exist on our server (RG-06, deferred — it
 // changes figures the desktop plugins read). Ours shows the real default the
 // server will apply if the box is left blank, which is 10% and 10%.
+//
+// A LINE POINTS AT A NAME, NOT AT A ROW NUMBER (S18 review, finding 7)
+//
+// GET /rategen/master numbers its rows `sn: i + 1` — a position in one
+// request's alphabetical, location-scoped list (fetchMasterMaterials in
+// server/util/rategenMaster.js). It is not a catalogue id: add a material,
+// work in another state, and row 214 is a different material. Storing it as a
+// line's refSn filed the customer's rate against a number that would come to
+// mean something else, and refSn is read as a price-resolution key elsewhere
+// (resolveLinePrice in services/archicadCosting.js, the compute engine), where
+// a stale one prices the wrong thing silently. A line now carries the name and
+// unit it was picked by, which is the identity the whole price-override system
+// already matches on (priceKey in server/util/rategenBulkPrices.js), and
+// leaves refSn null for the desktop to fill with its own stable serial.
+//
+// OVERHEAD AND PROFIT ARE SAVED AS TYPED (S18 review, finding 4)
+//
+// These boxes used to carry max="60", which a browser does not enforce on a
+// typed figure, while the build-up screen clamped to 60 and re-saved at the
+// clamp — so a rate built here at 80% profit became a 60% rate the first time
+// it was opened and saved, and the customer was never told. There is one rule
+// now, percentProblem() in rateMath.js, and both screens keep it: what is in
+// the box is what is stored, and a figure that cannot be stored is refused in
+// words by draftProblem() before anything is written.
 
 import React from "react";
 import { FaTimes } from "../../components/icons.jsx";
@@ -38,6 +62,15 @@ const money = (n) =>
     currency: "NGN",
     maximumFractionDigits: 2,
   }).format(Number(n) || 0);
+
+/**
+ * How a catalogue row is identified: by what it is and what it is sold in,
+ * never by its position in the answer to one request. The catalogue carries
+ * rows that share a name and differ by unit — steel per tonne and per kg — so
+ * the unit is part of the identity, exactly as it is server-side.
+ */
+const rowKey = (r) =>
+  `${String(r?.description ?? r?.name ?? "").trim()}|${String(r?.unit ?? "").trim()}`;
 
 const GROUPS = [
   { kind: "material", label: "Materials", qtyNote: "quantity per" },
@@ -78,7 +111,8 @@ export default function CustomRateBuilder({
               unitPrice: toNum(first.price),
               quantity: kind === "labour" ? 0.05 : 1,
               category: first.category || "",
-              refSn: first.sn ?? null,
+              // Not first.sn: that is this request's row number, not an id.
+              refSn: null,
             }
           : // Plant, and a catalogue that failed to load, are typed by hand.
             {
@@ -105,22 +139,22 @@ export default function CustomRateBuilder({
 
   const pick = (index, kind, value) => {
     const src = kind === "material" ? materials : labour;
-    const row = src.find((r) => String(r.sn ?? r.description) === value);
+    const row = src.find((r) => rowKey(r) === value);
     if (!row) return;
     setLine(index, {
       name: row.description || row.name || "",
       unit: row.unit || (kind === "labour" ? "day" : ""),
       unitPrice: toNum(row.price),
       category: row.category || "",
-      refSn: row.sn ?? null,
+      refSn: null,
     });
   };
 
   const t = draftTotals(draft);
 
   const options = (src) =>
-    src.map((r) => (
-      <option key={String(r.sn ?? r.description)} value={String(r.sn ?? r.description)}>
+    src.map((r, i) => (
+      <option key={`${rowKey(r)}-${i}`} value={rowKey(r)}>
         {r.description || r.name}
         {r.unit ? ` · per ${r.unit}` : ""}
       </option>
@@ -170,7 +204,6 @@ export default function CustomRateBuilder({
         <input
           type="number"
           min="0"
-          max="60"
           step="0.5"
           value={draft.overhead}
           onChange={(e) => set({ overhead: e.target.value })}
@@ -185,7 +218,6 @@ export default function CustomRateBuilder({
         <input
           type="number"
           min="0"
-          max="60"
           step="0.5"
           value={draft.profit}
           onChange={(e) => set({ profit: e.target.value })}
@@ -219,7 +251,7 @@ export default function CustomRateBuilder({
               <div className="rg-ln" key={l.index}>
                 {src.length ? (
                   <select
-                    value={String(l.refSn ?? l.name)}
+                    value={rowKey({ description: l.name, unit: l.unit })}
                     onChange={(e) => pick(l.index, g.kind, e.target.value)}
                     aria-label={`${g.label} line`}
                   >
