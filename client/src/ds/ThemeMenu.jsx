@@ -1,9 +1,15 @@
 // Richard's theme menu (site.js, 17 Sep 2026): Light, Dark blue, Black,
 // Match my device, hung under the #tt button. His markup and classes
-// (.tt-menu, .sw) on ThemeProvider's preference.
+// (.tt-menu, .tsw) on ThemeProvider's preference.
 //
 // ds.css scopes .tt-menu under .ds, so the portal carries a .ds wrapper with
 // display: contents — the wrapper adds no box of its own.
+//
+// The swatch is .tsw, not .sw. He renamed it on 17 Sep (6a85b22) because his
+// account switcher already owned .sw: the two rule sets were landing on each
+// other, squashing the switcher into a 26px box and giving the swatch the
+// switcher's padding and bottom border. Our DsSurfaceSwitch keeps .sw, which
+// is the switcher; anything that is a coloured theme square is .tsw.
 
 import React from "react";
 import { createPortal } from "react-dom";
@@ -88,7 +94,7 @@ export default function ThemeMenu({ anchor, onClose }) {
             data-theme-pick={t.key}
             onClick={() => pick(t.key)}
           >
-            <i className={`sw ${t.key}`} />
+            <i className={`tsw ${t.key}`} />
             <span>
               <b>{t.label}</b>
               <em>{t.note}</em>
@@ -121,7 +127,7 @@ export function ThemePicker({ onPicked }) {
             onPicked?.(t);
           }}
         >
-          <i className={`sw ${t.key}`} />
+          <i className={`tsw ${t.key}`} />
           <span>
             <b>{t.label}</b>
             <em>{t.key === "system" ? "Follows the system" : t.note}</em>
