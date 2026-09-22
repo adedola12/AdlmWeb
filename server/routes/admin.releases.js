@@ -30,6 +30,7 @@ import {
   releasesUrl,
 } from "../util/releaseGate.js";
 import { applyCandidate } from "../util/releaseGateFlow.js";
+import { listPullsAwaitingApprover } from "../util/releaseGatePulls.js";
 
 const router = express.Router();
 router.use(requireAuth, requirePermission("releases"));
@@ -65,10 +66,11 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const cfg = await getGateConfig();
-    const [pending, recent, awaitingReview] = await Promise.all([
+    const [pending, recent, awaitingReview, code] = await Promise.all([
       ReleaseCandidate.find({ status: "pending" }).sort({ submittedAt: -1 }).lean(),
       ReleaseCandidate.find({ status: { $ne: "pending" } }).sort({ updatedAt: -1 }).limit(50).lean(),
       ReleaseCandidate.find({ status: "emergency", reviewedAt: null }).sort({ decidedAt: -1 }).lean(),
+      listPullsAwaitingApprover(cfg.approverGithub).catch((err) => ({ pulls: [], error: String(err?.message || err) })),
     ]);
     res.json({
       ok: true,
@@ -82,6 +84,8 @@ router.get(
       pending,
       awaitingReview,
       recent,
+      // Website/API/service changes wait as pull requests on GitHub.
+      code,
     });
   }),
 );
