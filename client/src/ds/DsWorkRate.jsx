@@ -620,7 +620,9 @@ export default function DsWorkRate() {
                 {edit ? (
                   <>
                     <span className="wk-dirty">
-                      {total === storedTotal
+                      {/* To the kobo, so a float artefact never invents a
+                          change the customer cannot see. */}
+                      {Math.round(total * 100) === Math.round(storedTotal * 100)
                         ? "Edited — not saved"
                         : `Edited — not saved · ${money(storedTotal)} → ${money(total)} per ${
                             rate.unit || "unit"
