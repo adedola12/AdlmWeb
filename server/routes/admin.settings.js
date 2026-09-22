@@ -6,7 +6,7 @@ import { MAX_PLAUSIBLE_NGN_USD } from "../util/fx.js";
 import { isPublicHubCopy, PUBLIC_HUB_COPY_REFUSED } from "../util/hubStorage.js";
 import { isGatedSetting, stageSettingChange } from "../util/releaseGateSetting.js";
 
-function requireAdminOrMiniAdmin(req, res, next) {
+export function requireAdminOrMiniAdmin(req, res, next) {
   // See server/middleware/demoMode.js — read-only, masked demo sessions view only.
   if (req.demoMode) return next();
   const role = req.user?.role;
@@ -80,6 +80,15 @@ router.get("/installer-hub", async (_req, res) => {
 
 // POST set installer hub settings
 // { installerHubUrl?, installerHubVideoUrl?, installerHubGuideUrl? }
+//
+// RELEASE GATE + WEEKLY DIGEST. installerHubUrl is what every customer
+// downloads, so changing it IS a release: it is STAGED for the approver here,
+// never saved, and nothing is queued for customers from this route. The
+// approval (util/releaseGateFlow.js applyCandidate, kind "setting") both writes
+// the Setting and queues "a new Installation Center is ready" for the next
+// weekly digest, so a staged link nobody approves announces nothing. An admin
+// can still add one by hand with
+// POST /admin/release-notifications/digest/hub {version}.
 router.post("/installer-hub", async (req, res) => {
   const update = {};
   if (typeof req.body?.installerHubUrl === "string") {
@@ -110,11 +119,10 @@ router.post("/installer-hub", async (req, res) => {
     }
   }
 
-  // RELEASE GATE (docs/RELEASE_GATE.md). installerHubUrl is what every
-  // customer downloads, so changing it IS a release: it is staged for the
-  // approver instead of saved, and customers keep the current Hub until he
-  // approves it. The video and guide links are not the Hub itself and save
-  // as they always did. Demo and design sessions are simulated upstream.
+  // Staged for the approver instead of saved; customers keep the current Hub
+  // until he approves it (docs/RELEASE_GATE.md). The video and guide links are
+  // not the Hub itself and save as they always did. Demo and design sessions
+  // are simulated upstream.
   if (!req.demoMode && !req.designMode && isGatedSetting("installerHubUrl") && typeof update.installerHubUrl === "string") {
     const live = await Setting.findOne({ key: "global" }).select("installerHubUrl").lean();
     const previous = String(live?.installerHubUrl || "").trim();
@@ -139,6 +147,8 @@ router.post("/installer-hub", async (req, res) => {
         proposedInstallerHubUrl: update.installerHubUrl,
         installerHubVideoUrl: other?.installerHubVideoUrl,
         installerHubGuideUrl: other?.installerHubGuideUrl,
+        // Nothing is queued for customers yet: approving it is what does that.
+        hubNotice: { created: false, reason: "pending-approval" },
         message:
           "Staged for sign-off. Customers keep the current Installer Hub until the release approver approves it on /admin/releases.",
       });

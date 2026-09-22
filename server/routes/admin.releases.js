@@ -17,6 +17,11 @@
 //                                        approver only; takes a build back from
 //                                        firms, note required
 //
+// Approve and emergency both record the customers' "new version is ready"
+// notice (util/releaseGateFlow.js applyCandidate) and send none: it goes out
+// in the next weekly release digest, and their `releaseNotice` says when
+// (nextDigestAt, nextDigestLagos), exactly as the deployment PUT's does.
+//
 // Deliberately absent: any route that changes who the approver is. That is
 // done by server/scripts/release-gate.mjs, which records and emails the change,
 // so the approver cannot be swapped from a browser tab.
