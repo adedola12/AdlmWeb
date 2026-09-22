@@ -50,6 +50,7 @@ import { Link, useParams } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { useFeedback } from "./feedback/feedbackContext.js";
+import { fetchAllRates } from "./rategen/fetchRates.js";
 import {
   componentsOf,
   groupComponents,
@@ -86,6 +87,7 @@ export default function DsWorkRate() {
   const { accessToken } = useAuth();
   const fb = useFeedback();
   const [rates, setRates] = React.useState(null);
+  const [ratesTruncated, setRatesTruncated] = React.useState(false);
   const [mine, setMine] = React.useState(null); // { overrides, customs, version }
   const [failed, setFailed] = React.useState(false);
 
@@ -97,10 +99,14 @@ export default function DsWorkRate() {
   const load = React.useCallback(() => {
     if (!accessToken) return Promise.resolve();
     return Promise.all([
-      apiAuthed("/rategen-v2/library/rates/sync", {
-        token: accessToken,
-        params: { limit: 500 },
-      }).then((d) => (Array.isArray(d.items) ? d.items : [])),
+      // Every page of the library, because the rate being opened may sit past
+      // the first one. One page made a real rate read as "not in this library".
+      fetchAllRates(({ limit, cursor }) =>
+        apiAuthed("/rategen-v2/library/rates/sync", {
+          token: accessToken,
+          params: cursor ? { limit, cursor } : { limit },
+        }),
+      ),
       apiAuthed("/rategen-v2/library/user-rates", { token: accessToken })
         .then((d) => ({
           overrides: Array.isArray(d.rateOverrides) ? d.rateOverrides : [],
@@ -110,8 +116,9 @@ export default function DsWorkRate() {
         }))
         // A user with no library of their own is not an error.
         .catch(() => ({ overrides: [], customs: [], version: 1, customRatesVersion: 1 })),
-    ]).then(([items, own]) => {
-      setRates(items);
+    ]).then(([paged, own]) => {
+      setRates(paged.items);
+      setRatesTruncated(paged.truncated);
       setMine(own);
     });
   }, [accessToken]);
@@ -395,8 +402,9 @@ export default function DsWorkRate() {
           <Link to="/work/library">← RateGen</Link>
         </p>
         <p className="ds-sub">
-          That rate is not in this library. It may have been removed, or it belongs to another
-          account.
+          {ratesTruncated
+            ? "That rate was not in the part of the library this screen could load, and the library is larger than it holds. Open Rate Gen to reach it."
+            : "That rate is not in this library. It may have been removed, or it belongs to another account."}
         </p>
       </div>
     );

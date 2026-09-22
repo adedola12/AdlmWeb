@@ -273,6 +273,9 @@ router.put("/price-overrides/bulk", async (req, res) => {
         changed: 0,
         matched: plan.matched,
         capped: plan.capped,
+        // The cap itself, so the screen can report the real number rather than
+        // repeating one it has hard-coded.
+        limit: MAX_BULK_ROWS,
         version: lib.priceOverridesVersion || 1,
         state: stateKey,
       });
@@ -287,6 +290,7 @@ router.put("/price-overrides/bulk", async (req, res) => {
       changed: plan.changed,
       matched: plan.matched,
       capped: plan.capped,
+      limit: MAX_BULK_ROWS,
       // The whole previous array, so "Undo" is a restore rather than a guess
       // at which rows were replaced and which were created.
       previous: before,

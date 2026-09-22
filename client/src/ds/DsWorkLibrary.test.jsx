@@ -233,3 +233,95 @@ describe("the composition card for a customer's own copy", () => {
     expect(document.querySelector(".fb-card").textContent).toContain("Sandcrete block");
   });
 });
+
+// ── S18 review, finding 6 ───────────────────────────────────────────────────
+describe("a library bigger than one page", () => {
+  it("reads every page rather than the first 500 rows", async () => {
+    const page2 = { ...masterRate, id: "a2", description: "Concrete 1:2:4 in foundations" };
+    apiAuthed.mockImplementation(async (path, init) => {
+      if (path.includes("rates/sync")) {
+        const cursor = init?.params?.cursor;
+        return cursor
+          ? { items: [page2], location: { state: "lagos" }, nextCursor: null }
+          : { items: [masterRate], location: { state: "lagos" }, nextCursor: "c1" };
+      }
+      if (path.includes("user-rates"))
+        return { rateOverrides: [], customRates: [], meta: { ratesVersion: 1 } };
+      if (path.includes("/rategen/master")) return { materials: [], labour: [] };
+      throw new Error(`unstubbed ${path}`);
+    });
+
+    const { container, findByText } = mount();
+    // The rate on the second page is a rate in this library.
+    await findByText("Concrete 1:2:4 in foundations");
+    expect(container.querySelectorAll(".wk-row")).toHaveLength(2);
+    expect(container.querySelector(".wk-count").textContent).toContain("2 of 2 rates");
+  });
+});
+
+// ── S18 review, finding 5 ───────────────────────────────────────────────────
+// The server caps one bulk change and skips rows whose price does not move.
+// The screen reported "N prices raised" either way, so a change that half
+// happened read as a change that worked.
+describe("what a bulk price change reports", () => {
+  const catalogue = {
+    materials: [
+      { sn: 1, description: "Cement", unit: "bag", price: 9000, category: "Concrete" },
+      { sn: 2, description: "Sharp sand", unit: "m3", price: 20000, category: "Concrete" },
+    ],
+    labour: [],
+    state: "lagos",
+  };
+
+  function stubWithBulk(bulk) {
+    apiAuthed.mockImplementation(async (path, init) => {
+      if (path.includes("rates/sync")) return { items: [masterRate] };
+      if (path.includes("user-rates"))
+        return { rateOverrides: [], customRates: [], meta: { ratesVersion: 1 } };
+      if (path.includes("price-overrides/bulk")) return bulk;
+      if (path.includes("/rategen/master")) return catalogue;
+      throw new Error(`unstubbed ${path} ${init?.method || ""}`);
+    });
+  }
+
+  async function applyChange() {
+    const r = render(
+      <MemoryRouter initialEntries={["/work/library"]}>
+        <FeedbackProvider>
+          <DsWorkLibrary />
+        </FeedbackProvider>
+      </MemoryRouter>,
+    );
+    await r.findByText("Blockwork 225mm in cement mortar");
+    fireEvent.click(r.getByText("Materials"));
+    await waitFor(() => expect(r.getByText("Update prices").disabled).toBe(false));
+    fireEvent.click(r.getByText("Update prices"));
+    await waitFor(() => expect(document.querySelector(".fb-card")).toBeTruthy());
+    fireEvent.click(document.querySelector(".fb-card .p"));
+    await waitFor(() => expect(document.querySelector(".fb-toast")).toBeTruthy());
+    return document.querySelector(".fb-toast").textContent;
+  }
+
+  it("says how many of the matched rows actually moved", async () => {
+    stubWithBulk({ ok: true, changed: 800, matched: 1400, capped: true, limit: 1000, previous: [] });
+    const said = await applyChange();
+    expect(said).toContain("800 of 1400 prices raised");
+    expect(said).toContain("1400 rows matched");
+    expect(said).toContain("400 were not looked at");
+  });
+
+  it("does not claim a cap that did not happen", async () => {
+    stubWithBulk({ ok: true, changed: 2, matched: 2, capped: false, limit: 1000, previous: [] });
+    const said = await applyChange();
+    expect(said).toContain("2 prices raised by 5%");
+    expect(said).not.toContain("not looked at");
+    expect(said).not.toContain("of 2 prices");
+  });
+
+  it("accounts for rows that matched but did not move", async () => {
+    stubWithBulk({ ok: true, changed: 1, matched: 2, capped: false, limit: 1000, previous: [] });
+    const said = await applyChange();
+    expect(said).toContain("1 of 2 price");
+    expect(said).toContain("1 came to the same figure once rounded");
+  });
+});

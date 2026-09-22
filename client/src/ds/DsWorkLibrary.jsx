@@ -42,6 +42,7 @@ import {
 } from "./rategen/customRateDraft.js";
 import { componentsOf, toNum } from "./rategen/rateMath.js";
 import { mergeRateRows } from "./rategen/mergeRateRows.js";
+import { fetchAllRates } from "./rategen/fetchRates.js";
 
 const DASH = "–"; // an empty value, never an em dash
 
@@ -79,6 +80,7 @@ export default function DsWorkLibrary() {
   const navigate = useNavigate();
 
   const [rates, setRates] = React.useState(null);
+  const [ratesTruncated, setRatesTruncated] = React.useState(false);
   const [mine, setMine] = React.useState(null);
   const [master, setMaster] = React.useState(null); // materials + labour
   const [masterFailed, setMasterFailed] = React.useState(false);
@@ -92,10 +94,15 @@ export default function DsWorkLibrary() {
   const loadRates = React.useCallback(() => {
     if (!accessToken) return Promise.resolve();
     return Promise.all([
-      apiAuthed("/rategen-v2/library/rates/sync", {
-        token: accessToken,
-        params: { limit: 500 },
-      }).then((d) => (Array.isArray(d.items) ? d.items : [])),
+      // The whole library, page by page. Asking for one page and dropping the
+      // cursor showed a big practice part of its own catalogue and said
+      // nothing about the rest.
+      fetchAllRates(({ limit, cursor }) =>
+        apiAuthed("/rategen-v2/library/rates/sync", {
+          token: accessToken,
+          params: cursor ? { limit, cursor } : { limit },
+        }),
+      ),
       apiAuthed("/rategen-v2/library/user-rates", { token: accessToken })
         .then((d) => ({
           overrides: Array.isArray(d.rateOverrides) ? d.rateOverrides : [],
@@ -110,8 +117,9 @@ export default function DsWorkLibrary() {
           ratesVersion: 1,
           customRatesVersion: 1,
         })),
-    ]).then(([items, own]) => {
-      setRates(items);
+    ]).then(([paged, own]) => {
+      setRates(paged.items);
+      setRatesTruncated(paged.truncated);
       setMine(own);
     });
   }, [accessToken]);
@@ -398,11 +406,32 @@ export default function DsWorkLibrary() {
           percent,
         },
       });
+      // What ACTUALLY changed, not what was asked for. The server caps a single
+      // change (MAX_BULK_ROWS) and skips a row whose price does not move once
+      // it is rounded, so "N prices raised" on its own could be a report of a
+      // change that half happened.
       const changed = Number(res?.changed) || 0;
+      const matched = Number(res?.matched) || 0;
+      const cap = Number(res?.limit) || 0;
+      const capped = Boolean(res?.capped);
+      const notLookedAt = capped && cap ? Math.max(0, matched - cap) : 0;
+      const unmoved = Math.max(0, matched - changed - notLookedAt);
+      const rest = [
+        notLookedAt
+          ? `${matched} rows matched and one change covers at most ${cap}, so ${notLookedAt} were not looked at — change them by category to reach the rest.`
+          : "",
+        unmoved
+          ? `${unmoved} came to the same figure once rounded, so nothing was written for them.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+
       if (!changed) {
         fb.toast({
           title: "Nothing changed",
-          msg: "No price in that category moved at this percentage.",
+          msg: rest || "No price in that category moved at this percentage.",
+          ms: rest ? 7000 : undefined,
         });
         return;
       }
@@ -410,14 +439,16 @@ export default function DsWorkLibrary() {
       setMasterFailed(false);
       await loadMaster();
       fb.toast({
-        title: `${changed} price${changed === 1 ? "" : "s"} ${
-          percent > 0 ? "raised" : "reduced"
-        } by ${Math.abs(percent)}%`,
+        title: `${changed}${matched && changed !== matched ? ` of ${matched}` : ""} price${
+          changed === 1 ? "" : "s"
+        } ${percent > 0 ? "raised" : "reduced"} by ${Math.abs(percent)}%`,
         // His copy said every rate using them follows. Ours must not: a rate
         // stores the cost it was built at, so a price change reaches a rate
         // only when that rate is priced again.
-        msg: "These are your own prices. Rates already built keep the cost they were built at until they are priced again.",
-        ms: 6000,
+        msg: `These are your own prices. Rates already built keep the cost they were built at until they are priced again.${
+          rest ? ` ${rest}` : ""
+        }`,
+        ms: rest ? 9000 : 6000,
         action: Array.isArray(res?.previous)
           ? {
               label: "Undo",
@@ -539,7 +570,12 @@ export default function DsWorkLibrary() {
     tab === "rates"
       ? `${shownRates.length} of ${rows.length} rate${rows.length === 1 ? "" : "s"}${
           cat === "all" ? "" : ` in ${categories.find((c) => c.value === cat)?.label || ""}`
-        }${zone ? ` · priced for ${zone}` : ""}${ownCount ? ` · ${ownCount} of them yours` : ""}`
+        }${zone ? ` · priced for ${zone}` : ""}${ownCount ? ` · ${ownCount} of them yours` : ""}${
+          // Said out loud rather than left as a short list that looks complete.
+          ratesTruncated
+            ? " · more rates exist than this screen could load — open Rate Gen for the rest"
+            : ""
+        }`
       : tab === "plant"
         ? `${shownPlant.length} machine${shownPlant.length === 1 ? "" : "s"} · plant is priced inside rates, so this is what the build-ups carry`
         : master
