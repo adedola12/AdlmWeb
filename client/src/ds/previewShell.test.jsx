@@ -12,7 +12,7 @@
 // below is what keeps that exception deliberate rather than accidental.
 
 import { describe, it, expect } from "vitest";
-import { isBareScreen, hasFloatingAda } from "./DsPreview.jsx";
+import { isBareScreen, hasFloatingAda } from "./previewShell.js";
 import { DS_PAGES } from "./pages/manifest.js";
 
 const slugs = DS_PAGES.map((p) => p.slug);

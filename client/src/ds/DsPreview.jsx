@@ -13,6 +13,7 @@ import { ScrollRestoration, useNavigate } from "react-router-dom";
 import { MAP } from "../lib/dsRoutes.js";
 import { DS_PAGES } from "./pages/manifest.js";
 import AiAgent from "../components/AiAgent.jsx";
+import { isBareScreen, hasFloatingAda } from "./previewShell.js";
 
 const DsShell = React.lazy(() => import("./DsShell.jsx"));
 const DsAppShell = React.lazy(() => import("./DsAppShell.jsx"));
@@ -28,33 +29,8 @@ const DsPluginStyles = React.lazy(() => import("./DsPluginStyles.jsx"));
 // and the document renderer with no styling of their own whatsoever.
 const APP_SCREEN = /^(dash|work)-/;
 
-// His admin screens bring their own chrome — .adm-shell wraps an .adm-rail
-// that is part of the page, not stamped around it. So they get no shell of
-// ours at all: DsShell would put the marketing nav above an admin panel, and
-// DsAppShell would put the Manage rail beside his admin rail.
-//
-// The plugin side-one pages are the same shape for a different reason: they
-// are full-window simulations of QUIV inside Revit and HERON inside PlanSwift,
-// so a marketing nav, a launch strip and a footer around a Revit ribbon is
-// simply wrong. This list is his: the two prefixes below are exactly the set
-// of pages carrying "nochrome": true in his meta blocks (site/build.js), which
-// is 32 admin-* plus plugin-quiv and plugin-heron.
-const BARE_SCREEN = /^(admin|plugin)-/;
-
-/** Does this staged page render with no shell of ours around it? */
-export const isBareScreen = (slug) => BARE_SCREEN.test(String(slug || ""));
-
-/**
- * Does this staged page get our floating Ada?
- *
- * His adaFor() leaves her off dash-, work-, doc-, admin- and, since 17 Sep,
- * plugin- pages. We keep her on the preview app screens on purpose (see the
- * note at the mount), but not on the plugin references: those simulate a panel
- * docked inside Revit or PlanSwift, where a floating web chat button has
- * nothing to float over and only misleads a reviewer into thinking the desktop
- * add-in ships one.
- */
-export const hasFloatingAda = (slug) => !/^plugin-/.test(String(slug || ""));
+// Which pages get no shell of ours at all, and which get Ada, both live in
+// previewShell.js — see that file for why each answer is what it is.
 
 const NEEDS_LEARN = new Set(["dash-learning", "dash-course", "dash-certificates", "work-home"]);
 const NEEDS_AUTH = new Set(["login", "signup", "verify"]);
