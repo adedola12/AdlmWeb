@@ -155,11 +155,19 @@ const missingIcons = [...used].filter((u) => !ids.has(u));
 if (missingIcons.length) fail(`icon(s) referenced but not in the sprite: ${missingIcons.join(", ")}`);
 else ok(`all ${used.size} icon references resolve in the sprite`);
 
-// Hand-written components that live in the .ds world. ds/pages, ds/chrome and
-// ds/custom are excluded on purpose: those are generated from his markup, so
-// checks 2-4 already cover them, and a porter re-run would overwrite anything
-// said about them here.
-const HAND_WRITTEN_DIRS = ["src/ds", "src/ds/feedback", "src/ds/cert"];
+// Hand-written components that live in the .ds world. ds/pages and ds/chrome
+// are excluded on purpose: the porter writes them, so checks 2-4 already cover
+// them and a re-run would overwrite anything said about them here. ds/custom is
+// NOT excluded — port-ds-html.mjs writes only src/ds/pages (see its header), so
+// those wrappers are hand-maintained like every other file listed here, and a
+// class the sheets drop would rot there unseen.
+const HAND_WRITTEN_DIRS = [
+  "src/ds",
+  "src/ds/feedback",
+  "src/ds/cert",
+  "src/ds/custom",
+  "src/ds/rategen",
+];
 
 // Class names our components write that no .ds stylesheet defines, and which
 // are fine: Tailwind used on purpose, or a marker something else reads. Every

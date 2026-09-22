@@ -41,7 +41,9 @@ Disallow: /purchase
 Disallow: /checkout/
 Disallow: /receipt/
 Disallow: /invoice/
-Disallow: /portfolio-dashboard
+# /portfolio and /portfolio-dashboard both sit behind ProtectedRoute. The
+# prefix covers both.
+Disallow: /portfolio
 Disallow: /pm-tracker
 Disallow: /revit-projects
 Disallow: /projects/
@@ -63,7 +65,9 @@ Disallow: /signup
 # Design-system preview: the redesign staged beside the live pages for review.
 # Duplicate content by definition — it is the same copy as the real page in new
 # markup — so it must never be indexed alongside the original.
-Disallow: /preview/
+# The trailing slash left the index at /preview itself crawlable, which is the
+# one page that links to all the rest.
+Disallow: /preview
 
 # Filtered views of the same grid. The canonical already points back at the
 # clean URL, but not spending crawl budget on them at all is cheaper.

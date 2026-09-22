@@ -74,6 +74,12 @@ describe("robots.txt covers the signed-in app surfaces (rec-01)", () => {
     "/dashboard",
     "/profile",
     "/preview/work-home",
+    // The index that links to every staged page: the trailing slash in
+    // "Disallow: /preview/" used to leave this one crawlable.
+    "/preview",
+    // Both sit behind ProtectedRoute; only /portfolio-dashboard was listed.
+    "/portfolio",
+    "/portfolio-dashboard",
   ];
 
   for (const url of signedIn) {
