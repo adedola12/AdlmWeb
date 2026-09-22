@@ -28,6 +28,7 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkPrefs from "./WkPrefs.jsx";
 import { foldMaterials, normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { placeHref, readPlace } from "../lib/lastPlace.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -409,6 +410,15 @@ export default function DsWorkHome() {
   }
 
   const top = view$.recent[0] || null;
+  // P0.4: the exact place last worked on (tab and line), when this browser
+  // remembers one and the project is still on the account; otherwise the
+  // most recently touched project.
+  const place = (() => {
+    const pl = readPlace();
+    if (!pl || !projects) return null;
+    const hit = projects.find((p) => String(p.id) === String(pl.key) || String(p.slug || "") === String(pl.key));
+    return hit ? { ...pl, name: hit.name || pl.name } : null;
+  })();
 
   return (
     <div className="dsh-in">
@@ -470,10 +480,10 @@ export default function DsWorkHome() {
             <div className="dsh-stat">
               <span className="k">Work in hand</span>
               <b>{money(view$.value)}</b>
-              <span className="ds-sub">
+              <p className="ds-sub">
                 {view$.count} project{view$.count === 1 ? "" : "s"} at the rates they were
                 priced with
-              </span>
+              </p>
             </div>
             <div className="dsh-stat">
               <span className="k">Measured</span>
@@ -481,26 +491,26 @@ export default function DsWorkHome() {
                 {num(view$.items)}
                 <span className="u">items</span>
               </b>
-              <span className="ds-sub">
+              <p className="ds-sub">
                 across {sources.length} extraction source{sources.length === 1 ? "" : "s"}
-              </span>
+              </p>
             </div>
             <div className="dsh-stat">
               <span className="k">Valued to date</span>
               <b>{money(view$.valued)}</b>
-              <span className="ds-sub">
+              <p className="ds-sub">
                 {view$.value > 0
                   ? `${Math.round((view$.valued / view$.value) * 100)}% of the work in hand`
                   : "nothing valued yet"}
-              </span>
+              </p>
             </div>
-            {rail?.rates ? (
-              <div className="dsh-stat">
-                <span className="k">Rate library</span>
-                <b>{num(rail.rates)}</b>
-                <span className="ds-sub">build-ups you can price against</span>
-              </div>
-            ) : null}
+            <div className="dsh-stat">
+              <span className="k">Rate library</span>
+              <b>{num(rail?.rates || 0)}</b>
+              <p className="ds-sub">
+                {rail?.rates ? "build-ups you can price against" : "no rates saved yet"}
+              </p>
+            </div>
           </div>
 
           {view === "cards" && top && (
@@ -510,15 +520,26 @@ export default function DsWorkHome() {
                 <span className="wk-locnote">Across every product on this account</span>
               </div>
               <div className="wh-cont">
-                <Link className="wh-go" to={projectHref(top)}>
-                  {icon("wi-projects")}
-                  <span className="k">Project</span>
-                  <b>{top.name}</b>
-                  <span className="s">
-                    {num(top.itemCount)} items · {money(top.totalCost)} · touched{" "}
-                    {when(top.updatedAt)}
-                  </span>
-                </Link>
+                {place ? (
+                  <Link className="wh-go" to={placeHref(place)}>
+                    {icon("wi-projects")}
+                    <span className="k">{place.tabLabel ? `Project · ${place.tabLabel}` : "Project"}</span>
+                    <b>{place.name}</b>
+                    <span className="s">
+                      {place.lineLabel ? `Back to ${place.lineLabel}` : "Back where you were"}
+                    </span>
+                  </Link>
+                ) : (
+                  <Link className="wh-go" to={projectHref(top)}>
+                    {icon("wi-projects")}
+                    <span className="k">Project</span>
+                    <b>{top.name}</b>
+                    <span className="s">
+                      {num(top.itemCount)} items · {money(top.totalCost)} · touched{" "}
+                      {when(top.updatedAt)}
+                    </span>
+                  </Link>
+                )}
                 <Link className="wh-go" to="/rategen">
                   {icon("wi-library")}
                   <span className="k">Rate library</span>

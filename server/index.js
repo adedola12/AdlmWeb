@@ -114,6 +114,7 @@ import adminUsage from "./routes/admin.usage.js";
 import adminAiUsage from "./routes/admin.aiUsage.js";
 import adminCertificates from "./routes/admin.certificates.js";
 import verifyRoutes from "./routes/verify.js";
+import { publicDownloads, meDownloads } from "./routes/downloads.js";
 import telemetryTakeoff from "./routes/telemetry.takeoff.js";
 import adminTakeoff from "./routes/admin.takeoff.js";
 
@@ -267,6 +268,8 @@ app.use("/auth", authLimiter, authRoutes);
 app.use("/me/billing", meBillingRoutes);
 // Mounted before the catch-all /me router so its own routes win.
 app.use("/me/material-constants", materialConstantsRoutes);
+// Ahead of /me so its routes are reached before the catch-all me router (R15).
+app.use("/me/downloads", meDownloads);
 app.use("/me", meRoutes);
 app.use("/me/deployments", deviceLimiter, meDeploymentsRoutes);
 app.use("/me/courses", meCourses);
@@ -327,6 +330,8 @@ app.get("/settings/mobile-app-url", async (_req, res) => {
 
 // Public force-reinstall broadcast — read by the site-wide banner.
 // Returns active=false (and no other fields) when nothing is broadcasting.
+// R16: no installer link here. This answers anyone who asks, and the link is
+// handed out signed in (/me/summary, /me/downloads/installer-hub).
 app.get("/settings/force-reinstall", async (_req, res) => {
   try {
     const s = await Setting.findOne({ key: "global" }).lean();
@@ -335,7 +340,6 @@ app.get("/settings/force-reinstall", async (_req, res) => {
       active: true,
       message: s.forceReinstallMessage || "",
       triggeredAt: s.forceReinstallAt || null,
-      installerHubUrl: s.installerHubUrl || "",
       installerHubVideoUrl: s.installerHubVideoUrl || "",
       installerHubGuideUrl: resolveUserGuideUrl(s.installerHubGuideUrl),
     });
@@ -389,6 +393,7 @@ app.use("/admin/emails", adminEmails);
 app.use("/admin/certificates", adminCertificates);
 // Public on purpose: an employer checking a certificate has no account here.
 app.use("/verify", verifyRoutes);
+app.use("/downloads", publicDownloads);
 app.use("/admin/broadcast", adminBroadcast);
 // "QUIV 3.1.11 is ready" emails, recorded by the deployment PUT. See
 // util/releaseNotifier.js.

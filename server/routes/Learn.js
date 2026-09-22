@@ -7,6 +7,7 @@ import {
   groupBySection,
   recommendedFor,
   sectionOf,
+  LESSON_FILTERS,
 } from "../util/freeVideoSections.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { Product } from "../models/Product.js";
@@ -79,7 +80,8 @@ router.get("/free/sections", async (_req, res, next) => {
   try {
     const items = await FreeVideo.find({ isPublished: true }).lean();
     const sections = groupBySection(items);
-    res.json({ total: items.length, sections });
+    // `filters`: the chip row on the Learn page, in order (R02, R10).
+    res.json({ total: items.length, sections, filters: LESSON_FILTERS });
   } catch (err) {
     next(err);
   }

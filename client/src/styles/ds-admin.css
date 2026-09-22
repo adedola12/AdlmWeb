@@ -1403,3 +1403,4 @@
   width:1px;background:rgba(255,255,255,.16)}
 .ds .adm-tools .adm-tools-g button.on{background:var(--action,#239CFF);opacity:1;font-weight:500}
 .ds .adm-tools .adm-tools-g button.on:hover{background:var(--action,#239CFF)}
+.ds .adm-seg button:disabled{opacity:.4;cursor:not-allowed}

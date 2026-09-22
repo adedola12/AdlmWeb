@@ -1,26 +1,17 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
+import { API_BASE } from "../config.js";
 import { Link, useNavigate } from "react-router-dom";
 import appleLogo from "../assets/icons/apple-logo.png";
 import googlePlayLogo from "../assets/icons/playstore.png";
 import ComingSoonModal from "./ComingSoonModal.jsx";
-import { API_BASE } from "../config.js";
 
-// The current APK (the one set in Admin → Site Settings on 18 Sep 2026), used
-// until the API answers. The older copy this used to name was out of date.
-const FALLBACK_APP_URL =
-  "https://drive.google.com/file/d/1Pr16vXqTRAOgQrB2Fk3GzZnyMBPiHPRO/view?usp=sharing";
+// R15: the app downloads from ADLM's own storage through the API, which
+// falls back to the link set in Admin until the file is uploaded. The old
+// relative fetch of /settings/mobile-app-url reached the web host, not the
+// API, so this always served a hard-coded, out-of-date Google Drive copy.
+const appUrl = `${API_BASE}/downloads/android`;
 
 export default function Footer() {
-  const [appUrl, setAppUrl] = useState(FALLBACK_APP_URL);
-
-  useEffect(() => {
-    // From the API, not the web host: the relative URL reached the website,
-    // got its HTML page back, and so always fell back to the old APK.
-    fetch(`${API_BASE}/settings/mobile-app-url`)
-      .then((r) => r.json())
-      .then((d) => { if (d?.mobileAppUrl) setAppUrl(d.mobileAppUrl); })
-      .catch(() => {});
-  }, []);
   const navigate = useNavigate();
 
   // ✅ routes that REALLY exist in your router

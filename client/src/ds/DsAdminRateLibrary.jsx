@@ -386,7 +386,7 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
                 <a
                   className="wk-row"
                   role="row"
-                  href={`/admin/catalogue/rates/${r.id}`}
+                  href={`#rate-${r.id}`}
                   onClick={(e) => open(e, r)}
                   aria-expanded={openId === r.id}
                 >

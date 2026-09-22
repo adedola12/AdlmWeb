@@ -243,9 +243,13 @@
   background:linear-gradient(140deg,var(--navy-850),var(--navy-950));
   border:1px solid rgba(255,255,255,.10)}
 .ds .dsh-hub::before{content:"";position:absolute;inset:0;pointer-events:none;
-  background-image:radial-gradient(circle at 88% 8%,rgba(35,156,255,.30),transparent 58%),
-    radial-gradient(rgba(255,255,255,.10) 1.4px,transparent 1.5px);
-  background-size:100% 100%,22px 22px}
+  background-image:radial-gradient(rgba(255,255,255,.10) 1.4px,transparent 1.5px);
+  background-size:22px 22px}
+
+/* the glow is its own blurred layer, so it has no visible edge */
+.ds .dsh-hub::after{content:"";position:absolute;right:-12%;top:-70%;width:62%;height:170%;pointer-events:none;
+  background:radial-gradient(circle,rgba(35,156,255,.26) 0%,rgba(35,156,255,.10) 40%,transparent 72%);
+  filter:blur(44px)}
 .ds .dsh-hub > *{position:relative;z-index:2}
 .ds .dsh-hub h3{font-size:18px;font-weight:500;letter-spacing:-.02em;margin:0 0 8px;color:#fff}
 .ds .dsh-hub p{margin:0 0 18px;font-size:13.5px;font-weight:300;color:#B7C8DA;line-height:1.6}

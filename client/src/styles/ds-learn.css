@@ -228,37 +228,7 @@
   border:solid var(--action);border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
 
 
-/* The certificate is the real artwork with the account's details written onto
-   it. Every position and every type size is a percentage of the template's
-   width, so the composition holds identically on screen and on paper. */
-.ds .lx-sheet{position:relative;container-type:inline-size;line-height:1}
-.ds .lx-sheet .tpl{display:block;width:100%;height:auto}
-.ds .lx-sheet .ov{position:absolute;inset:0}
-.ds .lx-sheet .ov > *{position:absolute;left:8%;right:8%;text-align:center;margin:0}
-.ds .lx-sheet .nm{top:60.5%;font-family:Georgia,"Times New Roman",serif;font-size:5.4cqw;
-  font-weight:400;letter-spacing:.01em;color:#0b1f3d;line-height:1.1}
-.ds .lx-sheet .for{top:69.6%;left:20%;right:20%;font-size:1.9cqw;font-weight:400;color:#5b6472;
-  line-height:1.55}
-.ds .lx-sheet .for b{font-weight:600;color:#1f6fd0}
-.ds .lx-sheet .dt{top:84.4%;left:29%;right:56%;font-size:1.75cqw;color:#0b1f3d;letter-spacing:.02em}
-.ds .lx-sheet .sg{top:84.4%;left:53%;right:31%;font-size:1.75cqw;color:#0b1f3d;letter-spacing:.02em;
-  font-family:Georgia,"Times New Roman",serif;font-style:italic}
-.ds .lx-sheet .rf{top:93.4%;left:0;right:0;font-size:1.35cqw;color:#93a0b0;letter-spacing:.16em;
-  text-transform:uppercase}
-.ds .lx-cmodal .wk-modal-c{max-width:760px;padding:22px}
-.ds .lx-cmodal-a{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px}
-.ds .lx-cmodal-a span{font-size:12px;font-weight:300;color:var(--ink-3)}
-
-
-/* printing puts the certificate on the page and nothing else — the browser's
-   own Save as PDF is the honest way to hand someone a file from a static site */
-.ds .lx-print{display:none}
-@media print{
-.ds .lx-printing .dsh-rail, .ds .lx-printing .dsh-top, .ds .lx-printing .dsh-main, .ds .lx-printing .wk-modal, .ds .lx-printing .ada, .ds .lx-printing .dsh-ada{display:none!important}
-.ds .lx-printing .lx-print{display:block;padding:36px}
-.ds .lx-printing .lx-print{padding:0}
-@page{size:A4 landscape;margin:10mm}
-}
+/* The certificate sheet, its claim flow and its print rules live in cert.css. */
 
 
 /* The account picture is styled in work.css, which every signed-in page loads —
@@ -312,4 +282,77 @@
 .ds .lx-player.lib{grid-template-columns:1fr}
 .ds .lib-course{flex-direction:column;align-items:flex-start;gap:16px}
 .ds .lib-course-a{flex-direction:row}
+}
+
+
+/* ---- Guides & docs (dash-guides) ---- */
+.ds .dsh-dl .nm .gd-d{margin:5px 0 0;font-size:12.5px;font-weight:300;color:var(--ink-2);line-height:1.55;max-width:52ch}
+.ds .gd-a{display:flex;gap:8px;flex:none;flex-wrap:wrap}
+.ds .gd-p{margin:0;font-size:13px;font-weight:300;color:var(--ink-2);line-height:1.6}
+.ds .gd-p a{color:var(--action)}
+@media (max-width:640px){
+.ds .dsh-dl:has(.gd-a){flex-wrap:wrap}
+.ds .dsh-dl .gd-a{width:100%;padding-left:46px}
+}
+
+
+/* ---- Assignments (dash-assignments, the player tab, My learning) ---- */
+.ds .as-tabs{display:flex;gap:4px;margin:6px 0 18px;border-bottom:1px solid var(--line)}
+.ds .as-tabs button{position:relative;display:flex;align-items:center;gap:8px;padding:12px 14px;border:0;background:none;
+  font:400 14px var(--font);color:var(--ink-3);cursor:pointer}
+.ds .as-tabs button[aria-selected="true"]{color:var(--ink);font-weight:500}
+.ds .as-tabs button[aria-selected="true"]::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;
+  border-radius:2px;background:var(--action)}
+.ds .as-tabs em{font-style:normal;font-size:11.5px;min-width:20px;padding:1px 6px;border-radius:99px;background:var(--bg-alt);
+  border:1px solid var(--line);color:var(--ink-3)}
+.ds .as-list{display:grid;gap:14px}
+.ds .as-card{padding:22px 24px;border-radius:18px;border:1px solid var(--line);background:var(--bg);
+  transition:box-shadow 400ms,border-color 400ms}
+.ds .as-card.overdue{border-color:color-mix(in srgb,var(--fb-err) 40%,var(--line))}
+.ds .as-card.hl{border-color:var(--action);box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 14%,transparent)}
+.ds .as-top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.ds .as-k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.ds .as-card h3{margin:10px 0 0;font-size:18px;font-weight:500;letter-spacing:-.02em;color:var(--ink);line-height:1.3}
+.ds .as-card > p{margin:8px 0 0;font-size:13.5px;font-weight:300;color:var(--ink-2);line-height:1.6;max-width:75ch}
+.ds .as-meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:14px;font-size:12.5px;color:var(--ink)}
+.ds .as-meta em{font-style:normal;color:var(--ink-3);font-weight:300;margin-right:6px}
+.ds .as-fb{margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--bg-alt);border:1px solid var(--line);
+  font-size:13px;font-weight:300;color:var(--ink-2);line-height:1.55}
+.ds .as-fb b{display:block;font-weight:500;color:var(--ink);margin-bottom:3px}
+.ds .as-file{margin-top:12px;font-size:12.5px;color:var(--ink-2)}
+.ds .as-acts{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+.ds .as-acts:empty{display:none}
+.ds .as-pill{flex:none;font-size:11.5px;font-weight:500;padding:4px 10px;border-radius:99px;white-space:nowrap;
+  background:var(--bg-alt);color:var(--ink-2);border:1px solid var(--line)}
+.ds .as-pill.open{background:color-mix(in srgb,var(--fb-warn) 11%,transparent);color:var(--fb-warn);border-color:transparent}
+.ds .as-pill.overdue{background:color-mix(in srgb,var(--fb-err) 12%,transparent);color:var(--fb-err);border-color:transparent}
+.ds .as-pill.submitted{background:color-mix(in srgb,var(--action) 11%,transparent);color:var(--action);border-color:transparent}
+.ds .as-pill.marked{background:color-mix(in srgb,var(--fb-ok) 12%,transparent);color:var(--fb-ok);border-color:transparent}
+.ds .as-empty{padding:44px 20px;text-align:center;border:1px dashed var(--line-2);border-radius:18px}
+.ds .as-empty b{font-size:16px;font-weight:500;color:var(--ink)}
+.ds .as-empty p{margin:6px auto 0;max-width:48ch;font-size:13px;font-weight:300;color:var(--ink-3);line-height:1.6}
+.ds .as-mini{display:grid;gap:8px}
+.ds .as-row{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);
+  text-decoration:none;color:inherit;background:var(--bg);transition:border-color 180ms}
+.ds .as-row:hover{border-color:var(--line-2)}
+.ds .as-row .wk{flex:none;font-size:11px;color:var(--ink-3);width:52px}
+.ds .as-row .t{flex:1;min-width:0}
+.ds .as-row .t b{display:block;font-size:13.5px;font-weight:500;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .as-row .t em{display:block;font-style:normal;font-size:12px;color:var(--ink-3);font-weight:300}
+.ds .as-form{display:grid;gap:14px;margin-top:18px;text-align:left}
+.ds .as-drop{position:relative;display:block;padding:20px;border-radius:14px;border:1.5px dashed var(--line-2);
+  background:var(--bg-alt);text-align:center;cursor:pointer}
+.ds .as-drop.has{border-style:solid;border-color:var(--action)}
+.ds .as-drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.ds .as-drop b{display:block;font-size:14px;font-weight:500;color:var(--action)}
+.ds .as-drop span{display:block;margin-top:4px;font-size:12px;color:var(--ink-3);overflow-wrap:anywhere}
+.ds .as-drop:focus-within{box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 16%,transparent)}
+.ds .as-note span{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
+.ds .as-note em{font-style:normal;color:var(--ink-3)}
+.ds .as-note textarea{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line-2);background:var(--bg);
+  color:var(--ink);font:300 13.5px var(--font);resize:vertical}
+@media (max-width:640px){
+.ds .as-row{flex-wrap:wrap}
+.ds .as-row .wk{width:auto}
+.ds .as-card{padding:18px}
 }

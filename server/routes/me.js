@@ -1,5 +1,10 @@
 // server/routes/me.js
 import express from "express";
+import { resolveDownload } from "../util/downloadLinks.js";
+import { alertCount } from "../util/assignmentAlerts.js";
+import { myAssignments } from "../util/myAssignments.js";
+import cloudinary from "../cloudinary.js";
+import { checkAvatarUrl } from "../util/avatarCheck.js";
 import { WA_CODE_MINUTES, WA_RESEND_SECONDS, WA_MAX_ATTEMPTS, whatsappEnabled, toWhatsAppNumber, newWaCode, hashWaCode, sendWhatsAppCode } from "../util/whatsappVerify.js";
 import dayjs from "dayjs";
 import mongoose from "mongoose";
@@ -594,6 +599,11 @@ router.get(
         .lean(),
     ]);
 
+    // R15: from our own storage when the file is there, the Admin setting
+    // otherwise. An hour, because this sits on a page until it is clicked; the
+    // new Downloads screen asks /me/downloads/installer-hub for a fresh one.
+    const hubDownload = await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600 });
+
     return res.json({
       email: user.email,
       refreshVersion: user.refreshVersion || 1,
@@ -605,7 +615,7 @@ router.get(
 
       // Installer Hub settings (global, admin-configured)
       installerHub: {
-        downloadUrl: globalSettings?.installerHubUrl || "",
+        downloadUrl: hubDownload.url,
         videoUrl: globalSettings?.installerHubVideoUrl || "",
         // Always present — falls back to the copy bundled with the site.
         guideUrl: resolveUserGuideUrl(globalSettings?.installerHubGuideUrl),
@@ -719,6 +729,15 @@ router.post(
     }
 
     if (username !== undefined) u.username = username;
+    // A new photo must be a square photo of a face (R08, util/avatarCheck.js).
+    // Clearing it, or re-sending the one already saved, is not re-checked.
+    if (avatarUrl && avatarUrl !== u.avatarUrl) {
+      const refusal = await checkAvatarUrl(avatarUrl, {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        lookup: (publicId) => cloudinary.api.resource(publicId, { faces: true }),
+      });
+      if (refusal) return res.status(422).json({ error: refusal, field: "avatarUrl" });
+    }
     if (avatarUrl !== undefined) u.avatarUrl = avatarUrl;
 
     // State wins over zone. A state implies exactly one zone, so deriving it here
@@ -763,6 +782,10 @@ router.post(
         u.whatsappVerified = false;
         u.whatsappVerifiedAt = null;
         u.whatsappVerifiedNumber = "";
+        // A code sent to the old number cannot prove the new one (review).
+        u.whatsappCodeHash = "";
+        u.whatsappCodeExpires = null;
+        u.whatsappCodeNumber = "";
       }
       u.whatsapp = nextWa;
     }
@@ -2193,12 +2216,29 @@ router.get(
     // catalogue, so the rail reads "3 of 7" the way his design does — but with
     // 7 being however many products we sell today, not a number frozen into
     // the markup.
+    //
+    // Only LIVE licences for products we sell count. Every entitlement used to
+    // count, so add-on grants (boq-import, archicad) and expired licences read
+    // "7 of 6". ownedKeys lets the rail's My tools show what this account can
+    // open, rather than Richard's sample tenant.
+    const productKeys = await Product.find({ isCourse: { $ne: true } }, { key: 1 })
+      .lean()
+      .then((rows) => rows.map((r) => r.key).filter(Boolean))
+      .catch(() => []);
+    const sold = new Set(productKeys);
+    const now = dayjs();
     const owned = new Set(
-      (user?.entitlements || []).map((e) => e.productKey).filter(Boolean),
+      (user?.entitlements || [])
+        .filter(
+          (e) =>
+            e?.productKey &&
+            sold.has(e.productKey) &&
+            String(e.status || "").toLowerCase() === "active" &&
+            (!e.expiresAt || dayjs(e.expiresAt).isAfter(now)),
+        )
+        .map((e) => e.productKey),
     );
-    const catalogue = await Product.countDocuments({ isCourse: { $ne: true } }).catch(
-      () => 0,
-    );
+    const catalogue = productKeys.length;
 
     res.json({
       projects,
@@ -2206,8 +2246,13 @@ router.get(
       materials: rateLib.materials,
       gangs: rateLib.gangs,
       certificates,
+      // R11: assignments with a new alert (due soon, overdue, result in).
+      assignments: await myAssignments(userId, { links: false })
+        .then(alertCount)
+        .catch(() => 0),
       productsOwned: owned.size,
       productsTotal: catalogue,
+      ownedKeys: [...owned],
       name: user?.name || "",
       email: user?.email || "",
       organizationName: user?.organizationName || "",
@@ -2605,6 +2650,7 @@ router.post(
       });
     }
     u.whatsappCodeHash = hashWaCode(code);
+    u.whatsappCodeNumber = to;
     u.whatsappCodeExpires = new Date(Date.now() + WA_CODE_MINUTES * 60_000);
     u.whatsappCodeSentAt = new Date();
     u.whatsappCodeAttempts = 0;
@@ -2627,6 +2673,12 @@ router.post(
     if ((u.whatsappCodeAttempts || 0) >= WA_MAX_ATTEMPTS) {
       return res.status(429).json({ error: "Too many wrong codes. Ask for a new one." });
     }
+    // The code proves the number it was sent to, and only while that is still
+    // the number on the account (review, 2026-09-22).
+    const current = toWhatsAppNumber(u.whatsapp) || "";
+    if (!u.whatsappCodeNumber || u.whatsappCodeNumber !== current) {
+      return res.status(400).json({ error: "The number changed after that code was sent. Ask for a new one." });
+    }
     if (hashWaCode(code) !== u.whatsappCodeHash) {
       u.whatsappCodeAttempts = (u.whatsappCodeAttempts || 0) + 1;
       await u.save();
@@ -2637,8 +2689,9 @@ router.post(
     }
     u.whatsappVerified = true;
     u.whatsappVerifiedAt = new Date();
-    u.whatsappVerifiedNumber = toWhatsAppNumber(u.whatsapp) || "";
+    u.whatsappVerifiedNumber = u.whatsappCodeNumber;
     u.whatsappCodeHash = "";
+    u.whatsappCodeNumber = "";
     u.whatsappCodeExpires = null;
     u.whatsappCodeAttempts = 0;
     await u.save();

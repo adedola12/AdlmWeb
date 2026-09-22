@@ -12,6 +12,7 @@
 // screens he drew that we have not built.
 
 import React from "react";
+import { useDismiss } from "./dismiss.js";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import DsSurfaceSwitch from "./DsSurfaceSwitch.jsx";
 import { useAuth } from "../store.jsx";
@@ -28,7 +29,7 @@ const RAIL_KEY = "adlm-adm-rail";
 
 export default function DsAdminShell({ children, title }) {
   const { user, accessToken, clear } = useAuth();
-  const { toggle } = useTheme();
+  const { openMenu } = useTheme();
   const loc = useLocation();
   const nav = useNavigate();
   const findRef = React.useRef(null);
@@ -87,15 +88,8 @@ export default function DsAdminShell({ children, title }) {
   }, [loc.pathname]);
 
   // A menu that only closes on its own button is a menu that follows you
-  // around the page.
-  React.useEffect(() => {
-    if (!acc) return undefined;
-    const onDoc = (e) => {
-      if (!accRef.current?.contains(e.target)) setAcc(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [acc]);
+  // around the page: outside click, Escape, or another dropdown (R05).
+  useDismiss(acc, () => setAcc(false), [accRef]);
 
   // His .tail counts on the rail.
   //
@@ -333,7 +327,8 @@ export default function DsAdminShell({ children, title }) {
               className="tt adm-ico"
               id="tt"
               type="button"
-              onClick={toggle}
+              onClick={(e) => openMenu(e.currentTarget)}
+              aria-haspopup="menu"
               aria-label="Switch colour theme"
             >
               <svg className="i-moon" viewBox="0 0 24 24">

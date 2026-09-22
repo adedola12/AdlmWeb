@@ -20,7 +20,7 @@
 import React from "react";
 import { API_BASE } from "../../config";
 import { apiAuthed } from "../../http.js";
-import { plainText } from "../../lib/plainText.js";
+import ChatMarkdown from "../../lib/chatMarkdown.jsx";
 import { FaMagic } from "../../components/icons.jsx";
 
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
@@ -407,7 +407,7 @@ export default function WorkAreaView({
         method: "POST",
         credentials: "include",
         headers,
-        body: JSON.stringify({ message, history, sessionId: sessionRef.current }),
+        body: JSON.stringify({ message, history, sessionId: sessionRef.current, format: "markdown" }),
       });
       const json = await res.json().catch(() => ({}));
       say({ who: "ada", text: json?.reply || json?.error || "I couldn't answer that just now. Please try again." });
@@ -659,7 +659,11 @@ export default function WorkAreaView({
             {log.map((m, i) => (
               <div key={i} className={`ada-m ada-${m.who}`}>
                 {m.big ? <span className="ada-big">{m.big}</span> : null}
-                <p style={{ whiteSpace: "pre-wrap" }}>{m.who === "ada" ? plainText(m.text) : m.text}</p>
+                {m.who === "ada" ? (
+                  <ChatMarkdown text={m.text} />
+                ) : (
+                  <p style={{ whiteSpace: "pre-wrap" }}>{m.text}</p>
+                )}
                 {m.card?.length ? (
                   <div className="ada-card">
                     {m.card.map((c, j) => (

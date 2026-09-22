@@ -46,6 +46,15 @@ const SHEETS = [
   { in: "admin.css", out: "ds-admin.css" },
   // The Beyond BIM cohort page, added 12 September. One page loads it.
   { in: "beyondbim.css", out: "ds-beyondbim.css" },
+  // Added upstream 17 September. The certificate sheet (Learn screens and the
+  // public /certificate page), the site-wide toast and card system, and the
+  // project gallery and workspace.
+  { in: "cert.css", out: "ds-cert.css" },
+  { in: "feedback.css", out: "ds-feedback.css" },
+  { in: "work-proj.css", out: "ds-work-proj.css" },
+  // 17 Sep: side one of the plugins, QUIV and HERON inside a simulated Revit
+  // and PlanSwift. A design reference for the desktop add-ins, staged only.
+  { in: "plugin-quiv.css", out: "ds-plugin.css" },
 ];
 
 const CSS_DIR = path.resolve(CLIENT, "../../ADLMWebNewUI/site/assets/css");

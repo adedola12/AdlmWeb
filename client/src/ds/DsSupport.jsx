@@ -17,6 +17,7 @@
 // mean support asking for it in the first reply every time.
 
 import React from "react";
+import { useReportBack } from "./feedback/useReportBack.js";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
@@ -121,6 +122,7 @@ export default function DsSupport() {
   const [sending, setSending] = React.useState(false);
   const [said, setSaid] = React.useState("");
   const [problem, setProblem] = React.useState("");
+  useReportBack(said, problem);
 
   const loadTickets = React.useCallback(() => {
     if (!accessToken) return Promise.resolve();
@@ -499,8 +501,8 @@ export default function DsSupport() {
                 training problem rather than a support one. On-site sessions run on your own
                 projects.
               </p>
-              {/* His is a modal; ours goes to the training pages, which exist. */}
-              <Link className="ds-btn btn-o ds-btn-sm btn-full" to="/trainings" style={{ marginTop: 16 }}>
+              {/* His is a modal; ours goes to the events on the Learn page. */}
+              <Link className="ds-btn btn-o ds-btn-sm btn-full" to="/learn#events" style={{ marginTop: 16 }}>
                 Training for firms
               </Link>
             </div>

@@ -24,7 +24,13 @@ import { isStaff } from "../utils/roles.js";
 import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
-import DsRail from "./chrome/DsRail.jsx";
+import DsRailNav from "./DsRailNav.jsx";
+import { useDismiss } from "./dismiss.js";
+import DsSectionTabs from "./DsSectionTabs.jsx";
+import DsNotifBell from "./DsNotifBell.jsx";
+import { activeRailId } from "../lib/railActive.js";
+import { RAIL, railItems } from "./railConfig.js";
+import { useFeedback } from "./feedback/feedbackContext.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
 
 // His app screens load dash.css and work.css on top of site.css. Importing
@@ -75,9 +81,16 @@ export default function DsAppShell({ children, title = "", page = "" }) {
       ? "Search projects, rates and programmes"
       : "Search products, invoices, people";
 
+  const fb = useFeedback();
   const [counts, setCounts] = React.useState(null);
+  // The rail's red dot: /me/rail's count on arrival, then the bell's live one.
+  const [bellN, setBellN] = React.useState(null);
   const [drawer, setDrawer] = React.useState(false);
   const [menu, setMenu] = React.useState(false);
+  const accRef = React.useRef(null);
+  // The account menu closes on a click elsewhere, Escape, or another
+  // dropdown opening (R05). It used to close only from its own button.
+  useDismiss(menu, () => setMenu(false), [accRef]);
 
   // His dash.js puts these on <body>/<html>; several of his rules key off them.
   React.useEffect(() => {
@@ -150,27 +163,44 @@ export default function DsAppShell({ children, title = "", page = "" }) {
     team: "",
   };
 
-  // His dash.js marks the current item with `.on` by comparing his page names.
-  // Two things have to match here, because the rail is used from two places:
-  // on a real route the current path is what identifies the screen, but under
-  // /preview/* the path is /preview/<slug> while the rail links at /manage/*,
-  // and comparing those marks nothing at all. His page name — which the porter
-  // records on every link as data-ds-page — identifies the screen in both.
+  // The current rail item: an exact match of this route against the rail
+  // config (lib/railActive.js), falling back to the screen's page name only
+  // when its route is not in the rail. One item at most (R04).
+  const activeId = activeRailId({
+    pathname: location.pathname,
+    search: location.search,
+    page,
+  });
+  const alertN = bellN ?? Number(counts?.assignments || 0);
   const railRef = React.useRef(null);
+  // Every page in the rail the search box can jump to.
+  const searchable = React.useMemo(
+    () =>
+      railItems(RAIL).filter(
+        (it) => !it.action && it.ready !== false && !it.aliasOnly,
+      ),
+    [],
+  );
+
+  // /manage/support#ticket and the like: the router does not scroll to a hash,
+  // and .dsh-main (not the window) is the scroller.
   React.useEffect(() => {
-    const root = railRef.current;
-    if (!root) return;
-    const here = location.pathname;
-    root.querySelectorAll("a[href]").forEach((a) => {
-      const to = a.getAttribute("href");
-      const on = page
-        ? a.getAttribute("data-ds-page") === page
-        : to === here || (to !== "/" && here.startsWith(`${to}/`));
-      a.classList.toggle("on", on);
-      if (on) a.setAttribute("aria-current", "page");
-      else a.removeAttribute("aria-current");
-    });
-  }, [location.pathname, page, counts]);
+    const id = location.hash.replace(/^#/, "");
+    if (!id) return undefined;
+    // The screen may still be loading its data, so keep looking for the
+    // target for a few seconds rather than trying once.
+    let tries = 0;
+    const t = setInterval(() => {
+      const el = document.getElementById(decodeURIComponent(id));
+      if (el || ++tries > 25) clearInterval(t);
+      el?.scrollIntoView({ block: "start" });
+    }, 200);
+    return () => clearInterval(t);
+  }, [location.pathname, location.hash]);
+  const owned = React.useMemo(
+    () => (Array.isArray(counts?.ownedKeys) ? new Set(counts.ownedKeys) : null),
+    [counts],
+  );
 
   // Below 1000px his rail is a fixed drawer that slides in on `.open`. The
   // class has to land on .dsh-rail itself — the host above renders as
@@ -210,7 +240,13 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             if (e.target.closest("a")) setDrawer(false);
           }}
         >
-          <DsRail d={d} />
+          <DsRailNav
+            activeId={activeId}
+            d={d}
+            dots={alertN ? { assignments: { label: `${alertN} assignment${alertN === 1 ? "" : "s"} need${alertN === 1 ? "s" : ""} you` } } : null}
+            owned={owned}
+            onSignOut={signOut}
+          />
         </div>
 
         <div className="dsh-main">
@@ -228,16 +264,39 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             <span className="sp" />
             <span className="dsh-search">
               {icon("search")}
+              {/* It had no handler at all. It now jumps to the account page
+                  whose name matches (R01), suggesting them as you type. */}
               <input
                 type="search"
                 placeholder={searchPlaceholder}
                 aria-label="Search this account"
+                list="dsh-search-pages"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  const q = e.currentTarget.value.trim().toLowerCase();
+                  if (!q) return;
+                  const hit = searchable.find((it) => it.label.toLowerCase() === q) ||
+                    searchable.find((it) => it.label.toLowerCase().includes(q));
+                  if (hit) {
+                    e.currentTarget.value = "";
+                    navigate(hit.to);
+                  } else {
+                    fb.toast({ tone: "info", title: `Nothing in your account is called "${e.currentTarget.value.trim()}"` });
+                  }
+                }}
               />
+              <datalist id="dsh-search-pages">
+                {searchable.map((it) => (
+                  <option key={it.id} value={it.label} />
+                ))}
+              </datalist>
             </span>
             {/* Not in his build: signal bars for the round trip to ADLM Cloud,
                 the same indicator the desktop products carry in their header. */}
             <NetworkIndicator />
-            <span className="dsh-acc">
+            {/* R11: assignment deadlines and marks. */}
+            <DsNotifBell accessToken={accessToken} onCount={setBellN} />
+            <span className="dsh-acc" ref={accRef}>
               <button
                 type="button"
                 className="dsh-me"
@@ -269,6 +328,8 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             </span>
           </header>
 
+          {/* R03: this section's destinations as tabs, from the rail config. */}
+          <DsSectionTabs activeId={activeId} owned={owned} />
           {children}
         </div>
 

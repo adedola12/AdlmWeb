@@ -875,7 +875,7 @@ export default function DsCiviqPage({ d }) {
               {" "}
             </div>
             {" "}
-            <form className="sform-card" action="/checkout/thanks" method="get">
+            <form className="sform-card" action="/checkout/thanks" method="get" data-fb="lead" noValidate={true}>
               {" "}
               <input type="hidden" name="topic" value="CIVIQ waitlist" />
               {" "}

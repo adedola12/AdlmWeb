@@ -20,6 +20,7 @@ const DsLearnStyles = React.lazy(() => import("./DsLearnStyles.jsx"));
 const DsAuthStyles = React.lazy(() => import("./DsAuthStyles.jsx"));
 const DsDocStyles = React.lazy(() => import("./DsDocStyles.jsx"));
 const DsBeyondBimStyles = React.lazy(() => import("./DsBeyondBimStyles.jsx"));
+const DsPluginStyles = React.lazy(() => import("./DsPluginStyles.jsx"));
 
 // Which of his six stylesheets a page needs, read straight off the <link>
 // tags in his source. Only site.css is global; the other five are loaded per
@@ -37,6 +38,8 @@ const NEEDS_AUTH = new Set(["login", "signup", "verify"]);
 const NEEDS_DOC = new Set(["doc-preview", "quote"]);
 // The cohort page and its form, added upstream 2026-09-12.
 const NEEDS_BB = new Set(["beyondbim", "beyondbim-register"]);
+// Plugin side one, added upstream 2026-09-17 (design references).
+const NEEDS_PLUGIN = new Set(["plugin-quiv", "plugin-heron"]);
 
 // Real app path -> staged slug, so the preview can navigate to itself.
 //
@@ -135,6 +138,7 @@ export default function DsPreview({ page }) {
         {NEEDS_AUTH.has(page.slug) && <DsAuthStyles />}
         {NEEDS_DOC.has(page.slug) && <DsDocStyles />}
         {NEEDS_BB.has(page.slug) && <DsBeyondBimStyles />}
+        {NEEDS_PLUGIN.has(page.slug) && <DsPluginStyles />}
         <Shell {...shellProps}>
           <Page />
         </Shell>

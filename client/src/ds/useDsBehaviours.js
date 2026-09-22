@@ -30,6 +30,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { resolveHref } from "../lib/dsRoutes.js";
+import { claimOpen } from "./dismiss.js";
 
 const isWide = () => window.innerWidth > 1000;
 
@@ -73,13 +74,18 @@ function makeScope() {
 }
 
 // ── theme toggle ───────────────────────────────────────────────────────────
-// His #tt button writes its own data-theme attribute and localStorage key.
-// This app already has ThemeProvider doing that against a `.dark` class, so
-// the button is wired to that instead of running a second, conflicting system.
-function initTheme(root, s, toggleTheme) {
+// His #tt button opens his four-way theme menu (17 Sep). ThemeProvider owns
+// the preference and renders the menu, so the button only says where to hang
+// it — one theme system rather than two fighting over <html>.
+function initTheme(root, s, openThemeMenu) {
   const tt = root.querySelector("#tt");
-  if (!tt || !toggleTheme) return;
-  s.on(tt, "click", toggleTheme);
+  if (!tt || !openThemeMenu) return;
+  tt.setAttribute("aria-haspopup", "menu");
+  tt.setAttribute("aria-expanded", "false");
+  s.on(tt, "click", (e) => {
+    e.stopPropagation();
+    openThemeMenu(tt);
+  });
 }
 
 // ── reveal on first sight ──────────────────────────────────────────────────
@@ -720,16 +726,21 @@ function initNavPanel(root, s) {
     groups[g.getAttribute("data-panel")] = g;
   }
   let closeT = 0;
+  // R05: while open it is registered with ds/dismiss.js, so a click outside
+  // the nav, Escape, or another dropdown opening closes it.
+  let release = null;
 
   const close = () => {
     navEl.classList.remove("np-open");
     npFrame.style.height = "0px";
     Object.values(groups).forEach((g) => g.classList.remove("on"));
+    if (release) { const r = release; release = null; r(); }
   };
   const show = (key) => {
     const g = groups[key];
     if (!g) { close(); return; }
     clearTimeout(closeT);
+    if (!release) release = claimOpen(close, { inside: () => [navEl, panel] });
     Object.entries(groups).forEach(([k, el]) => el.classList.toggle("on", k === key));
     navEl.classList.add("np-open");
     npFrame.style.height = `${g.offsetHeight}px`;
@@ -749,7 +760,7 @@ function initNavPanel(root, s) {
     const on = panel.querySelector(".npg.on");
     if (on) npFrame.style.height = `${on.offsetHeight}px`;
   });
-  s.add(() => clearTimeout(closeT));
+  s.add(() => { clearTimeout(closeT); close(); });
 }
 
 // ── expanding picker (products) ────────────────────────────────────────────
@@ -771,7 +782,7 @@ function initPicker(root, s) {
 // `mapHref(href, hisPage)` lets the caller redirect a link before it is
 // followed — the staged preview uses it to keep mobile taps inside the
 // redesign. Defaults to identity, so promoted pages navigate normally.
-export function useDsBehaviours(ref, { toggleTheme, mapHref } = {}) {
+export function useDsBehaviours(ref, { openThemeMenu, mapHref } = {}) {
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -788,7 +799,7 @@ export function useDsBehaviours(ref, { toggleTheme, mapHref } = {}) {
     const s = makeScope();
 
     const blocks = [
-      ["theme", () => initTheme(root, s, toggleTheme)],
+      ["theme", () => initTheme(root, s, openThemeMenu)],
       ["reveal", () => initReveal(root, reduce, s)],
       ["counters", () => initCounters(root, reduce, s)],
       ["tilt", () => initTilt(root, reduce, s)],
@@ -821,7 +832,7 @@ export function useDsBehaviours(ref, { toggleTheme, mapHref } = {}) {
       s.run();
       if (!hadJs) document.documentElement.classList.remove("js");
     };
-  }, [ref, toggleTheme, navigate, mapHref]);
+  }, [ref, openThemeMenu, navigate, mapHref]);
 }
 
 export default useDsBehaviours;

@@ -865,6 +865,10 @@ function ExpandInput({ value, placeholder, onChange, type = "number" }) {
 }
 
 export default function ProjectBillTable({
+  // P0.4: the line to bring into view when the bill opens ("continue where
+  // you left off"), and a callback told which line was last worked on.
+  focusLine = "",
+  onLine,
   actualQtyInputs = {},
   actualRateInputs = {},
   actualTrackedAmount = 0,
@@ -1113,6 +1117,29 @@ export default function ProjectBillTable({
   // was that on a 50+ item BoQ, an animated scroll across 4 screens of
   // content is more disorienting than helpful. Instant jumps put the
   // target on screen immediately so the eye can re-anchor faster.
+  // P0.4: open on the line somebody was last working on, and mark it briefly.
+  // Rows can take a moment to arrive, so it looks for the row for a few seconds.
+  const focusedLineRef = useRef("");
+  useEffect(() => {
+    if (!focusLine || focusedLineRef.current === focusLine) return undefined;
+    let tries = 0;
+    const t = setInterval(() => {
+      const sel = `tr[data-line="${String(focusLine).replace(/["\\]/g, "")}"]`;
+      const el = document.querySelector(sel);
+      if (el || ++tries > 20) clearInterval(t);
+      if (!el) return;
+      focusedLineRef.current = focusLine;
+      el.scrollIntoView({ block: "center" });
+      el.style.outline = "2px solid var(--action)";
+      el.style.outlineOffset = "-2px";
+      setTimeout(() => {
+        el.style.outline = "";
+        el.style.outlineOffset = "";
+      }, 2500);
+    }, 150);
+    return () => clearInterval(t);
+  }, [focusLine]);
+
   const scrollToRef = useCallback((node) => {
     if (!node) return;
     try {
@@ -2219,9 +2246,17 @@ export default function ProjectBillTable({
                       const isDragging = dragIdx === row.i;
                       const isOver = dragOverIdx === row.i;
 
+                      const lineKey = String(row.key ?? row.i);
                       return (
                         <tr
                           key={row.key || row.i}
+                          data-line={lineKey}
+                          onFocusCapture={() =>
+                            onLine?.(
+                              lineKey,
+                              `line ${displayIndex + 1}${item.description ? `: ${String(item.description).slice(0, 60)}` : ""}`,
+                            )
+                          }
                           draggable={!sortCol}
                           onDragStart={(e) => {
                             setDragIdx(row.i);

@@ -211,6 +211,13 @@ export default function DsDashSettings() {
             <path d="M17.5 20V9.5" />
           </symbol>
           {" "}
+          <symbol id="wi-tools" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3.5" y="3.5" width="7" height="7" rx="2" />
+            <rect x="13.5" y="3.5" width="7" height="7" rx="2" />
+            <rect x="3.5" y="13.5" width="7" height="7" rx="2" />
+            <path d="M17 13.5v7M13.5 17h7" />
+          </symbol>
+          {" "}
           <symbol id="wi-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3.5 10.2 12 3.8l8.5 6.4V18a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 18v-7.8Z" />
             <path d="M9.5 20.5v-5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v5" />
@@ -226,6 +233,12 @@ export default function DsDashSettings() {
           <symbol id="wi-ada" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 3.5L13.42 7.6C13.72 8.47 13.87 8.9 14.16 9.23C14.3 9.39 14.47 9.53 14.65 9.65C15.02 9.9 15.47 9.99 16.38 10.18L20 10.93L16.38 11.68C15.47 11.87 15.02 11.96 14.65 12.21C14.47 12.33 14.3 12.47 14.16 12.63C13.87 12.96 13.72 13.39 13.42 14.26L12 18.36L10.58 14.26C10.28 13.39 10.13 12.96 9.84 12.63C9.7 12.47 9.53 12.33 9.35 12.21C8.98 11.96 8.53 11.87 7.62 11.68L4 10.93L7.62 10.18C8.53 9.99 8.98 9.9 9.35 9.65C9.53 9.53 9.7 9.39 9.84 9.23C10.13 8.9 10.28 8.47 10.58 7.6L12 3.5Z" />
             <path d="M18.5 17L18.9 18.1C19 18.38 19.05 18.52 19.14 18.63C19.19 18.68 19.24 18.73 19.3 18.77C19.42 18.85 19.56 18.88 19.85 18.94L21 19.17L19.85 19.4C19.56 19.46 19.42 19.49 19.3 19.57C19.24 19.61 19.19 19.66 19.14 19.71C19.05 19.82 19 19.96 18.9 20.24L18.5 21.34L18.1 20.24C18 19.96 17.95 19.82 17.86 19.71C17.81 19.66 17.76 19.61 17.7 19.57C17.58 19.49 17.44 19.46 17.15 19.4L16 19.17L17.15 18.94C17.44 18.88 17.58 18.85 17.7 18.77C17.76 18.73 17.81 18.68 17.86 18.63C17.95 18.52 18 18.38 18.1 18.1L18.5 17Z" />
+          </symbol>
+          {" "}
+          <symbol id="wi-task" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8.5 4.5H7A2.5 2.5 0 0 0 4.5 7v11.5A2.5 2.5 0 0 0 7 21h10a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 17 4.5h-1.5" />
+            <path d="M8.5 4.5A1.5 1.5 0 0 1 10 3h4a1.5 1.5 0 0 1 1.5 1.5v0A1.5 1.5 0 0 1 14 6h-4a1.5 1.5 0 0 1-1.5-1.5Z" />
+            <path d="M8.5 13.5l2.2 2.2 4.8-4.8" />
           </symbol>
           {" "}
         </svg>
@@ -298,6 +311,66 @@ export default function DsDashSettings() {
               </Link>
             </li>
             {" "}
+            <li className="has-grp dsh-tools" data-tools="">
+              {" "}
+              <button type="button" className="dsh-grp-b" aria-expanded="true">
+                <svg viewBox="0 0 24 24">
+                  <use href="#wi-tools" />
+                </svg>
+                <span className="lb">
+                  My tools
+                </span>
+                <i className="caret">
+                </i>
+              </button>
+              {" "}
+              <ul className="dsh-sub">
+                {" "}
+                <li>
+                  <Link to="/work/tool?t=quiv" data-ds-page="work-tool">
+                    <img src="/ds/ic-quiv.png" alt="" />
+                    QUIV
+                  </Link>
+                </li>
+                {" "}
+                <li>
+                  <Link to="/work/tool?t=heron" data-ds-page="work-tool">
+                    <img src="/ds/ic-heron.png" alt="" />
+                    HERON
+                  </Link>
+                </li>
+                {" "}
+                <li>
+                  <Link to="/work/library" data-ds-page="work-library">
+                    <img src="/ds/ic-rategen.png" alt="" />
+                    RateGen
+                  </Link>
+                </li>
+                {" "}
+                <li>
+                  <Link className="off" to="/work/tool?t=mep" data-ds-page="work-tool">
+                    <img src="/ds/ic-mep.png" alt="" />
+                    Revit MEP{" "}
+                    <span className="add">
+                      Add
+                    </span>
+                  </Link>
+                </li>
+                {" "}
+                <li>
+                  <Link className="off" to="/manage/products" data-ds-page="dash-products">
+                    <img src="/ds/ic-civiq.png" alt="" />
+                    CIVIQ{" "}
+                    <span className="soon">
+                      Soon
+                    </span>
+                  </Link>
+                </li>
+                {" "}
+              </ul>
+              {" "}
+            </li>
+            {" "}
             <li>
               <Link to="/work/projects" data-ds-page="work-projects">
                 <svg viewBox="0 0 24 24">
@@ -305,42 +378,9 @@ export default function DsDashSettings() {
                 </svg>
                 Projects{" "}
                 <span className="tail">
-                  2
+                  5
                 </span>
               </Link>
-            </li>
-            {" "}
-            <li>
-              <Link to="/work/library" data-ds-page="work-library">
-                <svg viewBox="0 0 24 24">
-                  <use href="#wi-library" />
-                </svg>
-                Rate library{" "}
-                <span className="tail">
-                  13
-                </span>
-              </Link>
-            </li>
-            {" "}
-            <li>
-              <Link to="/work/programme" data-ds-page="work-programme">
-                <svg viewBox="0 0 24 24">
-                  <use href="#wi-gantt" />
-                </svg>
-                Programme
-              </Link>
-            </li>
-            {" "}
-            <li>
-              <a className="off" href="#">
-                <svg viewBox="0 0 24 24">
-                  <use href="#wi-report" />
-                </svg>
-                Valuations{" "}
-                <span className="soon">
-                  Next
-                </span>
-              </a>
             </li>
             {" "}
           </ul>
@@ -360,6 +400,15 @@ export default function DsDashSettings() {
                   <use href="#hi-learning" />
                 </svg>
                 My learning
+              </Link>
+            </li>
+            {" "}
+            <li>
+              <Link to="/dash-assignments" data-ds-page="dash-assignments">
+                <svg viewBox="0 0 24 24">
+                  <use href="#wi-task" />
+                </svg>
+                Assignments
               </Link>
             </li>
             {" "}
@@ -385,7 +434,7 @@ export default function DsDashSettings() {
             </li>
             {" "}
             <li>
-              <Link to="/manage/downloads" data-ds-page="dash-downloads">
+              <Link to="/manage/guides" data-ds-page="dash-guides">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-doc" />
                 </svg>
@@ -534,7 +583,7 @@ export default function DsDashSettings() {
                     <div className="st-avatar" id="st-avatar">
                     </div>
                     {" "}
-                    <form className="dsh-form" action="/manage/settings" method="get" style={{ maxWidth: "none" }}>
+                    <form data-fb="profile" className="dsh-form" action="/manage/settings" method="get" style={{ maxWidth: "none" }}>
                       {" "}
                       <div className="two">
                         {" "}
@@ -623,7 +672,7 @@ export default function DsDashSettings() {
                   {" "}
                   <div className="dsh-body">
                     {" "}
-                    <form className="dsh-form" action="/manage/settings" method="get" style={{ maxWidth: "none" }}>
+                    <form data-fb="firm" className="dsh-form" action="/manage/settings" method="get" style={{ maxWidth: "none" }}>
                       {" "}
                       <div className="two">
                         {" "}
@@ -678,7 +727,7 @@ export default function DsDashSettings() {
                   {" "}
                   <div className="dsh-body">
                     {" "}
-                    <form className="dsh-form" action="/manage/settings" method="get">
+                    <form data-fb="password" className="dsh-form" action="/manage/settings" method="get">
                       {" "}
                       <div className="ds-field">
                         <label htmlFor="st-old">
@@ -766,7 +815,7 @@ export default function DsDashSettings() {
                         </span>
                       </div>
                       {" "}
-                      <a className="ds-btn btn-o ds-btn-sm" href="#">
+                      <a className="ds-btn btn-o ds-btn-sm" href="#" data-fb-toast="success|Signed out of CHIDI-LT01|That machine asks for a password the next time QUIV or RateGen opens.">
                         Sign out
                       </a>
                       {" "}
@@ -775,6 +824,79 @@ export default function DsDashSettings() {
                     <p style={{ margin: "14px 0 0", fontSize: "12.5px", fontWeight: "300", color: "var(--ink-3)", lineHeight: "1.6" }}>
                       {" "}Signing a machine out here frees its activation immediately, useful when a laptop is replaced or leaves the practice.
                     </p>
+                    {" "}
+                  </div>
+                  {" "}
+                </section>
+                {" "}
+                <section className="dsh-panel">
+                  {" "}
+                  <div className="dsh-ph">
+                    <h2>
+                      Appearance
+                    </h2>
+                    <span className="when">
+                      This device
+                    </span>
+                  </div>
+                  {" "}
+                  <div className="dsh-body">
+                    {" "}
+                    <div className="th-pick" role="radiogroup" aria-label="Theme">
+                      {" "}
+                      <button type="button" role="radio" data-theme-pick="light" aria-checked="false">
+                        <i className="tsw light">
+                        </i>
+                        <span>
+                          <b>
+                            Light
+                          </b>
+                          <em>
+                            White and blue
+                          </em>
+                        </span>
+                      </button>
+                      {" "}
+                      <button type="button" role="radio" data-theme-pick="dark" aria-checked="false">
+                        <i className="tsw dark">
+                        </i>
+                        <span>
+                          <b>
+                            Dark blue
+                          </b>
+                          <em>
+                            The ADLM navy
+                          </em>
+                        </span>
+                      </button>
+                      {" "}
+                      <button type="button" role="radio" data-theme-pick="black" aria-checked="false">
+                        <i className="tsw black">
+                        </i>
+                        <span>
+                          <b>
+                            Black
+                          </b>
+                          <em>
+                            Neutral dark greys
+                          </em>
+                        </span>
+                      </button>
+                      {" "}
+                      <button type="button" role="radio" data-theme-pick="system" aria-checked="false">
+                        <i className="tsw system">
+                        </i>
+                        <span>
+                          <b>
+                            Match my device
+                          </b>
+                          <em>
+                            Follows the system
+                          </em>
+                        </span>
+                      </button>
+                      {" "}
+                    </div>
                     {" "}
                   </div>
                   {" "}
@@ -870,7 +992,7 @@ export default function DsDashSettings() {
                     {" "}
                     <div style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
                       {" "}
-                      <a className="ds-btn btn-o ds-btn-sm" href="#">
+                      <a className="ds-btn btn-o ds-btn-sm" href="#" data-fb-toast="info|Preparing your export|We email a download link to tunde@adeyemipartners.ng within the hour. It expires after 48 hours.">
                         Export account data
                       </a>
                       {" "}

@@ -1,9 +1,10 @@
 import React from "react";
-import { Outlet, useLocation, ScrollRestoration } from "react-router-dom";
+import DsLaunchStrip from "./ds/DsLaunchStrip.jsx";
+import { Link, Outlet, useLocation, ScrollRestoration } from "react-router-dom";
+import { useAuth } from "./store.jsx";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import DesignModeBanner from "./components/DesignModeBanner.jsx";
-import { isClassicAdminPath } from "./lib/classicAdminPaths.js";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import AiAgent from "./components/AiAgent.jsx";
@@ -16,6 +17,7 @@ import { initGA } from "./ga";
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
   const location = useLocation();
+  const { user: authUser } = useAuth();
 
   // Screens that render inside his app frame — rail, app bar, own scroll
   // container. They supply their own chrome and their own padding, so the
@@ -28,19 +30,17 @@ export default function App() {
   // people who have not signed in.
   //
   // /projects/*, /time-management, /pm-tracker, /revit-projects, /portfolio*,
-  // /j/:code and /archicad/* are on this list because they are wrapped in the
-  // same frame (see pages/WorkShellRoute.jsx), even though they are our
-  // screens rather than ported ones.
+  // /j/:code and /archicad/* are on this list because they are now
+  // wrapped in the same frame (see pages/WorkShellRoute.jsx), even though they
+  // are our screens rather than ported ones. Leaving them off put the
+  // marketing nav and "Book a demo" above a signed-in rail.
   // Routes that carry their own chrome and must not also get the marketing
   // nav and footer. /admin joins the list because the admin section now has
   // his rail: two sets of navigation over one page compete for the same job,
   // and "Book a demo" does not belong above a refund queue.
-  // Classic admin screens (lib/classicAdminPaths.js) are the exception until
-  // go-live: they render without his frame, so they need the site nav back.
-  const appShellRoute =
-    /^\/(manage|work|dash-learning|dash-certificates|dash-course|projects|time-management|pm-tracker|revit-projects|portfolio|portfolio-dashboard|j|archicad|admin)(\/|$)/.test(
-      location.pathname,
-    ) && !isClassicAdminPath(location.pathname);
+  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-assignments|dash-course|projects|time-management|pm-tracker|revit-projects|portfolio|portfolio-dashboard|j|archicad|admin)(\/|$)/.test(
+    location.pathname,
+  );
 
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
@@ -76,7 +76,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-adlm-dark-bg text-slate-900 dark:text-adlm-dark-text transition-colors">
-      {!bannerDismissed && (
+      {/* Marketing pages only: above his app frame (a 100dvh grid with its
+          own scroller) the banner pushed the frame's foot off screen and
+          made the window scroll as well (R06). */}
+      {!bannerDismissed && !appShellRoute && (
         <CouponBanner
           banner={banner}
           onClose={() => setBannerDismissed(true)}
@@ -94,7 +97,21 @@ export default function App() {
           and the two sets of navigation compete for the same job. His own
           build does exactly that; it is on the snag list for him rather than
           reproduced here. */}
+      {/* R20: the launch countdown strip, on every public page, above the
+          fixed nav; hidden until config/launch.js has a date. */}
+      {!appShellRoute && <DsLaunchStrip />}
       {!appShellRoute && <Nav />}
+
+      {/* Signed in but the email is not confirmed: say so on every page
+          (a licensed account is prompted here rather than locked out). */}
+      {authUser?.emailVerified === false && location.pathname !== "/verify-email" && (
+        <div className="w-full bg-amber-50 text-amber-900 border-b border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-800 text-sm px-4 py-2 text-center">
+          Confirm your email address to use your account.{" "}
+          <Link className="underline font-semibold" to={`/verify-email?next=${encodeURIComponent(location.pathname)}`}>
+            Enter the code
+          </Link>
+        </div>
+      )}
 
       {/* Only renders for Design Access sessions, and only on /admin. */}
       <DesignModeBanner />
