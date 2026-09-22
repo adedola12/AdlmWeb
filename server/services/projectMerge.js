@@ -37,6 +37,24 @@ import { TakeoffProject } from "../models/TakeoffProject.js";
 // or in the plugin-generated codes, so it round-trips unambiguously.
 const NS = "::";
 
+// The arrays a CONTAINER owns in its own right, and which resolveMergedProject
+// therefore reads back off the container tagged with the container's own id.
+//
+// A variation is a contract instrument, not a measurement taken off a model:
+// it is raised against the merged contract, and the container is the document
+// that holds that contract, its certificates and its final account. The
+// post-lock flow already files scope there (see applyMergedLineWrite), and the
+// resolved read lists those rows first — so a write has to be able to route
+// them home again, or a merged project with contract-level scope can never be
+// saved at all.
+//
+// Nothing else is on this list, deliberately. The container's items, budget,
+// material lines and provisional sums are never read back from the container —
+// resolveMergedProject replaces all four with the sources' — so routing a row
+// there would store it where no read would ever find it again. Those stay
+// unroutable, which is the honest answer.
+export const CONTAINER_OWNED_FIELDS = Object.freeze(["variations"]);
+
 export function isMergeContainer(project) {
   return !!project?.mergeContainer;
 }
@@ -249,15 +267,20 @@ function ownerOf(line, codeField) {
  * every edit silently. Each line is routed home by the source tag it was given
  * on read, and de-namespaced back to the code its own document stores.
  *
- * Lines whose owner is unknown or is not one of this container's sources are
- * returned as `unroutable` rather than being dropped or guessed at — a QS
- * editing a merged bill must never have an edit vanish.
+ * A row the CONTAINER owns routes to the container instead — see
+ * CONTAINER_OWNED_FIELDS. Lines whose owner is unknown, or is neither the
+ * container nor one of its sources, are returned as `unroutable` rather than
+ * being dropped or guessed at — a QS editing a merged bill must never have an
+ * edit vanish.
  *
- * @returns {{ bySource: Map<string, object>, unroutable: Array, counts: object }}
+ * @returns {{ bySource: Map<string, object>, container: object,
+ *             unroutable: Array, counts: object }}
  */
 export function splitMergedWrite(container, body = {}) {
+  const containerId = String(container?._id || "");
   const allowed = new Set(mergeLinks(container).map((l) => String(l.projectId)));
   const bySource = new Map();
+  const containerBucket = {};
   const unroutable = [];
 
   const FIELDS = [
@@ -270,8 +293,19 @@ export function splitMergedWrite(container, body = {}) {
 
   for (const [field, codeField] of FIELDS) {
     if (!Array.isArray(body[field])) continue;
+    const containerOwns =
+      Boolean(containerId) && CONTAINER_OWNED_FIELDS.includes(field);
+    // Same reason as the per-source backfill at the end of this loop: a
+    // container array that had rows and now has none must still be written,
+    // or deleting the container's last variation would read as "field
+    // untouched" and the row would come straight back on the next read.
+    if (containerOwns) containerBucket[field] = [];
     for (const line of body[field]) {
       const owner = ownerOf(line, codeField);
+      if (containerOwns && owner === containerId) {
+        containerBucket[field].push(denamespace(line, codeField));
+        continue;
+      }
       if (!owner || !allowed.has(owner)) {
         unroutable.push({ field, line });
         continue;
@@ -297,7 +331,7 @@ export function splitMergedWrite(container, body = {}) {
       Object.entries(bucket).map(([k, v]) => [k, v.length]),
     );
   }
-  return { bySource, unroutable, counts };
+  return { bySource, container: containerBucket, unroutable, counts };
 }
 
 /**
