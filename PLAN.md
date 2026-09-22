@@ -396,3 +396,12 @@ One commit per item (`R05: close dropdowns on outside click`).
 Checks at the end: client lint 54 problems, all present before this branch (none added);
 client tests 55 pass; server tests 464 pass, 0 fail, 21 skipped; client production build OK;
 API and scheduled Lambda bundles OK. There is no TypeScript in this repo, so no type check.
+
+## Branch review, 22 Sep 2026
+
+A five-lens review (money and downloads, access and privacy, server correctness, React correctness, classic-site
+regressions), each finding checked by a skeptic that tried to refute it: 16 confirmed (10 distinct), 5 refuted.
+All ten are fixed on this branch (commits 1fcabef to dc97d67). Two were live on main as well: the file-name
+cleaner and the WhatsApp code. They went to main as PR #19, which waits for the release approver.
+Checks after the fixes: server 469 tests pass, client 58 pass, lint 54 (none added), both Lambda bundles and the
+client build OK.
