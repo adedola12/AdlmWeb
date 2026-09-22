@@ -19,6 +19,11 @@ function normalizeLockPin(value) {
 // subscription may see quantities / descriptions / progress but NOT pricing.
 // Quantities, units, %complete, categories, dates, flags and percentages are
 // intentionally preserved — only currency amounts are stripped.
+//
+// READ THIS BEFORE ADDING A FIELD: whatever is blanked here comes back on the
+// viewer's next save, so MASKED_MONEY_BLANKS (just below) has to blank the
+// same field or that save writes the zero over the owner's price. The two are
+// mirror images and projects.masking.test.js fails when they drift.
 function maskRates(obj) {
   if (!obj || typeof obj !== "object") return obj;
 
@@ -99,6 +104,274 @@ function maskRates(obj) {
   }
 
   return obj;
+}
+
+// ── The mirror image of maskRates() ──────────────────────────────────────
+// maskRates() is the ONE place that decides what a viewer without RateGen may
+// not SEE. This table is the ONE place that decides what such a viewer may not
+// WRITE, and the two must name exactly the same fields. Read them side by
+// side: every zero/null maskRates() puts into a payload appears here, because
+// that zero is what the client hands back on the next save. A money field
+// added to maskRates() and forgotten here is a field a masked save silently
+// writes over the owner's prices.
+//
+// The value against each field is what a BRAND-NEW row gets — i.e. exactly
+// what maskRates() would have shown the viewer — so a row they add carries no
+// money either way.
+const MASKED_MONEY_BLANKS = Object.freeze({
+  items: Object.freeze({
+    rate: 0,
+    actualRate: null,
+    netUnitCost: null,
+    overheadPercent: null,
+    profitPercent: null,
+  }),
+  materialItems: Object.freeze({
+    rate: 0,
+    actualRate: null,
+    netUnitCost: null,
+    overheadPercent: null,
+    profitPercent: null,
+  }),
+  budgetItems: Object.freeze({
+    rate: 0,
+    netUnitCost: 0,
+    overheadPercent: 0,
+    profitPercent: 0,
+    budgetRate: 0,
+  }),
+  provisionalSums: Object.freeze({ amount: 0 }),
+  preliminaryItems: Object.freeze({ actualAmount: 0 }),
+  variations: Object.freeze({ rate: 0 }),
+});
+
+// Every array on a project payload that carries money. Exported so the guard
+// and its tests iterate ONE list.
+export const MASKED_MONEY_ARRAYS = Object.freeze(Object.keys(MASKED_MONEY_BLANKS));
+
+// The arrays a federated merge container does NOT own: they are split back out
+// to the discipline projects that hold the real lines, so the container has no
+// stored money to restore them from.
+const MERGE_ROUTED_ARRAYS = Object.freeze([
+  "items",
+  "materialItems",
+  "budgetItems",
+  "provisionalSums",
+  "variations",
+]);
+
+// Fields that only ever belong to the server. projectForClient() removes them
+// from (or replaces them in) every payload it serves, so nothing legitimate
+// ever sends them back — stripping them makes it impossible for a round-tripped
+// payload to erase a share code, a collaborator or the contract lock PIN hash,
+// whatever a future write path chooses to read off the body.
+const NEVER_ACCEPTED_FROM_CLIENT = Object.freeze([
+  "shareCodes",
+  "collaborators",
+  "lockPinHash",
+]);
+
+// An identity for one row that is made of NOTHING the guard protects, so two
+// rows can be paired without ever consulting the money that is in dispute.
+function moneyFreeKey(kind, row, index) {
+  const part = (v) => String(v == null ? "" : v).trim().toLowerCase();
+  if (kind === "items" || kind === "materialItems") {
+    // Deliberately NOT itemIdentity(): that keys on `sn` too, and a client
+    // that renumbers lines when they are dragged would change every key at
+    // once, leaving the pairing to fall back on position — which is the one
+    // thing a re-order has just invalidated. Everything here survives a
+    // re-order, so a moved line keeps its own rate.
+    return [
+      part(row?.code),
+      part(row?.description),
+      part(row?.takeoffLine),
+      part(row?.materialName),
+      part(row?.unit),
+    ].join("::");
+  }
+  if (kind === "budgetItems") {
+    return [
+      part(row?.billIdentity || row?.sourceTakeoffCode),
+      part(row?.componentKind),
+      part(row?.description || row?.materialName),
+      part(row?.materialName),
+      part(row?.unit),
+    ].join("::");
+  }
+  if (kind === "provisionalSums") {
+    return [part(row?.kind) || "provisional", part(row?.description)].join("::");
+  }
+  if (kind === "preliminaryItems") return part(row?.name);
+  if (kind === "variations") {
+    return [part(row?.reference), part(row?.description), part(row?.unit)].join("::");
+  }
+  return `#${index}`;
+}
+
+// Restore the money a rate-masked viewer was never shown.
+//
+// `stored` is what the project holds today, `incoming` is the array that came
+// back on the request. Returns { rows } — the incoming rows with every
+// protected field forced back to the stored value — or { unsafe: true } when
+// the two lists cannot be paired without guessing, in which case the caller
+// must refuse the write rather than write a guess over real money.
+//
+// Pairing, in order:
+//   1. same identity (money-free), bucketed so duplicates pair one-for-one and
+//      a pure re-order still matches completely;
+//   2. leftovers that sit at the same index on both sides — the ordinary
+//      "edited a description in place" case;
+//   3. any remaining leftovers, in order, but ONLY when both sides have the
+//      same number left. Unequal leftovers mean rows were added AND edited at
+//      once, where pairing in order would move one line's money onto another;
+//      that is the case we refuse.
+// A row with no counterpart at all is new, and gets blank money.
+export function preserveMaskedMoney(stored, incoming, kind) {
+  const blanks = MASKED_MONEY_BLANKS[kind];
+  if (!blanks) {
+    return { rows: null, unsafe: true, reason: `unknown money array "${kind}"` };
+  }
+  const fields = Object.keys(blanks);
+  const storedRows = Array.isArray(stored) ? stored : [];
+  const rows = (Array.isArray(incoming) ? incoming : []).map((r) => ({ ...(r || {}) }));
+
+  // 1. identity
+  const buckets = new Map();
+  storedRows.forEach((row, i) => {
+    const key = moneyFreeKey(kind, row, i);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(i);
+  });
+  const sourceFor = new Array(rows.length).fill(-1);
+  const storedTaken = new Array(storedRows.length).fill(false);
+  rows.forEach((row, i) => {
+    const bucket = buckets.get(moneyFreeKey(kind, row, i));
+    if (bucket && bucket.length) {
+      const si = bucket.shift();
+      sourceFor[i] = si;
+      storedTaken[si] = true;
+    }
+  });
+
+  // Whatever is left on each side is either a row whose identity the viewer
+  // edited, a row they added, or a row they deleted — and from here we cannot
+  // tell which. Only when the two sides have the SAME number left is a pairing
+  // possible at all; anything else would put one line's rate on another line.
+  let leftIn = [];
+  rows.forEach((_, i) => {
+    if (sourceFor[i] < 0) leftIn.push(i);
+  });
+  const leftStored = new Set();
+  storedRows.forEach((_, i) => {
+    if (!storedTaken[i]) leftStored.add(i);
+  });
+
+  if (leftIn.length && leftStored.size) {
+    if (leftIn.length !== leftStored.size) {
+      return {
+        rows: null,
+        unsafe: true,
+        reason:
+          `${kind}: ${leftIn.length} changed row(s) cannot be matched to ` +
+          `${leftStored.size} stored row(s)`,
+      };
+    }
+
+    // 2. leftovers that sit at the same index on both sides — the ordinary
+    //    "edited this row in place" case.
+    leftIn = leftIn.filter((i) => {
+      if (!leftStored.has(i)) return true;
+      sourceFor[i] = i;
+      leftStored.delete(i);
+      return false;
+    });
+
+    // 3. the rest in order, which is the only pairing left that preserves
+    //    which row came before which.
+    const leftStoredList = [...leftStored].sort((a, b) => a - b);
+    leftIn.forEach((i, n) => {
+      sourceFor[i] = leftStoredList[n];
+    });
+  }
+
+  rows.forEach((row, i) => {
+    const src = sourceFor[i] >= 0 ? storedRows[sourceFor[i]] : null;
+    for (const f of fields) {
+      row[f] = src ? src[f] : blanks[f];
+    }
+  });
+  return { rows, unsafe: false, reason: "" };
+}
+
+// Route-level guard. Hand it the stored project, the resolved access and the
+// request body; use the body it hands back, or refuse with the error it hands
+// back. A viewer who CAN see rates gets their body back with only the
+// server-only fields stripped, so their saves are untouched.
+//
+// Exported for its unit test (projects.masking.test.js).
+export function guardMaskedWrite({ project, access, body, isMergeContainer: merged = false }) {
+  const next = { ...(body || {}) };
+  for (const field of NEVER_ACCEPTED_FROM_CLIENT) delete next[field];
+  if (next.contract && typeof next.contract === "object") {
+    next.contract = { ...next.contract };
+    for (const field of NEVER_ACCEPTED_FROM_CLIENT) delete next.contract[field];
+  }
+
+  if (access ? access.canSeeRates : true) return { body: next };
+
+  // A merge container holds none of the routed lines, so there is nothing here
+  // to restore them from — pairing against its empty arrays would blank every
+  // rate. Refuse loudly instead of destroying the disciplines' prices.
+  if (merged) {
+    const touched = MERGE_ROUTED_ARRAYS.filter((k) => Array.isArray(next[k]));
+    if (touched.length) {
+      return {
+        error: {
+          status: 409,
+          body: {
+            error:
+              "Rates are hidden on this shared project, so a bill or budget " +
+              "save cannot be applied to a merged project. Ask the owner.",
+            code: "RATES_MASKED_MERGE_UNSUPPORTED",
+            details: { arrays: touched },
+          },
+        },
+      };
+    }
+  }
+
+  for (const kind of MASKED_MONEY_ARRAYS) {
+    if (!Array.isArray(next[kind])) continue;
+    const { rows, unsafe, reason } = preserveMaskedMoney(project?.[kind], next[kind], kind);
+    if (unsafe) {
+      return {
+        error: {
+          status: 409,
+          body: {
+            error:
+              "Rates are hidden on this shared project, and this save changed " +
+              "too much at once for the stored prices to be matched back to it. " +
+              "Reload the project and save a smaller change.",
+            code: "RATES_MASKED_UNSAFE_MERGE",
+            details: { array: kind, reason },
+          },
+        },
+      };
+    }
+    next[kind] = rows;
+  }
+  return { body: next };
+}
+
+// Some writes do not carry money in the body at all — they REPRICE, by running
+// a pricing pass over the project. There is nothing to restore in those, and
+// re-pricing a bill you are not allowed to read is not work, it is damage, so
+// they are refused outright. One message, so the client can recognise it.
+function refuseRateMaskedWrite(res, what) {
+  return res.status(403).json({
+    error: `Rates are hidden on this shared project, so you cannot ${what}. Ask the owner.`,
+    code: "RATES_MASKED",
+  });
 }
 
 // Mask the money fields on a single certificate / final-account object before
@@ -2758,7 +3031,22 @@ async function getProject(req, res) {
 //
 // Returns { ok, applied } or { error, status } — never partially reports
 // success, because a silent half-write on a bill is worse than a refusal.
-async function applyMergedLineWrite({ req, container, userId, body }) {
+async function applyMergedLineWrite({ req, container, userId, body, canSeeRates = true }) {
+  // A merged write fans out to the discipline projects, which is where the
+  // real prices live — the container holds none of them, so guardMaskedWrite()
+  // has nothing here to restore a rate-masked payload from. Both callers
+  // refuse such a write before getting this far; this is the backstop that
+  // keeps a future caller from routing zeroed rates into the sources.
+  if (!canSeeRates && MERGE_ROUTED_ARRAYS.some((k) => Array.isArray(body?.[k]))) {
+    return {
+      error:
+        "Rates are hidden on this shared project, so a bill or budget save " +
+        "cannot be applied to a merged project. Ask the owner.",
+      code: "RATES_MASKED_MERGE_UNSUPPORTED",
+      status: 409,
+    };
+  }
+
   // ── Post-lock enforcement on a merged contract ──
   // The container owns the contract, so when it is locked the baseline covers
   // every discipline at once and enforcement has to happen HERE, against the
@@ -3109,6 +3397,45 @@ async function updateProject(req, res) {
       return res.status(400).json({ error: "Invalid id" });
     }
 
+    const userId = getUserObjectId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid user id in token" });
+    }
+
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    // Authorisation: owner or full-access collaborator may edit; view-only is
+    // rejected before any mutation. Contract-lock handling below is unchanged,
+    // so a full collaborator's edits respect locks exactly like the owner's.
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
+
+    // ── A viewer who cannot see rates cannot move money ──────────────
+    // projectForClient() handed this user a payload with every rate zeroed
+    // (maskRates). They edit a quantity and save, and the payload comes back
+    // carrying those zeros. Restore the stored money onto the incoming rows
+    // BEFORE a single body field is read, so what follows is the same code an
+    // owner runs — quantities, descriptions, units, order and ticks all save
+    // normally. Nothing changes for a viewer who CAN see rates.
+    const guarded = guardMaskedWrite({
+      project,
+      access,
+      body: req.body,
+      isMergeContainer: isMergeContainer(project),
+    });
+    if (guarded.error) {
+      return res.status(guarded.error.status).json(guarded.error.body);
+    }
+    req.body = guarded.body;
+
     const {
       name,
       items,
@@ -3137,27 +3464,6 @@ async function updateProject(req, res) {
       taxPercent,
     } = req.body || {};
 
-    const userId = getUserObjectId(req);
-    if (!userId) {
-      return res.status(401).json({ error: "Invalid user id in token" });
-    }
-
-    const project = await TakeoffProject.findOne(
-      accessFilter(id, userId, productKey),
-    );
-    if (!project) return res.status(404).json({ error: "Not found" });
-
-    // Authorisation: owner or full-access collaborator may edit; view-only is
-    // rejected before any mutation. Contract-lock handling below is unchanged,
-    // so a full collaborator's edits respect locks exactly like the owner's.
-    const access = await resolveProjectAccess(req, project);
-    if (!access.canEdit) {
-      return res.status(403).json({
-        error: "View-only access cannot edit this project.",
-        code: "VIEW_ONLY",
-      });
-    }
-
     // ── Federated merge container ──
     // The container owns no items, so a measurement write must be split and
     // applied to the source that owns each line; writing it here would discard
@@ -3178,6 +3484,7 @@ async function updateProject(req, res) {
           container: project,
           userId,
           body: req.body || {},
+          canSeeRates: !!access.canSeeRates,
         });
         if (routed.error) {
           return res.status(routed.status || 400).json({
@@ -3471,7 +3778,26 @@ async function updateProject(req, res) {
       // to its bill line so material + labour bundle together. Guarded so a
       // mapping issue can never break the save.
       try {
-        const budget = sanitizeBudgetItems(materialItems);
+        let budget = sanitizeBudgetItems(materialItems);
+        // This REPLACES budgetItems from a different array, so a rate-masked
+        // viewer whose materialItems were blank (nothing stored to restore
+        // from) would still arrive here with zeros and wipe a budget that was
+        // built some other way — a BoQ import, say. Restore against the budget
+        // this is about to overwrite, which is the money actually at risk.
+        if (access && !access.canSeeRates) {
+          const kept = preserveMaskedMoney(project.budgetItems, budget, "budgetItems");
+          if (kept.unsafe) {
+            return res.status(409).json({
+              error:
+                "Rates are hidden on this shared project, and this save changed " +
+                "too much at once for the stored prices to be matched back to it. " +
+                "Reload the project and save a smaller change.",
+              code: "RATES_MASKED_UNSAFE_MERGE",
+              details: { array: "budgetItems", reason: kept.reason },
+            });
+          }
+          budget = kept.rows;
+        }
         backfillBudgetLinks(project.items, budget);
         project.budgetItems = ensureBillItemCoverage(project.items, budget);
       } catch (e) {
@@ -4194,21 +4520,33 @@ async function issueCertificate(req, res) {
       0,
     );
 
-    const cumulativeValue = safeNum(req.body?.cumulativeValue ?? rollup.cumulativeValue);
+    // A viewer who cannot see rates was served a certificate panel of zeros,
+    // so the figures they send back are those zeros. Ignore the body's money
+    // entirely for them and certify what the project itself says — the same
+    // numbers an owner's "issue" button produces. Everything else on the
+    // certificate (dates, period, notes, status) still comes from them.
+    const moneyFromClient = !!access.canSeeRates;
+
+    const cumulativeValue = moneyFromClient
+      ? safeNum(req.body?.cumulativeValue ?? rollup.cumulativeValue)
+      : safeNum(rollup.cumulativeValue);
     const thisCertificate = Math.max(0, cumulativeValue - lessPrevious);
 
     // Rates default to the project's valuation settings.
     const valSettings = project.valuationSettings || {};
-    const retentionPct = Number.isFinite(Number(req.body?.retentionPct))
-      ? clampPercentage(Number(req.body.retentionPct), safeNum(valSettings.retentionPct) || 5)
-      : safeNum(valSettings.retentionPct) || 5;
-    const vatPct = Number.isFinite(Number(req.body?.vatPct))
-      ? clampPercentage(Number(req.body.vatPct), safeNum(valSettings.vatPct) || 7.5)
-      : safeNum(valSettings.vatPct) || 7.5;
-    const whtPct = Number.isFinite(Number(req.body?.whtPct))
-      ? clampPercentage(Number(req.body.whtPct), safeNum(valSettings.withholdingPct) || 2.5)
-      : safeNum(valSettings.withholdingPct) || 2.5;
-    const retentionReleased = safeNum(req.body?.retentionReleased);
+    const retentionPct =
+      moneyFromClient && Number.isFinite(Number(req.body?.retentionPct))
+        ? clampPercentage(Number(req.body.retentionPct), safeNum(valSettings.retentionPct) || 5)
+        : safeNum(valSettings.retentionPct) || 5;
+    const vatPct =
+      moneyFromClient && Number.isFinite(Number(req.body?.vatPct))
+        ? clampPercentage(Number(req.body.vatPct), safeNum(valSettings.vatPct) || 7.5)
+        : safeNum(valSettings.vatPct) || 7.5;
+    const whtPct =
+      moneyFromClient && Number.isFinite(Number(req.body?.whtPct))
+        ? clampPercentage(Number(req.body.whtPct), safeNum(valSettings.withholdingPct) || 2.5)
+        : safeNum(valSettings.withholdingPct) || 2.5;
+    const retentionReleased = moneyFromClient ? safeNum(req.body?.retentionReleased) : 0;
 
     const retentionAmount = (thisCertificate * retentionPct) / 100;
     const netBeforeTax = thisCertificate - retentionAmount + retentionReleased;
@@ -4466,6 +4804,13 @@ async function addVariation(req, res) {
     const loaded = await loadProjectForVariationWrite(req, res);
     if (!loaded) return;
     const { project, access } = loaded;
+    // A variation is a value, and this route is the one place a new one is
+    // born — there is no stored figure to restore, so the only way a viewer
+    // who cannot see rates is kept out of the contract sum is to say no.
+    // variationForClient() would hand them back a 0 anyway.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "raise a variation");
+    }
 
     const description = String(req.body?.description || "").trim().slice(0, 500);
     if (!description) {
@@ -5631,6 +5976,20 @@ async function markBudget(req, res) {
       });
     }
 
+    // Same rule as the project PUT: a viewer who cannot see rates was served a
+    // budget with every rate zeroed, so the stored prices win over whatever
+    // comes back. Their procurement marks, quantities and notes still save.
+    const guarded = guardMaskedWrite({
+      project,
+      access,
+      body: req.body,
+      isMergeContainer: isMergeContainer(project),
+    });
+    if (guarded.error) {
+      return res.status(guarded.error.status).json(guarded.error.body);
+    }
+    req.body = guarded.body;
+
     const body = req.body || {};
     if (!Array.isArray(body.budgetItems)) {
       return res.status(400).json({ error: "budgetItems array required" });
@@ -5653,6 +6012,7 @@ async function markBudget(req, res) {
         container: project,
         userId,
         body: { budgetItems: body.budgetItems },
+        canSeeRates: !!access.canSeeRates,
       });
       if (routed.error) {
         return res.status(routed.status || 400).json({
@@ -5873,6 +6233,12 @@ async function importBoqUpdate(req, res) {
         code: "VIEW_ONLY",
       });
     }
+    // A re-import REPLACES the bill (and usually the budget) with the
+    // workbook's own rates. There is no stored money to restore onto a
+    // spreadsheet, so a viewer who cannot see the prices cannot do this.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "re-import this bill from Excel");
+    }
 
     const parsed = await parseBoqWorkbook(req.file.buffer);
     stampImportedActuals(parsed.items);
@@ -5978,6 +6344,11 @@ async function regenerateMlSchedule(req, res) {
       return res
         .status(403)
         .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    // Regeneration re-derives the whole material & labour schedule — and its
+    // prices — from the CALLER's constants library, over the owner's budget.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "regenerate the material & labour schedule");
     }
 
     const ctx = await buildMlScheduleContext(userId);
@@ -6394,6 +6765,12 @@ async function priceServicesProject(req, res) {
     const access = await resolveProjectAccess(req, project);
     if (!access.canEdit) {
       return res.status(403).json({ error: "You do not have edit access to this project" });
+    }
+    // This REPLACES budgetItems with a pricing pass over the caller's own
+    // RateGen library and then derives every bill rate from it — the loudest
+    // money write on the project. Not for someone who cannot see the prices.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "price this bill");
     }
 
     const items = Array.isArray(project.items) ? project.items : [];
