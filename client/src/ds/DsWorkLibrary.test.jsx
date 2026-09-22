@@ -8,6 +8,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { FeedbackProvider } from "./feedback/FeedbackProvider.jsx";
 
 const masterRate = {
   id: "a1",
@@ -179,5 +180,56 @@ describe("the RateGen library", () => {
     // And the copy does not repeat the prototype's claim about rates moving.
     expect(container.textContent).not.toContain("every rate using it follows");
     expect(container.textContent).toContain("keep the cost they were built at");
+  });
+});
+
+// ── S18 review, finding 3 ───────────────────────────────────────────────────
+// The composition card reads whatever build-up the row carries. An override
+// with none of its own used to carry the MASTER's, so the card itemised
+// components adding to 10,000 under a net cost of 11,000 and read as if the
+// customer's own price were broken down when it is not.
+const mountWithCards = () =>
+  render(
+    <MemoryRouter initialEntries={["/work/library"]}>
+      <FeedbackProvider>
+        <DsWorkLibrary />
+      </FeedbackProvider>
+    </MemoryRouter>,
+  );
+
+describe("the composition card for a customer's own copy", () => {
+  const bareOverride = {
+    rateId: "a1",
+    description: "Blockwork 225mm in cement mortar",
+    unit: "m2",
+    netCost: 11000,
+    overheadPercent: 10,
+    profitPercent: 25,
+    overheadValue: 1100,
+    profitValue: 2750,
+    totalCost: 14850,
+    breakdown: [],
+  };
+
+  it("does not list the published rate's components against the customer's figure", async () => {
+    stub({ overrides: [bareOverride] });
+    const { container, findByText } = mountWithCards();
+    const row = await findByText("Blockwork 225mm in cement mortar");
+
+    fireEvent.click(row.closest("a"));
+    await waitFor(() => expect(container.textContent).toContain("14,850"));
+    // No card, and above all no master lines under the customer's net cost.
+    expect(document.querySelector(".fb-card")).toBe(null);
+    expect(container.textContent).not.toContain("Sandcrete block");
+  });
+
+  it("still itemises a published rate the customer has not touched", async () => {
+    stub();
+    const { findByText } = mountWithCards();
+    const row = await findByText("Blockwork 225mm in cement mortar");
+
+    fireEvent.click(row.closest("a"));
+    await waitFor(() => expect(document.querySelector(".fb-card")).toBeTruthy());
+    expect(document.querySelector(".fb-card").textContent).toContain("Sandcrete block");
   });
 });

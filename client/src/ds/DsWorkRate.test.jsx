@@ -379,3 +379,34 @@ describe("a rate the customer built themselves", () => {
     });
   });
 });
+
+// ── S18 review, finding 3, the other half ───────────────────────────────────
+describe("a customer's own copy with no build-up of its own", () => {
+  it("says the published rate's lines are not part of it, instead of showing them", async () => {
+    stub({
+      overrides: [
+        {
+          rateId: "a1",
+          description: "Blockwork 225mm in cement mortar",
+          unit: "m2",
+          netCost: 11000,
+          overheadPercent: 10,
+          profitPercent: 25,
+          overheadValue: 1100,
+          profitValue: 2750,
+          totalCost: 14850,
+          breakdown: [],
+        },
+      ],
+    });
+    const { container, findByText } = mount();
+    await findByText("Reset to published");
+
+    // None of the published rate's components are listed against 11,000.
+    expect(container.textContent).not.toContain("Sandcrete block");
+    expect(container.textContent).toContain("no components stored against it");
+    // And the published build-up is accounted for in words, with real figures.
+    expect(container.textContent).toContain("3 components");
+    expect(container.textContent).toContain("10,000");
+  });
+});

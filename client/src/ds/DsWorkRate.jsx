@@ -407,6 +407,11 @@ export default function DsWorkRate() {
   const unexplained = carried;
   const storedTotal = toNum(rate.totalCost);
 
+  // What the PUBLISHED rate is made of, used only to say why a customer's own
+  // copy with no build-up of its own is showing no lines.
+  const publishedComponents = componentsOf(published || {});
+  const publishedNet = toNum(published?.netCost);
+
   return (
     <div className="dsh-in">
       <p className="wk-back">
@@ -563,6 +568,18 @@ export default function DsWorkRate() {
                   This rate has no components stored against it, so there is nothing to break
                   down. It carries {money(total)} per {rate.unit || "unit"} as a flat figure.
                 </p>
+                {/* The published rate's lines are the published rate's. They add
+                    up to ITS net cost, so showing them here would read as an
+                    itemisation of a figure they do not explain. Said instead. */}
+                {isOwn && !isCustom && publishedComponents.length ? (
+                  <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--ink-3)" }}>
+                    The published rate is built up from {publishedComponents.length}{" "}
+                    component{publishedComponents.length === 1 ? "" : "s"} adding to{" "}
+                    {money(publishedNet)}. Those lines belong to the published rate, not to
+                    your copy, so they are not listed against your figure. Reset to published
+                    to go back to them.
+                  </p>
+                ) : null}
               </div>
             )}
 
