@@ -157,6 +157,16 @@ function parseComponent(item) {
   return c;
 }
 
+/** What a raw, unparsed array of build-up rows comes to in money. */
+function rawComponentsTotal(arr) {
+  let sum = 0;
+  for (const item of arr || []) {
+    const c = parseComponent(item);
+    if (c) sum += componentEffectiveTotal(c);
+  }
+  return sum;
+}
+
 function findComponentArray(scope) {
   if (!scope || typeof scope !== "object") return null;
 
@@ -165,7 +175,31 @@ function findComponentArray(scope) {
   const mats = Array.isArray(scope.materials) ? scope.materials : null;
   const labs = Array.isArray(scope.labour) ? scope.labour : null;
   if (mats && labs && (mats.length > 0 || labs.length > 0)) {
-    return [...mats, ...labs];
+    const projection = [...mats, ...labs];
+
+    // …but that pair is only PART of a rate built on the website. Its full
+    // build-up — material, labour AND plant — is in breakdown[]; materials[]
+    // and labour[] are a projection of it kept for the desktop, and they
+    // cannot hold a plant line at all (UserCustomRateLineSchema.rateType is
+    // material|labour, and anything that is not "labour" is stored as
+    // "material"). Reading the pair here made every plant line invisible, and
+    // enforceCeiling then clamped the rate DOWN by the whole plant cost — the
+    // takeoff priced the work below the rate the customer published.
+    //
+    // So the breakdown wins whenever it explains at least as much money as the
+    // pair does, which is exactly when it is the fuller build-up. A rate
+    // written before the breakdown existed still falls back to the pair and
+    // prices exactly as it does today. Nothing the desktop reads changes: both
+    // arrays are still written, still in the same shape.
+    const breakdown = Array.isArray(scope.breakdown) ? scope.breakdown : null;
+    if (
+      breakdown &&
+      breakdown.length > 0 &&
+      rawComponentsTotal(breakdown) >= rawComponentsTotal(projection) - 0.005
+    ) {
+      return breakdown;
+    }
+    return projection;
   }
 
   for (const key of COMPONENT_ARRAY_KEYS) {
@@ -280,12 +314,25 @@ export function expectedTotal(comp) {
  * Recomputes netCost / overheadAmount / profitAmount / totalCost so a
  * partially-populated composition becomes fully balanced. Does NOT overwrite
  * a non-zero totalCost coming from the server — the guardrail validates that.
+ *
+ * A stored netCost is the rate's OWN figure and outranks the sum of its lines.
+ * The difference between the two is the rate's unexplained remainder: the part
+ * of a published net cost that no component accounts for. The build-up screen
+ * shows it as "Not itemised" and carries it through every edit
+ * (unexplainedNet/totalsFrom in client/src/ds/rategen/rateMath.js, where
+ * net = Σ lines + carried = the stored net), because the rate a customer saves
+ * is the rate their next bill is priced from. Overwriting netCost with the sum
+ * here stripped that remainder off again, and enforceCeiling then clamped the
+ * headline down to the itemised part — the takeoff priced the work below the
+ * rate the library published. The sum is used only when no netCost was stored
+ * (compute items, and any rate that carries lines and nothing else), so every
+ * rate written before this branch prices exactly as it did.
  */
 export function normalizeComposition(comp) {
   if (!comp) return comp;
   if (Array.isArray(comp.components) && comp.components.length > 0) {
     const sum = comp.components.reduce((s, c) => (c ? s + componentEffectiveTotal(c) : s), 0);
-    if (sum > 0) comp.netCost = sum;
+    if (sum > 0 && toNum(comp.netCost) <= 0) comp.netCost = sum;
   }
 
   if (comp.overheadAmount <= 0 && comp.overheadPercent > 0) {
