@@ -51,7 +51,7 @@ export default function CheckoutThanks() {
           });
 
           // e.g. take users to their courses/dashboard after 2–3s
-          setTimeout(() => navigate("/dashboard"), 1500);
+          setTimeout(() => navigate("/manage"), 1500);
         } else {
           setStatus(
             `Payment status: ${out?.status || out?.message || "unknown"}`

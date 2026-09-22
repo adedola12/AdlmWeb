@@ -95,7 +95,7 @@ export default function Purchase() {
 
   const [qs] = useSearchParams();
   const navigate = useNavigate();
-  const returnTo = qs.get("return") || "/dashboard";
+  const returnTo = qs.get("return") || "/manage";
 
   // Use the real 3D scene unless the user prefers reduced motion. Starts false
   // so the first paint uses the lightweight SVG, then upgrades to 3D.

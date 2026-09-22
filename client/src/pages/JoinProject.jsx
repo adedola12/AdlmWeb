@@ -91,7 +91,7 @@ export default function JoinProject() {
               Get {upsell?.productName}
             </Link>
             <Link
-              to="/dashboard"
+              to="/manage"
               className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-adlm-dark-border dark:text-adlm-dark-text"
             >
               Go to dashboard
@@ -112,7 +112,7 @@ export default function JoinProject() {
             {err}
           </p>
           <Link
-            to="/dashboard"
+            to="/manage"
             className="mt-5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-adlm-dark-border dark:text-adlm-dark-text"
           >
             Go to dashboard
