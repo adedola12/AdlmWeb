@@ -5,7 +5,7 @@
 // mounting React, and so the screen and the builder cannot drift apart about
 // what a rate comes to.
 
-import { totalsFrom, toNum } from "./rateMath.js";
+import { percentProblem, totalsFrom, toNum } from "./rateMath.js";
 
 // What normalizeCustomRate() falls back to when a custom rate arrives without
 // percentages (server/util/rategenUserRates.js). Shown as the placeholder so
@@ -65,6 +65,11 @@ export function draftProblem(draft) {
     return "Add at least one material, labour or plant line";
   if ((draft.lines || []).some((l) => !String(l.name || "").trim()))
     return "Every line needs something on it";
+  // The same rule the build-up screen applies, so a rate cannot be built at a
+  // percentage that screen would refuse — or, as it used to, silently rewrite.
+  const percent =
+    percentProblem("Overhead", draft.overhead) || percentProblem("Profit", draft.profit);
+  if (percent) return percent;
   return null;
 }
 

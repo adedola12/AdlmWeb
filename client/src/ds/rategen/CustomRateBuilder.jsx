@@ -21,6 +21,16 @@
 // per-trade default that does not exist on our server (RG-06, deferred — it
 // changes figures the desktop plugins read). Ours shows the real default the
 // server will apply if the box is left blank, which is 10% and 10%.
+//
+// OVERHEAD AND PROFIT ARE SAVED AS TYPED (S18 review, finding 4)
+//
+// These boxes used to carry max="60", which a browser does not enforce on a
+// typed figure, while the build-up screen clamped to 60 and re-saved at the
+// clamp — so a rate built here at 80% profit became a 60% rate the first time
+// it was opened and saved, and the customer was never told. There is one rule
+// now, percentProblem() in rateMath.js, and both screens keep it: what is in
+// the box is what is stored, and a figure that cannot be stored is refused in
+// words by draftProblem() before anything is written.
 
 import React from "react";
 import { FaTimes } from "../../components/icons.jsx";
@@ -170,7 +180,6 @@ export default function CustomRateBuilder({
         <input
           type="number"
           min="0"
-          max="60"
           step="0.5"
           value={draft.overhead}
           onChange={(e) => set({ overhead: e.target.value })}
@@ -185,7 +194,6 @@ export default function CustomRateBuilder({
         <input
           type="number"
           min="0"
-          max="60"
           step="0.5"
           value={draft.profit}
           onChange={(e) => set({ profit: e.target.value })}

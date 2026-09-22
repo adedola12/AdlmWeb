@@ -136,3 +136,28 @@ describe("draftToPayload", () => {
     expect(p.sectionLabel).toBe("Finishes");
   });
 });
+
+// ── S18 review, finding 4 ───────────────────────────────────────────────────
+// A custom rate could be built at any percentage while the build-up screen
+// clamped to 60 and re-saved at the clamp, so an 80% rate quietly became a 60%
+// rate the first time it was opened and saved. One rule now, and it is the
+// builder's rule too.
+describe("overhead and profit in a custom rate", () => {
+  it("stores 80% when the builder says 80%", () => {
+    const p80 = draftToPayload({ ...draft(), overhead: "15", profit: "80" }, "x", 1);
+    expect(p80.profitPercent).toBe(80);
+    expect(p80.overheadPercent).toBe(15);
+    // And the strip the customer reads in the card is the same arithmetic.
+    const t = draftTotals({ ...draft(), overhead: "15", profit: "80" });
+    expect(t.totalCost).toBeCloseTo(t.netCost * 1.95, 6);
+  });
+
+  it("refuses a negative percentage in the same words as the build-up", () => {
+    expect(draftProblem({ ...draft(), profit: "-5" })).toBe("Profit cannot be less than 0%");
+    expect(draftProblem({ ...draft(), overhead: "-1" })).toBe("Overhead cannot be less than 0%");
+  });
+
+  it("still accepts a blank, which takes the documented default", () => {
+    expect(draftProblem({ ...draft(), overhead: "", profit: "" })).toBe(null);
+  });
+});

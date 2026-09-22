@@ -120,9 +120,21 @@ export function groupComponents(components = []) {
 /**
  * Net, overhead, profit and total from a set of lines and two percentages.
  * Both percentages are taken on net — our rule, and the server's.
+ *
+ * `carriedNet` is the part of a rate's stored net cost that no line explains
+ * (see unexplainedNet). It is CARRIED, not dropped. A master rate's net cost
+ * is often larger than the sum of its itemised lines, and a customer who edits
+ * one quantity must not silently lose that remainder: the rate they save is
+ * the rate their next bill is priced from, so it has to keep its value unless
+ * they changed it themselves.
  */
-export function totalsFrom(components = [], overheadPercent = 0, profitPercent = 0) {
-  const net = components.reduce((n, c) => n + toNum(c.amount), 0);
+export function totalsFrom(
+  components = [],
+  overheadPercent = 0,
+  profitPercent = 0,
+  carriedNet = 0,
+) {
+  const net = components.reduce((n, c) => n + toNum(c.amount), 0) + toNum(carriedNet);
   const oh = toNum(overheadPercent);
   const pr = toNum(profitPercent);
   const overheadValue = (net * oh) / 100;
@@ -150,4 +162,33 @@ export function unexplainedNet(storedNet, components = []) {
   // Normalise -0, which formats as "-₦0.00" and reads as a fault that is not
   // there.
   return v === 0 ? 0 : v;
+}
+
+/**
+ * What is wrong with a typed percentage, in words, or null if nothing is.
+ *
+ * ONE RULE, AND BOTH SCREENS KEEP IT. The build-up used to clamp overhead and
+ * profit to 60% while the box still showed what the user typed, so what was
+ * saved was not what was on screen; the custom-rate builder did not clamp at
+ * all, so a rate built at 80% profit silently became 60% the first time it was
+ * re-saved from the build-up. There is no 60% anywhere in the server, the
+ * desktop or any other screen in this app — it was invented here — so it is
+ * gone. A percentage is saved exactly as it is typed.
+ *
+ * The only figure refused is one that cannot be a percentage of anything: text,
+ * or a negative, which would price a rate below the cost of building it. A
+ * refusal is said out loud and nothing is written; no figure is ever rewritten
+ * behind the customer.
+ *
+ * A blank is not a problem here: each screen documents what blank means (the
+ * build-up reads it as 0, the builder as its stated default) and shows that
+ * figure in its own totals.
+ */
+export function percentProblem(label, value) {
+  const raw = String(value ?? "").trim();
+  if (raw === "") return null;
+  const n = Number(raw.replace(/,/g, ""));
+  if (!Number.isFinite(n)) return `${label} has to be a number`;
+  if (n < 0) return `${label} cannot be less than 0%`;
+  return null;
 }
