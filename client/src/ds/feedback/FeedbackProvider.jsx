@@ -16,6 +16,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { guessTone, toastLife } from "./feedbackRules.js";
 import { FeedbackContext } from "./feedbackContext.js";
+import { useHydrated } from "../../lib/useHydrated.js";
 
 const ICON = {
   success: <path d="M5 12.5l4.2 4.2L19 7" />,
@@ -246,9 +247,11 @@ export function FeedbackProvider({ children }) {
   }, []);
 
   const value = React.useMemo(() => ({ toast, card }), [toast, card]);
+  const hydrated = useHydrated();
 
+  // After hydration only: a server-rendered page has no portal in its HTML.
   const portal =
-    typeof document !== "undefined"
+    hydrated && typeof document !== "undefined"
       ? createPortal(
           <div className="ds" style={{ display: "contents" }}>
             {toasts.length > 0 && (
