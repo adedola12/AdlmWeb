@@ -45,9 +45,12 @@ import {
   buildWorkOverviewPipeline,
   certifiedToDateExpr,
   contractValueExprs,
-  hasActiveEntitlement,
   shapeWorkOverview,
 } from "../util/workOverview.js";
+import {
+  maskSharedMoney,
+  readerMaySeeRates,
+} from "../util/sharedMoney.js";
 import {
   hubSharesAppIdentity,
   isSchemeAwareBindingEnabled,
@@ -1475,46 +1478,9 @@ router.get(
   }),
 );
 
-// May this reader see money on work they do not own?
-//
-// One question, asked the same way as the project routes ask it
-// (routes/projects.js resolveProjectAccess): the owner always may, and a
-// collaborator only with an active RateGen subscription. Everyone else gets a
-// payload with the money zeroed, exactly as maskRates() zeroes it on the
-// project itself.
-async function readerMaySeeRates(userId) {
-  const me = await User.findById(userId, { entitlements: 1 }).lean();
-  return hasActiveEntitlement(me, "rategen");
-}
-
-/**
- * Hide the money on rollup rows the reader does not own, when they may not see
- * rates. The row stays — a collaborator is meant to see the project, its
- * quantities and its progress — but every figure the project API would have
- * masked reads zero here too, and `moneyHidden` says so rather than letting a
- * zero be mistaken for "nothing certified".
- *
- * Only the fields this branch added are masked. totalCost / valuedAmount /
- * remainingAmount have been on this route (and on the per-product list route)
- * since long before it, are read by screens that are not part of this change,
- * and are left exactly as they were.
- */
-function maskSharedMoney(rows, canSeeRates) {
-  if (canSeeRates) return rows;
-  return rows.map((p) =>
-    p.shared
-      ? {
-          ...p,
-          certifiedToDate: 0,
-          provisionalTotal: 0,
-          approvedVariationsTotal: 0,
-          preliminaryTotal: 0,
-          workValue: 0,
-          moneyHidden: true,
-        }
-      : p,
-  );
-}
+// readerMaySeeRates() and maskSharedMoney() used to live here. They moved to
+// util/sharedMoney.js unchanged when the per-product project list needed the
+// same rule — see the imports at the top of this file.
 
 // GET /me/projects-rollup — every project the user owns OR collaborates on,
 // across ALL products (QUIV/HERON/MEP/Civil + their -materials siblings),
