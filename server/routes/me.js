@@ -765,6 +765,10 @@ router.post(
         u.whatsappVerified = false;
         u.whatsappVerifiedAt = null;
         u.whatsappVerifiedNumber = "";
+        // A code sent to the old number cannot prove the new one (review).
+        u.whatsappCodeHash = "";
+        u.whatsappCodeExpires = null;
+        u.whatsappCodeNumber = "";
       }
       u.whatsapp = nextWa;
     }
@@ -2629,6 +2633,7 @@ router.post(
       });
     }
     u.whatsappCodeHash = hashWaCode(code);
+    u.whatsappCodeNumber = to;
     u.whatsappCodeExpires = new Date(Date.now() + WA_CODE_MINUTES * 60_000);
     u.whatsappCodeSentAt = new Date();
     u.whatsappCodeAttempts = 0;
@@ -2651,6 +2656,12 @@ router.post(
     if ((u.whatsappCodeAttempts || 0) >= WA_MAX_ATTEMPTS) {
       return res.status(429).json({ error: "Too many wrong codes. Ask for a new one." });
     }
+    // The code proves the number it was sent to, and only while that is still
+    // the number on the account (review, 2026-09-22).
+    const current = toWhatsAppNumber(u.whatsapp) || "";
+    if (!u.whatsappCodeNumber || u.whatsappCodeNumber !== current) {
+      return res.status(400).json({ error: "The number changed after that code was sent. Ask for a new one." });
+    }
     if (hashWaCode(code) !== u.whatsappCodeHash) {
       u.whatsappCodeAttempts = (u.whatsappCodeAttempts || 0) + 1;
       await u.save();
@@ -2661,8 +2672,9 @@ router.post(
     }
     u.whatsappVerified = true;
     u.whatsappVerifiedAt = new Date();
-    u.whatsappVerifiedNumber = toWhatsAppNumber(u.whatsapp) || "";
+    u.whatsappVerifiedNumber = u.whatsappCodeNumber;
     u.whatsappCodeHash = "";
+    u.whatsappCodeNumber = "";
     u.whatsappCodeExpires = null;
     u.whatsappCodeAttempts = 0;
     await u.save();
