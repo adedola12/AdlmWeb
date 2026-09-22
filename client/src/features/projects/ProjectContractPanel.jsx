@@ -31,7 +31,8 @@ function naira(v) {
 function signedMoney(v, canSeeRates = true) {
   if (!canSeeRates) return "–";
   const n = safeNum(v);
-  return (n > 0 ? "+" : "") + naira(n);
+  if (n === 0) return naira(0);
+  return (n > 0 ? "+" : "−") + naira(Math.abs(n));
 }
 
 function formatDate(v) {
@@ -46,24 +47,6 @@ function bytes(n) {
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
   if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
-
-// A button in his .wk-tabs. The count rides after the label in his muted ink.
-function SubTab({ active, onClick, label, count }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={active ? "on" : ""}
-    >
-      {label}
-      {typeof count === "number" && count > 0 ? (
-        <span style={{ marginLeft: 6, color: "var(--ink-3)" }}>{count}</span>
-      ) : null}
-    </button>
-  );
 }
 
 // His palettes for chips and tones.
@@ -95,21 +78,6 @@ function SectionHead({ title, sub, children }) {
         </div>
       </div>
       {children}
-    </div>
-  );
-}
-
-// His tiles are four fixed columns, sized for short figures. A full naira
-// figure at his tile size is ~210px, so the tiles wrap at a width that fits one.
-const FIT_TILES = { marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" };
-
-// One figure, in his dashboard tile.
-function Tile({ label, value, sub, tone: t, title }) {
-  return (
-    <div className={`dsh-stat${t ? ` ${t}` : ""}`} title={title}>
-      <span className="k">{label}</span>
-      <b>{value}</b>
-      <span className="ds-sub">{sub}</span>
     </div>
   );
 }
