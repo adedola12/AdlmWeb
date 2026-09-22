@@ -1724,9 +1724,10 @@ export default function ProjectBillTable({
     }
     if (provisionalSectionRef.current) {
       out.push({
+        // The sums now live in the Summary, which is where this ref sits.
         id: "provisional",
-        label: "Provisional sums",
-        badge: "PC",
+        label: "Summary",
+        badge: "Σ",
         refGetter: () => provisionalSectionRef.current,
       });
     }
@@ -2276,33 +2277,42 @@ export default function ProjectBillTable({
               ) : null}
 
               {ribbonTab === "provisional" ? (
-                <RibbonGroup title="Provisional sums">
-                  <RibbonButton
-                    icon={FaPlus}
-                    label="Add sum"
-                    onClick={() => {
-                      if (contractLocked) return;
-                      onAddProvisionalSum?.();
-                      setTimeout(
-                        () => scrollToRef(provisionalSectionRef.current),
-                        30,
-                      );
-                    }}
-                    title={
-                      contractLocked
-                        ? "Contract locked. Unlock to add PC sums"
-                        : "Add a provisional / PC sum"
-                    }
-                    disabled={!onAddProvisionalSum || contractLocked}
-                  />
+                <RibbonGroup title="PC and provisional sums">
+                  {[
+                    { kind: "pc", label: "Add PC sum" },
+                    { kind: "provisional", label: "Add provisional sum" },
+                  ].map(({ kind, label }) => (
+                    <RibbonButton
+                      key={kind}
+                      icon={FaPlus}
+                      label={label}
+                      onClick={() => {
+                        if (contractLocked) return;
+                        onAddProvisionalSum?.(kind);
+                        setTimeout(
+                          () => scrollToRef(provisionalSectionRef.current),
+                          30,
+                        );
+                      }}
+                      title={
+                        contractLocked
+                          ? "Contract locked. Unlock to add sums"
+                          : kind === "pc"
+                            ? "Add a prime-cost sum for a nominated supplier or subcontractor"
+                            : "Add an allowance for work that is not yet defined"
+                      }
+                      disabled={!onAddProvisionalSum || contractLocked}
+                    />
+                  ))}
                   <RibbonButton
                     icon={FaListUl}
-                    label="Go to list"
+                    label="Go to Summary"
                     onClick={() => scrollToRef(provisionalSectionRef.current)}
                   />
                   <div className="text-[11px] text-slate-600">
-                    Current total:{" "}
-                    <b className="text-slate-800">{money(provisionalTotal)}</b>
+                    PC <b className="text-slate-800">{money(totals.pc)}</b> ·
+                    provisional{" "}
+                    <b className="text-slate-800">{money(totals.provisional)}</b>
                   </div>
                 </RibbonGroup>
               ) : null}
