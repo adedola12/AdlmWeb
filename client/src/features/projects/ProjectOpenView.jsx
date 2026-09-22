@@ -464,6 +464,11 @@ export default function ProjectOpenView({
   onAddVariation,
   onUpdateVariation,
   onRemoveVariation,
+  // S18 valuations: raise a variation (pending) and decide a pending one.
+  // Distinct from onAddVariation above, which adds a blank row to the Bill's
+  // own editor and saves with the project.
+  onRaiseVariation,
+  onDecideVariation,
   preliminaryItems = [],
   onUpdatePreliminaryItem,
   onAddPreliminaryItem,
@@ -1111,44 +1116,11 @@ export default function ProjectOpenView({
             progressCount={progressCount}
             progressTotal={progressTotal}
           />
-        </div>
-      ) : null}
 
-      {activeTab === "work" ? (
-        <React.Suspense fallback={<div className="wk-empty">Loading the work area…</div>}>
-          <WorkAreaView
-            projectName={projectName}
-            productKey={productKey}
-            projectId={projectId}
-            accessToken={accessToken}
-            items={items}
-            rows={computedShown}
-            projectModels={projectModels}
-            materialItems={materialItems}
-            budgetItems={budgetItems}
-            pmDashboard={pmDashboard}
-            canSeeRates={canSeeRates}
-          />
-        </React.Suspense>
-      ) : null}
-
-      {activeTab === "model" ? (
-        <React.Suspense
-          fallback={<div className="wk-empty">Loading 3D viewer…</div>}
-        >
-          <ModelViewer
-            projectModels={projectModels}
-            items={items}
-            materialItems={materialItems}
-            productKey={productKey}
-            projectId={projectId}
-            accessToken={accessToken}
-          />
-        </React.Suspense>
-      ) : null}
-
-      {activeTab === "bill" ? (
-        <ProjectContractPanel
+          {/* S18 valuations: contract administration lives here now, as one
+              switch — Certificates, Variations, Final account (and our BIM
+              models view, which his design drops but we keep reachable). */}
+          <ProjectContractPanel
           certificates={certificates}
           certBusy={certBusy}
           onIssueCertificate={onIssueCertificate}
@@ -1261,7 +1233,47 @@ export default function ProjectOpenView({
               );
             })()
           }
+          // S18 valuations: the variation rows, and who may act on them.
+          variationRows={variations}
+          onRaiseVariation={onRaiseVariation}
+          onDecideVariation={onDecideVariation}
+          canEditProject={canEdit}
+          canSeeRates={canSeeRates}
         />
+        </div>
+      ) : null}
+
+      {activeTab === "work" ? (
+        <React.Suspense fallback={<div className="wk-empty">Loading the work area…</div>}>
+          <WorkAreaView
+            projectName={projectName}
+            productKey={productKey}
+            projectId={projectId}
+            accessToken={accessToken}
+            items={items}
+            rows={computedShown}
+            projectModels={projectModels}
+            materialItems={materialItems}
+            budgetItems={budgetItems}
+            pmDashboard={pmDashboard}
+            canSeeRates={canSeeRates}
+          />
+        </React.Suspense>
+      ) : null}
+
+      {activeTab === "model" ? (
+        <React.Suspense
+          fallback={<div className="wk-empty">Loading 3D viewer…</div>}
+        >
+          <ModelViewer
+            projectModels={projectModels}
+            items={items}
+            materialItems={materialItems}
+            productKey={productKey}
+            projectId={projectId}
+            accessToken={accessToken}
+          />
+        </React.Suspense>
       ) : null}
 
       {activeTab === "bill" && mergeInfo?.parts?.length > 1 ? (

@@ -13,6 +13,7 @@ import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
 import WkModal from "../ds/WkModal.jsx";
+import { normalizeVariationStatus } from "../lib/variations.js";
 
 // His orange palette, for a note that is a warning rather than information.
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
@@ -246,6 +247,10 @@ function getEndpoints(tool) {
       "/projects/" + t + "/" + id + "/certificates/" + n,
     certificateExport: (id, n) =>
       "/projects/" + t + "/" + id + "/certificates/" + n + "/export",
+    // S18 valuations: raise a variation (pending) and decide a pending one.
+    variations: (id) => "/projects/" + t + "/" + id + "/variations",
+    variationDecision: (id, index) =>
+      "/projects/" + t + "/" + id + "/variations/" + index,
     finalAccountFinalize: (id) =>
       "/projects/" + t + "/" + id + "/final-account/finalize",
     finalAccountReopen: (id) =>
@@ -557,6 +562,8 @@ function variationsEqual(a, b) {
     if (Number(X.rate || 0) !== Number(Y.rate || 0)) return false;
     if (String(X.reference || "") !== String(Y.reference || "")) return false;
     if (String(X.issuedAt || "") !== String(Y.issuedAt || "")) return false;
+    if (normalizeVariationStatus(X.status) !== normalizeVariationStatus(Y.status))
+      return false;
   }
   return true;
 }
@@ -1444,6 +1451,11 @@ export default function ProjectsGeneric() {
           issuedAt: v?.issuedAt
             ? new Date(v.issuedAt).toISOString().slice(0, 10)
             : "",
+          // S18 valuations: carry the approval status through load AND save.
+          // Without it a save would send the row back with no status, the
+          // server would read that as approved, and a variation still waiting
+          // for approval would silently start moving money.
+          status: normalizeVariationStatus(v?.status),
         }))
       : [];
     setVariations(vars);
@@ -2781,6 +2793,7 @@ export default function ProjectsGeneric() {
             rate: Number(v?.rate) || 0,
             reference: String(v?.reference || "").trim(),
             issuedAt: v?.issuedAt || null,
+            status: normalizeVariationStatus(v?.status),
           }))
           .filter((v) => v.description || v.qty > 0 || v.rate > 0),
         preliminaryPercent: Number(contract?.preliminaryPercent) || 0,
@@ -3730,6 +3743,74 @@ export default function ProjectsGeneric() {
   function handleTaxPercentChange(value) {
     const n = Math.max(0, Math.min(100, Number(value) || 0));
     setContract((prev) => ({ ...(prev || {}), taxPercent: n }));
+  }
+
+  // ── Variations: raise one (pending) and decide a pending one ──────────
+  // These go straight to the server rather than through the project save,
+  // for the same reason certificates do: a decision is an act, not a draft
+  // edit. The response is the truth, so local state is replaced from it.
+  function variationsFromServer(rows) {
+    return (Array.isArray(rows) ? rows : []).map((v) => ({
+      description: String(v?.description || ""),
+      qty: Number(v?.qty) || 0,
+      unit: String(v?.unit || ""),
+      rate: Number(v?.rate) || 0,
+      reference: String(v?.reference || ""),
+      issuedAt: v?.issuedAt
+        ? new Date(v.issuedAt).toISOString().slice(0, 10)
+        : "",
+      status: normalizeVariationStatus(v?.status),
+    }));
+  }
+
+  function adoptVariations(rows) {
+    const next = variationsFromServer(rows);
+    setVariations(next);
+    setBaseVariations(next.map((v) => ({ ...v })));
+    setSel((prev) => (prev ? { ...prev, variations: rows } : prev));
+  }
+
+  // A raise/decide replaces the whole list from the server, so unsaved edits
+  // in the Bill's own variations editor would be lost. Say so instead.
+  function variationEditsPending() {
+    if (variationsEqual(variations, baseVariations)) return false;
+    setErr(
+      "Save your variation edits first: raising or deciding a variation reloads the list from the server.",
+    );
+    return true;
+  }
+
+  async function handleRaiseVariation(body) {
+    if (!selectedId || !accessToken) return null;
+    if (variationEditsPending()) return null;
+    try {
+      const result = await apiAuthed(endpoints.variations(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: body || {},
+      });
+      if (result?.variations) adoptVariations(result.variations);
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to add the variation");
+      return null;
+    }
+  }
+
+  async function handleDecideVariation(index, status) {
+    if (!selectedId || !accessToken) return null;
+    if (variationEditsPending()) return null;
+    try {
+      const result = await apiAuthed(
+        endpoints.variationDecision(selectedId, index),
+        { token: accessToken, method: "PATCH", body: { status } },
+      );
+      if (result?.variations) adoptVariations(result.variations);
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to record the decision");
+      return null;
+    }
   }
 
   // ── Interim certificates ──
@@ -5539,6 +5620,8 @@ export default function ProjectsGeneric() {
                 onAddVariation={handleAddVariation}
                 onUpdateVariation={handleUpdateVariation}
                 onRemoveVariation={handleRemoveVariation}
+                onRaiseVariation={handleRaiseVariation}
+                onDecideVariation={handleDecideVariation}
                 preliminaryItems={preliminaryItems}
                 onUpdatePreliminaryItem={handleUpdatePreliminaryItem}
                 onAddPreliminaryItem={handleAddPreliminaryItem}
