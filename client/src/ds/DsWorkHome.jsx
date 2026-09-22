@@ -232,11 +232,12 @@ export default function DsWorkHome() {
       buildDecisions({
         projects: projects || [],
         overview,
+        overviewFailed,
         summary,
         products: PRODUCT,
         cap: 8,
       }),
-    [projects, overview, summary],
+    [projects, overview, overviewFailed, summary],
   );
 
   // Where this browser remembers being, filtered to projects still on the
@@ -337,7 +338,16 @@ export default function DsWorkHome() {
   const ratesPanel = (
     <Panel
       title="RateGen"
-      sub="Recently changed rates"
+      // Where a rate is used comes from the overview, not from the rate
+      // library. If that call did not come back, the Used column is unknown —
+      // and an unknown must not read as "on no bill lines".
+      sub={
+        overviewFailed
+          ? "Recently changed rates · where they are used could not be loaded"
+          : overview === null
+            ? "Recently changed rates · checking where they are used"
+            : "Recently changed rates"
+      }
       more={["Open RateGen", "/work/library"]}
     >
       <OhTable
@@ -454,9 +464,13 @@ export default function DsWorkHome() {
               <span>Certified to date</span>
               <b>{kpi.certified > 0 ? compact(kpi.certified) : DASH}</b>
               <Bar value={kpi.certifiedPct} tone="ok" />
+              {/* Against the work's value, not against measured work alone: a
+                  certificate certifies prelims, provisional sums and approved
+                  variations as well, so the old share divided two different
+                  things and read high on any job carrying prelims. */}
               <em>
-                {kpi.measured > 0
-                  ? `${Math.round(kpi.certifiedPct)}% of measured work`
+                {kpi.value > 0
+                  ? `${Math.round(kpi.certifiedPct)}% of the work's value`
                   : "Nothing measured yet"}
               </em>
             </Link>
@@ -469,10 +483,21 @@ export default function DsWorkHome() {
                   : "Everything measured has a rate"}
               </em>
             </Link>
+            {/* Three of the six kinds of decision come from the overview. Until
+                it arrives this tile does not know the answer, and a count of
+                what we happen to hold would read as "nothing to decide". */}
             <a href="#oh-att" className={decisions.urgent ? "warn" : undefined}>
               <span>Needs a decision</span>
-              <b>{num(decisions.total)}</b>
-              <em>{decisions.urgent ? `${num(decisions.urgent)} urgent` : "Nothing urgent"}</em>
+              <b>{decisions.partial ? DASH : num(decisions.total)}</b>
+              <em>
+                {overviewFailed
+                  ? "Part of this could not be loaded"
+                  : decisions.partial
+                    ? "Still checking"
+                    : decisions.urgent
+                      ? `${num(decisions.urgent)} urgent`
+                      : "Nothing urgent"}
+              </em>
             </a>
           </div>
 
@@ -481,16 +506,37 @@ export default function DsWorkHome() {
             <Panel
               id="oh-att"
               title="Needs a decision"
+              // What the sub line may claim depends on what is known. With the
+              // overview missing, valuations, variations and the programme are
+              // simply not in this list, and the line says so rather than
+              // quoting a total that is only part of one.
               sub={
-                decisions.total > decisions.rows.length
-                  ? `${num(decisions.total)} open · showing the ${decisions.rows.length} most pressing`
-                  : `${num(decisions.total)} open · each opens where it is resolved`
+                decisions.partial
+                  ? overviewFailed
+                    ? "Valuations, variations and the programme could not be loaded"
+                    : "Still checking valuations, variations and the programme"
+                  : decisions.total > decisions.rows.length
+                    ? `${num(decisions.total)} open · showing the ${decisions.rows.length} most pressing`
+                    : `${num(decisions.total)} open · each opens where it is resolved`
               }
-              more={decisions.total > decisions.rows.length ? ["All projects", "/work/projects"] : null}
+              more={
+                !decisions.partial && decisions.total > decisions.rows.length
+                  ? ["All projects", "/work/projects"]
+                  : null
+              }
             >
               <OhTable
                 head={["Type", "What", "Project", ">"]}
                 empty="Nothing is waiting on you."
+                // An empty table would say nothing is waiting. That is only
+                // true when everything that feeds it actually answered.
+                state={
+                  decisions.rows.length === 0 && decisions.partial
+                    ? overviewFailed
+                      ? "That could not be loaded just now."
+                      : "Loading…"
+                    : null
+                }
                 rows={decisions.rows.map((a) => (
                   <tr key={a.id} className={a.urgent ? "urgent" : undefined}>
                     <td>
@@ -595,6 +641,9 @@ export default function DsWorkHome() {
                     p.clientName || null,
                     p.mergedInto ? "linked services" : null,
                     p.accessLevel === "view" ? "view only" : null,
+                    // Says why the certified column reads as an en dash on
+                    // somebody else's project: the figure is withheld, not zero.
+                    p.moneyHidden ? "money hidden" : null,
                     p.isMaterials ? "material schedule" : null,
                   ].filter(Boolean);
                   return (
@@ -645,7 +694,10 @@ export default function DsWorkHome() {
                           <ProjectCell p={row} tab="valuation" />
                         </td>
                         <td className="mute">{short(row.date)}</td>
-                        <td className="n">{money(row.netPayable)}</td>
+                        {/* Money on somebody else's project, hidden by the
+                            server on the same rule the project page uses. An
+                            en dash, never a zero that reads as "nothing". */}
+                        <td className="n">{row.moneyHidden ? DASH : money(row.netPayable)}</td>
                         <td>
                           <span className={`pj-stage ${cls}`}>{label}</span>
                         </td>
@@ -664,8 +716,14 @@ export default function DsWorkHome() {
                       </td>
                       <td className="mute">{short(row.issuedAt)}</td>
                       <td className="n">
-                        {row.amount < 0 ? "−" : "+"}
-                        {money(Math.abs(row.amount))}
+                        {row.moneyHidden ? (
+                          DASH
+                        ) : (
+                          <>
+                            {row.amount < 0 ? "−" : "+"}
+                            {money(Math.abs(row.amount))}
+                          </>
+                        )}
                       </td>
                       <td>
                         <span className={`pj-stage ${cls}`}>{label}</span>

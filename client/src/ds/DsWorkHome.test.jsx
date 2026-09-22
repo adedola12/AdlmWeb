@@ -58,6 +58,7 @@ const base = () => {
     pendingVariations: [],
     tasks: [],
     rateUsage: [],
+    counts: { draftCertificates: 0, pendingVariations: 0, overdueTasks: 0 },
   };
   responses["/me/summary"] = { installations: [], entitlements: [] };
   responses["/rategen-v2/library/custom-rates"] = { items: [] };
@@ -97,11 +98,15 @@ describe("the Work overview, rebuilt as one dashboard", () => {
     expect(within(tile).getByText(/1 project at the rates they were priced with/)).toBeTruthy();
   });
 
-  it("shows certified value as a share of measured work", async () => {
+  it("shows certified value as a share of what the work is worth", async () => {
+    // 10m certified against a job worth 50m — measured work is only 40m of
+    // that, and dividing by it would claim 25%.
+    responses["/me/projects-rollup"] = { projects: [project({ workValue: 50_000_000 })] };
     mount();
     const tile = (await screen.findByText("Certified to date")).closest("a");
     expect(within(tile).getByText("₦10.0m")).toBeTruthy();
-    expect(within(tile).getByText("25% of measured work")).toBeTruthy();
+    expect(within(tile).getByText("20% of the work's value")).toBeTruthy();
+    expect(within(tile).queryByText(/of measured work/)).toBeNull();
   });
 
   it("shows an en dash, never a guess, where nothing is certified", async () => {
@@ -203,6 +208,110 @@ describe("the Work overview, rebuilt as one dashboard", () => {
     await screen.findByText("Projects");
     expect(screen.getByText("Measured work, all projects")).toBeTruthy();
     expect(screen.getAllByText("That could not be loaded just now.").length).toBe(2);
+  });
+
+  it("admits it cannot see the decisions rather than reporting none", async () => {
+    // Three of the six kinds of decision live on /me/work-overview. With that
+    // call dead the screen knows about the unpriced items and nothing else, so
+    // it must not put a confident number on the tile.
+    failing.add("/me/work-overview");
+    const { container } = mount();
+    await screen.findByText("Projects");
+    const tile = container.querySelector('a[href="#oh-att"]');
+    expect(within(tile).getByText("–")).toBeTruthy();
+    expect(within(tile).getByText("Part of this could not be loaded")).toBeTruthy();
+    expect(
+      screen.getByText("Valuations, variations and the programme could not be loaded"),
+    ).toBeTruthy();
+    // What it does know is still offered.
+    expect(screen.getByText("20 items need a rate")).toBeTruthy();
+  });
+
+  it("never says nothing is waiting when it could not look", async () => {
+    failing.add("/me/work-overview");
+    responses["/me/projects-rollup"] = { projects: [project({ unpricedCount: 0 })] };
+    mount();
+    await screen.findByText("Projects");
+    const panel = screen.getByRole("heading", { name: "Needs a decision" }).closest("section");
+    expect(within(panel).queryByText("Nothing is waiting on you.")).toBeNull();
+    expect(within(panel).getByText("That could not be loaded just now.")).toBeTruthy();
+  });
+
+  it("does not claim a rate is on no bill lines when usage could not be loaded", async () => {
+    failing.add("/me/work-overview");
+    responses["/rategen-v2/library/custom-rates"] = {
+      items: [
+        {
+          id: "r1",
+          title: "Blockwork 225mm",
+          description: "Blockwork 225mm",
+          unit: "m2",
+          totalCost: 12_000,
+          updatedAt: "2026-09-18T00:00:00Z",
+        },
+      ],
+    };
+    mount();
+    await screen.findByText("Blockwork 225mm");
+    expect(
+      screen.getByText("Recently changed rates · where they are used could not be loaded"),
+    ).toBeTruthy();
+  });
+
+  it("quotes the server's own count, not the handful of rows it sent", async () => {
+    const draft = (n) => ({
+      projectId: `p${n}`,
+      name: `Block ${n}`,
+      slug: `p${n}`,
+      productKey: "planswift",
+      number: n,
+      date: "2026-09-10T00:00:00Z",
+      netPayable: 0,
+      status: "draft",
+    });
+    responses["/me/projects-rollup"] = { projects: [project({ unpricedCount: 0 })] };
+    responses["/me/work-overview"] = {
+      ...responses["/me/work-overview"],
+      draftCertificates: Array.from({ length: 8 }, (_, i) => draft(i + 1)),
+      counts: { draftCertificates: 31, pendingVariations: 0, overdueTasks: 0 },
+    };
+    const { container } = mount();
+    await screen.findByText("Projects");
+    const tile = container.querySelector('a[href="#oh-att"]');
+    expect(within(tile).getByText("31")).toBeTruthy();
+    expect(screen.getByText("31 open · showing the 8 most pressing")).toBeTruthy();
+  });
+
+  it("hides money on a shared project instead of printing a zero", async () => {
+    responses["/me/projects-rollup"] = {
+      projects: [
+        project({ shared: true, accessLevel: "view", certifiedToDate: 0, moneyHidden: true }),
+      ],
+    };
+    responses["/me/work-overview"] = {
+      ...responses["/me/work-overview"],
+      certificates: [
+        {
+          projectId: "p1",
+          name: "MOREMI ESTATE BLOCK A",
+          slug: "moremi",
+          productKey: "planswift",
+          number: 2,
+          date: "2026-09-10T00:00:00Z",
+          netPayable: 0,
+          cumulativeValue: 0,
+          status: "approved",
+          shared: true,
+          moneyHidden: true,
+        },
+      ],
+    };
+    mount();
+    const cert = (await screen.findByText("IPC 2")).closest("tr");
+    // An en dash, not ₦0 — the figure is withheld, not nothing.
+    expect(within(cert).getByText("–")).toBeTruthy();
+    expect(within(cert).queryByText("₦0")).toBeNull();
+    expect(screen.getByText(/· money hidden/)).toBeTruthy();
   });
 
   it("takes the page down only when the rollup itself fails", async () => {

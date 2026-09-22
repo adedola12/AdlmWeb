@@ -117,7 +117,37 @@ describe("needs a decision", () => {
   it("keeps the three-month row, in days, from the real date", () => {
     const d = buildDecisions({ projects: [project({ updatedAt: days(-120) })], now: NOW });
     expect(d.rows[0].kind).toBe("Stale");
-    expect(d.rows[0].text).toBe("Not opened in 120 days");
+    // updatedAt records the last CHANGE. Nothing we store knows when a project
+    // was last opened, so the row does not claim to.
+    expect(d.rows[0].text).toBe("Last changed 120 days ago");
+    expect(d.rows[0].text).not.toMatch(/opened/);
+  });
+
+  it("gives every row a key of its own, even when the data repeats", () => {
+    const at = (n) => new Date(NOW - n * 86400000).toISOString();
+    const d = buildDecisions({
+      projects: [project({ id: undefined, unpricedCount: 1 }), project({ id: undefined, unpricedCount: 2 })],
+      overview: {
+        // Two projects on IPC 1; one project with two unnamed variations and
+        // two tasks of the same name — all of it happens on real accounts.
+        draftCertificates: [
+          { projectId: "a", productKey: "revit", slug: "a", number: 1, date: at(1) },
+          { projectId: "b", productKey: "revit", slug: "b", number: 1, date: at(2) },
+        ],
+        pendingVariations: [
+          { projectId: "a", productKey: "revit", slug: "a", issuedAt: at(1) },
+          { projectId: "a", productKey: "revit", slug: "a", issuedAt: at(2) },
+        ],
+        tasks: [
+          { projectId: "a", productKey: "revit", slug: "a", task: "Blockwork", endDate: at(9) },
+          { projectId: "a", productKey: "revit", slug: "a", task: "Blockwork", endDate: at(8) },
+        ],
+      },
+      now: NOW,
+      cap: 20,
+    });
+    const ids = d.rows.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("keeps the install row, and only for products that really install", () => {
@@ -143,7 +173,7 @@ describe("needs a decision", () => {
     const projects = Array.from({ length: 30 }, (_, i) =>
       project({ id: `p${i}`, slug: `p${i}`, unpricedCount: i + 1, updatedAt: days(-200) }),
     );
-    const d = buildDecisions({ projects, now: NOW, cap: 8 });
+    const d = buildDecisions({ projects, overview: { counts: {} }, now: NOW, cap: 8 });
     expect(d.rows.length).toBe(8);
     // 30 unpriced + 30 stale, all real.
     expect(d.total).toBe(60);
@@ -173,14 +203,72 @@ describe("needs a decision", () => {
     expect(buildDecisions({}).rows).toEqual([]);
     expect(buildDecisions({ projects: [], overview: null, summary: null }).total).toBe(0);
   });
+
+  it("counts what the server says there are, not the few rows it sent", () => {
+    // The server caps each kind at 8. Counting the rows and calling it the
+    // total told a person with 31 draft certificates that they had 8.
+    const cert = (i) => ({
+      projectId: `p${i}`,
+      name: "Block A",
+      slug: `p${i}`,
+      productKey: "planswift",
+      number: i,
+      date: days(-i),
+    });
+    const d = buildDecisions({
+      projects: [],
+      overview: {
+        draftCertificates: Array.from({ length: 8 }, (_, i) => cert(i + 1)),
+        counts: { draftCertificates: 31, pendingVariations: 6, overdueTasks: 2 },
+      },
+      now: NOW,
+      cap: 8,
+    });
+    expect(d.rows.length).toBe(8);
+    expect(d.total).toBe(31 + 6 + 2);
+    expect(d.urgent).toBe(2);
+    expect(d.partial).toBe(false);
+  });
+
+  it("never reports fewer than the rows it is actually showing", () => {
+    const d = buildDecisions({
+      projects: [],
+      overview: {
+        draftCertificates: [
+          { projectId: "p1", name: "Block A", slug: "p1", productKey: "planswift", number: 1, date: days(-1) },
+        ],
+        // An older response, or one where the branch came back empty.
+        counts: { draftCertificates: 0, pendingVariations: 0, overdueTasks: 0 },
+      },
+      now: NOW,
+    });
+    expect(d.total).toBe(1);
+  });
+
+  it("says it does not know, rather than nothing, when the overview failed", () => {
+    const failed = buildDecisions({
+      projects: [],
+      overview: null,
+      overviewFailed: true,
+      now: NOW,
+    });
+    expect(failed.partial).toBe(true);
+    expect(failed.rows).toEqual([]);
+
+    // Still loading is also "not known yet".
+    expect(buildDecisions({ projects: [], overview: null, now: NOW }).partial).toBe(true);
+    // Arrived: now the answer is complete.
+    expect(buildDecisions({ projects: [], overview: { counts: {} }, now: NOW }).partial).toBe(false);
+  });
 });
 
 describe("headline figures", () => {
-  const p = (totalCost, certifiedToDate, unpricedCount, accessLevel = "owner") => ({
+  const p = (totalCost, certifiedToDate, unpricedCount, accessLevel = "owner", extra = {}) => ({
     totalCost,
     certifiedToDate,
     unpricedCount,
     accessLevel,
+    ...extra,
   });
 
   it("sums measured work and certified value from the rollup", () => {
@@ -192,9 +280,27 @@ describe("headline figures", () => {
     expect(h.unpricedProjects).toBe(1);
   });
 
+  it("compares certified value with the whole of the work, not with measured work", () => {
+    // A certificate certifies prelims, provisional sums and approved
+    // variations too, so 5m certified on a 10m bill that is really worth 20m
+    // is a quarter of the job — not a half.
+    const h = headline([p(10_000_000, 5_000_000, 0, "owner", { workValue: 20_000_000 })]);
+    expect(h.value).toBe(20_000_000);
+    expect(h.certifiedPct).toBe(25);
+    // Measured work is still reported, because the first tile shows it.
+    expect(h.measured).toBe(10_000_000);
+  });
+
+  it("falls back to measured work where a row carries no value of its own", () => {
+    const h = headline([p(10_000_000, 4_000_000, 0)]);
+    expect(h.value).toBe(10_000_000);
+    expect(h.certifiedPct).toBe(40);
+  });
+
   it("does not divide by a portfolio worth nothing", () => {
     expect(headline([p(0, 0, 0)]).certifiedPct).toBe(0);
     expect(headline([]).measured).toBe(0);
+    expect(headline([]).value).toBe(0);
   });
 
   it("leaves a read-only project out of the work waiting for a rate", () => {
