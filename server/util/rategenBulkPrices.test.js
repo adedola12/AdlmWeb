@@ -43,7 +43,7 @@ test("effectivePrice ignores an override written for somewhere else", () => {
   assert.equal(effectivePrice(rows[0], ov, "material", "lagos"), 9000);
 });
 
-test("a category raise touches only that category, rounded to whole naira", () => {
+test("a category raise touches only that category", () => {
   const out = planBulkPriceChange({
     rows,
     overrides: [],
@@ -104,16 +104,43 @@ test("zero percent writes nothing at all", () => {
 });
 
 test("a row whose rounded price does not move is not written", () => {
-  // 0.001% of 9000 rounds back to 9000: no change, so no override is created
-  // that would freeze the row against later published corrections.
+  // 0.00001% of 9000 rounds back to 9000.00: no change, so no override is
+  // created that would freeze the row against later published corrections.
   const out = planBulkPriceChange({
     rows: [rows[0]],
     overrides: [],
     kind: "material",
-    percent: 0.001,
+    percent: 0.00001,
   });
   assert.equal(out.changed, 0);
   assert.equal(out.overrides.length, 0);
+});
+
+// S18 review, finding 8: whole-naira rounding quietly ate the kobo off a
+// price the customer had set by hand.
+test("a customer's own kobo-precise price keeps its kobo", () => {
+  const overrides = [
+    { kind: "material", name: "Cement", unit: "bag", price: 9500.5, state: "lagos" },
+  ];
+  const out = planBulkPriceChange({
+    rows: [rows[0]],
+    overrides,
+    kind: "material",
+    percent: 5,
+    stateKey: "lagos",
+  });
+  // 9,500.50 + 5% is 9,975.525, which is 9,975.53 — not 9,976.
+  assert.equal(out.overrides.find((o) => o.name === "Cement").price, 9975.53);
+});
+
+test("a whole-naira price still comes out whole", () => {
+  const out = planBulkPriceChange({
+    rows: [rows[0]],
+    overrides: [],
+    kind: "material",
+    percent: 8,
+  });
+  assert.equal(out.overrides[0].price, 9720);
 });
 
 test("overrides for another kind or another state survive untouched", () => {

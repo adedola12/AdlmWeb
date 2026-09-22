@@ -275,12 +275,36 @@ export default function DsWorkRate() {
         // read for its composition. They are rebuilt from the edited lines
         // rather than sent empty, which would quietly strip a saved rate of
         // its composition everywhere outside this screen.
+        // The category a line was filed under lives on materials[]/labour[],
+        // not on the breakdown this screen reads, so re-saving from here used
+        // to blank it on every line. Carried across by the same name-and-unit
+        // key the catalogue is identified by.
+        // (priceAsOf is not carried because it is not stored: neither
+        // BreakdownLineSchema nor UserCustomRateLineSchema in
+        // server/models/RateGenLibrary.js has the field, so a user rate has
+        // never held one.)
+        const filedUnder = new Map();
+        for (const l of [...(rate.materials || []), ...(rate.labour || [])]) {
+          const k = `${String(l.description || "").trim().toLowerCase()}|${String(
+            l.unit || "",
+          )
+            .trim()
+            .toLowerCase()}`;
+          if (l.category) filedUnder.set(k, l.category);
+        }
+
         const asLine = (c) => ({
           description: c.name,
           quantity: Math.max(0, toNum(c.quantity)),
           unit: c.unit || "",
           unitPrice: c.unitPrice,
           totalCost: c.amount,
+          category:
+            filedUnder.get(
+              `${String(c.name || "").trim().toLowerCase()}|${String(c.unit || "")
+                .trim()
+                .toLowerCase()}`,
+            ) || "",
           refSn: c.refSn ?? null,
           refName: c.refName || c.name,
         });

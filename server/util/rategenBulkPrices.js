@@ -72,8 +72,11 @@ export const MAX_BULK_ROWS = 1000;
  * priceOverrides array, so the caller does one assignment and one save.
  *
  *  - `percent` may be negative (a reduction). Zero changes nothing.
- *  - prices round to whole naira, because that is the unit the catalogue is
- *    quoted in and a kobo on a bulk move is noise.
+ *  - prices round to the kobo. They used to round to whole naira, which reads
+ *    as tidy until it meets a customer's own price: someone who had corrected
+ *    a row to 9,500.50 by hand lost the 50k the first time they moved the
+ *    category. The single-row route stores whatever they type, so a bulk move
+ *    has no business being coarser than the figure it starts from.
  *  - a price never goes below zero.
  *  - `category` null or "all" means every row of that kind.
  */
@@ -112,7 +115,7 @@ export function planBulkPriceChange({
     if (!name) continue;
     const unit = String(row.unit ?? "").trim();
     const before = effectivePrice(row, overrides, kind, stateKey);
-    const after = Math.max(0, Math.round(before * (1 + pc / 100)));
+    const after = Math.max(0, Math.round(before * (1 + pc / 100) * 100) / 100);
     // A row whose price does not actually move is not a change. Writing it
     // would still create an override, which quietly freezes that row against
     // future published corrections for no gain.

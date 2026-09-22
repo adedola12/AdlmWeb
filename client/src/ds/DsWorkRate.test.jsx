@@ -410,3 +410,25 @@ describe("a customer's own copy with no build-up of its own", () => {
     expect(container.textContent).toContain("10,000");
   });
 });
+
+// ── S18 review, finding 8 ───────────────────────────────────────────────────
+describe("re-saving a custom rate from the build-up", () => {
+  it("keeps the category each line was filed under", async () => {
+    stub({ customs: [customRate] });
+    const { findByText, getByLabelText, getByText } = mount("custom:tiling-x1");
+    await findByText("Ceramic tiling 300x300");
+
+    fireEvent.change(getByLabelText("Quantity of Ceramic tile"), { target: { value: "1.1" } });
+    await waitFor(() => getByText("Save to my library"));
+    fireEvent.click(getByText("Save to my library"));
+
+    await waitFor(() => {
+      const call = apiAuthed.mock.calls.find(([, i]) => i?.method === "PUT");
+      // The category lives on materials[]/labour[], which this screen rebuilds.
+      // It used to be rebuilt without it, blanking the filing on every save.
+      expect(call[1].body.materials[0].category).toBe("Tiling");
+      expect(call[1].body.labour[0].category).toBe("Finishing");
+      expect(call[1].body.materials[0].description).toBe("Ceramic tile");
+    });
+  });
+});
