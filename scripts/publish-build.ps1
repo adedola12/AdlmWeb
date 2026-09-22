@@ -260,13 +260,19 @@ Write-Host "  version     : $($saved.version)"
 Write-Host "  packageUri  : $($saved.packageUri)"
 Write-Host "  sha256      : $($saved.sha256)"
 Write-Host "  operations  : $(@($saved.operations).Count) step(s)"
-Write-Host "  envVars     : $(@($saved.envVars.PSObject.Properties).Count) set"
+if ($putResp.pendingApproval) {
+    # Release gate: the staged item only carries envVars when the PUT sent
+    # them, and this script never does. Approval leaves the stored ones alone.
+    Write-Host "  envVars     : unchanged ($(@($current.envVars.PSObject.Properties).Count) set on the live record)"
+} else {
+    Write-Host "  envVars     : $(@($saved.envVars.PSObject.Properties).Count) set"
+}
 
 $problems = @()
 if ($saved.version -ne $Version) { $problems += "version did not stick" }
 if ($saved.sha256 -ne $sha) { $problems += "sha256 did not stick" }
 if (@($saved.operations).Count -ne @($current.operations).Count) { $problems += "operations count changed - install steps were lost" }
-if (@($saved.envVars.PSObject.Properties).Count -lt @($current.envVars.PSObject.Properties).Count) { $problems += "envVars were lost - ADLM_API_BASE_URL may be gone" }
+if (-not $putResp.pendingApproval -and @($saved.envVars.PSObject.Properties).Count -lt @($current.envVars.PSObject.Properties).Count) { $problems += "envVars were lost - ADLM_API_BASE_URL may be gone" }
 
 if ($problems.Count) {
     Write-Host ""
