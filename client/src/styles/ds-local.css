@@ -1578,3 +1578,12 @@
 /* P0.4: index.css paints every input in dark mode (.dark input:not(...)),
    which outranks his transparent search field in the project gallery. */
 :root.dark .ds .pj-search input{background:none;color:var(--ink)}
+
+/* S18 PR2-17: his Gantt marks a milestone as a rotated square at its date
+   and a critical task with a small dot before the name. His own rules are
+   scoped to .pj-gantt; the project work area draws the same programme in
+   .wk-gantt, so the two marks are repeated here on his tokens. */
+.ds .wk-gr .g .wk-dm{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;
+  transform:rotate(45deg);background:var(--fb-warn);border-radius:2px}
+.ds .wk-gr .t .wk-crit{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--fb-err);margin-right:6px;vertical-align:middle}

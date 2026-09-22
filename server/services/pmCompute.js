@@ -378,6 +378,39 @@ function hydrateTaskCost(task, itemIndex) {
   };
 }
 
+// S18: what the task's own bill lines say it is, weighted by value.
+//
+// READ ONLY. Progress is still recorded on the task and pushed down to its
+// bill lines — this is only so the PM screens can SHOW what the bill reads
+// and flag a task whose figure has drifted from it. Returns null when the
+// task has no linked line, or when the linked lines are all worth nothing
+// (there is no honest weighted percentage of zero).
+function billPercentForTask(task, itemIndex) {
+  const links = Array.isArray(task?.linkedBoqIdentities)
+    ? task.linkedBoqIdentities
+    : [];
+  if (!links.length) return null;
+  const weights = Array.isArray(task?.linkedBoqWeights) ? task.linkedBoqWeights : [];
+  let value = 0;
+  let earned = 0;
+  let matched = 0;
+  for (let i = 0; i < links.length; i += 1) {
+    const entry = itemIndex.get(links[i]);
+    if (!entry) continue;
+    matched += 1;
+    const raw = Number(weights[i]);
+    const weight = (Number.isFinite(raw) ? raw : 100) / 100;
+    const share = safeNum(entry.plannedAmount) * weight;
+    value += share;
+    earned += (share * clamp(entry.percentComplete, 0, 100)) / 100;
+  }
+  if (!matched || value <= 0) return null;
+  return {
+    percent: Math.round(((earned / value) * 100) * 10) / 10,
+    lineCount: matched,
+  };
+}
+
 function summariseTasks(tasks, itemIndex, now) {
   const todayMs = now.getTime();
   const buckets = {
@@ -425,6 +458,8 @@ function summariseTasks(tasks, itemIndex, now) {
     const pct = clamp(task?.percentComplete, 0, 100);
     const { baselineCost, derivedActualCost } = hydrateTaskCost(task, itemIndex);
     const earned = (baselineCost * pct) / 100;
+    // S18: read-only, for display. Never feeds a total.
+    const fromBill = billPercentForTask(task, itemIndex);
 
     let isOverdue = false;
     if (
@@ -532,6 +567,11 @@ function summariseTasks(tasks, itemIndex, now) {
         plannedDuration,
         actualDuration,
         scheduleVarianceDays,
+        // S18: what this task's own bill lines read, weighted by value, and
+        // how many of them answered. Display only — the task's own
+        // percentComplete above is still what every figure is built on.
+        billPercentComplete: fromBill ? fromBill.percent : null,
+        billLineCount: fromBill ? fromBill.lineCount : 0,
       },
     };
   });
@@ -1460,4 +1500,4 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   };
 }
 
-export { itemIdentity as _itemIdentity };
+export { itemIdentity as _itemIdentity, billPercentForTask as _billPercentForTask };

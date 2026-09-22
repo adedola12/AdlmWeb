@@ -19,6 +19,7 @@ import { parseMsProjectFile } from "../util/msProjectParser.js";
 import { generateIcs, suggestedIcsFilename } from "../util/icsExporter.js";
 import { bestMatch, normalizeTaskName } from "../util/fuzzyMatch.js";
 import { TaskLinkLearned } from "../models/TaskLinkLearned.js";
+import { deriveItemCategory, UNCATEGORIZED } from "../util/boqCategory.js";
 import { isApprovedVariation } from "../util/variationStatus.js";
 
 const PM_IMPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -732,6 +733,113 @@ async function reschedulePm(req, res) {
   }
 }
 
+// S18 PR2-18: plan the bill lines that are in no task.
+//
+// One task per element (the bill's own category), linked to that element's
+// unplanned lines, starting after the last task already programmed. Each
+// task runs 21 days and the next starts 14 days later, so the new work reads
+// as a sequence rather than landing all on one day. Weights stay at 100, and
+// an identity that is already linked is never included, so the BoQ-to-WBS
+// coverage can only improve.
+async function planUnlinkedBillLines(req, res, project, ctx) {
+  const items = Array.isArray(project.items) ? project.items : [];
+  const groups = new Map(); // category → { identities, cost, order }
+  items.forEach((item, idx) => {
+    const identity = _itemIdentity(item, idx);
+    if (ctx.byIdentity.has(String(identity))) return;
+    const category =
+      String(item?.category || "").trim() ||
+      deriveItemCategory(item, project.productKey) ||
+      UNCATEGORIZED;
+    const g = groups.get(category) || { identities: [], cost: 0, order: idx };
+    g.identities.push(identity);
+    g.cost += safeNum(item?.qty) * safeNum(item?.rate);
+    groups.set(category, g);
+  });
+
+  if (groups.size === 0) {
+    return res.json({
+      ok: true,
+      generated: 0,
+      message: "Every bill line is already in a task.",
+      dashboard: computePmDashboard(project),
+      version: project.version,
+    });
+  }
+
+  // Start after the programme that already exists, never on top of it.
+  const DAY = 24 * 60 * 60 * 1000;
+  let latestEnd = null;
+  for (const t of ctx.existingTasks) {
+    const end = parseOptionalDate(t?.endDate);
+    if (end && (!latestEnd || end > latestEnd)) latestEnd = end;
+  }
+  const base =
+    ctx.requestedStart ||
+    (latestEnd ? new Date(latestEnd.getTime() + DAY) : null) ||
+    project.projectManagement?.projectStart ||
+    new Date();
+
+  const ordered = [...groups.entries()].sort((a, b) => a[1].order - b[1].order);
+  const made = [];
+  ordered.forEach(([category, g], i) => {
+    const start = new Date(base.getTime() + i * 14 * DAY);
+    const end = new Date(start.getTime() + 21 * DAY);
+    const task = sanitizeTask({
+      taskId: genId("boq"),
+      name: `${category} (unplanned bill lines)`.slice(0, 200),
+      startDate: start,
+      endDate: end,
+      baselineStart: start,
+      baselineEnd: end,
+      durationDays: 21,
+      percentComplete: 0,
+      baselineCost: g.cost,
+      status: "not-started",
+      priority: "medium",
+      linkedBoqIdentities: g.identities,
+      linkedBoqWeights: g.identities.map(() => 100),
+      source: "boq",
+    });
+    if (task) made.push(task);
+  });
+
+  project.projectManagement.tasks = [...ctx.existingTasks, ...made];
+  const lastEnd = made.length ? made[made.length - 1].endDate : null;
+  if (!project.projectManagement.projectStart) {
+    project.projectManagement.projectStart = base;
+  }
+  if (
+    lastEnd &&
+    (!project.projectManagement.projectFinish ||
+      project.projectManagement.projectFinish < lastEnd)
+  ) {
+    project.projectManagement.projectFinish = lastEnd;
+  }
+  if (!project.projectManagement.baselineDate) {
+    project.projectManagement.baselineDate = new Date();
+  }
+
+  touchPm(project);
+  project.version += 1;
+  await project.save();
+
+  recordActivity(
+    req,
+    project,
+    ACT.PM_GENERATED,
+    `Planned ${made.length} task(s) for bill lines that were in no task`,
+    { generated: made.length, mode: "unlinked" },
+  );
+  return res.json({
+    ok: true,
+    generated: made.length,
+    dashboard: computePmDashboard(project),
+    version: project.version,
+  });
+}
+
+
 // ── POST generate-from-boq ───────────────────────────────────────────────
 // Creates one task per BoQ item, linked back via linkedBoqIdentities so its
 // baselineCost stays in sync with the item's qty × rate. Tasks are evenly
@@ -761,6 +869,18 @@ async function generateFromBoq(req, res) {
       for (const id of t.linkedBoqIdentities || []) {
         byIdentity.set(String(id), t);
       }
+    }
+
+    // S18 PR2-18: "Plan them" — one task per element for the bill lines that
+    // are in no task yet, placed after everything already programmed. It
+    // never touches a line that is already linked, so nothing is planned
+    // twice and no existing task moves.
+    if (req.body?.onlyUnlinked === true) {
+      return planUnlinkedBillLines(req, res, project, {
+        requestedStart,
+        byIdentity,
+        existingTasks,
+      });
     }
 
     const start = requestedStart || project.projectManagement?.projectStart || new Date();

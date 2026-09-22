@@ -1677,7 +1677,12 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function handlePmGenerateFromBoq({ projectStart, projectFinish } = {}) {
+  async function handlePmGenerateFromBoq({
+    projectStart,
+    projectFinish,
+    // S18 PR2-18: plan only the bill lines that are in no task yet.
+    onlyUnlinked = false,
+  } = {}) {
     if (!selectedId) return;
     setPmGenerating(true);
     setPmImportError("");
@@ -1685,13 +1690,20 @@ export default function ProjectsGeneric() {
       const body = {};
       if (projectStart) body.projectStart = projectStart;
       if (projectFinish) body.projectFinish = projectFinish;
+      if (onlyUnlinked) body.onlyUnlinked = true;
       const data = await apiAuthed(endpoints.pmGenerateFromBoq(selectedId), {
         token: accessToken,
         method: "POST",
         body,
       });
       if (data?.dashboard) setPmDashboard(data.dashboard);
-      setNotice(`Generated ${data?.generated || 0} task(s) from BoQ.`);
+      setNotice(
+        onlyUnlinked
+          ? data?.generated
+            ? `${data.generated} task(s) added for bill lines that were in no task.`
+            : "Every bill line is already in a task."
+          : `Generated ${data?.generated || 0} task(s) from BoQ.`,
+      );
     } catch (e) {
       setPmImportError(e?.message || "Failed to generate tasks from BoQ.");
     } finally {
