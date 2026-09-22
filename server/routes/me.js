@@ -41,6 +41,11 @@ import {
 } from "../util/boqImportAccess.js";
 import { blankToUndefined } from "../util/profileInput.js";
 import {
+  baseProductKeyExpr,
+  buildWorkOverviewPipeline,
+  shapeWorkOverview,
+} from "../util/workOverview.js";
+import {
   hubSharesAppIdentity,
   isSchemeAwareBindingEnabled,
 } from "../util/deviceIdentity.js";
@@ -1554,45 +1559,11 @@ router.get(
           // "planswift" import is a HERON project. Filing every import under
           // QUIV showed HERON imports in the QUIV folder, and they then
           // opened as HERON.
-          baseProductKey: {
-            $let: {
-              vars: {
-                k: { $toLower: { $ifNull: ["$productKey", ""] } },
-              },
-              in: {
-                $switch: {
-                  branches: [
-                    {
-                      case: { $in: ["$$k", ["revit-materials", "revit-material"]] },
-                      then: "revit",
-                    },
-                    {
-                      case: { $in: ["$$k", ["planswift-materials", "planswift-material"]] },
-                      then: "planswift",
-                    },
-                    {
-                      case: {
-                        $in: [
-                          "$$k",
-                          ["mep-materials", "mep-material", "revitmep-materials"],
-                        ],
-                      },
-                      then: "mep",
-                    },
-                    {
-                      case: { $in: ["$$k", ["civil3d-materials", "civil3d-material"]] },
-                      then: "civil3d",
-                    },
-                    {
-                      case: { $in: ["$$k", ["archicad-materials", "archicad-material"]] },
-                      then: "archicad",
-                    },
-                  ],
-                  default: "$$k",
-                },
-              },
-            },
-          },
+          //
+          // The expression itself lives in util/workOverview.js, so this route
+          // and GET /me/work-overview can never disagree about which product a
+          // row belongs to.
+          baseProductKey: baseProductKeyExpr(),
           publicShareEnabled: 1,
           updatedAt: 1,
           version: 1,
@@ -1655,6 +1626,112 @@ router.get(
               $map: { input: "$safeItems", as: "item", in: valuationFactor },
             },
           },
+
+          // ── Additive fields for the Work overview (S18/WH-03, WH-06) ──
+          // Every one is derived from data already stored. Nothing is renamed,
+          // nothing is removed, and no existing field changes shape, so the
+          // desktop plugins (which never read this web-only route anyway) and
+          // the screens that already use it are untouched.
+
+          // The employer the bill is being prepared for. Stored since the BoQ
+          // cover needed it; the overview's project table shows it.
+          clientName: { $ifNull: ["$clientName", ""] },
+          // Set on a SOURCE project that has been merged into a container —
+          // i.e. this project's work is claimed as linked services elsewhere.
+          mergedInto: 1,
+
+          // What this user may do here. The rollup already carried `shared`,
+          // which only says "somebody else owns it"; pricing prompts must not
+          // be shown to a read-only collaborator who cannot act on them.
+          accessLevel: {
+            $cond: [
+              { $eq: ["$userId", userId] },
+              "owner",
+              {
+                $ifNull: [
+                  {
+                    $arrayElemAt: [
+                      {
+                        $map: {
+                          input: {
+                            $filter: {
+                              input: { $ifNull: ["$collaborators", []] },
+                              as: "c",
+                              cond: { $eq: ["$$c.userId", userId] },
+                            },
+                          },
+                          as: "c",
+                          in: "$$c.accessLevel",
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  "view",
+                ],
+              },
+            ],
+          },
+
+          // Measured work that has a rate, and measured work that has not.
+          // "Waiting for a rate" is a line with a quantity and no money on it;
+          // a zero-quantity line is a heading or a spare, not work.
+          pricedCount: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $gt: [num("$$item.qty"), 0] },
+                    { $gt: [num("$$item.rate"), 0] },
+                  ],
+                },
+              },
+            },
+          },
+          unpricedCount: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $gt: [num("$$item.qty"), 0] },
+                    { $lte: [num("$$item.rate"), 0] },
+                  ],
+                },
+              },
+            },
+          },
+
+          certificateCount: { $size: { $ifNull: ["$certificates", []] } },
+          // Certified to date is the cumulative value of the highest-numbered
+          // certificate that has actually been approved or paid. It is NOT a
+          // sum of certificates: each one already carries the value to date,
+          // so adding them would certify the same work again and again. A
+          // draft is excluded, because a draft certifies nothing.
+          certifiedAgg: {
+            $reduce: {
+              input: {
+                $filter: {
+                  input: { $ifNull: ["$certificates", []] },
+                  as: "c",
+                  cond: {
+                    $in: [{ $ifNull: ["$$c.status", "draft"] }, ["approved", "paid"]],
+                  },
+                },
+              },
+              initialValue: { n: -1, v: 0 },
+              in: {
+                $cond: [
+                  { $gt: [num("$$this.number"), "$$value.n"] },
+                  { n: num("$$this.number"), v: num("$$this.cumulativeValue") },
+                  "$$value",
+                ],
+              },
+            },
+          },
         },
       },
       {
@@ -1667,12 +1744,37 @@ router.get(
               0,
             ],
           },
+          certifiedToDate: { $ifNull: ["$certifiedAgg.v", 0] },
         },
       },
+      { $unset: "certifiedAgg" },
       { $sort: { updatedAt: -1 } },
     ]);
 
     return res.json({ projects: list });
+  }),
+);
+
+// GET /me/work-overview — the four things the Work dashboard needs that the
+// projects rollup cannot answer, because the rollup only reads a project's
+// items: certificates, variations, programme tasks, and how many bill lines
+// each RateGen rate is on.
+//
+// Read-only, web-only and additive: no desktop plugin calls it, nothing here
+// writes, and every figure is read exactly as stored (a certificate's
+// netPayable, a variation's qty x rate) so no total anywhere moves.
+//
+// Each panel is independent on the client, so a facet that comes back empty
+// simply shows that panel's empty state.
+router.get(
+  "/work-overview",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const raw = await TakeoffProject.aggregate(
+      buildWorkOverviewPipeline(userId, { now: new Date() }),
+    );
+    return res.json(shapeWorkOverview(raw));
   }),
 );
 
