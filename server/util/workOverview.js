@@ -184,6 +184,94 @@ export function contractValueExprs() {
   };
 }
 
+/**
+ * The two percentages the ESTIMATE needs and certified value never does, as
+ * expressions for a $project stage.
+ *
+ * Contingency and VAT are deliberately outside contractValueExprs() above,
+ * because neither is ever certified: a certificate values measured work,
+ * provisional sums, preliminaries and approved variations, and nothing else.
+ * They exist only to finish the grand summary.
+ *
+ * Same fields and the same defaults as listProjects() in routes/projects.js
+ * and as the schema itself (7.5 / 5 / 7.5), so a project estimates the same
+ * on the gallery as it does on its own Bill.
+ */
+export function estimatePercentExprs() {
+  return {
+    contingencyPercent: { $ifNull: ["$contract.contingencyPercent", 5] },
+    taxPercent: { $ifNull: ["$contract.taxPercent", 7.5] },
+  };
+}
+
+/**
+ * The grand-summary cascade, as $addFields stages, ending in `estimatedTotal`
+ * — the one figure the gallery calls "Estimated".
+ *
+ * It is the SAME cascade as client/src/features/projects/lib/projectTotals.js
+ * (the one module every screen reads) and as listProjects() in
+ * routes/projects.js, in the same order:
+ *
+ *   prelims     = (measured + sums) × preliminary%      ← already added
+ *   sub-total   = measured + sums + prelims
+ *   contingency = sub-total × contingency%
+ *   VAT         = (sub-total + contingency) × VAT%
+ *   estimated   = sub-total + contingency + VAT + approved variations
+ *
+ * A second, subtly different cascade would be worse than no figure at all, so
+ * me.projectsRollup.test.js evaluates these stages and compares them with
+ * projectTotals() itself on the same input.
+ *
+ * One stage per step because a $addFields cannot read a field it is defining.
+ * The caller must already have projected totalCost, provisionalTotal,
+ * preliminaryTotal, approvedVariationsTotal and both percentages.
+ */
+export function estimatedTotalStages() {
+  return [
+    {
+      $addFields: {
+        estimateSubtotal: {
+          $add: ["$totalCost", "$provisionalTotal", "$preliminaryTotal"],
+        },
+      },
+    },
+    {
+      $addFields: {
+        contingencyTotal: {
+          $divide: [{ $multiply: ["$estimateSubtotal", "$contingencyPercent"] }, 100],
+        },
+      },
+    },
+    {
+      $addFields: {
+        taxTotal: {
+          $divide: [
+            {
+              $multiply: [
+                { $add: ["$estimateSubtotal", "$contingencyTotal"] },
+                "$taxPercent",
+              ],
+            },
+            100,
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        estimatedTotal: {
+          $add: [
+            "$estimateSubtotal",
+            "$contingencyTotal",
+            "$taxTotal",
+            "$approvedVariationsTotal",
+          ],
+        },
+      },
+    },
+  ];
+}
+
 /** The project identity every facet row carries, so the client can link back. */
 const ROW_IDENTITY = {
   projectId: "$_id",
