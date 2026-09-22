@@ -314,6 +314,89 @@ describe("the Work overview, rebuilt as one dashboard", () => {
     expect(screen.getByText(/· money hidden/)).toBeTruthy();
   });
 
+  it("does not print the measured money on the row that says money is hidden", async () => {
+    // The rollup masks the figures this branch added but still sends measured
+    // work, because whether to mask that API-wide is a product decision nobody
+    // has taken. The screen draws the line itself: the row cannot say "money
+    // hidden" and then print ₦40.0m of it.
+    responses["/me/projects-rollup"] = {
+      projects: [
+        project({ shared: true, accessLevel: "view", certifiedToDate: 0, moneyHidden: true }),
+      ],
+    };
+    mount();
+    const panel = (await screen.findByRole("heading", { name: "Projects" })).closest("section");
+    const row = within(panel).getByText("MOREMI ESTATE BLOCK A").closest("tr");
+    expect(within(row).queryByText("₦40.0m")).toBeNull();
+    // Measured and Certified both withheld.
+    expect(within(row).getAllByText("–").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("leaves a hidden project out of the headline, and says the total leaves it out", async () => {
+    responses["/me/projects-rollup"] = {
+      projects: [
+        project(),
+        project({
+          id: "p2",
+          slug: "ikeja",
+          name: "IKEJA OFFICES",
+          shared: true,
+          accessLevel: "view",
+          totalCost: 90_000_000,
+          certifiedToDate: 0,
+          workValue: 0,
+          moneyHidden: true,
+        }),
+      ],
+    };
+    mount();
+    const tile = (await screen.findByText("Measured work, all projects")).closest("a");
+    // 40m, not 130m: the second project's money is withheld from this reader.
+    expect(within(tile).getByText("₦40.0m")).toBeTruthy();
+    expect(within(tile).queryByText("₦130.0m")).toBeNull();
+    expect(
+      within(tile).getByText(
+        /1 project at the rates they were priced with · 1 shared project, money hidden, not counted/,
+      ),
+    ).toBeTruthy();
+  });
+
+  it("shows an en dash when every project's money is hidden", async () => {
+    responses["/me/projects-rollup"] = {
+      projects: [
+        project({ shared: true, accessLevel: "view", certifiedToDate: 0, moneyHidden: true }),
+      ],
+    };
+    const { container } = mount();
+    await screen.findByText("Projects");
+    const tile = container.querySelector(".oh-kpis a");
+    expect(within(tile).getByText("–")).toBeTruthy();
+    expect(within(tile).getByText(/Nothing here can be totalled/)).toBeTruthy();
+  });
+
+  it("admits the decision count is short when the summary call fails", async () => {
+    // One of the six kinds of decision — a product on the plan that is not
+    // installed here — comes only from /me/summary. Dropping it silently made
+    // the tile a confident smaller number.
+    failing.add("/me/summary");
+    responses["/me/projects-rollup"] = { projects: [project({ unpricedCount: 0 })] };
+    const { container } = mount();
+    await screen.findByText("Projects");
+    const tile = container.querySelector('a[href="#oh-att"]');
+    await waitFor(() => expect(within(tile).getByText("–")).toBeTruthy());
+    expect(within(tile).getByText("Part of this could not be loaded")).toBeTruthy();
+    expect(screen.getByText("What is installed here could not be loaded")).toBeTruthy();
+  });
+
+  it("says the next lesson is missing rather than letting it look unenrolled", async () => {
+    failing.add("/me/courses");
+    mount();
+    await screen.findByText("Projects");
+    expect(
+      screen.getByText("Where this browser last had you · the next lesson could not be loaded"),
+    ).toBeTruthy();
+  });
+
   it("takes the page down only when the rollup itself fails", async () => {
     failing.add("/me/projects-rollup");
     mount();

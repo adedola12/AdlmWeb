@@ -45,6 +45,8 @@ import {
   buildWorkOverviewPipeline,
   certifiedToDateExpr,
   contractValueExprs,
+  estimatePercentExprs,
+  estimatedTotalStages,
   shapeWorkOverview,
 } from "../util/workOverview.js";
 import {
@@ -1526,6 +1528,24 @@ router.get(
       {
         $match: {
           pmTrackerOnly: { $ne: true },
+          // A merged project's CONTAINER holds no measurements of its own: its
+          // bill is resolved live from the source projects it links
+          // (services/projectMerge.js), which are themselves rows in this very
+          // list, with their own money. Left in, it arrived as a project worth
+          // ₦0 stuck at "Takeoff" and counted the same job twice — once as the
+          // container, once as each of its parts. Resolving its parts' money
+          // into it instead would double the portfolio's measured work, and
+          // dropping the parts to make room would hide, from a collaborator on
+          // one source model, the only project they can actually open.
+          //
+          // So the rollup excludes containers, exactly as the per-product list
+          // route does by default (routes/projects.js listProjects). The one
+          // screen that manages merges opts in there with ?includeMerged=1 and
+          // is the only place with a design for them; nothing on the Work
+          // screens does. A merged project is still opened, split and exported
+          // from that screen, and its certificates still reach the dashboard
+          // through GET /me/work-overview.
+          mergeContainer: { $ne: true },
           $or: [{ userId }, { "collaborators.userId": userId }],
         },
       },
@@ -1745,6 +1765,9 @@ router.get(
           // dashboard show certified value as a share of the same whole,
           // instead of dividing by qty x rate and reading high.
           ...contractValueExprs(),
+          // Contingency and VAT, which finish the grand summary but are never
+          // certified. They exist for estimatedTotal below.
+          ...estimatePercentExprs(),
         },
       },
       {
@@ -1788,6 +1811,12 @@ router.get(
           },
         },
       },
+      // …and what the job is ESTIMATED at: the whole grand summary, the same
+      // figure the project's own Bill shows. The gallery labelled measured
+      // work "Estimated" because this route never sent one; it now sends the
+      // real one, on the one cascade every screen reads
+      // (client/src/features/projects/lib/projectTotals.js).
+      ...estimatedTotalStages(),
       { $sort: { updatedAt: -1 } },
     ]);
 

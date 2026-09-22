@@ -24,10 +24,27 @@ import {
   STAGE_ORDER,
   compact,
   estimatedOf,
+  isMoneyHidden,
   short,
   sourceOf,
   stageOf,
 } from "../lib/projectGallery.js";
+
+/** The one placeholder for a withheld or empty figure. An en dash. */
+const DASH = "–";
+
+/**
+ * What this card may say about money.
+ *
+ * A project shared by somebody who may not show this reader rates comes back
+ * flagged `moneyHidden`. The card then shows an en dash — never a figure, and
+ * never a zero that reads as "worth nothing" — and the row is left out of the
+ * total at the top, which says so.
+ */
+const estimatedCell = (p) => (isMoneyHidden(p) ? DASH : compact(estimatedOf(p)));
+
+/** Sorting by value must not rank a figure the screen will not print. */
+const sortValue = (p) => (isMoneyHidden(p) ? 0 : estimatedOf(p));
 
 const ICON = {
   grid: (
@@ -68,6 +85,7 @@ const Bar = ({ pct }) => (
 function Flags({ p }) {
   const f = [];
   if (p.shared) f.push(<span key="s" className="pj-flag mute">Shared with you</span>);
+  if (isMoneyHidden(p)) f.push(<span key="h" className="pj-flag mute">Money hidden</span>);
   if (p.publicShareEnabled) f.push(<span key="l" className="pj-flag mute">Share link on</span>);
   if (p.isMaterials) f.push(<span key="m" className="pj-flag">Material schedule</span>);
   return f.length ? f : null;
@@ -109,7 +127,9 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
       return true;
     });
     out.sort((a, b) => {
-      if (sort === "value") return estimatedOf(b) - estimatedOf(a);
+      // A withheld figure sorts as nothing rather than by its real size: the
+      // order of the cards must not rank money the screen is refusing to show.
+      if (sort === "value") return sortValue(b) - sortValue(a);
       if (sort === "name") return String(a.name || "").localeCompare(String(b.name || ""));
       if (sort === "stage") return STAGE_ORDER[stageOf(a)] - STAGE_ORDER[stageOf(b)];
       return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
@@ -131,7 +151,12 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
   // not a filter that happens to match nothing. Keeping the two apart is the
   // whole point of rec-05: the same words cannot serve both.
   const firstRun = !filtered && !(projects || []).some((p) => !fixedTool || sourceOf(p) === fixedTool);
-  const total = list.reduce((a, p) => a + estimatedOf(p), 0);
+  // The total is the sum of the figures actually on screen. A project whose
+  // money is withheld shows an en dash, so it cannot be in the total either —
+  // and the line says how many were left out rather than under-reporting.
+  const counted = list.filter((p) => !isMoneyHidden(p));
+  const withheld = list.length - counted.length;
+  const total = counted.reduce((a, p) => a + estimatedOf(p), 0);
   const src = SOURCES[fixedTool];
 
   return (
@@ -193,7 +218,11 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
       <p className="pj-sum" aria-live="polite">
         {projects ? (
           <>
-            {list.length} {list.length === 1 ? "project" : "projects"} · <b>{compact(total)}</b> estimated
+            {list.length} {list.length === 1 ? "project" : "projects"} ·{" "}
+            <b>{counted.length ? compact(total) : DASH}</b> estimated
+            {withheld
+              ? ` · ${withheld} with money hidden ${withheld === 1 ? "is" : "are"} not counted`
+              : ""}
           </>
         ) : (
           "Loading your projects…"
@@ -276,7 +305,7 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
                   <div className="ft">
                     <div>
                       <span>Estimated</span>
-                      <b>{compact(estimatedOf(p))}</b>
+                      <b>{estimatedCell(p)}</b>
                     </div>
                     <div>
                       <span>Updated</span>
@@ -328,7 +357,7 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
                     <em>Valued {pct}%</em>
                   </span>
                   <span className="n">
-                    <b>{compact(estimatedOf(p))}</b>
+                    <b>{estimatedCell(p)}</b>
                   </span>
                   <span className="n">{short(p.updatedAt)}</span>
                 </Link>

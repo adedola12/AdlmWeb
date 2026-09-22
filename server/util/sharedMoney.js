@@ -34,6 +34,10 @@ export const ROLLUP_MONEY_FIELDS = Object.freeze([
   "approvedVariationsTotal",
   "preliminaryTotal",
   "workValue",
+  // The grand summary is the most revealing figure on a row, and the rollup
+  // only started sending it on this branch, so it is masked from the day it
+  // appears — no screen has ever seen it unmasked.
+  "estimatedTotal",
 ]);
 
 // The equivalent fields on a per-product project list row: the contract sum

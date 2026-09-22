@@ -7,6 +7,7 @@
 // the row is left out rather than invented.
 
 import { placeHref } from "./lastPlace.js";
+import { isMoneyHidden } from "./projectGallery.js";
 import { projectWorkspaceHref } from "./projectLinks.js";
 import { toRow } from "../ds/lxCourses.js";
 
@@ -74,21 +75,31 @@ const KIND_ORDER = ["Programme", "Valuation", "Variation", "Pricing", "Stale", "
  * arrived (still loading, or its call failed) `partial` says so, so the screen
  * can admit it does not know instead of reporting nothing to decide.
  *
+ * The same is true of GET /me/summary, which is the only thing that knows
+ * what is installed on this machine: when that call fails the install row
+ * simply is not there, and the total was quietly a row short with nothing on
+ * screen to say so. `summaryFailed` and `summaryPending` make it say so.
+ *
  * @param {object}   p
  * @param {Array}    p.projects        the folded /me/projects-rollup list
  * @param {object}   p.overview        GET /me/work-overview, or null while it loads
  * @param {boolean}  p.overviewFailed  that call failed outright
  * @param {object}   p.summary         GET /me/summary, or null
+ * @param {boolean}  p.summaryFailed   that call failed outright
+ * @param {boolean}  p.summaryPending  it was asked for and has not answered yet
  * @param {number}   p.now
  * @param {number}   p.cap             how many rows are shown
  * @param {object}   p.products        productKey → product name, for the install row
- * @returns {{ rows: Array, total: number, urgent: number, partial: boolean }}
+ * @returns {{ rows: Array, total: number, urgent: number, partial: boolean,
+ *   missing: { failed: string[], pending: string[] } }}
  */
 export function buildDecisions({
   projects = [],
   overview = null,
   overviewFailed = false,
   summary = null,
+  summaryFailed = false,
+  summaryPending = false,
   now = Date.now(),
   cap = 8,
   products = {},
@@ -257,16 +268,47 @@ export function buildDecisions({
     Programme: atLeast("Programme", c.overdueTasks),
   };
 
+  // What is not known, in the words the screen will use. Three of the six
+  // kinds live on the overview and one lives on the summary; a total missing
+  // either of them is a smaller number than the truth, and saying so is the
+  // difference between "nothing to decide" and "we could not look".
+  const failed = [];
+  const pending = [];
+  if (overviewFailed) failed.push(OVERVIEW_PART);
+  else if (!overview) pending.push(OVERVIEW_PART);
+  if (summaryFailed) failed.push(SUMMARY_PART);
+  else if (summaryPending) pending.push(SUMMARY_PART);
+
   return {
     rows: rows.map((r) => ({ ...r, projectName: r.project ? nameOf(r.project) : "" })),
     total: Object.values(byKind).reduce((a, b) => a + b, 0),
     // Overdue programme work is the only urgent kind, so the tile and the
     // table agree by construction.
     urgent: byKind.Programme,
-    // Three of the six kinds are unknown until the overview arrives. Saying so
-    // is the difference between "nothing to decide" and "we could not look".
-    partial: overviewFailed || !overview,
+    partial: failed.length + pending.length > 0,
+    missing: { failed, pending },
   };
+}
+
+/** What each call answers, named as a person would name it. */
+const OVERVIEW_PART = "valuations, variations and the programme";
+const SUMMARY_PART = "what is installed here";
+
+/** "a", "a, and b", "a, b, and c". */
+const sentence = (parts) =>
+  parts.length > 1 ? `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}` : parts[0];
+
+/**
+ * One line saying which part of "Needs a decision" is not known, ready for
+ * his panel sub-line. Empty when the answer is complete.
+ */
+export function decisionsNote(missing) {
+  const parts = [];
+  if (missing?.failed?.length) parts.push(`${sentence(missing.failed)} could not be loaded`);
+  if (missing?.pending?.length) parts.push(`still checking ${sentence(missing.pending)}`);
+  if (!parts.length) return "";
+  const line = parts.join(" · ");
+  return line.charAt(0).toUpperCase() + line.slice(1);
 }
 
 /**
@@ -299,22 +341,39 @@ const toNumber = (v) => Number(v) || 0;
  *
  * Certified value is never measured work alone, so dividing one by the other
  * compared two different things and read high on any job carrying prelims. A
- * row from an older response, or one whose money is hidden, has no workValue —
- * it falls back to measured work, which is the figure that row does show.
+ * row from an older response has no workValue at all; it falls back to
+ * measured work, which is the figure that row does show. A row whose money is
+ * hidden never reaches here — headline() leaves it out altogether.
  */
 export const workValueOf = (p) =>
   toNumber(p?.workValue) > 0 ? toNumber(p.workValue) : toNumber(p?.totalCost);
 
-/** The headline figures, summed over the folded rollup. */
+/**
+ * The headline figures, summed over the folded rollup.
+ *
+ * A project whose money is hidden is NOT summed. The rollup still sends its
+ * measured work — only the figures this branch added are masked — but the row
+ * says plainly that its money is withheld, and a total that quietly included
+ * it would contradict the row it is built from. It is reported as `hidden`
+ * instead, so the tile can say the total leaves it out; `counted` is how many
+ * projects the money actually came from, so a portfolio where every project is
+ * withheld shows an en dash rather than ₦0.
+ *
+ * The item counts are not money and are not masked, so they still cover every
+ * project.
+ */
 export function headline(projects = []) {
-  const measured = projects.reduce((a, p) => a + toNumber(p.totalCost), 0);
-  const value = projects.reduce((a, p) => a + workValueOf(p), 0);
-  const certified = projects.reduce((a, p) => a + toNumber(p.certifiedToDate), 0);
+  const counted = projects.filter((p) => !isMoneyHidden(p));
+  const measured = counted.reduce((a, p) => a + toNumber(p.totalCost), 0);
+  const value = counted.reduce((a, p) => a + workValueOf(p), 0);
+  const certified = counted.reduce((a, p) => a + toNumber(p.certifiedToDate), 0);
   const priceable = projects.filter(
     (p) => p.accessLevel !== "view" && toNumber(p.unpricedCount) > 0,
   );
   return {
     count: projects.length,
+    counted: counted.length,
+    hidden: projects.length - counted.length,
     measured,
     value,
     certified,

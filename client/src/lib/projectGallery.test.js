@@ -6,7 +6,7 @@
 // from an API that predates the extra fields.
 
 import { describe, it, expect } from "vitest";
-import { STAGES, STAGE_ORDER, estimatedOf, stageOf } from "./projectGallery.js";
+import { STAGES, STAGE_ORDER, estimatedOf, isMoneyHidden, stageOf } from "./projectGallery.js";
 
 const row = (extra = {}) => ({ totalCost: 0, progressPercent: 0, ...extra });
 
@@ -95,5 +95,17 @@ describe("estimatedOf", () => {
   it("never returns NaN", () => {
     expect(estimatedOf({ totalCost: "not a number" })).toBe(0);
     expect(estimatedOf(undefined)).toBe(0);
+  });
+});
+
+describe("isMoneyHidden", () => {
+  it("is true only when the row itself says the money is withheld", () => {
+    expect(isMoneyHidden({ moneyHidden: true })).toBe(true);
+    expect(isMoneyHidden({ moneyHidden: false })).toBe(false);
+    // Shared is not the same question: a collaborator who holds RateGen sees
+    // the money, and the server only flags the rows it actually masked.
+    expect(isMoneyHidden({ shared: true })).toBe(false);
+    expect(isMoneyHidden({})).toBe(false);
+    expect(isMoneyHidden(undefined)).toBe(false);
   });
 });
