@@ -83,7 +83,12 @@ export class AdlmReleaseGateStack extends Stack {
       }),
     );
 
-    const sesIdentityArn = `arn:aws:ses:${this.region}:${this.account}:identity/*`;
+    // SendEmail is authorised against the identity AND the configuration set
+    // the identity applies by default (MailConfigSet), so both are needed.
+    const sesResources = [
+      `arn:aws:ses:${this.region}:${this.account}:identity/*`,
+      `arn:aws:ses:${this.region}:${this.account}:configuration-set/*`,
+    ];
 
     // ── Hourly watcher ─────────────────────────────────────────────────────
     const watchLogs = new logs.LogGroup(this, "WatchLogs", {
@@ -116,7 +121,7 @@ export class AdlmReleaseGateStack extends Stack {
         resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PREFIX}/*`],
       }),
     );
-    watch.addToRolePolicy(new iam.PolicyStatement({ actions: ["ses:SendEmail"], resources: [sesIdentityArn] }));
+    watch.addToRolePolicy(new iam.PolicyStatement({ actions: ["ses:SendEmail"], resources: sesResources }));
 
     new events.Rule(this, "WatchHourly", {
       description: "Release gate watcher - checks main is protected and every commit was approved",
@@ -141,7 +146,7 @@ export class AdlmReleaseGateStack extends Stack {
       }),
     });
     bucket.grantPut(githubRole, "github/*");
-    githubRole.addToPolicy(new iam.PolicyStatement({ actions: ["ses:SendEmail"], resources: [sesIdentityArn] }));
+    githubRole.addToPolicy(new iam.PolicyStatement({ actions: ["ses:SendEmail"], resources: sesResources }));
     githubRole.addToPolicy(
       new iam.PolicyStatement({ actions: ["cloudformation:DescribeStacks"], resources: [this.stackId] }),
     );
