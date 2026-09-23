@@ -601,11 +601,12 @@ const ItemSchema = new mongoose.Schema(
     // parsing the "RateGen (…)" rateSource label.
     appliedRateKey: { type: String, default: "" },
     // When the QS applied this line's rate himself — a Rate Gen pick or a
-    // figure typed into the rate cell. While set (together with, or instead
-    // of, appliedRateKey) deriveBillRatesFromBudget leaves the rate alone
-    // rather than re-deriving it from the Budget build-up. Optional and null
-    // on every row written before this shipped, so existing projects keep
-    // deriving exactly as they did.
+    // figure typed into the website's rate cell. While set,
+    // deriveBillRatesFromBudget leaves the rate alone rather than re-deriving
+    // it from the Budget build-up. This is the ONLY signal that does that:
+    // appliedRateKey above is plugin provenance and carries no such meaning.
+    // Optional and null on every row written before this shipped and on every
+    // plugin payload, so existing projects keep deriving exactly as they did.
     rateLockedAt: { type: Date, default: null },
     actualQty: { type: Number, default: null },
     actualRate: { type: Number, default: null },

@@ -49,20 +49,25 @@ function groupMarkup(lines) {
 // save and the lazy budget heal instead of being quietly re-derived from a
 // build-up that never saw it.
 //
-// Two optional stamps mark such a line, both absent on every document written
-// before this shipped:
-//   • appliedRateKey — the exact Rate Gen library description that priced the
-//     line. It already existed on ItemSchema for the Revit plugin's provenance
-//     and the website's own pick now sets it too.
-//   • rateLockedAt   — when the rate was applied. Covers the hand-typed case,
-//     where there is no library description to record.
+// ONE stamp marks such a line, and it is one this platform writes itself:
+//   • rateLockedAt — when the QS applied the rate, set by the website's rate
+//     cell (a Rate Gen pick or a typed figure) and by nothing else. Optional,
+//     null by default, absent on every document written before this shipped.
 //
-// Because both are absent on stored rows, an existing project derives exactly
-// as it did before: this predicate can only ever return false for them, so no
-// stored figure moves. Nothing here re-classes or rewrites a budget row.
+// It is deliberately NOT keyed off appliedRateKey. That field is the Revit
+// plugin's provenance — "the exact RateGen library description that priced
+// this line" — and QUIV has always sent it, so treating its presence as a lock
+// would silently stop re-deriving thousands of lines on projects nobody has
+// touched, and a rate a customer already sees could change without anyone
+// asking for it. appliedRateKey therefore means exactly what it always meant:
+// where the figure came from, never whose figure it is.
+//
+// Because rateLockedAt is absent on every stored row and on every plugin
+// payload, an existing project derives exactly as it did before: this
+// predicate can only ever return false for them, so no stored figure moves.
+// Nothing here re-classes or rewrites a budget row.
 export function isRateApplied(item) {
   if (!item) return false;
-  if (String(item.appliedRateKey || "").trim()) return true;
   const at = item.rateLockedAt;
   if (at == null || at === "") return false;
   const d = at instanceof Date ? at : new Date(at);

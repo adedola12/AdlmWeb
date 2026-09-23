@@ -331,12 +331,15 @@ function pickedProject() {
   return {
     items: [
       // The QS picked a Rate Gen rate worth 15,000 on a line whose build-up
-      // (material + labour only, no plant) derives 12,500.
+      // (material + labour only, no plant) derives 12,500. The website's rate
+      // cell stamps BOTH: rateLockedAt is the lock, appliedRateKey only says
+      // which library rate produced the figure.
       {
         code: "C-CEIL",
         qty: 10,
         rate: 15000,
         appliedRateKey: "Reinforced concrete grade 25 in foundations",
+        rateLockedAt: "2026-09-23T05:00:00.000Z",
       },
     ],
     budgetItems: [
@@ -345,17 +348,51 @@ function pickedProject() {
   };
 }
 
-test("isRateApplied: only a real stamp counts", () => {
+test("isRateApplied: only our own rateLockedAt stamp counts", () => {
   assert.equal(isRateApplied(null), false);
   assert.equal(isRateApplied({}), false);
-  assert.equal(isRateApplied({ appliedRateKey: "" }), false);
-  assert.equal(isRateApplied({ appliedRateKey: "   " }), false);
   assert.equal(isRateApplied({ rateLockedAt: null }), false);
   assert.equal(isRateApplied({ rateLockedAt: "" }), false);
   assert.equal(isRateApplied({ rateLockedAt: "not a date" }), false);
-  assert.equal(isRateApplied({ appliedRateKey: "Concrete 1:2:4" }), true);
   assert.equal(isRateApplied({ rateLockedAt: "2026-09-23T05:00:00.000Z" }), true);
   assert.equal(isRateApplied({ rateLockedAt: new Date() }), true);
+  // appliedRateKey is the Revit plugin's provenance, not a lock. On its own it
+  // must never stop a line deriving, whatever it says.
+  assert.equal(isRateApplied({ appliedRateKey: "" }), false);
+  assert.equal(isRateApplied({ appliedRateKey: "   " }), false);
+  assert.equal(isRateApplied({ appliedRateKey: "Concrete 1:2:4" }), false);
+});
+
+test("a QUIV line with appliedRateKey and no stamp derives exactly as before", () => {
+  // THE REGRESSION GUARD. QUIV has always sent appliedRateKey, so on every
+  // existing Revit project these lines are re-derived from the Budget on each
+  // save and each GET. Nothing this work added may change that: the figure a
+  // customer already sees must not move because we shipped a new feature.
+  const quiv = {
+    items: [
+      {
+        code: "C-CEIL",
+        qty: 10,
+        rate: 999,
+        appliedRateKey: "Reinforced concrete grade 25 in foundations",
+      },
+    ],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+  // Byte for byte what the base commit produced: derived, never skipped.
+  const { updated, skipped } = deriveBillRatesFromBudget(quiv);
+  assert.equal(updated, 1);
+  assert.equal(skipped, 0);
+  assert.equal(quiv.items[0].rate, 12500);
+  assert.equal(quiv.items[0].netUnitCost, 10000);
+  assert.equal(quiv.items[0].profitPercent, 25);
+  // The provenance itself is untouched — the plugin round-trips it.
+  assert.equal(
+    quiv.items[0].appliedRateKey,
+    "Reinforced concrete grade 25 in foundations",
+  );
 });
 
 test("a picked Rate Gen rate survives the save", () => {
@@ -393,7 +430,13 @@ test("an unstamped line still derives, beside a stamped one", () => {
   const project = {
     items: [
       { code: "C-CEIL", qty: 10, rate: 0 }, // nobody touched it -> derives
-      { code: "C-WALL", qty: 10, rate: 15000, appliedRateKey: "Blockwork 225mm" },
+      {
+        code: "C-WALL",
+        qty: 10,
+        rate: 15000,
+        appliedRateKey: "Blockwork 225mm",
+        rateLockedAt: "2026-09-23T05:00:00.000Z",
+      },
     ],
     budgetItems: [
       { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
@@ -412,7 +455,15 @@ test("a project with no build-up behaves exactly as today", () => {
   // it is still kept, stamped or not.
   const budgetItems = [{ billIdentity: "C-CEIL", qty: 10, rate: 0 }];
   const stamped = {
-    items: [{ code: "C-CEIL", qty: 10, rate: 15000, appliedRateKey: "Concrete 1:2:4" }],
+    items: [
+      {
+        code: "C-CEIL",
+        qty: 10,
+        rate: 15000,
+        appliedRateKey: "Concrete 1:2:4",
+        rateLockedAt: "2026-09-23T05:00:00.000Z",
+      },
+    ],
     budgetItems,
   };
   const bare = {
