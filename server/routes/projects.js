@@ -243,6 +243,7 @@ import {
 } from "../util/billBudgetCascade.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
+import { guardMaskedWrite, itemIdentity } from "../util/rateMaskGuard.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
 import {
   parseBoqWorkbook,
@@ -887,18 +888,9 @@ function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTIN
   };
 }
 
-function itemIdentity(item, index) {
-  const sn = safeNum(item?.sn) || index + 1;
-  const parts = [
-    sn,
-    String(item?.code || "").trim().toLowerCase(),
-    String(item?.description || "").trim().toLowerCase(),
-    String(item?.takeoffLine || "").trim().toLowerCase(),
-    String(item?.materialName || "").trim().toLowerCase(),
-    String(item?.unit || "").trim().toLowerCase(),
-  ];
-  return parts.join("::");
-}
+// itemIdentity() is imported from util/rateMaskGuard.js: the rate-mask guard
+// matches a masked payload to the stored lines with the same key the contract
+// lock uses, so the two can never disagree about which line is which.
 
 function displayItemDescription(item, productKey) {
   if (isMaterialsProductKey(productKey)) {
@@ -2941,6 +2933,48 @@ async function updateProject(req, res) {
       return res.status(400).json({ error: "Invalid id" });
     }
 
+    const userId = getUserObjectId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid user id in token" });
+    }
+
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    // Authorisation: owner or full-access collaborator may edit; view-only is
+    // rejected before any mutation. Contract-lock handling below is unchanged,
+    // so a full collaborator's edits respect locks exactly like the owner's.
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
+
+    // ── Rate-masked saves may not move money, or remove a row ──
+    // A collaborator without RateGen read this project with every rate and
+    // amount zeroed, and the editor sends that copy back on save. Take the
+    // money from what is stored instead of from the payload, so marking
+    // progress or re-measuring cannot write those zeros over the owner's
+    // pricing — and put back any row the payload dropped, because deleting a
+    // line you cannot see the value of destroys that value just as surely.
+    // Owners — and therefore every desktop plugin — skip this entirely. A
+    // merge container holds no lines of its own, so the guard reads the same
+    // resolved view the client was served.
+    let body = req.body || {};
+    let restoredRows = null;
+    if (!access.canSeeRates) {
+      const storedView = isMergeContainer(project)
+        ? await resolveMergedProject(project, project.userId)
+        : project;
+      const guarded = guardMaskedWrite(storedView, body);
+      body = guarded.body;
+      if (Object.keys(guarded.restored).length) restoredRows = guarded.restored;
+    }
+
     const {
       name,
       items,
@@ -2967,28 +3001,7 @@ async function updateProject(req, res) {
       // user hasn't touched them.
       contingencyPercent,
       taxPercent,
-    } = req.body || {};
-
-    const userId = getUserObjectId(req);
-    if (!userId) {
-      return res.status(401).json({ error: "Invalid user id in token" });
-    }
-
-    const project = await TakeoffProject.findOne(
-      accessFilter(id, userId, productKey),
-    );
-    if (!project) return res.status(404).json({ error: "Not found" });
-
-    // Authorisation: owner or full-access collaborator may edit; view-only is
-    // rejected before any mutation. Contract-lock handling below is unchanged,
-    // so a full collaborator's edits respect locks exactly like the owner's.
-    const access = await resolveProjectAccess(req, project);
-    if (!access.canEdit) {
-      return res.status(403).json({
-        error: "View-only access cannot edit this project.",
-        code: "VIEW_ONLY",
-      });
-    }
+    } = body;
 
     // ── Federated merge container ──
     // The container owns no items, so a measurement write must be split and
@@ -2998,18 +3011,18 @@ async function updateProject(req, res) {
     // container and are applied below by the normal path.
     if (isMergeContainer(project)) {
       const touchesLines =
-        req.body?.items !== undefined ||
-        req.body?.budgetItems !== undefined ||
-        req.body?.materialItems !== undefined ||
-        req.body?.provisionalSums !== undefined ||
-        req.body?.variations !== undefined;
+        body.items !== undefined ||
+        body.budgetItems !== undefined ||
+        body.materialItems !== undefined ||
+        body.provisionalSums !== undefined ||
+        body.variations !== undefined;
 
       if (touchesLines) {
         const routed = await applyMergedLineWrite({
           req,
           container: project,
           userId,
-          body: req.body || {},
+          body,
         });
         if (routed.error) {
           return res.status(routed.status || 400).json({
@@ -3059,6 +3072,7 @@ async function updateProject(req, res) {
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+      if (restoredRows) out._restoredRows = restoredRows;
       return res.json(out);
     }
 
@@ -3066,9 +3080,9 @@ async function updateProject(req, res) {
     // whether this save added or removed variations.
     const prevVarCount = (project.variations || []).length;
     const bodyTouchesRates =
-      req.body?.items !== undefined ||
-      req.body?.budgetItems !== undefined ||
-      req.body?.materialItems !== undefined;
+      body.items !== undefined ||
+      body.budgetItems !== undefined ||
+      body.materialItems !== undefined;
 
     // Snapshot bill quantities (by code) BEFORE any mutation — used by the
     // Bill → Budget cascade after save to compute which lines changed.
@@ -3261,9 +3275,9 @@ async function updateProject(req, res) {
 
     // User-defined bill categories — additive to the canonical per-product
     // list. De-duped, trimmed, capped. Surfaced to the Bill + Budget pickers.
-    if (Array.isArray(req.body?.customCategories)) {
+    if (Array.isArray(body.customCategories)) {
       const seen = new Set();
-      project.customCategories = req.body.customCategories
+      project.customCategories = body.customCategories
         .map((c) => String(c || "").trim().slice(0, 200))
         .filter((c) => {
           const k = c.toLowerCase();
@@ -3274,9 +3288,9 @@ async function updateProject(req, res) {
         .slice(0, 200);
     }
 
-    if (Array.isArray(req.body?.excludedCategories)) {
+    if (Array.isArray(body.excludedCategories)) {
       const seen = new Set();
-      project.excludedCategories = req.body.excludedCategories
+      project.excludedCategories = body.excludedCategories
         .map((c) => String(c || "").trim().slice(0, 200))
         .filter((c) => {
           const k = c.toLowerCase();
@@ -3432,7 +3446,14 @@ async function updateProject(req, res) {
       recordActivity(req, project, ACT.RATES_UPDATED, "Updated rates & valuation");
     }
 
-    res.json({ ...projectForClient(project, access), budgetCascade });
+    res.json({
+      ...projectForClient(project, access),
+      budgetCascade,
+      // Rows the guard put back. The client shows this as "these could not be
+      // removed while rates are hidden" rather than letting them reappear
+      // unexplained on the next read.
+      ...(restoredRows ? { _restoredRows: restoredRows } : {}),
+    });
   } catch (err) {
     console.error("PUT project error:", err);
     res.status(500).json({ error: "Server error" });
@@ -5217,7 +5238,7 @@ async function markBudget(req, res) {
       });
     }
 
-    const body = req.body || {};
+    let body = req.body || {};
     if (!Array.isArray(body.budgetItems)) {
       return res.status(400).json({ error: "budgetItems array required" });
     }
@@ -5228,6 +5249,21 @@ async function markBudget(req, res) {
       return res
         .status(409)
         .json({ error: "Version conflict", version: project.version });
+    }
+
+    // Procurement marking is a progress edit, and it is exactly what a
+    // collaborator without RateGen is here to do — but the budget rows the
+    // Budget tab sends back carry the money it read as zero, and a row dropped
+    // from that list would take its build-up with it. Keep the stored pricing,
+    // keep every row, and let the marking through. See util/rateMaskGuard.js.
+    let restoredRows = null;
+    if (!access.canSeeRates) {
+      const storedView = isMergeContainer(project)
+        ? await resolveMergedProject(project, project.userId)
+        : project;
+      const guarded = guardMaskedWrite(storedView, body);
+      body = guarded.body;
+      if (Object.keys(guarded.restored).length) restoredRows = guarded.restored;
     }
 
     // Procurement marking on a merged project: split the budget lines back to
@@ -5251,6 +5287,7 @@ async function markBudget(req, res) {
       const merged = await resolveMergedProject(project, project.userId);
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
+      if (restoredRows) out._restoredRows = restoredRows;
       return res.json(out);
     }
 
@@ -5266,7 +5303,10 @@ async function markBudget(req, res) {
     recordActivity(req, project, ACT.BUDGET_UPDATED, "Updated the budget & procurement", {
       lineCount: budget.length,
     });
-    return res.json(projectForClient(project, access));
+    return res.json({
+      ...projectForClient(project, access),
+      ...(restoredRows ? { _restoredRows: restoredRows } : {}),
+    });
   } catch (err) {
     console.error("markBudget error:", err);
     return res.status(500).json({ error: "Server error" });
