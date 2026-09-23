@@ -661,6 +661,16 @@ export function computeLineAmounts(line) {
   line.totalAmount = round2(qty * toNum(line.unitRate));
   line.materialAmount = round2(qty * toNum(line.materialUnitCost));
   line.labourAmount = round2(qty * toNum(line.labourProvenance?.labourUnitRate));
+  // Plant and the remainder were already computed off the build-up
+  // (compPlantCost / compOtherCost) and then thrown away, so Material + Labour
+  // did not reconcile to the total and a mixer or an excavator read as margin.
+  // Plant is its own resource class, not a slice of labour: the residual
+  // labour path below already subtracts plant, so these do not double count.
+  // A line with no plant in its build-up — and any line stored before this
+  // change, which carries no plantUnitCost — gets 0, so no existing figure
+  // moves. unitRate, netUnitCost, marginAmount and totalAmount are untouched.
+  line.plantAmount = round2(qty * toNum(line.plantUnitCost));
+  line.otherAmount = round2(qty * toNum(line.otherUnitCost));
   const directUnit = toNum(line.netUnitCost) * (1 + toNum(line.overheadPercent) / 100);
   line.marginAmount = round2(line.totalAmount - directUnit * qty);
   return line;
@@ -739,6 +749,8 @@ export function costLine(rawLine, match, labourLibrary) {
     line.profitPercent = toNum(comp.profitPercent);
     line.unitRate = round2(clamped);
     line.materialUnitCost = round2(compMaterialCost(comp));
+    line.plantUnitCost = round2(compPlantCost(comp));
+    line.otherUnitCost = round2(compOtherCost(comp));
     line.marginPercent = toNum(comp.profitPercent); // margin defaults from the rate's profit %
 
     line.rateProvenance = {
@@ -754,6 +766,8 @@ export function costLine(rawLine, match, labourLibrary) {
     line.profitPercent = 0;
     line.unitRate = 0;
     line.materialUnitCost = 0;
+    line.plantUnitCost = 0;
+    line.otherUnitCost = 0;
     line.marginPercent = 0;
     line.rateProvenance = {
       rateId: null,
@@ -805,6 +819,8 @@ export function buildCategories(lines) {
       nrm: c.nrm,
       materialAmount: round2(catLines.reduce((s, l) => s + toNum(l.materialAmount), 0)),
       labourAmount: round2(catLines.reduce((s, l) => s + toNum(l.labourAmount), 0)),
+      plantAmount: round2(catLines.reduce((s, l) => s + toNum(l.plantAmount), 0)),
+      otherAmount: round2(catLines.reduce((s, l) => s + toNum(l.otherAmount), 0)),
       totalAmount: round2(catLines.reduce((s, l) => s + toNum(l.totalAmount), 0)),
       marginAmount: round2(catLines.reduce((s, l) => s + toNum(l.marginAmount), 0)),
     };
@@ -814,6 +830,8 @@ export function buildCategories(lines) {
 export function buildTotals(lines) {
   const materialAmount = round2(lines.reduce((s, l) => s + toNum(l.materialAmount), 0));
   const labourAmount = round2(lines.reduce((s, l) => s + toNum(l.labourAmount), 0));
+  const plantAmount = round2(lines.reduce((s, l) => s + toNum(l.plantAmount), 0));
+  const otherAmount = round2(lines.reduce((s, l) => s + toNum(l.otherAmount), 0));
   const marginAmount = round2(lines.reduce((s, l) => s + toNum(l.marginAmount), 0));
   const grandTotal = round2(lines.reduce((s, l) => s + toNum(l.totalAmount), 0));
 
@@ -829,6 +847,10 @@ export function buildTotals(lines) {
   return {
     materialAmount,
     labourAmount,
+    plantAmount,
+    otherAmount,
+    // directCost, marginAmount and grandTotal are deliberately unchanged:
+    // plant was always inside the total, it just had no name of its own.
     directCost: round2(grandTotal - marginAmount),
     marginAmount,
     grandTotal,
