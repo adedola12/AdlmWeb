@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { classifyResourceKind } from "./resourceKind.js";
+import { canonicalKind, classifyResourceKind, KIND } from "./resourceKind.js";
 
 export const SECTION_LABELS = {
   ground: "Groundwork",
@@ -151,13 +151,10 @@ function normalizeCustomRateLine(raw = {}, fallbackType = "material") {
     raw.Kind ??
     fallbackType;
 
-  const normalizedRateTypeRaw = String(rawRateType || "")
-    .trim()
-    .toLowerCase();
-  const normalizedRateType =
-    normalizedRateTypeRaw === "labour" || normalizedRateTypeRaw === "1"
-      ? "labour"
-      : "material";
+  // A rate line can now say plant. Anything the shared vocabulary does not
+  // recognise still falls to material, exactly as it did when the only two
+  // values were material and labour, so no existing payload changes meaning.
+  const normalizedRateType = canonicalKind(rawRateType) || "material";
 
   return {
     rateType: normalizedRateType,
@@ -223,6 +220,70 @@ export function normalizeRateOverride(raw = {}) {
       raw.clientUpdatedAt ?? raw.ClientUpdatedAt,
       new Date()
     ),
+  };
+}
+
+/**
+ * Keep a plant line that a client which cannot express plant would delete.
+ *
+ * Rate Gen desktop rebuilds a custom rate's push from its own Material and
+ * Labour lists (Services/UserRatesCloudSync.cs BuildCustomRatePayload), so a
+ * plant line authored on the website is simply absent from its next push, and
+ * the rate would come back worth the plant amount less. It reads rateType as a
+ * plain C# string and never enum-parses it, so it cannot FAULT on "plant" —
+ * it just does not know to send one back.
+ *
+ * A client that does understand plant says so with `supportsPlant: true`, and
+ * then its payload is authoritative — including a deliberate deletion. Rate
+ * Gen desktop does not send that flag, so its pushes preserve. When a desktop
+ * release learns to carry plant, it sends the flag and takes over with no
+ * server change.
+ *
+ * @param {object} incoming  the normalised rate from the payload
+ * @param {object} stored    the rate already held, or null
+ * @param {object} [opts]
+ * @param {boolean} [opts.clientSupportsPlant]
+ */
+export function preservePlantLines(incoming, stored, opts = {}) {
+  if (!incoming) return incoming;
+  if (opts.clientSupportsPlant) return incoming;
+
+  const isPlant = (l) => {
+    const k = canonicalKind(l?.rateType);
+    return k === KIND.PLANT || k === KIND.EQUIPMENT;
+  };
+  const storedLines = [
+    ...(Array.isArray(stored?.materials) ? stored.materials : []),
+    ...(Array.isArray(stored?.labour) ? stored.labour : []),
+  ];
+  const storedPlant = storedLines.filter(isPlant);
+  if (!storedPlant.length) return incoming;
+
+  const incomingLines = [
+    ...(Array.isArray(incoming.materials) ? incoming.materials : []),
+    ...(Array.isArray(incoming.labour) ? incoming.labour : []),
+  ];
+  const seen = new Set(
+    incomingLines.map((l) => `${normalizeText(l?.description).toLowerCase()}|${l?.unit || ""}`),
+  );
+  const missing = storedPlant.filter(
+    (l) => !seen.has(`${normalizeText(l?.description).toLowerCase()}|${l?.unit || ""}`),
+  );
+  if (!missing.length) return incoming;
+
+  // Plant lines ride in `materials`: the schema has only the two arrays, and
+  // rateType is what carries the class. The breakdown and the totals are
+  // rebuilt so the rate is worth what it was worth before the push.
+  const materials = [...(incoming.materials || []), ...missing];
+  const labour = incoming.labour || [];
+  const netCost =
+    [...materials, ...labour].reduce((sum, l) => sum + toNum(l?.totalCost, 0), 0) || 0;
+
+  return {
+    ...incoming,
+    materials,
+    breakdown: toBreakdownFromCustomLines([...materials, ...labour]),
+    ...computeTotals(netCost, incoming.overheadPercent, incoming.profitPercent),
   };
 }
 
