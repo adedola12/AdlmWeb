@@ -957,6 +957,13 @@ export default function ProjectBillTable({
   boqUndoStack = [],
   onBoqUndo,
   onBoqUndoClear,
+  // True when this viewer is a collaborator without RateGen, so every rate and
+  // amount reached them as zero. They may still measure, mark progress and add
+  // rows — but not remove one, because they cannot see what it is worth. The
+  // server enforces this and puts back anything a save drops
+  // (server/util/rateMaskGuard.js); this just stops the click, so a row never
+  // appears to go and then comes back.
+  ratesMasked = false,
   onSyncBoqRates,
   onSyncPrices,
   onToggleAutoFill,
@@ -2765,13 +2772,15 @@ export default function ProjectBillTable({
                                 className="ds-btn ds-btn-sm btn-o"
                                 style={ROW_BTN}
                                 title={
-                                  contractLocked
-                                    ? "Contract locked. Unlock it to delete measured items, or raise a variation"
-                                    : "Delete row (you'll be able to undo)"
+                                  ratesMasked
+                                    ? RATES_HIDDEN_NO_DELETE
+                                    : contractLocked
+                                      ? "Contract locked. Unlock it to delete measured items, or raise a variation"
+                                      : "Delete row (you'll be able to undo)"
                                 }
-                                disabled={contractLocked}
+                                disabled={contractLocked || ratesMasked}
                                 onClick={() => {
-                                  if (contractLocked) return;
+                                  if (contractLocked || ratesMasked) return;
                                   onDeleteItem?.(row.i);
                                 }}
                               >
@@ -3188,9 +3197,21 @@ export default function ProjectBillTable({
                           <td className="px-1 py-2 text-center">
                             <button
                               type="button"
-                              className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
-                              title="Remove this variation"
-                              onClick={() => onRemoveVariation?.(i)}
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
+                                ratesMasked
+                                  ? "text-slate-300 cursor-not-allowed"
+                                  : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              }`}
+                              title={
+                                ratesMasked
+                                  ? RATES_HIDDEN_NO_DELETE
+                                  : "Remove this variation"
+                              }
+                              disabled={ratesMasked}
+                              onClick={() => {
+                                if (ratesMasked) return;
+                                onRemoveVariation?.(i);
+                              }}
                             >
                               <FaTrashAlt className="text-[10px]" />
                             </button>
@@ -3458,19 +3479,21 @@ export default function ProjectBillTable({
                               <button
                                 type="button"
                                 className={`inline-flex h-6 w-6 items-center justify-center rounded ${
-                                  contractLocked
+                                  contractLocked || ratesMasked
                                     ? "text-slate-300 cursor-not-allowed"
                                     : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                                 }`}
-                                disabled={contractLocked}
+                                disabled={contractLocked || ratesMasked}
                                 onClick={() => {
-                                  if (contractLocked) return;
+                                  if (contractLocked || ratesMasked) return;
                                   onRemovePreliminaryItem(i);
                                 }}
                                 title={
-                                  contractLocked
-                                    ? "Contract locked. Unlock to remove preliminaries"
-                                    : "Remove this row"
+                                  ratesMasked
+                                    ? RATES_HIDDEN_NO_DELETE
+                                    : contractLocked
+                                      ? "Contract locked. Unlock to remove preliminaries"
+                                      : "Remove this row"
                                 }
                               >
                                 <FaTrashAlt className="text-[10px]" />
@@ -3663,18 +3686,20 @@ export default function ProjectBillTable({
                           <button
                             type="button"
                             className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
-                              contractLocked
+                              contractLocked || ratesMasked
                                 ? "text-slate-300 cursor-not-allowed"
                                 : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                             }`}
                             title={
-                              contractLocked
-                                ? "Contract locked. Unlock to remove PC sums"
-                                : "Remove this row"
+                              ratesMasked
+                                ? RATES_HIDDEN_NO_DELETE
+                                : contractLocked
+                                  ? "Contract locked. Unlock to remove PC sums"
+                                  : "Remove this row"
                             }
-                            disabled={contractLocked}
+                            disabled={contractLocked || ratesMasked}
                             onClick={() => {
-                              if (contractLocked) return;
+                              if (contractLocked || ratesMasked) return;
                               onRemoveProvisionalSum?.(i);
                             }}
                           >
@@ -4190,6 +4215,14 @@ function WbsLinkChip({ stats }) {
 }
 
 // ────────────────────────────────────────────────────────────────────
+// Why every delete control is dead for a collaborator without RateGen: they
+// read this project with every rate and amount zeroed, so they cannot see what
+// removing a row would throw away. The server refuses the removal and puts the
+// row back (server/util/rateMaskGuard.js); this message is what stops them
+// making the click in the first place.
+const RATES_HIDDEN_NO_DELETE =
+  "Rates are hidden on this project, so rows cannot be removed. Ask the project owner, or subscribe to RateGen.";
+
 // BoqUndoBar — sticky banner that surfaces the last N deletes so users
 // can recover from accidental trash clicks. Visible only while the
 // stack is non-empty.

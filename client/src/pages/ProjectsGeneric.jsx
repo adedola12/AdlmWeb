@@ -5476,6 +5476,7 @@ export default function ProjectsGeneric() {
                 boqUndoStack={boqUndoStack}
                 onBoqUndo={handleBoqUndo}
                 onBoqUndoClear={handleBoqUndoClear}
+                ratesMasked={!!sel?._ratesMasked}
                 rates={rates}
                 openPickKey={openPickKey}
                 onToggleOpenPickKey={(key) =>
