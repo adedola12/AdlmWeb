@@ -213,6 +213,7 @@ import {
 } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import {
+  containerOwnerId,
   isMergeContainer,
   mergeLinks,
   resolveMergedProject,
@@ -2434,9 +2435,14 @@ async function getProject(req, res) {
     // derivation) would either no-op or, worse, persist an empty budget onto
     // it. The healing still happens — on each SOURCE, when that source is
     // opened or saved by its plugin — and the combined view simply reflects it.
+    //
+    // The sources resolve under the CONTAINER's owner, and applyMergedLineWrite
+    // now resolves them the same way, so a collaborator can save what this
+    // serves them. What they may do is decided here, on the container, by
+    // resolveProjectAccess.
     if (isMergeContainer(project)) {
       const access = await resolveProjectAccess(req, project);
-      const merged = await resolveMergedProject(project, project.userId);
+      const merged = await resolveMergedProject(project);
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
@@ -2590,7 +2596,12 @@ async function getProject(req, res) {
 //
 // Returns { ok, applied } or { error, status } — never partially reports
 // success, because a silent half-write on a bill is worse than a refusal.
-async function applyMergedLineWrite({ req, container, userId, body }) {
+//
+// The caller has already settled authorisation on the CONTAINER (accessFilter
+// to load it, then access.canEdit / canSeeRates). This function therefore takes
+// no requester id: the sources resolve under the container's owner, exactly as
+// the read does — see containerOwnerId() in services/projectMerge.js.
+async function applyMergedLineWrite({ req, container, body }) {
   // ── Post-lock enforcement on a merged contract ──
   // The container owns the contract, so when it is locked the baseline covers
   // every discipline at once and enforcement has to happen HERE, against the
@@ -2609,7 +2620,7 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
   const containerLocked = !!container?.contract?.locked;
 
   if (containerLocked && Array.isArray(body.items)) {
-    const resolved = await resolveMergedProject(container, userId);
+    const resolved = await resolveMergedProject(container);
     const sanitizedNext = sanitizeItems(body.items, container.productKey);
     const { lockedItems, extraVariations } = enforceContractLock({
       project: { contract: container.contract, items: resolved.items },
@@ -2631,10 +2642,21 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
     };
   }
 
+  // Under the CONTAINER's owner, exactly as the read resolves them — see
+  // containerOwnerId(). Loading them under the REQUESTER's id is what used to
+  // make every collaborator's save on a merged project answer 404 about a
+  // missing discipline, on a project they could plainly read and edit. The
+  // keys can only be this container's own merge links (splitMergedWrite fences
+  // them), and whether this requester may edit at all was settled on the
+  // container before we were called.
+  const ownerId = containerOwnerId(container);
   const ids = [...bySource.keys()];
-  const sources = await TakeoffProject.find({ _id: { $in: ids }, userId });
+  const sources = await TakeoffProject.find({ _id: { $in: ids }, userId: ownerId });
   const byId = new Map(sources.map((p) => [String(p._id), p]));
   if (sources.length !== ids.length) {
+    // Now only ever a genuinely missing source — deleted, or moved out of the
+    // owner's namespace — which is the same thing the read reports as
+    // merge.missing rather than an access decision.
     return {
       error: "A discipline project behind this merge could not be loaded.",
       code: "MERGE_SOURCE_MISSING",
@@ -3008,7 +3030,6 @@ async function updateProject(req, res) {
         const routed = await applyMergedLineWrite({
           req,
           container: project,
-          userId,
           body: req.body || {},
         });
         if (routed.error) {
@@ -3055,7 +3076,7 @@ async function updateProject(req, res) {
       project.version = (Number(project.version) || 0) + 1;
       await project.save();
 
-      const merged = await resolveMergedProject(project, project.userId);
+      const merged = await resolveMergedProject(project);
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
@@ -3679,7 +3700,7 @@ async function lockContract(req, res) {
     // are computed on the namespaced lines, which is the same form later edits
     // arrive in, so post-lock matching lines up.
     const lockScope = isMergeContainer(project)
-      ? await resolveMergedProject(project, project.userId)
+      ? await resolveMergedProject(project)
       : project;
 
     const baseItems = (lockScope.items || []).map((it, idx) => ({
@@ -5237,7 +5258,6 @@ async function markBudget(req, res) {
       const routed = await applyMergedLineWrite({
         req,
         container: project,
-        userId,
         body: { budgetItems: body.budgetItems },
       });
       if (routed.error) {
@@ -5248,7 +5268,7 @@ async function markBudget(req, res) {
       }
       project.version = (Number(project.version) || 0) + 1;
       await project.save();
-      const merged = await resolveMergedProject(project, project.userId);
+      const merged = await resolveMergedProject(project);
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       return res.json(out);
