@@ -77,6 +77,11 @@ function agrees(rate, budgetRate) {
  * What to say about one bill line, or null when there is nothing to say.
  *
  * Returns:
+ *   { state: "released", budgetRate } — the QS has committed an empty cell and
+ *       not saved yet. The line still shows the rate he applied, but the next
+ *       save hands it back to the Budget build-up and the rate CHANGES. He is
+ *       told which figure is coming before he writes it, and budgetRate is
+ *       null when nothing is priced under the line (an en dash on screen).
  *   { state: "differs", budgetRate, difference } — the QS applied this rate,
  *       the Budget prices the same line, and the two figures disagree. That is
  *       a real contradiction on screen and the line says so.
@@ -89,6 +94,11 @@ function agrees(rate, budgetRate) {
  * A missing Budget is a fact of the project, not a fault of the line.
  */
 export function reconcileAppliedRate(item, budgetLines) {
+  // A release the QS has committed but not saved. It is the one note that has
+  // to appear BEFORE the write, because saving is what moves the money.
+  if (item?.rateReleased) {
+    return { state: "released", budgetRate: buildUpRate(item?.qty, budgetLines) };
+  }
   if (!isRateApplied(item)) return null;
   const rate = num(item?.rate);
   if (rate <= 0) return null;

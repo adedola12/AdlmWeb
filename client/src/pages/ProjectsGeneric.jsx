@@ -32,10 +32,13 @@ import {
   variationForSave,
   variationRow,
 } from "../features/projects/lib/projectRows.js";
+import { reconcileBill } from "../features/projects/rateReconcile.js";
 import {
-  isRateApplied,
-  reconcileBill,
-} from "../features/projects/rateReconcile.js";
+  budgetDrivenCodes as budgetDrivenCodesFor,
+  nextRateStamp,
+  rateEditState,
+  rateFieldsForSave,
+} from "../features/projects/rateStamp.js";
 
 // His orange palette, for a note that is a warning rather than information.
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
@@ -2573,22 +2576,15 @@ export default function ProjectsGeneric() {
   // value unless the QS just changed it.
   function stampRates(keys, meta, { keepRateKey = "" } = {}) {
     if (!meta || !keys.length) return;
-    // An empty rate cell means "I have no rate", not "my rate is mine for
-    // ever". Stamping it would lock the line out of its Budget build-up
-    // permanently with nothing on screen able to undo it — so clearing the
-    // cell RELEASES the stamp, and that is the way back for a line stamped by
-    // mistake. The plugin's own appliedRateKey is kept: it records which
-    // library rate produced the figure and is not ours to erase.
-    if (meta.source === "cleared") {
-      stampRateEntries(
-        keys.map((key) => ({ key, appliedRateKey: keepRateKey, rateLockedAt: null })),
-      );
-      return;
-    }
-    const appliedRateKey =
-      meta.source === "rategen" ? String(meta.rateKey || "").trim() : "";
-    const rateLockedAt = new Date().toISOString();
-    stampRateEntries(keys.map((key) => ({ key, appliedRateKey, rateLockedAt })));
+    // What the meta does to the stamp lives in rateStamp.js, where it can be
+    // tested: an empty cell the QS has COMMITTED releases the stamp (the way
+    // back for a line stamped by mistake, keeping the plugin's own
+    // appliedRateKey because that records which library rate produced the
+    // figure and is not ours to erase); a keystroke on the way to retyping the
+    // figure returns null and moves nothing at all.
+    const stamp = nextRateStamp(meta, { keepRateKey });
+    if (!stamp) return;
+    stampRateEntries(keys.map((key) => ({ key, ...stamp })));
   }
 
   function handleRateChange(rowIndex, value, meta) {
@@ -2891,8 +2887,6 @@ export default function ProjectsGeneric() {
       const updatedItems = its.map((it, i) => {
         const k = itemKey(it, i);
         const raw = rates?.[k];
-        const use =
-          String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
         const statusValue = Boolean(statusMap?.[k]);
         // percentComplete falls back to the stored value when no UI input
         // has touched it; statusValue = true forces 100%.
@@ -2921,15 +2915,13 @@ export default function ProjectsGeneric() {
           String(it?.trade || "").trim();
         // Provenance travels with the rate. Without it the server re-derives
         // the line from a Budget build-up that never saw this figure, the
-        // rate reverts, and the toast still says "Saved".
+        // rate reverts, and the toast still says "Saved". An empty cell is not
+        // a rate of zero: it keeps the stored figure, and it is the stamp that
+        // decides whether the server keeps it. (rateStamp.js, tested there.)
         const stamp = rateStamps?.[k] || null;
         return {
           ...it,
-          rate: use,
-          appliedRateKey: stamp
-            ? stamp.appliedRateKey
-            : String(it?.appliedRateKey || ""),
-          rateLockedAt: stamp ? stamp.rateLockedAt : (it?.rateLockedAt ?? null),
+          ...rateFieldsForSave(it, raw, stamp),
           actualQty: nextActualQty,
           actualRate: nextActualRate,
           [statusField]: statusValue,
@@ -4824,38 +4816,36 @@ export default function ProjectsGeneric() {
           ? stamp.appliedRateKey
           : String(it?.appliedRateKey || ""),
         rateLockedAt: stamp ? stamp.rateLockedAt : (it?.rateLockedAt ?? null),
+        // Screen-only: the QS has committed a release that is not saved yet.
+        // The line still holds its rate here and in the database; the next
+        // save hands it to the Budget. Never sent anywhere — saveRatesToCloud
+        // builds its payload from sel.items, not from this list.
+        rateReleased: rateEditState(it, stamp).released,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sel?.items, rates, rateStamps, showMaterials]);
 
-  // Bill codes the QS has priced himself. Their rate is his, the server keeps
-  // it, and the cell must stay editable — telling him the Budget derives it
-  // would be the lie this change exists to stop.
-  const rateAppliedCodes = React.useMemo(() => {
-    const set = new Set();
-    for (const it of billLinesWithStamps) {
-      const code = String(it?.code || "").trim().toLowerCase();
-      if (code && isRateApplied(it)) set.add(code);
-    }
-    return set;
-  }, [billLinesWithStamps]);
-
-  // Codes whose bill rate is derived from a priced material/labour build-up —
-  // those BoQ rate cells become read-only (the Budget tab drives them).
-  const budgetDrivenCodes = React.useMemo(() => {
-    const totals = new Map();
-    for (const b of sel?.budgetItems || []) {
-      const code = String(b?.billIdentity || "").trim().toLowerCase();
-      if (!code) continue;
-      totals.set(code, (totals.get(code) || 0) + safeNum(b.qty) * safeNum(b.rate));
-    }
-    const set = new Set();
-    for (const [code, net] of totals) {
-      if (net > 0 && !rateAppliedCodes.has(code)) set.add(code);
-    }
-    return set;
-  }, [sel?.budgetItems, rateAppliedCodes]);
+  // Codes whose bill rate is derived from a priced build-up — those BoQ rate
+  // cells are read-only (the Budget tab drives them).
+  //
+  // Taken from the lines as STORED. An unsaved stamp may only ever UNLOCK a
+  // cell, never lock one: a rate the QS has just applied frees its cell at
+  // once, and a release he has committed leaves the cell editable until the
+  // save, so he can change his mind. Reading the live stamp in both directions
+  // is what used to swap the input he was typing in for a read-only lock chip
+  // the instant he backspaced it.
+  const budgetDrivenCodes = React.useMemo(
+    () =>
+      budgetDrivenCodesFor(sel?.items, sel?.budgetItems, (it, i) =>
+        rateStamps?.[itemKey(it, i)] || null,
+      ),
+    // itemKey is redeclared on every render, so listing it would defeat the
+    // memo; showMaterials is what it actually varies with and is listed. Same
+    // as the memo above it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sel?.items, sel?.budgetItems, rateStamps, showMaterials],
+  );
 
   // Lines whose applied rate and Budget build-up do not agree. Empty on every
   // project nobody has re-priced, so nothing new appears on an old bill.
