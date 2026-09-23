@@ -491,9 +491,18 @@ export function RateCell({
     if (formulaDraft) setFormulaDraft("");
     // If it's a number, treat as direct rate input
     if (/^[\d.,]*$/.test(v)) {
+      const cleaned = v.replace(/,/g, "");
       // Typed straight into the cell. Stamped as applied so the server stops
       // re-deriving the line from a build-up the QS did not price.
-      onChange?.(v.replace(/,/g, ""), { source: "typed" });
+      //
+      // An EMPTY cell is not that. This regex matches "" too, so emptying the
+      // field used to stamp the line as the QS's for ever — with no way on
+      // screen to take it back. Clearing a rate means "I have no rate", so it
+      // reports itself as cleared and the parent releases the stamp: the line
+      // goes back to being derived from its Budget build-up.
+      onChange?.(cleaned, {
+        source: cleaned.trim() === "" ? "cleared" : "typed",
+      });
       setSearchQuery("");
       setSearchResults([]);
     } else {
@@ -2982,7 +2991,10 @@ export default function ProjectBillTable({
                                     // the signed value — variations are the
                                     // proper channel for any rate change. Also lock
                                     // when the rate is derived from a priced Budget
-                                    // build-up (Material + Labour + O&P).
+                                    // build-up. That build-up is the NET of every
+                                    // row under the line whatever its kind —
+                                    // material, labour, plant, consumable — so the
+                                    // words must not name two of them.
                                     disabled={
                                       contractLocked ||
                                       Boolean(
@@ -2997,7 +3009,7 @@ export default function ProjectBillTable({
                                     disabledHint={
                                       contractLocked
                                         ? "Contract locked. Unlock it on the Contract Admin tab to edit rates, or raise a variation."
-                                        : "Rate derived from the Budget build-up (Material + Labour + O&P). Edit the prices on the Budget tab."
+                                        : "Rate derived from the Budget build-up (net of every resource row + O&P). Edit the prices on the Budget tab."
                                     }
                                   />
 
@@ -3027,23 +3039,18 @@ export default function ProjectBillTable({
 
                             {/* The honest state of a rate the QS applied
                           himself: it is the line's rate now, but the Budget
-                          build-up has not been rewritten to match it yet, so
-                          say so on the line instead of showing two figures
-                          that quietly disagree. An en dash where the Budget
-                          has nothing priced. */}
+                          prices the same line differently, so say so instead
+                          of showing two figures that quietly disagree. Only a
+                          real contradiction appears here — a line with nothing
+                          priced against it has nothing to reconcile with and
+                          says nothing at all. */}
                             {rateNote ? (
                               <div
                                 className="mt-0.5 text-[11px] text-amber-700"
-                                title={
-                                  rateNote.state === "no-buildup"
-                                    ? "This rate is the one applied to the line. The Budget has nothing priced against it yet, so the two do not reconcile."
-                                    : "This rate is the one applied to the line. The Budget build-up still prices it differently, so the two do not reconcile."
-                                }
+                                title="This rate is the one applied to the line. The Budget build-up still prices it differently, so the two do not reconcile."
                               >
                                 {"Rate applied. Budget build-up: "}
-                                {rateNote.state === "no-buildup"
-                                  ? "–"
-                                  : money(rateNote.budgetRate)}
+                                {money(rateNote.budgetRate)}
                                 <span className="text-slate-500">
                                   {" (not reconciled)"}
                                 </span>

@@ -3,6 +3,7 @@ import { FaBoxes, FaCubes, FaHardHat, FaLayerGroup, FaTimes, FaTools } from "../
 import SectionRail from "./SectionRail.jsx";
 import { RateCell } from "./ProjectBillTable.jsx";
 import { resolveAll, normalizeTitle } from "../../lib/budgetBillLink.js";
+import { isRateApplied } from "./rateReconcile.js";
 import {
   buyByDate,
   buyScheduleGroups,
@@ -17,7 +18,10 @@ import {
 // then laid out in Bill order and the Bill's sections, with each line's
 // material AND labour bundled together. Users can price each row (manually or
 // from RateGen) and set a per-line Overhead & Profit %; the resulting
-// Bill Rate = Material + Labour + O&P flows up to the BoQ automatically.
+// rate = net build-up + O&P (every resource row, plant included) flows up to
+// the BoQ automatically — UNLESS the QS has applied a rate to that bill line
+// himself, in which case his rate stands and this tab prints what the build-up
+// comes to beside it rather than pretending to set the bill.
 // ─────────────────────────────────────────────────────────────────────
 
 function safeNum(v) {
@@ -198,6 +202,12 @@ export default function ProjectBudgetTab({
         // independent of (and even when locked out of) per-line procurement.
         billCompleted: Boolean(it?.completed) || safeNum(it?.percentComplete) >= 100,
         billPercent: Boolean(it?.completed) ? 100 : safeNum(it?.percentComplete),
+        // The QS applied this line's rate himself, so the server no longer
+        // derives the bill rate from the build-up below. The figure this tab
+        // computes is then a costing, not the rate the client is charged, and
+        // the caption has to say which it is.
+        rateApplied: isRateApplied(it),
+        billRate: safeNum(it?.rate),
       });
     });
     return m;
@@ -277,6 +287,8 @@ export default function ProjectBudgetTab({
           // bill item ticked complete shows as done in the budget breakdown.
           billCompleted: meta ? Boolean(meta.billCompleted) : false,
           billPercent: meta ? safeNum(meta.billPercent) : 0,
+          rateApplied: meta ? Boolean(meta.rateApplied) : false,
+          billRate: meta ? safeNum(meta.billRate) : 0,
           lines: [],
         });
         seen += 1;
@@ -1226,7 +1238,12 @@ export default function ProjectBudgetTab({
                               %
                             </label>
                           </div>
-                          {/* Net + derived bill rate. */}
+                          {/* Net, and what this build-up makes of the rate.
+                              It is the BILL rate only while the server still
+                              derives it. Once the QS has applied a rate to the
+                              line himself, this figure is what the build-up
+                              costs — the Bill charges his, and the caption says
+                              so and prints it beside this one. */}
                           <div className="text-right leading-tight">
                             <div className="text-[10px] text-slate-400 dark:text-adlm-dark-dim">
                               net &#8358;{money(g.net)}
@@ -1235,8 +1252,21 @@ export default function ProjectBudgetTab({
                               &#8358;{money(billAmount)}
                             </div>
                             {g.billQty > 0 ? (
-                              <div className="text-[10px] text-adlm-orange">
-                                rate &#8358;{money(billRate)}/{g.billUnit}
+                              <div
+                                className="text-[10px] text-adlm-orange"
+                                title={
+                                  g.rateApplied
+                                    ? "The QS applied this line's rate on the Bill, so it is no longer derived from this build-up. This is what the build-up comes to."
+                                    : "The Bill charges this rate: it is derived from the build-up above."
+                                }
+                              >
+                                {g.rateApplied ? "build-up " : "bill rate "}
+                                &#8358;{money(billRate)}/{g.billUnit}
+                              </div>
+                            ) : null}
+                            {g.billQty > 0 && g.rateApplied ? (
+                              <div className="text-[10px] text-slate-400 dark:text-adlm-dark-dim">
+                                bill &#8358;{money(g.billRate)}/{g.billUnit}
                               </div>
                             ) : null}
                           </div>
