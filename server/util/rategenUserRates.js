@@ -544,3 +544,50 @@ export function mergeRatesWithUserData(masterRates = [], rateOverrides = [], cus
 
   return merged.sort(sortRateDefinitions);
 }
+
+// ── Resource-class subtotals ──────────────────────────────────────────────
+// Splits a rate's build-up into the three resource classes a QS prices with,
+// plus a remainder so the four always reconcile to the itemised net.
+//
+// The owner's rule (23 Sep 2026): plant is its own resource class, NOT a slice
+// of labour. A Rate Gen build-up carries material, labour AND plant lines, and
+// the Budget must carry the total labour cost alone and the total plant cost
+// alone. Equipment is folded into plant (same class to a QS: hired kit, not a
+// gang); anything else — consumables and unclassified lines — lands in
+// otherCost so nothing is silently dropped and
+// materialCost + labourCost + plantCost + otherCost === Σ components.
+//
+// Figures are per ONE unit of the rate (components carry per-unit money), and
+// are deliberately left unrounded: a build-up line can be worth fractions of a
+// kobo per unit and rounding here would zero it.
+export function compositionSubtotals(composition) {
+  const components = Array.isArray(composition?.components) ? composition.components : [];
+
+  let materialCost = 0;
+  let labourCost = 0;
+  let plantCost = 0;
+  let otherCost = 0;
+
+  for (const c of components) {
+    const amount = toNum(c?.totalCost, 0);
+    if (!amount) continue;
+    switch (String(c?.kind || "").toLowerCase()) {
+      case "labour":
+      case "labor":
+        labourCost += amount;
+        break;
+      case "plant":
+      case "equipment":
+        plantCost += amount;
+        break;
+      case "material":
+        materialCost += amount;
+        break;
+      default:
+        otherCost += amount;
+        break;
+    }
+  }
+
+  return { materialCost, labourCost, plantCost, otherCost };
+}
