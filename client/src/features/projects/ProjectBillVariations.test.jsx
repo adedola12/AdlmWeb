@@ -124,3 +124,49 @@ describe("the Bill's variations section", () => {
     expect(box.getAllByRole("checkbox").length).toBe(VARIATIONS.length);
   });
 });
+
+// ── When rates are hidden from this viewer ────────────────────────────────
+// A collaborator without RateGen reads the whole project with every rate and
+// amount zeroed. They may measure, mark progress, edit and add — the server
+// keeps the owner's pricing on whatever they save — but a deletion it takes at
+// its word, because a row removed is a row nobody carried the money for. They
+// cannot see what a row is worth, so the delete controls are dead for them.
+describe("when rates are hidden from this viewer", () => {
+  const SUMS = [
+    { kind: "pc", description: "Lift installation", amount: 3_000_000 },
+    { kind: "provisional", description: "Drainage allowance", amount: 1_200_000 },
+  ];
+  const PRELIMS = [{ name: "Site accommodation", allocation: 10, actualAmount: 850_000 }];
+
+  it("greys out every delete control, and says why", () => {
+    renderBill({
+      canSeeRates: false,
+      provisionalSums: SUMS,
+      preliminaryItems: PRELIMS,
+      onRemoveProvisionalSum: () => {},
+      onUpdatePreliminaryItem: () => {},
+      onRemovePreliminaryItem: () => {},
+    });
+    const blocked = screen.getAllByTitle(/Rates are hidden on this project/);
+    // One variation delete per row, the two sums, and the preliminary.
+    expect(blocked.length).toBe(VARIATIONS.length + SUMS.length + PRELIMS.length);
+    for (const btn of blocked) expect(btn.disabled).toBe(true);
+  });
+
+  it("does not fire the remove handler when the control is clicked anyway", () => {
+    const onRemoveVariation = vi.fn();
+    renderBill({ canSeeRates: false, onRemoveVariation });
+    screen.getAllByTitle(/Rates are hidden on this project/)[0].click();
+    expect(onRemoveVariation).not.toHaveBeenCalled();
+  });
+
+  it("leaves the controls alone for anyone who can see the rates", () => {
+    const onRemoveVariation = vi.fn();
+    renderBill({ provisionalSums: SUMS, preliminaryItems: PRELIMS, onRemoveVariation });
+    expect(screen.queryAllByTitle(/Rates are hidden on this project/).length).toBe(0);
+    const remove = screen.getAllByTitle("Remove this variation")[0];
+    expect(remove.disabled).toBe(false);
+    remove.click();
+    expect(onRemoveVariation).toHaveBeenCalled();
+  });
+});

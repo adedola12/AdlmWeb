@@ -124,6 +124,15 @@ const POP = {
 const ICON_BTN = { padding: "6px 8px" };
 const ROW_BTN = { padding: "4px 6px" };
 
+// Why every delete control is dead for a collaborator without RateGen: they
+// read this project with every rate and amount zeroed, so they cannot see what
+// removing a row would throw away. The server keeps the owner's pricing on
+// anything they save (guardMaskedWrite in server/routes/projects.js), but it
+// takes a deletion at its word — the row, and the money on it, would simply be
+// gone. This message is what stops the click being made in the first place.
+const RATES_HIDDEN_NO_DELETE =
+  "Rates are hidden on this project, so rows cannot be removed. Ask the project owner, or subscribe to RateGen.";
+
 // A bill row's state in his tokens: a dragged row fades, a marked row takes
 // his light wash, and the drop target shows an action-coloured line.
 function billRowStyle({ dragging, marked, dropAbove, dropBelow }) {
@@ -1004,6 +1013,9 @@ function SummarySumGroup({
   onAdd,
   onUpdate,
   onRemove,
+  // Dead while rates are hidden: removing a sum throws away an amount this
+  // viewer was served as zero. Everything else in the group stays editable.
+  removeDisabled = false,
   onCommit,
   checkboxCls,
 }) {
@@ -1056,8 +1068,12 @@ function SummarySumGroup({
                 type="button"
                 className="x"
                 aria-label={`Remove ${sum?.description || label}`}
-                title="Remove this sum"
-                onClick={() => onRemove?.(index)}
+                title={removeDisabled ? RATES_HIDDEN_NO_DELETE : "Remove this sum"}
+                disabled={removeDisabled}
+                onClick={() => {
+                  if (removeDisabled) return;
+                  onRemove?.(index);
+                }}
               >
                 <FaTimes size={13} aria-hidden="true" />
               </button>
@@ -1154,6 +1170,13 @@ export default function ProjectBillTable({
   // appear in the order the disciplines were merged rather than alphabetically.
   sourceOptions = [],
   onGroupByModeChange,
+  // False when this viewer is a collaborator without RateGen, so every rate and
+  // amount reached them as zero (the server's maskRates). They may still
+  // measure, mark progress, edit and add rows — the server keeps the owner's
+  // pricing on whatever they save — but removing a row is a decision about
+  // money they cannot see, so the delete controls are dead for them. Already
+  // passed by ProjectOpenView; it was simply not read here.
+  canSeeRates = true,
   contractLocked = false,
   contractLockedAt = null,
   contractApprovedAt = null,
@@ -1662,6 +1685,11 @@ export default function ProjectBillTable({
   // on screen and stays readable, but nothing in it can be changed: that is
   // what "changes go through variations" means.
   const summaryEditable = !contractLocked;
+
+  // Rates are hidden from this viewer. Only the delete controls read it — the
+  // rest of the table stays exactly as editable as it was, because measuring
+  // and marking progress is what a rate-blind collaborator is here to do.
+  const ratesMasked = canSeeRates === false;
   const sumGroups = React.useMemo(
     () => splitProvisionalSums(provisionalSums),
     [provisionalSums],
@@ -3214,13 +3242,15 @@ export default function ProjectBillTable({
                                 className="ds-btn ds-btn-sm btn-o"
                                 style={ROW_BTN}
                                 title={
-                                  contractLocked
-                                    ? "Contract locked. Unlock it to delete measured items, or raise a variation"
-                                    : "Delete row (you'll be able to undo)"
+                                  ratesMasked
+                                    ? RATES_HIDDEN_NO_DELETE
+                                    : contractLocked
+                                      ? "Contract locked. Unlock it to delete measured items, or raise a variation"
+                                      : "Delete row (you'll be able to undo)"
                                 }
-                                disabled={contractLocked}
+                                disabled={contractLocked || ratesMasked}
                                 onClick={() => {
-                                  if (contractLocked) return;
+                                  if (contractLocked || ratesMasked) return;
                                   onDeleteItem?.(row.i);
                                 }}
                               >
@@ -3687,9 +3717,19 @@ export default function ProjectBillTable({
                           <td className="px-1 py-2 text-center">
                             <button
                               type="button"
-                              className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
-                              title="Remove this variation"
-                              onClick={() => onRemoveVariation?.(i)}
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
+                                ratesMasked
+                                  ? "text-slate-300 cursor-not-allowed"
+                                  : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              }`}
+                              title={
+                                ratesMasked ? RATES_HIDDEN_NO_DELETE : "Remove this variation"
+                              }
+                              disabled={ratesMasked}
+                              onClick={() => {
+                                if (ratesMasked) return;
+                                onRemoveVariation?.(i);
+                              }}
                             >
                               <FaTrashAlt className="text-[10px]" />
                             </button>
@@ -3962,19 +4002,21 @@ export default function ProjectBillTable({
                               <button
                                 type="button"
                                 className={`inline-flex h-6 w-6 items-center justify-center rounded ${
-                                  contractLocked
+                                  contractLocked || ratesMasked
                                     ? "text-slate-300 cursor-not-allowed"
                                     : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                                 }`}
-                                disabled={contractLocked}
+                                disabled={contractLocked || ratesMasked}
                                 onClick={() => {
-                                  if (contractLocked) return;
+                                  if (contractLocked || ratesMasked) return;
                                   onRemovePreliminaryItem(i);
                                 }}
                                 title={
-                                  contractLocked
-                                    ? "Contract locked. Unlock to remove preliminaries"
-                                    : "Remove this row"
+                                  ratesMasked
+                                    ? RATES_HIDDEN_NO_DELETE
+                                    : contractLocked
+                                      ? "Contract locked. Unlock to remove preliminaries"
+                                      : "Remove this row"
                                 }
                               >
                                 <FaTrashAlt className="text-[10px]" />
@@ -4155,6 +4197,7 @@ export default function ProjectBillTable({
             onAdd={addSum}
             onUpdate={onUpdateProvisionalSum}
             onRemove={removeSum}
+            removeDisabled={ratesMasked}
             onCommit={sayUpdated}
             checkboxCls={checkboxCls}
           />
@@ -4168,6 +4211,7 @@ export default function ProjectBillTable({
             onAdd={addSum}
             onUpdate={onUpdateProvisionalSum}
             onRemove={removeSum}
+            removeDisabled={ratesMasked}
             onCommit={sayUpdated}
             checkboxCls={checkboxCls}
           />

@@ -1604,6 +1604,13 @@
 .ds .pj-sumbox .r.s .pj-sum-done input{width:14px;height:14px;padding:0;border-radius:4px;
   accent-color:var(--action);background:none;flex:none}
 .ds .pj-sumbox .r.s .pj-sum-done:hover{color:var(--ink-2)}
+/* S18: the Summary's remove control while rates are hidden from this viewer.
+   His .pj-sumbox .x has no disabled state — nothing in his prototype could be
+   disabled — so a collaborator without RateGen would have seen a live-looking
+   cross that does nothing. Greyed on the same two declarations his .ds-btn
+   uses when disabled, so it reads the same in light, dark and black. */
+.ds .pj-sumbox .x:disabled{opacity:.45;cursor:not-allowed}
+.ds .pj-sumbox .x:disabled:hover{background:none}
 /* His .r.s already wraps under 900px; keep the tick with the amount rather
    than letting it start a line of its own on a phone. */
 @media (max-width:900px){

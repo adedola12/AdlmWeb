@@ -92,16 +92,42 @@ function discOf(link, project) {
 }
 
 /**
+ * The identity a container's sources resolve under: the container's OWNER,
+ * never whoever is asking.
+ *
+ * This used to be a parameter, and that was the whole bug. The read path passed
+ * `project.userId` and served a collaborator the full combined bill; the write
+ * path passed the requester's id, found nothing, and answered 404 "a discipline
+ * project behind this merge could not be loaded". A project a collaborator
+ * could plainly read and edit could never be saved.
+ *
+ * Resolving under the owner is the correct authority, not a relaxation of one.
+ * Reachability is already fenced twice over: a source is only reachable through
+ * the container's own `linkType: "merge"` links, and only the owner can create
+ * those (createMergedProject is owner-only over their own projects). What the
+ * requester may DO is decided on the CONTAINER — accessFilter() to load it,
+ * then resolveProjectAccess()'s canEdit / canSeeRates — which is the one
+ * document the sharing was granted on. Asking the sources again would ask the
+ * wrong document.
+ *
+ * Intrinsic rather than passed so the two halves cannot drift apart again.
+ */
+export function containerOwnerId(container) {
+  return container?.userId ?? null;
+}
+
+/**
  * Load the source projects behind a container, in the order they were linked.
- * Owner-scoped: only the caller's own projects resolve, so a collaborator on
- * the container can never pull in a project they were not given access to.
+ * Always scoped to the container's owner — see containerOwnerId().
  *
  * @returns {Promise<Array<{ link, project, discipline }>>} missing sources are
  *          dropped (reported separately by resolveMergedProject).
  */
-export async function loadMergeSources(container, userId) {
+export async function loadMergeSources(container) {
   const links = mergeLinks(container);
   if (!links.length) return [];
+  const userId = containerOwnerId(container);
+  if (!userId) return [];
   const ids = links.map((l) => l.projectId);
   const rows = await TakeoffProject.find({ _id: { $in: ids }, userId }).lean();
   const byId = new Map(rows.map((p) => [String(p._id), p]));
@@ -143,8 +169,8 @@ function tagLines(lines, { sourceId, sourceName, discipline, productKey }, codeF
  * project is the commercial entity, so one contract sum and one certificate
  * series govern all disciplines.
  */
-export async function resolveMergedProject(container, userId) {
-  const sources = await loadMergeSources(container, userId);
+export async function resolveMergedProject(container) {
+  const sources = await loadMergeSources(container);
   const linked = mergeLinks(container);
 
   const items = [];
@@ -221,9 +247,9 @@ export async function resolveMergedProject(container, userId) {
       // wording the UI uses for the parts list.
       partType: plain.mergePartType === "building" ? "building" : "discipline",
       parts,
-      // A source the caller can't load (deleted, or owned by someone else).
-      // Reported rather than silently dropped so the QS knows the combined
-      // total is short.
+      // A linked source that no longer resolves — deleted, or moved out of the
+      // owner's namespace. Reported rather than silently dropped so the QS
+      // knows the combined total is short.
       missing,
       disciplines: [...new Set(parts.map((p) => p.discipline))],
     },
@@ -339,13 +365,19 @@ export function splitMergedWrite(container, body = {}) {
  * Every write against a merged project must go through this — the container
  * holds no items, so writing to it would silently discard the edit.
  *
+ * Owner-scoped like the read, and fenced to this container's own merge links —
+ * see containerOwnerId(). The caller has already established on the CONTAINER
+ * that this requester may edit it.
+ *
  * @returns {Promise<{ project, identity } | null>}
  */
-export async function resolveSourceForIdentity(container, userId, namespaced) {
+export async function resolveSourceForIdentity(container, namespaced) {
   const split = splitIdentity(namespaced);
   if (!split) return null;
   const allowed = new Set(mergeLinks(container).map((l) => String(l.projectId)));
   if (!allowed.has(split.sourceProjectId)) return null;
+  const userId = containerOwnerId(container);
+  if (!userId) return null;
   const project = await TakeoffProject.findOne({
     _id: split.sourceProjectId,
     userId,
