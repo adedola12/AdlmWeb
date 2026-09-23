@@ -400,11 +400,30 @@ export function RateCell({
   const searchFnRef = useRef(onSearchRateGen);
   searchFnRef.current = onSearchRateGen;
 
+  // Did the QS empty this cell during THIS visit to it? It matters because
+  // EVERY untouched cell is empty — the stored rate is only the placeholder —
+  // so leaving a cell can only mean "cleared" when he actually cleared it.
+  const clearedRef = useRef(false);
+  // Committing an empty cell is the deliberate "this line has no rate of its
+  // own": it releases the lock and hands the line back to its Budget build-up,
+  // which changes the line's rate on the next save. A keystroke on the way to
+  // retyping the figure is not that, so the release waits for the commit —
+  // blur, Enter, or clicking away. Held in a ref because the outside-click
+  // effect is registered once per focus and would otherwise call a stale
+  // onChange.
+  const commitClearRef = useRef(null);
+  commitClearRef.current = () => {
+    if (!clearedRef.current) return;
+    clearedRef.current = false;
+    onChange?.("", { source: "cleared" });
+  };
+
   // Close popup when clicking outside
   useEffect(() => {
     if (!focused) return;
     function handleClick(e) {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        commitClearRef.current?.();
         setFocused(false);
         setSearchQuery("");
         setSearchResults([]);
@@ -448,6 +467,7 @@ export function RateCell({
 
   const handleFocus = () => {
     setFocused(true);
+    clearedRef.current = false;
     setSearchQuery("");
     // Existing candidates from batch sync
     setSearchResults(boqCandidates.length ? boqCandidates : []);
@@ -465,6 +485,7 @@ export function RateCell({
     if (!formulaResult) return false;
     if (formulaResult.ok) {
       const rounded = Math.round(formulaResult.value * 100) / 100;
+      clearedRef.current = false;
       // A figure the QS worked out himself — stamp it so the save keeps it.
       onChange?.(String(rounded), { source: "typed" });
       setFormulaDraft("");
@@ -482,6 +503,8 @@ export function RateCell({
     // live preview underneath the input; commit on Enter / blur via
     // commitFormula.
     if (isFormulaInput(v)) {
+      // He is working out a figure, not giving the line up.
+      clearedRef.current = false;
       setFormulaDraft(v);
       setSearchQuery("");
       setSearchResults([]);
@@ -492,21 +515,34 @@ export function RateCell({
     // If it's a number, treat as direct rate input
     if (/^[\d.,]*$/.test(v)) {
       const cleaned = v.replace(/,/g, "");
+      const empty = cleaned.trim() === "";
+      clearedRef.current = empty;
       // Typed straight into the cell. Stamped as applied so the server stops
       // re-deriving the line from a build-up the QS did not price.
       //
       // An EMPTY cell is not that. This regex matches "" too, so emptying the
       // field used to stamp the line as the QS's for ever — with no way on
-      // screen to take it back. Clearing a rate means "I have no rate", so it
-      // reports itself as cleared and the parent releases the stamp: the line
-      // goes back to being derived from its Budget build-up.
-      onChange?.(cleaned, {
-        source: cleaned.trim() === "" ? "cleared" : "typed",
-      });
+      // screen to take it back. Clearing a rate means "I have no rate", so a
+      // COMMITTED empty cell releases the stamp and the line goes back to
+      // being derived from its Budget build-up.
+      //
+      // But the keystroke that empties the field on the way to retyping the
+      // figure is not a decision about anything. It used to report itself as
+      // cleared there and then, which released the lock, dropped the line back
+      // into the Budget-driven set on the same render, and replaced the input
+      // the QS was typing into with a read-only lock chip — and a save from
+      // there wrote the OLD figure with the lock stripped, so the server
+      // re-derived the line and the rate silently changed. So the empty cell
+      // reports itself as `editing`: the text changes, nothing else does, and
+      // the release waits for the commit (see commitClearRef).
+      onChange?.(cleaned, { source: empty ? "editing" : "typed" });
       setSearchQuery("");
       setSearchResults([]);
     } else {
-      // Text — search RateGen
+      // Text — search RateGen. He is looking for a rate to put in, so an
+      // abandoned search leaves the line exactly as it was rather than
+      // releasing it.
+      clearedRef.current = false;
       setSearchQuery(v);
     }
   };
@@ -531,6 +567,7 @@ export function RateCell({
 
     // Round to 2 decimal places
     cost = Math.round(cost * 100) / 100;
+    clearedRef.current = false;
     // Carry WHICH rate priced the line, not just the number. The parent stamps
     // it onto the bill line as appliedRateKey, which is what stops the save
     // re-deriving the rate away from under the pick.
@@ -614,9 +651,15 @@ export function RateCell({
                 // the draft so the user can fix them without losing
                 // their work.
                 if (formulaResult && formulaResult.ok) commitFormula();
+                // Leaving an emptied cell is the commit that releases the
+                // lock. Does nothing on a cell the QS merely looked at.
+                commitClearRef.current?.();
               }}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
+                  // Escape abandons the edit. Nothing is committed, so an
+                  // emptied cell keeps the rate and the lock it arrived with.
+                  clearedRef.current = false;
                   setFocused(false);
                   setSearchQuery("");
                   setFormulaDraft("");
@@ -629,6 +672,14 @@ export function RateCell({
                   if (formulaResult) {
                     e.preventDefault();
                     commitFormula();
+                    return;
+                  }
+                  // Enter on an emptied cell commits the release, the same as
+                  // clicking away — one keystroke does not, two do.
+                  if (clearedRef.current) {
+                    e.preventDefault();
+                    commitClearRef.current?.();
+                    setFocused(false);
                   }
                 }
               }}
@@ -3043,8 +3094,23 @@ export default function ProjectBillTable({
                           of showing two figures that quietly disagree. Only a
                           real contradiction appears here — a line with nothing
                           priced against it has nothing to reconcile with and
-                          says nothing at all. */}
-                            {rateNote ? (
+                          says nothing at all.
+
+                          A released rate is the other note, and the urgent
+                          one: the cell is empty, the line still shows the old
+                          figure, and the NEXT SAVE hands it to the Budget. He
+                          reads which figure is coming before he writes it. */}
+                            {rateNote?.state === "released" ? (
+                              <div
+                                className="mt-0.5 text-[11px] text-amber-700"
+                                title="The rate cell is empty, so this line goes back to being priced by its Budget build-up. Type a rate again to keep the one on screen."
+                              >
+                                {"Rate released. Saving prices this line from the Budget build-up: "}
+                                {rateNote.budgetRate == null
+                                  ? EN_DASH
+                                  : money(rateNote.budgetRate)}
+                              </div>
+                            ) : rateNote ? (
                               <div
                                 className="mt-0.5 text-[11px] text-amber-700"
                                 title="This rate is the one applied to the line. The Budget build-up still prices it differently, so the two do not reconcile."

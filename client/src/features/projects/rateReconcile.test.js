@@ -160,4 +160,24 @@ describe("reconcileBill", () => {
     expect(reconcileBill(null, null).size).toBe(0);
     expect(reconcileBill([], []).size).toBe(0);
   });
+
+  it("names the figure a committed release is about to apply", () => {
+    // The QS has emptied the cell and not saved. The line still shows his
+    // 15,000; the save will price it from the build-up. He is told which
+    // figure is coming while he can still change his mind.
+    const notes = reconcileBill(
+      [{ code: "A", qty: 10, rate: 15000, ...picked, rateReleased: true }],
+      [{ billIdentity: "A", qty: 10, rate: 10000, profitPercent: 25 }],
+    );
+    expect(notes.get(0)).toEqual({ state: "released", budgetRate: 12500 });
+  });
+
+  it("reports a release with nothing priced under it as an unknown figure", () => {
+    const notes = reconcileBill(
+      [{ code: "A", qty: 10, rate: 15000, ...picked, rateReleased: true }],
+      [],
+    );
+    // null, so the screen prints the en dash rather than inventing a zero.
+    expect(notes.get(0)).toEqual({ state: "released", budgetRate: null });
+  });
 });

@@ -413,6 +413,43 @@ test("a picked rate survives the GET that triggers the budget heal", () => {
   assert.equal(project.items[0].rate, 15000);
 });
 
+test("what a backspaced rate cell used to send, and what it sends now", () => {
+  // The client-side half of this is pinned in
+  // client/src/features/projects/rateStamp.test.jsx. This is the money end of
+  // the same sequence, from the server's point of view.
+  //
+  // The QS applied ₦15,000 to a line whose build-up derives ₦12,500, saved,
+  // then backspaced the cell to retype the figure. That single keystroke
+  // released the lock on screen, and the save then sent the STORED rate with
+  // rateLockedAt stripped — which is exactly the shape below, and the server
+  // does the only thing it can with it.
+  const wasSent = {
+    items: [{ code: "C-CEIL", qty: 10, rate: 15000, rateLockedAt: null }],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+  deriveBillRatesFromBudget(wasSent);
+  assert.equal(wasSent.items[0].rate, 12500); // ₦2,500 a unit, on nothing but a backspace
+
+  // A keystroke no longer strips the stamp, so the same save now sends the
+  // line exactly as it stands and the figure does not move.
+  const isSent = {
+    items: [
+      { code: "C-CEIL", qty: 10, rate: 15000, rateLockedAt: "2026-09-23T05:00:00.000Z" },
+    ],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+  deriveBillRatesFromBudget(isSent);
+  assert.equal(isSent.items[0].rate, 15000);
+
+  // And when he DOES commit the release, the hand-back still works: that is
+  // the first payload, and it is the only way to produce it now.
+  assert.equal(wasSent.items[0].rate, 12500);
+});
+
 test("a hand-typed rate stamped with rateLockedAt survives too", () => {
   const project = {
     items: [{ code: "C-CEIL", qty: 10, rate: 15000, rateLockedAt: "2026-09-23T05:00:00.000Z" }],
