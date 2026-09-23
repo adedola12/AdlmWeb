@@ -26,6 +26,9 @@ import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
 import DsRail from "./chrome/DsRail.jsx";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
+import KeyboardShortcutsDialog, { KeyboardShortcutsButton } from "../components/KeyboardShortcutsDialog.jsx";
+import { useKeyboardShortcuts, railShortcuts } from "../hooks/useKeyboardShortcuts.js";
+import { useTheme } from "../theme.jsx";
 
 // His app screens load dash.css and work.css on top of site.css. Importing
 // them here rather than in main.jsx is what keeps ~91 KB of dashboard styling
@@ -75,6 +78,8 @@ export default function DsAppShell({ children, title = "", page = "" }) {
       ? "Search projects, rates and programmes"
       : "Search products, invoices, people";
 
+  const { toggle: toggleTheme } = useTheme();
+  const searchRef = React.useRef(null);
   const [counts, setCounts] = React.useState(null);
   const [drawer, setDrawer] = React.useState(false);
   const [menu, setMenu] = React.useState(false);
@@ -180,6 +185,23 @@ export default function DsAppShell({ children, title = "", page = "" }) {
     if (rail) rail.classList.toggle("open", drawer);
   }, [drawer]);
 
+  // The shortcut scheme every ADLM product shares, in its browser-safe form.
+  const railRoot = () => railRef.current;
+  const focusSearch = () => {
+    searchRef.current?.focus();
+    searchRef.current?.select();
+  };
+  const keys = useKeyboardShortcuts([
+    ...railShortcuts(railRoot, (href) => navigate(href)),
+    { key: "k", mod: true, typing: true, group: "Navigate", label: "Search", run: focusSearch },
+    { key: "/", group: "Navigate", label: "Search", hidden: true, run: focusSearch },
+    { key: "l", mod: true, shift: true, typing: true, group: "View", label: "Switch light / dark theme", run: toggleTheme },
+    { note: true, display: "Esc", group: "View", label: "Close the menu" },
+  ]);
+
+  const { setSheetOpen } = keys;
+  const closeSheet = React.useCallback(() => setSheetOpen(false), [setSheetOpen]);
+
   const signOut = (e) => {
     e.preventDefault();
     clear();
@@ -229,6 +251,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             <span className="dsh-search">
               {icon("search")}
               <input
+                ref={searchRef}
                 type="search"
                 placeholder={searchPlaceholder}
                 aria-label="Search this account"
@@ -237,6 +260,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             {/* Not in his build: signal bars for the round trip to ADLM Cloud,
                 the same indicator the desktop products carry in their header. */}
             <NetworkIndicator />
+            <KeyboardShortcutsButton onClick={() => keys.setSheetOpen(true)} />
             <span className="dsh-acc">
               <button
                 type="button"
@@ -275,6 +299,12 @@ export default function DsAppShell({ children, title = "", page = "" }) {
         <div
           className={drawer ? "dsh-scrim on" : "dsh-scrim"}
           onClick={() => setDrawer(false)}
+        />
+        <KeyboardShortcutsDialog
+          open={keys.sheetOpen}
+          onClose={closeSheet}
+          items={keys.visible}
+          product="ADLM Studio"
         />
       </div>
     </div>

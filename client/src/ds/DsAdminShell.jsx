@@ -22,6 +22,8 @@ import DsSprite from "./chrome/DsSprite.jsx";
 import DsAdminSprite from "./chrome/DsAdminSprite.jsx";
 import { NAV, titleFor } from "./adminNav.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
+import KeyboardShortcutsDialog, { KeyboardShortcutsButton } from "../components/KeyboardShortcutsDialog.jsx";
+import { useKeyboardShortcuts, railShortcuts } from "../hooks/useKeyboardShortcuts.js";
 import "../styles/ds-admin.css";
 
 const RAIL_KEY = "adlm-adm-rail";
@@ -176,6 +178,24 @@ export default function DsAdminShell({ children, title }) {
 
   // An anchor now carries it in the menu, as his does, so the browser's own
   // navigation has to be called off before ours runs.
+  // The shortcut scheme every ADLM product shares, in its browser-safe form.
+  // Ctrl/âŒ˜+K and Esc stay with the effect above; they are listed as notes.
+  const keys = useKeyboardShortcuts([
+    ...railShortcuts(() => document.querySelector(".adm-rail"), (href) => nav(href)),
+    { note: true, key: "k", mod: true, group: "Navigate", label: "Search" },
+    {
+      key: "/",
+      group: "Navigate",
+      label: "Search",
+      hidden: true,
+      run: () => findRef.current?.focus(),
+    },
+    { key: "l", mod: true, shift: true, typing: true, group: "View", label: "Switch light / dark theme", run: toggle },
+    { note: true, display: "Esc", group: "View", label: "Close the menu" },
+  ]);
+  const { setSheetOpen } = keys;
+  const closeSheet = React.useCallback(() => setSheetOpen(false), [setSheetOpen]);
+
   const signOut = (e) => {
     e?.preventDefault?.();
     clear();
@@ -324,6 +344,7 @@ export default function DsAdminShell({ children, title }) {
             {/* Not in his build: signal bars for the round trip to ADLM Cloud,
                 the same indicator the desktop products carry in their header. */}
             <NetworkIndicator />
+            <KeyboardShortcutsButton onClick={() => keys.setSheetOpen(true)} />
 
             {/* His #tt, on our ThemeProvider rather than its own localStorage
                 key. One theme system for the whole site: admin obeys the same
@@ -389,6 +410,12 @@ export default function DsAdminShell({ children, title }) {
           </main>
         </div>
       </div>
+      <KeyboardShortcutsDialog
+        open={keys.sheetOpen}
+        onClose={closeSheet}
+        items={keys.visible}
+        product="ADLM Studio admin"
+      />
     </div>
   );
 }
