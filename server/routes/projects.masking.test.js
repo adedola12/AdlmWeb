@@ -629,3 +629,267 @@ test("preserveMaskedMoney copes with a project that has no stored array yet", ()
   assert.equal(rows[0].rate, 0);
   assert.equal(rows[1].rate, 0);
 });
+
+/* ── the row id ─────────────────────────────────────────────────────────── */
+//
+// Every money subdocument is `_id: false`, so for a long time a row had no
+// name of its own and the guard could only pair on the row's text and its
+// position. lineId is that name: the server mints it on write, the web client
+// hands it back untouched, and the desktop plugins neither send nor see it.
+//
+// These tests hold both halves of that. A payload that names its rows gets the
+// tighter reading — a row nobody named is a row that was just created, so it
+// never inherits the money of whatever used to sit in its slot. A payload that
+// names nothing gets the old reading, unchanged, because that is what every
+// plugin posts today.
+
+const ID_A = "ln-aaaaaaaa-1111";
+const ID_B = "ln-bbbbbbbb-2222";
+
+// The same two stored lines, now carrying the ids a save would have minted.
+const NAMED_ITEMS = [
+  { ...STORED_ITEMS[0], lineId: ID_A },
+  { ...STORED_ITEMS[1], lineId: ID_B },
+];
+
+test("a named row keeps its own money when its text AND its position change at once", () => {
+  // The case no amount of text-matching or position-matching could get right:
+  // the second line is re-worded and dragged to the top in one save. Its key
+  // changed, so pass 1 cannot find it; it moved, so pass 2 cannot either. Its
+  // id did not change, and that is enough.
+  const incoming = masked("items", [
+    { ...NAMED_ITEMS[1], description: "Concrete 1:2:4 (revised mix)", qty: 61 },
+    NAMED_ITEMS[0],
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: NAMED_ITEMS },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(error, undefined);
+  // Each line kept ITS OWN rate across the move, and the quantity the viewer
+  // is allowed to change still saved.
+  assert.equal(body.items[0].rate, 180000);
+  assert.equal(body.items[0].qty, 61);
+  assert.equal(body.items[1].rate, 5000);
+});
+
+test("a row replaced in its own slot no longer inherits that slot's money", () => {
+  // The limit the previous review pinned, now closed. Same payload as that
+  // test — line 2 swapped for a different line at the same index — except the
+  // rows are named. The added row carries no id in a payload whose other row
+  // does, which is the client saying it is new; it never reaches the position
+  // pass, so it cannot pick up the concrete rate.
+  //
+  // What is left over is a priced stored row nobody carried forward, and the
+  // guard's standing rule for that is to refuse rather than silently drop a
+  // figure the viewer was never allowed to see.
+  const incoming = masked("items", [
+    NAMED_ITEMS[0],
+    { sn: 2, code: "A9", description: "Sand blinding", unit: "m2", qty: 20 },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: NAMED_ITEMS },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(body, undefined);
+  assert.equal(error.status, 409);
+  assert.equal(error.body.code, "RATES_MASKED_UNSAFE_MERGE");
+  assert.equal(error.body.details.array, "items");
+});
+
+test("an unnamed payload still lands on the old reading — the plugins are untouched", () => {
+  // The SAME replacement as the test above, from a client that does not speak
+  // ids: every desktop plugin, which deserializes into its own DTOs and drops
+  // the field. The stored rows are named; the payload is not, and the payload
+  // is what decides. Position still pairs, so the new row still takes the
+  // slot's rate — exactly as it did before lineId existed.
+  const incoming = masked("items", [
+    { ...NAMED_ITEMS[0], lineId: undefined },
+    { sn: 2, code: "A9", description: "Sand blinding", unit: "m2", qty: 20 },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: NAMED_ITEMS },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(error, undefined);
+  assert.equal(body.items[1].rate, 180000);
+});
+
+test("a named row that is only deleted is still an ordinary save", () => {
+  // Deleting is not replacing: the money goes with the line, nothing is left
+  // holding someone else's figure, and no 409 is owed.
+  const { body, error } = guardMaskedWrite({
+    project: { items: NAMED_ITEMS },
+    access: MASKED,
+    body: { items: masked("items", [NAMED_ITEMS[0]]) },
+  });
+  assert.equal(error, undefined);
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0].rate, 5000);
+});
+
+test("a named row added alongside the others is new, and gets blanks", () => {
+  const incoming = masked("items", [
+    ...NAMED_ITEMS,
+    { sn: 3, code: "A3", description: "Hardcore filling", unit: "m3", qty: 12 },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: NAMED_ITEMS },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(error, undefined);
+  assert.equal(body.items[0].rate, 5000);
+  assert.equal(body.items[1].rate, 180000);
+  assert.equal(body.items[2].rate, 0);
+  assert.equal(body.items[2].netUnitCost, null);
+});
+
+test("a duplicated id pairs one-for-one — the copy is a new row, not a second claim", () => {
+  // Copying a line in the editor can copy its id too. The first row to claim
+  // an id gets it and the stored row is spent; the copy falls through and is
+  // read as new. Two rows must never both be paid the same stored rate.
+  const stored = [NAMED_ITEMS[0]];
+  const incoming = masked("items", [
+    NAMED_ITEMS[0],
+    { ...NAMED_ITEMS[0], sn: 2, description: "Excavate trenches (copy)" },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: stored },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(error, undefined);
+  assert.equal(body.items[0].rate, 5000);
+  assert.equal(body.items[1].rate, 0);
+});
+
+test("an id that is not a well-formed id reads as no id at all", () => {
+  // Rubbish in the field must not become a key, or two rows that both sent
+  // rubbish would pair with each other. "x" is too short for LINE_ID_RE, so
+  // this payload names nothing and falls through to the old passes.
+  const incoming = masked("items", [
+    { ...STORED_ITEMS[0], lineId: "x" },
+    { ...STORED_ITEMS[1], lineId: { not: "a string" } },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: NAMED_ITEMS },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(error, undefined);
+  assert.equal(body.items[0].rate, 5000);
+  assert.equal(body.items[1].rate, 180000);
+});
+
+test("a masked save that arrives unnamed still comes out named", () => {
+  // A plugin's save strips the ids. Whatever the guard pairs, it hands the
+  // stored row's id back to the row that paired with it, so the ids the web
+  // client is holding survive a save it did not make. Without this the next
+  // masked save would be back to guessing.
+  const incoming = masked("items", STORED_ITEMS); // no ids anywhere
+  const { rows, unsafe } = preserveMaskedMoney(NAMED_ITEMS, incoming, "items");
+  assert.equal(unsafe, false);
+  assert.equal(rows[0].lineId, ID_A);
+  assert.equal(rows[1].lineId, ID_B);
+});
+
+test("a row that sent its own id keeps it — the stored id never overwrites it", () => {
+  const incoming = masked("items", NAMED_ITEMS);
+  const { rows } = preserveMaskedMoney(NAMED_ITEMS, incoming, "items");
+  assert.equal(rows[0].lineId, ID_A);
+  assert.equal(rows[1].lineId, ID_B);
+});
+
+test("every money array pairs on the id, not just the bill", () => {
+  // The id is on all five subdocuments, so the pass has to work for each of
+  // them. Re-word and re-order one row of each and check its own figure
+  // followed it. preliminaryItems is keyed on `name` alone, so a rename there
+  // was previously unmatchable in any position but its own.
+  const cases = {
+    provisionalSums: [
+      { lineId: ID_A, description: "Lift installation", amount: 4_000_000, kind: "pc" },
+      { lineId: ID_B, description: "Soakaway", amount: 250_000, kind: "provisional" },
+    ],
+    variations: [
+      { lineId: ID_A, reference: "VO-01", description: "Extra soakaway", unit: "item", qty: 1, rate: 90_000 },
+      { lineId: ID_B, reference: "VO-02", description: "Omit fence", unit: "m", qty: 10, rate: -4_000 },
+    ],
+    preliminaryItems: [
+      { lineId: ID_A, name: "Site security", actualAmount: 300_000 },
+      { lineId: ID_B, name: "Insurances", actualAmount: 120_000 },
+    ],
+    budgetItems: [
+      { lineId: ID_A, billIdentity: "A1", description: "Cement", unit: "bag", qty: 100, rate: 9_000, budgetRate: 9_000 },
+      { lineId: ID_B, billIdentity: "A2", description: "Sand", unit: "m3", qty: 20, rate: 15_000, budgetRate: 15_000 },
+    ],
+  };
+  const renamed = {
+    provisionalSums: (r) => ({ ...r, description: "Lift installation (revised)" }),
+    variations: (r) => ({ ...r, description: "Extra soakaway (revised)", reference: "VO-01A" }),
+    preliminaryItems: (r) => ({ ...r, name: "Site security (night only)" }),
+    budgetItems: (r) => ({ ...r, description: "Cement (42.5R)", billIdentity: "A1x" }),
+  };
+  const figure = {
+    provisionalSums: "amount",
+    variations: "rate",
+    preliminaryItems: "actualAmount",
+    budgetItems: "rate",
+  };
+
+  for (const [kind, stored] of Object.entries(cases)) {
+    // Re-word row one and move it to the bottom, in one save.
+    const incoming = masked(kind, [stored[1], renamed[kind](stored[0])]);
+    const { rows, unsafe, reason } = preserveMaskedMoney(stored, incoming, kind);
+    assert.equal(unsafe, false, `${kind}: ${reason}`);
+    assert.equal(rows[0][figure[kind]], stored[1][figure[kind]], kind);
+    assert.equal(rows[1][figure[kind]], stored[0][figure[kind]], kind);
+  }
+});
+
+test("a forged id reaches no further than a copied description already did", () => {
+  // Pinned so the limit is a decision, not a surprise. A collaborator who
+  // cannot see rates CAN point a line at another line's stored price, by
+  // sending that line's id — just as they could by copying its description
+  // and unit, which has always worked. Nothing here shows them a figure, and
+  // nothing here lets them type one: the money still comes from the store.
+  // Re-arranging which line money sits on is edit access, which the owner
+  // granted; the guard's job is to stop a masked save WRITING money.
+  const incoming = masked("items", [
+    { ...STORED_ITEMS[0], lineId: ID_B }, // claims to be the concrete line
+  ]);
+  const { rows } = preserveMaskedMoney(NAMED_ITEMS, incoming, "items");
+  assert.equal(rows[0].rate, 180000);
+});
+
+test("a row the server synthesised is unnamed, and still pairs on position", () => {
+  // Not every stored row went through a sanitizer: ensureBillItemCoverage()
+  // makes the Labour and Material lines a bill item is missing, and every row
+  // written before this field existed has no id either. Those rows are stored
+  // unnamed, and an unnamed incoming row sitting against one is NOT the "a
+  // client that names its rows left this one out" case — there was no id for
+  // it to echo. Position still speaks for them, which is what keeps the Budget
+  // tab saving on a project whose rows are only half named.
+  const stored = [
+    { ...STORED_ITEMS[0], lineId: ID_A },
+    { ...STORED_ITEMS[1] }, // synthesised: no id, and priced
+  ];
+  const incoming = masked("items", [
+    stored[0],
+    { ...stored[1], description: "Concrete 1:2:4 (re-worded)" },
+  ]);
+  const { body, error } = guardMaskedWrite({
+    project: { items: stored },
+    access: MASKED,
+    body: { items: incoming },
+  });
+  assert.equal(error, undefined);
+  assert.equal(body.items[0].rate, 5000);
+  assert.equal(body.items[1].rate, 180000);
+  // …and having paired, the unnamed stored row still has nothing to lend it,
+  // so the row stays unnamed until a sanitizer names it on the way to disk.
+  assert.equal(body.items[1].lineId, undefined);
+});

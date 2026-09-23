@@ -212,3 +212,47 @@ describe("date handling", () => {
     expect(toDateInput("")).toBe("");
   });
 });
+
+describe("the row id survives the round trip", () => {
+  // The server gives every row a lineId and pairs an incoming row to the
+  // stored row it came from by that id (server/routes/projects.js,
+  // preserveMaskedMoney). It only works if the id comes BACK, so these rows
+  // must keep a field these helpers have never heard of.
+  //
+  // This is the same "a row travels whole" rule the rest of this file pins,
+  // and it is why these helpers spread instead of listing fields. Rewrite one
+  // of them as a field list and a rate-masked collaborator's save starts
+  // guessing again — or gets refused, because a row that arrives unnamed in a
+  // payload whose other rows are named reads as a brand-new row.
+  const LINE_ID = "ln-aaaaaaaa-1111";
+
+  it("keeps the id on a provisional sum", () => {
+    const out = provisionalSumForSave(
+      provisionalSumRow({ lineId: LINE_ID, description: "Lift installation", amount: 1 }),
+    );
+    expect(out.lineId).toBe(LINE_ID);
+  });
+
+  it("keeps the id on a variation", () => {
+    const out = variationForSave(
+      variationRow({ lineId: LINE_ID, description: "Extra soakaway", qty: 1, rate: 1 }),
+    );
+    expect(out.lineId).toBe(LINE_ID);
+  });
+
+  it("keeps the id on a preliminary item", () => {
+    const out = preliminaryItemForSave(
+      preliminaryItemRow({ lineId: LINE_ID, name: "Site security", allocation: 5 }),
+    );
+    expect(out.lineId).toBe(LINE_ID);
+  });
+
+  it("gives a brand-new row no id — the server is the one that names rows", () => {
+    // A client-invented id would be a client-invented identity, and the row it
+    // claimed to be is where the money is. New rows arrive unnamed and the
+    // server mints one on write.
+    expect(newProvisionalSumRow("pc").lineId).toBeUndefined();
+    expect(newVariationRow().lineId).toBeUndefined();
+    expect(newPreliminaryItemRow().lineId).toBeUndefined();
+  });
+});

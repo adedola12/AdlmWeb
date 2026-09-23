@@ -106,6 +106,17 @@ const ValuationEventSchema = new mongoose.Schema(
 
 const ProvisionalSumSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     description: { type: String, default: "", trim: true },
     amount: { type: Number, default: 0 },
     // PC sums are budgetary allowances — the actual scope is executed and
@@ -153,6 +164,17 @@ const ElementQtySchema = new mongoose.Schema(
 // is fully backward-compatible.
 const BudgetItemSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     billIdentity: { type: String, default: "" },
     sn: { type: Number, default: 0 },
     description: { type: String, default: "", trim: true },
@@ -201,6 +223,17 @@ const BudgetItemSchema = new mongoose.Schema(
 // pool, mirroring how measured items drive valuation.
 const PreliminaryItemSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     name: { type: String, default: "", trim: true },
     allocation: { type: Number, default: 0 }, // 0-100
     completed: { type: Boolean, default: false },
@@ -222,6 +255,17 @@ const PreliminaryItemSchema = new mongoose.Schema(
 // client extras) so they can be tracked against the project total.
 const VariationSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     description: { type: String, default: "", trim: true },
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "", trim: true },
@@ -592,6 +636,17 @@ const ContractSchema = new mongoose.Schema(
 
 const ItemSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     sn: { type: Number, default: 0 },
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },

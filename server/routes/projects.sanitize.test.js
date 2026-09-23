@@ -15,7 +15,7 @@ import mongoose from "mongoose";
 
 process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "test-access-secret";
 
-const { sanitizeProvisionalSums, sanitizeVariations } = await import("./projects.js");
+const { sanitizeProvisionalSums, sanitizeVariations, keepLineId } = await import("./projects.js");
 
 const DECIDER = new mongoose.Types.ObjectId().toString();
 
@@ -110,4 +110,58 @@ test("rubbish in the decision fields is dropped, not stored", () => {
   assert.equal(out.decidedAt, null);
   assert.equal(out.decidedBy, null);
   assert.equal(out.source, "manual");
+});
+
+/* ── the row id ─────────────────────────────────────────────────────────── */
+//
+// These rows are `_id: false` subdocuments, so the sanitizers are the only
+// place a row can be given a name of its own. Every write path funnels through
+// them, which is how a row ends up named without any caller knowing about it.
+// projects.masking.test.js holds what the name is FOR.
+
+test("a row with no id is given one", () => {
+  const [sum] = sanitizeProvisionalSums([{ description: "Lift installation", amount: 1 }]);
+  const [vo] = sanitizeVariations([{ description: "Extra soakaway", qty: 1, rate: 1 }]);
+  assert.match(sum.lineId, /^[A-Za-z0-9_-]{8,64}$/);
+  assert.match(vo.lineId, /^[A-Za-z0-9_-]{8,64}$/);
+});
+
+test("two rows saved together are given different ids", () => {
+  // Ids are minted, never derived from the row or its position — two rows that
+  // are identical in every other way must still be told apart.
+  const [a, b] = sanitizeProvisionalSums([
+    { description: "Soakaway", amount: 250_000 },
+    { description: "Soakaway", amount: 250_000 },
+  ]);
+  assert.notEqual(a.lineId, b.lineId);
+});
+
+test("a row that came back with its id keeps it", () => {
+  const id = "ln-aaaaaaaa-1111";
+  const [sum] = sanitizeProvisionalSums([
+    { lineId: id, description: "Lift installation", amount: 1 },
+  ]);
+  assert.equal(sum.lineId, id);
+});
+
+test("an id that is not well formed is replaced, never stored", () => {
+  // Too short, too long, wrong characters, or not a string at all. Anything
+  // that is not an id gets a real one rather than being written through — two
+  // rows that both sent rubbish must not end up sharing a name.
+  const rubbish = ["x", "a".repeat(65), "has spaces", "semi;colon", { o: 1 }, 42, null];
+  const rows = sanitizeProvisionalSums(
+    rubbish.map((lineId, i) => ({ lineId, description: `Row ${i}`, amount: 1 })),
+  );
+  assert.equal(rows.length, rubbish.length);
+  const ids = new Set(rows.map((r) => r.lineId));
+  assert.equal(ids.size, rubbish.length);
+  for (const r of rows) assert.match(r.lineId, /^[A-Za-z0-9_-]{8,64}$/);
+});
+
+test("keepLineId is the one place that decides", () => {
+  const id = "ln-bbbbbbbb-2222";
+  assert.equal(keepLineId(id), id);
+  assert.equal(keepLineId(`  ${id}  `), id, "trimmed, because clients pad");
+  assert.notEqual(keepLineId(""), "");
+  assert.notEqual(keepLineId(undefined), keepLineId(undefined));
 });

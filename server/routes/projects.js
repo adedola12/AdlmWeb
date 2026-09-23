@@ -171,6 +171,44 @@ const NEVER_ACCEPTED_FROM_CLIENT = Object.freeze([
   "lockPinHash",
 ]);
 
+// A row's own identity, as the client hands it back.
+//
+// These rows are `_id: false` subdocuments, so until now a row had no name
+// of its own: pairing an incoming row to the stored row it came from could
+// only read its text and its position, and a row REPLACED in its slot was
+// indistinguishable from the same row edited in place. lineId is that name.
+// The server mints it on write, and every other field on the row can then
+// change without the row losing track of which stored row it is.
+//
+// Deliberately opaque and deliberately random: it must never encode a
+// position, because a stale id that happened to line up with a re-used slot
+// would pair two rows that have nothing to do with each other. Bounded and
+// character-limited so a client cannot post a megabyte of it.
+//
+// What it is NOT: an authorisation. A masked collaborator could forge one to
+// pull a particular stored row's price onto a different line — but they can
+// already do that by copying that row's description and unit, and either way
+// the figure comes from the STORE and stays invisible to them. The guard
+// stops a masked save writing money; it does not pretend to stop an editor
+// the owner trusted from re-arranging which line money sits on.
+const LINE_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+// The id on a row, or "" when there is none worth trusting.
+function normalizeLineId(value) {
+  const id = String(value == null ? "" : value).trim();
+  return LINE_ID_RE.test(id) ? id : "";
+}
+
+// The id a sanitized row is stored with: the client's own, when it sent one
+// back, and a fresh one when it did not. Every sanitizer calls this, so every
+// write path mints ids without knowing it — including the plugins, which send
+// no id and, ignoring unknown JSON fields as they do, never see one.
+//
+// Exported for its unit test (projects.sanitize.test.js).
+export function keepLineId(value) {
+  return normalizeLineId(value) || crypto.randomUUID();
+}
+
 // An identity for one row that is made of NOTHING the guard protects, so two
 // rows can be paired without ever consulting the money that is in dispute.
 function moneyFreeKey(kind, row, index) {
@@ -229,12 +267,14 @@ function rowCarriesMoney(row, fields) {
 // must refuse the write rather than write a guess over real money.
 //
 // Pairing, in order:
+//   0. the row's own lineId, when both sides carry one — the only pass that
+//      survives the row's text AND its position changing in the same save;
 //   1. same identity (money-free), bucketed so duplicates pair one-for-one and
 //      a pure re-order still matches completely;
 //   2. leftovers that sit at the same index on BOTH sides, and only while the
 //      two sides have the same number of leftovers — the ordinary "edited a
 //      description in place" case, where position still means something.
-// There is no third pass. There used to be one — any remaining leftovers
+// There is no fourth pass. There used to be a third — any remaining leftovers
 // paired in order whenever the counts happened to match — and it was wrong:
 // equal leftover counts do NOT mean the leftovers correspond. Delete one line
 // and add another in the same save and the added line inherited the deleted
@@ -248,12 +288,19 @@ function rowCarriesMoney(row, fields) {
 // still an ordinary save — the money goes with the line the viewer meant to
 // delete, and no incoming row is left holding somebody else's figure.
 //
-// Known limit, and it is inherent: these rows have no stable id (every money
-// subdocument is `_id: false`), so a row REPLACED in its own slot is
-// indistinguishable from the same row edited in place, and keeps that slot's
-// money. Money never crosses from one position to another, which is what the
-// third pass was doing. Closing the last of it needs a row id the client
-// round-trips.
+// The id is what closes the old known limit, and it closes it only for a
+// client that round-trips it. Replace a row in its own slot and the added row
+// arrives carrying no id (or one that names no stored row) in a payload whose
+// other rows are named, which is the client telling us it is new. It no longer
+// reaches pass 2, so it no longer inherits the slot's rate — and because the
+// replaced row is then a priced leftover, the save is REFUSED rather than
+// quietly blanked. A 409 that says "reload and save a smaller change" is the
+// right answer to a request the server genuinely cannot read: the alternative
+// is dropping a figure the viewer was never allowed to see.
+//
+// A payload carrying no ids at all names nothing, falls straight through to
+// passes 1 and 2, and behaves exactly as it did before the id existed — which
+// is the contract the desktop plugins are held to.
 export function preserveMaskedMoney(stored, incoming, kind) {
   const blanks = MASKED_MONEY_BLANKS[kind];
   if (!blanks) {
@@ -263,23 +310,50 @@ export function preserveMaskedMoney(stored, incoming, kind) {
   const storedRows = Array.isArray(stored) ? stored : [];
   const rows = (Array.isArray(incoming) ? incoming : []).map((r) => ({ ...(r || {}) }));
 
-  // 1. identity
-  const buckets = new Map();
-  storedRows.forEach((row, i) => {
-    const key = moneyFreeKey(kind, row, i);
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push(i);
-  });
   const sourceFor = new Array(rows.length).fill(-1);
   const storedTaken = new Array(storedRows.length).fill(false);
-  rows.forEach((row, i) => {
-    const bucket = buckets.get(moneyFreeKey(kind, row, i));
-    if (bucket && bucket.length) {
+
+  // One pairing pass over whatever is still unpaired. `keyOf(row, index)`
+  // returns the key this pass matches on, or null for a row it cannot speak
+  // for. Bucketed, so duplicate keys pair one-for-one and a pure re-order
+  // still matches completely.
+  const pairOn = (keyOf) => {
+    const buckets = new Map();
+    storedRows.forEach((row, i) => {
+      if (storedTaken[i]) return;
+      const key = keyOf(row, i);
+      if (key == null) return;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(i);
+    });
+    if (!buckets.size) return;
+    rows.forEach((row, i) => {
+      if (sourceFor[i] >= 0) return;
+      const key = keyOf(row, i);
+      if (key == null) return;
+      const bucket = buckets.get(key);
+      if (!bucket || !bucket.length) return;
       const si = bucket.shift();
       sourceFor[i] = si;
       storedTaken[si] = true;
-    }
-  });
+    });
+  };
+
+  // Does this payload name its rows at all? One valid id anywhere in the
+  // array is the client saying "I round-trip these", which is what makes a
+  // row WITHOUT one a row it has just created rather than a row it forgot to
+  // label. A payload with no ids claims nothing, and gets exactly the
+  // behaviour it had before this field existed.
+  const payloadNamesRows = rows.some((row) => normalizeLineId(row?.lineId));
+
+  // 0. the row's own id. Skipped for any row without one, on either side, so
+  //    a payload that carries no ids reaches pass 1 with nothing paired.
+  pairOn((row) => normalizeLineId(row?.lineId) || null);
+
+  // 1. identity. moneyFreeKey() always returns a string — including "" for a
+  //    row with nothing in its key fields — and "" is a key like any other
+  //    here, which is what it has always been.
+  pairOn((row, i) => moneyFreeKey(kind, row, i));
 
   // Whatever is left on each side is either a row whose identity the viewer
   // edited, a row they added, or a row they deleted — and from here we cannot
@@ -298,9 +372,31 @@ export function preserveMaskedMoney(stored, incoming, kind) {
   //    number of leftovers: an unequal count means rows were added or removed
   //    around the edit, and then index i on one side is not index i on the
   //    other (delete a line and the line below it slides up into its place).
+  //
+  //    Position is a guess, and an id is evidence, so the guess only gets to
+  //    stand where no id contradicts it. Two things contradict it:
+  //      • the incoming row carries an id. It got this far, so that id named
+  //        no stored row — it is a new row, or a stale one from a client that
+  //        loaded before somebody else's save. Either way it is not whichever
+  //        row happens to sit at this index now.
+  //      • the incoming row carries none while the stored row at this index
+  //        does, in a payload that named its other rows. A client that echoes
+  //        ids would have echoed that one, so this is a row it just created.
+  //    This is the pass that used to hand a replaced row its slot's rate. A
+  //    client that names its rows no longer reaches it, and the save is
+  //    refused below instead — which the viewer fixes by reloading.
+  //
+  //    What still pairs here, exactly as it always has: a payload that names
+  //    nothing, which is every desktop plugin; and an unnamed row against an
+  //    unnamed stored row, which is a row synthesised server-side or one
+  //    written before this field existed.
+  const positionContradicted = (i) =>
+    Boolean(normalizeLineId(rows[i]?.lineId)) ||
+    (payloadNamesRows && Boolean(normalizeLineId(storedRows[i]?.lineId)));
   if (leftIn.length && leftIn.length === leftStored.size) {
     leftIn = leftIn.filter((i) => {
       if (!leftStored.has(i)) return true;
+      if (positionContradicted(i)) return true;
       sourceFor[i] = i;
       leftStored.delete(i);
       return false;
@@ -331,6 +427,15 @@ export function preserveMaskedMoney(stored, incoming, kind) {
     const src = sourceFor[i] >= 0 ? storedRows[sourceFor[i]] : null;
     for (const f of fields) {
       row[f] = src ? src[f] : blanks[f];
+    }
+    // A row that paired on its text or its position, but arrived without an
+    // id, inherits the stored row's. Without this a masked save would drop
+    // the id the owner's client minted, and the NEXT masked save would be
+    // back to guessing. The id is not money and is not in `fields`, so a row
+    // that sent its own keeps it.
+    if (src && !normalizeLineId(row.lineId)) {
+      const carried = normalizeLineId(src.lineId);
+      if (carried) row.lineId = carried;
     }
   });
   return { rows, unsafe: false, reason: "" };
@@ -1322,6 +1427,9 @@ function sanitizeItems(items, productKey = "") {
     if (wasBinaryDone && parsedPercent < 100) parsedPercent = 100;
 
     const baseItem = {
+      // See keepLineId(). Kept when the client echoed one, minted when it
+      // did not, so a row is never stored without a name of its own.
+      lineId: keepLineId(item.lineId),
       sn: Number.isFinite(Number(item.sn)) ? Number(item.sn) : i + 1,
       qty: Number.isFinite(Number(item.qty)) ? Number(item.qty) : 0,
       unit: item.unit != null ? String(item.unit) : "",
@@ -1417,7 +1525,7 @@ export function sanitizeProvisionalSums(sums) {
     // always been treated, so a client that does not send `kind` (every
     // desktop plugin today) leaves its rows exactly as they were.
     const kind = String(s.kind || "").trim().toLowerCase() === "pc" ? "pc" : "provisional";
-    out.push({ description, amount, completed, completedAt, kind });
+    out.push({ lineId: keepLineId(s.lineId), description, amount, completed, completedAt, kind });
   }
   return out;
 }
@@ -1480,6 +1588,7 @@ function sanitizeBudgetItems(items) {
           .slice(0, 5000)
       : [];
     out.push({
+      lineId: keepLineId(b.lineId),
       billIdentity,
       sn: num(b.sn),
       description,
@@ -1563,7 +1672,10 @@ function sanitizePreliminaryItems(items) {
     const actualAmount = Number.isFinite(Number(it.actualAmount))
       ? Math.max(0, Number(it.actualAmount))
       : 0;
-    out.push({ name, allocation, completed, completedAt, notes, actualAmount });
+    out.push({
+      lineId: keepLineId(it.lineId),
+      name, allocation, completed, completedAt, notes, actualAmount,
+    });
   }
   return out;
 }
@@ -1607,6 +1719,7 @@ export function sanitizeVariations(variations) {
     const decidedBy = isValidObjectId(v.decidedBy) ? v.decidedBy : null;
     if (!description && qty === 0 && rate === 0) continue;
     out.push({
+      lineId: keepLineId(v.lineId),
       description, qty, unit, rate, reference, issuedAt, source,
       completed, completedAt, status, decidedAt, decidedBy,
     });
@@ -3876,7 +3989,16 @@ async function updateProject(req, res) {
         // built some other way — a BoQ import, say. Restore against the budget
         // this is about to overwrite, which is the money actually at risk.
         if (access && !access.canSeeRates) {
-          const kept = preserveMaskedMoney(project.budgetItems, budget, "budgetItems");
+          // These rows were DERIVED from materialItems, so the ids on them are
+          // materialItems' ids — they name material lines, not budget lines,
+          // and pairing on them would match nothing while still telling
+          // preserveMaskedMoney that this payload names its rows (which would
+          // switch off its position pass). Hand it an anonymous array so this
+          // path pairs on text and position exactly as it always has, then put
+          // the ids back: the ones it carried forward from the stored budget,
+          // and a fresh one for anything genuinely new.
+          const anonymous = budget.map((b) => ({ ...b, lineId: "" }));
+          const kept = preserveMaskedMoney(project.budgetItems, anonymous, "budgetItems");
           if (kept.unsafe) {
             return res.status(409).json({
               error:
@@ -3887,7 +4009,7 @@ async function updateProject(req, res) {
               details: { array: "budgetItems", reason: kept.reason },
             });
           }
-          budget = kept.rows;
+          budget = kept.rows.map((b) => ({ ...b, lineId: keepLineId(b.lineId) }));
         }
         backfillBudgetLinks(project.items, budget);
         project.budgetItems = ensureBillItemCoverage(project.items, budget);
