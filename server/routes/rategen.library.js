@@ -24,6 +24,11 @@ import {
   toUserRateDefinition,
   compositionSubtotals,
 } from "../util/rategenUserRates.js";
+import {
+  makeCompositionBudget,
+  projectBestRate,
+  projectRateCandidate,
+} from "../util/rategenRateProjection.js";
 
 const router = express.Router();
 
@@ -408,7 +413,13 @@ router.post("/library/material-prices/resolve", async (req, res, next) => {
  * POST /library/rate-items/resolve
  * Fuzzy-match BOQ item descriptions against the user's effective RateGen rates.
  * Body: { items: [{ description, unit }], limitCandidates?: number }
- * Returns: { ok, results, ratesByKey, candidatesByKey }
+ * Returns: { ok, results, ratesByKey, candidatesByKey, stats }
+ *
+ * Every candidate carries the rate's id and its per-unit split by resource
+ * class — materialCost / labourCost / plantCost / otherCost — because plant is
+ * its own class and a caller filing this money into a Budget has to know which
+ * bucket it belongs in. The best match additionally carries the full
+ * `composition` (up to a per-response cap; see util/rategenRateProjection.js).
  */
 router.post("/library/rate-items/resolve", async (req, res, next) => {
   try {
@@ -470,6 +481,9 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
     const candidatesByKey = {};
     const results = [];
 
+    // Bounds how much build-up one response may carry; see the helper.
+    const budget = makeCompositionBudget();
+
     for (const w of wanted) {
       const reqToks = tokens(w.description);
       const reqUnit = normUnit(w.unit);
@@ -495,47 +509,13 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
       const best = candidates[0] || null;
 
       // Candidates carry the per-unit subtotals and the rate's id, but NOT the
-      // whole build-up: a bulk resolve asks for up to 2000 bill lines and
-      // returns up to 20 candidates each, so a full composition per candidate
-      // would make the response many times larger. The build-up rides on the
-      // best match only (below) — that is the one a pick writes from.
-      const mapped = candidates.map((c) => ({
-        description: c.description,
-        unit: c.unit,
-        totalCost: c.totalCost,
-        netCost: c.netCost,
-        sectionKey: c.sectionKey,
-        sectionLabel: c.sectionLabel,
-        source: c.source,
-        score: Number((c.score || 0).toFixed(4)),
-        rateId: c.rateId || null,
-        materialCost: c.subtotals.materialCost,
-        labourCost: c.subtotals.labourCost,
-        plantCost: c.subtotals.plantCost,
-        otherCost: c.subtotals.otherCost,
-      }));
+      // whole build-up — see util/rategenRateProjection.js for why.
+      const mapped = candidates.map(projectRateCandidate);
 
       candidatesByKey[descKey] = mapped;
-      ratesByKey[descKey] = best
-        ? {
-            description: best.description,
-            unit: best.unit,
-            totalCost: best.totalCost,
-            sectionLabel: best.sectionLabel,
-            source: best.source,
-            score: Number((best.score || 0).toFixed(4)),
-            rateId: best.rateId || null,
-            netCost: best.netCost,
-            materialCost: best.subtotals.materialCost,
-            labourCost: best.subtotals.labourCost,
-            plantCost: best.subtotals.plantCost,
-            otherCost: best.subtotals.otherCost,
-            // Null when the rate has no structured build-up (an unpriced or
-            // headline-only rate) — the caller must cope with that rather than
-            // assume a split exists.
-            composition: best.composition || null,
-          }
-        : null;
+      ratesByKey[descKey] = projectBestRate(best, {
+        includeComposition: budget.take(best),
+      });
 
       results.push({
         key: descKey,
@@ -550,7 +530,7 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
       results,
       ratesByKey,
       candidatesByKey,
-      stats: { requested: wanted.length, pool: pool.length },
+      stats: { requested: wanted.length, pool: pool.length, ...budget.stats },
     });
   } catch (err) {
     next(err);
@@ -560,7 +540,9 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
 /**
  * GET /library/rate-items/search?q=...&limit=8
  * Lightweight type-ahead: search user's effective rates by description keyword.
- * Returns: { ok, results: [{ description, unit, totalCost, sectionLabel, source }] }
+ * Returns: { ok, results: [{ description, unit, totalCost, netCost, sectionLabel,
+ *   source, score, rateId, materialCost, labourCost, plantCost, otherCost }] }
+ * No composition here — this fires on every keystroke.
  */
 router.get("/library/rate-items/search", async (req, res, next) => {
   try {
