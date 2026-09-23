@@ -21,6 +21,7 @@ import {
   normalizeCustomRate,
   normalizeRateOverride,
   normalizeSectionKey,
+  preservePlantLines,
   toUserRateDefinition,
   compositionSubtotals,
 } from "../util/rategenUserRates.js";
@@ -1150,8 +1151,8 @@ router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
       });
     }
 
-    const item = normalizeUserCustomRatePayload(customRateId, req.body);
-    if (!item.title && !item.description) {
+    const incoming = normalizeUserCustomRatePayload(customRateId, req.body);
+    if (!incoming.title && !incoming.description) {
       return res
         .status(400)
         .json({ error: "title or description is required" });
@@ -1160,6 +1161,16 @@ router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
     const nextItems = [...(lib.customRates || [])];
     const existingIndex = nextItems.findIndex(
       (candidate) => String(candidate?.customRateId || "") === customRateId
+    );
+
+    // Rate Gen desktop rebuilds its push from its own material and labour
+    // lists, so a plant line authored on the website is simply missing from
+    // it and the rate would come back worth the plant amount less. A client
+    // that understands plant says so and its payload is authoritative.
+    const item = preservePlantLines(
+      incoming,
+      existingIndex >= 0 ? nextItems[existingIndex] : null,
+      { clientSupportsPlant: req.body?.supportsPlant === true },
     );
 
     if (existingIndex >= 0) nextItems[existingIndex] = item;

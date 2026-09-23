@@ -80,27 +80,89 @@ carry the money: the door a rate walks through, and the engine that writes Budge
   the whole `materialItems` array and the Budget is re-derived from it, so a changed
   `componentKind` would re-key every row on every project its user opens.
 
-## Two read-only counts to run first
+## The two read-only counts — RUN, 23 September 2026
 
-Local dev points at the production cluster, so these were not run:
+Both were run read-only against the production cluster before any code was
+written. `countDocuments` / `aggregate` only, no writes, no app code loaded.
 
-- `db.rategenrates.countDocuments({ "breakdown.refKind": { $in: [null, ""] } })` — if zero, the
-  master catalogue is already stamped and a classifier change will never reach it, because an
-  explicit `refKind` outranks the name regex (`rategenUserRates.js:306`).
-- a count of `budgetItems` rows anywhere with `componentKind` matching `/plant|equip/i` — if it is
-  zero, the Plant sheet has never printed for a real customer, and this is far safer to change
-  today than it will be in three months.
+**1. Master rates with an unstamped breakdown — 1 line out of 204.**
 
-## Still to design (the dedicated session)
+`db.rategenrates.countDocuments({ "breakdown.refKind": { $in: [null, ""] } })`
+returns **1**, across 130 rates. The `refKind` values present are `material`
+(114) and `labour` (89) — **and no `plant` at all**: plant does not exist
+anywhere in the master catalogue today.
 
-- How a picked rate writes Budget rows: bill quantity × constants for the material quantities,
-  prices and class from the rate, one aggregated **Labour** row and one **Plant** row per item.
-- The `sn` band and `rateSource` stamp for rategen-written rows, so `isGeneratedRow` can replace
-  them on a re-pick but never touches a row the QS typed
-  (`mlSchedule.js:694`, and the 800,000,000–899,999,999 band).
-- A Plant branch in `mlSchedule`, fed from the rate's plant subtotal.
-- The **project resources** store for the gang detail. It must be a new array that
-  `deriveBillRates` and the budget heal never read — `deriveBillRates.js:46` sums every row under
-  a `billIdentity`, so gang rows in `budgetItems` would double-count labour and raise the bill by
-  ~20% on a plain read.
+So the doc's prediction holds: the catalogue is effectively fully stamped, an
+explicit `refKind` outranks the name regex, and a classifier change is inert
+there. That is what made it safe to replace the five private classifiers with
+one shared vocabulary (`util/resourceKind.js`).
+
+**2. Budget rows already classed as plant — NOT zero. 6 rows, 3 projects.**
+
+This contradicts the assumption the doc was written on. The Plant sheet HAS a
+real customer's data behind it:
+
+| project | row | kind | sn | rate | qty |
+|---|---|---|---|---|---|
+| My Revit Takeoff | Concrete mixer 10/7 | Plant | 82, 89 | 0 | 0.3, 1.01 |
+| New Takeoff | Concrete mixer 10/7 | Plant | 67, 74 | 0 | 0.3, 1.01 |
+| New Demo | Concrete mixer 10/7 | Plant | 93, 100 | 0 | 0.3, 1.01 |
+
+The `sn` values are small, so these are REAL plugin-sent rows, not generated
+ones. They are priced at 0 — plant reached the Budget and was then invisible
+to the costing engine, exactly as defect 3 describes.
+
+Consequences, and they are now design constraints rather than observations:
+
+- The componentKind spelling in the database is **capitalised** (`Material`,
+  `Labour`, `Plant`, `Consumable`), while rate and component kinds are
+  lowercase on the wire. The shared classifier keeps both and never rewrites a
+  stored word, because `componentKind` is part of every merge key.
+- `isRateGenRow` must not match these. It does not: they carry no
+  `rateSource` and their `sn` is nowhere near the 700,000,000 band.
+- A histogram of every `budgetItems.componentKind` in production:
+  Material 12,395 · Labour 7,650 · Consumable 35 · Plant 6.
+
+**A third count was run, because the design needed it.** The `sn` band
+700,000,000–799,999,999 is **completely empty** across all 19,272 budget rows
+(< 700M: 13,451 real rows · 800–899M: 814 ml-schedule · ≥ 900M: 5,821
+coverage). That band is now the rategen-written band.
+
+## Built, 23 September 2026 (the dedicated session)
+
+All five on `claude/bold-goldberg-9d774d`, branched off this one. The plugin
+half is untouched — see `PLANT-IN-BUDGET-PLUGIN-HANDOVER.md`.
+
+- **A picked rate writes the Budget rows** — `util/rateToBudget.js`, and an
+  additive `POST /:productKey/:id/bill/:code/price-from-rate`. Quantities from
+  the bill and the constants, prices and class from the rate; material rows,
+  ONE Labour row, ONE Plant row. Reproduction is by back-solved O&P, so the
+  pick sticks to the kobo. Stamped `rateSource=rategen-rate` in the 700M band,
+  so a re-pick replaces only its own rows.
+- **A Plant branch in `mlSchedule`**, fed from the rate's plant subtotal
+  (`opts.plantFor`) or from four new Plant constants that all ship at 0. The
+  bill total does not move; the cost/profit split corrects.
+- **The project resources store** — `resourceItems` on TakeoffProject, its own
+  endpoint, stripped from `projectForClient`. Never read by `deriveBillRates`
+  or the budget heal, asserted both ways.
+- **A rate line can say plant**, with `preservePlantLines()` guarding against
+  the desktop sync deleting one. The condition was checked against the C#
+  source and holds: `RateType` is a plain string, never enum-parsed.
+- **One shared resource classifier** — `util/resourceKind.js`, replacing five
+  private re-implementations that disagreed on 73 of 1,709 real component
+  names.
+
+## Still to design
+
 - Whether plant gets its own master price library and per-state override kind.
+  Nothing in the master catalogue is classed plant today (count 1 above), so
+  plant prices currently come only from a rate's own build-up.
+- The **ArchiCAD Plant column** — `archicadCosting.js` computes `compPlantCost`
+  and the costing path is plant-aware, but the column is not shown. Deferred by
+  the owner to after launch.
+- Whether the client's `ProjectBudgetTab.jsx` vocabulary should be unified with
+  `util/resourceKind.js`. It is presentation-only and already correct, but it
+  is a sixth copy; sharing it needs a Vite `fs.allow` and a CDK bundling
+  change, which is not launch-week work.
+- Whether the QS should see the gang reconciliation (what `summariseResources`
+  computes) beside the Budget's Labour row, and what a mismatch should say.

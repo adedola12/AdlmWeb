@@ -664,6 +664,38 @@ const ItemSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// ── Project resources ──
+// The gang and plant detail behind a Budget line: three masons, two
+// labourers, a mixer and its operator, at their day rates.
+//
+// A SEPARATE ARRAY FROM budgetItems, AND THAT IS THE WHOLE POINT.
+// deriveBillRatesFromBudget sums every budget row under a billIdentity and
+// drives the bill rate from it, on save and on a plain GET. Gang rows in
+// budgetItems would be added to the single Labour row that already carries
+// their total, double-counting labour and raising the client's bill the next
+// time anyone merely OPENED the project. See util/projectResources.js.
+const ProjectResourceSchema = new mongoose.Schema(
+  {
+    // The bill line whose Labour / Plant row this helps explain.
+    billIdentity: { type: String, default: "", trim: true },
+    sn: { type: Number, default: 0 },
+    name: { type: String, default: "", trim: true },
+    // Labour | Plant | Equipment — see util/resourceKind.js.
+    componentKind: { type: String, default: "Labour", trim: true },
+    trade: { type: String, default: "", trim: true },
+    unit: { type: String, default: "", trim: true },
+    // How many of this resource (3 masons) and for how long (0.4 days).
+    quantity: { type: Number, default: 0 },
+    duration: { type: Number, default: 0 },
+    rate: { type: Number, default: 0 },
+    notes: { type: String, default: "", trim: true },
+    // "rategen-rate" for a row a picked rate wrote — so a re-pick replaces its
+    // own rows and never one the QS typed.
+    rateSource: { type: String, default: "", trim: true },
+  },
+  { _id: false },
+);
+
 // ── Collaborator sharing ──
 // A project is owned by one userId, but can be SHARED with colleagues who
 // then collaborate on the SAME document. Each collaborator carries an access
@@ -857,6 +889,11 @@ const TakeoffProjectSchema = new mongoose.Schema(
     materialItems: { type: [ItemSchema], default: [] },
     provisionalSums: { type: [ProvisionalSumSchema], default: [] },
     budgetItems: { type: [BudgetItemSchema], default: [] },
+    // The gang / plant detail behind each budget Labour and Plant row. NEVER
+    // read by deriveBillRates or the budget heal, and deliberately kept off
+    // projectForClient — it is served by its own endpoint so no route a
+    // desktop plugin calls changes shape.
+    resourceItems: { type: [ProjectResourceSchema], default: [] },
     variations: { type: [VariationSchema], default: [] },
     preliminaryItems: { type: [PreliminaryItemSchema], default: [] },
     contract: { type: ContractSchema, default: () => ({}) },
