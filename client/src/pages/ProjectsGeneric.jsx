@@ -32,6 +32,10 @@ import {
   variationForSave,
   variationRow,
 } from "../features/projects/lib/projectRows.js";
+import {
+  isRateApplied,
+  reconcileBill,
+} from "../features/projects/rateReconcile.js";
 
 // His orange palette, for a note that is a warning rather than information.
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
@@ -1151,6 +1155,12 @@ export default function ProjectsGeneric() {
   // rates editing
   const [rates, setRates] = React.useState({});
   const [baseRates, setBaseRates] = React.useState({});
+  // Where each line's rate came from, keyed the same way as `rates`:
+  //   { appliedRateKey, rateLockedAt } for a line the QS priced himself.
+  // Sent with the save so the server stops re-deriving that line out from
+  // under him (server/util/deriveBillRates.js, isRateApplied). A line nobody
+  // has touched has no entry and behaves exactly as it always has.
+  const [rateStamps, setRateStamps] = React.useState({});
   const [actualQtyMap, setActualQtyMap] = React.useState({});
   const [baseActualQtyMap, setBaseActualQtyMap] = React.useState({});
   const [actualRateMap, setActualRateMap] = React.useState({});
@@ -1435,9 +1445,20 @@ export default function ProjectsGeneric() {
     const uiPercents = {};
     const baseCategories = {};
     const uiCategories = {};
+    const stamps = {};
     for (let i = 0; i < its.length; i++) {
       const k = itemKey(its[i], i);
       const r = safeNum(its[i]?.rate);
+      // Carry the stored provenance forward so a save that touches one line
+      // does not strip the stamp off every other line on the bill.
+      const storedKey = String(its[i]?.appliedRateKey || "").trim();
+      const storedLockedAt = its[i]?.rateLockedAt || null;
+      if (storedKey || storedLockedAt) {
+        stamps[k] = {
+          appliedRateKey: storedKey,
+          rateLockedAt: storedLockedAt,
+        };
+      }
       const actualQty = parseOptionalNumber(its[i]?.actualQty);
       const actualRate = parseOptionalNumber(its[i]?.actualRate);
       base[k] = r;
@@ -1589,6 +1610,7 @@ export default function ProjectsGeneric() {
     } else {
       setRates(ui);
     }
+    setRateStamps(stamps);
     if (cached && cached?.actualQty && typeof cached.actualQty === "object") {
       const nextActualQty = { ...uiActualQty };
       for (const [k, v] of Object.entries(cached.actualQty)) {
@@ -1640,6 +1662,7 @@ export default function ProjectsGeneric() {
     setSel(null);
     setRates({});
     setBaseRates({});
+    setRateStamps({});
     setActualQtyMap({});
     setBaseActualQtyMap({});
     setActualRateMap({});
@@ -2518,13 +2541,31 @@ export default function ProjectsGeneric() {
     });
   }
 
-  function handleRateChange(rowIndex, value) {
+  // Stamp a line (and any line a linked group carries the rate onto) as
+  // priced by the QS. `meta` comes from the rate cell: a Rate Gen pick carries
+  // the library description, a typed figure carries none. Called only from an
+  // explicit edit, never from a background re-fetch, so no project changes
+  // value unless the QS just changed it.
+  function stampRates(keys, meta) {
+    if (!meta || !keys.length) return;
+    const appliedRateKey =
+      meta.source === "rategen" ? String(meta.rateKey || "").trim() : "";
+    const rateLockedAt = new Date().toISOString();
+    setRateStamps((prev) => {
+      const next = { ...(prev || {}) };
+      for (const k of keys) next[k] = { appliedRateKey, rateLockedAt };
+      return next;
+    });
+  }
+
+  function handleRateChange(rowIndex, value, meta) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
     const it = its[rowIndex];
     if (!it) return;
     const k0 = itemKey(it, rowIndex);
     const groupId = groupIdForIndex(rowIndex);
+    const stamped = [k0];
     setRates((prev) => {
       const next = { ...(prev || {}), [k0]: value };
       if (!groupId || !isGroupLinked(groupId)) return next;
@@ -2539,9 +2580,13 @@ export default function ProjectsGeneric() {
             : safeNum(next[kj]);
         if (onlyFillEmpty && existing !== 0) continue;
         next[kj] = value;
+        stamped.push(kj);
       }
       return next;
     });
+    // A rate carried onto a linked sibling was applied by the QS just as much
+    // as the line he typed into, so it carries the same stamp.
+    stampRates(stamped, meta);
   }
   function handleActualQtyChange(rowIndex, value) {
     if (!sel) return;
@@ -2835,9 +2880,17 @@ export default function ProjectsGeneric() {
         const nextTrade =
           String(tradeMap?.[k] ?? "").trim() ||
           String(it?.trade || "").trim();
+        // Provenance travels with the rate. Without it the server re-derives
+        // the line from a Budget build-up that never saw this figure, the
+        // rate reverts, and the toast still says "Saved".
+        const stamp = rateStamps?.[k] || null;
         return {
           ...it,
           rate: use,
+          appliedRateKey: stamp
+            ? stamp.appliedRateKey
+            : String(it?.appliedRateKey || ""),
+          rateLockedAt: stamp ? stamp.rateLockedAt : (it?.rateLockedAt ?? null),
           actualQty: nextActualQty,
           actualRate: nextActualRate,
           [statusField]: statusValue,
@@ -3384,7 +3437,10 @@ export default function ProjectsGeneric() {
       [mk]: pk,
     }));
     const price = String(safeNum(candidate.price) || 0);
-    handleRateChange(rowIndex, price);
+    handleRateChange(rowIndex, price, {
+      source: "rategen",
+      rateKey: String(candidate?.description || "").trim(),
+    });
     priceMatchingUnpricedLines(rowIndex, price);
     setOpenPickKey(null);
   }
@@ -3535,7 +3591,10 @@ export default function ProjectsGeneric() {
   function handlePickBoqCandidate(rowIndex, candidate) {
     if (!candidate) return;
     const price = String(safeNum(candidate.totalCost) || 0);
-    handleRateChange(rowIndex, price);
+    handleRateChange(rowIndex, price, {
+      source: "rategen",
+      rateKey: String(candidate?.description || "").trim(),
+    });
     priceMatchingUnpricedLines(rowIndex, price);
     setOpenBoqPickKey(null);
   }
@@ -4660,6 +4719,39 @@ export default function ProjectsGeneric() {
     return [...base.slice(0, -1), ...extra, last];
   }, [toolNorm, sel?.customCategories, sel?.excludedCategories, userCategories]);
 
+  // The bill as it stands on screen: stored lines with the unsaved rate and
+  // the unsaved provenance folded in. Used for the read-only decision and the
+  // reconciliation note so both describe what the QS is actually looking at.
+  const billLinesWithStamps = React.useMemo(() => {
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    return its.map((it, i) => {
+      const k = itemKey(it, i);
+      const raw = rates?.[k];
+      const stamp = rateStamps?.[k] || null;
+      return {
+        ...it,
+        rate: String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw),
+        appliedRateKey: stamp
+          ? stamp.appliedRateKey
+          : String(it?.appliedRateKey || ""),
+        rateLockedAt: stamp ? stamp.rateLockedAt : (it?.rateLockedAt ?? null),
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel?.items, rates, rateStamps, showMaterials]);
+
+  // Bill codes the QS has priced himself. Their rate is his, the server keeps
+  // it, and the cell must stay editable — telling him the Budget derives it
+  // would be the lie this change exists to stop.
+  const rateAppliedCodes = React.useMemo(() => {
+    const set = new Set();
+    for (const it of billLinesWithStamps) {
+      const code = String(it?.code || "").trim().toLowerCase();
+      if (code && isRateApplied(it)) set.add(code);
+    }
+    return set;
+  }, [billLinesWithStamps]);
+
   // Codes whose bill rate is derived from a priced material/labour build-up —
   // those BoQ rate cells become read-only (the Budget tab drives them).
   const budgetDrivenCodes = React.useMemo(() => {
@@ -4670,9 +4762,18 @@ export default function ProjectsGeneric() {
       totals.set(code, (totals.get(code) || 0) + safeNum(b.qty) * safeNum(b.rate));
     }
     const set = new Set();
-    for (const [code, net] of totals) if (net > 0) set.add(code);
+    for (const [code, net] of totals) {
+      if (net > 0 && !rateAppliedCodes.has(code)) set.add(code);
+    }
     return set;
-  }, [sel?.budgetItems]);
+  }, [sel?.budgetItems, rateAppliedCodes]);
+
+  // Lines whose applied rate and Budget build-up do not agree. Empty on every
+  // project nobody has re-priced, so nothing new appears on an old bill.
+  const rateNotes = React.useMemo(
+    () => reconcileBill(billLinesWithStamps, sel?.budgetItems),
+    [billLinesWithStamps, sel?.budgetItems],
+  );
 
   // Add a user-defined category for this project's bill arrangement; persists
   // immediately (items untouched — only customCategories[] is sent).
@@ -5741,6 +5842,7 @@ export default function ProjectsGeneric() {
                 onSearchBudgetRates={searchMaterialRates}
                 budgetRateGenReady={canRateGen}
                 budgetDrivenCodes={budgetDrivenCodes}
+                rateNotes={rateNotes}
                 onAddCategory={handleAddCategory}
                 onRemoveCategory={handleRemoveCategory}
                 onAddTrade={handleAddTrade}

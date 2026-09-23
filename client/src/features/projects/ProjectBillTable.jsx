@@ -364,6 +364,11 @@ function convertRateUnit(rateCost, rateUnit, boqUnit, boqDescription) {
 
 /**
  * RateCell — An inline rate input that:
+ *
+ * onChange(value, meta) — meta describes WHERE the figure came from:
+ *   { source: "rategen", rateKey, rateUnit } for a pick out of the library,
+ *   { source: "typed" } for a figure the QS entered or worked out by formula.
+ *   Callers that ignore the second argument behave exactly as before.
  * 1. Shows formatted value with thousands separators when not focused
  * 2. On focus, expands into a popup overlay with a full-width input
  * 3. Supports typing a rate name to search RateGen library suggestions
@@ -460,7 +465,8 @@ export function RateCell({
     if (!formulaResult) return false;
     if (formulaResult.ok) {
       const rounded = Math.round(formulaResult.value * 100) / 100;
-      onChange?.(String(rounded));
+      // A figure the QS worked out himself — stamp it so the save keeps it.
+      onChange?.(String(rounded), { source: "typed" });
       setFormulaDraft("");
       setSearchQuery("");
       setSearchResults([]);
@@ -485,7 +491,9 @@ export function RateCell({
     if (formulaDraft) setFormulaDraft("");
     // If it's a number, treat as direct rate input
     if (/^[\d.,]*$/.test(v)) {
-      onChange?.(v.replace(/,/g, ""));
+      // Typed straight into the cell. Stamped as applied so the server stops
+      // re-deriving the line from a build-up the QS did not price.
+      onChange?.(v.replace(/,/g, ""), { source: "typed" });
       setSearchQuery("");
       setSearchResults([]);
     } else {
@@ -514,7 +522,14 @@ export function RateCell({
 
     // Round to 2 decimal places
     cost = Math.round(cost * 100) / 100;
-    onChange?.(String(cost));
+    // Carry WHICH rate priced the line, not just the number. The parent stamps
+    // it onto the bill line as appliedRateKey, which is what stops the save
+    // re-deriving the rate away from under the pick.
+    onChange?.(String(cost), {
+      source: "rategen",
+      rateKey: String(candidate?.description || "").trim(),
+      rateUnit: String(candidate?.unit || "").trim(),
+    });
     setFocused(false);
     setSearchQuery("");
     setSearchResults([]);
@@ -1060,6 +1075,10 @@ export default function ProjectBillTable({
   onSearchRateGen,
   onStatusToggle,
   percentMap = {},
+  // Map of item index -> { state, budgetRate } for lines whose rate the QS
+  // applied himself and whose Budget build-up does not agree with it. Empty
+  // for every project nobody has re-priced, so the table is unchanged.
+  rateNotes = null,
   onPercentChange,
   onCategoryChange,
   onAddCategory,
@@ -2527,6 +2546,9 @@ export default function ProjectBillTable({
                         ? getCandidatesForItem?.(item) || []
                         : [];
                       const rateValue = rates?.[row.key] ?? "";
+                      // Null unless this line's rate was applied by the QS and
+                      // its Budget build-up disagrees with it.
+                      const rateNote = rateNotes?.get?.(row.i) || null;
                       const actualQtyValue = actualQtyInputs?.[row.key] ?? "";
                       const actualRateValue = actualRateInputs?.[row.key] ?? "";
                       const actualDateLabel = formatDateTime(
@@ -2824,7 +2846,9 @@ export default function ProjectBillTable({
                                     placeholder={String(
                                       Number(item?.rate || 0),
                                     )}
-                                    onChange={(v) => onRateChange?.(row.i, v)}
+                                    onChange={(v, meta) =>
+                                      onRateChange?.(row.i, v, meta)
+                                    }
                                     onSearchRateGen={onSearchRateGen}
                                     canRateGenBoq={canRateGen || canRateGenBoq}
                                     boqCandidates={candidates || []}
@@ -2940,7 +2964,9 @@ export default function ProjectBillTable({
                                     placeholder={String(
                                       Number(item?.rate || 0),
                                     )}
-                                    onChange={(v) => onRateChange?.(row.i, v)}
+                                    onChange={(v, meta) =>
+                                      onRateChange?.(row.i, v, meta)
+                                    }
                                     onSearchRateGen={onSearchRateGen}
                                     canRateGenBoq={canRateGenBoq}
                                     boqCandidates={
@@ -2998,6 +3024,31 @@ export default function ProjectBillTable({
                                 </>
                               )}
                             </div>
+
+                            {/* The honest state of a rate the QS applied
+                          himself: it is the line's rate now, but the Budget
+                          build-up has not been rewritten to match it yet, so
+                          say so on the line instead of showing two figures
+                          that quietly disagree. An en dash where the Budget
+                          has nothing priced. */}
+                            {rateNote ? (
+                              <div
+                                className="mt-0.5 text-[11px] text-amber-700"
+                                title={
+                                  rateNote.state === "no-buildup"
+                                    ? "This rate is the one applied to the line. The Budget has nothing priced against it yet, so the two do not reconcile."
+                                    : "This rate is the one applied to the line. The Budget build-up still prices it differently, so the two do not reconcile."
+                                }
+                              >
+                                {"Rate applied. Budget build-up: "}
+                                {rateNote.state === "no-buildup"
+                                  ? "–"
+                                  : money(rateNote.budgetRate)}
+                                <span className="text-slate-500">
+                                  {" (not reconciled)"}
+                                </span>
+                              </div>
+                            ) : null}
                           </td>
 
                           {showActualColumns ? (
