@@ -562,6 +562,10 @@ import {
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
 import { generateMlSchedule } from "../util/mlSchedule.js";
 import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
+import { RateGenRate } from "../models/RateGenRate.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
+import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
 import {
   BOQ_IMPORT_PRODUCTS,
   hasBoqImportGrant,
@@ -6393,6 +6397,131 @@ async function importBoqUpdate(req, res) {
   }
 }
 
+// Price ONE bill line from a Rate Gen rate the QS picked in the Bill table.
+//
+// This is the fix for a pick that did not stick. Writing only the bill rate
+// left deriveBillRatesFromBudget to re-derive it from a Budget that had never
+// heard of the rate, so the number reverted while the toast said "Saved".
+// Now the pick writes the build-up too, and the derivation agrees with it.
+//
+// The body says WHICH rate, not what it costs. The rate is re-resolved from
+// this user's own merged library server-side, so a client cannot post a price
+// into a project.
+async function priceLineFromRate(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const code = String(req.params.code || "").trim();
+    if (!code) return res.status(400).json({ error: "A bill line code is required" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res
+        .status(403)
+        .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    // Pricing a line writes money into the owner's budget from the CALLER's
+    // rate library. A collaborator who cannot see rates must not do that.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "price a bill line from a rate");
+    }
+
+    const item = (project.items || []).find(
+      (it) => String(it?.code || "").trim().toLowerCase() === code.toLowerCase(),
+    );
+    if (!item) return res.status(404).json({ error: "No bill line with that code" });
+
+    const rate = await resolvePickedRate(userId, req.body || {});
+    if (!rate) {
+      return res.status(404).json({
+        error: "That rate is not in your Rate Gen library.",
+        code: "RATE_NOT_FOUND",
+      });
+    }
+
+    const ctx = await buildMlScheduleContext(userId);
+    const built = buildRateBudgetRows(item, rate, ctx.K, {
+      priceFor: ctx.priceFor,
+      unitCost: Number(req.body?.unitCost) || 0,
+    });
+    if (!built) {
+      return res.status(422).json({
+        error:
+          "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+        code: "RATE_HAS_NO_BUILDUP",
+      });
+    }
+
+    project.budgetItems = sanitizeBudgetItems(
+      applyRateRows(project.budgetItems, code, built.rows),
+    );
+    backfillBudgetLinks(project.items, project.budgetItems);
+    project.budgetItems = ensureBillItemCoverage(project.items, project.budgetItems);
+    // The build-up now reproduces the picked rate, so this sets the bill line
+    // to exactly what the QS chose instead of reverting it.
+    deriveBillRatesFromBudget(project);
+    reconcileItemsFromBudget(project);
+    project.version = (Number(project.version) || 0) + 1;
+    await project.save();
+
+    recordActivity(req, project, ACT.BUDGET_UPDATED, "Priced a bill line from a rate", {
+      code,
+      rate: String(rate.description || "").slice(0, 200),
+    });
+
+    return res.json({
+      ...projectForClient(project, access),
+      _rateWarnings: built.warnings,
+    });
+  } catch (err) {
+    console.error("priceLineFromRate error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// The picked rate, re-read from the caller's own merged library. Matched by
+// rateId first; a custom rate the desktop app created has no master id, so a
+// description + unit match is the fallback.
+async function resolvePickedRate(userId, body) {
+  const wantedId = String(body?.rateId || "").trim();
+  const wantedDesc = String(body?.description || "").trim().toLowerCase();
+  const wantedUnit = String(body?.unit || "").trim().toLowerCase();
+  if (!wantedId && !wantedDesc) return null;
+
+  const [masterRates, lib] = await Promise.all([
+    RateGenRate.find({}).lean(),
+    RateGenLibrary.findOne({ userId }).lean(),
+  ]);
+  const merged = mergeRatesWithUserData(
+    masterRates,
+    Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+    Array.isArray(lib?.customRates) ? lib.customRates : [],
+  );
+
+  if (wantedId) {
+    const byId = merged.find(
+      (r) => String(r?.rateId || r?.id || "") === wantedId,
+    );
+    if (byId) return byId;
+  }
+  if (!wantedDesc) return null;
+  return (
+    merged.find(
+      (r) =>
+        String(r?.description || "").trim().toLowerCase() === wantedDesc &&
+        (!wantedUnit || String(r?.unit || "").trim().toLowerCase() === wantedUnit),
+    ) || null
+  );
+}
+
 // Rebuild the Material & Labour schedule for a project from the current
 // constants library. This is what makes the Material Constants window useful:
 // change "blocks per m²" from 10 to 12.5, hit regenerate, and every blockwork
@@ -7429,6 +7558,19 @@ router.post(
   requireEntitlementParam,
   requireBoqImport(),
   regenerateMlSchedule,
+);
+
+// Price one bill line from a Rate Gen rate the QS picked.
+//
+// ADDITIVE: no plugin calls this, and no plugin route's shape changes. The
+// client sends WHICH rate was picked, never what it costs — the server
+// re-resolves the rate from that user's own merged library, so a price can
+// only ever be one they already hold.
+router.post(
+  "/:productKey/:id/bill/:code/price-from-rate",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  priceLineFromRate,
 );
 
 // Price all services bill lines from RateGen (MEP web Budget view).
