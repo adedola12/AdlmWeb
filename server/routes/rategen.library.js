@@ -22,6 +22,7 @@ import {
   normalizeRateOverride,
   normalizeSectionKey,
   toUserRateDefinition,
+  compositionSubtotals,
 } from "../util/rategenUserRates.js";
 
 const router = express.Router();
@@ -450,6 +451,13 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
           sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
           source: String(r?.source || "master"),
           rateId: r?.rateId || r?.id || r?._id || null,
+          // The build-up itself, and its split by resource class. A rate's
+          // material, labour and plant prices were parsed a line above and then
+          // thrown away at the projection; the caller needs them to put the
+          // right money in the right Budget bucket (plant is its own class, not
+          // a slice of labour).
+          composition: r?.composition || null,
+          subtotals: compositionSubtotals(r?.composition),
           _tokens: tokens(desc),
           _unitNorm: normUnit(r?.unit),
           _plantShare: plantShareOf(r),
@@ -486,6 +494,11 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
 
       const best = candidates[0] || null;
 
+      // Candidates carry the per-unit subtotals and the rate's id, but NOT the
+      // whole build-up: a bulk resolve asks for up to 2000 bill lines and
+      // returns up to 20 candidates each, so a full composition per candidate
+      // would make the response many times larger. The build-up rides on the
+      // best match only (below) — that is the one a pick writes from.
       const mapped = candidates.map((c) => ({
         description: c.description,
         unit: c.unit,
@@ -495,6 +508,11 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
         sectionLabel: c.sectionLabel,
         source: c.source,
         score: Number((c.score || 0).toFixed(4)),
+        rateId: c.rateId || null,
+        materialCost: c.subtotals.materialCost,
+        labourCost: c.subtotals.labourCost,
+        plantCost: c.subtotals.plantCost,
+        otherCost: c.subtotals.otherCost,
       }));
 
       candidatesByKey[descKey] = mapped;
@@ -506,6 +524,16 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
             sectionLabel: best.sectionLabel,
             source: best.source,
             score: Number((best.score || 0).toFixed(4)),
+            rateId: best.rateId || null,
+            netCost: best.netCost,
+            materialCost: best.subtotals.materialCost,
+            labourCost: best.subtotals.labourCost,
+            plantCost: best.subtotals.plantCost,
+            otherCost: best.subtotals.otherCost,
+            // Null when the rate has no structured build-up (an unpriced or
+            // headline-only rate) — the caller must cope with that rather than
+            // assume a split exists.
+            composition: best.composition || null,
           }
         : null;
 
@@ -570,6 +598,11 @@ router.get("/library/rate-items/search", async (req, res, next) => {
         }
         if (score === 0) return null;
 
+        // Same additive shape as a resolve candidate: the id so a pick can name
+        // the rate it took, and the per-unit split by resource class so the
+        // caller can file material, labour and plant money separately. The full
+        // build-up stays off a type-ahead result — it fires on every keystroke.
+        const subtotals = compositionSubtotals(r?.composition);
         return {
           description: desc,
           unit: String(r?.unit || ""),
@@ -578,6 +611,11 @@ router.get("/library/rate-items/search", async (req, res, next) => {
           sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
           source: String(r?.source || "master"),
           score,
+          rateId: r?.rateId || r?.id || r?._id || null,
+          materialCost: subtotals.materialCost,
+          labourCost: subtotals.labourCost,
+          plantCost: subtotals.plantCost,
+          otherCost: subtotals.otherCost,
         };
       })
       .filter(Boolean)
