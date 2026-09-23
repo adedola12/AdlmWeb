@@ -19,14 +19,18 @@
 // so user pricing/procurement edits survive re-heals via the sn|name|unit|kind
 // merge key.
 
+import { isLabourKind } from "./resourceKind.js";
+
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
+// The vocabulary is util/resourceKind.js. By the stored kind only — a row
+// NAMED "Mason" but stored as Material is a material here, because that is how
+// it is keyed, exported and priced everywhere else.
 function isLabour(b) {
-  const k = String(b?.componentKind || "").trim().toLowerCase();
-  return k === "labour" || k === "labor";
+  return isLabourKind(b?.componentKind);
 }
 
 // Work items that are pure labour (no material is bought/placed) — these show

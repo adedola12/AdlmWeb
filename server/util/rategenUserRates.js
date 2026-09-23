@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { classifyResourceKind } from "./resourceKind.js";
 
 export const SECTION_LABELS = {
   ground: "Groundwork",
@@ -290,31 +291,11 @@ export function normalizeCustomRate(raw = {}) {
 // can auto-derive Material + Labour lines for a takeoff and run the
 // "headline == net + overhead + profit" guardrail. See
 // docs/quiv-takeoff-material-rate-upgrade.server-spec.md §1.
-const LABOUR_KIND_RE =
-  /\b(labou?r(er)?|mason|carpenter|bender|fitter|fixer|painter|plumber|electrician|artisan|workmanship|gang|foreman|helper|operative|welder|bricklayer)\b/i;
-const PLANT_KIND_RE =
-  /\b(plant|excavat\w*|mixer|vibrator|crane|machine|pump|roller|compactor|scaffold(ing)?|hoist|hire)\b/i;
-const CONSUMABLE_KIND_RE =
-  /\b(nails?|binding\s*wire|tying\s*wire|fuel|diesel|petrol|consumable|disposab\w*)\b/i;
-
-// Map a component to one of: material | labour | plant | equipment | consumable.
-// Prefer an explicit refKind/rateType; otherwise classify by name keywords.
+// Classification lives in util/resourceKind.js — one vocabulary for the whole
+// pricing path. This wrapper keeps the old name and signature so the plugin
+// composition builder and the refKind backfill script read the same as before.
 export function classifyComponentKind(name, refKind) {
-  const rk = String(refKind || "")
-    .trim()
-    .toLowerCase();
-  if (rk) {
-    if (rk === "labour" || rk === "labor" || rk === "1") return "labour";
-    if (rk === "material" || rk === "0") return "material";
-    if (rk === "plant") return "plant";
-    if (rk === "equipment") return "equipment";
-    if (rk === "consumable") return "consumable";
-  }
-  const n = String(name || "");
-  if (LABOUR_KIND_RE.test(n)) return "labour";
-  if (PLANT_KIND_RE.test(n)) return "plant";
-  if (CONSUMABLE_KIND_RE.test(n)) return "consumable";
-  return "material";
+  return classifyResourceKind(name, refKind);
 }
 
 // Build the `composition` object the plugin's RateCompositionParser expects.

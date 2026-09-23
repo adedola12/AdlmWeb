@@ -19,6 +19,10 @@ import { RateGenMaterial } from "../models/RateGenMaterial.js";
 import { RateGenLabour } from "../models/RateGenLabour.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { fetchMasterLabour } from "../util/rategenMaster.js";
+import {
+  classifyResourceKind,
+  KIND as SHARED_KIND,
+} from "../util/resourceKind.js";
 
 /* ────────────────────────────── constants ────────────────────────────── */
 
@@ -80,39 +84,17 @@ function readNum(obj, ...names) {
 
 /* ──────────────────── kind classification (parser port) ──────────────────── */
 
-const LABOUR_KEYWORDS = [
-  "labour", "labor", "operator", "banksman", "mason", "carpenter", "steel fixer",
-  "steelfixer", "fixer", "foreman", "ganger", "helper", "skilled", "unskilled", "craftsman",
-];
-const PLANT_KEYWORDS = [
-  "bulldozer", "dozer", "mixer", "compressor", "excavator", "loader", "payloader",
-  "crane", "vibrator", "poker", "machine", "plant", "roller", "grader", "truck", "tipper", "pump",
-];
-const CONSUMABLE_KEYWORDS = [
-  "diesel", "fuel", "petrol", "oil", "consumable", "consumables", "lubricant", "grease",
-];
-
+// Classification lives in util/resourceKind.js — one vocabulary for the whole
+// pricing path, so a name classed as plant here is classed as plant in the
+// rate library, the schedule and the Budget too. The id arguments still win
+// over everything: a line resolved against the master Labour or Material
+// library IS that kind, whatever it is called.
 export function classifyKind(name, explicitKind = null, labourId = null, materialId = null) {
   if (labourId) return KIND.LABOUR;
   if (materialId) return KIND.MATERIAL;
-
-  const k = String(explicitKind || "").trim().toLowerCase();
-  switch (k) {
-    case "labour":
-    case "labor": return KIND.LABOUR;
-    case "material": return KIND.MATERIAL;
-    case "plant":
-    case "equipment": return KIND.PLANT;
-    case "consumable":
-    case "consumables": return KIND.CONSUMABLE;
-    default: break;
-  }
-
-  const n = String(name || "").toLowerCase();
-  if (CONSUMABLE_KEYWORDS.some((w) => n.includes(w))) return KIND.CONSUMABLE;
-  if (PLANT_KEYWORDS.some((w) => n.includes(w))) return KIND.PLANT;
-  if (LABOUR_KEYWORDS.some((w) => n.includes(w))) return KIND.LABOUR;
-  return KIND.MATERIAL; // anything physical and priced defaults to material
+  // Equipment is plant on an ArchiCAD costing — there is no separate bucket.
+  const k = classifyResourceKind(name, explicitKind);
+  return k === SHARED_KIND.EQUIPMENT ? KIND.PLANT : k;
 }
 
 /* ──────────────── composition parsing (RateCompositionParser port) ──────────────── */
