@@ -88,6 +88,53 @@ test("the sheets that imported before import exactly as they did", async () => {
   assert.equal((await parseBoqWorkbook(await toBuffer(guessed))).budgetItems[0].componentKind, "Labour");
 });
 
+test("a sheet that says material AND plant is a MATERIAL sheet for the plant room", async () => {
+  // The rule the comment states: only a name that mentions plant or equipment
+  // and NEITHER material nor labour reaches the new branches. "MATERIAL
+  // SCHEDULE PLANT ROOM" is a material schedule; "Plant Room" is the place it
+  // is for. Classing it Plant puts the QS's cement on the Plant & Equipment
+  // sheet and drops it off the procurement schedule, because
+  // billBudgetExporter filters both to the material bucket.
+  const wb = workbookWithSchedules("MATERIAL SCHEDULE PLANT ROOM", [
+    ["Cement", "bag", 600, 9000],
+    ["Labour for placing concrete", "m3", 100, 3000],
+  ]);
+
+  const parsed = await parseBoqWorkbook(await toBuffer(wb));
+  assert.deepEqual(
+    parsed.budgetItems.map((b) => b.componentKind),
+    // The labour rescue is gated on a Material sheet, so it only works if the
+    // sheet is read as Material in the first place.
+    ["Material", "Labour"],
+  );
+  // And the scope tag keeps the room its whole name: stripping "plant" off a
+  // sheet that is not a plant sheet renames the place to "Room".
+  assert.equal(parsed.budgetItems[0].category, "Plant Room");
+});
+
+test("a sheet that says labour AND plant is still a LABOUR sheet", async () => {
+  const wb = workbookWithSchedules("LABOUR SCHEDULE PLANT ROOM", [
+    ["Mason gang", "day", 20, 25000],
+  ]);
+
+  const parsed = await parseBoqWorkbook(await toBuffer(wb));
+  assert.equal(parsed.budgetItems[0].componentKind, "Labour");
+  assert.equal(parsed.budgetItems[0].category, "Plant Room");
+});
+
+test("a plant sheet with a place in its name keeps classing as Plant", async () => {
+  // The other direction: no material, no labour in the name, so the plant
+  // branch is reached and the kind words come off the scope tag.
+  // (Excel caps a sheet name at 31 characters, so the name stays short.)
+  const wb = workbookWithSchedules("PLANT & EQUIPMENT GATE HOUSE", [
+    ["Tower crane hire", "wk", 4, 900000],
+  ]);
+
+  const parsed = await parseBoqWorkbook(await toBuffer(wb));
+  assert.equal(parsed.budgetItems[0].componentKind, "Plant");
+  assert.equal(parsed.budgetItems[0].category, "Gate House");
+});
+
 test("a customer's own 'Rate Build-Up' sheet still imports as a BILL", async () => {
   // SCHEDULE_SHEET_RE learned the exporter's renamed sheet. If it had learned
   // a bare "build-up" it would have swallowed this workbook's only measured

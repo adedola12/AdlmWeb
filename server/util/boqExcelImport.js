@@ -537,18 +537,35 @@ function parseScheduleSheet({ ws, header }, ctx) {
   // Labour" has always fallen to Labour here, and a name carrying two kinds
   // must keep doing exactly what it did. Only names that mention plant or
   // equipment AND neither material nor labour reach the new branches, so no
-  // sheet that imported before imports differently now.
-  const sheetKind = /labour|labor/i.test(name)
+  // sheet that imported before imports differently now — which is what the
+  // exclusions below actually enforce. Without them "MATERIAL SCHEDULE PLANT
+  // ROOM" imported its cement as Plant, and billBudgetExporter filters both
+  // the material price index and the buy schedule to the material bucket, so
+  // that cement dropped off the QS's procurement schedule.
+  const saysMaterial = /material/i.test(name);
+  const saysLabour = /labour|labor/i.test(name);
+  const saysPlant = !saysMaterial && /plant/i.test(name);
+  const saysEquipment = !saysMaterial && /equip/i.test(name);
+  const sheetKind = saysLabour
     ? "Labour"
-    : /plant/i.test(name)
+    : saysPlant
       ? "Plant"
-      : /equip/i.test(name)
+      : saysEquipment
         ? "Equipment"
         : "Material";
   // "MATERIAL SCHEDULE GATE HOUSE" → "Gate House" context tag.
+  //
+  // Only the words that actually NAMED the kind come off. "MATERIAL SCHEDULE
+  // PLANT ROOM" is a material schedule for the plant room, so its tag is
+  // "Plant Room": stripping "plant" from a sheet that is not a plant sheet
+  // renames the room to "Room".
+  const kindWords =
+    sheetKind === "Plant" || sheetKind === "Equipment"
+      ? /material|labour|labor|plant|equipment|resource|build[\s-]?up|schedule/gi
+      : /material|labour|labor|resource|build[\s-]?up|schedule/gi;
   const sheetScope = titleCaseIfCaps(
     name
-      .replace(/material|labour|labor|plant|equipment|resource|build[\s-]?up|schedule/gi, "")
+      .replace(kindWords, "")
       .replace(/[&,]/g, " ")
       .replace(/\s+/g, " ")
       .trim(),
