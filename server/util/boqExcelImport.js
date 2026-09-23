@@ -385,7 +385,14 @@ function exportNotImportable() {
 // they collect, so importing them would double the bill.
 const SKIP_SHEET_RE = /cover|summary|milestone|read ?me|instruction|note|collection|prices?\b/i;
 // Resource build-up sheets (the budget), not measured work.
-const SCHEDULE_SHEET_RE = /material|labour|labor|plant|equipment|build[\s-]?up/i;
+//
+// "resource build-up" is OUR OWN exported sheet name and nothing else: a bare
+// "build-up" would re-route a customer workbook whose sheet is called "Rate
+// Build-Up" or "Build up of rates" out of the bill path it takes today, so the
+// same file would import differently from how it imports now. The phrase is
+// pinned to the two words the exporter writes together.
+const SCHEDULE_SHEET_RE =
+  /material|labour|labor|plant|equipment|resource[\s-]?build[\s-]?up/i;
 
 function classifySheets(workbook) {
   const bills = [];
