@@ -103,7 +103,7 @@ async function normalizeProjectDoc(doc) {
   doc.name = doc.name || doc.title || "Project";
   doc.items = Array.isArray(doc.items) ? doc.items : [];
   if (!doc.mergeContainer) return doc;
-  const merged = await resolveMergedProject(doc, doc.userId);
+  const merged = await resolveMergedProject(doc);
   merged.name = doc.name;
   return merged;
 }

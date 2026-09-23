@@ -15,6 +15,15 @@
 // source's row still goes to its source, a row that belongs to neither is
 // still refused, and a rate-blind viewer's merged save is still refused
 // outright by the masking guard in front of all of this.
+//
+// WHICH IDENTITY RESOLVES THE SOURCES (the second half, below)
+// Routing a row home is no use if the document it routes to cannot be loaded.
+// The read resolved a container's sources under the CONTAINER's owner, so a
+// collaborator was served the whole combined bill; the write resolved them
+// under the REQUESTER, found nothing, and answered 404 MERGE_SOURCE_MISSING for
+// every save. Both halves now go through containerOwnerId(), and what those
+// tests assert is the filter that actually reaches Mongo — the one place the
+// two could silently drift apart again.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -23,8 +32,11 @@ process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "test-access-se
 
 import {
   CONTAINER_OWNED_FIELDS,
+  containerOwnerId,
+  loadMergeSources,
   namespacedIdentity,
   resolveMergedProject,
+  resolveSourceForIdentity,
   splitMergedWrite,
 } from "./projectMerge.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
@@ -35,6 +47,11 @@ const CONTAINER_ID = "6512aa000000000000000001";
 const ARCH_ID = "6512aa000000000000000002";
 const STRUCT_ID = "6512aa000000000000000003";
 const STRANGER_ID = "6512aa000000000000000009";
+// The container's owner, and a collaborator the owner shared it with. The
+// collaborator owns nothing here, which is exactly why resolving the sources
+// under their id used to come back empty.
+const OWNER_ID = "6512aa0000000000000000a1";
+const COLLABORATOR_ID = "6512aa0000000000000000a2";
 
 // A variation raised against the merged contract, as the container stores it.
 const CONTAINER_VO = {
@@ -49,6 +66,8 @@ const CONTAINER_VO = {
 function container(overrides = {}) {
   return {
     _id: CONTAINER_ID,
+    userId: OWNER_ID,
+    collaborators: [{ userId: COLLABORATOR_ID, accessLevel: "full" }],
     name: "Ikeja Tower — combined",
     productKey: "revit",
     mergeContainer: true,
@@ -211,7 +230,7 @@ test("what the container hands out is exactly what routes home again", async () 
   TakeoffProject.find = () => ({ lean: async () => sources });
   let resolved;
   try {
-    resolved = await resolveMergedProject(container(), "user1");
+    resolved = await resolveMergedProject(container());
   } finally {
     TakeoffProject.find = realFind;
   }
@@ -253,4 +272,168 @@ test("a project with no container-owned rows behaves exactly as it did", () => {
   assert.deepEqual(unroutable, []);
   assert.equal(own.variations, undefined, "an untouched field is not written");
   assert.equal(bySource.get(ARCH_ID).items[0].code, "A1");
+});
+
+/* ── which identity resolves the sources ────────────────────────────────── */
+
+// The two discipline projects behind the container, owned by the container's
+// owner — which is the only way they are ever stored.
+function sourceDocs() {
+  return [
+    {
+      _id: ARCH_ID,
+      userId: OWNER_ID,
+      name: "Ikeja Tower — architectural",
+      productKey: "revit",
+      items: [{ code: "A1", description: "Blockwork", qty: 120, rate: 5_000 }],
+      variations: [],
+    },
+    {
+      _id: STRUCT_ID,
+      userId: OWNER_ID,
+      name: "Ikeja Tower — structural",
+      productKey: "revit",
+      items: [{ code: "C1", description: "Concrete grade 25", qty: 40, rate: 180_000 }],
+      variations: [],
+    },
+  ];
+}
+
+// A Mongo stub that RESPECTS the filter and records it, so a test can assert on
+// the scoping itself rather than only on the resolved output. A stub that
+// ignored `userId` would hide the very bug these exist for.
+async function withScopedFind(rows, fn) {
+  const realFind = TakeoffProject.find;
+  const realFindOne = TakeoffProject.findOne;
+  const findFilters = [];
+  const findOneFilters = [];
+  const matches = (row, uid) => String(row.userId) === String(uid ?? "");
+  TakeoffProject.find = (filter) => {
+    findFilters.push(filter);
+    const ids = (filter?._id?.$in || []).map(String);
+    const hits = rows.filter((r) => ids.includes(String(r._id)) && matches(r, filter?.userId));
+    return { lean: async () => hits };
+  };
+  TakeoffProject.findOne = async (filter) => {
+    findOneFilters.push(filter);
+    return (
+      rows.find((r) => String(r._id) === String(filter?._id) && matches(r, filter?.userId)) || null
+    );
+  };
+  try {
+    return await fn({ findFilters, findOneFilters });
+  } finally {
+    TakeoffProject.find = realFind;
+    TakeoffProject.findOne = realFindOne;
+  }
+}
+
+test("a container's sources resolve under its owner, whoever is asking", async () => {
+  await withScopedFind(sourceDocs(), async ({ findFilters }) => {
+    const merged = await resolveMergedProject(container());
+
+    assert.equal(findFilters.length, 1, "the sources were not loaded in one query");
+    assert.equal(
+      String(findFilters[0].userId),
+      OWNER_ID,
+      "the sources were not scoped to the container's owner",
+    );
+    assert.equal(merged.items.length, 2, "both disciplines should resolve into the view");
+    assert.deepEqual(merged.merge.missing, [], "no source should be reported missing");
+  });
+});
+
+// The regression guard. The second argument is deliberate: it is exactly what
+// the write path used to pass, and the point is that it can no longer change
+// the scoping. If the owner id ever goes back to being a parameter, this fails.
+test("a requester id passed in cannot mis-scope the resolution", async () => {
+  const c = container();
+  assert.equal(String(containerOwnerId(c)), OWNER_ID);
+
+  await withScopedFind(sourceDocs(), async ({ findFilters }) => {
+    const merged = await resolveMergedProject(c, COLLABORATOR_ID);
+    assert.equal(String(findFilters[0].userId), OWNER_ID);
+    assert.equal(
+      merged.items.length,
+      2,
+      "a collaborator's id leaked into the scoping and emptied the merged bill",
+    );
+  });
+
+  await withScopedFind(sourceDocs(), async ({ findFilters }) => {
+    const sources = await loadMergeSources(c, COLLABORATOR_ID);
+    assert.equal(String(findFilters[0].userId), OWNER_ID);
+    assert.equal(sources.length, 2);
+  });
+});
+
+test("what the read serves a collaborator is what the write can route home", async () => {
+  // The whole point of the fix: the collaborator is served every discipline's
+  // lines, sends them back, and each one lands on a document the write can
+  // actually load — under the same owner the read used.
+  const c = container({ variations: [] });
+  await withScopedFind(sourceDocs(), async () => {
+    const merged = await resolveMergedProject(c);
+    const echoed = { items: merged.items.map((it) => ({ ...it, percentComplete: 60 })) };
+    const { bySource, unroutable } = splitMergedWrite(c, echoed);
+
+    assert.deepEqual(unroutable, [], "a line the read produced could not be routed back");
+    assert.equal(bySource.size, 2, "both disciplines should receive their own lines");
+    assert.equal(bySource.get(ARCH_ID).items[0].code, "A1");
+    assert.equal(bySource.get(ARCH_ID).items[0].percentComplete, 60);
+
+    // Every id the write will load is one of the container's own merge links,
+    // so owner-scoping them adds no reach the read did not already have.
+    const linked = new Set(c.linkedProjects.map((l) => String(l.projectId)));
+    for (const id of bySource.keys()) {
+      assert.ok(linked.has(id), `${id} is not one of this container's sources`);
+    }
+  });
+});
+
+test("a single identity routes home under the owner, and only if it is linked", async () => {
+  const rows = [
+    ...sourceDocs(),
+    // The collaborator's own project, deliberately NOT linked to the container.
+    { _id: STRANGER_ID, userId: COLLABORATOR_ID, name: "Somebody else's job", items: [] },
+  ];
+  await withScopedFind(rows, async ({ findOneFilters }) => {
+    const hit = await resolveSourceForIdentity(
+      container(),
+      namespacedIdentity(STRUCT_ID, "C1"),
+    );
+    assert.ok(hit, "a linked source did not resolve");
+    assert.equal(hit.identity, "C1");
+    assert.equal(String(hit.project._id), STRUCT_ID);
+    assert.equal(
+      String(findOneFilters[0].userId),
+      OWNER_ID,
+      "the source was not scoped to the container's owner",
+    );
+  });
+
+  await withScopedFind(rows, async ({ findOneFilters }) => {
+    // Not a merge link of this container — refused before it ever reaches
+    // Mongo, even though somebody happens to own it.
+    const miss = await resolveSourceForIdentity(
+      container(),
+      namespacedIdentity(STRANGER_ID, "X1"),
+    );
+    assert.equal(miss, null, "an unlinked project resolved through a container");
+    assert.equal(findOneFilters.length, 0, "an unlinked id was still queried");
+  });
+});
+
+test("a container whose source was deleted still reports it rather than pretending", async () => {
+  // MERGE_SOURCE_MISSING now only ever means this: a source that is genuinely
+  // gone, not a collaborator being asked the wrong question.
+  const rows = sourceDocs().filter((r) => String(r._id) !== STRUCT_ID);
+  await withScopedFind(rows, async () => {
+    const merged = await resolveMergedProject(container());
+    assert.equal(merged.items.length, 1, "the surviving discipline should still resolve");
+    assert.deepEqual(
+      merged.merge.missing.map((m) => String(m.projectId)),
+      [STRUCT_ID],
+    );
+  });
 });
