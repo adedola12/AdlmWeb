@@ -3,6 +3,8 @@
 His prototype (`RichardEnoch/adlm-studio-site`, cloned beside this repo as `ADLMWebNewUI`)
 gained eight commits on 17 and 18 September 2026, `eaf8bd5..596e9cb`. This file records what
 came over, what did not, and why — the same way `PLAN.md` records his 16 September review.
+His next ten commits, on 22 September, are almost entirely designs for the Windows products;
+they have their own section at the foot of this file.
 
 The port has two layers and they moved separately:
 
@@ -117,6 +119,85 @@ route sends.
 | AI auto take-off, and model-change (drift) alerts | Plugin features. The website stores no model versions. |
 | A "Try QUIV in Revit (preview)" link from the tool pages | It opens a simulation whose AI confidence figures are written examples. |
 | His plugin pages as working React | They simulate the Revit and PlanSwift add-ins, which are ours to build in C#. They stay staged as a design reference. |
+
+## His 22 September update: the Windows products
+
+He pushed ten more commits on 22 September 2026, `596e9cb..ca0e6c3`. Almost none of it is
+website work.
+
+| Commit | His words |
+|---|---|
+| `ff30edc` | HERON rebuilt on how it actually works: read the ADLM template, not the drawing |
+| `dfb7080` | The Installer Hub as a desktop app, for review before Dolapo builds it |
+| `bbcef4a` | Hub: splash and sign-in, and both apps scroll again |
+| `f9e52ec` | Hub launch redrawn as a window; Hub gains account pages; HERON gains take-offs |
+| `409c259` | Keep the Quiv prototype out of the deploy |
+| `474585c` | Build the splash screens from Richard's designs |
+| `95e5aa1` | Let the launch screens be replayed for review |
+| `f6dfacf` | Rebuild the splash to the Figma frames, measured rather than estimated |
+| `e66e977` | Ignore site/Quiv so a broad add stops picking it up |
+| `ca0e6c3` | Splash fills its frame, loses the rings, and becomes the sign-in |
+
+Five new pages — `hub`, `splash-quiv`, `splash-heron`, `splash-rategen`, `splash-hub` — plus
+`assets/css/{hub,splash,plugin-heron}.css`, `assets/js/{hub,splash,plugin-heron}.js`
+(replacing `plugin-heron-config.js`) and eight images.
+
+### These are designs for Windows software, not features of this site
+
+The Installer Hub is a desktop application that installs, updates and licenses every ADLM
+product on a QS's PC. The four splash screens are the launch windows of QUIV, HERON, RateGen
+and the Hub, and since `ca0e6c3` the splash **becomes** the sign-in rather than handing over
+to another window. None of that runs in a browser. **The real work is a desktop job for the
+owner**, in the same category as the plugin pages: his drawings say what to build, and what
+gets built is C#/WPF, not React.
+
+So they were staged exactly the way `d1839cb` staged `plugin-quiv` and `plugin-heron`: under
+`/preview/<slug>`, staff-only, rendered bare, mapped to `null` in `client/src/lib/dsRoutes.js`
+so none of them can ever become a customer route, and listed in the staff preview index under
+"Windows products" with a `design reference` badge.
+
+### What was staged, and what is deliberately thin
+
+- **Both porters were re-run against his HEAD.** For every page we already had, the only real
+  change was `plugin-heron`: PlanSwift now sits *behind* HERON rather than around it, because
+  the take-off is finished by the time HERON opens. Every other generated file came out
+  byte-identical. Its sheet moved from `plugin-quiv.css` to `splash.css` + `plugin-heron.css`,
+  so the two plugin references no longer share one stylesheet.
+- **Three sheets added** to `port-ds-css.mjs`: `ds-splash.css`, `ds-hub.css`,
+  `ds-plugin-heron.css`. They are lazily imported by the `/preview` routes that need them, so
+  no customer page downloads a byte of them.
+- **The splash and Hub pages are near enough empty, on purpose.** His sources are a mount
+  point and nothing else (`<div id="splash" data-product="quiv">`); the screens are drawn at
+  runtime by `assets/js/splash.js` (129 lines) and `assets/js/hub.js` (838 lines), which are
+  not ported. Staging records the design and fixes it as a non-route; it does not reproduce
+  it. **Review the real thing in his own repo**, which renders it. The preview index says this
+  in as many words so nobody files it as a broken page.
+- **His splash photography is not copied.** `sp-*.jpg` and `wm-*.png` are 519 KB named only by
+  his JavaScript, so `syncImages()` in `port-ds-html.mjs` now copies only what his markup or
+  his stylesheets reference, and reports what it left behind. The day that screen is built
+  here, the reference comes with it and the sync picks it up.
+
+### Two porter defects his update exposed
+
+- `hub.css` is the first sheet of his to carry a real `url("../img/…")`. Ported into
+  `client/src/styles/` that path points at nothing, and Vite fails the **build** on it rather
+  than warning. `port-ds-css.mjs` now rewrites it to `/ds/…` — the same rewrite
+  `dsRoutes.resolveHref` already does for his markup — and exits non-zero if any relative url
+  survives. `verify-ds-port.mjs` gained a matching check.
+- A bare page was rendered inside a `React.Fragment`, so it carried no `.ds` scope, so **not
+  one ported rule could match it**. His 32 staged `admin-*` screens and both plugin references
+  have been rendering as unstyled markup. "Bare" means no nav, footer, promo band or Ada —
+  his own build still loads the stylesheets. Fixed with a `.ds` wrapper, and `admin.css` is
+  now loaded for the `admin-*` previews, which nothing was doing either.
+
+### What was deliberately not built
+
+| | Why |
+|---|---|
+| The Installer Hub itself | A Windows application. His `hub.js` is a drawing of one, not one. |
+| The four splash/sign-in screens | Launch windows of the desktop products. Same. |
+| `splash.js` / `hub.js` as React | They exist to make a desktop design reviewable in a browser. Reproducing them here would be building the wrong thing in the wrong language. |
+| HERON's take-offs panel (`plugin-heron.js`, 1,124 lines) | Belongs in the C# add-in, like the rest of side one. |
 
 His own open list is in `ADLMWebNewUI/PROJECT-SUMMARY.md` §7 — the Revit MEP rename (he
 recommends SERVIQ), real unit prices and zone factors, product icons, the About photographs,

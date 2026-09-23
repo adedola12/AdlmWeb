@@ -115,6 +115,16 @@ export const MAP = {
   // Design references for the desktop add-ins; no route of their own.
   "plugin-quiv": null,
   "plugin-heron": null,
+  // His 22 September update: the Installer Hub drawn as a Windows app, and the
+  // four launch screens where the splash becomes the sign-in. Designs for
+  // software that runs on a QS's PC, not pages of this website — so each is
+  // deliberately not a route, and staged under /preview only. Building them is
+  // a desktop job; see docs/RICHARD-SEP18.md.
+  hub: null,
+  "splash-quiv": null,
+  "splash-heron": null,
+  "splash-rategen": null,
+  "splash-hub": null,
   "work-project": "/projects/:tool",
   // Rate library and Programme are RateGen and Time Pro under his names — the
   // screens exist, so these keep pointing at the real ones rather than growing

@@ -6,17 +6,30 @@
 //
 //   * A page with "nochrome": true in its meta block is emitted with no nav,
 //     no footer and no promo band. Today that is his 32 admin-* screens, which
-//     carry their own .adm-rail, plus plugin-quiv and plugin-heron, which are
-//     full-window simulations of QUIV docked in Revit and HERON docked in
-//     PlanSwift. A marketing nav around a Revit ribbon is simply wrong.
+//     carry their own .adm-rail; plugin-quiv and plugin-heron, which picture
+//     QUIV docked in Revit and HERON beside PlanSwift; and, since 22 Sep 2026,
+//     the Installer Hub and the four product splash screens, which are Windows
+//     applications rather than web pages. A marketing nav around a Revit
+//     ribbon, or around an installer running on someone's PC, is simply wrong.
 //   * adaFor() leaves the floating Ada off dash-, work-, doc-, admin- and,
-//     since 17 Sep 2026, plugin- pages.
+//     since 17 Sep 2026, plugin- pages. On 22 Sep he widened that to every
+//     chromeless page, in his words because "an installer running on a QS's PC
+//     is not a website".
+//
+// `hub` is anchored rather than prefixed: it is one page, and "hub-something"
+// later would be a different thing that has to say so for itself.
 
-const BARE_SCREEN = /^(admin|plugin)-/;
-const PLUGIN_SCREEN = /^plugin-/;
+const BARE_SCREEN = /^(admin-|plugin-|splash-|hub$)/;
+
+// The screens that picture software running on Windows: the two plugin
+// references, the four splash screens, and the Installer Hub.
+const DESKTOP_SCREEN = /^(plugin-|splash-|hub$)/;
 
 /** Does this staged page render with no shell of ours around it? */
 export const isBareScreen = (slug) => BARE_SCREEN.test(String(slug || ""));
+
+/** Is this staged page a design for a Windows product rather than a web page? */
+const isDesktopScreen = (slug) => DESKTOP_SCREEN.test(String(slug || ""));
 
 /**
  * Does this staged page get our floating Ada?
@@ -26,8 +39,9 @@ export const isBareScreen = (slug) => BARE_SCREEN.test(String(slug || ""));
  * than keyword matching over published copy — and a reviewer walking the
  * staged app screens should be able to open her.
  *
- * The plugin references are the exception. They picture a panel docked inside
- * Revit or PlanSwift, where a floating web chat button has nothing to float
- * over and only suggests the desktop add-in ships one. It does not.
+ * The desktop references are the exception. They picture a panel docked inside
+ * Revit, a window beside PlanSwift, an installer, or a splash screen — none of
+ * which a floating web chat button has anything to float over, and putting one
+ * there only suggests the desktop products ship one. They do not.
  */
-export const hasFloatingAda = (slug) => !PLUGIN_SCREEN.test(String(slug || ""));
+export const hasFloatingAda = (slug) => !isDesktopScreen(slug);

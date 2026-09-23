@@ -45,6 +45,8 @@ const DIVERGENCES = [
   ["civiq page hand-authored", "his predates the Civil 3D spec; rebuilt on his section order with real spec + live catalogue data"],
   ["compare given its own /compare route", "his lives as #compare inside pricing.html; same table markup, prices now read from the catalogue"],
   ["prices read from GET /products", "his were typed into the markup and could drift from what checkout charges"],
+  ["css url(../img/x) -> url(/ds/x)", "his sheets sit in assets/css; ported into src/styles that path points at nothing and Vite fails the build"],
+  ["images only his JS names are not copied", "assets/img is synced for what his markup and stylesheets reference; the rest is weight for a picture nothing ported can draw"],
 ];
 
 console.log("\n1. Page coverage");
@@ -141,6 +143,25 @@ if (unmapped.length) fail(`${unmapped.length} unmapped href(s): ${unmapped.slice
 else ok(`${refs} links and image sources all resolve`);
 if (missingAssets.length) fail(`${missingAssets.length} missing asset(s): ${[...new Set(missingAssets)].slice(0, 3).join(", ")}`);
 else ok("every referenced asset exists in public/");
+
+// The same question for his STYLESHEETS, which check 3 above cannot see: a
+// background image is written url("../img/x.jpg") and the porter rewrites it
+// to /ds/x.jpg. Nothing needed that until hub.css on 22 Sep, and a url that
+// resolves to nothing fails `npm run build` rather than degrading.
+const cssDir = path.join(CLIENT, "src/styles");
+const cssAssets = new Set();
+const cssRelative = [];
+for (const file of fs.readdirSync(cssDir).filter((f) => /^ds.*\.css$/.test(f))) {
+  const css = fs.readFileSync(path.join(cssDir, file), "utf8");
+  for (const m of css.matchAll(/url\(\s*["']?(\/[^"')]+)/g)) cssAssets.add(m[1]);
+  for (const m of css.matchAll(/url\(\s*["']?(\.\.?\/[^"')]+)/g)) {
+    cssRelative.push(`${file}: ${m[1]}`);
+  }
+}
+const missingCssAssets = [...cssAssets].filter((u) => !fs.existsSync(path.join(CLIENT, "public", u)));
+if (cssRelative.length) fail(`${cssRelative.length} relative url() left in the ported CSS: ${cssRelative.slice(0, 3).join("; ")}`);
+else if (missingCssAssets.length) fail(`${missingCssAssets.length} stylesheet asset(s) missing from public/: ${missingCssAssets.slice(0, 3).join(", ")}`);
+else ok(`${cssAssets.size} stylesheet image(s) resolve under public/`);
 
 console.log("\n4. Icon sprite");
 const allJsx = [
