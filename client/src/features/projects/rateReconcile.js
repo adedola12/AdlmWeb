@@ -17,12 +17,15 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Mirrors server/util/deriveBillRates.js isRateApplied. Both stamps are
-// optional; a line written before this shipped carries neither, so it reports
-// false and keeps behaving exactly as it always has.
+// Mirrors server/util/deriveBillRates.js isRateApplied, and must keep mirroring
+// it: the screen may not claim a line is locked when the server would still
+// re-derive it. The stamp is rateLockedAt and only rateLockedAt — appliedRateKey
+// is the Revit plugin's provenance ("which library rate priced this"), which
+// QUIV has always sent and which says nothing about whose rate it is. A line
+// written before this shipped carries no stamp, so it reports false and keeps
+// behaving exactly as it always has.
 export function isRateApplied(item) {
   if (!item) return false;
-  if (String(item.appliedRateKey || "").trim()) return true;
   const at = item.rateLockedAt;
   if (at == null || at === "") return false;
   const d = at instanceof Date ? at : new Date(at);
@@ -73,22 +76,24 @@ function agrees(rate, budgetRate) {
 /**
  * What to say about one bill line, or null when there is nothing to say.
  *
- * Returns one of:
- *   { state: "no-buildup", budgetRate: null }  — the rate is applied and the
- *       Budget has nothing priced against the line. The figure to show is an
- *       en dash; the line is honestly unreconciled.
- *   { state: "differs", budgetRate, difference } — both exist and disagree.
- *   null — the line is derived from its build-up (the existing, correct
- *       behaviour), or the two already agree, so there is nothing to flag.
+ * Returns:
+ *   { state: "differs", budgetRate, difference } — the QS applied this rate,
+ *       the Budget prices the same line, and the two figures disagree. That is
+ *       a real contradiction on screen and the line says so.
+ *   null — anything else.
+ *
+ * "Anything else" deliberately includes a line with NO priced build-up. There
+ * is nothing to reconcile against, so there is nothing to report: a project
+ * with no Budget at all would otherwise flag every rate the QS ever applied,
+ * which is noise on exactly the projects where a disagreement cannot exist.
+ * A missing Budget is a fact of the project, not a fault of the line.
  */
 export function reconcileAppliedRate(item, budgetLines) {
   if (!isRateApplied(item)) return null;
   const rate = num(item?.rate);
   if (rate <= 0) return null;
   const budgetRate = buildUpRate(item?.qty, budgetLines);
-  if (budgetRate == null) {
-    return { state: "no-buildup", budgetRate: null, difference: null };
-  }
+  if (budgetRate == null) return null;
   if (agrees(rate, budgetRate)) return null;
   return {
     state: "differs",

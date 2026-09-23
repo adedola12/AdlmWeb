@@ -1155,6 +1155,12 @@ export default function ProjectsGeneric() {
   // rates editing
   const [rates, setRates] = React.useState({});
   const [baseRates, setBaseRates] = React.useState({});
+  // The rate map as it stands right now. A setRates updater does not run until
+  // React renders, so anything that has to know BOTH the new map and which
+  // lines it touched — the linked-group carry, the Rate Gen sync after its
+  // await — reads this instead and works the edit out once, in one place.
+  const ratesRef = React.useRef(rates);
+  ratesRef.current = rates;
   // Where each line's rate came from, keyed the same way as `rates`:
   //   { appliedRateKey, rateLockedAt } for a line the QS priced himself.
   // Sent with the save so the server stops re-deriving that line out from
@@ -2541,21 +2547,48 @@ export default function ProjectsGeneric() {
     });
   }
 
+  // Write the per-line stamp. Each entry carries its own library description,
+  // because a Rate Gen sync applies a different rate to every line it fills.
+  // A null rateLockedAt is a RELEASE, not a no-op: the line goes back to being
+  // derived from its Budget build-up.
+  function stampRateEntries(entries) {
+    if (!entries?.length) return;
+    setRateStamps((prev) => {
+      const next = { ...(prev || {}) };
+      for (const e of entries) {
+        if (!e?.key) continue;
+        next[e.key] = {
+          appliedRateKey: e.appliedRateKey || "",
+          rateLockedAt: e.rateLockedAt ?? null,
+        };
+      }
+      return next;
+    });
+  }
+
   // Stamp a line (and any line a linked group carries the rate onto) as
   // priced by the QS. `meta` comes from the rate cell: a Rate Gen pick carries
   // the library description, a typed figure carries none. Called only from an
   // explicit edit, never from a background re-fetch, so no project changes
   // value unless the QS just changed it.
-  function stampRates(keys, meta) {
+  function stampRates(keys, meta, { keepRateKey = "" } = {}) {
     if (!meta || !keys.length) return;
+    // An empty rate cell means "I have no rate", not "my rate is mine for
+    // ever". Stamping it would lock the line out of its Budget build-up
+    // permanently with nothing on screen able to undo it — so clearing the
+    // cell RELEASES the stamp, and that is the way back for a line stamped by
+    // mistake. The plugin's own appliedRateKey is kept: it records which
+    // library rate produced the figure and is not ours to erase.
+    if (meta.source === "cleared") {
+      stampRateEntries(
+        keys.map((key) => ({ key, appliedRateKey: keepRateKey, rateLockedAt: null })),
+      );
+      return;
+    }
     const appliedRateKey =
       meta.source === "rategen" ? String(meta.rateKey || "").trim() : "";
     const rateLockedAt = new Date().toISOString();
-    setRateStamps((prev) => {
-      const next = { ...(prev || {}) };
-      for (const k of keys) next[k] = { appliedRateKey, rateLockedAt };
-      return next;
-    });
+    stampRateEntries(keys.map((key) => ({ key, appliedRateKey, rateLockedAt })));
   }
 
   function handleRateChange(rowIndex, value, meta) {
@@ -2565,11 +2598,17 @@ export default function ProjectsGeneric() {
     if (!it) return;
     const k0 = itemKey(it, rowIndex);
     const groupId = groupIdForIndex(rowIndex);
+
+    // Work the whole edit out ONCE, here, and hand the same result to the rate
+    // map and to the stamp. The linked-group keys used to be collected inside
+    // the setRates updater, which React does not run until it renders: by the
+    // time stampRates read the array it still held only this row, so a rate
+    // carried onto a sibling was saved unstamped and reverted on the next save.
+    const prev = ratesRef.current || {};
+    const next = { ...prev, [k0]: value };
     const stamped = [k0];
-    setRates((prev) => {
-      const next = { ...(prev || {}), [k0]: value };
-      if (!groupId || !isGroupLinked(groupId)) return next;
-      if (String(value ?? "").trim() === "") return next;
+    const blank = String(value ?? "").trim() === "";
+    if (groupId && isGroupLinked(groupId) && !blank) {
       for (let j = 0; j < its.length; j++) {
         if (j === rowIndex) continue;
         if (groupIdForIndex(j) !== groupId) continue;
@@ -2582,11 +2621,11 @@ export default function ProjectsGeneric() {
         next[kj] = value;
         stamped.push(kj);
       }
-      return next;
-    });
+    }
+    setRates(next);
     // A rate carried onto a linked sibling was applied by the QS just as much
     // as the line he typed into, so it carries the same stamp.
-    stampRates(stamped, meta);
+    stampRates(stamped, meta, { keepRateKey: String(it?.appliedRateKey || "") });
   }
   function handleActualQtyChange(rowIndex, value) {
     if (!sel) return;
@@ -3457,7 +3496,21 @@ export default function ProjectsGeneric() {
       .trim();
   }
 
-  async function syncBoqRates(project) {
+  // `explicit` is the whole question here. This sync can fire two ways:
+  //
+  //   • the QS presses "Sync rates", or turns the auto-fill switch on — a
+  //     deliberate act of pricing, no different from picking a rate in the
+  //     cell, so the lines it fills carry the same stamp and the figures stick;
+  //   • an effect runs it on open, because rateSyncEnabled is saved in the
+  //     project's valuation settings. Nobody asked for that this minute, so
+  //     nothing is stamped: on a line with a priced build-up the server still
+  //     re-derives and the sync's figure is discarded on save.
+  //
+  // Stamping the second case would change the money on projects the QS only
+  // opened, which is the one thing this work must not do. So it stays
+  // unstamped — and the notice says plainly how many of the rates it just put
+  // on screen will not survive, instead of claiming all of them were "synced".
+  async function syncBoqRates(project, { explicit = false } = {}) {
     if (showMaterials) return;
     if (!canRateGen) return;
     if (!project?._id) return;
@@ -3489,47 +3542,78 @@ export default function ProjectsGeneric() {
 
       setBoqRateResolved(result);
 
+      // Bill codes with a priced build-up. The server derives those lines from
+      // the Budget, so an unstamped rate dropped into one is thrown away on the
+      // next save — that is the silent revert, and the QS is owed the count.
+      const derivedNet = new Map();
+      for (const b of Array.isArray(project?.budgetItems) ? project.budgetItems : []) {
+        const code = String(b?.billIdentity || "").trim().toLowerCase();
+        if (!code) continue;
+        derivedNet.set(
+          code,
+          (derivedNet.get(code) || 0) + safeNum(b?.qty) * safeNum(b?.rate),
+        );
+      }
+
       let matched = 0;
       let filled = 0;
+      let wontStick = 0;
 
-      setRates((prev) => {
-        const next = { ...(prev || {}) };
+      // Worked out once, here, so the stamps describe exactly the lines the
+      // rate map is about to be given (see ratesRef).
+      const next = { ...(ratesRef.current || {}) };
+      const stamps = [];
+      const rateLockedAt = new Date().toISOString();
 
-        for (let i = 0; i < its.length; i++) {
-          const it = its[i] || {};
-          const k = itemKey(it, i);
-          const descKey = normalizeBoqDescription(it.description);
-          const candidates = Array.isArray(result?.candidatesByKey?.[descKey])
-            ? result.candidatesByKey[descKey]
-            : [];
+      for (let i = 0; i < its.length; i++) {
+        const it = its[i] || {};
+        const k = itemKey(it, i);
+        const descKey = normalizeBoqDescription(it.description);
+        const candidates = Array.isArray(result?.candidatesByKey?.[descKey])
+          ? result.candidatesByKey[descKey]
+          : [];
 
-          if (!candidates.length) continue;
+        if (!candidates.length) continue;
 
-          const best = candidates[0];
-          if (!best) continue;
+        const best = candidates[0];
+        if (!best) continue;
 
-          matched += 1;
+        matched += 1;
 
-          const totalCost = safeNum(best.totalCost);
-          if (totalCost <= 0) continue;
+        const totalCost = safeNum(best.totalCost);
+        if (totalCost <= 0) continue;
 
-          const existing =
-            String(next[k] ?? "").trim() === ""
-              ? safeNum(it?.rate)
-              : safeNum(next[k]);
+        const existing =
+          String(next[k] ?? "").trim() === ""
+            ? safeNum(it?.rate)
+            : safeNum(next[k]);
 
-          if (onlyFillEmpty && existing !== 0) continue;
+        if (onlyFillEmpty && existing !== 0) continue;
 
-          next[k] = String(totalCost);
-          filled += 1;
+        next[k] = String(totalCost);
+        filled += 1;
+
+        if (explicit) {
+          stamps.push({
+            key: k,
+            appliedRateKey: String(best?.description || "").trim(),
+            rateLockedAt,
+          });
+        } else if (safeNum(derivedNet.get(String(it?.code || "").trim().toLowerCase())) > 0) {
+          wontStick += 1;
         }
+      }
 
-        return next;
-      });
+      setRates(next);
+      if (stamps.length) stampRateEntries(stamps);
 
+      const held =
+        wontStick > 0
+          ? ` ${wontStick} of them are priced by the Budget build-up and will go back to the Budget's rate when you save — press Sync rates to apply them yourself.`
+          : "";
       setNotice(
         filled > 0
-          ? `Synced ${filled} rate(s) from RateGen. (${matched} match(es) found)`
+          ? `Synced ${filled} rate(s) from RateGen. (${matched} match(es) found)${held}`
           : `No rates filled. (${matched} match(es) found)`,
       );
     } catch (e) {
@@ -3550,6 +3634,9 @@ export default function ProjectsGeneric() {
     if (autoFillBoqAppliedRef.current[selectedId]) return;
     autoFillBoqAppliedRef.current[selectedId] = true;
 
+    // Opening the project is not a decision to re-price it: this run can come
+    // from a setting saved months ago, so it fills the cells and stamps
+    // nothing.
     syncBoqRates(sel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMaterials, shouldAutoSyncBoq, canRateGen, selectedId]);
@@ -3567,7 +3654,8 @@ export default function ProjectsGeneric() {
     setRateGenPoolLoaded(false);
     autoFillBoqAppliedRef.current = {};
 
-    // Re-sync for the currently open project
+    // Re-sync for the currently open project. A zone change is not a pricing
+    // decision on this bill either, so this run stamps nothing.
     if (shouldAutoSyncBoq && sel && selectedId) {
       syncBoqRates(sel);
     }
@@ -3577,7 +3665,8 @@ export default function ProjectsGeneric() {
   function toggleAutoFillBoq(v) {
     setAutoFillBoqRates(v);
     if (selectedId) delete autoFillBoqAppliedRef.current[selectedId];
-    if (v && sel) syncBoqRates(sel);
+    // The QS just turned this on: the rates it brings in are his.
+    if (v && sel) syncBoqRates(sel, { explicit: true });
   }
 
   function getBoqCandidatesForItem(item) {
@@ -5703,7 +5792,9 @@ export default function ProjectsGeneric() {
                 autoFillBoqRates={autoFillBoqRates}
                 autoFillBoqBusy={autoFillBoqBusy}
                 canRateGenBoq={!showMaterials && canRateGen}
-                onSyncBoqRates={() => sel && syncBoqRates(sel)}
+                onSyncBoqRates={() =>
+                  sel && syncBoqRates(sel, { explicit: true })
+                }
                 onToggleAutoFillBoq={toggleAutoFillBoq}
                 getBoqCandidatesForItem={getBoqCandidatesForItem}
                 onPickBoqCandidate={handlePickBoqCandidate}

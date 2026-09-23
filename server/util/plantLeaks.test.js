@@ -88,6 +88,30 @@ test("the sheets that imported before import exactly as they did", async () => {
   assert.equal((await parseBoqWorkbook(await toBuffer(guessed))).budgetItems[0].componentKind, "Labour");
 });
 
+test("a customer's own 'Rate Build-Up' sheet still imports as a BILL", async () => {
+  // SCHEDULE_SHEET_RE learned the exporter's renamed sheet. If it had learned
+  // a bare "build-up" it would have swallowed this workbook's only measured
+  // sheet, and a file that imports as a bill today would import as an empty
+  // budget instead. Pinned so the phrase can never be loosened by accident.
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Rate Build-Up");
+  ws.addRow(["Item", "Description", "Qty", "Unit", "Rate", "Amount"]);
+  ws.addRow(["A", "Concrete 1:2:4 in foundation", 100, "m3", 45000, null]);
+
+  const parsed = await parseBoqWorkbook(await toBuffer(wb));
+  assert.equal(parsed.items.length, 1);
+  assert.equal(parsed.items[0].qty, 100);
+  assert.equal(parsed.items[0].rate, 45000);
+  assert.equal(parsed.budgetItems.length, 0);
+});
+
+test("our own 'Resource Build-up' sheet is still read as a schedule", async () => {
+  const wb = workbookWithSchedules("Resource Build-up", [["Cement", "bag", 600, 9000]]);
+  const parsed = await parseBoqWorkbook(await toBuffer(wb));
+  assert.equal(parsed.budgetItems.length, 1);
+  assert.equal(parsed.budgetItems[0].componentKind, "Material");
+});
+
 /* ── (b) a Plant row is not the material bucket ─────────────────────────── */
 
 const billItem = {
