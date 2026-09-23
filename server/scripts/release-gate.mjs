@@ -14,6 +14,12 @@
 //   node scripts/release-gate.mjs offboard --reason "Left ADLM on 30 Sep 2026" \
 //     [--successor-email x@y --successor-name "..." --successor-github handle] [--confirm]
 //
+//   node scripts/release-gate.mjs protect [--repo owner/name --branch b] [--confirm]
+//     Puts the gate on a repository: invites the approver, writes CODEOWNERS,
+//     and turns on branch protection with admins included. With no --repo it
+//     does every repo in GATED_REPOS. Private repositories need GitHub Pro;
+//     without it GitHub answers 403 and the repo is reported as skipped.
+//
 // Without --confirm every command is a dry run that prints what it would do.
 // The GitHub steps shell out to `gh`, signed in as the repo owner.
 // Mail goes through SES only; a refusal is reported, never rerouted.
@@ -34,6 +40,27 @@ import {
 
 const REPO = process.env.RELEASE_GATE_REPO || "adedola12/AdlmWeb";
 const ENVIRONMENT = "production";
+
+// Every repository the gate covers. `private` ones cannot be protected on
+// GitHub Free (403 "Upgrade to GitHub Pro"), so `protect` reports them and
+// carries on; the plugin release gate on the API still covers what they ship.
+// Offboarding removes the leaver from ALL of these, protected or not.
+const GATED_REPOS = [
+  { repo: "adedola12/AdlmWeb", branch: "main" },
+  { repo: "adedola12/adlm-ai-service", branch: "main" },
+  { repo: "adedola12/ADLMRateGen-SingleUser", branch: "may30-version" },
+  { repo: "adedola12/ADLMInstaller", branch: "master", private: true },
+  { repo: "adedola12/RevitPluginBuilding", branch: "main", private: true },
+  { repo: "adedola12/RevitPluginArch", branch: "master", private: true },
+  { repo: "adedola12/ADLMRvtMEPPlugin", branch: "master", private: true },
+  { repo: "adedola12/ADLMRateGen", branch: "master", private: true },
+  { repo: "adedola12/ADLMPlanswiftApp", branch: "master", private: true },
+  { repo: "adedola12/ADLM-C3D-RoadTools", branch: "master", private: true },
+  { repo: "adedola12/TimeManagementApp", branch: "master", private: true },
+  { repo: "adedola12/adlm-mobile", branch: "main", private: true },
+];
+
+const NEEDS_PRO = /upgrade to github pro/i;
 
 const [, , cmd, ...rest] = process.argv;
 const args = {};
@@ -104,16 +131,82 @@ function setEnvironmentReviewer(login) {
   }
 }
 
-function codeownersFor(login) {
+function codeownersFor(login, repo = REPO) {
   const who = login ? `@${login}` : "@adedola12";
-  return [
-    "# Every change needs the release approver's review before it reaches main.",
-    "# Managed by server/scripts/release-gate.mjs. See docs/RELEASE_GATE.md.",
+  const lines = [
+    "# Every change needs the release approver's review before it reaches the",
+    "# default branch. Managed by server/scripts/release-gate.mjs.",
+    "# See adedola12/AdlmWeb docs/RELEASE_GATE.md.",
     `* ${who}`,
     `/.github/ ${who}`,
-    `/docs/RELEASE_GATE.md ${who}`,
-    "",
-  ].join("\n");
+  ];
+  if (repo === REPO) lines.push(`/docs/RELEASE_GATE.md ${who}`);
+  lines.push("");
+  return lines.join("\n");
+}
+
+const PROTECTION = {
+  required_status_checks: null,
+  enforce_admins: true,
+  required_pull_request_reviews: {
+    required_approving_review_count: 1,
+    require_code_owner_reviews: true,
+    dismiss_stale_reviews: true,
+    require_last_push_approval: true,
+  },
+  restrictions: null,
+  allow_force_pushes: false,
+  allow_deletions: false,
+};
+
+/** Put the gate on one repository. Returns "protected" | "skipped" | "failed". */
+async function protectRepo({ repo, branch, private: isPrivate }, login) {
+  say(`${repo} (${branch})${isPrivate ? " [private]" : ""}`);
+
+  if (login) {
+    await step(`invite ${login} (push)`, () => {
+      try {
+        gh(["api", "-X", "PUT", `repos/${repo}/collaborators/${login}`, "-f", "permission=push"]);
+      } catch (err) {
+        // Already a collaborator, or an invite is already pending.
+        say(`    (${String(err.stderr || err.message).trim().split("\n").pop()})`);
+      }
+    });
+  }
+
+  await step("write .github/CODEOWNERS", () => {
+    const wanted = Buffer.from(codeownersFor(login, repo)).toString("base64");
+    let sha;
+    try {
+      sha = JSON.parse(gh(["api", `repos/${repo}/contents/.github/CODEOWNERS?ref=${branch}`])).sha;
+    } catch {
+      sha = undefined; // no file yet
+    }
+    gh(
+      ["api", "-X", "PUT", `repos/${repo}/contents/.github/CODEOWNERS`, "--input", "-"],
+      JSON.stringify({
+        message: "chore(release-gate): the release approver reviews every change\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+        content: wanted,
+        branch,
+        ...(sha ? { sha } : {}),
+      }),
+    );
+  });
+
+  try {
+    await step(`protect ${branch} (admins included, code-owner review, no force push)`, () =>
+      gh(["api", "-X", "PUT", `repos/${repo}/branches/${branch}/protection`, "--input", "-"], JSON.stringify(PROTECTION)),
+    );
+    return "protected";
+  } catch (err) {
+    const message = String(err.stderr || err.message);
+    if (NEEDS_PRO.test(message)) {
+      say("  ! skipped: private repositories need GitHub Pro (https://github.com/settings/billing/plans).");
+      return "skipped";
+    }
+    say(`  ! failed: ${message.trim().split("\n").pop()}`);
+    return "failed";
+  }
 }
 
 // Rewriting CODEOWNERS on a protected main needs protection lifted for one
@@ -207,6 +300,26 @@ async function nameApprover({ email, name, github, reason, action }) {
   say(sent ? "  - notification sent (SES)" : "  ! SES refused the notification. Nothing was rerouted; see the error above.");
 }
 
+async function protect() {
+  const cfg = await getGateConfig();
+  const login = args.github || cfg.approverGithub;
+  if (!login) throw new Error("No approver GitHub login. Run set-approver first, or pass --github.");
+
+  const only = args.repo ? String(args.repo) : "";
+  const targets = only
+    ? [{ repo: only, branch: String(args.branch || "main"), private: !!args.private }]
+    : GATED_REPOS;
+
+  const tally = { protected: 0, skipped: 0, failed: 0 };
+  for (const t of targets) {
+    tally[await protectRepo(t, login)] += 1;
+  }
+  say(`\n${tally.protected} protected, ${tally.skipped} need GitHub Pro, ${tally.failed} failed.`);
+  if (CONFIRM) {
+    await recordGateEvent("github.protect", { repos: targets.map((t) => t.repo), approverGithub: login, tally, actor: BY });
+  }
+}
+
 async function offboard() {
   const reason = String(args.reason || "").trim();
   if (reason.length < 5) throw new Error('--reason is required, e.g. --reason "Left ADLM on 30 Sep 2026"');
@@ -235,9 +348,17 @@ async function offboard() {
   );
   await step("SSM watcher approver -> (none)", () => setWatcherApprover("", ""));
   if (leavingGithub) {
-    await step(`GitHub: remove ${leavingGithub} from ${REPO}`, () =>
-      gh(["api", "-X", "DELETE", `repos/${REPO}/collaborators/${leavingGithub}`]),
-    );
+    // Every gated repository, not just the website: access left behind in one
+    // of the product repos is exactly the gap an offboarding is meant to close.
+    for (const { repo } of GATED_REPOS) {
+      await step(`GitHub: remove ${leavingGithub} from ${repo}`, () => {
+        try {
+          gh(["api", "-X", "DELETE", `repos/${repo}/collaborators/${leavingGithub}`]);
+        } catch (err) {
+          say(`    (${String(err.stderr || err.message).trim().split("\n").pop()})`);
+        }
+      });
+    }
     await step(`GitHub: clear ${ENVIRONMENT} environment reviewer`, () => setEnvironmentReviewer(args["successor-github"] || ""));
   }
 
@@ -291,11 +412,12 @@ async function main() {
   await mongoose.connect(uri, { dbName: process.env.DB_NAME || "adlmWeb" });
   try {
     if (cmd === "status") await status();
+    else if (cmd === "protect") await protect();
     else if (cmd === "set-approver") {
       if (!args.email) throw new Error("--email is required");
       await nameApprover({ email: args.email, name: args.name, github: args.github, reason: args.reason, action: "approver.named" });
     } else if (cmd === "offboard") await offboard();
-    else say("usage: release-gate.mjs status | set-approver --email --name --github [--confirm] | offboard --reason [--successor-*] [--confirm]");
+    else say("usage: release-gate.mjs status | set-approver --email --name --github [--confirm] | protect [--repo --branch] [--confirm] | offboard --reason [--successor-*] [--confirm]");
     if (!CONFIRM && cmd !== "status") say("\nDry run. Add --confirm to do it.");
   } finally {
     await mongoose.disconnect();

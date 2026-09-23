@@ -42,6 +42,22 @@ design makes every bypass **visible and permanent** instead:
   API, that `main` is protected, was not force-pushed, and that every commit on
   it came through a PR the approver approved. Disabling Actions does not stop it.
 
+## Putting the gate on a repository
+
+```
+cd server
+node scripts/release-gate.mjs protect                                   # dry run, every repo
+node scripts/release-gate.mjs protect --confirm
+node scripts/release-gate.mjs protect --repo owner/name --branch main --confirm
+```
+
+It invites the approver, writes `.github/CODEOWNERS` and turns on branch
+protection with admins included, for every repository in `GATED_REPOS`
+(`server/scripts/release-gate.mjs`). Private repositories need **GitHub Pro**;
+on a free account GitHub answers 403 and the repo is reported as skipped, so
+the command is safe to run before upgrading. Offboarding removes the leaver
+from every repo in that list.
+
 ## The locked audit trail
 
 Stack `AdlmReleaseGate` (eu-west-1) owns an S3 bucket with **Object Lock in
