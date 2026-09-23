@@ -177,20 +177,37 @@ async function protectRepo({ repo, branch, private: isPrivate }, login) {
   await step("write .github/CODEOWNERS", () => {
     const wanted = Buffer.from(codeownersFor(login, repo)).toString("base64");
     let sha;
+    let current = "";
     try {
-      sha = JSON.parse(gh(["api", `repos/${repo}/contents/.github/CODEOWNERS?ref=${branch}`])).sha;
+      const file = JSON.parse(gh(["api", `repos/${repo}/contents/.github/CODEOWNERS?ref=${branch}`]));
+      sha = file.sha;
+      current = String(file.content || "").replace(/\s/g, "");
     } catch {
       sha = undefined; // no file yet
     }
-    gh(
-      ["api", "-X", "PUT", `repos/${repo}/contents/.github/CODEOWNERS`, "--input", "-"],
-      JSON.stringify({
-        message: "chore(release-gate): the release approver reviews every change\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
-        content: wanted,
-        branch,
-        ...(sha ? { sha } : {}),
-      }),
-    );
+
+    if (current && current === wanted) {
+      say("    already correct");
+      return;
+    }
+
+    try {
+      gh(
+        ["api", "-X", "PUT", `repos/${repo}/contents/.github/CODEOWNERS`, "--input", "-"],
+        JSON.stringify({
+          message: "chore(release-gate): the release approver reviews every change\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+          content: wanted,
+          branch,
+          ...(sha ? { sha } : {}),
+        }),
+      );
+    } catch (err) {
+      // Once the branch IS protected, a direct commit is refused — which is
+      // the gate working. Changing CODEOWNERS on a protected repo goes through
+      // a pull request (or offboard's one-commit lift), never from here.
+      say(`    ! not written: ${String(err.stderr || err.message).trim().split("\n").pop()}`);
+      say("      The branch is protected; change CODEOWNERS through a pull request.");
+    }
   });
 
   try {
