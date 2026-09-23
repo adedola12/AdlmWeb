@@ -126,12 +126,38 @@ const PAGES = [
   // are a simulation for the desktop add-ins' design; staged under /preview
   // as a reference, not a website feature. Behaviour (plugin-quiv.js) is not
   // ported.
+  //
+  // 22 Sep: he rebuilt plugin-heron on how HERON actually works — PlanSwift
+  // sits BEHIND it rather than around it, because the take-off is already done
+  // by the time HERON opens, and HERON reads the ADLM template rather than the
+  // drawing. Its stylesheet moved from plugin-quiv.css to splash.css +
+  // plugin-heron.css, and its 1,124 lines of plugin-heron.js are not ported.
   { src: "src/plugin-quiv.html", name: "DsPluginQuiv", slug: "plugin-quiv" },
   { src: "src/plugin-heron.html", name: "DsPluginHeron", slug: "plugin-heron" },
   { src: "src/work-project.html", name: "DsWorkProject", slug: "work-project" },
   { src: "src/work-library.html", name: "DsWorkLibrary", slug: "work-library" },
   { src: "src/work-rate.html", name: "DsWorkRate", slug: "work-rate" },
   { src: "src/work-programme.html", name: "DsWorkProgramme", slug: "work-programme" },
+
+  // ── the Windows products (his 22 Sep update) ────────────────────────────
+  // These are NOT website pages. They are designs for software Adedolapo
+  // builds for Windows: the Installer Hub drawn as a desktop app, and the four
+  // launch/splash screens, where the splash settles into the sign-in rather
+  // than handing over to another window.
+  //
+  // Staged for exactly the reason his plugin pages are — so the design is
+  // recorded, reviewable and mapped to `null` in dsRoutes so it can never
+  // become a customer route. What each screen DRAWS lives in his
+  // assets/js/splash.js (129 lines) and assets/js/hub.js (838 lines), which
+  // are not ported: his own repo renders them, and building them for real is a
+  // desktop job. So the staged route carries his mount point and his ported
+  // stylesheet, and the preview index says so rather than pretending
+  // otherwise.
+  { src: "src/hub.html", name: "DsHub", slug: "hub" },
+  { src: "src/splash-quiv.html", name: "DsSplashQuiv", slug: "splash-quiv" },
+  { src: "src/splash-heron.html", name: "DsSplashHeron", slug: "splash-heron" },
+  { src: "src/splash-rategen.html", name: "DsSplashRateGen", slug: "splash-rategen" },
+  { src: "src/splash-hub.html", name: "DsSplashHub", slug: "splash-hub" },
 
   // ── the rest ────────────────────────────────────────────────────────────
   { src: "src/ada.html", name: "DsAda", slug: "ada" },
@@ -694,19 +720,53 @@ ${jsx}
  * ADDS ONLY, NEVER DELETES OR OVERWRITES. public/ds also holds art that is
  * ours rather than his — a sync that mirrored the source would throw it away,
  * and one that overwrote would silently undo a deliberate replacement.
+ *
+ * AND ONLY WHAT THE PORTED LAYERS ACTUALLY REFERENCE. We port two things: his
+ * markup and his stylesheets. An image named nowhere in either is reachable
+ * only from his JavaScript, which is not ported — so copying it ships weight
+ * to every visitor for a picture nothing on this site can draw. His 22
+ * September splash photography is half a megabyte of exactly that: sp-*.jpg
+ * and wm-*.png are named only in assets/js/splash.js. They are reported, not
+ * copied, and the day that screen is built here the reference comes with it.
  */
+function referencedImages() {
+  const names = new Set();
+  const add = (text) => {
+    for (const m of text.matchAll(/(?:assets\/img|\.\.\/img)\/([\w.@-]+)/g)) names.add(m[1]);
+  };
+  for (const dir of [SITE, path.join(SITE, "src")]) {
+    if (!fs.existsSync(dir)) continue;
+    for (const f of fs.readdirSync(dir)) {
+      if (f.endsWith(".html")) add(fs.readFileSync(path.join(dir, f), "utf8"));
+    }
+  }
+  const css = path.join(SITE, "assets/css");
+  if (fs.existsSync(css)) {
+    for (const f of fs.readdirSync(css)) {
+      if (f.endsWith(".css")) add(fs.readFileSync(path.join(css, f), "utf8"));
+    }
+  }
+  return names;
+}
+
 function syncImages() {
   const from = path.join(SITE, "assets/img");
   const to = path.join(CLIENT, "public/ds");
   if (!fs.existsSync(from)) return;
   fs.mkdirSync(to, { recursive: true });
 
+  const wanted = referencedImages();
   const copied = [];
+  const skipped = [];
   for (const name of fs.readdirSync(from)) {
     const src = path.join(from, name);
     if (!fs.statSync(src).isFile()) continue;
     const dst = path.join(to, name);
     if (fs.existsSync(dst)) continue;
+    if (!wanted.has(name)) {
+      skipped.push(`${name} (${Math.round(fs.statSync(src).size / 1024)} KB)`);
+      continue;
+    }
     fs.copyFileSync(src, dst);
     copied.push(name);
   }
@@ -714,6 +774,13 @@ function syncImages() {
   if (copied.length) {
     console.log(
       `[port-ds-html] copied ${copied.length} new image(s) into public/ds: ${copied.join(", ")}`,
+    );
+  }
+  if (skipped.length) {
+    console.log(
+      `[port-ds-html] left ${skipped.length} image(s) in his repo — no ported markup or\n` +
+        "stylesheet names them, so only his unported JavaScript can draw them:\n  " +
+        skipped.join("\n  "),
     );
   }
 }

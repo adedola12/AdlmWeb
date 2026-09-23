@@ -6,122 +6,149 @@ import React from "react";
 export default function DsPluginHeron() {
   return (
     <>
-      <div className="rv ps" id="rv">
+      {/* PlanSwift sits behind HERON rather than around it: the take-off is already
+     done by the time HERON opens, so the QS is switching windows, not working
+     in two panes. It shows through in dock mode. */}
+      {" "}
+      <div className="hn-behind" aria-hidden="true">
         {" "}
-        <header className="rv-title">
-          {" "}
-          <span className="rv-logo ps">
+        <div className="hn-ps-title">
+          <span className="hn-ps-logo">
             P
           </span>
-          {" "}
-          <span className="rv-file">
-            PlanSwift 11,{" "}
-            <b id="rv-file">
-              Ikoyi-Complex.pspx
-            </b>
-            , A-101 Ground floor plan
-          </span>
-          {" "}
-          <span className="rv-note">
-            Preview: PlanSwift is simulated so HERON can be tried in a browser
-          </span>
-          {" "}
-        </header>
+          {" "}PlanSwift Pro Metric 11.0, 2026, qts 517 practise
+        </div>
         {" "}
-        <nav className="rv-ribbon" aria-label="PlanSwift ribbon">
+        <div className="hn-ps-body">
           {" "}
-          <span>
-            File
-          </span>
-          <span>
-            Home
-          </span>
-          <span>
-            Takeoff
-          </span>
-          <span>
-            Estimating
-          </span>
-          <span>
-            Pages
-          </span>
-          <span>
-            Tools
-          </span>
-          <span>
-            View
-          </span>
-          {" "}
-          <span className="on">
-            Plugins
-          </span>
-          {" "}
-          <button type="button" className="rv-launch" id="rv-launch">
-            <img src="/ds/ic-heron.png" alt="" />
-            HERON
-          </button>
-          {" "}
-        </nav>
-        {" "}
-        <div className="rv-body">
-          {" "}
-          <aside className="rv-props" aria-label="Pages and takeoff">
+          <div className="hn-ps-panel">
             {" "}
             <b>
-              Pages
+              Takeoff Summary
             </b>
             {" "}
-            <ul className="rv-browser">
-              <li className="in on">
-                A-101 Ground floor plan
+            <ul>
+              {" "}
+              <li>
+                SITE CLEARANCE{" "}
+                <i>
+                  90.68
+                </i>
               </li>
+              {" "}
+              <li className="f">
+                Ground FLoor
+              </li>
+              {" "}
               <li className="in">
-                A-102 First floor plan
+                Site Area{" "}
+                <i>
+                  92.79
+                </i>
               </li>
+              {" "}
+              <li className="f">
+                Sub
+              </li>
+              {" "}
               <li className="in">
-                A-103 Roof plan
+                Girth{" "}
+                <i>
+                  37.24
+                </i>
               </li>
-              <li className="in">
-                S-101 Foundation layout
+              {" "}
+              <li className="in2">
+                Trench Exc{" "}
+                <i>
+                  48.14
+                </i>
               </li>
-              <li className="in">
-                S-201 Beam &amp; column schedule
+              {" "}
+              <li className="in2">
+                Surface Treatment{" "}
+                <i>
+                  166.92
+                </i>
               </li>
+              {" "}
+              <li className="in2">
+                Earth Work Support{" "}
+                <i>
+                  141.59
+                </i>
+              </li>
+              {" "}
+              <li className="in2">
+                Concrete Footing{" "}
+                <i>
+                  0.00
+                </i>
+              </li>
+              {" "}
             </ul>
             {" "}
-            <b className="pb">
-              Selection
+          </div>
+          {" "}
+          <div className="hn-ps-sheet">
+            <span>
+              A-101 · Ground floor plan · 1:100
+            </span>
+          </div>
+          {" "}
+          <div className="hn-ps-panel r">
+            {" "}
+            <b>
+              Templates, Parts, Inputs
             </b>
             {" "}
-            <div id="rv-props">
-              <p className="mute">
-                Nothing measured
-              </p>
-            </div>
-            {" "}
-            <b className="pb">
-              Scale
-            </b>
-            {" "}
-            <ul className="rv-browser">
-              <li className="in">
-                1:100 · calibrated
+            <ul>
+              {" "}
+              <li className="t">
+                Complete ADLM TakeOff
               </li>
-              <li className="in">
-                Units: metres
+              {" "}
+              <li className="f">
+                SUBSTRUCTURE
               </li>
+              {" "}
+              <li className="in">
+                Site Area
+              </li>
+              {" "}
+              <li className="in">
+                Building Area
+              </li>
+              {" "}
+              <li className="in">
+                PAD FOUNDATION
+              </li>
+              {" "}
+              <li className="in">
+                STRIP FOUNDATION
+              </li>
+              {" "}
+              <li className="f">
+                FRAME
+              </li>
+              {" "}
+              <li className="in">
+                COLUMN
+              </li>
+              {" "}
+              <li className="in">
+                BEAM
+              </li>
+              {" "}
             </ul>
             {" "}
-          </aside>
-          {" "}
-          <main className="rv-view" id="rv-view" aria-label="Drawing sheet">
-          </main>
-          {" "}
-          <section className="qv" id="qv" aria-label="HERON">
-          </section>
+          </div>
           {" "}
         </div>
         {" "}
+      </div>
+      {" "}
+      <div className="hn mode-full" id="hn">
       </div>
     </>
   );
