@@ -29,6 +29,17 @@ function isLabour(b) {
   return k === "labour" || k === "labor";
 }
 
+// The material bucket, tested explicitly. It used to be "anything that is not
+// labour", which quietly counted a Plant or Equipment row as material: a bill
+// line whose only non-labour row was excavator hire looked covered, so no
+// material line was ever synthesised for it and the QS had nothing to price
+// the materials on. Plant is its own resource class. A blank kind still counts
+// as material — that is what an unstamped row has always meant here.
+function isMaterial(b) {
+  const k = String(b?.componentKind || "").trim().toLowerCase();
+  return !k || k === "material";
+}
+
 // Work items that are pure labour (no material is bought/placed) — these show
 // a Labour line only. Everything else defaults to Material + Labour.
 // Start-anchored stems (no trailing \b) so "excavat" matches "excavation",
@@ -175,7 +186,7 @@ export function ensureBillItemCoverage(items, budgetItems) {
     // Material only for items that actually carry material — labour-only items
     // (excavation, disposal, compaction, earthwork support, backfill…) stay
     // labour-only.
-    if (!isLabourOnly(it) && !lines.some((b) => !isLabour(b))) {
+    if (!isLabourOnly(it) && !lines.some(isMaterial)) {
       const name = cleanName(it?.description || it?.takeoffLine) || "Material";
       list.push(synth(it, code, "Material", name, 0));
     }

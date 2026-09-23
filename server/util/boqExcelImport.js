@@ -385,7 +385,7 @@ function exportNotImportable() {
 // they collect, so importing them would double the bill.
 const SKIP_SHEET_RE = /cover|summary|milestone|read ?me|instruction|note|collection|prices?\b/i;
 // Resource build-up sheets (the budget), not measured work.
-const SCHEDULE_SHEET_RE = /material|labour|labor|plant|equipment/i;
+const SCHEDULE_SHEET_RE = /material|labour|labor|plant|equipment|build[\s-]?up/i;
 
 function classifySheets(workbook) {
   const bills = [];
@@ -521,10 +521,30 @@ function parseBillSheet({ ws, header }, ctx) {
 function parseScheduleSheet({ ws, header }, ctx) {
   const cols = header.columns;
   const name = String(ws.name || "");
-  const sheetKind = /labour|labor/i.test(name) ? "Labour" : "Material";
+  // The sheet's own kind, used only as the fallback for a row that carries no
+  // Type/Component cell of its own. Plant is a resource class in its own right,
+  // so a "Plant & Equipment Schedule" — ours or one a QS built by hand — must
+  // not import as Material.
+  //
+  // Labour is tested FIRST on purpose: a combined sheet named "Material &
+  // Labour" has always fallen to Labour here, and a name carrying two kinds
+  // must keep doing exactly what it did. Only names that mention plant or
+  // equipment AND neither material nor labour reach the new branches, so no
+  // sheet that imported before imports differently now.
+  const sheetKind = /labour|labor/i.test(name)
+    ? "Labour"
+    : /plant/i.test(name)
+      ? "Plant"
+      : /equip/i.test(name)
+        ? "Equipment"
+        : "Material";
   // "MATERIAL SCHEDULE GATE HOUSE" → "Gate House" context tag.
   const sheetScope = titleCaseIfCaps(
-    name.replace(/material|labour|labor|schedule/gi, "").replace(/\s+/g, " ").trim(),
+    name
+      .replace(/material|labour|labor|plant|equipment|resource|build[\s-]?up|schedule/gi, "")
+      .replace(/[&,]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
   );
   const hasExplicitRef = cols.billRef !== undefined;
 
@@ -593,9 +613,14 @@ function parseScheduleSheet({ ws, header }, ctx) {
     }
 
     const kindText = text(row, "componentKind");
+    // The row's own Type cell wins. With no Type cell, a description that says
+    // labour is labour — but only on a sheet whose own kind is Material, which
+    // is where that guess was always made. On a Labour sheet the guess and the
+    // sheet agree anyway, and on a Plant sheet a description mentioning a gang
+    // must not drag a plant row back into labour.
     const componentKind = kindText
       ? normalizeComponentKind(kindText, sheetKind)
-      : /labour|labor|workmanship/i.test(description)
+      : sheetKind === "Material" && /labour|labor|workmanship/i.test(description)
         ? "Labour"
         : sheetKind;
 
