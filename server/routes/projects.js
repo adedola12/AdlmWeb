@@ -488,6 +488,12 @@ function projectForClient(project, access) {
   // already rate-masked). Always strip the raw array.
   delete obj.linkedProjects;
 
+  // The gang / plant detail behind each Budget Labour and Plant row is served
+  // by GET /:productKey/:id/resources, not here. Keeping it off this payload
+  // is what lets it exist at all without changing the shape of any route a
+  // desktop plugin calls.
+  delete obj.resourceItems;
+
   if (!canSeeRates) {
     maskRates(obj);
     obj._ratesMasked = true;
@@ -566,6 +572,11 @@ import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
 import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
+import {
+  sanitizeResourceItems,
+  applyResourceRows,
+  buildResourcesFromRate,
+} from "../util/projectResources.js";
 import {
   BOQ_IMPORT_PRODUCTS,
   hasBoqImportGrant,
@@ -6397,6 +6408,83 @@ async function importBoqUpdate(req, res) {
   }
 }
 
+// ── Project resources ─────────────────────────────────────────────────────
+//
+// The gang and plant detail behind each Budget Labour and Plant row. Its own
+// endpoint, and its own array, precisely so it can never be mistaken for a
+// budget row: deriveBillRatesFromBudget sums every budget row under a
+// billIdentity and drives the bill rate from it on a plain GET, so gang rows
+// in budgetItems would double-count labour and raise the client's bill just
+// because somebody opened the project. See util/projectResources.js.
+async function getProjectResources(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey)).lean();
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    const rows = sanitizeResourceItems(project.resourceItems);
+
+    // Resources carry day rates. A viewer without RateGen sees the gang and
+    // the hours, never the money — the same line maskRates draws everywhere.
+    if (!access.canSeeRates) {
+      return res.json({
+        resourceItems: rows.map((r) => ({ ...r, rate: 0 })),
+        _ratesMasked: true,
+      });
+    }
+    return res.json({ resourceItems: rows });
+  } catch (err) {
+    console.error("getProjectResources error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function putProjectResources(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res
+        .status(403)
+        .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    // A masked viewer's payload carries rate 0 on every row (see the GET), so
+    // saving it would wipe the owner's day rates.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "edit project resources");
+    }
+
+    project.resourceItems = sanitizeResourceItems(req.body?.resourceItems);
+    project.version = (Number(project.version) || 0) + 1;
+    await project.save();
+
+    recordActivity(req, project, ACT.BUDGET_UPDATED, "Updated the project resources", {
+      resourceCount: project.resourceItems.length,
+    });
+
+    return res.json({ resourceItems: project.resourceItems });
+  } catch (err) {
+    console.error("putProjectResources error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
 // Price ONE bill line from a Rate Gen rate the QS picked in the Bill table.
 //
 // This is the fix for a pick that did not stick. Writing only the bill rate
@@ -6462,6 +6550,13 @@ async function priceLineFromRate(req, res) {
 
     project.budgetItems = sanitizeBudgetItems(
       applyRateRows(project.budgetItems, code, built.rows),
+    );
+    // The gang and plant behind that one Labour row and one Plant row. Into
+    // resourceItems, never budgetItems — deriveBillRatesFromBudget below sums
+    // every budget row under this code, so filing the gang there would count
+    // the labour twice and raise the client's bill.
+    project.resourceItems = sanitizeResourceItems(
+      applyResourceRows(project.resourceItems, code, buildResourcesFromRate(item, rate)),
     );
     backfillBudgetLinks(project.items, project.budgetItems);
     project.budgetItems = ensureBillItemCoverage(project.items, project.budgetItems);
@@ -7558,6 +7653,22 @@ router.post(
   requireEntitlementParam,
   requireBoqImport(),
   regenerateMlSchedule,
+);
+
+// The gang / plant detail behind the Budget's Labour and Plant rows. Its own
+// endpoint by design — see projectForClient, which strips resourceItems so no
+// route a desktop plugin calls changes shape.
+router.get(
+  "/:productKey/:id/resources",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  getProjectResources,
+);
+router.put(
+  "/:productKey/:id/resources",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  putProjectResources,
 );
 
 // Price one bill line from a Rate Gen rate the QS picked.
