@@ -600,6 +600,13 @@ const ItemSchema = new mongoose.Schema(
     // Revit plugin). Round-trips so the plugin can re-resolve the rate without
     // parsing the "RateGen (…)" rateSource label.
     appliedRateKey: { type: String, default: "" },
+    // When the QS applied this line's rate himself — a Rate Gen pick or a
+    // figure typed into the rate cell. While set (together with, or instead
+    // of, appliedRateKey) deriveBillRatesFromBudget leaves the rate alone
+    // rather than re-deriving it from the Budget build-up. Optional and null
+    // on every row written before this shipped, so existing projects keep
+    // deriving exactly as they did.
+    rateLockedAt: { type: Date, default: null },
     actualQty: { type: Number, default: null },
     actualRate: { type: Number, default: null },
     actualRecordedAt: { type: Date, default: null },

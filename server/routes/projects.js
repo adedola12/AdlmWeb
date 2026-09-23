@@ -1313,6 +1313,10 @@ function sanitizeItems(items, productKey = "") {
       rate: parsedRate,
       // RateGen library description that priced this line (plugin provenance).
       appliedRateKey: item.appliedRateKey != null ? String(item.appliedRateKey) : "",
+      // When the QS applied this rate himself (Rate Gen pick or typed figure).
+      // Optional: absent on every plugin payload, so a plugin save leaves it
+      // null and the line keeps deriving from the Budget exactly as today.
+      rateLockedAt: parseOptionalDate(item.rateLockedAt),
       actualQty: parseOptionalNumber(item.actualQty),
       actualRate: parsedActualRate,
       actualRecordedAt: parsedActualRecordedAt,
