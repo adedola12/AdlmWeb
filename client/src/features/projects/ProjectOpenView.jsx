@@ -429,6 +429,9 @@ export default function ProjectOpenView({
   onSearchBudgetRates,
   budgetRateGenReady = false,
   budgetDrivenCodes,
+  // Lines whose applied rate and Budget build-up do not agree — see
+  // rateReconcile.js. Null/empty on a project nobody has re-priced.
+  rateNotes,
   onAddCategory,
   onRemoveCategory,
   onAddTrade,
@@ -1408,6 +1411,7 @@ export default function ProjectOpenView({
           onAddCategory={onAddCategory}
           onAddTrade={onAddTrade}
           budgetDrivenCodes={budgetDrivenCodes}
+          rateNotes={rateNotes}
           tradeOptions={tradeOptions}
           onTradeChange={onTradeChange}
           groupByMode={groupByMode}
