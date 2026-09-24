@@ -67,7 +67,11 @@ export default function DsQuoteDoc({ spec, onClose }) {
             >
               Print or save as PDF
             </button>
-            <button type="button" className="ds-btn btn-o ds-btn-sm qt-close" onClick={onClose}>
+            {/* .qt-close is only a hook in his build — quote.js focuses and
+                binds it. The look is his .ds-btn btn-o, and here onClick does
+                the binding, so the hook name was an undefined class and
+                nothing else. */}
+            <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={onClose}>
               Close
             </button>
           </div>

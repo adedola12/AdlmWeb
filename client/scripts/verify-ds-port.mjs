@@ -191,8 +191,10 @@ const HAND_WRITTEN_DIRS = [
 ];
 
 // Class names our components write that no .ds stylesheet defines, and which
-// are fine: Tailwind used on purpose, or a marker something else reads. Every
-// entry needs a reason.
+// are fine: Tailwind used on purpose, a marker something else reads, or one of
+// HIS OWN structural wrappers — a div his JS creates and his stylesheet never
+// styles, ported verbatim because the rule belongs upstream and inventing one
+// here would be us designing, not porting. Every entry needs a reason.
 const UNSTYLED_OK = [
   // Tailwind, deliberately. DsPreviewIndex says in its own header that it is a
   // review tool styled with the app's Tailwind rather than the ported design
@@ -210,27 +212,28 @@ const UNSTYLED_OK = [
   // Marker classes. Never styled; something else reads them.
   ["sh-leave", "marker on his wk-modal so DsLeaveStudio can find its own dialog"],
   ["ct", "cert dialog hook (ds/cert), styled through .cx-* not .ct"],
+
+  // His own structural wrappers. Each is written by HIS javascript and styled
+  // by no rule in HIS stylesheet — the children carry the whole appearance —
+  // so the port is faithful and a rule of ours would be an invention. Checked
+  // against his build on 24 Sep 2026; worth sending back to him with .adm-link.
+  ["adm-burn", "his admin-ai.js does el('div','adm-burn'); .adm-burn-bar and .adm-burn-k style themselves"],
+  ["lx-cont-in", "his learn.js writes it inside .lx-cont, which styles .k and the card through it"],
+  ["pj-out", "his work-proj.js writes it as the swap target for .pj-grid / .pj-table / .pj-empty"],
 ];
 
 // Known gaps: written by a component, defined by no sheet. Recorded, not
 // blessed — each one is a CHR-1 in miniature, and each belongs to the stream
 // that owns the file. Delete the entry when the rule lands. The point of
 // listing them is that the check still fails for anything NEW.
-const TRACKED_GAPS = [
-  ["adm-h1", "DsAdminShell page heading: no rule, so the h1 falls back to UA styling"],
-  ["adm-burn", "DsAdminAiUsage credit burn-down block"],
-  ["adm-x", "DsDocComposer close control"],
-  ["ds-input", "DsAdminVideos text field"],
-  ["dsh-note", "DsManageOverview"],
-  ["dsh-notice", "DsManageOverview banner, with its --body and --cta parts"],
-  ["dsh-notice-body", "DsManageOverview"],
-  ["dsh-notice-cta", "DsManageOverview"],
-  ["lx-cont-in", "DsLearning continue strip"],
-  ["pj-out", "DsProjectGallery"],
-  ["qt-close", "DsQuoteDoc"],
-  ["qt-saved", "DsQuoteBuilder"],
-  ["sform-status", "WaitlistForm status line"],
-];
+//
+// Empty since 24 Sep 2026 (S18 G1). The last thirteen were closed by using a
+// class of his where he had one (.adm-h, .adm-drawer-x, .adm-fields input,
+// .dsh-att, .panel rise), by deleting a hook name nothing reads (.qt-close),
+// and by writing two rules in ds-local.css for the two cases he genuinely has
+// no equivalent for (.dsh-notice, .sform-status). Keep it empty: a new entry
+// here is a screen shipping unstyled, not a to-do.
+const TRACKED_GAPS = [];
 
 // Bases whose variants are sibling classes rather than compounds, so
 // `base ${variant}` is correct even though no `.base.variant` selector exists.

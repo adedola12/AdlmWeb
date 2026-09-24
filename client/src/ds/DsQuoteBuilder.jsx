@@ -901,8 +901,13 @@ export default function DsQuoteBuilder() {
           </div>
         )}
 
+        {/* His markup is a panel carrying the id: the id is what quote.js
+            reaches for, the look is his .panel .rise. It was written with a
+            .qt-saved class instead, which no sheet defines, so the block
+            rendered with no card, no padding and no radius beside three
+            siblings that had all three. */}
         {drafts.length > 0 && (
-          <div id="qt-saved" className="qt-saved">
+          <div id="qt-saved" className="panel rise">
             <h3>Kept on this machine</h3>
             <p className="ds-sub">
               Quotations you saved here. They live in this browser only: nothing that stores a
