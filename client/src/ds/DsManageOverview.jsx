@@ -27,6 +27,15 @@ const money = (n) =>
     maximumFractionDigits: 0,
   }).format(Number(n) || 0);
 
+// One sprite icon per kind of thing that needs you, so his .dsh-att dot has
+// something to draw. Every id here is in DsAppSprite; an unknown kind falls
+// back to #hi-info rather than rendering an empty square.
+const ATTENTION_ICON = {
+  warn: "hi-alert",
+  idle: "hi-downloads",
+  course: "hi-learning",
+};
+
 const longDate = (d) =>
   d
     ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
@@ -299,11 +308,19 @@ export default function DsManageOverview() {
   return (
     <div className="dsh-in">
       {view.notice ? (
+        /* The level picks one of HIS palettes rather than a colour of ours:
+           .pal-light / .pal-deep / .pal-orange each set --pal-fill, --pal-line
+           and --pal-key, which is how every other tinted surface on the site
+           follows light, dark and black without naming a colour. He has no
+           green palette, so a "success" notice takes the deep navy — an
+           announcement rather than an alarm. */
         <div
-          className={`dsh-notice dsh-notice--${
-            ["info", "success", "warn"].includes(view.notice.level)
-              ? view.notice.level
-              : "info"
+          className={`dsh-notice ${
+            view.notice.level === "warn"
+              ? "pal-orange"
+              : view.notice.level === "success"
+                ? "pal-deep"
+                : "pal-light"
           }`}
           role="status"
         >
@@ -500,15 +517,28 @@ export default function DsManageOverview() {
               {view.attention.length === 0 ? (
                 <p className="ds-sub">Nothing needs you. Everything is active and installed.</p>
               ) : (
-                view.attention.map((a, i) => (
-                  <div className="dsh-note" key={`${a.kind}-${i}`}>
-                    <span className={`dot ${a.kind === "warn" ? "warn" : ""}`} />
-                    <span>{a.text} </span>
-                    <span className="act">
-                      <Link to={a.to}>{a.action}</Link>
-                    </span>
-                  </div>
-                ))
+                /* His attention list, markup and all: ul.dsh-att > li > span.dot
+                   + copy + a.act. It was written as .dsh-note rows, a name no
+                   sheet of his defines, so the rows had no divider, the dot was
+                   a bare 0x0 span and the link sat inline instead of at the end
+                   of the row. .dsh-att is the same list, styled. */
+                <ul className="dsh-att">
+                  {view.attention.map((a, i) => (
+                    <li className={a.kind === "warn" ? "warn" : ""} key={`${a.kind}-${i}`}>
+                      <span className="dot">
+                        <svg viewBox="0 0 24 24">
+                          <use href={`#${ATTENTION_ICON[a.kind] || "hi-info"}`} />
+                        </svg>
+                      </span>
+                      <div>
+                        <b>{a.text}</b>
+                      </div>
+                      <Link className="act" to={a.to}>
+                        {a.action}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </section>

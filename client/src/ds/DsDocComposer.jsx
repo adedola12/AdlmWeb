@@ -794,7 +794,7 @@ export default function DsDocComposer() {
                     </button>
                     <button
                       type="button"
-                      className="adm-x"
+                      className="adm-drawer-x"
                       aria-label={`Remove ${r.title}`}
                       onClick={() => drop(r.id)}
                     >

@@ -383,7 +383,7 @@ export default function DsAdminShell({ children, title }) {
 
           <main className="adm-page adm-scroll">
             <div className="adm-page-in">
-              {title ? <h1 className="adm-h1">{title}</h1> : null}
+              {title ? <h1 className="adm-h">{title}</h1> : null}
               {children}
             </div>
           </main>

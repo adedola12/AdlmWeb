@@ -267,10 +267,14 @@ export default function DsAdminVideos() {
           poller would, and a video that has already been announced is refused rather than sent
           twice.
         </span>
-        <div className="adm-inline" style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        {/* His field idiom is a wrapper, not a class on the input: .adm-fields
+            input carries the border, radius and padding. It was written as
+            .adm-inline + .ds-input, and .ds-input is defined nowhere — so the
+            only rule reaching it was .adm-inline input, which is the 68px
+            right-aligned cell editor and the wrong shape for a watch URL. */}
+        <div className="adm-fields" style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <input
             type="text"
-            className="ds-input"
             style={{ flex: 1, minWidth: 0 }}
             placeholder="https://www.youtube.com/watch?v=…"
             value={paste}
