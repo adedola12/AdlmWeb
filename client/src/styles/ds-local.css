@@ -1740,11 +1740,25 @@
    in the project gallery is 34x30, and the modal close is 34x34. Below 760px
    — where his own rules already stretch these to the full width of the row —
    they take a 40px minimum as well. Padding, colour and type are untouched,
-   so nothing moves on a desktop and nothing here is a new value. */
+   so nothing moves on a desktop and nothing here is a new value.
+
+   Two of these set a size against a size he already sets, and those two have
+   to out-rank him or nothing happens. `.ds .pj-views button` (0,2,1) and
+   `.ds .wk-modal-x` (0,2,0) are exactly the selectors ds-work-proj.css and
+   ds-work.css use for their 34x30 and 34x34 — equal weight, and both sheets
+   are imported from route components, so they land AFTER this file in the
+   bundle and win the tie. The measured build had the 40px declarations
+   sitting 75KB and 113KB ahead of the rules that overrode them.
+
+   `:root` adds a pseudo-class to the front, which is the same device
+   ds.css uses for `:root.js .ds .rise` and this sheet uses for
+   `:root.dark .ds .pj-search input`. One step of weight, no !important, and
+   no change to what the selector matches. The other three set min-height,
+   which he sets nowhere, so they win on their own and are left alone. */
 @media (max-width: 760px) {
   .ds .wk-tabs button, .ds .wk-loc-sw button, .ds .wk-dd-b { min-height: 40px; }
-  .ds .pj-views button { width: 40px; height: 40px; }
-  .ds .wk-modal-x { width: 40px; height: 40px; }
+  :root .ds .pj-views button { width: 40px; height: 40px; }
+  :root .ds .wk-modal-x { width: 40px; height: 40px; }
 }
 /* ------------------------------------------------- first-run empty states
    His empty state has three parts: a heading, a line saying why the screen
@@ -1765,7 +1779,11 @@
 .ds .wk-empty > p{margin:6px auto 14px;max-width:52ch;font-size:13px;font-weight:300;
   color:var(--ink-3);line-height:1.6}
 .ds .wk-empty > p:last-child{margin-bottom:0}
-.ds .wk-empty > .b{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+/* No `> .b` action row here. His .pj-empty has one, and it was copied across
+   with the rest, but nothing renders that shape inside a .wk-empty — the
+   empty states that carry an action put a bare .ds-btn or his .as-acts
+   there. A rule for markup that does not exist reads as a supported shape
+   and is not one. */
 
 /* His .as-empty centres its text; his .as-acts is a left-aligned flex row,
    made for the buttons under an assignment card. An action inside the empty
