@@ -4,6 +4,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { API_BASE } from "../config";
+import Seo from "../components/Seo.jsx";
+import { breadcrumbSchema, ptrainingEventSchema } from "../lib/schema.js";
 
 function fmtDate(d) {
   try {
@@ -483,8 +485,37 @@ export default function PTrainingDetail() {
 
   const activeMedia = galleryMedia[galleryIdx] || null;
 
+  // The path this page is actually reachable at, which is what the canonical
+  // and both schema blocks have to agree on. `key` may be the slug or the id;
+  // whichever the visitor arrived by is the one that gets indexed.
+  const canonicalPath = `/ptrainings/${key}`;
+
+  // Built from the record the API returned, not from anything typed here, so a
+  // date or a fee can only be wrong on this page if it is also wrong in the
+  // admin screen that set it. Null when the event has no usable start date or
+  // location, in which case the page simply carries no Event markup.
+  const eventBlock = ptrainingEventSchema(t, { path: canonicalPath });
+
+  const metaDescription = String(t.subtitle || t.description || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <Seo
+        title={t.title}
+        description={metaDescription || undefined}
+        path={canonicalPath}
+        image={t.flyerUrl || undefined}
+        jsonLd={[
+          eventBlock,
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Training and events", path: "/trainings" },
+            { name: t.title, path: canonicalPath },
+          ]),
+        ].filter(Boolean)}
+      />
       {/* HERO */}
       <div className="bg-white rounded-2xl border shadow-sm p-4 sm:p-6">
         <div className="flex flex-wrap gap-2">
