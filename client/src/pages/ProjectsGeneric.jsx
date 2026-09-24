@@ -12,6 +12,14 @@ import { FaCubes, FaFolder, FaInfoCircle } from "../components/icons.jsx";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
+// The workspace is drawn in his project pieces (.pj-empty, .pj-kpi, .pj-buy,
+// .pj-vars, .pj-stage, .pj-sumbox) but nothing on this route ever loaded the
+// sheet that defines them: DsAppShell brings ds-work.css, and ds-work-proj.css
+// was imported only by the gallery and Work's overview. So the buy schedule's
+// and the variation list's empty states rendered as bare text unless the
+// reader happened to have visited /work first in the same session. Importing
+// it here makes the route look the same whichever door it was opened by.
+import "../styles/ds-work-proj.css";
 import WkModal from "../ds/WkModal.jsx";
 import { useFeedback } from "../ds/feedback/feedbackContext.js";
 import {

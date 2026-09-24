@@ -645,14 +645,29 @@ export default function ProjectValuationSummary({
             </p>
           ) : null}
 
-          {!loadingValuations && !valuations.length ? (
+          {/* Three states, not one. A read that failed already says so in the
+              note above, and saying "no valuation entries yet" underneath it
+              would turn a fault into a fact about the project. While it is
+              still loading the screen knows nothing either way, so it says
+              nothing. Only when the log really came back empty does the panel
+              explain what a valuation is and the one thing that makes one. */}
+          {loadingValuations || valuationErr || valuations.length ? null : (
             <div style={{ padding: 20 }}>
               <div className="wk-empty">
-                No valuation entries yet. Once you save marked items, they will appear
-                here by date.
+                <b>No valuation yet</b>
+                <p>
+                  A valuation is one day&rsquo;s progress priced: the lines you marked complete,
+                  or moved on by a percentage, valued at their own rates. Saving them numbers
+                  the day as a certificate you can print or export, with retention, VAT and
+                  previous payments worked out from the settings above.
+                </p>
+                <p>
+                  Mark lines on the Bill, complete or a percentage of the way there, then save
+                  the project. The day appears here as Valuation 1.
+                </p>
               </div>
             </div>
-          ) : null}
+          )}
 
           {selectedValuation && certificate ? (
             <>
