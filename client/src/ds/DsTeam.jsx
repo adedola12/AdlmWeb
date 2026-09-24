@@ -224,8 +224,10 @@ export default function DsTeam() {
           <section className="dsh-panel">
             <div className="dsh-ph">
               <h2>Members</h2>
+              {/* "0 of 0 seats held" reads as a broken account rather than a
+                  new one, which is the same call DsManageOverview made. */}
               <span className="when">
-                {view.used} of {view.owned} seats held
+                {view.owned ? `${view.used} of ${view.owned} seats held` : "No seats yet"}
               </span>
             </div>
             <div className="tbl-wrap">
@@ -326,8 +328,25 @@ export default function DsTeam() {
                   </div>
                 ))
               ) : (
+                // Item 13: why it is empty depends on whether anything is
+                // owned at all. A machine cannot activate a licence this
+                // account has not got, so the two say different things and
+                // point at different places.
                 <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
-                  No machine has activated a licence yet. The first install registers one.
+                  {view.owned ? (
+                    <>
+                      No machine has activated a licence yet. Installing a product on a
+                      computer registers it here, with the name of that machine and when it
+                      last ran.{" "}
+                      <Link to="/manage/downloads">Get the installers</Link>.
+                    </>
+                  ) : (
+                    <>
+                      No machine has activated a licence yet, because there is no licence on
+                      this account to activate. A seat is what a machine activates against.{" "}
+                      <Link to="/purchase">See the plans</Link>.
+                    </>
+                  )}
                 </p>
               )}
               <p
@@ -380,7 +399,9 @@ export default function DsTeam() {
                 </div>
               ) : (
                 <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
-                  No licensed products yet.
+                  No licensed products yet. This meter shows how many seats each product has
+                  and how many of them are installed, so it fills the moment a subscription
+                  starts. <Link to="/purchase">See the plans</Link>.
                 </p>
               )}
               <p
@@ -392,9 +413,14 @@ export default function DsTeam() {
                   lineHeight: 1.6,
                 }}
               >
-                {view.idle > 0
-                  ? `${view.idle} seat${view.idle === 1 ? " is" : "s are"} paid for and not installed anywhere. Installing on a machine costs nothing extra.`
-                  : "Every seat is installed. Buying another is the only way to add a machine without freeing one first."}
+                {/* "Every seat is installed" was true of an account with seats
+                    and no idle ones, and a lie on an account with no seats at
+                    all — which is every account on its first morning. */}
+                {!view.owned
+                  ? "There is nothing to install yet. A seat is bought per product, and activates against one machine at a time."
+                  : view.idle > 0
+                    ? `${view.idle} seat${view.idle === 1 ? " is" : "s are"} paid for and not installed anywhere. Installing on a machine costs nothing extra.`
+                    : "Every seat is installed. Buying another is the only way to add a machine without freeing one first."}
               </p>
             </div>
           </section>

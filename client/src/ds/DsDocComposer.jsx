@@ -120,6 +120,8 @@ export default function DsDocComposer() {
   const [from, setFrom] = React.useState("");
   const [source, setSource] = React.useState(() => sampleFor("letter"));
   const [kept, setKept] = React.useState([]);
+  // Did the list fail to come back, or is it genuinely empty? Two sentences.
+  const [keptFailed, setKeptFailed] = React.useState(false);
   const [dropping, setDropping] = React.useState(false);
   const [problem, setProblem] = React.useState("");
 
@@ -310,9 +312,13 @@ export default function DsDocComposer() {
     try {
       const r = await apiAuthed("/admin/docs/saved", { token: accessToken });
       setKept(r?.items || []);
+      setKeptFailed(false);
     } catch {
       // A library that cannot be read is not a reason to stop writing, so the
-      // composer carries on and says so quietly rather than blocking.
+      // composer carries on and says so quietly rather than blocking. The flag
+      // is what keeps the panel from then reporting an empty library, which
+      // would read as "your documents are gone".
+      setKeptFailed(true);
       setNote("Saved documents could not be listed just now.");
     }
   }, [accessToken]);
@@ -761,10 +767,17 @@ export default function DsDocComposer() {
 
           <p className="adm-grp">Saved documents</p>
           <div className="adm-saved">
-            {kept.length === 0 ? (
+            {keptFailed ? (
+              <p className="adm-hint">
+                The list could not be read just now, so nothing is shown here. Your saved
+                documents are on the server and are not affected; what you are writing is not
+                affected either, and saving it still works.
+              </p>
+            ) : kept.length === 0 ? (
               <p className="adm-hint">
                 Nothing saved yet. Documents are kept on the server now, not in this browser, so
-                one written here opens on any machine you sign in from.
+                one written here opens on any machine you sign in from. Write one and press
+                Save, and it joins this list.
               </p>
             ) : (
               <div className="adm-kept">
