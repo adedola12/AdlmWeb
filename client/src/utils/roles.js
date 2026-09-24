@@ -45,8 +45,17 @@ export const isAdmin = (u) => !!(u?.isSuperAdmin || u?.role === "admin" || u?.de
 
 export const isMiniAdmin = (u) => u?.role === "mini_admin";
 
+// Areas that open no admin screen. A role holding only these is not staff:
+// no Admin link, no admin shell. See server/config/permissions.js.
+const NON_ADMIN_AREAS = new Set(["preview"]);
+
 // Holds ANY admin area — admin, mini-admin, or a custom role with permissions.
 export const isStaff = (u) =>
   isAdmin(u) || // covers Design Access too
   u?.role === "mini_admin" ||
-  (Array.isArray(u?.permissions) && u.permissions.length > 0);
+  (Array.isArray(u?.permissions) && u.permissions.some((k) => !NON_ADMIN_AREAS.has(k)));
+
+// May see the staff-only preview site (preview host, /preview/* pages): all
+// staff, plus a role granted just the "preview" area (Tech Support).
+export const canViewPreview = (u) =>
+  isStaff(u) || (Array.isArray(u?.permissions) && u.permissions.includes("preview"));

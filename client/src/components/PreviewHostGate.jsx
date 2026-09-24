@@ -4,16 +4,16 @@
 // The branch build is the unfinished new site. On the live hosts
 // (adlmstudio.net, www.adlmstudio.net) and on localhost this gate does
 // nothing, so it is safe to carry through go-live. Anywhere else, a visitor
-// sees only the sign-in screens until they sign in with an admin role (admin,
-// Design Access or mini-admin); a signed-in customer is told the preview is
-// staff-only.
+// sees only the sign-in screens until they sign in with a staff role (admin,
+// Design Access, mini-admin, or Tech Support, which holds only the "preview"
+// area); a signed-in customer is told the preview is staff-only.
 //
 // Like DsPreviewGate it is a courtesy gate: the bundle is still downloadable.
 // Customer data stays protected by the API, which checks every request.
 
 import React from "react";
 import { useAuth } from "../store.jsx";
-import { isStaff } from "../utils/roles.js";
+import { canViewPreview } from "../utils/roles.js";
 import { isGatedHost, isOpenPath } from "../lib/previewHost.js";
 
 function Wall({ title, children }) {
@@ -58,13 +58,13 @@ export default function PreviewHostGate({ router, children }) {
   if (!gated) return children;
   // AuthProvider withholds `user` for one frame while hydrating; wait.
   if (accessToken && !user) return null;
-  if (user && isStaff(user)) return children;
+  if (user && canViewPreview(user)) return children;
 
   if (user) {
     return (
       <Wall title="This preview is for ADLM staff">
         <p>
-          You are signed in as {user.email}, which has no admin role. The live site is at{" "}
+          You are signed in as {user.email}, which has no access to the preview. The live site is at{" "}
           <a href="https://www.adlmstudio.net" style={linkStyle}>adlmstudio.net</a>.
         </p>
         <p>
@@ -93,7 +93,7 @@ export default function PreviewHostGate({ router, children }) {
     <Wall title="Staff preview">
       <p>This is the next version of the ADLM Studio website, open to the ADLM team only.</p>
       <p>
-        <a href={`/login?next=${next}`} style={linkStyle}>Sign in with your admin account</a>
+        <a href={`/login?next=${next}`} style={linkStyle}>Sign in with your staff account</a>
         {" · "}
         <a href="https://www.adlmstudio.net" style={linkStyle}>Go to adlmstudio.net</a>
       </p>
