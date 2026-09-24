@@ -104,6 +104,16 @@ export async function ensureRolesSeeded() {
       isSuperAdmin: false,
       permissions: ["releases"],
     },
+    // Tech support — can sign in to the staff preview site and nothing else.
+    // Other areas can be ticked on it later in Roles & Access; the seed only
+    // makes sure "preview" stays on.
+    {
+      key: "tech_support",
+      name: "Tech Support",
+      system: true,
+      isSuperAdmin: false,
+      permissions: ["preview"],
+    },
     // Designer — sees every admin screen, read-only, with all identities and
     // figures replaced by placeholders. `permissions` stays empty on purpose:
     // access comes from the demoMode flag (see decideAccess above), so nobody
@@ -149,6 +159,10 @@ export async function ensureRolesSeeded() {
     }
     if (d.key === "release_approver" && !(existing.permissions || []).includes("releases")) {
       existing.permissions = [...(existing.permissions || []), "releases"];
+      changed = true;
+    }
+    if (d.key === "tech_support" && !(existing.permissions || []).includes("preview")) {
+      existing.permissions = [...(existing.permissions || []), "preview"];
       changed = true;
     }
     if (d.key === "design" && !existing.designAccess) {

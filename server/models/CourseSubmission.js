@@ -25,6 +25,11 @@ const CourseSubmissionSchema = new mongoose.Schema(
     gradedBy: { type: String },
     gradedAt: { type: Date },
     feedback: { type: String, default: "" },
+    // R13: an optional mark out of 100, who marked it (by name, for the
+    // learner), and when the learner first read the result.
+    score: { type: Number, min: 0, max: 100, default: null },
+    gradedByName: { type: String, default: "" },
+    feedbackSeenAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

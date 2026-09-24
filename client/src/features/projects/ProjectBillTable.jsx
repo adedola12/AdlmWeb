@@ -1,6 +1,17 @@
 import React, { useRef, useCallback, useState, useEffect } from "react";
 import { FaArrowDown, FaArrowUp, FaChevronDown, FaChevronUp, FaClipboardList, FaCogs, FaFileInvoiceDollar, FaGripVertical, FaInfoCircle, FaLink, FaListUl, FaPlus, FaSearch, FaSync, FaTimes, FaTrashAlt } from "../../components/icons.jsx";
 import SectionRail from "./SectionRail.jsx";
+import { useFeedback } from "../../ds/feedback/feedbackContext.js";
+import {
+  EN_DASH,
+  projectTotals,
+  splitProvisionalSums,
+} from "./lib/projectTotals.js";
+import {
+  variationKpis,
+  variationStatusClass,
+  variationStatusLabel,
+} from "../../lib/variations.js";
 
 /**
  * Draggable column-resize handle.
@@ -62,10 +73,84 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+// Rows inside the bill's table, in his manner. His bill is a grid of divs
+// (.wk-qg / .wk-qgh / .wk-qtot); this one is a real <table> with editable
+// cells, so the same look is carried by his tokens on the rows instead.
+//
+//   section heading  his alt surface with a firmer rule above; while a line is
+//                    dragged over it, his light-blue wash and an action outline
+//   subtotal         the alt surface, a rule above, tabular figures
+//   total            his heavy rule (.wk-tot) above the bill's totals
+const sectionRowStyle = (dropping) => ({
+  background: dropping ? "var(--pal-light-wash)" : "var(--bg-alt)",
+  borderTop: "1px solid var(--line-2)",
+  outline: dropping ? "2px dashed var(--action)" : "none",
+  outlineOffset: -2,
+});
+const SUBTOTAL_ROW = {
+  background: "var(--bg-alt)",
+  borderTop: "1px solid var(--line-2)",
+  fontSize: 12,
+  fontWeight: 500,
+  color: "var(--ink)",
+  fontVariantNumeric: "tabular-nums",
+};
+const TOTAL_ROW = {
+  // 2px, not his 1.5px: in a collapsed table border a 1.5px rule rounds down to 1.
+  borderTop: "2px solid var(--ink)",
+  fontSize: 13.5,
+  fontWeight: 500,
+  color: "var(--ink)",
+  fontVariantNumeric: "tabular-nums",
+};
+const READING = { color: "var(--ink)", fontWeight: 500, fontVariantNumeric: "tabular-nums" };
+
+// One of his palettes, for a .wk-src chip or a toggled button.
+function palChip(pal) {
+  return {
+    background: `var(--pal-${pal}-wash)`,
+    color: `var(--pal-${pal}-key)`,
+    borderColor: `var(--pal-${pal}-line)`,
+  };
+}
+// His .wk-dd-m surface, for popovers that are open whenever they render.
+const POP = {
+  background: "var(--bg)",
+  border: "1px solid var(--line)",
+  borderRadius: 14,
+  boxShadow: "0 3px 10px rgba(var(--shadow-c),.08), 0 20px 46px rgba(var(--shadow-c),.20)",
+};
+// A compact ds-btn holding just an icon.
+const ICON_BTN = { padding: "6px 8px" };
+const ROW_BTN = { padding: "4px 6px" };
+
+// Why every delete control is dead for a collaborator without RateGen: they
+// read this project with every rate and amount zeroed, so they cannot see what
+// removing a row would throw away. The server keeps the owner's pricing on
+// anything they save (guardMaskedWrite in server/routes/projects.js), but it
+// takes a deletion at its word — the row, and the money on it, would simply be
+// gone. This message is what stops the click being made in the first place.
+const RATES_HIDDEN_NO_DELETE =
+  "Rates are hidden on this project, so rows cannot be removed. Ask the project owner, or subscribe to RateGen.";
+
+// A bill row's state in his tokens: a dragged row fades, a marked row takes
+// his light wash, and the drop target shows an action-coloured line.
+function billRowStyle({ dragging, marked, dropAbove, dropBelow }) {
+  return {
+    ...(dragging
+      ? { opacity: 0.4, background: "var(--bg-alt)" }
+      : marked
+        ? { background: "var(--pal-light-wash)" }
+        : null),
+    ...(dropAbove ? { borderTop: "2px solid var(--action)" } : null),
+    ...(dropBelow ? { borderBottom: "2px solid var(--action)" } : null),
+  };
+}
+
 function InfoTip({ text }) {
   return (
     <span className="relative inline-flex items-center group">
-      <FaInfoCircle className="text-slate-500" />
+      <FaInfoCircle size={13} className="text-slate-500" />
       <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-xs text-white group-hover:block">
         {text}
       </span>
@@ -91,13 +176,8 @@ function PercentInline({
       : Math.max(0, Math.min(100, Number(row?.percentComplete) || 0));
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1 py-0.5 text-[10px] ${
-        isRatified
-          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-          : value > 0
-            ? "border-amber-300 bg-amber-50 text-amber-700"
-            : "border-slate-200 bg-white text-slate-500"
-      }`}
+      className="wk-src sm"
+      style={isRatified ? palChip("light") : value > 0 ? palChip("orange") : undefined}
       title={
         isRatified
           ? "Fully ratified (100%)"
@@ -117,6 +197,7 @@ function PercentInline({
           onPercentChange?.(row.i, v);
         }}
         className="w-10 bg-transparent text-right tabular-nums focus:outline-none disabled:opacity-70"
+        style={{ border: 0, color: "inherit", font: "inherit" }}
       />
       <span>%</span>
     </span>
@@ -292,6 +373,11 @@ function convertRateUnit(rateCost, rateUnit, boqUnit, boqDescription) {
 
 /**
  * RateCell — An inline rate input that:
+ *
+ * onChange(value, meta) — meta describes WHERE the figure came from:
+ *   { source: "rategen", rateKey, rateUnit } for a pick out of the library,
+ *   { source: "typed" } for a figure the QS entered or worked out by formula.
+ *   Callers that ignore the second argument behave exactly as before.
  * 1. Shows formatted value with thousands separators when not focused
  * 2. On focus, expands into a popup overlay with a full-width input
  * 3. Supports typing a rate name to search RateGen library suggestions
@@ -323,11 +409,30 @@ export function RateCell({
   const searchFnRef = useRef(onSearchRateGen);
   searchFnRef.current = onSearchRateGen;
 
+  // Did the QS empty this cell during THIS visit to it? It matters because
+  // EVERY untouched cell is empty — the stored rate is only the placeholder —
+  // so leaving a cell can only mean "cleared" when he actually cleared it.
+  const clearedRef = useRef(false);
+  // Committing an empty cell is the deliberate "this line has no rate of its
+  // own": it releases the lock and hands the line back to its Budget build-up,
+  // which changes the line's rate on the next save. A keystroke on the way to
+  // retyping the figure is not that, so the release waits for the commit —
+  // blur, Enter, or clicking away. Held in a ref because the outside-click
+  // effect is registered once per focus and would otherwise call a stale
+  // onChange.
+  const commitClearRef = useRef(null);
+  commitClearRef.current = () => {
+    if (!clearedRef.current) return;
+    clearedRef.current = false;
+    onChange?.("", { source: "cleared" });
+  };
+
   // Close popup when clicking outside
   useEffect(() => {
     if (!focused) return;
     function handleClick(e) {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        commitClearRef.current?.();
         setFocused(false);
         setSearchQuery("");
         setSearchResults([]);
@@ -371,6 +476,7 @@ export function RateCell({
 
   const handleFocus = () => {
     setFocused(true);
+    clearedRef.current = false;
     setSearchQuery("");
     // Existing candidates from batch sync
     setSearchResults(boqCandidates.length ? boqCandidates : []);
@@ -388,7 +494,9 @@ export function RateCell({
     if (!formulaResult) return false;
     if (formulaResult.ok) {
       const rounded = Math.round(formulaResult.value * 100) / 100;
-      onChange?.(String(rounded));
+      clearedRef.current = false;
+      // A figure the QS worked out himself — stamp it so the save keeps it.
+      onChange?.(String(rounded), { source: "typed" });
       setFormulaDraft("");
       setSearchQuery("");
       setSearchResults([]);
@@ -404,6 +512,8 @@ export function RateCell({
     // live preview underneath the input; commit on Enter / blur via
     // commitFormula.
     if (isFormulaInput(v)) {
+      // He is working out a figure, not giving the line up.
+      clearedRef.current = false;
       setFormulaDraft(v);
       setSearchQuery("");
       setSearchResults([]);
@@ -413,11 +523,35 @@ export function RateCell({
     if (formulaDraft) setFormulaDraft("");
     // If it's a number, treat as direct rate input
     if (/^[\d.,]*$/.test(v)) {
-      onChange?.(v.replace(/,/g, ""));
+      const cleaned = v.replace(/,/g, "");
+      const empty = cleaned.trim() === "";
+      clearedRef.current = empty;
+      // Typed straight into the cell. Stamped as applied so the server stops
+      // re-deriving the line from a build-up the QS did not price.
+      //
+      // An EMPTY cell is not that. This regex matches "" too, so emptying the
+      // field used to stamp the line as the QS's for ever — with no way on
+      // screen to take it back. Clearing a rate means "I have no rate", so a
+      // COMMITTED empty cell releases the stamp and the line goes back to
+      // being derived from its Budget build-up.
+      //
+      // But the keystroke that empties the field on the way to retyping the
+      // figure is not a decision about anything. It used to report itself as
+      // cleared there and then, which released the lock, dropped the line back
+      // into the Budget-driven set on the same render, and replaced the input
+      // the QS was typing into with a read-only lock chip — and a save from
+      // there wrote the OLD figure with the lock stripped, so the server
+      // re-derived the line and the rate silently changed. So the empty cell
+      // reports itself as `editing`: the text changes, nothing else does, and
+      // the release waits for the commit (see commitClearRef).
+      onChange?.(cleaned, { source: empty ? "editing" : "typed" });
       setSearchQuery("");
       setSearchResults([]);
     } else {
-      // Text — search RateGen
+      // Text — search RateGen. He is looking for a rate to put in, so an
+      // abandoned search leaves the line exactly as it was rather than
+      // releasing it.
+      clearedRef.current = false;
       setSearchQuery(v);
     }
   };
@@ -442,7 +576,15 @@ export function RateCell({
 
     // Round to 2 decimal places
     cost = Math.round(cost * 100) / 100;
-    onChange?.(String(cost));
+    clearedRef.current = false;
+    // Carry WHICH rate priced the line, not just the number. The parent stamps
+    // it onto the bill line as appliedRateKey, which is what stops the save
+    // re-deriving the rate away from under the pick.
+    onChange?.(String(cost), {
+      source: "rategen",
+      rateKey: String(candidate?.description || "").trim(),
+      rateUnit: String(candidate?.unit || "").trim(),
+    });
     setFocused(false);
     setSearchQuery("");
     setSearchResults([]);
@@ -490,7 +632,7 @@ export function RateCell({
         </button>
       ) : (
         /* Expanded popup overlay on focus */
-        <div className="absolute left-0 top-0 z-40 w-80 rounded-lg border border-blue-300 bg-white shadow-xl">
+        <div className="absolute left-0 top-0 z-40 w-80" style={POP}>
           <div className="p-2">
             <input
               ref={inputRef}
@@ -518,9 +660,15 @@ export function RateCell({
                 // the draft so the user can fix them without losing
                 // their work.
                 if (formulaResult && formulaResult.ok) commitFormula();
+                // Leaving an emptied cell is the commit that releases the
+                // lock. Does nothing on a cell the QS merely looked at.
+                commitClearRef.current?.();
               }}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
+                  // Escape abandons the edit. Nothing is committed, so an
+                  // emptied cell keeps the rate and the lock it arrived with.
+                  clearedRef.current = false;
                   setFocused(false);
                   setSearchQuery("");
                   setFormulaDraft("");
@@ -533,6 +681,14 @@ export function RateCell({
                   if (formulaResult) {
                     e.preventDefault();
                     commitFormula();
+                    return;
+                  }
+                  // Enter on an emptied cell commits the release, the same as
+                  // clicking away — one keystroke does not, two do.
+                  if (clearedRef.current) {
+                    e.preventDefault();
+                    commitClearRef.current?.();
+                    setFocused(false);
                   }
                 }
               }}
@@ -540,11 +696,8 @@ export function RateCell({
             {/* Live formula preview / hint strip */}
             {formulaResult ? (
               <div
-                className={`mt-1 rounded-md border px-2 py-1 text-[11px] ${
-                  formulaResult.ok
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border-rose-200 bg-rose-50 text-rose-800"
-                }`}
+                className="mt-1 rounded-md border px-2 py-1 text-[11px]"
+                style={palChip(formulaResult.ok ? "light" : "orange")}
               >
                 {formulaResult.ok ? (
                   <span>
@@ -625,7 +778,7 @@ export function RateCell({
                             </>
                           ) : (
                             <div className="whitespace-nowrap text-xs font-semibold text-adlm-blue-700">
-                              {formatRate(c.totalCost)}/{c.unit || "—"}
+                              {formatRate(c.totalCost)}/{c.unit || "–"}
                             </div>
                           )}
                         </div>
@@ -806,7 +959,160 @@ function ExpandInput({ value, placeholder, onChange, type = "number" }) {
   );
 }
 
+// ── Summary rows (his .pj-sumbox pieces) ──────────────────────────────────
+// A percentage row: the label, an inline % input while the contract is open,
+// and the money it works out to. Read-only after lock, where it prints the
+// percentage as text so the figure is still explained.
+function SummaryPercentRow({
+  label,
+  percent,
+  amount,
+  editable,
+  onChange,
+  onCommit,
+  title,
+}) {
+  return (
+    <div className="r">
+      <span className="l" title={title}>
+        {label}
+        {editable && onChange ? (
+          <>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              max="100"
+              data-pct={label}
+              value={safeNum(percent)}
+              aria-label={`${label} percent`}
+              onChange={(e) => onChange(e.target.value)}
+              onBlur={() => onCommit?.()}
+            />
+            %
+          </>
+        ) : (
+          <span style={{ color: "var(--ink-3)" }}>· {safeNum(percent)}%</span>
+        )}
+      </span>
+      <b>{money(amount)}</b>
+    </div>
+  );
+}
+
+// One named group of sums — PC or provisional — with its own sub-total, its
+// rows, and an add link. Each row keeps the index it holds in the single
+// stored provisionalSums array, so an edit writes back to the right row.
+function SummarySumGroup({
+  kind,
+  label,
+  addLabel,
+  rows,
+  total,
+  editable,
+  onAdd,
+  onUpdate,
+  onRemove,
+  // Dead while rates are hidden: removing a sum throws away an amount this
+  // viewer was served as zero. Everything else in the group stays editable.
+  removeDisabled = false,
+  onCommit,
+  checkboxCls,
+}) {
+  return (
+    <div className="grp">
+      <div className="r h">
+        <span className="l">{label}</span>
+        <b>{money(total)}</b>
+      </div>
+      {rows.map(({ sum, index }) => (
+        <div className="r s" key={`${kind}-${index}`}>
+          {editable ? (
+            <>
+              <input
+                type="text"
+                value={sum?.description || ""}
+                aria-label="Description"
+                placeholder={kind === "pc" ? "e.g. Lift installation" : "e.g. Drainage allowance"}
+                onChange={(e) => onUpdate?.(index, { description: e.target.value })}
+              />
+              <input
+                type="number"
+                step="1000"
+                value={sum?.amount === 0 || sum?.amount == null ? "" : sum.amount}
+                aria-label="Amount"
+                placeholder="0"
+                onChange={(e) =>
+                  onUpdate?.(index, {
+                    amount: e.target.value === "" ? 0 : Number(e.target.value),
+                  })
+                }
+                onBlur={() => onCommit?.()}
+              />
+              {/* Ours, not his: the tick that says this allowance has actually
+                been executed. It is what lets the sum count toward earned
+                value, so dropping it to match his design would lose data. */}
+              <label
+                className="pj-sum-done"
+                title="Tick once this allowance has been executed, so it counts toward earned value."
+              >
+                <input
+                  type="checkbox"
+                  className={checkboxCls}
+                  checked={Boolean(sum?.completed)}
+                  onChange={(e) => onUpdate?.(index, { completed: e.target.checked })}
+                />
+                Executed
+              </label>
+              <button
+                type="button"
+                className="x"
+                aria-label={`Remove ${sum?.description || label}`}
+                title={removeDisabled ? RATES_HIDDEN_NO_DELETE : "Remove this sum"}
+                disabled={removeDisabled}
+                onClick={() => {
+                  if (removeDisabled) return;
+                  onRemove?.(index);
+                }}
+              >
+                <FaTimes size={13} aria-hidden="true" />
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="l">
+                {sum?.description || EN_DASH}
+                {sum?.completed ? (
+                  <em style={{ fontStyle: "normal", color: "var(--fb-ok)", fontSize: 12 }}>
+                    Executed
+                  </em>
+                ) : null}
+              </span>
+              <b>{money(sum?.amount)}</b>
+            </>
+          )}
+        </div>
+      ))}
+      {rows.length === 0 ? (
+        <div className="r s">
+          <span className="l">None</span>
+          <b>{EN_DASH}</b>
+        </div>
+      ) : null}
+      {editable && onAdd ? (
+        <button type="button" className="pj-lnk add" onClick={() => onAdd(kind)}>
+          {addLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ProjectBillTable({
+  // P0.4: the line to bring into view when the bill opens ("continue where
+  // you left off"), and a callback told which line was last worked on.
+  focusLine = "",
+  onLine,
   actualQtyInputs = {},
   actualRateInputs = {},
   actualTrackedAmount = 0,
@@ -845,6 +1151,10 @@ export default function ProjectBillTable({
   onSearchRateGen,
   onStatusToggle,
   percentMap = {},
+  // Map of item index -> { state, budgetRate } for lines whose rate the QS
+  // applied himself and whose Budget build-up does not agree with it. Empty
+  // for every project nobody has re-priced, so the table is unchanged.
+  rateNotes = null,
   onPercentChange,
   onCategoryChange,
   onAddCategory,
@@ -860,10 +1170,31 @@ export default function ProjectBillTable({
   // appear in the order the disciplines were merged rather than alphabetically.
   sourceOptions = [],
   onGroupByModeChange,
+  // False when this viewer is a collaborator without RateGen, so every rate and
+  // amount reached them as zero (the server's maskRates). They may still
+  // measure, mark progress, edit and add rows — the server keeps the owner's
+  // pricing on whatever they save — but removing a row is a decision about
+  // money they cannot see, so the delete controls are dead for them. Already
+  // passed by ProjectOpenView; it was simply not read here.
+  canSeeRates = true,
   contractLocked = false,
   contractLockedAt = null,
   contractApprovedAt = null,
   contractSum = 0,
+  // S18 bill: the measured work on its own. `grossAmount` reaches this table
+  // already carrying the project's whole scope (the Overview needs it that
+  // way), so using it as the base of the grand summary counted the sums and
+  // the preliminaries a second time. The Summary uses this instead, and falls
+  // back to grossAmount for any caller that does not pass it.
+  measuredAmount = null,
+  // S18 bill: the bill went out to tender on this date (PR2-25), and the
+  // Summary's "See variations" link (PR2-05).
+  tenderedAt = null,
+  onMarkTendered,
+  onOpenVariations,
+  // S18 bill: put a removed sum back at the index it came from, for the
+  // toast's Undo.
+  onRestoreProvisionalSum,
   preliminaryPercent = 7.5,
   // Contingency + tax (VAT) as percentages of (measured + prov + prelim)
   // and (subtotal + contingency) respectively. The QS grand summary
@@ -917,11 +1248,9 @@ export default function ProjectBillTable({
   rateGenPoolLoaded = false,
   onReloadRateGenPool,
   rates = {},
-  remainingAmount = 0,
   showActualColumns = false,
   showMaterials = false,
   statusLabel = "Completed",
-  valuedAmount = 0,
   linkedSummaries = [],
   onRemoveCategory,
 }) {
@@ -933,6 +1262,10 @@ export default function ProjectBillTable({
   const statusPendingText = showMaterials
     ? "Save to log this purchase date and deduct it from the balance."
     : "Save to log this completion date and deduct it from the balance.";
+
+  // The site-wide toast (his feedback.js). Declared before the callbacks that
+  // close over it, so its dependency arrays can name it.
+  const fb = useFeedback();
 
   const handleColResize = useColResize();
 
@@ -958,8 +1291,11 @@ export default function ProjectBillTable({
       setDragIdx(null);
       setDragOverIdx(null);
       setDragOverCat(null);
+      // His "Moved to X" (PR2-12). Dropping a row onto a section is a small
+      // gesture with no other confirmation, so it says what it did.
+      fb.toast({ tone: "info", title: `Moved to ${category}`, ms: 2200 });
     },
-    [dragIdx, groupByMode, onTradeChange, onCategoryChange],
+    [dragIdx, groupByMode, onTradeChange, onCategoryChange, fb],
   );
 
   // Ribbon tab state — mirrors MS Office ribbon (Home / Rates / Navigate / Extras)
@@ -1055,6 +1391,29 @@ export default function ProjectBillTable({
   // was that on a 50+ item BoQ, an animated scroll across 4 screens of
   // content is more disorienting than helpful. Instant jumps put the
   // target on screen immediately so the eye can re-anchor faster.
+  // P0.4: open on the line somebody was last working on, and mark it briefly.
+  // Rows can take a moment to arrive, so it looks for the row for a few seconds.
+  const focusedLineRef = useRef("");
+  useEffect(() => {
+    if (!focusLine || focusedLineRef.current === focusLine) return undefined;
+    let tries = 0;
+    const t = setInterval(() => {
+      const sel = `tr[data-line="${String(focusLine).replace(/["\\]/g, "")}"]`;
+      const el = document.querySelector(sel);
+      if (el || ++tries > 20) clearInterval(t);
+      if (!el) return;
+      focusedLineRef.current = focusLine;
+      el.scrollIntoView({ block: "center" });
+      el.style.outline = "2px solid var(--action)";
+      el.style.outlineOffset = "-2px";
+      setTimeout(() => {
+        el.style.outline = "";
+        el.style.outlineOffset = "";
+      }, 2500);
+    }, 150);
+    return () => clearInterval(t);
+  }, [focusLine]);
+
   const scrollToRef = useCallback((node) => {
     if (!node) return;
     try {
@@ -1234,28 +1593,70 @@ export default function ProjectBillTable({
     });
   }, [groupedRows]);
 
+  // ── What the table's own money columns add up to (S18 review) ───────────
+  // Every money column in this table lists the MEASURED WORK: one row per item
+  // of work, priced qty × rate. So the row that closes those columns, and the
+  // total under "Summary by category", add up those same rows.
+  //
+  // They used to print the whole project scope instead — measured work plus
+  // the sums plus preliminaries plus approved variations — which is a larger
+  // and different figure, so the Bill contradicted itself on one screen. The
+  // estimated total, the full cascade, is the Summary box's job and it is
+  // labelled as such; these are labelled "measured work".
+  const shownTotals = React.useMemo(
+    () =>
+      sortedShown.reduce(
+        (acc, row) => ({
+          full: acc.full + safeNum(row.fullAmount),
+          valued: acc.valued + safeNum(row.valuedAmount),
+          balance: acc.balance + safeNum(row.amount),
+        }),
+        { full: 0, valued: 0, balance: 0 },
+      ),
+    [sortedShown],
+  );
+
   const totalCols = showActualColumns ? 14 : 10;
 
-  // Variation totals — Amount = Qty × Rate per row.
-  const variationsTotal = React.useMemo(() => {
-    return (Array.isArray(variations) ? variations : []).reduce(
-      (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
-      0,
-    );
-  }, [variations]);
+  // ── The project's totals ────────────────────────────────────────────────
+  // One module does this arithmetic for every screen now (PR2-08). The
+  // cascade is unchanged: prelims on measured work plus the sums, contingency
+  // on the sub-total, VAT on sub-total plus contingency, approved variations
+  // after VAT — the same order the server freezes at contract lock.
+  const measuredWork = measuredAmount == null ? grossAmount : safeNum(measuredAmount);
+  const totals = React.useMemo(
+    () =>
+      projectTotals({
+        measured: measuredWork,
+        provisionalSums,
+        variations,
+        preliminaryPercent,
+        contingencyPercent,
+        taxPercent,
+        linkedSummaries,
+      }),
+    [
+      measuredWork,
+      provisionalSums,
+      variations,
+      preliminaryPercent,
+      contingencyPercent,
+      taxPercent,
+      linkedSummaries,
+    ],
+  );
 
-  const provisionalTotal = React.useMemo(() => {
-    return (Array.isArray(provisionalSums) ? provisionalSums : []).reduce(
-      (acc, s) => acc + safeNum(s?.amount),
-      0,
-    );
-  }, [provisionalSums]);
-
-  // Preliminaries are a % of (measured + provisional). Variations are tracked
-  // separately and added to the planned contract sum so the client sees the
-  // true project cost.
-  const preliminaryAmount =
-    ((grossAmount + provisionalTotal) * safeNum(preliminaryPercent)) / 100;
+  // Approved variations only (S18 valuations). A row with no status is
+  // approved — that is every row written before the field existed — so no
+  // existing project's figure moves. A pending one is worth nothing here
+  // until somebody approves it on the Valuation tab.
+  const variationsTotal = totals.variations;
+  const variationCounts = React.useMemo(
+    () => variationKpis(variations),
+    [variations],
+  );
+  const provisionalTotal = totals.sums;
+  const preliminaryAmount = totals.prelims;
 
   // Preliminary done: share of the preliminary pool "earned" by completed
   // preliminary line items (weighted by allocation %).
@@ -1280,20 +1681,65 @@ export default function ProjectBillTable({
     preliminaryAmount - preliminaryDone,
   );
 
-  // QS grand-summary cascade:
-  //   Sub-total = measured + provisional + preliminaries
-  //   Contingency = sub-total × contingency%
-  //   Tax (VAT) = (sub-total + contingency) × tax%
-  //   Planned Total = sub-total + contingency + tax
-  //   Current Total = Planned + variations (claimed during execution)
-  const boqSubtotal = grossAmount + provisionalTotal + preliminaryAmount;
-  const contingencyAmount = (boqSubtotal * safeNum(contingencyPercent)) / 100;
-  const taxAmount =
-    ((boqSubtotal + contingencyAmount) * safeNum(taxPercent)) / 100;
-  const plannedProjectTotal = boqSubtotal + contingencyAmount + taxAmount;
+  // The Summary is editable while the contract is open. After lock it stays
+  // on screen and stays readable, but nothing in it can be changed: that is
+  // what "changes go through variations" means.
+  const summaryEditable = !contractLocked;
+
+  // Rates are hidden from this viewer. Only the delete controls read it — the
+  // rest of the table stays exactly as editable as it was, because measuring
+  // and marking progress is what a rate-blind collaborator is here to do.
+  const ratesMasked = canSeeRates === false;
+  const sumGroups = React.useMemo(
+    () => splitProvisionalSums(provisionalSums),
+    [provisionalSums],
+  );
+
+  // His toast after every Summary edit, so a change to a percentage or a sum
+  // reports what it did to the figure that matters.
+  const sayUpdated = React.useCallback(() => {
+    fb.toast({
+      tone: "info",
+      title: "Summary updated",
+      msg: `Estimated total ${money(totals.total)}`,
+      ms: 2400,
+    });
+  }, [fb, totals.total]);
+
+  const addSum = React.useCallback(
+    (kind) => {
+      // A row with no description and no amount is dropped by the server's
+      // sanitiser, so a new sum starts with a name it can be saved under.
+      onAddProvisionalSum?.(kind === "pc" ? "pc" : "provisional");
+    },
+    [onAddProvisionalSum],
+  );
+
+  const removeSum = React.useCallback(
+    (index) => {
+      const list = Array.isArray(provisionalSums) ? provisionalSums : [];
+      const gone = list[index];
+      if (!gone) return;
+      onRemoveProvisionalSum?.(index);
+      fb.toast({
+        tone: "info",
+        title: `Removed ${gone.description || "the sum"}`,
+        ...(onRestoreProvisionalSum
+          ? {
+              action: {
+                label: "Undo",
+                run: () => onRestoreProvisionalSum(index, gone),
+              },
+            }
+          : {}),
+      });
+    },
+    [provisionalSums, onRemoveProvisionalSum, onRestoreProvisionalSum, fb],
+  );
+
   // projectTotal is the LIVE total — what users actually owe today
-  // (planned + variations issued so far).
-  const projectTotal = plannedProjectTotal + variationsTotal;
+  // (planned + approved variations issued so far).
+  const projectTotal = totals.total;
 
   // Helper for sortable header
   const SortHeader = ({ col, children, className = "", ...rest }) => (
@@ -1306,9 +1752,9 @@ export default function ProjectBillTable({
       <span className="inline-flex items-center gap-1">
         {children}
         {sortCol === col ? (
-          <span className="text-adlm-blue-700">{sortAsc ? "▲" : "▼"}</span>
+          <span style={{ color: "var(--action)" }}>{sortAsc ? "▲" : "▼"}</span>
         ) : (
-          <span className="text-slate-300">⇅</span>
+          <span style={{ color: "var(--ink-3)", opacity: 0.6 }}>⇅</span>
         )}
       </span>
     </th>
@@ -1323,17 +1769,30 @@ export default function ProjectBillTable({
     { id: "provisional", label: "Provisional", icon: FaFileInvoiceDollar },
   ];
 
+  // A group of bill tools: his .wk-grp title above, the controls below.
   const RibbonGroup = ({ title, children }) => (
-    <div className="flex flex-col items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 min-w-[110px]">
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        {children}
-      </div>
-      <div className="text-[10px] uppercase tracking-wide text-slate-400">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        minWidth: 120,
+        padding: "10px 14px",
+        border: "1px solid var(--line)",
+        borderRadius: 12,
+        background: "var(--bg-alt)",
+      }}
+    >
+      <div className="wk-grp" style={{ padding: 0 }}>
         {title}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        {children}
       </div>
     </div>
   );
 
+  // His small outline button; the "active" state is his primary.
   const RibbonButton = ({
     icon: Icon,
     label,
@@ -1347,17 +1806,10 @@ export default function ProjectBillTable({
       onClick={onClick}
       disabled={disabled}
       title={title || label}
-      className={[
-        "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 text-[11px] transition",
-        disabled
-          ? "text-slate-300 cursor-not-allowed"
-          : active
-            ? "bg-adlm-blue-700 text-white"
-            : "text-slate-700 hover:bg-slate-100",
-      ].join(" ")}
+      className={`ds-btn ds-btn-sm ${active ? "btn-p" : "btn-o"}`}
     >
-      {Icon ? <Icon className="text-sm" /> : null}
-      <span className="whitespace-nowrap">{label}</span>
+      {Icon ? <Icon size={13} /> : null}
+      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
     </button>
   );
 
@@ -1410,9 +1862,10 @@ export default function ProjectBillTable({
     }
     if (provisionalSectionRef.current) {
       out.push({
+        // The sums now live in the Summary, which is where this ref sits.
         id: "provisional",
-        label: "Provisional sums",
-        badge: "PC",
+        label: "Summary",
+        badge: "Σ",
         refGetter: () => provisionalSectionRef.current,
       });
     }
@@ -1456,79 +1909,79 @@ export default function ProjectBillTable({
           />
         ) : null}
 
-        {/* Office-style ribbon: tab strip + contextual groups */}
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-depth">
-          <div className="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-2 pt-2">
-            {RIBBON_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const active = ribbonTab === tab.id;
-              return (
+        {/* The bill's tools, in his pieces: .wk-tabs for the ribbon's tabs,
+            the running totals as his readings, and the tools below in titled
+            groups. The totals stay visible when the tools are hidden. */}
+        <div className="wk-panel">
+          <div className="wk-ph" style={{ flexWrap: "wrap", gap: 12 }}>
+            <div
+              className="wk-tabs"
+              role="tablist"
+              aria-label="Bill tools"
+              style={{ maxWidth: "100%", overflowX: "auto" }}
+            >
+              {RIBBON_TABS.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={ribbonTab === tab.id}
+                  className={ribbonTab === tab.id ? "on" : ""}
                   onClick={() => setRibbonTab(tab.id)}
-                  className={[
-                    "inline-flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs font-medium transition",
-                    active
-                      ? "bg-slate-50 text-adlm-blue-700 border-x border-t border-slate-200"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50",
-                  ].join(" ")}
                 >
-                  <Icon className="text-[11px]" />
                   {tab.label}
                 </button>
-              );
-            })}
-            <div className="ml-auto flex items-center gap-3 px-2 text-[11px] text-slate-500">
-              <span>
-                Measured: <b className="text-slate-700">{money(grossAmount)}</b>
+              ))}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                flexWrap: "wrap",
+                gap: "6px 14px",
+                marginLeft: "auto",
+              }}
+            >
+              <span className="wk-locnote">
+                Measured <b style={READING}>{money(totals.measured)}</b>
               </span>
               {provisionalTotal > 0 ? (
-                <span>
-                  PC:{" "}
-                  <b className="text-slate-700">{money(provisionalTotal)}</b>
+                <span className="wk-locnote">
+                  PC <b style={READING}>{money(provisionalTotal)}</b>
                 </span>
               ) : null}
               {variationsTotal !== 0 ? (
-                <span>
-                  Variations:{" "}
-                  <b
-                    className={
-                      variationsTotal > 0 ? "text-amber-700" : "text-red-700"
-                    }
-                  >
+                <span className="wk-locnote">
+                  Variations{" "}
+                  <b style={{ ...READING, color: "var(--pal-orange-key)" }}>
                     {money(variationsTotal)}
                   </b>
                 </span>
               ) : null}
-              <span className="font-semibold">
-                Project total:{" "}
-                <b className="text-adlm-blue-700">{money(projectTotal)}</b>
+              <span className="wk-locnote" style={{ color: "var(--ink-2)" }}>
+                Project total{" "}
+                <b style={{ ...READING, fontSize: 15, color: "var(--action)" }}>
+                  {money(projectTotal)}
+                </b>
               </span>
-              {/* Collapse / expand the entire ribbon panel. The summary row
-                (Measured / PC / Variations / Project total) stays visible
-                either way so users keep their at-a-glance totals. */}
               <button
                 type="button"
                 onClick={toggleRibbonCollapsed}
                 aria-expanded={!ribbonCollapsed}
                 aria-controls="boq-ribbon-body"
-                className="ml-1 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-                title={ribbonCollapsed ? "Show toolbar" : "Hide toolbar"}
+                className="ds-btn ds-btn-sm btn-o"
+                title={ribbonCollapsed ? "Show the bill tools" : "Hide the bill tools"}
               >
-                <span
-                  aria-hidden="true"
-                  className={`inline-block transition-transform ${ribbonCollapsed ? "" : "rotate-180"}`}
-                >
-                  ▾
-                </span>
-                {ribbonCollapsed ? "Show" : "Hide"}
+                {ribbonCollapsed ? "Show tools" : "Hide tools"}
               </button>
             </div>
           </div>
 
           {ribbonCollapsed ? null : (
-            <div id="boq-ribbon-body" className="flex flex-wrap gap-2 p-3">
+            <div
+              id="boq-ribbon-body"
+              style={{ display: "flex", flexWrap: "wrap", gap: 10, padding: "14px 20px" }}
+            >
               {ribbonTab === "home" ? (
                 <>
                   <RibbonGroup title="View">
@@ -1558,55 +2011,40 @@ export default function ProjectBillTable({
 
                   <RibbonGroup title="Grouping">
                     <div
-                      className="inline-flex items-center overflow-hidden rounded-md border border-slate-200 bg-white text-[11px]"
+                      className="wk-loc-sw"
                       role="tablist"
                       aria-label="Group BoQ items by"
                     >
                       <button
                         type="button"
                         onClick={() => onGroupByModeChange?.("category")}
-                        className={[
-                          "px-2.5 py-1 transition",
-                          !isTradeGrouping && !isSourceGrouping
-                            ? "bg-adlm-blue-700 text-white"
-                            : "text-slate-700 hover:bg-slate-100",
-                        ].join(" ")}
+                        className={!isTradeGrouping && !isSourceGrouping ? "on" : ""}
                         title="Group by building element (Substructure / Superstructure / HVAC / Plumbing / Electrical)"
                       >
-                        Category
+                        By element
                       </button>
                       <button
                         type="button"
                         onClick={() => onGroupByModeChange?.("trade")}
-                        className={[
-                          "px-2.5 py-1 transition border-l border-slate-200",
-                          isTradeGrouping
-                            ? "bg-adlm-blue-700 text-white"
-                            : "text-slate-700 hover:bg-slate-100",
-                        ].join(" ")}
+                        className={isTradeGrouping ? "on" : ""}
                         title="Group by trade / work section (Concrete Works, Formwork, Reinforcement, Masonry, Finishes, etc.)"
                       >
-                        Trade
+                        By trade
                       </button>
                       {sourceOptions.length ? (
                         <button
                           type="button"
                           onClick={() => onGroupByModeChange?.("source")}
-                          className={[
-                            "px-2.5 py-1 transition border-l border-slate-200",
-                            isSourceGrouping
-                              ? "bg-adlm-blue-700 text-white"
-                              : "text-slate-700 hover:bg-slate-100",
-                          ].join(" ")}
+                          className={isSourceGrouping ? "on" : ""}
                           title="Group by the discipline project each line was measured in (architectural, structural, ...)"
                         >
                           Discipline
                         </button>
                       ) : null}
                     </div>
-                    <div className="text-[10px] text-slate-500 max-w-[180px] leading-tight">
+                    <div className="wk-fx" style={{ maxWidth: 220, lineHeight: 1.45 }}>
                       {isSourceGrouping
-                        ? "Grouped by the discipline project each line came from. Switch to Category or Trade to arrange the combined bill the usual way."
+                        ? "Grouped by the discipline project each line came from. Switch to element or trade to arrange the combined bill the usual way."
                         : isTradeGrouping
                         ? "Grouped by the work being done. Drag a row onto a section to re-file it, learned for next time."
                         : "Grouped by the element they belong to. Drag a row onto a category to re-file it, learned for next time."}
@@ -1627,7 +2065,8 @@ export default function ProjectBillTable({
                           if (isTradeGrouping) onAddTrade?.(t);
                           else onAddCategory?.(t);
                         }}
-                        className="mt-1 inline-flex items-center gap-1 self-start rounded-md border border-dashed border-adlm-blue-300 bg-white px-2 py-1 text-[10px] font-semibold text-adlm-blue-700 hover:bg-blue-50"
+                        className="ds-btn ds-btn-sm btn-o"
+                        style={{ alignSelf: "flex-start" }}
                         title="Create a new category / work section, remembered for your future projects"
                       >
                         + New {isTradeGrouping ? "section" : "category"}
@@ -1706,19 +2145,37 @@ export default function ProjectBillTable({
                         disabled={autoFillBoqBusy}
                         title="Fetch rates from RateGen library and auto-fill"
                       />
+                      {/* His .pj-switch (work-proj.js wireAuto(), 17 Sep 2026).
+                        Same setting as before — valuationSettings.rateSyncEnabled
+                        — in his toggle, with the two toasts that say plainly
+                        which way round the bill now is. */}
                       <label
-                        className="inline-flex items-center gap-1.5 text-[11px] text-slate-700"
-                        title="When enabled, project rates auto-update when RateGen rates change"
+                        className="pj-switch"
+                        title="While this is on, a rate changed in your RateGen library is applied to this bill. Turn it off before the bill goes out."
                       >
                         <input
                           type="checkbox"
                           checked={rateSyncEnabled}
-                          onChange={(e) =>
-                            onToggleRateSyncEnabled?.(e.target.checked)
-                          }
-                          className={checkboxCls}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            onToggleRateSyncEnabled?.(on);
+                            fb.toast(
+                              on
+                                ? {
+                                    tone: "info",
+                                    title: "This bill now follows RateGen",
+                                    msg: "A rate changed in your library is applied here. Turn it off before the bill goes out.",
+                                  }
+                                : {
+                                    tone: "info",
+                                    title: "This bill keeps its own prices",
+                                    msg: "Library changes no longer reach it.",
+                                  },
+                            );
+                          }}
                         />
-                        Live rate sync
+                        <i aria-hidden="true" />
+                        Follow RateGen changes
                       </label>
                     </RibbonGroup>
                   ) : null}
@@ -1821,15 +2278,23 @@ export default function ProjectBillTable({
                         30,
                       );
                     }}
-                    title="Add a variation from a site instruction"
+                    title="Add a variation from a site instruction. It waits for approval before it counts."
                   />
                   <RibbonButton
                     icon={FaListUl}
                     label="Go to list"
                     onClick={() => scrollToRef(variationsSectionRef.current)}
                   />
+                  {onOpenVariations ? (
+                    <RibbonButton
+                      icon={FaClipboardList}
+                      label="Approve / reject"
+                      onClick={onOpenVariations}
+                      title="Open the Valuation tab's Variations view, where variations are decided"
+                    />
+                  ) : null}
                   <div className="text-[11px] text-slate-600">
-                    Current total:{" "}
+                    Approved total:{" "}
                     <b
                       className={
                         variationsTotal > 0
@@ -1937,16 +2402,16 @@ export default function ProjectBillTable({
 
                   <RibbonGroup title="Contract sum">
                     <div className="text-[11px] text-slate-600 leading-tight">
-                      Measured: <b>{money(grossAmount)}</b>
+                      Measured: <b>{money(totals.measured)}</b>
                     </div>
                     <div className="text-[11px] text-slate-600 leading-tight">
-                      PC Sums: <b>{money(provisionalTotal)}</b>
+                      PC and provisional sums: <b>{money(totals.sums)}</b>
                     </div>
                     <div className="text-[11px] text-slate-600 leading-tight">
-                      Preliminaries: <b>{money(preliminaryAmount)}</b>
+                      Preliminaries: <b>{money(totals.prelims)}</b>
                     </div>
                     <div className="text-[12px] font-semibold text-adlm-blue-700">
-                      Total: {money(projectTotal - variationsTotal)}
+                      Total: {money(totals.planned)}
                     </div>
                     {variationsTotal !== 0 ? (
                       <div className="text-[10px] text-amber-700">
@@ -1958,33 +2423,42 @@ export default function ProjectBillTable({
               ) : null}
 
               {ribbonTab === "provisional" ? (
-                <RibbonGroup title="Provisional sums">
-                  <RibbonButton
-                    icon={FaPlus}
-                    label="Add sum"
-                    onClick={() => {
-                      if (contractLocked) return;
-                      onAddProvisionalSum?.();
-                      setTimeout(
-                        () => scrollToRef(provisionalSectionRef.current),
-                        30,
-                      );
-                    }}
-                    title={
-                      contractLocked
-                        ? "Contract locked. Unlock to add PC sums"
-                        : "Add a provisional / PC sum"
-                    }
-                    disabled={!onAddProvisionalSum || contractLocked}
-                  />
+                <RibbonGroup title="PC and provisional sums">
+                  {[
+                    { kind: "pc", label: "Add PC sum" },
+                    { kind: "provisional", label: "Add provisional sum" },
+                  ].map(({ kind, label }) => (
+                    <RibbonButton
+                      key={kind}
+                      icon={FaPlus}
+                      label={label}
+                      onClick={() => {
+                        if (contractLocked) return;
+                        onAddProvisionalSum?.(kind);
+                        setTimeout(
+                          () => scrollToRef(provisionalSectionRef.current),
+                          30,
+                        );
+                      }}
+                      title={
+                        contractLocked
+                          ? "Contract locked. Unlock to add sums"
+                          : kind === "pc"
+                            ? "Add a prime-cost sum for a nominated supplier or subcontractor"
+                            : "Add an allowance for work that is not yet defined"
+                      }
+                      disabled={!onAddProvisionalSum || contractLocked}
+                    />
+                  ))}
                   <RibbonButton
                     icon={FaListUl}
-                    label="Go to list"
+                    label="Go to Summary"
                     onClick={() => scrollToRef(provisionalSectionRef.current)}
                   />
                   <div className="text-[11px] text-slate-600">
-                    Current total:{" "}
-                    <b className="text-slate-800">{money(provisionalTotal)}</b>
+                    PC <b className="text-slate-800">{money(totals.pc)}</b> ·
+                    provisional{" "}
+                    <b className="text-slate-800">{money(totals.provisional)}</b>
                   </div>
                 </RibbonGroup>
               ) : null}
@@ -1992,80 +2466,95 @@ export default function ProjectBillTable({
           )}
 
           {!ribbonCollapsed && showActualColumns && ribbonTab === "home" ? (
-            <div className="border-t bg-white px-3 py-2 text-[11px] text-slate-500">
+            <p className="wk-note" style={{ borderTop: "1px solid var(--line)" }}>
               Actual amount uses the entered actual qty and actual rate. If only
               one actual field is entered, the other value falls back to the
               planned quantity or rate for comparison.
-            </div>
+            </p>
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2 rounded-md border bg-white px-2 py-2">
-          <FaSearch className="text-slate-500" />
-          <input
-            className="w-full text-sm outline-none"
-            placeholder="Search items (description / group / S/N)..."
-            value={itemQuery}
-            onChange={(e) => onItemQueryChange?.(e.target.value)}
-          />
+        <div className="wk-bar" style={{ marginBottom: 0 }}>
+          <label className="wk-find">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#hi-search" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search items (description / group / S/N)..."
+              aria-label="Search bill items"
+              autoComplete="off"
+              value={itemQuery}
+              onChange={(e) => onItemQueryChange?.(e.target.value)}
+            />
+          </label>
           {itemQuery ? (
             <button
               type="button"
-              className="text-slate-500 hover:text-slate-700"
+              className="ds-btn ds-btn-sm btn-o"
               onClick={onClearItemQuery}
-              title="Clear"
+              title="Clear the search"
             >
-              <FaTimes />
+              Clear
             </button>
           ) : null}
         </div>
 
         {!items.length ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
-            This project does not have any saved items yet.
+          <div className="wk-empty">
+            <b>No bill yet</b>
+            <p>
+              The bill is the measured work: every item, its quantity and the rate it is priced
+              at. Items are not written here. They arrive with the project, from the takeoff it
+              was measured in or from the Excel bill it was imported from.
+            </p>
+            <p>
+              Save the project again from where it was measured, and the items land here to
+              price, value and programme.
+            </p>
           </div>
         ) : null}
 
         {items.length && !computedShown.length ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+          <div className="wk-empty">
             No items match the current search.
           </div>
         ) : null}
 
         {computedShown.length ? (
-          <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white max-w-full">
+          <div className="wk-panel" style={{ overflowX: "auto", maxWidth: "100%" }}>
             <table
               className="w-full text-sm"
               style={{ tableLayout: "auto", minWidth: 0 }}
             >
               <colgroup>
-                <col className="w-10" /> {/* S/N */}
+                <col className="w-10" />{/* S/N */}
                 <col
                   className={showActualColumns ? "w-10" : "w-[130px]"}
-                />{" "}
+                />
                 {/* Status */}
                 <col
                   style={{ width: showActualColumns ? "22%" : "28%" }}
-                />{" "}
+                />
                 {/* Description, % based */}
-                <col className="w-16" /> {/* Qty */}
-                <col className="w-10" /> {/* Unit */}
+                <col className="w-16" />{/* Qty */}
+                <col className="w-10" />{/* Unit */}
                 <col
                   style={{ width: showActualColumns ? "12%" : "16%" }}
-                />{" "}
+                />
                 {/* Rate */}
-                {showActualColumns ? <col className="w-[100px]" /> : null}{" "}
+                {showActualColumns ? <col className="w-[100px]" /> : null}
                 {/* Actual qty */}
-                {showActualColumns ? <col className="w-[100px]" /> : null}{" "}
+                {showActualColumns ? <col className="w-[100px]" /> : null}
                 {/* Actual rate */}
-                {showActualColumns ? <col className="w-[90px]" /> : null}{" "}
+                {showActualColumns ? <col className="w-[90px]" /> : null}
                 {/* Actual amount */}
-                {showActualColumns ? <col className="w-[72px]" /> : null}{" "}
+                {showActualColumns ? <col className="w-[72px]" /> : null}
                 {/* Actual added */}
-                <col className="w-[90px]" /> {/* Gross amount */}
-                <col className="w-[72px]" /> {/* Deducted */}
-                <col className="w-[72px]" /> {/* Balance */}
-                <col className="w-[80px]" /> {/* Actions */}
+                <col className="w-[90px]" />{/* Gross amount */}
+                <col className="w-[72px]" />{/* Deducted */}
+                <col className="w-[72px]" />{/* Balance */}
+                <col className="w-[80px]" />{/* Actions */}
               </colgroup>
               <thead className="bg-slate-50 text-left text-slate-600">
                 <tr>
@@ -2108,12 +2597,8 @@ export default function ProjectBillTable({
                       ref={(el) => {
                         categoryAnchorRef.current[category] = el;
                       }}
-                      className={[
-                        "border-t-2 border-adlm-blue-200 scroll-mt-24 transition-colors",
-                        dragOverCat === category && dragIdx != null
-                          ? "bg-adlm-blue-100 outline-dashed outline-2 outline-adlm-blue-400"
-                          : "bg-slate-100",
-                      ].join(" ")}
+                      className="scroll-mt-24 transition-colors"
+                      style={sectionRowStyle(dragOverCat === category && dragIdx != null)}
                       data-section={`cat-${category}`}
                       onDragOver={(e) => {
                         if (dragIdx == null) return;
@@ -2133,12 +2618,12 @@ export default function ProjectBillTable({
                     >
                       <td colSpan={totalCols} className="px-3 py-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-slate-900">
+                          <span className="wk-grp" style={{ padding: 0 }}>
                             {category}
                           </span>
-                          <span className="text-[11px] text-slate-600">
+                          <span className="wk-locnote">
                             {dragOverCat === category && dragIdx != null ? (
-                              <span className="font-semibold text-adlm-blue-700">
+                              <span style={{ color: "var(--action)", fontWeight: 500 }}>
                                 Drop to move here
                               </span>
                             ) : (
@@ -2158,6 +2643,9 @@ export default function ProjectBillTable({
                         ? getCandidatesForItem?.(item) || []
                         : [];
                       const rateValue = rates?.[row.key] ?? "";
+                      // Null unless this line's rate was applied by the QS and
+                      // its Budget build-up disagrees with it.
+                      const rateNote = rateNotes?.get?.(row.i) || null;
                       const actualQtyValue = actualQtyInputs?.[row.key] ?? "";
                       const actualRateValue = actualRateInputs?.[row.key] ?? "";
                       const actualDateLabel = formatDateTime(
@@ -2167,9 +2655,17 @@ export default function ProjectBillTable({
                       const isDragging = dragIdx === row.i;
                       const isOver = dragOverIdx === row.i;
 
+                      const lineKey = String(row.key ?? row.i);
                       return (
                         <tr
                           key={row.key || row.i}
+                          data-line={lineKey}
+                          onFocusCapture={() =>
+                            onLine?.(
+                              lineKey,
+                              `line ${displayIndex + 1}${item.description ? `: ${String(item.description).slice(0, 60)}` : ""}`,
+                            )
+                          }
                           draggable={!sortCol}
                           onDragStart={(e) => {
                             setDragIdx(row.i);
@@ -2207,29 +2703,24 @@ export default function ProjectBillTable({
                             setDragIdx(null);
                             setDragOverIdx(null);
                           }}
-                          className={[
-                            "border-t align-top transition-colors",
-                            isDragging
-                              ? "opacity-40 bg-slate-100"
-                              : row.isMarked
-                                ? "bg-emerald-50/40"
-                                : "bg-white",
-                            isOver && dragIdx != null && dragIdx !== row.i
-                              ? dragIdx < row.i
-                                ? "border-b-2 border-b-adlm-blue-700"
-                                : "border-t-2 border-t-adlm-blue-700"
-                              : "",
-                          ].join(" ")}
+                          className="border-t align-top transition-colors"
+                          style={billRowStyle({
+                            dragging: isDragging,
+                            marked: row.isMarked,
+                            dropAbove: isOver && dragIdx != null && dragIdx > row.i,
+                            dropBelow: isOver && dragIdx != null && dragIdx < row.i,
+                          })}
                         >
                           {/* Drag handle + S/N */}
                           <td className="px-1 py-2">
                             <div className="flex items-center gap-1">
                               {!sortCol && (
                                 <span
-                                  className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none"
+                                  className="cursor-grab active:cursor-grabbing touch-none"
+                                  style={{ color: "var(--ink-3)", display: "inline-flex" }}
                                   title="Drag to reorder"
                                 >
-                                  <FaGripVertical className="text-[10px]" />
+                                  <FaGripVertical size={13} />
                                 </span>
                               )}
                               <span className="font-medium text-slate-700">
@@ -2452,7 +2943,9 @@ export default function ProjectBillTable({
                                     placeholder={String(
                                       Number(item?.rate || 0),
                                     )}
-                                    onChange={(v) => onRateChange?.(row.i, v)}
+                                    onChange={(v, meta) =>
+                                      onRateChange?.(row.i, v, meta)
+                                    }
                                     onSearchRateGen={onSearchRateGen}
                                     canRateGenBoq={canRateGen || canRateGenBoq}
                                     boqCandidates={candidates || []}
@@ -2471,17 +2964,19 @@ export default function ProjectBillTable({
                                     <div className="relative">
                                       <button
                                         type="button"
-                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border hover:bg-slate-50"
+                                        className="ds-btn ds-btn-sm btn-o"
+                                        style={ICON_BTN}
+                                        aria-label="Pick a matching material price"
                                         title="Pick a matching material price"
                                         onClick={() =>
                                           onToggleOpenPickKey?.(row.key)
                                         }
                                       >
-                                        <FaSearch className="text-xs text-slate-600" />
+                                        <FaSearch size={13} />
                                       </button>
 
                                       {openPickKey === row.key ? (
-                                        <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border bg-white shadow-lg">
+                                        <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden" style={POP}>
                                           <div className="border-b px-3 py-2 text-xs text-slate-600">
                                             Choose a price for{" "}
                                             <b>
@@ -2547,7 +3042,7 @@ export default function ProjectBillTable({
                                           <div className="flex justify-end p-2">
                                             <button
                                               type="button"
-                                              className="btn btn-xs"
+                                              className="ds-btn ds-btn-sm btn-o"
                                               onClick={onClosePickKey}
                                             >
                                               Close
@@ -2566,7 +3061,9 @@ export default function ProjectBillTable({
                                     placeholder={String(
                                       Number(item?.rate || 0),
                                     )}
-                                    onChange={(v) => onRateChange?.(row.i, v)}
+                                    onChange={(v, meta) =>
+                                      onRateChange?.(row.i, v, meta)
+                                    }
                                     onSearchRateGen={onSearchRateGen}
                                     canRateGenBoq={canRateGenBoq}
                                     boqCandidates={
@@ -2582,7 +3079,10 @@ export default function ProjectBillTable({
                                     // the signed value — variations are the
                                     // proper channel for any rate change. Also lock
                                     // when the rate is derived from a priced Budget
-                                    // build-up (Material + Labour + O&P).
+                                    // build-up. That build-up is the NET of every
+                                    // row under the line whatever its kind —
+                                    // material, labour, plant, consumable — so the
+                                    // words must not name two of them.
                                     disabled={
                                       contractLocked ||
                                       Boolean(
@@ -2597,13 +3097,16 @@ export default function ProjectBillTable({
                                     disabledHint={
                                       contractLocked
                                         ? "Contract locked. Unlock it on the Contract Admin tab to edit rates, or raise a variation."
-                                        : "Rate derived from the Budget build-up (Material + Labour + O&P). Edit the prices on the Budget tab."
+                                        : "Rate derived from the Budget build-up (net of every resource row + O&P). Edit the prices on the Budget tab."
                                     }
                                   />
 
                                   <button
                                     type="button"
-                                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition ${canLink ? (linked ? "border-blue-300 bg-blue-50" : "hover:bg-slate-50") : "cursor-not-allowed opacity-40"}`}
+                                    className="ds-btn ds-btn-sm btn-o"
+                                    style={{ ...ICON_BTN, ...(linked ? palChip("light") : null) }}
+                                    aria-pressed={linked}
+                                    aria-label="Link similar items"
                                     title={
                                       canLink
                                         ? linked
@@ -2616,13 +3119,46 @@ export default function ProjectBillTable({
                                       onToggleGroupLink?.(groupId, row.i)
                                     }
                                   >
-                                    <FaLink
-                                      className={`text-xs ${linked ? "text-adlm-blue-700" : "text-slate-600"}`}
-                                    />
+                                    <FaLink size={13} />
                                   </button>
                                 </>
                               )}
                             </div>
+
+                            {/* The honest state of a rate the QS applied
+                          himself: it is the line's rate now, but the Budget
+                          prices the same line differently, so say so instead
+                          of showing two figures that quietly disagree. Only a
+                          real contradiction appears here — a line with nothing
+                          priced against it has nothing to reconcile with and
+                          says nothing at all.
+
+                          A released rate is the other note, and the urgent
+                          one: the cell is empty, the line still shows the old
+                          figure, and the NEXT SAVE hands it to the Budget. He
+                          reads which figure is coming before he writes it. */}
+                            {rateNote?.state === "released" ? (
+                              <div
+                                className="mt-0.5 text-[11px] text-amber-700"
+                                title="The rate cell is empty, so this line goes back to being priced by its Budget build-up. Type a rate again to keep the one on screen."
+                              >
+                                {"Rate released. Saving prices this line from the Budget build-up: "}
+                                {rateNote.budgetRate == null
+                                  ? EN_DASH
+                                  : money(rateNote.budgetRate)}
+                              </div>
+                            ) : rateNote ? (
+                              <div
+                                className="mt-0.5 text-[11px] text-amber-700"
+                                title="This rate is the one applied to the line. The Budget build-up still prices it differently, so the two do not reconcile."
+                              >
+                                {"Rate applied. Budget build-up: "}
+                                {money(rateNote.budgetRate)}
+                                <span className="text-slate-500">
+                                  {" (not reconciled)"}
+                                </span>
+                              </div>
+                            ) : null}
                           </td>
 
                           {showActualColumns ? (
@@ -2689,51 +3225,52 @@ export default function ProjectBillTable({
 
                           {/* Actions: move up / move down / delete */}
                           <td className="px-1 py-2">
-                            <div className="flex items-center justify-center gap-0.5">
+                            <div className="flex items-center justify-center gap-1">
                               <button
                                 type="button"
-                                className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="ds-btn ds-btn-sm btn-o"
+                                style={ROW_BTN}
                                 title="Move up"
                                 disabled={row.i === 0}
                                 onClick={() => onMoveItem?.(row.i, row.i - 1)}
                               >
-                                <FaArrowUp className="text-[10px]" />
+                                <FaArrowUp size={12} />
                               </button>
                               <button
                                 type="button"
-                                className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="ds-btn ds-btn-sm btn-o"
+                                style={ROW_BTN}
                                 title="Move down"
                                 disabled={row.i >= items.length - 1}
                                 onClick={() => onMoveItem?.(row.i, row.i + 1)}
                               >
-                                <FaArrowDown className="text-[10px]" />
+                                <FaArrowDown size={12} />
                               </button>
                               <button
                                 type="button"
-                                className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
-                                  contractLocked
-                                    ? "text-slate-300 cursor-not-allowed"
-                                    : "hover:bg-red-50 text-slate-400 hover:text-red-600"
-                                }`}
+                                className="ds-btn ds-btn-sm btn-o"
+                                style={ROW_BTN}
                                 title={
-                                  contractLocked
-                                    ? "Contract locked. Unlock it to delete measured items, or raise a variation"
-                                    : "Delete row (you'll be able to undo)"
+                                  ratesMasked
+                                    ? RATES_HIDDEN_NO_DELETE
+                                    : contractLocked
+                                      ? "Contract locked. Unlock it to delete measured items, or raise a variation"
+                                      : "Delete row (you'll be able to undo)"
                                 }
-                                disabled={contractLocked}
+                                disabled={contractLocked || ratesMasked}
                                 onClick={() => {
-                                  if (contractLocked) return;
+                                  if (contractLocked || ratesMasked) return;
                                   onDeleteItem?.(row.i);
                                 }}
                               >
-                                <FaTrashAlt className="text-[10px]" />
+                                <FaTrashAlt size={12} />
                               </button>
                             </div>
                           </td>
                         </tr>
                       );
                     })}
-                    <tr className="border-t bg-slate-50 text-xs font-medium text-slate-800">
+                    <tr style={SUBTOTAL_ROW}>
                       <td colSpan={6} className="px-2 py-2 text-right">
                         Subtotal, {category}
                       </td>
@@ -2773,12 +3310,8 @@ export default function ProjectBillTable({
                             ref={(el) => {
                               categoryAnchorRef.current[category] = el;
                             }}
-                            className={[
-                              "border-t-2 border-adlm-blue-200 scroll-mt-24 transition-colors",
-                              dragOverCat === category && dragIdx != null
-                                ? "bg-adlm-blue-100 outline-dashed outline-2 outline-adlm-blue-400"
-                                : "bg-slate-100",
-                            ].join(" ")}
+                            className="scroll-mt-24 transition-colors"
+                      style={sectionRowStyle(dragOverCat === category && dragIdx != null)}
                             data-section={`cat-${category}`}
                             onDragOver={(e) => {
                               if (dragIdx == null) return;
@@ -2798,13 +3331,13 @@ export default function ProjectBillTable({
                           >
                             <td colSpan={totalCols} className="px-3 py-2">
                               <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold text-slate-900">
+                                <span className="wk-grp" style={{ padding: 0 }}>
                                   {category}
                                 </span>
-                                <span className="text-[11px] text-slate-600">
+                                <span className="wk-locnote">
                                   {dragOverCat === category &&
                                   dragIdx != null ? (
-                                    <span className="font-semibold text-adlm-blue-700">
+                                    <span style={{ color: "var(--action)", fontWeight: 500 }}>
                                       Drop to move here
                                     </span>
                                   ) : (
@@ -2838,10 +3371,14 @@ export default function ProjectBillTable({
                   : null}
               </tbody>
 
-              <tfoot className="bg-slate-50">
-                <tr className="border-t font-semibold text-slate-900 text-xs">
-                  <td className="px-2 py-2" colSpan={6}>
-                    Totals
+              <tfoot>
+                <tr style={TOTAL_ROW}>
+                  <td
+                    className="px-2 py-2"
+                    colSpan={6}
+                    title="The measured work these columns list. Preliminaries, PC and provisional sums, contingency, VAT and approved variations are in the Summary below, which gives the estimated total."
+                  >
+                    Totals · measured work
                   </td>
                   {showActualColumns ? <td className="px-2 py-2" /> : null}
                   {showActualColumns ? <td className="px-2 py-2" /> : null}
@@ -2851,11 +3388,11 @@ export default function ProjectBillTable({
                     </td>
                   ) : null}
                   {showActualColumns ? <td className="px-2 py-2" /> : null}
-                  <td className="px-2 py-2">{money(grossAmount)}</td>
+                  <td className="px-2 py-2">{money(shownTotals.full)}</td>
                   <td className="px-2 py-2 text-emerald-700">
-                    {money(valuedAmount)}
+                    {money(shownTotals.valued)}
                   </td>
-                  <td className="px-2 py-2">{money(remainingAmount)}</td>
+                  <td className="px-2 py-2">{money(shownTotals.balance)}</td>
                   <td className="px-2 py-2" />
                 </tr>
               </tfoot>
@@ -2871,13 +3408,13 @@ export default function ProjectBillTable({
             (s, l) => s + (Number(l.live?.total ?? l.snapshot?.total) || 0),
             0,
           );
-          const grandTotal = grossAmount + linkedGrandTotal;
+          const grandTotal = shownTotals.full + linkedGrandTotal;
           return (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth">
-              <div className="mb-2 text-sm font-semibold text-slate-900">
-                Summary by category
+            <div className="wk-panel">
+              <div className="wk-ph">
+                <h2>Summary by category</h2>
               </div>
-              <div className="overflow-x-auto">
+              <div style={{ overflowX: "auto", padding: "4px 20px 16px" }}>
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 text-left text-slate-600">
                     <tr>
@@ -2952,8 +3489,13 @@ export default function ProjectBillTable({
                   </tbody>
                   <tfoot className="bg-slate-50 font-semibold text-slate-900">
                     <tr className="border-t">
-                      <td className="px-2 py-2">
-                        {activeSummaries.length > 0 ? "Grand Total (incl. linked)" : "Total"}
+                      <td
+                        className="px-2 py-2"
+                        title="The measured work in the column above. The estimated total, with preliminaries, sums, contingency and VAT, is in the Summary."
+                      >
+                        {activeSummaries.length > 0
+                          ? "Grand Total (incl. linked)"
+                          : "Measured work total"}
                       </td>
                       <td className="px-2 py-2 text-right">
                         {categoryTotals.reduce((acc, t) => acc + t.count, 0)}
@@ -2962,10 +3504,10 @@ export default function ProjectBillTable({
                         {money(grandTotal)}
                       </td>
                       <td className="px-2 py-2 text-right text-emerald-700">
-                        {money(valuedAmount)}
+                        {money(shownTotals.valued)}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {money(remainingAmount + linkedGrandTotal)}
+                        {money(shownTotals.balance + linkedGrandTotal)}
                       </td>
                       {onRemoveCategory && <td />}
                     </tr>
@@ -2979,28 +3521,49 @@ export default function ProjectBillTable({
         {onAddVariation ? (
           <div
             ref={variationsSectionRef}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
+            className="wk-panel scroll-mt-24"
+            style={{ padding: 20 }}
           >
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div style={{ minWidth: 0, flex: "1 1 320px" }}>
                 <div className="text-sm font-semibold text-slate-900">
                   Variations, Site Instructions / Change Orders
                 </div>
+                {/* S18: one rule for variations, wherever they are keyed in.
+                    A new one is raised WAITING FOR APPROVAL and is worth
+                    nothing until it is approved on the Valuation tab, which
+                    is where approving and rejecting live. This section keeps
+                    the working columns the Valuation view has no answer for —
+                    the quantity and rate behind the figure, the instruction
+                    reference, and the tick that says the work was executed on
+                    site — and shows, read-only, where each row stands. */}
                 <div className="text-[11px] text-slate-500">
                   Log variations that come from architect's instructions, client
-                  changes or site directives. These are tracked against the
-                  project total separately from measured-work variance (which is
-                  captured per item via actual qty / rate).
+                  changes or site directives. A new variation waits for
+                  approval and moves nothing until it is approved on the
+                  Valuation tab; only approved ones are in the project total.
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn btn-xs"
-                onClick={onAddVariation}
-                title="Add variation row"
-              >
-                + Add variation
-              </button>
+              <div className="flex items-center gap-3">
+                {onOpenVariations ? (
+                  <button
+                    type="button"
+                    className="pj-lnk"
+                    onClick={onOpenVariations}
+                    title="Approve or reject variations on the Valuation tab"
+                  >
+                    Approve or reject
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-xs"
+                  onClick={onAddVariation}
+                  title="Add a variation. It waits for approval before it counts."
+                >
+                  + Add variation
+                </button>
+              </div>
             </div>
 
             {variations.length ? (
@@ -3015,6 +3578,12 @@ export default function ProjectBillTable({
                       <th className="px-2 py-2 w-20">Unit</th>
                       <th className="px-2 py-2 w-28 text-right">Rate</th>
                       <th className="px-2 py-2 w-32 text-right">Amount</th>
+                      <th
+                        className="px-2 py-2 w-28"
+                        title="Approved on the Valuation tab. Only an approved variation counts."
+                      >
+                        Status
+                      </th>
                       <th className="px-2 py-2 w-28">Issued</th>
                       <th
                         className="px-2 py-2 w-16 text-center"
@@ -3114,6 +3683,21 @@ export default function ProjectBillTable({
                           <td className="px-2 py-2 text-right font-medium text-slate-900">
                             {money(amount)}
                           </td>
+                          {/* Read-only on purpose: a decision is an act, and
+                              it is taken on the Valuation tab's Variations
+                              view, never by typing in the bill. */}
+                          <td className="px-2 py-2">
+                            <span
+                              className={`pj-stage ${variationStatusClass(v?.status)}`}
+                              title={
+                                onOpenVariations
+                                  ? "Approve or reject this on the Valuation tab"
+                                  : undefined
+                              }
+                            >
+                              {variationStatusLabel(v?.status)}
+                            </span>
+                          </td>
                           <td className="px-2 py-2">
                             <input
                               className="input !h-8 w-full !px-2 text-xs"
@@ -3142,9 +3726,19 @@ export default function ProjectBillTable({
                           <td className="px-1 py-2 text-center">
                             <button
                               type="button"
-                              className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
-                              title="Remove this variation"
-                              onClick={() => onRemoveVariation?.(i)}
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
+                                ratesMasked
+                                  ? "text-slate-300 cursor-not-allowed"
+                                  : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              }`}
+                              title={
+                                ratesMasked ? RATES_HIDDEN_NO_DELETE : "Remove this variation"
+                              }
+                              disabled={ratesMasked}
+                              onClick={() => {
+                                if (ratesMasked) return;
+                                onRemoveVariation?.(i);
+                              }}
                             >
                               <FaTrashAlt className="text-[10px]" />
                             </button>
@@ -3156,20 +3750,33 @@ export default function ProjectBillTable({
                   <tfoot className="bg-slate-50 font-semibold text-slate-900">
                     <tr className="border-t">
                       <td className="px-2 py-2" colSpan={6}>
-                        Total variations
+                        Total approved variations
                       </td>
                       <td className="px-2 py-2 text-right">
                         {money(variationsTotal)}
                       </td>
-                      <td colSpan={2}></td>
+                      <td className="px-2 py-2 text-[11px] font-normal text-slate-500" colSpan={4}>
+                        {variationCounts.pendingCount
+                          ? `${variationCounts.pendingCount} waiting for approval, not counted`
+                          : EN_DASH}
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             ) : (
-              <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                No variations logged yet. Click "+ Add variation" to record a
-                site instruction or change order.
+              // His .wk-empty, not the slate Tailwind box that was here: that
+              // box painted its own border, background and text colour as
+              // literals, so it stayed a light-grey card in dark and in his
+              // black theme.
+              <div className="wk-empty" style={{ marginTop: 12, padding: "20px 18px" }}>
+                <b>No variations logged yet</b>
+                <p>
+                  A variation is a site instruction or change order recorded against the
+                  contract. It waits for approval on the Valuation tab, and only then does it
+                  count toward the project total, so logging one changes no figure on its own.
+                </p>
+                <p>Add variation, above, records the first one.</p>
               </div>
             )}
           </div>
@@ -3178,7 +3785,8 @@ export default function ProjectBillTable({
         {onUpdatePreliminaryItem && Array.isArray(preliminaryItems) ? (
           <div
             ref={preliminarySectionRef}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
+            className="wk-panel scroll-mt-24"
+            style={{ padding: 20 }}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -3404,26 +4012,28 @@ export default function ProjectBillTable({
                           <td className="px-2 py-2 text-[10px] text-slate-500">
                             {p?.completedAt
                               ? new Date(p.completedAt).toLocaleDateString()
-                              : "—"}
+                              : "–"}
                           </td>
                           <td className="px-1 py-2 text-center">
                             {onRemovePreliminaryItem ? (
                               <button
                                 type="button"
                                 className={`inline-flex h-6 w-6 items-center justify-center rounded ${
-                                  contractLocked
+                                  contractLocked || ratesMasked
                                     ? "text-slate-300 cursor-not-allowed"
                                     : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                                 }`}
-                                disabled={contractLocked}
+                                disabled={contractLocked || ratesMasked}
                                 onClick={() => {
-                                  if (contractLocked) return;
+                                  if (contractLocked || ratesMasked) return;
                                   onRemovePreliminaryItem(i);
                                 }}
                                 title={
-                                  contractLocked
-                                    ? "Contract locked. Unlock to remove preliminaries"
-                                    : "Remove this row"
+                                  ratesMasked
+                                    ? RATES_HIDDEN_NO_DELETE
+                                    : contractLocked
+                                      ? "Contract locked. Unlock to remove preliminaries"
+                                      : "Remove this row"
                                 }
                               >
                                 <FaTrashAlt className="text-[10px]" />
@@ -3452,7 +4062,7 @@ export default function ProjectBillTable({
                             (acc, p) => acc + safeNum(p?.actualAmount),
                             0,
                           );
-                          return totActual > 0 ? money(totActual) : "—";
+                          return totActual > 0 ? money(totActual) : "–";
                         })()}
                       </td>
                       <td colSpan={2}></td>
@@ -3506,347 +4116,194 @@ export default function ProjectBillTable({
                 </table>
               </div>
             ) : (
-              <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                No preliminary items yet. Open the project once to seed the
-                BESMM4 defaults, or click "+ Add item".
+              // Same again: his .wk-empty in place of the slate literals.
+              <div className="wk-empty" style={{ marginTop: 12, padding: "20px 18px" }}>
+                <b>No preliminary items yet</b>
+                <p>
+                  Preliminaries are the site-wide costs that belong to no single measured item:
+                  supervision, site accommodation, plant standing, insurances. They are priced
+                  here and carried into the bill total.
+                </p>
+                <p>
+                  Opening the project once seeds the BESMM4 defaults, and &ldquo;+ Add item&rdquo;
+                  adds one of your own.
+                </p>
               </div>
             )}
           </div>
         ) : null}
 
-        {onAddProvisionalSum ? (
+        {/* ── Summary (his .pj-sumbox, work-proj.js summary(), 17 Sep 2026) ──
+          One box under the bill holding everything below the measured work:
+          preliminaries, the two named groups of sums, contingency, VAT and the
+          estimated total. It replaces the old slate/adlm-blue "Project total"
+          card and the separate provisional-sums table, which showed the same
+          money twice in two different shapes.
+
+          The arithmetic is unchanged and comes from the shared module, so this
+          box, the Overview tile, the final account and the contract sum the
+          server freezes at lock all read the same figure. Once the contract is
+          locked the whole box is read-only, because from then on money moves
+          through variations. */}
+        <section
+          ref={provisionalSectionRef}
+          className="pj-sumbox scroll-mt-24"
+          aria-label="Bill summary"
+        >
+          <div className="hd">
+            <h3>Summary</h3>
+            <span>
+              {contractLocked ? (
+                `Contract locked${
+                  contractLockedAt
+                    ? ` ${new Date(contractLockedAt).toLocaleDateString()}`
+                    : ""
+                }, changes go through variations${
+                  contractSum ? ` · contract sum ${money(contractSum)}` : ""
+                }`
+              ) : tenderedAt ? (
+                <>
+                  {`Tendered ${new Date(tenderedAt).toLocaleDateString()}`}
+                  {onMarkTendered ? (
+                    <>
+                      {" · "}
+                      <button
+                        type="button"
+                        className="pj-lnk"
+                        onClick={() => onMarkTendered(false)}
+                      >
+                        Not tendered after all
+                      </button>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  Everything below the measured work, edited here
+                  {onMarkTendered && measuredWork > 0 ? (
+                    <>
+                      {" · "}
+                      <button
+                        type="button"
+                        className="pj-lnk"
+                        onClick={() => onMarkTendered(true)}
+                        title="Record the day this priced bill went out to tender."
+                      >
+                        Mark as tendered
+                      </button>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </span>
+          </div>
+
+          <div className="r">
+            <span className="l">Measured work</span>
+            <b>{money(totals.measured)}</b>
+          </div>
+
+          <SummaryPercentRow
+            label="Preliminaries"
+            percent={preliminaryPercent}
+            amount={totals.prelims}
+            editable={summaryEditable}
+            onChange={onPreliminaryPercentChange}
+            onCommit={sayUpdated}
+            title="Preliminaries as a percentage of measured work plus the sums. Typical range 5 – 10%."
+          />
+
+          <SummarySumGroup
+            kind="pc"
+            label="PC sums"
+            addLabel="+ Add a PC sum"
+            rows={sumGroups.pc}
+            total={totals.pc}
+            editable={summaryEditable}
+            onAdd={addSum}
+            onUpdate={onUpdateProvisionalSum}
+            onRemove={removeSum}
+            removeDisabled={ratesMasked}
+            onCommit={sayUpdated}
+            checkboxCls={checkboxCls}
+          />
+          <SummarySumGroup
+            kind="provisional"
+            label="Provisional sums"
+            addLabel="+ Add a provisional sum"
+            rows={sumGroups.provisional}
+            total={totals.provisional}
+            editable={summaryEditable}
+            onAdd={addSum}
+            onUpdate={onUpdateProvisionalSum}
+            onRemove={removeSum}
+            removeDisabled={ratesMasked}
+            onCommit={sayUpdated}
+            checkboxCls={checkboxCls}
+          />
+
+          <SummaryPercentRow
+            label="Contingency"
+            percent={contingencyPercent}
+            amount={totals.contingency}
+            editable={summaryEditable && !!onContingencyPercentChange}
+            onChange={onContingencyPercentChange}
+            onCommit={sayUpdated}
+            title="Contingency as a percentage of the sub-total."
+          />
+
+          {contractLocked ? (
+            <div className="r">
+              <span className="l">
+                Approved variations
+                {onOpenVariations ? (
+                  <button type="button" className="pj-lnk" onClick={onOpenVariations}>
+                    See variations
+                  </button>
+                ) : null}
+              </span>
+              <b>{money(totals.variations)}</b>
+            </div>
+          ) : null}
+
+          <SummaryPercentRow
+            label="VAT"
+            percent={taxPercent}
+            amount={totals.tax}
+            editable={summaryEditable && !!onTaxPercentChange}
+            onChange={onTaxPercentChange}
+            onCommit={sayUpdated}
+            title="VAT as a percentage of the sub-total plus contingency."
+          />
+
+          {/* Named in full, because the table above ends in a "measured work"
+            total and the two are different questions: that one is what the
+            items of work come to, this one is what the project is estimated
+            to cost once everything in this box is on top. */}
           <div
-            ref={provisionalSectionRef}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
+            className="r t"
+            title="Measured work plus preliminaries, PC and provisional sums, contingency, VAT and approved variations. The table above totals the measured work alone."
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">
-                  Provisional Sums
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  Add PC sums and provisional items not derived from the takeoff
-                  (e.g. allowances, statutory fees, specialist works). Saved
-                  with the project and exported as a separate sheet.
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn btn-xs"
-                onClick={onAddProvisionalSum}
-                title="Add provisional sum row"
-              >
-                + Add provisional sum
-              </button>
-            </div>
-
-            {provisionalSums.length ? (
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-left text-slate-600">
-                    <tr>
-                      <th className="px-2 py-2 w-10">#</th>
-                      <th className="px-2 py-2">Description</th>
-                      <th className="px-2 py-2 w-40 text-right">Amount</th>
-                      <th
-                        className="px-2 py-2 w-20 text-center"
-                        title="Tick when the PC scope has been executed, earned value will then include it."
-                      >
-                        Done
-                      </th>
-                      <th className="px-2 py-2 w-12"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {provisionalSums.map((s, i) => (
-                      <tr
-                        key={i}
-                        className={`border-t ${s?.completed ? "bg-emerald-50/50" : ""}`}
-                      >
-                        <td className="px-2 py-2 text-slate-500">{i + 1}</td>
-                        <td className="px-2 py-2">
-                          <input
-                            className="input !h-8 w-full !px-2 text-xs"
-                            type="text"
-                            placeholder="e.g. PC sum for kitchen fittings"
-                            value={s?.description || ""}
-                            onChange={(e) =>
-                              onUpdateProvisionalSum?.(i, {
-                                description: e.target.value,
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            className="input !h-8 w-full !px-2 text-xs text-right"
-                            type="number"
-                            step="any"
-                            placeholder="0.00"
-                            value={
-                              s?.amount === 0 || s?.amount == null
-                                ? ""
-                                : s.amount
-                            }
-                            onChange={(e) =>
-                              onUpdateProvisionalSum?.(i, {
-                                amount:
-                                  e.target.value === ""
-                                    ? 0
-                                    : Number(e.target.value),
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <input
-                            type="checkbox"
-                            className={checkboxCls}
-                            checked={Boolean(s?.completed)}
-                            onChange={(e) =>
-                              onUpdateProvisionalSum?.(i, {
-                                completed: e.target.checked,
-                              })
-                            }
-                            title="Mark as executed, flows into earned value (EV)"
-                          />
-                        </td>
-                        <td className="px-1 py-2 text-center">
-                          <button
-                            type="button"
-                            className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
-                              contractLocked
-                                ? "text-slate-300 cursor-not-allowed"
-                                : "text-slate-400 hover:bg-red-50 hover:text-red-600"
-                            }`}
-                            title={
-                              contractLocked
-                                ? "Contract locked. Unlock to remove PC sums"
-                                : "Remove this row"
-                            }
-                            disabled={contractLocked}
-                            onClick={() => {
-                              if (contractLocked) return;
-                              onRemoveProvisionalSum?.(i);
-                            }}
-                          >
-                            <FaTrashAlt className="text-[10px]" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-slate-50 font-semibold text-slate-900">
-                    <tr className="border-t">
-                      <td className="px-2 py-2"></td>
-                      <td className="px-2 py-2">Total provisional sums</td>
-                      <td className="px-2 py-2 text-right">
-                        {money(
-                          provisionalSums.reduce(
-                            (acc, s) => acc + (Number(s?.amount) || 0),
-                            0,
-                          ),
-                        )}
-                      </td>
-                      <td className="px-2 py-2 text-center text-[10px] text-slate-500">
-                        {provisionalSums.filter((s) => s?.completed).length}/
-                        {provisionalSums.length}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            ) : (
-              <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                No provisional sums added yet. Click "+ Add provisional sum" to
-                start.
-              </div>
-            )}
+            <span className="l">Estimated total</span>
+            <b>{money(totals.total)}</b>
           </div>
-        ) : null}
 
-        {provisionalTotal > 0 ||
-        variationsTotal !== 0 ||
-        computedShown.length ? (
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-800/60 p-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Project total
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                {contractLocked
-                  ? `Contract locked · baseline ${money(contractSum)}`
-                  : "Draft, lock contract to freeze the baseline."}
-              </div>
+          {/* Linked services sit OUTSIDE the cascade, and the row says so
+            rather than leaving a figure that does not add up. That project
+            carries its own preliminaries, contingency and VAT and is valued
+            on its own certificates, so folding it in would count it twice. */}
+          {totals.linked ? (
+            <div className="r">
+              <span className="l">
+                Linked services
+                <em style={{ color: "var(--ink-3)", fontStyle: "normal", fontSize: 12 }}>
+                  priced and valued on their own project
+                </em>
+              </span>
+              <b>{money(totals.linked)}</b>
             </div>
-
-            {/* Sub-total breakdown, three rows that add up to the BoQ
-              subtotal (measured + prov + prelim). */}
-            <div className="grid gap-2 text-xs sm:grid-cols-3">
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">
-                  Measured work
-                </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {money(grossAmount)}
-                </div>
-              </div>
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">
-                  Provisional sums
-                </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {money(provisionalTotal)}
-                </div>
-              </div>
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">
-                  Preliminaries ({safeNum(preliminaryPercent).toFixed(1)}%)
-                </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {money(preliminaryAmount)}
-                </div>
-                {preliminaryDone > 0 ? (
-                  <div className="mt-0.5 text-[10px] text-emerald-700 dark:text-emerald-400">
-                    Done: {money(preliminaryDone)}
-                  </div>
-                ) : null}
-                {preliminaryOutstanding > 0 && preliminaryDone > 0 ? (
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Outstanding: {money(preliminaryOutstanding)}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            {/* Sub-total line: bold, separates BoQ from add-ons */}
-            <div className="mt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-2 text-xs">
-              <div className="font-semibold text-slate-700 dark:text-slate-200">
-                BoQ sub-total
-              </div>
-              <div className="font-bold text-slate-900 dark:text-slate-100">
-                {money(boqSubtotal)}
-              </div>
-            </div>
-
-            {/* Contingency + Tax row, editable percent inputs inline.
-              The cascade follows the standard QS grand-summary
-              convention: Sub-total → +Contingency → +Tax → Planned. */}
-            <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
-              <div className="flex items-center justify-between gap-2 rounded-md bg-white dark:bg-slate-700/40 px-2 py-1.5 border border-slate-100 dark:border-slate-600">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500 dark:text-slate-400">
-                    Contingency
-                  </span>
-                  {onContingencyPercentChange ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      value={safeNum(contingencyPercent)}
-                      onChange={(e) =>
-                        onContingencyPercentChange(
-                          Math.max(
-                            0,
-                            Math.min(100, Number(e.target.value) || 0),
-                          ),
-                        )
-                      }
-                      disabled={contractLocked}
-                      className="w-12 rounded border border-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-1 py-0.5 text-[10px] text-right disabled:opacity-50"
-                    />
-                  ) : (
-                    <span className="text-[10px] text-slate-600 dark:text-slate-300">
-                      {safeNum(contingencyPercent).toFixed(1)}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                    %
-                  </span>
-                </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {money(contingencyAmount)}
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-md bg-white dark:bg-slate-700/40 px-2 py-1.5 border border-slate-100 dark:border-slate-600">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500 dark:text-slate-400">
-                    Tax / VAT
-                  </span>
-                  {onTaxPercentChange ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      value={safeNum(taxPercent)}
-                      onChange={(e) =>
-                        onTaxPercentChange(
-                          Math.max(
-                            0,
-                            Math.min(100, Number(e.target.value) || 0),
-                          ),
-                        )
-                      }
-                      disabled={contractLocked}
-                      className="w-12 rounded border border-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-1 py-0.5 text-[10px] text-right disabled:opacity-50"
-                    />
-                  ) : (
-                    <span className="text-[10px] text-slate-600 dark:text-slate-300">
-                      {safeNum(taxPercent).toFixed(1)}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                    %
-                  </span>
-                </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {money(taxAmount)}
-                </div>
-              </div>
-            </div>
-
-            {/* Planned project total, what was agreed at lock. */}
-            <div className="mt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-2 text-xs">
-              <div className="font-semibold text-slate-700 dark:text-slate-200">
-                Planned project total
-              </div>
-              <div className="font-bold text-adlm-blue-700 dark:text-adlm-blue-400">
-                {money(plannedProjectTotal)}
-              </div>
-            </div>
-
-            {/* Variations (only visible when there are any) and current total */}
-            {variationsTotal !== 0 ? (
-              <>
-                <div className="mt-2 flex items-center justify-between text-xs">
-                  <div className="text-slate-600 dark:text-slate-300">
-                    + Variations (instructions during execution)
-                  </div>
-                  <div
-                    className={`font-semibold ${
-                      variationsTotal > 0
-                        ? "text-amber-700 dark:text-amber-400"
-                        : "text-red-700 dark:text-red-400"
-                    }`}
-                  >
-                    {money(variationsTotal)}
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center justify-between border-t-2 border-adlm-blue-200 dark:border-adlm-blue-700 pt-2 text-sm">
-                  <div className="font-bold text-slate-900 dark:text-slate-100">
-                    Current total project cost
-                  </div>
-                  <div className="text-lg font-bold text-adlm-blue-700 dark:text-adlm-blue-300">
-                    {money(projectTotal)}
-                  </div>
-                </div>
-              </>
-            ) : null}
-          </div>
-        ) : null}
+          ) : null}
+        </section>
 
         <div
           ref={bottomAnchorRef}
@@ -4107,13 +4564,9 @@ function WbsLinkChip({ stats }) {
     explanation = `Sum of link weights = ${total}%. This BoQ line is correctly allocated across the WBS.`;
   }
 
-  const palette = {
-    emerald:
-      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/40",
-    rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-700/40",
-    slate:
-      "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
-  }[tone];
+  // Balanced reads in his light palette, over-allocated in his warning
+  // orange, under-allocated stays his neutral chip.
+  const palette = { emerald: palChip("light"), rose: palChip("orange"), slate: undefined }[tone];
 
   const names = Array.isArray(stats.taskNames) ? stats.taskNames : [];
   const previewNames = names.slice(0, 6);
@@ -4132,7 +4585,8 @@ function WbsLinkChip({ stats }) {
     <div className="mt-1 inline-flex items-center">
       <span
         title={title}
-        className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${palette}`}
+        className="wk-src sm"
+        style={palette}
       >
         <span aria-hidden="true">🔗</span>
         {n} link{n === 1 ? "" : "s"} · {total}%

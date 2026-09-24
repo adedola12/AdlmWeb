@@ -524,7 +524,11 @@ export default function Products() {
       </div>
 
       {/* Toolbar */}
-      <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-3 md:p-4 sticky top-[56px] z-10 shadow-depth">
+      {/* Below the nav, and below the launch strip when it shows (R20). */}
+      <div
+        className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-3 md:p-4 sticky z-10 shadow-depth"
+        style={{ top: "calc(56px + var(--launch-strip-h, 0px))" }}
+      >
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="flex-1 relative">
             <input

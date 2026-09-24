@@ -74,6 +74,66 @@ export default function DsRail({ d }) {
             </Link>
           </li>
           {" "}
+          <li className="has-grp dsh-tools" data-tools="">
+            {" "}
+            <button type="button" className="dsh-grp-b" aria-expanded="true">
+              <svg viewBox="0 0 24 24">
+                <use href="#wi-tools" />
+              </svg>
+              <span className="lb">
+                My tools
+              </span>
+              <i className="caret">
+              </i>
+            </button>
+            {" "}
+            <ul className="dsh-sub">
+              {" "}
+              <li>
+                <Link to="/work/tool?t=quiv" data-ds-page="work-tool">
+                  <img src="/ds/ic-quiv.png" alt="" />
+                  QUIV
+                </Link>
+              </li>
+              {" "}
+              <li>
+                <Link to="/work/tool?t=heron" data-ds-page="work-tool">
+                  <img src="/ds/ic-heron.png" alt="" />
+                  HERON
+                </Link>
+              </li>
+              {" "}
+              <li>
+                <Link to="/work/library" data-ds-page="work-library">
+                  <img src="/ds/ic-rategen.png" alt="" />
+                  RateGen
+                </Link>
+              </li>
+              {" "}
+              <li>
+                <Link className="off" to="/work/tool?t=mep" data-ds-page="work-tool">
+                  <img src="/ds/ic-mep.png" alt="" />
+                  Revit MEP{" "}
+                  <span className="add">
+                    Add
+                  </span>
+                </Link>
+              </li>
+              {" "}
+              <li>
+                <Link className="off" to="/manage/products" data-ds-page="dash-products">
+                  <img src="/ds/ic-civiq.png" alt="" />
+                  CIVIQ{" "}
+                  <span className="soon">
+                    Soon
+                  </span>
+                </Link>
+              </li>
+              {" "}
+            </ul>
+            {" "}
+          </li>
+          {" "}
           <li>
             <Link to="/work/projects" data-ds-page="work-projects">
               <svg viewBox="0 0 24 24">
@@ -84,39 +144,6 @@ export default function DsRail({ d }) {
                 {d.projects}
               </span>
             </Link>
-          </li>
-          {" "}
-          <li>
-            <Link to="/work/library" data-ds-page="work-library">
-              <svg viewBox="0 0 24 24">
-                <use href="#wi-library" />
-              </svg>
-              Rate library{" "}
-              <span className="tail">
-                {d.rates}
-              </span>
-            </Link>
-          </li>
-          {" "}
-          <li>
-            <Link to="/work/programme" data-ds-page="work-programme">
-              <svg viewBox="0 0 24 24">
-                <use href="#wi-gantt" />
-              </svg>
-              Programme
-            </Link>
-          </li>
-          {" "}
-          <li>
-            <a className="off" href="#">
-              <svg viewBox="0 0 24 24">
-                <use href="#wi-report" />
-              </svg>
-              Valuations{" "}
-              <span className="soon">
-                Next
-              </span>
-            </a>
           </li>
           {" "}
         </ul>
@@ -136,6 +163,15 @@ export default function DsRail({ d }) {
                 <use href="#hi-learning" />
               </svg>
               My learning
+            </Link>
+          </li>
+          {" "}
+          <li>
+            <Link to="/dash-assignments" data-ds-page="dash-assignments">
+              <svg viewBox="0 0 24 24">
+                <use href="#wi-task" />
+              </svg>
+              Assignments
             </Link>
           </li>
           {" "}
@@ -161,7 +197,7 @@ export default function DsRail({ d }) {
           </li>
           {" "}
           <li>
-            <Link to="/manage/downloads" data-ds-page="dash-downloads">
+            <Link to="/manage/guides" data-ds-page="dash-guides">
               <svg viewBox="0 0 24 24">
                 <use href="#hi-doc" />
               </svg>

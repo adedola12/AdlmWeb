@@ -143,6 +143,17 @@ export const MC = {
   MepConduitLengthM: "Mep.Conduit.StockLength_m",
   MepPipeLengthM: "Mep.Pipe.StockLength_m",
 
+  // Plant allowance per unit of work. Plant is its own resource class, not a
+  // slice of labour, so it gets its own line in the Budget rather than being
+  // buried in the gang rate. DEFAULT 0 FOR EVERY KIND, deliberately: a plant
+  // figure that nobody set is a figure nobody can defend, and a non-zero
+  // default would move the cost/profit split on every project that regenerates
+  // its schedule. Set one and the schedule carries a Plant line for that work.
+  PlantConcretePerM3: "Plant.Concrete.PerM3",
+  PlantExcavationPerM3: "Plant.Excavation.PerM3",
+  PlantFillPerM3: "Plant.Fill.PerM3",
+  PlantBlockworkPerM2: "Plant.Blockwork.PerM2",
+
   // Markup used when an UNPRICED bill is priced from the build-up
   MarkupOverheadPercent: "Markup.Overhead.Percent",
   MarkupProfitPercent: "Markup.Profit.Percent",
@@ -271,6 +282,13 @@ export const MATERIAL_CONSTANTS = [
   D(MC.MepCableDrumLengthM, "Cable drum length", "m/drum", "MEP – Cost Split", 100, 1, 5000),
   D(MC.MepConduitLengthM, "Conduit stock length", "m/length", "MEP – Cost Split", 3, 0.5, 50),
   D(MC.MepPipeLengthM, "Pipe stock length", "m/length", "MEP – Cost Split", 5.8, 0.5, 50),
+
+  // ── Plant ────────────────────────────────────────────────────────────────
+  // All zero by default — see the note on the keys above.
+  D(MC.PlantConcretePerM3, "Concrete plant (mixer, vibrator)", "₦/m³", "Plant", 0, 0, 1000000),
+  D(MC.PlantExcavationPerM3, "Excavation plant", "₦/m³", "Plant", 0, 0, 1000000),
+  D(MC.PlantFillPerM3, "Filling / compaction plant", "₦/m³", "Plant", 0, 0, 1000000),
+  D(MC.PlantBlockworkPerM2, "Blockwork plant (hoist, mixer)", "₦/m²", "Plant", 0, 0, 1000000),
 
   // ── Markup ───────────────────────────────────────────────────────────────
   D(MC.MarkupOverheadPercent, "Overhead", "% of net cost", "Markup", 10, 0, 100),

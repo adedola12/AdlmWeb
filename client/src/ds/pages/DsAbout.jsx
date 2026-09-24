@@ -564,9 +564,7 @@ export default function DsAbout() {
             <article className="tcard tilt rise">
               {" "}
               <div className="tshot">
-                <span className="av">
-                  EF
-                </span>
+                <img src="/ds/team-ebun.jpg" alt="Ebunoluwa Fadeyibii" width="960" height="1200" />
               </div>
               {" "}
               <b>

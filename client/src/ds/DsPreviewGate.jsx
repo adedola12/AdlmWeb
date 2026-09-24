@@ -27,7 +27,7 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { isStaff } from "../utils/roles.js";
+import { canViewPreview } from "../utils/roles.js";
 
 export default function DsPreviewGate({ children }) {
   const { user, accessToken } = useAuth();
@@ -46,7 +46,7 @@ export default function DsPreviewGate({ children }) {
     return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   }
 
-  if (!isStaff(user)) return <Navigate to="/" replace />;
+  if (!canViewPreview(user)) return <Navigate to="/" replace />;
 
   return children;
 }

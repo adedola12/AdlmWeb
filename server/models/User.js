@@ -137,6 +137,8 @@ const UserSchema = new mongoose.Schema(
     whatsappVerifiedAt: { type: Date, default: null },
     whatsappVerifiedNumber: { type: String, default: "" },
     whatsappCodeHash: { type: String, default: "" },
+    // The number the pending code went to: a code proves that number only.
+    whatsappCodeNumber: { type: String, default: "" },
     whatsappCodeExpires: { type: Date, default: null },
     whatsappCodeSentAt: { type: Date, default: null },
     whatsappCodeAttempts: { type: Number, default: 0 },
@@ -227,6 +229,9 @@ const UserSchema = new mongoose.Schema(
     // opts in with .select("+paymentMethod.authorizationCode").
     paymentMethod: {
       provider: { type: String, default: "paystack" },
+      // The Paystack account the card was saved on (R22, util/paystackKeys.js).
+      // Blank on cards saved before, which are the personal account's.
+      account: { type: String, default: "" },
       authorizationCode: { type: String, select: false },
       signature: { type: String, select: false },
       last4: { type: String, default: "" },
@@ -276,6 +281,11 @@ const UserSchema = new mongoose.Schema(
     // the server is not a way to get around it.
     emailVerifySentAt: { type: Date, default: null },
     emailVerifyAttempts: { type: Number, default: 0 },
+    // Unconfirmed accounts: verification codes sent today, and how many times
+    // the address was changed while confirming (routes/auth.js limits both).
+    emailVerifyResends: { type: Number, default: 0 },
+    emailVerifyResendDay: { type: String, default: "" },
+    emailChangeCount: { type: Number, default: 0 },
 
     /* ── does this address still accept mail? ─────────────────────────────
      *

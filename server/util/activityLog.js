@@ -17,9 +17,15 @@ export const ACT = {
   BOQ_REIMPORTED: "project.boq-reimported",
   CONTRACT_LOCKED: "contract.locked",
   CONTRACT_UNLOCKED: "contract.unlocked",
+  // S18 bill: the bill went out to tender, or that was taken back.
+  CONTRACT_TENDERED: "contract.tendered",
+  CONTRACT_UNTENDERED: "contract.untendered",
   VARIATION_ADDED: "variation.added",
   VARIATION_UPDATED: "variation.updated",
   VARIATION_REMOVED: "variation.removed",
+  // S18 valuations: a variation is raised pending, then decided.
+  VARIATION_APPROVED: "variation.approved",
+  VARIATION_REJECTED: "variation.rejected",
   RATES_UPDATED: "rate.updated",
   BUDGET_UPDATED: "budget.updated",
   PROVISIONAL_CHANGED: "provisional.changed",

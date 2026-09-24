@@ -1,4 +1,5 @@
 import express from "express";
+import { paystackKeys, paystackSecret } from "../util/paystackKeys.js";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth.js";
 import { Purchase } from "../models/Purchase.js";
 import { Product } from "../models/Product.js";
@@ -20,7 +21,8 @@ import { sendProformaInvoice } from "../util/proformaInvoice.js";
 import { payoutAccount } from "../util/payoutAccount.js";
 
 const router = express.Router();
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+// R22: the key comes from util/paystackKeys.js (personal today, the business
+// account behind PAYSTACK_ACCOUNT=business), read when used.
 
 // Organization licences normally start at 2 users. RateGen is the exception:
 // firms buy it for a single estimator, so an org may take just 1 seat.
@@ -417,15 +419,25 @@ router.get("/verify", async (req, res) => {
     const reference = String(req.query.reference || "").trim();
     if (!reference)
       return res.status(400).json({ error: "reference required" });
-    if (!PAYSTACK_SECRET)
+    const keys = paystackKeys();
+    if (!keys.length)
       return res.status(400).json({ error: "Paystack not configured" });
 
-    const psRes = await fetch(
-      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } },
-    );
-
-    const data = await psRes.json().catch(() => ({}));
+    // The active account first. The other is tried only if the first does
+    // not know the reference: a payment started just before a switch of
+    // account is verified where it was made (R22).
+    let psRes;
+    let data;
+    let account;
+    for (const k of keys) {
+      psRes = await fetch(
+        `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+        { headers: { Authorization: `Bearer ${k.secret}` } },
+      );
+      data = await psRes.json().catch(() => ({}));
+      account = k.account;
+      if (psRes.ok && data?.status) break;
+    }
     if (!psRes.ok || !data?.status) {
       return res
         .status(400)
@@ -459,7 +471,7 @@ router.get("/verify", async (req, res) => {
 
     // Persist the reusable card token for auto-renewals. Best-effort: a
     // failure here must never block crediting a confirmed payment.
-    await saveCardAuthorization(existing.userId, data?.data).catch((err) =>
+    await saveCardAuthorization(existing.userId, data?.data, account).catch((err) =>
       console.error("[purchase verify] save card failed:", err?.message || err),
     );
 
@@ -518,7 +530,8 @@ router.get("/verify", async (req, res) => {
 // in NGN too (their bank handles FX); 3DS runs inside the Paystack popup.
 router.post("/:id/paystack/init", requireAuth, requireVerifiedEmail, async (req, res) => {
   try {
-    if (!PAYSTACK_SECRET)
+    const secret = paystackSecret();
+    if (!secret)
       return res.status(400).json({ error: "Paystack not configured" });
 
     const p = await Purchase.findById(req.params.id);
@@ -547,7 +560,7 @@ router.post("/:id/paystack/init", requireAuth, requireVerifiedEmail, async (req,
     const psRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${PAYSTACK_SECRET}`,
+        Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

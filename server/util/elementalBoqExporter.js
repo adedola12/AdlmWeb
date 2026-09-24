@@ -1712,7 +1712,7 @@ function writeSummarySheet(workbook, billRefs) {
 /* =========================
    Public API
    ========================= */
-// Material & Labour build-up sheet — one block per bill line with formula-
+// Resource build-up sheet — one block per bill line with formula-
 // linked Amount = Qty×Rate, Net = SUM(...), Overhead/Profit %, and a derived
 // Bill rate = Net×(1+(O/H+Profit)/100)/billQty. Grouped by billIdentity (=bill
 // code) so it lines up with the rest of the workbook.
@@ -1742,7 +1742,12 @@ function writeBudgetBreakdownSheet(workbook, items, budgetItems) {
     return s ? s[0].toUpperCase() + s.slice(1) : "Material";
   };
 
-  const ws = workbook.addWorksheet(safeSheetName("Material & Labour", workbook));
+  // "Resource Build-up", not "Material & Labour": the Net row below sums EVERY
+  // row in the block, whatever its kind, and the Type column already prints
+  // Plant, Equipment and Consumable when the Budget holds them. The sheet name
+  // has to say what the arithmetic does. It still matches the importer's
+  // SCHEDULE_SHEET_RE, so an exported workbook re-imports as a schedule sheet.
+  const ws = workbook.addWorksheet(safeSheetName("Resource Build-up", workbook));
   ws.columns = [
     { width: 48 },
     { width: 10 },
@@ -1792,7 +1797,9 @@ function writeBudgetBreakdownSheet(workbook, items, budgetItems) {
     const pr = blk.reduce((a, l) => Math.max(a, num(l.profitPercent)), 0);
     const ohRow = ws.addRow(["Overhead %", "", "", "", "", oh]);
     const prRow = ws.addRow(["Profit %", "", "", "", "", pr]);
-    const rateRow = ws.addRow(["Bill rate (Material + Labour + O&P)", "", "", "", "", null]);
+    // The formula divides the Net build-up — every kind of resource in the
+    // block, not just material and labour — by the bill quantity and adds O&P.
+    const rateRow = ws.addRow(["Bill rate (Net build-up + O&P)", "", "", "", "", null]);
     rateRow.getCell(6).value = {
       formula: `IF(D${headerNum}=0,F${netRow.number}*(1+(F${ohRow.number}+F${prRow.number})/100),F${netRow.number}*(1+(F${ohRow.number}+F${prRow.number})/100)/D${headerNum})`,
     };
@@ -2066,7 +2073,7 @@ export async function exportElementalBoQ({
 
   writeSummarySheet(workbook, billRefs);
 
-  // Material & Labour build-up (after the summary so it reads as an appendix).
+  // Resource build-up (after the summary so it reads as an appendix).
   writeBudgetBreakdownSheet(workbook, projectItems, budgetItems);
 
   const buf = await workbook.xlsx.writeBuffer();

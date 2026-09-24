@@ -4,24 +4,25 @@
 // note, which is the part worth having its own page: it says plainly what the
 // document does and does not claim.
 //
-// One line of his is not reproduced. He writes that each certificate "carries a
-// reference an employer can check with us"; ours carries the name and the date
-// and nothing else, and there is no verification desk behind a reference. The
-// note says what is true instead.
+// R14: claimed through his three-step card, viewed and downloaded on his
+// light or dark template, and checkable by anyone at /certificate.
 
 import React from "react";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
-import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import CertTicket from "./LxCertTicket.jsx";
-import { certReady, certificateName, toRow } from "./lxCourses.js";
+import CertHost from "./cert/CertHost.jsx";
+import { useCertName } from "./cert/useCertName.js";
+import { certReady, toRow } from "./lxCourses.js";
 
 export default function DsCertificates() {
   const { accessToken, user } = useAuth();
   const [courses, setCourses] = React.useState(null);
   const [failed, setFailed] = React.useState("");
-  const [certModal, setCertModal] = React.useState(null);
+  const [certOpen, setCertOpen] = React.useState(null);
+  const [finishOf, setFinishOf] = React.useState({});
+  const cn = useCertName(accessToken, user);
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
@@ -50,8 +51,10 @@ export default function DsCertificates() {
   }
 
   // Issued first — those are the ones somebody came here to fetch.
-  const rows = courses.map(toRow).sort((a, b) => Number(certReady(b)) - Number(certReady(a)));
-  const certName = certificateName(user);
+  const rows = courses
+    .map(toRow)
+    .map((r) => (finishOf[r.sku] ? { ...r, finish: finishOf[r.sku] } : r))
+    .sort((a, b) => Number(certReady(b)) - Number(certReady(a)));
 
   return (
     <div className="dsh-in">
@@ -60,8 +63,8 @@ export default function DsCertificates() {
           <h1>Certificates</h1>
           <p>
             Issued to the account rather than to a laptop, so a change of machine or email does not
-            lose them. Each one carries the name held on the account, which locks the first time a
-            certificate is downloaded — check it under Account settings before the first download.
+            lose them. You confirm the name to print once, when you claim the first one; each
+            carries a QR code anyone can use to check it.
           </p>
         </div>
       </div>
@@ -72,17 +75,9 @@ export default function DsCertificates() {
             <CertTicket
               key={r.sku}
               row={r}
-              certName={certName}
-              onDownload={(row, opts) =>
-                setCertModal({
-                  sku: row.sku,
-                  title: row.title,
-                  description: row.blurb,
-                  completionDate: row.issuedAt,
-                  reference: row.certificateRef,
-                  preview: !!opts?.preview,
-                })
-              }
+              certName={cn.name}
+              claimed={cn.locked}
+              onOpen={(row, action) => setCertOpen({ row, action })}
             />
           ))}
         </div>
@@ -112,21 +107,23 @@ export default function DsCertificates() {
           </p>
           <ul>
             <li>Issued to the account, so it survives a change of laptop or email</li>
-            <li>Carries a reference you can quote to us, and the date it was issued</li>
-            <li>Downloadable at any time, as many times as you need</li>
+            <li>
+              Carries a QR code and a reference anyone can verify at{" "}
+              <Link to="/certificate" style={{ color: "var(--action)" }}>
+                adlmstudio.net/certificate
+              </Link>
+            </li>
+            <li>Your name is confirmed once, by you; the light or dark finish can change any time</li>
           </ul>
         </div>
       </section>
 
-      <CertificateNameModal
-        open={!!certModal}
-        onClose={() => setCertModal(null)}
-        courseSku={certModal?.sku}
-        courseTitle={certModal?.title}
-        courseDescription={certModal?.description}
-        completionDate={certModal?.completionDate}
-        reference={certModal?.reference}
-        preview={certModal?.preview}
+      <CertHost
+        open={certOpen}
+        cn={cn}
+        token={accessToken}
+        onFinish={(sku, finish) => setFinishOf((m) => ({ ...m, [sku]: finish }))}
+        onClose={() => setCertOpen(null)}
       />
     </div>
   );

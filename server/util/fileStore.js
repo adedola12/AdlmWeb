@@ -41,12 +41,26 @@ export async function presignUpload({ key, contentType, expiresIn = 900 }) {
   return { uploadUrl, key, contentType, storage: t.backend, expiresIn };
 }
 
+/**
+ * The Content-Disposition a download is saved under. The plain `filename` is
+ * printable ASCII with quotes, backslashes and control characters taken out;
+ * `filename*` (RFC 5987) carries the exact name, accents and all.
+ *
+ * The earlier one-liner had `\\r` inside a regex literal, which is the letter
+ * r, so "Chapter report.docx" saved as "Chapte epot.docx" and a real CR got
+ * through (review, 2026-09-22).
+ */
+export function contentDisposition(fileName) {
+  const name = String(fileName || "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  if (!name) return undefined;
+  const ascii = name.replace(/["\\]/g, "").replace(/[^\u0020-\u007e]/g, "_");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+}
+
 /** A presigned GET that downloads under the file's own name. */
 export async function presignDownload({ key, storage, fileName, expiresIn = 300 }) {
   const t = target(storage || fileStoreBackend());
-  const disposition = fileName
-    ? `attachment; filename="${String(fileName).replace(/["\\r\n]/g, "")}"`
-    : undefined;
+  const disposition = contentDisposition(fileName);
   return getSignedUrl(
     t.client,
     new GetObjectCommand({ Bucket: t.bucket, Key: key, ResponseContentDisposition: disposition }),

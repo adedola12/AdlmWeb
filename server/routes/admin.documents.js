@@ -23,6 +23,7 @@
 // had. Nothing links here.
 
 import express from "express";
+import { DOWNLOADS, resolveDownload } from "../util/downloadLinks.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { AuditLog } from "../models/AuditLog.js";
 import { Proposal } from "../models/Proposal.js";
@@ -114,6 +115,21 @@ router.get("/system", ...hub, async (_req, res, next) => {
   try {
     const s = (await Setting.findOne({ key: "global" }).lean()) || {};
 
+    // R15: where each download is actually served from right now. A Drive
+    // link is only the fallback until the file is in our storage.
+    const [hubFrom, appFrom] = await Promise.all([
+      resolveDownload("installer-hub", { settings: s }),
+      resolveDownload("android", { settings: s }),
+    ]);
+    const servedFrom = (r, d) =>
+      r.source === "store"
+        ? `served from ADLM storage (${d.key})`
+        : r.source === "drive"
+          ? `served from the Google Drive link until ${d.key} is uploaded to ADLM storage`
+          : r.source === "setting"
+            ? `served from this link until ${d.key} is uploaded to ADLM storage`
+            : `nothing to serve: upload ${d.key} or set a link`;
+
     // One row per setting, because the question an administrator has is "what
     // is this set to and does it apply" — not "show me a JSON blob".
     const items = [
@@ -138,15 +154,15 @@ router.get("/system", ...hub, async (_req, res, next) => {
         id: "hub",
         name: "Installer Hub",
         value: s.installerHubUrl || "not set",
-        note: "Where the desktop installer is downloaded from.",
-        state: s.installerHubUrl ? "active" : "due",
+        note: `Where the desktop installer is downloaded from: ${servedFrom(hubFrom, DOWNLOADS["installer-hub"])}.`,
+        state: hubFrom.source === "store" ? "active" : "due",
       },
       {
         id: "mobile",
         name: "Mobile app",
         value: s.mobileAppUrl || "not set",
-        note: "The link the site offers for the phone app.",
-        state: s.mobileAppUrl ? "active" : "calm",
+        note: `The phone app download: ${servedFrom(appFrom, DOWNLOADS.android)}.`,
+        state: appFrom.source === "store" ? "active" : "due",
       },
       {
         id: "reinstall",
@@ -383,6 +399,7 @@ router.get("/saved/:id", ...hub, async (req, res, next) => {
       to: d.to,
       from: d.from || "",
       source: d.source || "",
+      sign: d.sign || "line",
     });
   } catch (err) {
     next(err);
@@ -403,6 +420,7 @@ router.post("/saved", ...hub, async (req, res, next) => {
       from: String(b.from || "").trim(),
       source,
       blocks: n0(b.blocks),
+      sign: ["dolapo", "line", "none"].includes(b.sign) ? b.sign : "line",
       byId: req.user?._id,
       byEmail: req.user?.email || "",
     };
@@ -473,6 +491,7 @@ router.post("/saved/:id/duplicate", ...hub, async (req, res, next) => {
       to: src.to,
       source: src.source,
       blocks: src.blocks,
+      sign: src.sign || "line",
       byId: req.user?._id,
       byEmail: req.user?.email || "",
     });

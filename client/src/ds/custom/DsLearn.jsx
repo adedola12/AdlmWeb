@@ -10,9 +10,8 @@
 import React from "react";
 import DsLearnPage from "../pages/DsLearnPage.jsx";
 import { API_BASE } from "../../config.js";
-import DsFreeLessons from "../DsFreeLessons.jsx";
 import DsCourseLinks from "../DsCourseLinks.jsx";
-import DsFreeLibrary from "../DsFreeLibrary.jsx";
+import DsLessonGrid from "../DsLessonGrid.jsx";
 
 const NGN = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -50,21 +49,16 @@ export default function DsLearn() {
   }, []);
 
   return (
-    // His free-lesson tiles are static markup with no destination. The wrapper
-    // matches each one to a real video and makes it play, without altering his
-    // thumbnails or layout.
     <DsCourseLinks>
-      <DsFreeLessons>
-        <DsLearnPage
+      <DsLearnPage
         d={{
           bimbld: { yearly: money(prices.bimbld) },
           bimmep: { yearly: money(prices.BIMMEP) },
-          // The rest of the channel, shelved by software, under his nine
-          // tiles. Slot placed by port-ds-html.mjs after his "Show more".
-          library: <DsFreeLibrary />,
+          // R02: his filters, tiles and "Show more", on the whole YouTube
+          // library, in place of his nine demo tiles (port-ds-html.mjs slot).
+          lessons: <DsLessonGrid />,
         }}
-        />
-      </DsFreeLessons>
+      />
     </DsCourseLinks>
   );
 }

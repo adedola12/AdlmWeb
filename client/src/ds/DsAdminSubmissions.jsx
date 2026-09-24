@@ -69,8 +69,13 @@ const fileName = (url) => {
 /** The work, beside the queue. */
 function Viewer({ item, onClose, onDecide, busy }) {
   const [feedback, setFeedback] = React.useState(item?.feedback || "");
+  // R13: an optional mark out of 100, returned with the feedback.
+  const [score, setScore] = React.useState(item?.score ?? "");
 
-  React.useEffect(() => setFeedback(item?.feedback || ""), [item]);
+  React.useEffect(() => {
+    setFeedback(item?.feedback || "");
+    setScore(item?.score ?? "");
+  }, [item]);
 
   React.useEffect(() => {
     const onKey = (e) => {
@@ -149,12 +154,23 @@ function Viewer({ item, onClose, onDecide, busy }) {
             placeholder="Why it passed, or what to fix before the next attempt."
           />
         </label>
+        <label>
+          Mark out of 100 <span className="opt">optional</span>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            value={score}
+            onChange={(e) => setScore(e.target.value)}
+            style={{ maxWidth: 110 }}
+          />
+        </label>
         <div className="adm-view-acts">
           <button
             type="button"
             className="ds-btn btn-o ds-btn-sm"
             disabled={busy}
-            onClick={() => onDecide(item.id, "rejected", feedback)}
+            onClick={() => onDecide(item.id, "rejected", feedback, score)}
           >
             Return for another attempt
           </button>
@@ -163,7 +179,7 @@ function Viewer({ item, onClose, onDecide, busy }) {
             className="ds-btn btn-p ds-btn-sm"
             disabled={busy || !item.file}
             title={item.file ? undefined : "There is nothing attached to mark"}
-            onClick={() => onDecide(item.id, "approved", feedback)}
+            onClick={() => onDecide(item.id, "approved", feedback, score)}
           >
             Pass — issue the certificate
           </button>
@@ -198,7 +214,7 @@ export default function DsAdminSubmissions() {
     load(view);
   }, [view, load]);
 
-  async function decide(id, to, feedback) {
+  async function decide(id, to, feedback, score) {
     if (busy) return;
     setBusy(true);
     try {
@@ -209,7 +225,7 @@ export default function DsAdminSubmissions() {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: to, feedback }),
+        body: JSON.stringify({ status: to, feedback, score: score === "" ? null : Number(score) }),
       });
       setOpen(null);
       await load(view);

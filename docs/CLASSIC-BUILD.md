@@ -11,9 +11,13 @@ build (Richard Enoch's redesign, branch `feat/video-notifications`) goes live.
 |---|---|---|
 | adlmstudio.net | Classic only. `/manage`, `/work` and `/dash-*` send them to the classic page for the same job (`client/src/components/NewBuildGate.jsx`). | Classic, plus the new-build screens by URL |
 | `/preview/*`, `/fit` | Sent home | The staged redesign |
-| preview.adlmstudio.com | Sign-in page only | The whole new build |
+| preview.adlmstudio.net | Sign-in page only | The whole new build |
 
 ## At go-live: retire, do not delete
+
+Step 2 is already done on the `release` branch (the `go-live:` commits of
+22 Sep 2026), so it reaches main with the launch pull request. Step 1 is the
+only thing left to do by hand, just before that pull request merges.
 
 1. Tag the last classic commit on main: `git tag classic-build-final <sha>` and
    push the tag. That tag is the archive; it can be checked out and run at any

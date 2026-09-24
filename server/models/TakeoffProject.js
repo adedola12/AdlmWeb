@@ -8,6 +8,8 @@ const DefaultValuationSettings = Object.freeze({
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
+  // S18 valuations: default procurement lead time, in days.
+  procurementLeadDays: 14,
 });
 
 const ValuationSettingsSchema = new mongoose.Schema(
@@ -52,6 +54,16 @@ const ValuationSettingsSchema = new mongoose.Schema(
       enum: ["boq", "budget"],
       default: "boq",
     },
+    // S18 valuations: how many days before a material is needed on site the
+    // buy schedule says to order it. Was React state only, so it was lost on
+    // reload. Optional with a default, so a project saved before this field
+    // existed behaves exactly as it does today (14 days).
+    procurementLeadDays: {
+      type: Number,
+      default: DefaultValuationSettings.procurementLeadDays,
+      min: 0,
+      max: 120,
+    },
   },
   { _id: false },
 );
@@ -94,6 +106,17 @@ const ValuationEventSchema = new mongoose.Schema(
 
 const ProvisionalSumSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     description: { type: String, default: "", trim: true },
     amount: { type: Number, default: 0 },
     // PC sums are budgetary allowances — the actual scope is executed and
@@ -103,6 +126,18 @@ const ProvisionalSumSchema = new mongoose.Schema(
     // "Done" buckets. Matches preliminary-item semantics.
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null },
+    // S18 bill: which of the two named groups this sum belongs to. "pc" is a
+    // prime-cost sum for a nominated supplier or subcontractor; "provisional"
+    // is an allowance for work that is not yet defined. The website has always
+    // shown one list under both names, so the field is optional and every
+    // existing row reads as "provisional" — the combined figure, and therefore
+    // every total and every export, is unchanged. Additive with a default, so
+    // the desktop plugins round-trip these rows exactly as they do today.
+    kind: {
+      type: String,
+      enum: ["pc", "provisional"],
+      default: "provisional",
+    },
   },
   { _id: false },
 );
@@ -129,6 +164,17 @@ const ElementQtySchema = new mongoose.Schema(
 // is fully backward-compatible.
 const BudgetItemSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     billIdentity: { type: String, default: "" },
     sn: { type: Number, default: 0 },
     description: { type: String, default: "", trim: true },
@@ -177,6 +223,17 @@ const BudgetItemSchema = new mongoose.Schema(
 // pool, mirroring how measured items drive valuation.
 const PreliminaryItemSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     name: { type: String, default: "", trim: true },
     allocation: { type: Number, default: 0 }, // 0-100
     completed: { type: Boolean, default: false },
@@ -198,6 +255,17 @@ const PreliminaryItemSchema = new mongoose.Schema(
 // client extras) so they can be tracked against the project total.
 const VariationSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     description: { type: String, default: "", trim: true },
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "", trim: true },
@@ -217,6 +285,19 @@ const VariationSchema = new mongoose.Schema(
     // toward earned value only when ticked. Same semantics as PC sums.
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null },
+    // S18 valuations: approval status. A variation only moves money once it
+    // is approved. The default is "approved" on purpose — every row written
+    // before this field existed, and every row the post-lock auto-add flow
+    // raises, reads back as approved, so no existing project's total moves.
+    // `completed` above stays a separate flag: approved = it counts toward
+    // the contract value, completed = it has been executed on site.
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "approved",
+    },
+    decidedAt: { type: Date, default: null },
+    decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   },
   { _id: false },
 );
@@ -514,6 +595,12 @@ const ContractSchema = new mongoose.Schema(
     lockedAt: { type: Date, default: null },
     lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     approvedAt: { type: Date, default: null },
+    // S18 bill: when the bill went out to tender. Set by hand from the project
+    // ("Mark as tendered"), cleared the same way, and read only to place the
+    // project at the Tendered stage between Priced and Contract locked. It
+    // changes no figure and is null on every existing project, which is why
+    // those projects keep the stage they show today.
+    tenderedAt: { type: Date, default: null },
     // Preliminaries as a percentage of (measured work + provisional sums).
     // Typical range in Nigerian practice is 5 – 10%. Stored as whole number.
     preliminaryPercent: { type: Number, default: 7.5 },
@@ -549,6 +636,17 @@ const ContractSchema = new mongoose.Schema(
 
 const ItemSchema = new mongoose.Schema(
   {
+    // A stable identity for this row, minted by the server the first time it
+    // sees a row without one (see keepLineId() in routes/projects.js). It is
+    // the ONLY field on these rows that survives an edit to every other
+    // field, which is what lets a rate-masked save pair an incoming row to
+    // the stored row it came from instead of guessing from its text and its
+    // position.
+    //
+    // Optional on the way in, always present on the way out. A client that
+    // neither sends nor echoes it — every desktop plugin today — is served
+    // exactly the behaviour it had before the field existed.
+    lineId: { type: String, default: "" },
     sn: { type: Number, default: 0 },
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },
@@ -557,6 +655,14 @@ const ItemSchema = new mongoose.Schema(
     // Revit plugin). Round-trips so the plugin can re-resolve the rate without
     // parsing the "RateGen (…)" rateSource label.
     appliedRateKey: { type: String, default: "" },
+    // When the QS applied this line's rate himself — a Rate Gen pick or a
+    // figure typed into the website's rate cell. While set,
+    // deriveBillRatesFromBudget leaves the rate alone rather than re-deriving
+    // it from the Budget build-up. This is the ONLY signal that does that:
+    // appliedRateKey above is plugin provenance and carries no such meaning.
+    // Optional and null on every row written before this shipped and on every
+    // plugin payload, so existing projects keep deriving exactly as they did.
+    rateLockedAt: { type: Date, default: null },
     actualQty: { type: Number, default: null },
     actualRate: { type: Number, default: null },
     actualRecordedAt: { type: Date, default: null },
@@ -609,6 +715,38 @@ const ItemSchema = new mongoose.Schema(
     // Overhead / profit % carried from the rate build-up (for margin calc).
     overheadPercent: { type: Number, default: null },
     profitPercent: { type: Number, default: null },
+  },
+  { _id: false },
+);
+
+// ── Project resources ──
+// The gang and plant detail behind a Budget line: three masons, two
+// labourers, a mixer and its operator, at their day rates.
+//
+// A SEPARATE ARRAY FROM budgetItems, AND THAT IS THE WHOLE POINT.
+// deriveBillRatesFromBudget sums every budget row under a billIdentity and
+// drives the bill rate from it, on save and on a plain GET. Gang rows in
+// budgetItems would be added to the single Labour row that already carries
+// their total, double-counting labour and raising the client's bill the next
+// time anyone merely OPENED the project. See util/projectResources.js.
+const ProjectResourceSchema = new mongoose.Schema(
+  {
+    // The bill line whose Labour / Plant row this helps explain.
+    billIdentity: { type: String, default: "", trim: true },
+    sn: { type: Number, default: 0 },
+    name: { type: String, default: "", trim: true },
+    // Labour | Plant | Equipment — see util/resourceKind.js.
+    componentKind: { type: String, default: "Labour", trim: true },
+    trade: { type: String, default: "", trim: true },
+    unit: { type: String, default: "", trim: true },
+    // How many of this resource (3 masons) and for how long (0.4 days).
+    quantity: { type: Number, default: 0 },
+    duration: { type: Number, default: 0 },
+    rate: { type: Number, default: 0 },
+    notes: { type: String, default: "", trim: true },
+    // "rategen-rate" for a row a picked rate wrote — so a re-pick replaces its
+    // own rows and never one the QS typed.
+    rateSource: { type: String, default: "", trim: true },
   },
   { _id: false },
 );
@@ -806,6 +944,11 @@ const TakeoffProjectSchema = new mongoose.Schema(
     materialItems: { type: [ItemSchema], default: [] },
     provisionalSums: { type: [ProvisionalSumSchema], default: [] },
     budgetItems: { type: [BudgetItemSchema], default: [] },
+    // The gang / plant detail behind each budget Labour and Plant row. NEVER
+    // read by deriveBillRates or the budget heal, and deliberately kept off
+    // projectForClient — it is served by its own endpoint so no route a
+    // desktop plugin calls changes shape.
+    resourceItems: { type: [ProjectResourceSchema], default: [] },
     variations: { type: [VariationSchema], default: [] },
     preliminaryItems: { type: [PreliminaryItemSchema], default: [] },
     contract: { type: ContractSchema, default: () => ({}) },

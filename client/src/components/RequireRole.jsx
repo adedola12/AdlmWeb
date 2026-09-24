@@ -14,7 +14,7 @@ export default function RequireRole({ roles, children }) {
         replace
       />
     );
-  if (!roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  if (!roles.includes(user.role)) return <Navigate to="/manage" replace />;
 
   return children;
 }

@@ -13,6 +13,7 @@ import { ScrollRestoration, useNavigate } from "react-router-dom";
 import { MAP } from "../lib/dsRoutes.js";
 import { DS_PAGES } from "./pages/manifest.js";
 import AiAgent from "../components/AiAgent.jsx";
+import { isBareScreen, hasFloatingAda } from "./previewShell.js";
 
 const DsShell = React.lazy(() => import("./DsShell.jsx"));
 const DsAppShell = React.lazy(() => import("./DsAppShell.jsx"));
@@ -20,23 +21,49 @@ const DsLearnStyles = React.lazy(() => import("./DsLearnStyles.jsx"));
 const DsAuthStyles = React.lazy(() => import("./DsAuthStyles.jsx"));
 const DsDocStyles = React.lazy(() => import("./DsDocStyles.jsx"));
 const DsBeyondBimStyles = React.lazy(() => import("./DsBeyondBimStyles.jsx"));
+const DsPluginStyles = React.lazy(() => import("./DsPluginStyles.jsx"));
+const DsPluginHeronStyles = React.lazy(() => import("./DsPluginHeronStyles.jsx"));
+const DsSplashStyles = React.lazy(() => import("./DsSplashStyles.jsx"));
+const DsHubStyles = React.lazy(() => import("./DsHubStyles.jsx"));
+const DsAdminStyles = React.lazy(() => import("./DsAdminStyles.jsx"));
 
-// Which of his six stylesheets a page needs, read straight off the <link>
-// tags in his source. Only site.css is global; the other five are loaded per
+// Which of his stylesheets a page needs, read straight off the <link> tags in
+// that page's own source. Only site.css is global; the rest are loaded per
 // page, and porting site.css alone left every app screen, both auth screens
-// and the document renderer with no styling of their own whatsoever.
+// and the document renderer with no styling of their own whatsoever. There
+// are fifteen sheets now, so each set below names the pages his <link> tags
+// name — nothing is inferred from the slug except the admin family, which is
+// uniform across all 32 screens.
 const APP_SCREEN = /^(dash|work)-/;
 
-// His admin screens bring their own chrome — .adm-shell wraps an .adm-rail
-// that is part of the page, not stamped around it. So they get no shell of
-// ours at all: DsShell would put the marketing nav above an admin panel, and
-// DsAppShell would put the Manage rail beside his admin rail.
-const BARE_SCREEN = /^admin-/;
+// Which pages get no shell of ours at all, and which get Ada, both live in
+// previewShell.js — see that file for why each answer is what it is.
+
 const NEEDS_LEARN = new Set(["dash-learning", "dash-course", "dash-certificates", "work-home"]);
 const NEEDS_AUTH = new Set(["login", "signup", "verify"]);
 const NEEDS_DOC = new Set(["doc-preview", "quote"]);
 // The cohort page and its form, added upstream 2026-09-12.
 const NEEDS_BB = new Set(["beyondbim", "beyondbim-register"]);
+// Plugin side one, added upstream 2026-09-17 (design references). His 22 Sep
+// rebuild moved HERON off plugin-quiv.css onto splash.css + plugin-heron.css,
+// so the two no longer share a sheet.
+const NEEDS_PLUGIN = new Set(["plugin-quiv"]);
+const NEEDS_PLUGIN_HERON = new Set(["plugin-heron"]);
+// His splash sheet dresses the four launch screens, the Hub, and — since the
+// rebuild — the HERON page, exactly as the <link> tags in his sources say.
+const NEEDS_SPLASH = new Set([
+  "splash-quiv",
+  "splash-heron",
+  "splash-rategen",
+  "splash-hub",
+  "hub",
+  "plugin-heron",
+]);
+const NEEDS_HUB = new Set(["hub"]);
+// His 32 admin-* screens carry their own .adm-* layout, which lives in
+// admin.css. Nothing was loading it here, so every staged admin screen
+// rendered his markup with no layout at all.
+const ADMIN_SCREEN = /^admin-/;
 
 // Real app path -> staged slug, so the preview can navigate to itself.
 //
@@ -62,6 +89,22 @@ const PREVIEW_OF = new Map(
     ([real]) => typeof real === "string",
   ),
 );
+
+/**
+ * The whole shell a "nochrome" page gets: the `.ds` scope and nothing else.
+ *
+ * Every rule the porter writes is scoped under `.ds`, which is what keeps a
+ * page that has not opted in completely unaffected. A bare page used to render
+ * inside a Fragment, so no rule could match it and his admin and plugin
+ * screens came out as raw markup. His build does not drop site.css on those
+ * pages either — it drops the nav, the footer and the promo band.
+ *
+ * @param {object} props
+ * @param {React.ReactNode} props.children
+ */
+function BareScope({ children }) {
+  return <div className="ds">{children}</div>;
+}
 
 /**
  * @param {object} props
@@ -115,8 +158,14 @@ export default function DsPreview({ page }) {
   // "Book a demo" above a signed-in dashboard — which is what his own build
   // does, and is on the snag list for him rather than reproduced here.
   const isApp = APP_SCREEN.test(page.slug);
-  const isBare = BARE_SCREEN.test(page.slug);
-  const Shell = isBare ? React.Fragment : isApp ? DsAppShell : DsShell;
+  const isBare = isBareScreen(page.slug);
+  const hasAda = hasFloatingAda(page.slug);
+  // "Bare" means no nav, footer, promo band or Ada — what his "nochrome": true
+  // emits. It does NOT mean unstyled: every ported rule is scoped under `.ds`,
+  // so a bare page rendered inside a Fragment matched nothing at all and came
+  // out as unstyled markup. His own build still loads site.css on those pages,
+  // so the scope stays and only the chrome goes.
+  const Shell = isBare ? BareScope : isApp ? DsAppShell : DsShell;
   const shellProps = isBare
     ? {}
     : isApp
@@ -135,6 +184,11 @@ export default function DsPreview({ page }) {
         {NEEDS_AUTH.has(page.slug) && <DsAuthStyles />}
         {NEEDS_DOC.has(page.slug) && <DsDocStyles />}
         {NEEDS_BB.has(page.slug) && <DsBeyondBimStyles />}
+        {NEEDS_PLUGIN.has(page.slug) && <DsPluginStyles />}
+        {NEEDS_PLUGIN_HERON.has(page.slug) && <DsPluginHeronStyles />}
+        {NEEDS_SPLASH.has(page.slug) && <DsSplashStyles />}
+        {NEEDS_HUB.has(page.slug) && <DsHubStyles />}
+        {ADMIN_SCREEN.test(page.slug) && <DsAdminStyles />}
         <Shell {...shellProps}>
           <Page />
         </Shell>
@@ -148,7 +202,7 @@ export default function DsPreview({ page }) {
             Ours, not his. His answers from keywords over published copy; this
             one is Claude-backed through /agent/chat, grounded in the
             catalogue, and already works signed out. */}
-        <AiAgent />
+        {hasAda && <AiAgent />}
       </React.Suspense>
     </div>
   );

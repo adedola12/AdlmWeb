@@ -27,7 +27,9 @@ export const authLimiter = rateLimit({
   // design — a button that dies on click is worse than no button — so there
   // was no error to see. On an office IP behind one NAT address that is ten
   // people looking at the page once each.
-  skip: (req) => req.method === "GET" && req.path === "/providers",
+  // Read-only lookups a page makes on load; counting them would spend a
+  // visitor's sign-in attempts before they have typed anything.
+  skip: (req) => req.method === "GET" && (req.path === "/providers" || req.path === "/signup-ticket"),
 });
 
 // Medium: device activation / deactivation

@@ -155,6 +155,7 @@ router.post("/chat", rateLimit, optionalAuth, async (req, res) => {
       accessToken: req.agentAccessToken || "",
       sessionId,
       ip,
+      format: req.body?.format === "markdown" ? "markdown" : "plain",
     });
 
     // Best-effort transcript logging for conversion tuning.
