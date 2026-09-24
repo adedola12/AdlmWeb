@@ -23,7 +23,11 @@ import fetch from "node-fetch";
 import { EmailTemplate } from "../models/EmailTemplate.js";
 import { EmailSend, hashRecipient } from "../models/EmailSend.js";
 import { canEdit } from "./emailCatalogue.js";
-import { isSesSelected, sendViaSes } from "./sesTransport.js";
+import {
+  isSesSelected,
+  sendViaSes,
+  getSesAccount,
+} from "./sesTransport.js";
 import { senderFor, replyToAddress } from "./senders.js";
 
 // strip HTML → text
@@ -124,8 +128,50 @@ const transports = buildTransports();
  * state checkable before it matters, rather than at the moment Resend is down
  * and a customer is waiting. Never throws: it reports.
  */
-export async function verifyMail() {
+// readAccount is injectable so the report's own branches — sandbox, paused,
+// unreachable — can be tested without an AWS round trip. Callers pass nothing.
+export async function verifyMail({ readAccount = getSesAccount } = {}) {
   const rows = [];
+
+  // ── SES, the path production actually sends on ──────────────────────
+  // This report existed before the SES cutover and never learned about it,
+  // so it listed Resend and Gmail and said nothing about the transport
+  // carrying every message. Read literally it was telling an admin that
+  // mail leaves here on Resend, which stopped being true when
+  // MAIL_TRANSPORT=ses was set.
+  //
+  // GetAccount is the honest check: it proves the credentials, the region
+  // and that AWS will accept a message right now. Production access and
+  // the pause flag are reported because sandbox and a pause are the two
+  // states that look fine locally and refuse every customer.
+  const sesLive = isSesSelected();
+  try {
+    const acct = await readAccount();
+    const sending = acct?.SendingEnabled !== false;
+    const prod = acct?.ProductionAccessEnabled === true;
+    const sent = Number(acct?.SendQuota?.SentLast24Hours || 0);
+    const cap = Number(acct?.SendQuota?.Max24HourSend || 0);
+    const enforcement = String(acct?.EnforcementStatus || "").toUpperCase();
+    const notes = [
+      prod ? "production access" : "SANDBOX — only verified addresses receive mail",
+      sending ? "sending enabled" : "SENDING PAUSED by AWS",
+      cap ? `${Math.round(sent)} of ${Math.round(cap)} sent in 24h` : "",
+      enforcement && enforcement !== "HEALTHY" ? `enforcement ${enforcement}` : "",
+    ].filter(Boolean);
+    rows.push({
+      via: "ses",
+      ok: sending,
+      live: sesLive,
+      said: notes.join("; "),
+    });
+  } catch (err) {
+    rows.push({
+      via: "ses",
+      ok: false,
+      live: sesLive,
+      said: String(err?.name || err?.message || err).slice(0, 200),
+    });
+  }
 
   const key = process.env.RESEND_API_KEY;
   if (!key) {
@@ -173,12 +219,42 @@ export async function verifyMail() {
     }
   }
 
+  return summariseMailWays(rows);
+}
+
+/**
+ * The verdict, given the probed rows. Split out from verifyMail so the rule
+ * can be tested on its own: every row but the SES one needs a network call to
+ * produce, and the rule is the part that was wrong.
+ */
+export function summariseMailWays(rows) {
+  // With MAIL_FALLBACK=off a failing SES send throws instead of trying the
+  // rungs below, so anything that is not the selected transport is dead
+  // weight however well it authenticates. Say so on each row rather than
+  // leaving an admin to read "works" next to Resend and draw the obvious
+  // wrong conclusion.
+  const fallbackOff = /^(0|false|no|off)$/i.test(
+    String(process.env.MAIL_FALLBACK || "").trim(),
+  );
+  for (const r of rows) {
+    if (r.via === "ses") continue;
+    r.live = false;
+    if (isSesSelected() && fallbackOff) r.unused = true;
+  }
+
+  const live = rows.find((r) => r.live);
   return {
     // Something can definitely send. A sending-only Resend key is reachable
     // but unproven, so it does not on its own make this true — the point of
     // the flag is to say whether there is a way out that has been checked.
-    ok: rows.some((r) => r.ok && !r.unknown),
+    //
+    // When a transport is selected, only that one counts: a healthy Resend
+    // behind a closed fallback cannot carry anything, and reporting the
+    // system as fine on its strength is how an outage gets missed.
+    ok: live ? Boolean(live.ok) : rows.some((r) => r.ok && !r.unknown),
     reachable: rows.some((r) => r.ok),
+    transport: live ? live.via : "",
+    fallbackOff,
     ways: rows,
   };
 }
