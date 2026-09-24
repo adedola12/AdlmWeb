@@ -8,6 +8,7 @@ import { apiAuthed } from "../http.js";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 import { confirmPriceSanity } from "../lib/priceSanity.js";
 import { readPreloaded } from "../lib/preload.js";
+import { upcomingTrainings } from "../lib/upcomingTrainings.js";
 import { AppTile, Eyebrow } from "../components/brand.jsx";
 import { Reveal, Stagger, StaggerItem } from "../components/effects.jsx";
 import {
@@ -256,6 +257,9 @@ export default function Products() {
             `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
             { credentials: "include" },
           );
+          // Same reason as the trainings read below: without this a 500 became
+          // an empty catalogue, and this page IS the catalogue.
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const json = await res.json();
 
           if (!cancelled) {
@@ -268,7 +272,9 @@ export default function Products() {
           }
         }
       } catch (e) {
-        if (!cancelled) setMsg(e?.message || "Failed to load products");
+        console.error("[products] catalogue failed to load:", e);
+        if (!cancelled)
+          setMsg("The product list could not be loaded just now. Please try again shortly.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -290,12 +296,22 @@ export default function Products() {
         const res = await fetch(`${API_BASE}/ptrainings/events`, {
           credentials: "include",
         });
+        // Without this a 500 fell through to res.json(), which either threw or
+        // handed back an error object; neither is an array, so the section
+        // said "No trainings published yet." — a read that failed, reported as
+        // a shelf that is empty.
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        const list = Array.isArray(json) ? json : [];
-        if (!cancelled) setTrainings(list);
+        if (!Array.isArray(json)) throw new Error("expected a list of events");
+        if (!cancelled) setTrainings(json);
       } catch (e) {
+        // What went wrong belongs in the console, where it can be read. The
+        // page gets a sentence: a visitor on /products was being shown the
+        // exception itself, e.g. `Unexpected token '<', "<!doctype "... is not
+        // valid JSON` when the API answered with an HTML error page.
+        console.error("[products] physical trainings failed to load:", e);
         if (!cancelled)
-          setTrainingsErr(e?.message || "Failed to load trainings");
+          setTrainingsErr("The training dates could not be loaded just now. Please try again shortly.");
       }
     })();
 
@@ -482,9 +498,13 @@ export default function Products() {
   }
 
   /* -------------------- Physical trainings: the preview and the rest -------------------- */
-  // GET /ptrainings/events returns every published event; the section leads
-  // with a preview and "View all" opens the remainder in place.
-  const trainingList = trainings || [];
+  // GET /ptrainings/events returns every published event, oldest first and
+  // never filtered by date, so the raw list opens on sessions that finished
+  // long ago. This section is forward-looking — a price and a View button into
+  // the enrolment flow — so it shows what is still ahead, on the same rule as
+  // the calendar at /learn/calendar. Then the preview, and "View all" opens
+  // the remainder in place.
+  const trainingList = upcomingTrainings(trainings);
   const shownTrainings = showAllTrainings
     ? trainingList
     : trainingList.slice(0, PT_PREVIEW);
@@ -696,9 +716,16 @@ export default function Products() {
           {shownTrainings.map((t) => (
             <TrainingCard key={t._id} t={t} />
           ))}
-          {!trainingList.length ? (
+          {!trainingList.length && !trainingsErr ? (
             <div className="text-sm text-slate-500 dark:text-adlm-dark-muted">
-              No trainings published yet.
+              {/* Three different states, and saying the wrong one is a lie in
+                  every direction: "nothing published" when the last workshop
+                  simply ran, "nothing scheduled" when none was ever put up,
+                  and either of them when the list never arrived — which is
+                  why the failure above takes this line off the page. */}
+              {trainings?.length
+                ? "No sessions are scheduled right now."
+                : "No trainings published yet."}
             </div>
           ) : null}
         </div>
