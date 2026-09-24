@@ -1624,3 +1624,44 @@
   transform:rotate(45deg);background:var(--fb-warn);border-radius:2px}
 .ds .wk-gr .t .wk-crit{display:inline-block;width:7px;height:7px;border-radius:50%;
   background:var(--fb-err);margin-right:6px;vertical-align:middle}
+
+/* S18 G1: the published notice on the customer's home screen.
+   An admin can publish one line to every signed-in customer (see the notice
+   endpoints in server/routes/admin.settings.js). Nothing in his build does
+   that, so his dash sheet has no page banner to borrow — the nearest thing he
+   has is .adm-banner, which is admin-only and would put an adm- class on a
+   customer screen. This is that same shape rebuilt in the dsh namespace.
+   No colour is named here: the level is one of his palette classes
+   (.pal-light / .pal-deep / .pal-orange), which set --pal-fill, --pal-line
+   and --pal-key, so the banner follows light, dark and black the way every
+   other tinted surface of his does. */
+.ds .dsh-notice{display:flex;align-items:flex-start;gap:16px;margin:0 0 20px;padding:14px 18px;
+  border-radius:16px;border:1px solid var(--pal-line,var(--line));
+  background-image:var(--pal-fill,none);background-color:var(--bg-inset)}
+.ds .dsh-notice-body{flex:1;min-width:0}
+.ds .dsh-notice-body strong{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-notice-body p{margin:2px 0 0;font-size:12.5px;font-weight:300;line-height:1.55;
+  color:var(--ink-2);max-width:88ch}
+.ds .dsh-notice-cta{flex:none;align-self:center;font-size:12.5px;font-weight:500;
+  color:var(--pal-key,var(--action));text-decoration:none;white-space:nowrap}
+.ds .dsh-notice-cta:hover{text-decoration:underline}
+/* On a phone the call to action would squeeze the message into two words. */
+@media (max-width:560px){
+.ds .dsh-notice{flex-direction:column;gap:10px;padding:14px 16px}
+.ds .dsh-notice-cta{align-self:flex-start}
+}
+
+/* S18 G1: the waitlist form's status line.
+   His .sform-card is a static form — it posts nowhere, so it has no sending,
+   sent or failed state and no rule for one. Ours replaces his fields in place
+   with this box, which was carrying its whole appearance in a style attribute
+   where no theme, no media query and no reviewer could reach it. Same
+   declarations, now in his tokens beside his .sform-note. */
+.ds .sform-status{margin-top:14px;padding:18px 22px;border-radius:14px;
+  border:1px solid var(--line);background:var(--bg-alt);text-align:center}
+/* The confirmation takes the place of the form rather than sitting under it,
+   so it needs no gap above. */
+.ds .sform-status.done{margin-top:0}
+.ds .sform-status h4{margin:0 0 6px}
+.ds .sform-status p{margin:0}
+.ds .sform-status .ds-btn{margin-top:14px}
