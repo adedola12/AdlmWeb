@@ -238,6 +238,9 @@ export function eventSchema({
   image,
   priceNGN,
   offerUrl,
+  // schema.org/ItemAvailability. Defaults to InStock because most events that
+  // carry a price are open; a caller that knows better says so.
+  availability = "InStock",
 }) {
   const start = isoDate(startDate);
   if (!name || !url || !start) return null;
@@ -294,7 +297,7 @@ export function eventSchema({
             price: String(Number(priceNGN)),
             priceCurrency: "NGN",
             url: offerUrl || url,
-            availability: "https://schema.org/InStock",
+            availability: `https://schema.org/${availability}`,
           },
         }
       : {}),
@@ -330,6 +333,15 @@ export function ptrainingEventSchema(record, { path } = {}) {
     .replace(/\s+/g, " ")
     .trim();
 
+  // The two ways an event stops taking registrations, which the page shows
+  // differently and so the markup must too. `status` is the admin's switch
+  // (open|closed|draft); capacity is the one the enrolment route enforces —
+  // the same default of 14 seats PTrainingDetail and routes/ptrainings.js
+  // both use when the record carries no figure.
+  const open = String(ev.status || "open").toLowerCase() === "open";
+  const cap = Number(ev.capacityApproved) || 14;
+  const soldOut = Number(ev.approvedCount) >= cap;
+
   return eventSchema({
     name: ev.title,
     description,
@@ -343,7 +355,15 @@ export function ptrainingEventSchema(record, { path } = {}) {
     image: /^https?:\/\//i.test(String(ev.flyerUrl || "")) ? ev.flyerUrl : undefined,
     // Only while registration is open. "closed" means checkout will refuse,
     // and an InStock offer on a closed event is a promise the site breaks.
-    priceNGN: String(ev.status || "open").toLowerCase() === "open" ? payable : 0,
+    priceNGN: open ? payable : 0,
+    // The page and the markup have to agree, and the page's own "Enrollment
+    // Closed" is the capacity rule, not the status field: PTrainingDetail
+    // reads approvedCount against capacityApproved, and POST
+    // /ptrainings/:key/enroll refuses with 409 at the same line. A full event
+    // whose status is still "open" was therefore advertising InStock beside
+    // a screen saying enrollment was closed — a contradiction Google counts
+    // against the page, and untrue besides.
+    availability: soldOut ? "SoldOut" : "InStock",
   });
 }
 

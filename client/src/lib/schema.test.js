@@ -286,6 +286,39 @@ describe("Event built from a physical training record", () => {
     expect(block.offers).toBeUndefined();
   });
 
+  // PTrainingDetail decides "Enrollment Closed" from approvedCount against
+  // capacityApproved, and POST /ptrainings/:key/enroll refuses at the same
+  // line. The markup has to say the same thing the page and the till do.
+  it("says a full event is sold out rather than in stock", () => {
+    const block = expectSoundSchema(
+      ptrainingEventSchema({ ...record, capacityApproved: 20, approvedCount: 20 }),
+      "Event",
+    );
+    expect(block.offers.availability).toBe("https://schema.org/SoldOut");
+    // The price stays: it is what the seat cost, and dropping it would lose
+    // the event its rich result as well as the truth.
+    expect(block.offers.price).toBe("250000");
+  });
+
+  it("uses the same default capacity as the page and the enrolment route", () => {
+    // 14 seats when the record carries no figure of its own.
+    const full = ptrainingEventSchema({ ...record, approvedCount: 14 });
+    expect(full.offers.availability).toBe("https://schema.org/SoldOut");
+
+    const room = ptrainingEventSchema({ ...record, approvedCount: 13 });
+    expect(room.offers.availability).toBe("https://schema.org/InStock");
+  });
+
+  it("is in stock while seats remain, and with no count read at all", () => {
+    const some = ptrainingEventSchema({ ...record, capacityApproved: 30, approvedCount: 4 });
+    expect(some.offers.availability).toBe("https://schema.org/InStock");
+
+    // The listing endpoint does not carry approvedCount; an unknown count is
+    // not a full house.
+    const unknown = ptrainingEventSchema(record);
+    expect(unknown.offers.availability).toBe("https://schema.org/InStock");
+  });
+
   it("leaves out a flyer that is not a real URL", () => {
     const block = ptrainingEventSchema({ ...record, flyerUrl: "flyer.jpg" });
     expect(block.image).toBeUndefined();
