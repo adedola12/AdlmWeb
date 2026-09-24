@@ -1156,6 +1156,11 @@ export default function ProjectsGeneric() {
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
+  // `err` is the page's general error line: a failed save, a rate sync that
+  // would not run, a rejected upload all land in it. The grid's empty state
+  // needs the narrower fact — did THIS list fail to load — or an unrelated
+  // failure relabels an empty grid "your projects could not be listed".
+  const [listFailed, setListFailed] = React.useState(false);
   const [storageInfo, setStorageInfo] = React.useState(null);
 
   // explorer selection
@@ -2177,6 +2182,7 @@ export default function ProjectsGeneric() {
   async function load({ keepSelection = true } = {}) {
     setErr("");
     setNotice("");
+    setListFailed(false);
 
     try {
       const [list, storage] = await Promise.all([
@@ -2232,6 +2238,7 @@ export default function ProjectsGeneric() {
       // left a lapsed subscription looking like an empty "0 projects" list.
       closeProject();
       setRows([]);
+      setListFailed(true);
       const msg = e?.message || "Failed to load projects";
       const product = String(TITLES[tool] || "this product").replace(/ projects$/, "");
       setErr(
@@ -5772,7 +5779,7 @@ export default function ProjectsGeneric() {
                 sectionSummary={sectionSummary}
                 statusPastLabel={statusPastLabel}
                 storageInfo={storageInfo}
-                loadFailed={!!err}
+                loadFailed={listFailed}
                 searching={!!projectQ}
                 totalCount={rows.length}
                 sourceName={gallerySource?.name || ""}
