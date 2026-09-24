@@ -1570,6 +1570,17 @@
   color:var(--ink-3);font-size:18px;line-height:1;padding:4px 8px;cursor:pointer}
 .ds .launch-strip .x:hover{color:var(--ink)}
 .ds .nav{top:var(--launch-strip-h,0px)}
+/* The mobile drawer covers the whole viewport, and its 86px of top padding is
+   his: enough to clear a nav sitting at the very top. Ours is not at the very
+   top while the strip is up, so the first item — "Products" — slid under the
+   logo row. The variable is removed when the strip is dismissed and after the
+   launch passes, and the fallback then puts his own figure back. */
+:root.mnav-open .ds .mnav{padding-top:calc(86px + var(--launch-strip-h,0px))}
+/* And his .mnav-in takes its min-height from 100dvh less that same padding
+   (126px = 86 top + 40 bottom), which is what drops "Sign in" and "Book a
+   demo" to the foot of the drawer. Taller padding without this just pushes
+   them past the fold, so the strip has to come off here too. */
+:root.mnav-open .ds .mnav-in{min-height:calc(100dvh - 126px - var(--launch-strip-h,0px))}
 @media (max-width:600px){
 .ds .launch-strip .lab{flex-basis:100%;text-align:center}
 .ds .launch-strip .go{display:none}
@@ -1789,3 +1800,49 @@
    made for the buttons under an assignment card. An action inside the empty
    state has to sit under the sentence rather than off to one side. */
 .ds .as-empty .as-acts{justify-content:center}
+
+/* ---------------------------------------------------------------------------
+   The mobile menu, which opens as a 126px-tall scrolling sliver.
+   ---------------------------------------------------------------------------
+   His `.mnav` drawer is `position:fixed;inset:0` and lives INSIDE `<nav
+   class="nav">`. Once the page is scrolled the nav takes `.stuck`, which adds
+   `backdrop-filter:blur(18px) saturate(160%)` — and a backdrop-filter other
+   than `none` makes an element the containing block for its fixed-position
+   descendants. So `inset:0` stops meaning the viewport and starts meaning the
+   63px header. The drawer's own padding is 86px top + 40px bottom = 126px,
+   which is more than the box it now has to fit in, so it lands 126px tall
+   holding 812px of menu: a sliver with an inner scrollbar, with the page
+   showing through underneath.
+
+   Reproduced in HIS build too (ADLMWebNewUI, /learn at 375px, `.stuck` forced:
+   drawer 126px, content 812px, identical), so this is upstream and belongs on
+   the snag list — but it is ours to survive until he takes it.
+
+   Dropping the blur while the menu is open restores the viewport as the
+   containing block: measured 126px -> 812px, inner scrollbar gone. Nothing is
+   lost visually, because a drawer covering the whole screen is what the blur
+   would have been blurring.
+
+   `transition:none` is not tidiness. `.nav` transitions backdrop-filter over
+   340ms, and a value part-way through that transition is still not `none`, so
+   the containing block survives for longer than the drawer takes to fade in —
+   the sliver would simply be animated.
+
+   The three rules after it are his (site.css 2721-2726), which the port
+   dropped on the floor: he writes them as `.mnav-open .nav`, his script puts
+   `mnav-open` on <html>, and port-ds-css.mjs scoped them to
+   `.ds .mnav-open .nav` — a `.mnav-open` INSIDE `.ds`, which never exists.
+   They are what keeps the header readable and its buttons above the drawer;
+   without the last one a full-height drawer covers the burger and the menu
+   cannot be closed. The porter has no way to know which bare classes live on
+   the document root, so it needs a list; that is filed, not done here.
+*/
+:root.mnav-open .ds .nav{
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  transition:none;
+  background:var(--bg);
+  border-bottom-color:var(--line);
+}
+:root.mnav-open .ds .nav.stuck{background:var(--bg)}
+:root.mnav-open .ds .nav > .nav-in{position:relative;z-index:2}
