@@ -778,7 +778,7 @@ export function RateCell({
                             </>
                           ) : (
                             <div className="whitespace-nowrap text-xs font-semibold text-adlm-blue-700">
-                              {formatRate(c.totalCost)}/{c.unit || "—"}
+                              {formatRate(c.totalCost)}/{c.unit || "–"}
                             </div>
                           )}
                         </div>
@@ -4012,7 +4012,7 @@ export default function ProjectBillTable({
                           <td className="px-2 py-2 text-[10px] text-slate-500">
                             {p?.completedAt
                               ? new Date(p.completedAt).toLocaleDateString()
-                              : "—"}
+                              : "–"}
                           </td>
                           <td className="px-1 py-2 text-center">
                             {onRemovePreliminaryItem ? (
@@ -4062,7 +4062,7 @@ export default function ProjectBillTable({
                             (acc, p) => acc + safeNum(p?.actualAmount),
                             0,
                           );
-                          return totActual > 0 ? money(totActual) : "—";
+                          return totActual > 0 ? money(totActual) : "–";
                         })()}
                       </td>
                       <td colSpan={2}></td>

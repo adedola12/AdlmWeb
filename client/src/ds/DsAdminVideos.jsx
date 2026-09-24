@@ -165,7 +165,7 @@ export default function DsAdminVideos() {
       h: "Recipients",
       w: "110px",
       num: true,
-      cell: (v) => (v.notifiedAt ? num(v.stats.sent) : <AdmDim>—</AdmDim>),
+      cell: (v) => (v.notifiedAt ? num(v.stats.sent) : <AdmDim>–</AdmDim>),
     },
     {
       h: "Failed",
@@ -173,7 +173,7 @@ export default function DsAdminVideos() {
       num: true,
       cell: (v) =>
         !v.notifiedAt ? (
-          <AdmDim>—</AdmDim>
+          <AdmDim>–</AdmDim>
         ) : v.stats.failed ? (
           <AdmChip tone="bad">{num(v.stats.failed)}</AdmChip>
         ) : (
@@ -187,7 +187,7 @@ export default function DsAdminVideos() {
       w: "160px",
       cell: (v) =>
         !v.notifiedAt ? (
-          <AdmDim>—</AdmDim>
+          <AdmDim>–</AdmDim>
         ) : (
           <AdmDim>
             {num(v.stats.skippedOptedOut)} opted out · {num(v.stats.skippedUnverified)} unconfirmed

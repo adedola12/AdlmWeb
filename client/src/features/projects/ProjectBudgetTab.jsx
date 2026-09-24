@@ -454,7 +454,7 @@ export default function ProjectBudgetTab({
       }
       const e = byKind.get(label);
       e.count += 1;
-      const unit = (l?.unit || "").toString().trim() || "—";
+      const unit = (l?.unit || "").toString().trim() || "–";
       e.qtyByUnit.set(unit, (e.qtyByUnit.get(unit) || 0) + safeNum(l.qty));
       if (lineDone(l)) e.done += 1;
       if (safeNum(l.rate) > 0) e.priced += 1;
@@ -763,7 +763,7 @@ export default function ProjectBudgetTab({
               value={globalOH}
               disabled={!canEdit || saving}
               onChange={(e) => setGlobalOH(e.target.value)}
-              placeholder="—"
+              placeholder="–"
               className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-right text-slate-900 disabled:opacity-50 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
             />
             %
@@ -777,7 +777,7 @@ export default function ProjectBudgetTab({
               value={globalPR}
               disabled={!canEdit || saving}
               onChange={(e) => setGlobalPR(e.target.value)}
-              placeholder="—"
+              placeholder="–"
               className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-right text-slate-900 disabled:opacity-50 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
             />
             %
