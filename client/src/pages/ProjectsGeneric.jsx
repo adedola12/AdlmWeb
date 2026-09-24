@@ -518,6 +518,16 @@ function categoryMapsEqual(a, b) {
   return true;
 }
 
+// Ticking a PC sum or a variation "done" stamps the date; unticking clears
+// it. Mirrors what handleUpdatePreliminaryItem does inline for preliminaries.
+function stampCompletion(row, patch) {
+  if (patch?.completed === true && !row.completedAt) {
+    return { ...row, completedAt: new Date().toISOString() };
+  }
+  if (patch?.completed === false) return { ...row, completedAt: null };
+  return row;
+}
+
 function provisionalSumsEqual(a, b) {
   const A = Array.isArray(a) ? a : [];
   const B = Array.isArray(b) ? b : [];
@@ -525,6 +535,7 @@ function provisionalSumsEqual(a, b) {
   for (let i = 0; i < A.length; i++) {
     if (String(A[i]?.description || "") !== String(B[i]?.description || "")) return false;
     if (Number(A[i]?.amount || 0) !== Number(B[i]?.amount || 0)) return false;
+    if (Boolean(A[i]?.completed) !== Boolean(B[i]?.completed)) return false;
   }
   return true;
 }
@@ -557,6 +568,7 @@ function variationsEqual(a, b) {
     if (Number(X.rate || 0) !== Number(Y.rate || 0)) return false;
     if (String(X.reference || "") !== String(Y.reference || "")) return false;
     if (String(X.issuedAt || "") !== String(Y.issuedAt || "")) return false;
+    if (Boolean(X.completed) !== Boolean(Y.completed)) return false;
   }
   return true;
 }
@@ -1430,6 +1442,11 @@ export default function ProjectsGeneric() {
       ? project.provisionalSums.map((s) => ({
           description: String(s?.description || ""),
           amount: Number(s?.amount) || 0,
+          // The QS's "done" tick — the Done column edits it, the Overview's
+          // done figures read it, and the save below sends it back. Dropping
+          // it here cleared it server-side on the next save.
+          completed: Boolean(s?.completed),
+          completedAt: s?.completedAt || null,
         }))
       : [];
     setProvisionalSums(sums);
@@ -1444,6 +1461,8 @@ export default function ProjectsGeneric() {
           issuedAt: v?.issuedAt
             ? new Date(v.issuedAt).toISOString().slice(0, 10)
             : "",
+          completed: Boolean(v?.completed),
+          completedAt: v?.completedAt || null,
         }))
       : [];
     setVariations(vars);
@@ -2494,14 +2513,14 @@ export default function ProjectsGeneric() {
   function handleAddProvisionalSum() {
     setProvisionalSums((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      { description: "", amount: 0 },
+      { description: "", amount: 0, completed: false, completedAt: null },
     ]);
   }
   function handleUpdateProvisionalSum(idx, patch) {
     setProvisionalSums((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
       if (idx < 0 || idx >= next.length) return prev;
-      next[idx] = { ...next[idx], ...patch };
+      next[idx] = stampCompletion({ ...next[idx], ...patch }, patch);
       return next;
     });
   }
@@ -2531,6 +2550,8 @@ export default function ProjectsGeneric() {
         rate: 0,
         reference: "",
         issuedAt: "",
+        completed: false,
+        completedAt: null,
       },
     ]);
   }
@@ -2538,7 +2559,7 @@ export default function ProjectsGeneric() {
     setVariations((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
       if (idx < 0 || idx >= next.length) return prev;
-      next[idx] = { ...next[idx], ...patch };
+      next[idx] = stampCompletion({ ...next[idx], ...patch }, patch);
       return next;
     });
   }
@@ -2771,6 +2792,8 @@ export default function ProjectsGeneric() {
           .map((s) => ({
             description: String(s?.description || "").trim(),
             amount: Number(s?.amount) || 0,
+            completed: Boolean(s?.completed),
+            completedAt: s?.completedAt || null,
           }))
           .filter((s) => s.description || s.amount > 0),
         variations: variations
@@ -2781,6 +2804,8 @@ export default function ProjectsGeneric() {
             rate: Number(v?.rate) || 0,
             reference: String(v?.reference || "").trim(),
             issuedAt: v?.issuedAt || null,
+            completed: Boolean(v?.completed),
+            completedAt: v?.completedAt || null,
           }))
           .filter((v) => v.description || v.qty > 0 || v.rate > 0),
         preliminaryPercent: Number(contract?.preliminaryPercent) || 0,

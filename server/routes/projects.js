@@ -1037,23 +1037,75 @@ function sanitizeItems(items, productKey = "") {
   return safe;
 }
 
-function sanitizeProvisionalSums(sums) {
+// ── Absent means unchanged ─────────────────────────────────────────────
+// Provisional sums and variations carry no id, so a save can only be matched
+// to what is stored by description and position. This matcher pairs each
+// incoming row with the stored row it came from: by description first (a
+// queue, so duplicate descriptions pair oldest-first), then by slot for a row
+// whose description was edited. A row it cannot pair returns null and is
+// treated as new.
+//
+// It exists so a writer that does not model a field cannot erase it. The BoQ
+// editor sends PC sums as { description, amount } and variations as
+// { description, qty, unit, rate, reference, issuedAt } — the QS's "done"
+// tick is in neither shape, so rebuilding the row from the payload alone
+// silently cleared every tick on every save. Only an explicit flag in the
+// payload moves it now.
+function storedRowMatcher(previous) {
+  const rows = Array.isArray(previous) ? previous : [];
+  const byDescription = new Map();
+  rows.forEach((row, index) => {
+    const key = String(row?.description || "").trim().toLowerCase();
+    const queue = byDescription.get(key);
+    if (queue) queue.push(index);
+    else byDescription.set(key, [index]);
+  });
+  const claimed = new Set();
+  return function match(description, index) {
+    const queue = byDescription.get(String(description || "").trim().toLowerCase());
+    while (queue && queue.length) {
+      const i = queue.shift();
+      if (claimed.has(i)) continue;
+      claimed.add(i);
+      return rows[i];
+    }
+    if (rows[index] && !claimed.has(index)) {
+      claimed.add(index);
+      return rows[index];
+    }
+    return null;
+  };
+}
+
+// Resolve a row's completion tick against the stored row it came from.
+// `completed` missing from the payload keeps what is stored; an explicit
+// true/false sets it. `completedAt` follows: kept when the tick survives a
+// save that did not carry the date, stamped when the tick is new.
+function resolveCompletion(row, prior) {
+  const completed =
+    row?.completed === undefined ? Boolean(prior?.completed) : Boolean(row.completed);
+  if (!completed) return { completed: false, completedAt: null };
+  const src = row?.completedAt === undefined ? prior?.completedAt : row.completedAt;
+  if (src) {
+    const d = new Date(src);
+    if (!Number.isNaN(d.getTime())) return { completed, completedAt: d };
+  }
+  return { completed, completedAt: new Date() };
+}
+
+function sanitizeProvisionalSums(sums, previous = []) {
   if (!Array.isArray(sums)) return [];
+  const matchStored = storedRowMatcher(previous);
   const out = [];
   for (let i = 0; i < sums.length && out.length < 200; i += 1) {
     const s = sums[i] || {};
     const description = String(s.description || "").trim().slice(0, 500);
     const amount = Number.isFinite(Number(s.amount)) ? Number(s.amount) : 0;
     if (!description && amount === 0) continue;
-    const completed = Boolean(s.completed);
-    let completedAt = null;
-    if (completed) {
-      if (s.completedAt) {
-        const d = new Date(s.completedAt);
-        if (!Number.isNaN(d.getTime())) completedAt = d;
-      }
-      if (!completedAt) completedAt = new Date();
-    }
+    const { completed, completedAt } = resolveCompletion(
+      s,
+      matchStored(description, out.length),
+    );
     out.push({ description, amount, completed, completedAt });
   }
   return out;
@@ -1205,8 +1257,9 @@ function sanitizePreliminaryItems(items) {
   return out;
 }
 
-function sanitizeVariations(variations) {
+function sanitizeVariations(variations, previous = []) {
   if (!Array.isArray(variations)) return [];
+  const matchStored = storedRowMatcher(previous);
   const out = [];
   for (let i = 0; i < variations.length && out.length < 500; i += 1) {
     const v = variations[i] || {};
@@ -1215,23 +1268,19 @@ function sanitizeVariations(variations) {
     const unit = String(v.unit || "").trim().slice(0, 40);
     const rate = Number.isFinite(Number(v.rate)) ? Number(v.rate) : 0;
     const reference = String(v.reference || "").trim().slice(0, 120);
+    if (!description && qty === 0 && rate === 0) continue;
     let issuedAt = null;
     if (v.issuedAt) {
       const d = new Date(v.issuedAt);
       if (!Number.isNaN(d.getTime())) issuedAt = d;
     }
+    const prior = matchStored(description, out.length);
+    // Provenance is server-set (a line added after lock) and the editor never
+    // sends it back — absent keeps what is stored, same rule as the tick.
+    const sourceSrc = v.source === undefined ? prior?.source : v.source;
     const source =
-      v.source === "post-lock-new-item" ? "post-lock-new-item" : "manual";
-    const completed = Boolean(v.completed);
-    let completedAt = null;
-    if (completed) {
-      if (v.completedAt) {
-        const d = new Date(v.completedAt);
-        if (!Number.isNaN(d.getTime())) completedAt = d;
-      }
-      if (!completedAt) completedAt = new Date();
-    }
-    if (!description && qty === 0 && rate === 0) continue;
+      sourceSrc === "post-lock-new-item" ? "post-lock-new-item" : "manual";
+    const { completed, completedAt } = resolveCompletion(v, prior);
     out.push({
       description, qty, unit, rate, reference, issuedAt, source,
       completed, completedAt,
@@ -3256,7 +3305,10 @@ async function updateProject(req, res) {
     }
 
     if (Array.isArray(provisionalSums)) {
-      project.provisionalSums = sanitizeProvisionalSums(provisionalSums);
+      project.provisionalSums = sanitizeProvisionalSums(
+        provisionalSums,
+        project.provisionalSums,
+      );
     }
 
     // User-defined bill categories — additive to the canonical per-product
@@ -3312,7 +3364,7 @@ async function updateProject(req, res) {
     }
 
     if (Array.isArray(variations)) {
-      project.variations = sanitizeVariations(variations);
+      project.variations = sanitizeVariations(variations, project.variations);
     }
 
     if (Array.isArray(preliminaryItems)) {
