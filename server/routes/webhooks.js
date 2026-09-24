@@ -1,5 +1,6 @@
 // server/routes/webhooks.js
 import express from "express";
+import { paystackKeys } from "../util/paystackKeys.js";
 import crypto from "crypto";
 import { Purchase } from "../models/Purchase.js";
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
@@ -12,13 +13,13 @@ const router = express.Router();
 // check below throws on every event.
 router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
   try {
-    const secret = process.env.PAYSTACK_SECRET_KEY;
-    const signature = req.headers["x-paystack-signature"];
-    const computed = crypto
-      .createHmac("sha512", secret)
-      .update(req.body)
-      .digest("hex");
-    if (signature !== computed) return res.status(401).end();
+    // Signed by either of our Paystack accounts (R22): payments started
+    // before a switch of account are still reported after it.
+    const signature = String(req.headers["x-paystack-signature"] || "");
+    const match = paystackKeys().find(
+      ({ secret }) => crypto.createHmac("sha512", secret).update(req.body).digest("hex") === signature,
+    );
+    if (!match) return res.status(401).end();
 
     const event = JSON.parse(req.body.toString("utf8") || "{}");
     if (event.event !== "charge.success") return res.json({ ok: true });
@@ -36,7 +37,7 @@ router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
     // events for already-paid purchases — the upsert is idempotent, and
     // renewal charges refresh the stored expiry metadata this way).
     // Best-effort: a failure must never block crediting the payment.
-    await saveCardAuthorization(existing.userId, event.data).catch((err) =>
+    await saveCardAuthorization(existing.userId, event.data, match.account).catch((err) =>
       console.error("[webhook/paystack] save card failed:", err?.message || err),
     );
 

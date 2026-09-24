@@ -10,6 +10,7 @@ import { TakeoffProject } from "../models/TakeoffProject.js";
 import { computePmDashboard, computeProjectScope } from "./pmCompute.js";
 import { productLabel } from "./reportEngine.js";
 import { similarityScore } from "../util/fuzzyMatch.js";
+import { canonicalKind, kindLabel } from "../util/resourceKind.js";
 
 function oid(id) {
   return new mongoose.Types.ObjectId(String(id));
@@ -305,14 +306,12 @@ function billRows(project) {
 }
 
 // Material | Labour | Plant | Consumable | Equipment. Blank/unknown → "Other".
+// The vocabulary is util/resourceKind.js; only the "Other" fallback is local,
+// because a sales answer would rather say "Other" than repeat a word the QS
+// typed into a kind column.
 function kindOf(row) {
-  const k = String(row?.componentKind || "").trim().toLowerCase();
-  if (k === "labour" || k === "labor") return "Labour";
-  if (k === "material") return "Material";
-  if (k === "plant") return "Plant";
-  if (k === "consumable") return "Consumable";
-  if (k === "equipment") return "Equipment";
-  return "Other";
+  const k = canonicalKind(row?.componentKind);
+  return k ? kindLabel(k) : "Other";
 }
 
 function resourceName(row) {

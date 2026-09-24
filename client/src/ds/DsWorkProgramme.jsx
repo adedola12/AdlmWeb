@@ -52,6 +52,7 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkDropdown from "./WkDropdown.jsx";
 import WkPrefs from "./WkPrefs.jsx";
+import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -356,7 +357,7 @@ export default function DsWorkProgramme() {
     apiAuthed("/me/projects-rollup", { token: accessToken })
       .then((d) => {
         if (!alive) return;
-        const all = Array.isArray(d?.projects) ? d.projects : d?.items || [];
+        const all = normaliseRollup(Array.isArray(d?.projects) ? d.projects : d?.items || []);
         // The shelf is "has work that can be sequenced", not "is a bill".
         //
         // That distinction is the whole reason HERON and CIVIQ were missing:
@@ -864,22 +865,22 @@ export default function DsWorkProgramme() {
                 {weeks}
                 <span className="u">weeks</span>
               </b>
-              <span className="ds-sub">{plan.end} working days, six-day week</span>
+              <p className="ds-sub">{plan.end} working days, six-day week</p>
             </div>
             <div className="dsh-stat">
               <span className="k">Start on site</span>
               <b>{fmt(start)}</b>
-              <span className="ds-sub">{start.getFullYear()}</span>
+              <p className="ds-sub">{start.getFullYear()}</p>
             </div>
             <div className="dsh-stat">
               <span className="k">Practical completion</span>
               <b>{fmt(finish)}</b>
-              <span className="ds-sub">{finish.getFullYear()}</span>
+              <p className="ds-sub">{finish.getFullYear()}</p>
             </div>
             <div className="dsh-stat">
               <span className="k">Peak gangs on site</span>
               <b>{plan.peak}</b>
-              <span className="ds-sub">across every trade running at once</span>
+              <p className="ds-sub">across every trade running at once</p>
             </div>
           </div>
 
@@ -983,7 +984,7 @@ export default function DsWorkProgramme() {
                 r.items.map((g, i) => (
                   <div className="wk-qr" key={`${r.trade}-${i}`}>
                     <span className="d">
-                      <Link to={`/work/project/${current.productKey}/${current.id}`}>
+                      <Link to={projectWorkspaceHref(current)}>
                         {g.name}
                       </Link>
                       <em>

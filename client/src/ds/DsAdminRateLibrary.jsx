@@ -35,6 +35,11 @@ const ZONES = [
 ];
 const zoneName = (k) => ZONES.find((z) => z.key === k)?.name || "South West";
 
+// An empty value is an en dash. Never an em dash, never "N/A", never a zero
+// standing in for a figure nobody has.
+const DASH = "–";
+const num0 = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
 const money = (n) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 })
     .format(Number(n) || 0);
@@ -373,12 +378,17 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
 
       {loading ? null : tab === "rates" ? (
         rateRows.length ? (
-          <div className="wk-tbl wk-tbl-rates" role="table">
+          /* Same seven columns as the customer's RateGen library, so an admin
+             and the estimator read the same shape. The figures are the ones
+             the route sends; nothing is recomputed here. */
+          <div className="wk-tbl wk-tbl-rates rg" role="table">
             <div className="wk-hd" role="row">
               <span>Item of work</span>
               <span>Unit</span>
-              <span>Rate</span>
-              <span>Last touched</span>
+              <span>Net cost</span>
+              <span>Overhead</span>
+              <span>Profit</span>
+              <span>Total</span>
               <span />
             </div>
             {rateRows.map((r) => (
@@ -386,7 +396,7 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
                 <a
                   className="wk-row"
                   role="row"
-                  href={`/admin/catalogue/rates/${r.id}`}
+                  href={`#rate-${r.id}`}
                   onClick={(e) => open(e, r)}
                   aria-expanded={openId === r.id}
                 >
@@ -395,7 +405,18 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
                       <Mark text={r.description} term={term} />
                     </b>
                     <span>
-                      {[r.code, r.section].filter(Boolean).join(" · ")}
+                      {/* Last touched and the line count moved here when the
+                          table took his seven money columns. Losing them
+                          altogether would cost the screen the two facts an
+                          admin actually checks. */}
+                      {[
+                        r.code,
+                        r.section,
+                        r.lines ? `${r.lines} line${r.lines === 1 ? "" : "s"}` : "no build-up",
+                        when(r.updatedAt),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                       {r.recipe ? (
                         <>
                           {" · "}
@@ -404,16 +425,21 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
                       ) : null}
                     </span>
                   </span>
-                  <span className="wk-u">{r.unit || "—"}</span>
-                  <span className="wk-r">
-                    {/* A recipe is not free, it is unpriced. A zero here would
-                        be a lie the eye reads before the caveat. */}
-                    {r.recipe ? "—" : money(r.total)}
-                    <i>{r.recipe ? "not priced" : `per ${r.unit || "unit"}`}</i>
+                  <span className="wk-u">{r.unit || DASH}</span>
+                  {/* A recipe is not free, it is unpriced. A zero in any of
+                      these would be a lie the eye reads before the caveat. */}
+                  <span className="wk-n">{r.recipe ? DASH : money(r.net)}</span>
+                  <span className="wk-n m">
+                    {r.recipe ? DASH : money((num0(r.net) * num0(r.overheadPercent)) / 100)}
+                    <i>{r.recipe ? "not priced" : `${num0(r.overheadPercent)}%`}</i>
                   </span>
-                  <span className="wk-w">
-                    {when(r.updatedAt) || "—"}
-                    <i>{r.lines ? `${r.lines} line${r.lines === 1 ? "" : "s"}` : "no build-up"}</i>
+                  <span className="wk-n m">
+                    {r.recipe ? DASH : money((num0(r.net) * num0(r.profitPercent)) / 100)}
+                    <i>{r.recipe ? "not priced" : `${num0(r.profitPercent)}%`}</i>
+                  </span>
+                  <span className="wk-r">
+                    {r.recipe ? DASH : money(r.total)}
+                    <i>{r.recipe ? "not priced" : `per ${r.unit || "unit"}`}</i>
                   </span>
                   <span className="wk-go">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -444,7 +470,7 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
                                 {l.quantity} {l.unit}
                               </span>
                               <span>{l.waste ? `${l.waste}% waste` : ""}</span>
-                              <span>{l.unitPrice == null ? "—" : money(l.unitPrice)}</span>
+                              <span>{l.unitPrice == null ? DASH : money(l.unitPrice)}</span>
                             </div>
                           ))}
                         </div>
@@ -490,14 +516,14 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
                 <b>
                   <Mark text={m.name} term={term} />
                 </b>
-                <span>{m.category || "—"}</span>
+                <span>{m.category || DASH}</span>
               </span>
-              <span className="wk-u">{m.unit || "—"}</span>
+              <span className="wk-u">{m.unit || DASH}</span>
               <span className="wk-r">
                 {money(m.price)}
                 <i>per {m.unit || "unit"}</i>
               </span>
-              <span className="wk-w">{m.category || "—"}</span>
+              <span className="wk-w">{m.category || DASH}</span>
             </div>
           ))}
         </div>

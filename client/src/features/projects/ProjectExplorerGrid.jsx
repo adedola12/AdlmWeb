@@ -1,3 +1,22 @@
+// The project grid on /projects/:tool, in his project cards.
+//
+// His markup: .wk-bar with .wk-count and .wk-acts for the toolbar, .wk-projs /
+// .wk-proj with .t (h3 + .stage), .c, .f for each card, and .wk-empty when
+// there is nothing to show. The same card as /work/projects (DsWorkProjects),
+// so the two views of the same projects look like one product.
+//
+// Every behaviour of the old grid is kept: select, select all, clear, merge,
+// delete one, delete selected, delete all, open on click or Enter/Space.
+// Three things his card does not have are fitted into it rather than invented:
+//
+//   * the progress bar becomes the "% complete" figure in .f
+//   * select and delete become a .wk-acts row at the foot of the card
+//   * the merged / part-of-a-merge / shared badges become the .stage chip,
+//     with anything the chip cannot hold carried in the .c line
+//
+// The card is a div with role="button", not a <button>, because it contains
+// buttons of its own.
+
 import React from "react";
 import { FaFolder, FaObjectGroup, FaTrash } from "../../components/icons.jsx";
 import ProjectSectionSummary from "./ProjectSectionSummary.jsx";
@@ -12,9 +31,23 @@ function safeNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
+
+const updatedAt = (d) =>
+  d
+    ? new Date(d).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "–";
+
+// The icon wrapper sizes by its `size` prop (default 22), not by font-size.
+const iconStyle = { verticalAlign: -3, marginRight: 8, color: "var(--action)" };
+
 export default function ProjectExplorerGrid({
   bulkBusy = false,
-  checkboxCls = "",
   onClearSelection,
   onDeleteAll,
   onDeleteProject,
@@ -29,16 +62,22 @@ export default function ProjectExplorerGrid({
   selectedMap = {},
   statusPastLabel = "Completed to date",
   storageInfo = null,
+  // Item 13: an empty grid is three different situations and they need three
+  // different sentences. "No projects found" was the filter sentence, and it
+  // was what a brand-new account was shown on its first morning.
+  loadFailed = false,
+  searching = false,
+  totalCount = 0,
+  sourceName = "",
+  hostName = "",
+  isMaterials = false,
 }) {
   return (
-    <div className="mt-5">
-      <ProjectSectionSummary
-        statusPastLabel={statusPastLabel}
-        summary={sectionSummary}
-      />
+    <div style={{ marginTop: 20 }}>
+      <ProjectSectionSummary statusPastLabel={statusPastLabel} summary={sectionSummary} />
 
       {storageInfo && !storageInfo.isMaterials ? (
-        <div className="mt-4">
+        <div style={{ margin: "0 0 20px" }}>
           <StorageBar
             used={storageInfo.used}
             limit={storageInfo.limit}
@@ -47,41 +86,34 @@ export default function ProjectExplorerGrid({
         </div>
       ) : null}
 
-      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="text-sm text-slate-600 dark:text-adlm-dark-muted">
-          {rowsShown.length} project(s)
-          {selectedIdsCount ? (
-            <>
-              {" "}| <b>{selectedIdsCount}</b> selected
-            </>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
+      <div className="wk-bar">
+        <p className="wk-count" style={{ margin: 0, marginRight: "auto" }}>
+          {plural(rowsShown.length, "project")}
+          {selectedIdsCount ? ` · ${selectedIdsCount} selected` : ""}
+        </p>
+        <div className="wk-acts" style={{ flexWrap: "wrap" }}>
           <button
             type="button"
-            className="btn btn-sm"
+            className="ds-btn ds-btn-sm btn-o"
             onClick={onSelectAllShown}
             disabled={!rowsShown.length || bulkBusy}
             title="Select all projects in this view"
           >
             Select all
           </button>
-
           <button
             type="button"
-            className="btn btn-sm"
+            className="ds-btn ds-btn-sm btn-o"
             onClick={onClearSelection}
             disabled={!selectedIdsCount || bulkBusy}
             title="Clear selection"
           >
             Clear
           </button>
-
           {onMergeSelected ? (
             <button
               type="button"
-              className="btn btn-sm"
+              className="ds-btn ds-btn-sm btn-o"
               onClick={onMergeSelected}
               disabled={selectedIdsCount < 2 || bulkBusy}
               title={
@@ -90,182 +122,191 @@ export default function ProjectExplorerGrid({
                   : `Merge ${selectedIdsCount} projects into a single project`
               }
             >
-              <span className="inline-flex items-center gap-2 text-adlm-blue-700 dark:text-adlm-blue-300">
-                <FaObjectGroup className="text-[13px]" /> Merge selected
-              </span>
+              <FaObjectGroup size={13} /> Merge selected
             </button>
           ) : null}
-
           <button
             type="button"
-            className="btn btn-sm"
+            className="ds-btn ds-btn-sm btn-o"
             onClick={onDeleteSelected}
             disabled={!selectedIdsCount || bulkBusy}
             title="Delete selected"
           >
-            <span className="inline-flex items-center gap-2 text-orange-700">
-              <FaTrash className="text-[13px]" /> Delete selected
-            </span>
+            <FaTrash size={13} /> Delete selected
           </button>
-
           <button
             type="button"
-            className="btn btn-sm"
+            className="ds-btn ds-btn-sm btn-o"
             onClick={onDeleteAll}
             disabled={!rowsShown.length || bulkBusy}
             title="Delete all projects"
           >
-            <span className="inline-flex items-center gap-2 text-orange-700">
-              <FaTrash className="text-[13px]" /> Delete all
-            </span>
+            <FaTrash size={13} /> Delete all
           </button>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {rowsShown.map((row, index) => {
-          const id = rowId(row);
-          const checked = !!selectedMap?.[id];
-          const updated = row?.updatedAt
-            ? new Date(row.updatedAt).toLocaleString()
-            : "-";
-          const key = id || `${row?.name || "row"}-${index}`;
-
-          const itemCount = safeNum(row?.itemCount);
-          const markedCount = safeNum(row?.markedCount);
-          const pct = itemCount
-            ? Math.min(100, Math.round((markedCount / itemCount) * 100))
-            : 0;
-
-          return (
-            <div
-              key={key}
-              role="button"
-              tabIndex={0}
-              onClick={() => id && onOpenProject?.(id)}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && id) {
-                  onOpenProject?.(id);
-                }
-              }}
-              className={[
-                "group relative spotlight cursor-pointer rounded-2xl border bg-white p-4 shadow-depth transition lift dark:bg-adlm-dark-panel",
-                checked
-                  ? "border-adlm-blue-700 ring-2 ring-adlm-blue-700"
-                  : "border-slate-200 dark:border-adlm-dark-border hover:border-adlm-blue-400",
-                !id ? "cursor-not-allowed opacity-60" : "",
-              ].join(" ")}
-            >
-              {/* corner accent glow */}
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -top-12 -right-12 w-32 h-32 rounded-full bg-adlm-blue-600/10 blur-3xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-              />
-
-              <button
-                type="button"
-                className="absolute left-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-md bg-white/90 dark:bg-adlm-dark-raised shadow-sm transition hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!id) return;
-                  onToggleSelect?.(id);
-                }}
-                title={checked ? "Unselect" : "Select"}
-                disabled={!id || bulkBusy}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  readOnly
-                  className={checkboxCls}
-                />
-              </button>
-
-              {/* Only the owner can delete; shared projects hide this. */}
-              {!row?.shared ? (
-                <button
-                  type="button"
-                  className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-orange-500/10"
-                  title="Delete project"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteProject?.(id, row?.name);
-                  }}
-                  disabled={!id || bulkBusy}
-                >
-                  <FaTrash className="text-[13px]" />
-                </button>
-              ) : null}
-
-              <div className="relative mt-2 flex items-center justify-center">
-                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue transition-transform duration-300 group-hover:scale-105">
-                  {row?.mergeContainer ? (
-                    <FaObjectGroup className="text-2xl" />
-                  ) : (
-                    <FaFolder className="text-2xl" />
-                  )}
-                </div>
-              </div>
-
-              <div className="relative mt-3 text-center">
-                <div className="line-clamp-2 text-sm font-semibold text-slate-900 dark:text-white">
-                  {row?.name || "Untitled"}
-                </div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
-                  {row?.mergeContainer
-                    ? `${safeNum(row?.mergedPartCount)} discipline${
-                        safeNum(row?.mergedPartCount) === 1 ? "" : "s"
-                      }`
-                    : `${itemCount} item${itemCount === 1 ? "" : "s"}${
-                        markedCount ? ` · ${markedCount} done` : ""
-                      }`}
-                </div>
-                {row?.mergeContainer ? (
-                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-adlm-blue-50 px-2 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-600/15 dark:text-adlm-blue-300">
-                    <FaObjectGroup className="text-[9px]" /> Merged project
-                  </div>
-                ) : row?.mergedInto ? (
-                  <div
-                    className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-white/10 dark:text-adlm-dark-muted"
-                    title="This project is part of a merged project. It still opens on its own in the plugin."
-                  >
-                    Part of a merge
-                  </div>
-                ) : null}
-                {row?.shared ? (
-                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-600/15 dark:text-adlm-blue-300">
-                    Shared · {row.accessLevel === "full" ? "Full" : "View"}
-                  </div>
-                ) : null}
-              </div>
-
-              {itemCount ? (
-                <div className="relative mt-3">
-                  <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-adlm-orange to-amber-400 transition-[width] duration-700"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <div className="mt-1 text-center text-[10px] font-medium text-slate-400 dark:text-adlm-dark-dim">
-                    {pct}% complete
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="relative mt-2 text-center text-[11px] text-slate-400 dark:text-adlm-dark-dim">
-                {updated}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       {rowsShown.length === 0 ? (
-        <div className="mt-4 text-sm text-slate-600 dark:text-adlm-dark-muted">
-          No projects found.
+        <div className="wk-empty">
+          {loadFailed ? (
+            <>
+              <b>Your projects could not be listed</b>
+              <p>
+                The reason is in the message above this list. Nothing has been deleted: this is
+                the list failing to load, not the projects going missing.
+              </p>
+            </>
+          ) : searching && totalCount > 0 ? (
+            <>
+              <b>No project matches</b>
+              <p>
+                Nothing here matches what you typed. Clear the search box to see all{" "}
+                {plural(totalCount, "project")} again.
+              </p>
+            </>
+          ) : (
+            <>
+              <b>No projects yet</b>
+              <p>
+                {isMaterials
+                  ? `A material schedule is generated from a priced bill, so it is ${sourceName || "the takeoff"} that makes one. Price a bill in ${sourceName || "the takeoff"} and save it to ADLM Cloud; the schedule appears here beside it.`
+                  : hostName && sourceName
+                    ? `Projects start in ${hostName}. Measure in ${sourceName}, save to ADLM Cloud, and the project appears here to price, value and programme.`
+                    : "Projects start in the plugins. Measure there, save to ADLM Cloud, and the project appears here to price, value and programme."}
+              </p>
+            </>
+          )}
         </div>
-      ) : null}
+      ) : (
+        <div className="wk-projs">
+          {rowsShown.map((row, index) => {
+            const id = rowId(row);
+            const checked = !!selectedMap?.[id];
+            const key = id || `${row?.name || "row"}-${index}`;
+
+            const itemCount = safeNum(row?.itemCount);
+            const markedCount = safeNum(row?.markedCount);
+            const parts = safeNum(row?.mergedPartCount);
+            const pct = itemCount ? Math.min(100, Math.round((markedCount / itemCount) * 100)) : 0;
+            const sharedText = row?.shared
+              ? `Shared · ${row.accessLevel === "full" ? "Full" : "View"}`
+              : "";
+
+            // One chip, most specific first; the rest goes in the sub-line.
+            let stage;
+            let amber = false;
+            if (row?.mergeContainer) stage = "Merged project";
+            else if (row?.mergedInto) stage = "Part of a merge";
+            else if (row?.shared) {
+              stage = sharedText;
+              amber = true;
+            } else if (!itemCount) stage = "Empty";
+            else if (pct >= 100) stage = "Complete";
+            else {
+              stage = `${pct}% complete`;
+              amber = pct > 0;
+            }
+
+            const sub = [
+              row?.mergeContainer
+                ? plural(parts, "discipline")
+                : `${plural(itemCount, "item")}${markedCount ? ` · ${markedCount.toLocaleString()} done` : ""}`,
+              row?.shared && stage !== sharedText ? sharedText : "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+
+            return (
+              <div
+                key={key}
+                role="button"
+                tabIndex={0}
+                className="wk-proj"
+                aria-disabled={!id || undefined}
+                title={
+                  row?.mergedInto && !row?.mergeContainer
+                    ? "This project is part of a merged project. It still opens on its own in the plugin."
+                    : undefined
+                }
+                onClick={() => id && onOpenProject?.(id)}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if ((e.key === "Enter" || e.key === " ") && id) {
+                    e.preventDefault();
+                    onOpenProject?.(id);
+                  }
+                }}
+                style={{
+                  cursor: id ? "pointer" : "not-allowed",
+                  opacity: id ? 1 : 0.6,
+                  ...(checked
+                    ? { borderColor: "var(--action)", boxShadow: "0 0 0 1px var(--action)" }
+                    : null),
+                }}
+              >
+                <div className="t">
+                  <h3>
+                    {row?.mergeContainer ? (
+                      <FaObjectGroup size={17} style={iconStyle} aria-hidden="true" />
+                    ) : (
+                      <FaFolder size={17} style={iconStyle} aria-hidden="true" />
+                    )}
+                    {row?.name || "Untitled"}
+                  </h3>
+                  <span className={`stage${amber ? " amber" : ""}`}>{stage}</span>
+                </div>
+                <p className="c">{sub}</p>
+
+                <div className="f">
+                  <div>
+                    <b>{row?.mergeContainer ? parts.toLocaleString() : itemCount.toLocaleString()}</b>
+                    <span>{row?.mergeContainer ? "disciplines" : "items"}</span>
+                  </div>
+                  <div>
+                    <b>{itemCount ? `${pct}%` : "–"}</b>
+                    <span>complete</span>
+                  </div>
+                  <div>
+                    <b>{updatedAt(row?.updatedAt)}</b>
+                    <span>last updated</span>
+                  </div>
+                </div>
+
+                <div className="wk-acts" style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className={`ds-btn ds-btn-sm ${checked ? "btn-p" : "btn-o"}`}
+                    aria-pressed={checked}
+                    title={checked ? "Unselect" : "Select"}
+                    disabled={!id || bulkBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (id) onToggleSelect?.(id);
+                    }}
+                  >
+                    {checked ? "✓ Selected" : "Select"}
+                  </button>
+                  {/* Only the owner can delete; shared projects hide this. */}
+                  {!row?.shared ? (
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-sm btn-o"
+                      title="Delete project"
+                      disabled={!id || bulkBusy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteProject?.(id, row?.name);
+                      }}
+                    >
+                      <FaTrash size={13} /> Delete
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1407,3 +1407,385 @@
   .ds .bb-bar span{display:none}
   .ds .bb-bar .ds-btn{margin-right:56px}
 }
+
+/* wk-legacy — his tokens under the project workspace's older markup.
+   The budget tab, the bill (4,200 lines), its section rail, the contract panel
+   and the PM views still carry the app's own Tailwind classes. Rewriting the
+   bill element by element is where a money figure could quietly move, so this
+   maps that markup's colour, line, surface and control classes onto his tokens
+   instead: nothing in the markup or its behaviour changes, and the result
+   follows his light and dark themes because his tokens do. Scoped to
+   .wk-legacy, which only the open project's view column carries
+   (ProjectOpenView), so no other page is touched. Specificity (0,3,0) is above
+   Tailwind's dark: variants, which is what lets one token serve both themes.
+
+   The colour declarations are !important on purpose: index.css carries a
+   dark-mode shim of ~90 rules like `.dark .text-slate-900 { color: #e2e8f0
+   !important }`, and a plain rule loses to !important whatever its
+   specificity. Between two !important rules specificity decides again, and
+   (0,3,0) beats the shim's (0,2,0). */
+.ds .wk-legacy{color:var(--ink-2) !important}
+
+/* surfaces */
+.ds .wk-legacy .bg-white{background-color:var(--bg) !important}
+.ds .wk-legacy .bg-slate-50,.ds .wk-legacy .bg-slate-100,.ds .wk-legacy .bg-gray-50,.ds .wk-legacy .bg-gray-100{background-color:var(--bg-alt) !important}
+.ds .wk-legacy .shadow-depth,.ds .wk-legacy .shadow-sm,.ds .wk-legacy .shadow,.ds .wk-legacy .shadow-md,.ds .wk-legacy .shadow-inner{box-shadow:none}
+.ds .wk-legacy .shadow-lg,.ds .wk-legacy .shadow-xl{box-shadow:0 18px 44px rgba(var(--shadow-c),.22)}
+.ds .wk-legacy .rounded-2xl{border-radius:18px}
+.ds .wk-legacy .rounded-2xl.shadow-depth{background-image:var(--card-fill) !important}
+.ds .wk-legacy .bg-blue-50,.ds .wk-legacy .bg-adlm-blue-50,.ds .wk-legacy .bg-adlm-blue-100,.ds .wk-legacy .bg-blue-100{background-color:var(--pal-light-wash) !important}
+.ds .wk-legacy .bg-amber-50,.ds .wk-legacy .bg-amber-100,.ds .wk-legacy .bg-orange-50,.ds .wk-legacy .bg-rose-50,.ds .wk-legacy .bg-red-50{background-color:var(--pal-orange-wash) !important}
+.ds .wk-legacy .bg-emerald-50,.ds .wk-legacy .bg-emerald-100{background-color:color-mix(in srgb,var(--ok) 12%,transparent) !important}
+.ds .wk-legacy .bg-adlm-blue-700,.ds .wk-legacy .bg-adlm-blue-600,.ds .wk-legacy .bg-blue-600{background-color:var(--action) !important;color:var(--action-ink) !important}
+
+/* ink */
+.ds .wk-legacy .text-slate-900,.ds .wk-legacy .text-slate-800,.ds .wk-legacy .text-gray-900,.ds .wk-legacy .text-gray-800{color:var(--ink) !important}
+.ds .wk-legacy .text-slate-700,.ds .wk-legacy .text-slate-600,.ds .wk-legacy .text-gray-700,.ds .wk-legacy .text-gray-600{color:var(--ink-2) !important}
+.ds .wk-legacy .text-slate-500,.ds .wk-legacy .text-slate-400,.ds .wk-legacy .text-gray-500,.ds .wk-legacy .text-gray-400{color:var(--ink-3) !important}
+.ds .wk-legacy .text-slate-300{color:var(--ink-3) !important;opacity:.7}
+.ds .wk-legacy .text-adlm-blue-800,.ds .wk-legacy .text-adlm-blue-700,.ds .wk-legacy .text-adlm-blue-600,.ds .wk-legacy .text-blue-700,.ds .wk-legacy .text-blue-800,.ds .wk-legacy .text-blue-900{color:var(--action) !important}
+.ds .wk-legacy .text-emerald-800,.ds .wk-legacy .text-emerald-700,.ds .wk-legacy .text-emerald-600{color:var(--ok) !important}
+.ds .wk-legacy .text-amber-800,.ds .wk-legacy .text-amber-700,.ds .wk-legacy .text-amber-600,.ds .wk-legacy .text-orange-700,.ds .wk-legacy .text-adlm-orange,.ds .wk-legacy .text-rose-800,.ds .wk-legacy .text-rose-700,.ds .wk-legacy .text-red-700,.ds .wk-legacy .text-red-600{color:var(--pal-orange-key) !important}
+
+/* lines */
+.ds .wk-legacy .border,.ds .wk-legacy .border-t,.ds .wk-legacy .border-b,.ds .wk-legacy .border-l,.ds .wk-legacy .border-r,.ds .wk-legacy .border-slate-100,.ds .wk-legacy .border-slate-200,.ds .wk-legacy .border-gray-200{border-color:var(--line) !important}
+.ds .wk-legacy .border-slate-300,.ds .wk-legacy .border-gray-300{border-color:var(--line-2) !important}
+.ds .wk-legacy .border-blue-200,.ds .wk-legacy .border-blue-300,.ds .wk-legacy .border-adlm-blue-200{border-color:var(--pal-light-line) !important}
+.ds .wk-legacy .border-amber-200,.ds .wk-legacy .border-amber-300,.ds .wk-legacy .border-orange-200,.ds .wk-legacy .border-orange-300{border-color:var(--pal-orange-line) !important}
+.ds .wk-legacy .border-emerald-200{border-color:color-mix(in srgb,var(--ok) 35%,transparent) !important}
+.ds .wk-legacy .divide-y > * + *{border-color:var(--line) !important}
+
+/* hover */
+.ds .wk-legacy .hover\:bg-slate-50:hover,.ds .wk-legacy .hover\:bg-slate-100:hover,.ds .wk-legacy .hover\:bg-white:hover{background-color:var(--bg-alt) !important}
+.ds .wk-legacy .hover\:bg-blue-50:hover{background-color:var(--pal-light-wash) !important}
+.ds .wk-legacy .hover\:bg-red-50:hover,.ds .wk-legacy .hover\:bg-orange-50:hover{background-color:var(--pal-orange-wash) !important}
+.ds .wk-legacy .hover\:text-slate-700:hover,.ds .wk-legacy .hover\:text-slate-900:hover{color:var(--ink) !important}
+.ds .wk-legacy .hover\:text-red-600:hover{color:var(--pal-orange-key) !important}
+
+/* tables: his small uppercase header, his rule between rows */
+.ds .wk-legacy thead th{font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3) !important}
+/* not !important: the dark shim never targets rows, and the bill's subtotal
+   rows set their own firmer rule inline */
+.ds .wk-legacy tbody tr{border-color:var(--line)}
+
+/* fields: his .wk-f input colours and focus ring; sizes stay the markup's */
+.ds .wk-legacy .input{background-color:var(--bg-alt) !important;border:1px solid var(--line) !important;border-radius:10px;color:var(--ink) !important;font-family:var(--font)}
+.ds .wk-legacy .input:focus{outline:0;background-color:var(--bg) !important;border-color:var(--action) !important;box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 18%,transparent)}
+
+/* buttons: his outline .ds-btn; the old primary is his gradient */
+.ds .wk-legacy .btn{background:transparent !important;border:1px solid var(--line-2) !important;border-radius:10px;color:var(--ink) !important;font-family:var(--font);font-weight:500;box-shadow:none}
+.ds .wk-legacy .btn:hover:not(:disabled){border-color:var(--ink-3) !important;background:var(--bg-alt) !important}
+.ds .wk-legacy .btn-3d{background-image:var(--action-grad) !important;color:var(--action-ink) !important;border:0 !important;box-shadow:none}
+
+
+/* ds-btn disabled — his three rules from ds-admin.css, copied verbatim.
+   ds-admin.css is not loaded in the app shell, and the project workspace
+   disables ds-btns (Finalize before lock, Move up on the first bill row). */
+.ds .ds-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
+.ds .ds-btn:disabled:hover{transform:none;filter:none}
+.ds .ds-btn:disabled::before{display:none}
+
+/* project card pill — ds.css's hero `.ds .stage` (width:min(1080px,86%),
+   margin-top 66px) shares the class name with his card's .stage chip, so the
+   chip stretched to 86% of the card, squeezed the title to one word a line
+   and ran past the card edge. The chip sizes to its text. */
+.ds .wk-proj .stage{width:auto;margin:0;white-space:nowrap}
+
+/* R03 section tabs — his .wk-tabs segmented control above each account
+   screen, padded to line up with .dsh-in at each of his breakpoints, and
+   scrolling sideways rather than wrapping on a phone. */
+.ds .dsh-sectabs{padding:24px 36px 0}
+.ds .dsh-sectabs .wk-tabs{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.ds .dsh-sectabs .wk-tabs::-webkit-scrollbar{display:none}
+.ds .dsh-sectabs + .dsh-in{padding-top:18px}
+@media (max-width:1000px){.ds .dsh-sectabs{padding:20px 20px 0}}
+@media (max-width:720px){.ds .dsh-sectabs{padding:16px 16px 0}.ds .dsh-sectabs .wk-tabs{display:flex}}
+
+/* R06 — sticky panels stop at their section's bounds.
+   .dsh-main is the scroller and his app bar sticks at its top, 64px tall
+   (--dash-bar). The course sidebar stuck at 14px, so it slid under the bar
+   and a long module list could never be scrolled to its end: it now sits
+   below the bar and scrolls inside itself. His narrow-screen rule
+   (.lx-side{position:static} under 1000px) still applies. */
+.ds .dsh-main .lx-side{top:calc(var(--dash-bar) + 14px);max-height:calc(100dvh - var(--dash-bar) - 28px);overflow:auto;overscroll-behavior:contain}
+/* A #target inside the app lands below the sticky bar, not under it. */
+.ds .dsh-main [id]{scroll-margin-top:calc(var(--dash-bar) + 16px)}
+
+/* R14 — the certificate's name face (his cert.css). The porter drops every
+   @font-face, so it lives here. TODO(adlm): confirm the BALLW web-embedding
+   licence (Richard supplied the file); until then it falls back to the
+   script faces listed in ds-cert.css. */
+@font-face{font-family:"ADLM Signature";src:url("/ds/fonts/ballw.ttf") format("truetype");font-display:swap}
+/* His print wrapper sits directly under <body> so his print rule can hide
+   everything else; it carries .ds itself for the sheet's own rules. */
+.cx-print.ds{display:none}
+@media print{:root.cx-printing .cx-print.ds{display:block}}
+/* index.css puts Lexend on every element with !important, which would print
+   the holder's name in Lexend. The name, on the sheet and on the claim card's
+   check, is his signature face. */
+.ds .cx-sheet .nm,.ds .cx-big{font-family:"ADLM Signature","Brush Script MT",cursive !important}
+
+/* R17: Ada's replies, rendered by lib/chatMarkdown.jsx. index.css's reset
+   strips list markers, so the lists put theirs back. */
+.ds .ada-md > * + *{margin-top:8px}
+.ds .ada-md p{margin:0}
+.ds .ada-md ul,.ds .ada-md ol{margin:0;padding-left:18px;display:grid;gap:4px}
+.ds .ada-md ul{list-style:disc}
+.ds .ada-md ol{list-style:decimal}
+.ds .ada-md li::marker{color:var(--ink-3)}
+.ds .ada-md strong{color:var(--ink);font-weight:500}
+.ds .ada-md em{font-style:italic}
+.ds .ada-md a{color:var(--action);text-decoration:underline;text-underline-offset:2px}
+.ds .ada-md-tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.ds .ada-md table{border-collapse:collapse;width:100%;font-size:12.5px}
+.ds .ada-md th,.ds .ada-md td{padding:6px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+.ds .ada-md tbody tr:last-child td{border-bottom:0}
+.ds .ada-md th{font-weight:500;color:var(--ink);background:var(--bg-alt)}
+/* The suggestions now sit under the input, always (R17). */
+.ds .ada-chips-under{padding-top:0}
+.ds .ada-chips-under button:disabled{opacity:.5;cursor:default}
+
+/* R02: real lesson titles run long ("How to Install ADLM Softwares & Plugins |
+   From Purchase to Setup in 7 Minutes"). Clamped so a tile never spills and
+   every row keeps his height. */
+.ds .lrows .ltile h4{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ds .lrows .ltile p{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.ds .lmore .lcount a{color:var(--action)}
+
+/* R20: the launch countdown strip (ds/DsLaunchStrip.jsx), his Beyond BIM
+   countdown tiles made small. It publishes its height as --launch-strip-h
+   and both navs move down by it. */
+.ds .launch-strip{position:fixed;top:0;left:0;right:0;z-index:120;display:flex;align-items:center;
+  justify-content:center;gap:8px 14px;flex-wrap:wrap;padding:7px 44px 7px 16px;background:var(--bg-alt);
+  border-bottom:1px solid var(--line);font:400 13px/1.3 var(--font);color:var(--ink-2)}
+.ds .launch-strip .lab{color:var(--ink);font-weight:500}
+.ds .launch-count{display:inline-flex;gap:6px}
+.ds .launch-count .u{display:inline-flex;align-items:baseline;gap:4px;padding:3px 8px;border-radius:8px;
+  background:var(--bg-inset);border:1px solid var(--line)}
+.ds .launch-count .u b{font-size:14px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .launch-count .u span{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.ds .launch-strip .go{color:var(--action);text-decoration:none;font-weight:500}
+.ds .launch-strip .go:hover{text-decoration:underline}
+.ds .launch-strip .x{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;
+  color:var(--ink-3);font-size:18px;line-height:1;padding:4px 8px;cursor:pointer}
+.ds .launch-strip .x:hover{color:var(--ink)}
+.ds .nav{top:var(--launch-strip-h,0px)}
+@media (max-width:600px){
+.ds .launch-strip .lab{flex-basis:100%;text-align:center}
+.ds .launch-strip .go{display:none}
+}
+
+/* CHR-3: the toast stack moved to the top right on 17 Sep (his feedback.css:
+   top:76px, 70px under 640px), which assumes the nav starts at y=0. The strip
+   above pushes the nav down by --launch-strip-h, so on a public page the
+   toasts were landing over the lower half of the nav. Offset them by the same
+   variable. It is unset everywhere the strip does not render — the app and
+   admin shells, and every page after 1 Oct 10:00 WAT — so the calc falls back
+   to his own numbers and this is a no-op. ds-local.css is imported after
+   ds-feedback.css (main.jsx), so equal specificity resolves our way, and the
+   narrow rule sits after the wide one for the same reason. */
+.ds .fb-stack{top:calc(76px + var(--launch-strip-h,0px))}
+@media (max-width:640px){
+.ds .fb-stack{top:calc(70px + var(--launch-strip-h,0px))}
+}
+
+/* P0.4: index.css paints every input in dark mode (.dark input:not(...)),
+   which outranks his transparent search field in the project gallery. */
+:root.dark .ds .pj-search input{background:none;color:var(--ink)}
+
+/* S18 bill (PR2-01): the Summary's "Executed" tick.
+   His .pj-sumbox has no equivalent — a sum in his prototype is a figure and
+   nothing else — but ours records whether the allowance has actually been
+   executed, which is what lets it count toward earned value. It rides inside
+   his .r.s row, so it is sized and coloured from his tokens and never grows
+   the generic `.pj-sumbox input` box the text and number fields use. */
+.ds .pj-sumbox .r.s .pj-sum-done{display:inline-flex;align-items:center;gap:6px;flex:none;
+  font-size:11.5px;color:var(--ink-3);white-space:nowrap;cursor:pointer}
+.ds .pj-sumbox .r.s .pj-sum-done input{width:14px;height:14px;padding:0;border-radius:4px;
+  accent-color:var(--action);background:none;flex:none}
+.ds .pj-sumbox .r.s .pj-sum-done:hover{color:var(--ink-2)}
+/* S18: the Summary's remove control while rates are hidden from this viewer.
+   His .pj-sumbox .x has no disabled state — nothing in his prototype could be
+   disabled — so a collaborator without RateGen would have seen a live-looking
+   cross that does nothing. Greyed on the same two declarations his .ds-btn
+   uses when disabled, so it reads the same in light, dark and black. */
+.ds .pj-sumbox .x:disabled{opacity:.45;cursor:not-allowed}
+.ds .pj-sumbox .x:disabled:hover{background:none}
+/* His .r.s already wraps under 900px; keep the tick with the amount rather
+   than letting it start a line of its own on a phone. */
+@media (max-width:900px){
+.ds .pj-sumbox .r.s .pj-sum-done{font-size:11px}
+}
+/* S18 PR2-17: his Gantt marks a milestone as a rotated square at its date
+   and a critical task with a small dot before the name. His own rules are
+   scoped to .pj-gantt; the project work area draws the same programme in
+   .wk-gantt, so the two marks are repeated here on his tokens. */
+.ds .wk-gr .g .wk-dm{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;
+  transform:rotate(45deg);background:var(--fb-warn);border-radius:2px}
+.ds .wk-gr .t .wk-crit{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--fb-err);margin-right:6px;vertical-align:middle}
+
+/* S18 G1: the published notice on the customer's home screen.
+   An admin can publish one line to every signed-in customer (see the notice
+   endpoints in server/routes/admin.settings.js). Nothing in his build does
+   that, so his dash sheet has no page banner to borrow — the nearest thing he
+   has is .adm-banner, which is admin-only and would put an adm- class on a
+   customer screen. This is that same shape rebuilt in the dsh namespace.
+   No colour is named here: the level is one of his palette classes
+   (.pal-light / .pal-deep / .pal-orange), which set --pal-fill, --pal-line
+   and --pal-key, so the banner follows light, dark and black the way every
+   other tinted surface of his does. */
+.ds .dsh-notice{display:flex;align-items:flex-start;gap:16px;margin:0 0 20px;padding:14px 18px;
+  border-radius:16px;border:1px solid var(--pal-line,var(--line));
+  background-image:var(--pal-fill,none);background-color:var(--bg-inset)}
+.ds .dsh-notice-body{flex:1;min-width:0}
+.ds .dsh-notice-body strong{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-notice-body p{margin:2px 0 0;font-size:12.5px;font-weight:300;line-height:1.55;
+  color:var(--ink-2);max-width:88ch}
+.ds .dsh-notice-cta{flex:none;align-self:center;font-size:12.5px;font-weight:500;
+  color:var(--pal-key,var(--action));text-decoration:none;white-space:nowrap}
+.ds .dsh-notice-cta:hover{text-decoration:underline}
+/* On a phone the call to action would squeeze the message into two words. */
+@media (max-width:560px){
+.ds .dsh-notice{flex-direction:column;gap:10px;padding:14px 16px}
+.ds .dsh-notice-cta{align-self:flex-start}
+}
+
+/* S18 G1: the waitlist form's status line.
+   His .sform-card is a static form — it posts nowhere, so it has no sending,
+   sent or failed state and no rule for one. Ours replaces his fields in place
+   with this box, which was carrying its whole appearance in a style attribute
+   where no theme, no media query and no reviewer could reach it. Same
+   declarations, now in his tokens beside his .sform-note. */
+.ds .sform-status{margin-top:14px;padding:18px 22px;border-radius:14px;
+  border:1px solid var(--line);background:var(--bg-alt);text-align:center}
+/* The confirmation takes the place of the form rather than sitting under it,
+   so it needs no gap above. */
+.ds .sform-status.done{margin-top:0}
+.ds .sform-status h4{margin:0 0 6px}
+.ds .sform-status p{margin:0}
+.ds .sform-status .ds-btn{margin-top:14px}
+
+/* ================================================== the phone pass, signed in
+   Item 20 on his open list: "the marketing site is mobile-clean; Manage, Work
+   and Admin have had spot fixes only." Everything below is measured at 375px,
+   checked at 768px, and written against his own breakpoints (720/760/900) and
+   tokens. Nothing here changes a desktop width.                             */
+
+
+/* ---- the app bar had no room left for the one thing it is for ------------
+   .dsh-top is a flex row: burger 36, title, network indicator, bell 36, the
+   account chip. Only the title can shrink — it is the one child with
+   overflow:hidden, so its automatic minimum size is 0 — and every other child
+   is flex:none or holds its min-content. At 375px the fixed children add up
+   to more than the bar: 32 padding + 36 burger + 50 gaps + ~97 network
+   ("Excellent" at 12px plus the bars) + 36 bell + ~118 account chip. The
+   title is squeezed to nothing first, and then the bar itself overflows, and
+   because .dsh-main sets overflow-y:auto its overflow-x computes to auto too
+   — so the whole signed-in page scrolls sideways.
+
+   The signal in the indicator is the four bars; the word is a gloss on them,
+   and it has a title and an aria-label besides. Dropping the word on a phone
+   gives the screen name back its room and takes the bar under the viewport.
+   The admin bar is built the same way and does the same thing, so one rule
+   covers both. */
+@media (max-width: 720px) {
+  .ds .dsh-top .net-ind-label, .ds .adm-top .net-ind-label { display: none; }
+  /* with the word gone the bars are the whole control, so it takes a
+     thumb-sized box rather than shrinking to the width of the glyph */
+  .ds .dsh-top .net-ind, .ds .adm-top .net-ind {
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+  }
+}
+
+/* Below 560px the first name on the account chip goes the same way. The
+   avatar is the affordance — it is what opens the menu, and the menu names
+   the person on its first line — so the word beside it is decoration at the
+   width where the title has none. His own rail collapses its labels exactly
+   this way (.rail-tight .dsh-grp-b .lb). The admin bar loses its search box
+   at this width for the same reason his app bar loses .dsh-search below
+   1000px: an input squeezed to 40px is not a search box, and every admin
+   screen is one tap away in the rail. */
+@media (max-width: 560px) {
+  .ds .dsh-top .dsh-me { padding: 5px 6px; }
+  .ds .dsh-top .dsh-me > span:not(.dsh-avi) { display: none; }
+  .ds .adm-top .adm-me { padding: 5px; }
+  .ds .adm-top .adm-me > span:not(.avi) { display: none; }
+  .ds .adm-top .adm-find { display: none; }
+}
+
+
+/* ---- the project list clipped its own figures ---------------------------
+   /work/projects in list view. His phone rule folds .pj-table .rw to
+   `1fr auto`, but a bare 1fr track is minmax(auto,1fr) and .pj-table .p b is
+   white-space:nowrap — so the track sized itself to the full project name and
+   .pj-table's own overflow:hidden cut the stage, the estimated figure and the
+   date off the right-hand edge. A long name hid the money.
+
+   min-width:0 on the row's cells is the fix he uses everywhere else himself
+   — .pj-bill, .pj-rt and .pj-buy all fold to minmax(0,1fr), and his dash
+   sheet carries the same declaration for .dsh-cols > *. With it the track can
+   shrink and the ellipsis .pj-table .p b already carries does its job. */
+@media (max-width: 900px) {
+  .ds .pj-table .rw > span { min-width: 0; }
+}
+
+
+/* ---- controls a thumb can actually land on ------------------------------
+   His work controls are sized for a pointer: the tab strip and the basis
+   switch are 8px of padding on a 13px line (~34px tall), the layout switch
+   in the project gallery is 34x30, and the modal close is 34x34. Below 760px
+   — where his own rules already stretch these to the full width of the row —
+   they take a 40px minimum as well. Padding, colour and type are untouched,
+   so nothing moves on a desktop and nothing here is a new value.
+
+   Two of these set a size against a size he already sets, and those two have
+   to out-rank him or nothing happens. `.ds .pj-views button` (0,2,1) and
+   `.ds .wk-modal-x` (0,2,0) are exactly the selectors ds-work-proj.css and
+   ds-work.css use for their 34x30 and 34x34 — equal weight, and both sheets
+   are imported from route components, so they land AFTER this file in the
+   bundle and win the tie. The measured build had the 40px declarations
+   sitting 75KB and 113KB ahead of the rules that overrode them.
+
+   `:root` adds a pseudo-class to the front, which is the same device
+   ds.css uses for `:root.js .ds .rise` and this sheet uses for
+   `:root.dark .ds .pj-search input`. One step of weight, no !important, and
+   no change to what the selector matches. The other three set min-height,
+   which he sets nowhere, so they win on their own and are left alone. */
+@media (max-width: 760px) {
+  .ds .wk-tabs button, .ds .wk-loc-sw button, .ds .wk-dd-b { min-height: 40px; }
+  :root .ds .pj-views button { width: 40px; height: 40px; }
+  :root .ds .wk-modal-x { width: 40px; height: 40px; }
+}
+/* ------------------------------------------------- first-run empty states
+   His empty state has three parts: a heading, a line saying why the screen
+   is empty, and a row with the one action that fills it. He styled that as
+   .pj-empty, in ds-work-proj.css.
+
+   The work shell loads ds-work.css, not ds-work-proj.css, and .wk-empty in
+   ds-work.css only ever styled a single bare sentence — so a work screen
+   that wanted the three parts had nowhere to put them. These rules give
+   .wk-empty the same three parts, copied from his .pj-empty values so the
+   two read identically wherever they sit next to each other.
+
+   Direct children only, unlike his descendant selectors: a .wk-empty holding
+   one sentence, which is most of them today, is untouched, and a panel that
+   happens to nest a paragraph deeper inside one is not restyled from a
+   distance. */
+.ds .wk-empty > b{display:block;font-size:16px;font-weight:500;color:var(--ink)}
+.ds .wk-empty > p{margin:6px auto 14px;max-width:52ch;font-size:13px;font-weight:300;
+  color:var(--ink-3);line-height:1.6}
+.ds .wk-empty > p:last-child{margin-bottom:0}
+/* No `> .b` action row here. His .pj-empty has one, and it was copied across
+   with the rest, but nothing renders that shape inside a .wk-empty — the
+   empty states that carry an action put a bare .ds-btn or his .as-acts
+   there. A rule for markup that does not exist reads as a supported shape
+   and is not one. */
+
+/* His .as-empty centres its text; his .as-acts is a left-aligned flex row,
+   made for the buttons under an assignment card. An action inside the empty
+   state has to sit under the sentence rather than off to one side. */
+.ds .as-empty .as-acts{justify-content:center}

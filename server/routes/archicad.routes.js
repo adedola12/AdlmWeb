@@ -677,6 +677,11 @@ router.get("/element/:projectId/:guid", async (req, res) => {
       share: shareInfo(project),
       materialAmount: r2(toNum(line.materialAmount) * fraction),
       labourAmount: r2(toNum(line.labourAmount) * fraction),
+      // Plant carried through at the same fraction as the rest of the line.
+      // Lines costed before plant had a name of its own carry no plantAmount,
+      // so this reads 0 for them — nothing already on a version changes.
+      plantAmount: r2(toNum(line.plantAmount) * fraction),
+      otherAmount: r2(toNum(line.otherAmount) * fraction),
       totalAmount: r2(toNum(line.totalAmount) * fraction),
       marginAmount: r2(toNum(line.marginAmount) * fraction),
       unitRate: toNum(line.unitRate),

@@ -18,6 +18,7 @@ import {
   mepDiscipline,
   isGeneratedRow,
   measureBasis,
+  plantRateFor,
   parseGirthMetres,
 } from "./mlSchedule.js";
 
@@ -400,4 +401,103 @@ test("editing a constant changes the schedule it produces", () => {
     tweaked,
   );
   assert.equal(mat(rows, "Blocks").qty, 1287.5); // 100 × 1.03 × 12.5
+});
+
+// ── plant ───────────────────────────────────────────────────────────────────
+//
+// Plant is its own resource class, not a slice of labour. Until it had its own
+// branch the back-solve booked every naira of it as PROFIT: plant sat in the
+// bill rate the QS priced with, and was absent from the build-up, so the whole
+// of it fell into the gap the back-solve calls overhead and profit.
+
+const CONCRETE = (over = {}) =>
+  item({
+    code: CODE,
+    description: "Reinforced concrete 1:2:4 in foundation",
+    unit: "m3",
+    qty: 100,
+    rate: 13500,
+    ...over,
+  });
+
+const netOf = (rows) => rows.reduce((a, b) => a + b.qty * b.rate, 0);
+
+test("a project with no plant generates exactly the schedule it did before", () => {
+  // Every Plant constant ships at 0, so this is the default for every existing
+  // project and nothing about it may change.
+  assert.equal(plantRateFor(CONCRETE(), "concrete", K), 0);
+  const { budgetItems } = generateMlSchedule([CONCRETE()], [], K, {});
+  assert.equal(budgetItems.filter((b) => b.componentKind === "Plant").length, 0);
+});
+
+test("setting a plant constant moves money out of profit and into cost", () => {
+  const plain = generateMlSchedule([CONCRETE()], [], K, {}).budgetItems;
+  const withPlant = generateMlSchedule(
+    [CONCRETE()],
+    [],
+    resolveConstants({ [MC.PlantConcretePerM3]: 1000 }),
+    {},
+  ).budgetItems;
+
+  const plant = withPlant.filter((b) => b.componentKind === "Plant");
+  assert.equal(plant.length, 1, "one Plant line, carrying the whole plant cost");
+  assert.equal(plant[0].qty, 100);
+  assert.equal(plant[0].rate, 1000);
+
+  // Cost rises by exactly the plant, and the reported profit falls by the same.
+  assert.equal(Math.round(netOf(withPlant) - netOf(plain)), 100000);
+
+  const markup = (rows) => rows[0].overheadPercent + rows[0].profitPercent;
+  assert.ok(markup(withPlant) < markup(plain), "the profit percentage comes down");
+});
+
+test("…and the bill total does not move a kobo", () => {
+  // The invariant the whole engine rests on. Plant changes the cost/profit
+  // SPLIT; it must never change what the client was billed.
+  const bill = CONCRETE();
+  for (const K2 of [K, resolveConstants({ [MC.PlantConcretePerM3]: 1000 })]) {
+    const { budgetItems } = generateMlSchedule([bill], [], K2, {});
+    const markup = 1 + (budgetItems[0].overheadPercent + budgetItems[0].profitPercent) / 100;
+    assert.ok(
+      Math.abs((netOf(budgetItems) * markup) / bill.qty - bill.rate) < 0.01,
+      "the derived bill rate is still the rate the bill arrived with",
+    );
+  }
+});
+
+test("a caller that can resolve the line's rate feeds it the rate's plant subtotal", () => {
+  // This is the path that matters: the constants know nothing about plant on
+  // an arbitrary line, but the Rate Gen rate the line was priced from does.
+  const { budgetItems } = generateMlSchedule([CONCRETE()], [], K, {
+    plantFor: (it, kind) => (kind === "concrete" ? 1200 : 0),
+  });
+  const plant = budgetItems.filter((b) => b.componentKind === "Plant");
+  assert.equal(plant.length, 1);
+  assert.equal(plant[0].rate, 1200, "the rate's plant subtotal, not a constant");
+});
+
+test("the rate's plant subtotal beats the constant", () => {
+  const { budgetItems } = generateMlSchedule(
+    [CONCRETE()],
+    [],
+    resolveConstants({ [MC.PlantConcretePerM3]: 1000 }),
+    { plantFor: () => 1500 },
+  );
+  assert.equal(budgetItems.find((b) => b.componentKind === "Plant").rate, 1500);
+});
+
+test("a generated Plant row is replaceable, and keeps the QS's edits", () => {
+  const K2 = resolveConstants({ [MC.PlantConcretePerM3]: 1000 });
+  const first = generateMlSchedule([CONCRETE()], [], K2, {}).budgetItems;
+
+  const plant = first.find((b) => b.componentKind === "Plant");
+  assert.equal(isGeneratedRow(plant), true, "so a regenerate can replace it");
+  plant.rate = 1750; // the QS knows what the mixer actually costs
+  plant.procured = true;
+
+  const second = generateMlSchedule([CONCRETE()], first, K2, {}).budgetItems;
+  const after = second.filter((b) => b.componentKind === "Plant");
+  assert.equal(after.length, 1, "replaced, not duplicated");
+  assert.equal(after[0].rate, 1750, "their price survived the regenerate");
+  assert.equal(after[0].procured, true);
 });

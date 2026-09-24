@@ -21,8 +21,15 @@ import {
   normalizeCustomRate,
   normalizeRateOverride,
   normalizeSectionKey,
+  preservePlantLines,
   toUserRateDefinition,
+  compositionSubtotals,
 } from "../util/rategenUserRates.js";
+import {
+  makeCompositionBudget,
+  projectBestRate,
+  projectRateCandidate,
+} from "../util/rategenRateProjection.js";
 
 const router = express.Router();
 
@@ -407,7 +414,13 @@ router.post("/library/material-prices/resolve", async (req, res, next) => {
  * POST /library/rate-items/resolve
  * Fuzzy-match BOQ item descriptions against the user's effective RateGen rates.
  * Body: { items: [{ description, unit }], limitCandidates?: number }
- * Returns: { ok, results, ratesByKey, candidatesByKey }
+ * Returns: { ok, results, ratesByKey, candidatesByKey, stats }
+ *
+ * Every candidate carries the rate's id and its per-unit split by resource
+ * class — materialCost / labourCost / plantCost / otherCost — because plant is
+ * its own class and a caller filing this money into a Budget has to know which
+ * bucket it belongs in. The best match additionally carries the full
+ * `composition` (up to a per-response cap; see util/rategenRateProjection.js).
  */
 router.post("/library/rate-items/resolve", async (req, res, next) => {
   try {
@@ -450,6 +463,13 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
           sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
           source: String(r?.source || "master"),
           rateId: r?.rateId || r?.id || r?._id || null,
+          // The build-up itself, and its split by resource class. A rate's
+          // material, labour and plant prices were parsed a line above and then
+          // thrown away at the projection; the caller needs them to put the
+          // right money in the right Budget bucket (plant is its own class, not
+          // a slice of labour).
+          composition: r?.composition || null,
+          subtotals: compositionSubtotals(r?.composition),
           _tokens: tokens(desc),
           _unitNorm: normUnit(r?.unit),
           _plantShare: plantShareOf(r),
@@ -461,6 +481,9 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
     const ratesByKey = {};
     const candidatesByKey = {};
     const results = [];
+
+    // Bounds how much build-up one response may carry; see the helper.
+    const budget = makeCompositionBudget();
 
     for (const w of wanted) {
       const reqToks = tokens(w.description);
@@ -486,28 +509,14 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
 
       const best = candidates[0] || null;
 
-      const mapped = candidates.map((c) => ({
-        description: c.description,
-        unit: c.unit,
-        totalCost: c.totalCost,
-        netCost: c.netCost,
-        sectionKey: c.sectionKey,
-        sectionLabel: c.sectionLabel,
-        source: c.source,
-        score: Number((c.score || 0).toFixed(4)),
-      }));
+      // Candidates carry the per-unit subtotals and the rate's id, but NOT the
+      // whole build-up — see util/rategenRateProjection.js for why.
+      const mapped = candidates.map(projectRateCandidate);
 
       candidatesByKey[descKey] = mapped;
-      ratesByKey[descKey] = best
-        ? {
-            description: best.description,
-            unit: best.unit,
-            totalCost: best.totalCost,
-            sectionLabel: best.sectionLabel,
-            source: best.source,
-            score: Number((best.score || 0).toFixed(4)),
-          }
-        : null;
+      ratesByKey[descKey] = projectBestRate(best, {
+        includeComposition: budget.take(best),
+      });
 
       results.push({
         key: descKey,
@@ -522,7 +531,7 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
       results,
       ratesByKey,
       candidatesByKey,
-      stats: { requested: wanted.length, pool: pool.length },
+      stats: { requested: wanted.length, pool: pool.length, ...budget.stats },
     });
   } catch (err) {
     next(err);
@@ -532,7 +541,9 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
 /**
  * GET /library/rate-items/search?q=...&limit=8
  * Lightweight type-ahead: search user's effective rates by description keyword.
- * Returns: { ok, results: [{ description, unit, totalCost, sectionLabel, source }] }
+ * Returns: { ok, results: [{ description, unit, totalCost, netCost, sectionLabel,
+ *   source, score, rateId, materialCost, labourCost, plantCost, otherCost }] }
+ * No composition here — this fires on every keystroke.
  */
 router.get("/library/rate-items/search", async (req, res, next) => {
   try {
@@ -570,6 +581,11 @@ router.get("/library/rate-items/search", async (req, res, next) => {
         }
         if (score === 0) return null;
 
+        // Same additive shape as a resolve candidate: the id so a pick can name
+        // the rate it took, and the per-unit split by resource class so the
+        // caller can file material, labour and plant money separately. The full
+        // build-up stays off a type-ahead result — it fires on every keystroke.
+        const subtotals = compositionSubtotals(r?.composition);
         return {
           description: desc,
           unit: String(r?.unit || ""),
@@ -578,6 +594,11 @@ router.get("/library/rate-items/search", async (req, res, next) => {
           sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
           source: String(r?.source || "master"),
           score,
+          rateId: r?.rateId || r?.id || r?._id || null,
+          materialCost: subtotals.materialCost,
+          labourCost: subtotals.labourCost,
+          plantCost: subtotals.plantCost,
+          otherCost: subtotals.otherCost,
         };
       })
       .filter(Boolean)
@@ -1130,8 +1151,8 @@ router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
       });
     }
 
-    const item = normalizeUserCustomRatePayload(customRateId, req.body);
-    if (!item.title && !item.description) {
+    const incoming = normalizeUserCustomRatePayload(customRateId, req.body);
+    if (!incoming.title && !incoming.description) {
       return res
         .status(400)
         .json({ error: "title or description is required" });
@@ -1140,6 +1161,16 @@ router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
     const nextItems = [...(lib.customRates || [])];
     const existingIndex = nextItems.findIndex(
       (candidate) => String(candidate?.customRateId || "") === customRateId
+    );
+
+    // Rate Gen desktop rebuilds its push from its own material and labour
+    // lists, so a plant line authored on the website is simply missing from
+    // it and the rate would come back worth the plant amount less. A client
+    // that understands plant says so and its payload is authoritative.
+    const item = preservePlantLines(
+      incoming,
+      existingIndex >= 0 ? nextItems[existingIndex] : null,
+      { clientSupportsPlant: req.body?.supportsPlant === true },
     );
 
     if (existingIndex >= 0) nextItems[existingIndex] = item;

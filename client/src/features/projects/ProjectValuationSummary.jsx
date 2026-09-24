@@ -241,7 +241,13 @@ function buildWorkbookDashboardSheet({
     ["Project name", projectName],
     ["Overall progress", `${safeNum(progressPercent).toFixed(1)}%`],
     ["Marked lines", `${safeNum(progressCount)} of ${safeNum(progressTotal)}`],
-    ["Total project cost", safeNum(grossAmount)],
+    // S18 review: this figure is the project SCOPE — measured work, PC and
+    // provisional sums, preliminaries and approved variations. It is not the
+    // Bill's estimated total, which cascades contingency and VAT on top, so it
+    // says what it sums rather than claiming a name it does not carry. The
+    // figure itself is unchanged: the three rows here still reconcile with one
+    // another, and with the certificates this workbook is built from.
+    ["Project scope (measured, sums, prelims and approved variations)", safeNum(grossAmount)],
     [`${statusLabel} value`, safeNum(valuedAmount)],
     ["Amount left", safeNum(remainingAmount)],
     [],
@@ -352,22 +358,38 @@ function buildWorkbookValuationSheet({
   return setWorksheetColumns(ws, [12, 60, 12, 10, 14, 16]);
 }
 
+// His .wk-f field. .wk-f spans every column of a grid by default (it was made
+// for his modal form), so these three set gridColumn back to auto to sit
+// side by side.
 function PercentageField({ label, value, onChange }) {
   return (
-    <label className="text-sm">
-      <div className="mb-1 text-xs text-slate-500">{label}</div>
+    <label className="wk-f" style={{ gridColumn: "auto" }}>
+      <span>{label}</span>
       <input
         type="number"
         min="0"
         max="100"
         step="0.01"
-        className="input"
         value={safeNum(value)}
         onChange={(e) => onChange?.(e.target.value === "" ? 0 : Number(e.target.value))}
       />
     </label>
   );
 }
+
+// His palette tokens for the two progress chips and for a warning note.
+const CHIP_PARTIAL = {
+  background: "var(--pal-orange-wash)",
+  color: "var(--pal-orange-key)",
+  borderColor: "var(--pal-orange-line)",
+};
+const CHIP_RATIFIED = {
+  background: "var(--pal-light-wash)",
+  color: "var(--pal-light-key)",
+  borderColor: "var(--pal-light-line)",
+};
+const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" };
+const DESC = { display: "block", fontSize: 13.5, fontWeight: 400, color: "var(--ink)" };
 
 export default function ProjectValuationSummary({
   grossAmount = 0,
@@ -501,109 +523,113 @@ export default function ProjectValuationSummary({
   }
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: "grid", gap: 18 }}>
       {showValuationSettings ? (
-        <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
-          <div className="font-medium">Valuation settings</div>
-          <div className="mt-1 text-sm text-slate-600">
-            Saved per project and reused for every valuation sheet.
+        <section className="wk-panel">
+          <div className="wk-ph">
+            <h2>Valuation settings</h2>
+            <span className="wk-locnote">
+              Saved per project and reused for every valuation sheet.
+            </span>
           </div>
+          <div style={{ padding: "18px 20px 20px", display: "grid", gap: 16 }}>
+            <label className="wk-f">
+              <span>Client / Employer</span>
+              <input
+                type="text"
+                value={clientName}
+                onChange={(e) => onClientNameChange?.(e.target.value)}
+                placeholder="e.g. First World Communities Ltd"
+                maxLength={200}
+              />
+              {/* <small>, not <span>: .wk-f span would restyle it as a label. */}
+              <small className="wk-fx" style={{ display: "block", marginTop: 6 }}>
+                Titles the exported bill: &ldquo;Proposed Development for
+                {clientName ? ` ${clientName}` : " …"}&rdquo;. Saved with the project.
+              </small>
+            </label>
 
-          <label className="mt-4 block">
-            <div className="mb-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
-              Client / Employer
+            <div
+              style={{
+                display: "grid",
+                gap: 16,
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              }}
+            >
+              <PercentageField
+                label="Retention %"
+                value={valuationSettings?.retentionPct}
+                onChange={(value) => onValuationSettingChange?.("retentionPct", value)}
+              />
+              <PercentageField
+                label="VAT %"
+                value={valuationSettings?.vatPct}
+                onChange={(value) => onValuationSettingChange?.("vatPct", value)}
+              />
+              <PercentageField
+                label="Withholding tax %"
+                value={valuationSettings?.withholdingPct}
+                onChange={(value) => onValuationSettingChange?.("withholdingPct", value)}
+              />
             </div>
-            <input
-              type="text"
-              value={clientName}
-              onChange={(e) => onClientNameChange?.(e.target.value)}
-              placeholder="e.g. First World Communities Ltd"
-              maxLength={200}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/30 focus:border-adlm-blue-700 dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-text"
-            />
-            <div className="mt-1 text-[11px] text-slate-500 dark:text-adlm-dark-dim">
-              Titles the exported bill: &ldquo;Proposed Development for
-              {clientName ? ` ${clientName}` : " …"}&rdquo;. Saved with the project.
-            </div>
-          </label>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <PercentageField
-              label="Retention %"
-              value={valuationSettings?.retentionPct}
-              onChange={(value) => onValuationSettingChange?.("retentionPct", value)}
-            />
-            <PercentageField
-              label="VAT %"
-              value={valuationSettings?.vatPct}
-              onChange={(value) => onValuationSettingChange?.("vatPct", value)}
-            />
-            <PercentageField
-              label="Withholding tax %"
-              value={valuationSettings?.withholdingPct}
-              onChange={(value) =>
-                onValuationSettingChange?.("withholdingPct", value)
-              }
-            />
           </div>
-        </div>
+        </section>
       ) : null}
 
       {!showDailyValuationLog ? null : (
-        <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0">
-              <div className="font-medium">Daily valuation log</div>
-              <div className="mt-1 text-sm text-slate-600">
-                Select a valuation day to preview the certificate, print it, or export all saved valuations to Excel.
-              </div>
-            </div>
+        <section className="wk-panel">
+          <div className="wk-ph">
+            <h2>Daily valuation log</h2>
+            <span className="wk-locnote">
+              Select a valuation day to preview the certificate, print it, or export all
+              saved valuations to Excel.
+            </span>
+          </div>
 
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end sm:justify-end">
-              <label className="text-sm sm:min-w-[260px]">
-                <div className="mb-1 text-xs text-slate-500">Valuation date</div>
-                <select
-                  className="input w-full"
-                  value={selectedValuationDate}
-                  onChange={(e) => onSelectValuationDate?.(e.target.value)}
-                  disabled={!valuations.length || loadingValuations}
-                >
-                  <option value="">
-                    {loadingValuations ? "Loading valuations..." : "Select valuation day"}
-                  </option>
-                  {sortedValuations.map((log, index) => {
-                    const partial = Number(log?.partialCount) || 0;
-                    const binary = Number(log?.binaryCount) || 0;
-                    const suffix =
-                      partial > 0 && binary > 0
-                        ? ` — ${binary} ratified, ${partial} partial`
-                        : partial > 0
-                          ? ` — ${partial} partial`
-                          : binary > 0
-                            ? ` — ${binary} ratified`
-                            : "";
-                    return (
-                      <option key={log.date} value={log.date}>
-                        Valuation {index + 1} - {formatDate(log.date)} ({log.itemCount} item{log.itemCount === 1 ? "" : "s"}){suffix}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
+          <div className="wk-bar" style={{ padding: "16px 20px 0", alignItems: "flex-end" }}>
+            <label className="wk-f" style={{ flex: "1 1 260px", minWidth: 0 }}>
+              <span>Valuation date</span>
+              <select
+                value={selectedValuationDate}
+                onChange={(e) => onSelectValuationDate?.(e.target.value)}
+                disabled={!valuations.length || loadingValuations}
+              >
+                <option value="">
+                  {loadingValuations ? "Loading valuations..." : "Select valuation day"}
+                </option>
+                {sortedValuations.map((log, index) => {
+                  const partial = Number(log?.partialCount) || 0;
+                  const binary = Number(log?.binaryCount) || 0;
+                  const suffix =
+                    partial > 0 && binary > 0
+                      ? ` — ${binary} ratified, ${partial} partial`
+                      : partial > 0
+                        ? ` — ${partial} partial`
+                        : binary > 0
+                          ? ` — ${binary} ratified`
+                          : "";
+                  return (
+                    <option key={log.date} value={log.date}>
+                      Valuation {index + 1} - {formatDate(log.date)} ({log.itemCount} item{log.itemCount === 1 ? "" : "s"}){suffix}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
 
+            <div className="wk-acts">
               <button
                 type="button"
-                className="btn btn-sm"
+                className="ds-btn ds-btn-sm btn-o"
                 onClick={handleExportExcel}
                 disabled={!valuationWorkbookRows.length}
                 title={!valuationWorkbookRows.length ? "No valuation log to export yet" : "Export editable Excel workbook"}
               >
                 Export Excel
               </button>
-
               <button
                 type="button"
-                className="btn btn-sm"
+                className="ds-btn ds-btn-sm btn-o"
                 onClick={handlePrint}
                 disabled={!selectedValuation || !certificate}
                 title={!selectedValuation ? "Choose a valuation date first" : "Print valuation"}
@@ -614,153 +640,153 @@ export default function ProjectValuationSummary({
           </div>
 
           {valuationErr ? (
-            <div className="mt-3 text-sm text-red-600">{valuationErr}</div>
+            <p className="mk-note" role="alert" style={{ margin: "14px 20px 0", ...NOTE_WARN }}>
+              {valuationErr}
+            </p>
           ) : null}
 
-          {!loadingValuations && !valuations.length ? (
-            <div className="mt-3 text-sm text-slate-600">
-              No valuation entries yet. Once you save marked items, they will appear here by date.
+          {/* Three states, not one. A read that failed already says so in the
+              note above, and saying "no valuation entries yet" underneath it
+              would turn a fault into a fact about the project. While it is
+              still loading the screen knows nothing either way, so it says
+              nothing. Only when the log really came back empty does the panel
+              explain what a valuation is and the one thing that makes one. */}
+          {loadingValuations || valuationErr || valuations.length ? null : (
+            <div style={{ padding: 20 }}>
+              <div className="wk-empty">
+                <b>No valuation yet</b>
+                <p>
+                  A valuation is one day&rsquo;s progress priced: the lines you marked complete,
+                  or moved on by a percentage, valued at their own rates. Saving them numbers
+                  the day as a certificate you can print or export, with retention, VAT and
+                  previous payments worked out from the settings above.
+                </p>
+                <p>
+                  Mark lines on the Bill, complete or a percentage of the way there, then save
+                  the project. The day appears here as Valuation 1.
+                </p>
+              </div>
             </div>
-          ) : null}
+          )}
 
           {selectedValuation && certificate ? (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-3 text-sm text-slate-700 dark:text-adlm-dark-text">
-                <div className="font-medium text-slate-900 dark:text-white">
-                  Valuation {certificate.valuationNumber} for {formatDate(selectedValuation.date)}
-                </div>
-                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            <>
+              {/* The certificate's lines, in his bill rows. */}
+              <div className="wk-qt" style={{ marginTop: 14 }}>
+                <div className="wk-qgh">
                   <span>
-                    {selectedValuation.itemCount} item{selectedValuation.itemCount === 1 ? "" : "s"} in this certificate
+                    Valuation {certificate.valuationNumber} · {formatDate(selectedValuation.date)}
                   </span>
-                  {Number(selectedValuation.partialCount) > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
-                      {selectedValuation.partialCount} partial
-                    </span>
-                  ) : null}
-                  {Number(selectedValuation.binaryCount) > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
-                      {selectedValuation.binaryCount} ratified
-                    </span>
-                  ) : null}
                   <span>Amount due {money(certificate.amountDue)}</span>
-                  <span>Progress {certificate.progressPercentToDate.toFixed(1)}%</span>
+                </div>
+                <p className="wk-locnote" style={{ margin: "0 0 10px" }}>
+                  {selectedValuation.itemCount} item{selectedValuation.itemCount === 1 ? "" : "s"} in
+                  this certificate · progress {certificate.progressPercentToDate.toFixed(1)}%
+                  {Number(selectedValuation.partialCount) > 0
+                    ? ` · ${selectedValuation.partialCount} partial`
+                    : ""}
+                  {Number(selectedValuation.binaryCount) > 0
+                    ? ` · ${selectedValuation.binaryCount} ratified`
+                    : ""}
+                </p>
+                <div className="wk-qhd">
+                  <span>Description</span>
+                  <span>Progress</span>
+                  <span>Qty</span>
+                  <span>Rate</span>
+                  <span>Amount</span>
+                </div>
+                {(selectedValuation.items || []).map((item, index) => {
+                  const isPartial = item?.eventType === "partial";
+                  const prevPct = Number(item?.previousPercent) || 0;
+                  const nextPct = Number(item?.nextPercent) || 0;
+                  return (
+                    <div className="wk-qr" key={item.itemKey || `${item.sn}-${item.description}`}>
+                      <span className="d">
+                        <b style={DESC}>{item.description}</b>
+                        <em>Ref {alphaIndex(index)}</em>
+                      </span>
+                      <span className="s">
+                        {isPartial ? (
+                          <span
+                            className="wk-src sm"
+                            style={CHIP_PARTIAL}
+                            title={`Partial progress from ${prevPct}% to ${nextPct}%`}
+                          >
+                            {prevPct}% → {nextPct}%
+                          </span>
+                        ) : (
+                          <span className="wk-src sm" style={CHIP_RATIFIED} title="Line ratified at 100%">
+                            {statusLabel}
+                          </span>
+                        )}
+                      </span>
+                      <span className="q">
+                        {Number(item.qty || 0).toFixed(2)}
+                        <i>{item.unit}</i>
+                      </span>
+                      <span className="r">{money(item.rate)}</span>
+                      <span className="ds-a">{money(item.amount)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* The payment summary, in his "what the client receives" rows. */}
+              <div className="wk-expr" style={{ borderTop: "1px solid var(--line)" }}>
+                <div>
+                  <span>{statusLabel} items in this valuation</span>
+                  <b>{money(certificate.currentValuationAmount)}</b>
+                </div>
+                <div>
+                  <span>Gross value of works to date</span>
+                  <b>{money(certificate.grossToDate)}</b>
+                </div>
+                <div>
+                  <span>Less retention ({safeNum(certificate.retentionPct)}%)</span>
+                  <b>{money(certificate.retentionAmount)}</b>
+                </div>
+                <div>
+                  <span>Net valuation to date</span>
+                  <b>{money(certificate.netValuationToDate)}</b>
+                </div>
+                <div>
+                  <span>Less previous payments</span>
+                  <b>
+                    {certificate.previousPayments > 0
+                      ? money(certificate.previousPayments)
+                      : "Not applicable for first valuation"}
+                  </b>
+                </div>
+                {certificate.previousEntries.map((entry, index) => (
+                  <div key={`${entry.date}-${index}`}>
+                    <span style={{ paddingLeft: 14 }}>
+                      Valuation No. {index + 1} ({formatDate(entry.date)})
+                    </span>
+                    <b style={{ color: "var(--ink-3)" }}>{money(entry.totalAmount)}</b>
+                  </div>
+                ))}
+                <div>
+                  <span>Subtotal before taxes</span>
+                  <b>{money(certificate.amountBeforeTax)}</b>
+                </div>
+                <div>
+                  <span>Add VAT ({safeNum(certificate.vatPct)}%)</span>
+                  <b>{money(certificate.vatAmount)}</b>
+                </div>
+                <div>
+                  <span>Less withholding tax ({safeNum(certificate.withholdingPct)}%)</span>
+                  <b>{money(certificate.withholdingAmount)}</b>
+                </div>
+                <div className="t">
+                  <span>Total amount due for payment</span>
+                  <b>{money(certificate.amountDue)}</b>
                 </div>
               </div>
-
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-slate-600">
-                    <tr>
-                      <th className="px-3 py-2">Ref</th>
-                      <th className="px-3 py-2">Description</th>
-                      <th className="px-3 py-2">Progress</th>
-                      <th className="px-3 py-2">Qty</th>
-                      <th className="px-3 py-2">Unit</th>
-                      <th className="px-3 py-2">Rate</th>
-                      <th className="px-3 py-2">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(selectedValuation.items || []).map((item, index) => {
-                      const isPartial = item?.eventType === "partial";
-                      const prevPct = Number(item?.previousPercent) || 0;
-                      const nextPct = Number(item?.nextPercent) || 0;
-                      return (
-                        <tr key={item.itemKey || `${item.sn}-${item.description}`} className="border-t">
-                          <td className="px-3 py-2">{alphaIndex(index)}</td>
-                          <td className="px-3 py-2">
-                            {item.description}
-                          </td>
-                          <td className="px-3 py-2">
-                            {isPartial ? (
-                              <span
-                                className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800"
-                                title={`Partial progress from ${prevPct}% to ${nextPct}%`}
-                              >
-                                {prevPct}% → {nextPct}%
-                              </span>
-                            ) : (
-                              <span
-                                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800"
-                                title="Line ratified at 100%"
-                              >
-                                {statusLabel}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">{Number(item.qty || 0).toFixed(2)}</td>
-                          <td className="px-3 py-2">{item.unit}</td>
-                          <td className="px-3 py-2">{money(item.rate)}</td>
-                          <td className="px-3 py-2 font-medium">{money(item.amount)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="min-w-full text-sm">
-                  <tbody>
-                    <tr className="border-t">
-                      <td className="px-3 py-2 font-medium">{statusLabel} items in this valuation</td>
-                      <td className="px-3 py-2 text-right">{money(certificate.currentValuationAmount)}</td>
-                    </tr>
-                    <tr className="border-t">
-                      <td className="px-3 py-2 font-medium">Gross value of works to date</td>
-                      <td className="px-3 py-2 text-right">{money(certificate.grossToDate)}</td>
-                    </tr>
-                    <tr className="border-t">
-                      <td className="px-3 py-2 font-medium">Less retention ({safeNum(certificate.retentionPct)}%)</td>
-                      <td className="px-3 py-2 text-right">{money(certificate.retentionAmount)}</td>
-                    </tr>
-                    <tr className="border-t">
-                      <td className="px-3 py-2 font-medium">Net valuation to date</td>
-                      <td className="px-3 py-2 text-right">{money(certificate.netValuationToDate)}</td>
-                    </tr>
-                    <tr className="border-t">
-                      <td className="px-3 py-2 font-medium">Less previous payments</td>
-                      <td className="px-3 py-2 text-right">
-                        {certificate.previousPayments > 0
-                          ? money(certificate.previousPayments)
-                          : "Not applicable for first valuation"}
-                      </td>
-                    </tr>
-                    {certificate.previousEntries.map((entry, index) => (
-                      <tr key={`${entry.date}-${index}`} className="border-t text-slate-600">
-                        <td className="px-3 py-2">
-                          Valuation No. {index + 1} ({formatDate(entry.date)})
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          {money(entry.totalAmount)}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="border-t">
-                      <td className="px-3 py-2 font-medium">Subtotal before taxes</td>
-                      <td className="px-3 py-2 text-right">{money(certificate.amountBeforeTax)}</td>
-                    </tr>
-                    <tr className="border-t">
-                      <td className="px-3 py-2 font-medium">Add VAT ({safeNum(certificate.vatPct)}%)</td>
-                      <td className="px-3 py-2 text-right">{money(certificate.vatAmount)}</td>
-                    </tr>
-                    <tr className="border-t">
-                      <td className="px-3 py-2 font-medium">Less withholding tax ({safeNum(certificate.withholdingPct)}%)</td>
-                      <td className="px-3 py-2 text-right">{money(certificate.withholdingAmount)}</td>
-                    </tr>
-                    <tr className="border-t bg-adlm-blue-700 text-white">
-                      <td className="px-3 py-2 font-semibold">TOTAL AMOUNT DUE FOR PAYMENT</td>
-                      <td className="px-3 py-2 text-right font-semibold">{money(certificate.amountDue)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            </>
           ) : null}
-        </div>
+        </section>
       )}
     </div>
   );
 }
-

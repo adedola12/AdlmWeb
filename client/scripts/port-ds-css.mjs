@@ -46,6 +46,25 @@ const SHEETS = [
   { in: "admin.css", out: "ds-admin.css" },
   // The Beyond BIM cohort page, added 12 September. One page loads it.
   { in: "beyondbim.css", out: "ds-beyondbim.css" },
+  // Added upstream 17 September. The certificate sheet (Learn screens and the
+  // public /certificate page), the site-wide toast and card system, and the
+  // project gallery and workspace.
+  { in: "cert.css", out: "ds-cert.css" },
+  { in: "feedback.css", out: "ds-feedback.css" },
+  { in: "work-proj.css", out: "ds-work-proj.css" },
+  // 17 Sep: side one of the plugins, QUIV and HERON inside a simulated Revit
+  // and PlanSwift. A design reference for the desktop add-ins, staged only.
+  { in: "plugin-quiv.css", out: "ds-plugin.css" },
+  // 22 Sep: the WINDOWS products, not the website. splash.css dresses the four
+  // launch screens (and, since his rebuild, the HERON plugin page); hub.css
+  // dresses the Installer Hub drawn as a desktop app; plugin-heron.css
+  // replaces plugin-quiv.css on the HERON page, which he rebuilt on how HERON
+  // actually works. All three are staged design references — see
+  // docs/RICHARD-SEP18.md. They are loaded only by the /preview routes that
+  // need them, so no customer page downloads them.
+  { in: "splash.css", out: "ds-splash.css" },
+  { in: "hub.css", out: "ds-hub.css" },
+  { in: "plugin-heron.css", out: "ds-plugin-heron.css" },
 ];
 
 const CSS_DIR = path.resolve(CLIENT, "../../ADLMWebNewUI/site/assets/css");
@@ -237,6 +256,31 @@ function chunkIndexOfLine(css, offset) {
   return line;
 }
 
+// ── asset urls ────────────────────────────────────────────────────────────
+// His stylesheets live in site/assets/css/, so a background image is written
+// `url("../img/x.jpg")`. Ported into client/src/styles/ that same path points
+// at client/src/img/, which does not exist — and Vite fails the whole BUILD on
+// an unresolvable url in CSS rather than warning about it. His images are
+// served from public/ds, so the reference is rewritten to an absolute /ds/
+// one: exactly the rewrite dsRoutes.resolveHref already does for his markup.
+//
+// Nothing needed this until hub.css arrived on 22 September. Every other
+// relative url in his sheets is inside an @font-face, and those are dropped.
+const unresolvedUrls = [];
+
+function fixAssetUrls(css, where) {
+  const out = css.replace(
+    /url\(\s*(['"]?)\.\.\/img\/([^'")]+)\1\s*\)/g,
+    (_whole, _q, file) => `url("/ds/${file}")`,
+  );
+  // Anything still relative would break `npm run build`, so it is reported as
+  // an error rather than left for the build to discover.
+  for (const m of out.matchAll(/url\(\s*['"]?(\.\.?\/[^'")]+)/g)) {
+    unresolvedUrls.push(`${where}: ${m[1]}`);
+  }
+  return out;
+}
+
 // Populated during the run; reported at the end.
 const strays = [];
 // prefers-color-scheme used in a compound query, which the simple unwrap above
@@ -400,7 +444,7 @@ function main() {
     }
 
     const raw = fs.readFileSync(src, "utf8");
-    const ported = transform(raw);
+    const ported = fixAssetUrls(transform(raw), sheet.in);
 
     const header = `/* GENERATED — do not edit by hand.
  *
@@ -442,6 +486,14 @@ ${ported}
       `[port-ds-css] dropped ${strays.length} stray '}' in the source at line(s) ` +
         `${strays.join(", ")} — worth fixing upstream in site.css.`,
     );
+  }
+  if (unresolvedUrls.length) {
+    console.error(
+      `[port-ds-css] ${unresolvedUrls.length} url() still points outside src/styles.\n` +
+        "Vite fails the build on these. Add the folder to fixAssetUrls():\n  " +
+        unresolvedUrls.join("\n  "),
+    );
+    process.exitCode = 1;
   }
 }
 

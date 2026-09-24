@@ -136,6 +136,14 @@ export default function DsAdminCertificates() {
   }
 
   function submit() {
+    // R14: reopen the holder's confirmed name. Nothing to fill in; audited.
+    if (open.mode === "reset") {
+      act(`/admin/certificates/${open.row.id}/reset-name`, {
+        ok: (r) =>
+          `${open.row.who}'s certificate name is open again${r?.was ? ` (was ${r.was})` : ""}. They confirm it on their next claim.`,
+      });
+      return;
+    }
     const fields =
       open.mode === "issue"
         ? ISSUE_FIELDS.map((f) => (f.k === "courseSku" ? { ...f, options: courses } : f))
@@ -238,6 +246,13 @@ export default function DsAdminCertificates() {
             >
               Revoke
             </button>
+            <button
+              type="button"
+              className="ds-btn btn-o ds-btn-sm"
+              onClick={() => setOpen({ mode: "reset", row: c, errors: {}, values: {} })}
+            >
+              Reset name
+            </button>
           </span>
         ),
     },
@@ -329,14 +344,18 @@ export default function DsAdminCertificates() {
               ? "Issue a certificate by hand"
               : open.mode === "revoke"
                 ? `Revoke ${open.row.ref}?`
-                : `Reissue ${open.row.ref}`
+                : open.mode === "reset"
+                  ? `Reset the name on ${open.row.ref}?`
+                  : `Reissue ${open.row.ref}`
           }
           intro={
             open.mode === "issue"
               ? "Certificates normally issue themselves when the last module passes. Doing it here is for the times that did not happen — so it asks why."
               : open.mode === "revoke"
                 ? `${open.row.who} · ${open.row.course}. It stops verifying, and anybody checking it will be told it was withdrawn. They keep their pass; the certificate is what is withdrawn.`
-                : "Same pass, same mark, same reference — a fresh copy. The original stays on the record."
+                : open.mode === "reset"
+                  ? `${open.row.who} confirmed the name printed on their certificates, and it locked. This reopens it, for a misspelling or a legal change of name: they write and confirm it again the next time they open a certificate. The reference and the pass do not change, and the reset is logged.`
+                  : "Same pass, same mark, same reference — a fresh copy. The original stays on the record."
           }
           note={
             open.mode === "revoke"
@@ -361,11 +380,14 @@ export default function DsAdminCertificates() {
                     ? "Issue it"
                     : open.mode === "revoke"
                       ? "Revoke it"
-                      : "Reissue it"}
+                      : open.mode === "reset"
+                        ? "Reset the name"
+                        : "Reissue it"}
               </button>
             </>
           }
         >
+          {open.mode === "reset" ? null : (
           <AdmFields
             fields={
               open.mode === "issue"
@@ -384,6 +406,7 @@ export default function DsAdminCertificates() {
             errors={open.errors}
             onChange={(values) => setOpen((o) => ({ ...o, values }))}
           />
+          )}
         </AdmDrawer>
       ) : null}
 

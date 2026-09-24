@@ -1,6 +1,7 @@
 import express from "express";
+import { refFor } from "../util/certificateRef.js";
 import { withFileLinks } from "../util/submissionLinks.js";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requireAdmin, requirePermission } from "../middleware/auth.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
@@ -9,10 +10,18 @@ import PDFDocument from "pdfkit";
 import cloudinary from "../utils/cloudinaryConfig.js";
 
 const router = express.Router();
-router.use(requireAuth, requireAdmin);
+// Staff with the "learn" area mark submissions: the same gate as the queue
+// they read them from (admin.learnQueues.js). requireAdmin here refused them
+// at the grade step after showing them the queue (R13).
+//
+// Only the marking is theirs. The enrolment list (every learner's name and
+// email) and marking a whole enrolment complete stay admin-only, as they were
+// before: "learn" is a staff-grantable area (review, 2026-09-22).
+router.use(requireAuth);
+const markers = requirePermission("learn");
 
 // list pending submissions
-router.get("/submissions", async (_req, res) => {
+router.get("/submissions", markers, async (_req, res) => {
   const items = await CourseSubmission.find({ gradeStatus: "pending" })
     .sort({ createdAt: 1 })
     .lean();
@@ -20,10 +29,14 @@ router.get("/submissions", async (_req, res) => {
 });
 
 // grade
-router.post("/submissions/:id/grade", async (req, res) => {
-  const { status, feedback } = req.body || {};
+router.post("/submissions/:id/grade", markers, async (req, res) => {
+  const { status, feedback, score } = req.body || {};
   if (!["approved", "rejected"].includes(status))
     return res.status(400).json({ error: "status must be approved|rejected" });
+  const mark = score === undefined || score === null || score === "" ? null : Number(score);
+  if (mark !== null && (!Number.isFinite(mark) || mark < 0 || mark > 100)) {
+    return res.status(400).json({ error: "A mark is a number from 0 to 100." });
+  }
 
   const s = await CourseSubmission.findById(req.params.id);
   if (!s) return res.status(404).json({ error: "Submission not found" });
@@ -32,6 +45,15 @@ router.post("/submissions/:id/grade", async (req, res) => {
   s.feedback = feedback || "";
   s.gradedBy = req.user.email;
   s.gradedAt = new Date();
+  s.score = mark;
+  // The learner sees who marked it; a new mark is a new result to read.
+  s.feedbackSeenAt = null;
+  try {
+    const marker = await User.findById(req.user._id || req.user.id, { firstName: 1, lastName: 1 }).lean();
+    s.gradedByName = [marker?.firstName, marker?.lastName].filter(Boolean).join(" ") || "Your tutor";
+  } catch {
+    s.gradedByName = "Your tutor";
+  }
   await s.save();
 
   // if approved, mark module completed (idempotent)
@@ -58,6 +80,8 @@ router.post("/submissions/:id/grade", async (req, res) => {
         enr.status = "completed";
         enr.certificateUrl = certUrl;
         enr.certificateIssuedAt = new Date();
+        // The reference the certificate prints and /verify checks (R14).
+        if (!enr.certificateRef) enr.certificateRef = refFor(enr._id);
       }
 
       await enr.save();
@@ -68,7 +92,7 @@ router.post("/submissions/:id/grade", async (req, res) => {
 });
 
 // list all enrollments with user + course info
-router.get("/enrollments", async (_req, res) => {
+router.get("/enrollments", requireAdmin, async (_req, res) => {
   try {
     const enrollments = await CourseEnrollment.find({})
       .sort({ createdAt: -1 })
@@ -112,7 +136,7 @@ router.get("/enrollments", async (_req, res) => {
 });
 
 // admin marks enrollment as completed
-router.post("/enrollments/:id/complete", async (req, res) => {
+router.post("/enrollments/:id/complete", requireAdmin, async (req, res) => {
   try {
     const enr = await CourseEnrollment.findById(req.params.id);
     if (!enr) return res.status(404).json({ error: "Enrollment not found" });

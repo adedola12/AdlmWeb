@@ -1,5 +1,10 @@
 // server/routes/me.js
 import express from "express";
+import { resolveDownload } from "../util/downloadLinks.js";
+import { alertCount } from "../util/assignmentAlerts.js";
+import { myAssignments } from "../util/myAssignments.js";
+import cloudinary from "../cloudinary.js";
+import { checkAvatarUrl } from "../util/avatarCheck.js";
 import { WA_CODE_MINUTES, WA_RESEND_SECONDS, WA_MAX_ATTEMPTS, whatsappEnabled, toWhatsAppNumber, newWaCode, hashWaCode, sendWhatsAppCode } from "../util/whatsappVerify.js";
 import dayjs from "dayjs";
 import mongoose from "mongoose";
@@ -35,6 +40,19 @@ import {
   BOQ_IMPORT_LEGACY_ENTITLEMENT,
 } from "../util/boqImportAccess.js";
 import { blankToUndefined } from "../util/profileInput.js";
+import {
+  baseProductKeyExpr,
+  buildWorkOverviewPipeline,
+  certifiedToDateExpr,
+  contractValueExprs,
+  estimatePercentExprs,
+  estimatedTotalStages,
+  shapeWorkOverview,
+} from "../util/workOverview.js";
+import {
+  maskSharedMoney,
+  readerMaySeeRates,
+} from "../util/sharedMoney.js";
 import {
   hubSharesAppIdentity,
   isSchemeAwareBindingEnabled,
@@ -594,6 +612,11 @@ router.get(
         .lean(),
     ]);
 
+    // R15: from our own storage when the file is there, the Admin setting
+    // otherwise. An hour, because this sits on a page until it is clicked; the
+    // new Downloads screen asks /me/downloads/installer-hub for a fresh one.
+    const hubDownload = await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600 });
+
     return res.json({
       email: user.email,
       refreshVersion: user.refreshVersion || 1,
@@ -605,7 +628,7 @@ router.get(
 
       // Installer Hub settings (global, admin-configured)
       installerHub: {
-        downloadUrl: globalSettings?.installerHubUrl || "",
+        downloadUrl: hubDownload.url,
         videoUrl: globalSettings?.installerHubVideoUrl || "",
         // Always present — falls back to the copy bundled with the site.
         guideUrl: resolveUserGuideUrl(globalSettings?.installerHubGuideUrl),
@@ -719,6 +742,15 @@ router.post(
     }
 
     if (username !== undefined) u.username = username;
+    // A new photo must be a square photo of a face (R08, util/avatarCheck.js).
+    // Clearing it, or re-sending the one already saved, is not re-checked.
+    if (avatarUrl && avatarUrl !== u.avatarUrl) {
+      const refusal = await checkAvatarUrl(avatarUrl, {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        lookup: (publicId) => cloudinary.api.resource(publicId, { faces: true }),
+      });
+      if (refusal) return res.status(422).json({ error: refusal, field: "avatarUrl" });
+    }
     if (avatarUrl !== undefined) u.avatarUrl = avatarUrl;
 
     // State wins over zone. A state implies exactly one zone, so deriving it here
@@ -1448,6 +1480,10 @@ router.get(
   }),
 );
 
+// readerMaySeeRates() and maskSharedMoney() used to live here. They moved to
+// util/sharedMoney.js unchanged when the per-product project list needed the
+// same rule — see the imports at the top of this file.
+
 // GET /me/projects-rollup — every project the user owns OR collaborates on,
 // across ALL products (QUIV/HERON/MEP/Civil + their -materials siblings),
 // each with the same cost/valuation rollup the per-product /projects/:key
@@ -1463,6 +1499,7 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const canSeeRates = await readerMaySeeRates(userId);
 
     const num = (path) => ({
       $convert: { input: path, to: "double", onError: 0, onNull: 0 },
@@ -1491,6 +1528,24 @@ router.get(
       {
         $match: {
           pmTrackerOnly: { $ne: true },
+          // A merged project's CONTAINER holds no measurements of its own: its
+          // bill is resolved live from the source projects it links
+          // (services/projectMerge.js), which are themselves rows in this very
+          // list, with their own money. Left in, it arrived as a project worth
+          // ₦0 stuck at "Takeoff" and counted the same job twice — once as the
+          // container, once as each of its parts. Resolving its parts' money
+          // into it instead would double the portfolio's measured work, and
+          // dropping the parts to make room would hide, from a collaborator on
+          // one source model, the only project they can actually open.
+          //
+          // So the rollup excludes containers, exactly as the per-product list
+          // route does by default (routes/projects.js listProjects). The one
+          // screen that manages merges opts in there with ?includeMerged=1 and
+          // is the only place with a design for them; nothing on the Work
+          // screens does. A merged project is still opened, split and exported
+          // from that screen, and its certificates still reach the dashboard
+          // through GET /me/work-overview.
+          mergeContainer: { $ne: true },
           $or: [{ userId }, { "collaborators.userId": userId }],
         },
       },
@@ -1535,45 +1590,11 @@ router.get(
           // "planswift" import is a HERON project. Filing every import under
           // QUIV showed HERON imports in the QUIV folder, and they then
           // opened as HERON.
-          baseProductKey: {
-            $let: {
-              vars: {
-                k: { $toLower: { $ifNull: ["$productKey", ""] } },
-              },
-              in: {
-                $switch: {
-                  branches: [
-                    {
-                      case: { $in: ["$$k", ["revit-materials", "revit-material"]] },
-                      then: "revit",
-                    },
-                    {
-                      case: { $in: ["$$k", ["planswift-materials", "planswift-material"]] },
-                      then: "planswift",
-                    },
-                    {
-                      case: {
-                        $in: [
-                          "$$k",
-                          ["mep-materials", "mep-material", "revitmep-materials"],
-                        ],
-                      },
-                      then: "mep",
-                    },
-                    {
-                      case: { $in: ["$$k", ["civil3d-materials", "civil3d-material"]] },
-                      then: "civil3d",
-                    },
-                    {
-                      case: { $in: ["$$k", ["archicad-materials", "archicad-material"]] },
-                      then: "archicad",
-                    },
-                  ],
-                  default: "$$k",
-                },
-              },
-            },
-          },
+          //
+          // The expression itself lives in util/workOverview.js, so this route
+          // and GET /me/work-overview can never disagree about which product a
+          // row belongs to.
+          baseProductKey: baseProductKeyExpr(),
           publicShareEnabled: 1,
           updatedAt: 1,
           version: 1,
@@ -1636,6 +1657,117 @@ router.get(
               $map: { input: "$safeItems", as: "item", in: valuationFactor },
             },
           },
+
+          // ── Additive fields for the Work overview (S18/WH-03, WH-06) ──
+          // Every one is derived from data already stored. Nothing is renamed,
+          // nothing is removed, and no existing field changes shape, so the
+          // desktop plugins (which never read this web-only route anyway) and
+          // the screens that already use it are untouched.
+
+          // The employer the bill is being prepared for. Stored since the BoQ
+          // cover needed it; the overview's project table shows it.
+          clientName: { $ifNull: ["$clientName", ""] },
+          // Set on a SOURCE project that has been merged into a container —
+          // i.e. this project's work is claimed as linked services elsewhere.
+          mergedInto: 1,
+
+          // What this user may do here. The rollup already carried `shared`,
+          // which only says "somebody else owns it"; pricing prompts must not
+          // be shown to a read-only collaborator who cannot act on them.
+          accessLevel: {
+            $cond: [
+              { $eq: ["$userId", userId] },
+              "owner",
+              {
+                $ifNull: [
+                  {
+                    $arrayElemAt: [
+                      {
+                        $map: {
+                          input: {
+                            $filter: {
+                              input: { $ifNull: ["$collaborators", []] },
+                              as: "c",
+                              cond: { $eq: ["$$c.userId", userId] },
+                            },
+                          },
+                          as: "c",
+                          in: "$$c.accessLevel",
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  "view",
+                ],
+              },
+            ],
+          },
+
+          // Measured work that has a rate, and measured work that has not.
+          // "Waiting for a rate" is a line with a quantity and no money on it;
+          // a zero-quantity line is a heading or a spare, not work.
+          pricedCount: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $gt: [num("$$item.qty"), 0] },
+                    { $gt: [num("$$item.rate"), 0] },
+                  ],
+                },
+              },
+            },
+          },
+          unpricedCount: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $gt: [num("$$item.qty"), 0] },
+                    { $lte: [num("$$item.rate"), 0] },
+                  ],
+                },
+              },
+            },
+          },
+
+          certificateCount: { $size: { $ifNull: ["$certificates", []] } },
+          // Certified to date: what the approved and paid certificates add up
+          // to, which is the figure the project's own Contract tab shows
+          // (client ProjectContractPanel) and the one the PDF reports print
+          // (services/reportEngine). It used to be the cumulative value of the
+          // highest-numbered approved certificate, which agrees only while
+          // approval runs contiguously from certificate 1 — with cert 1 left a
+          // draft, the dashboard certified work nobody had approved. The
+          // expression lives in util/workOverview.js so the two /me routes
+          // cannot drift apart again.
+          certifiedToDate: certifiedToDateExpr(),
+
+          // ── What the stage is read from (S18 bill, PR2-24) ───────────────
+          // client/src/lib/projectGallery.js stageOf() reads these three plus
+          // certificateCount. Without them the gallery and the overview could
+          // only ever report Takeoff, Priced or Valuations, so a finalised job
+          // read "Valuations" and filtering by Tendered returned nothing. Same
+          // fields, same $ifNull defaults, as the per-product list route.
+          contractLocked: { $ifNull: ["$contract.locked", false] },
+          tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
+          finalized: { $ifNull: ["$finalAccount.finalized", false] },
+
+          // ── The rest of the work's value ─────────────────────────────────
+          // Measured work alone is not what a certificate certifies: a
+          // certificate's cumulative value also carries provisional sums,
+          // preliminaries and approved variations. Carrying them lets the
+          // dashboard show certified value as a share of the same whole,
+          // instead of dividing by qty x rate and reading high.
+          ...contractValueExprs(),
+          // Contingency and VAT, which finish the grand summary but are never
+          // certified. They exist for estimatedTotal below.
+          ...estimatePercentExprs(),
         },
       },
       {
@@ -1648,12 +1780,75 @@ router.get(
               0,
             ],
           },
+          // The preliminary pool is a percentage of measured work plus the
+          // declared provisional sums — the same order the Bill, the contract
+          // lock and computeValueToDate() use.
+          preliminaryTotal: {
+            $divide: [
+              {
+                $multiply: [
+                  { $add: ["$totalCost", "$provisionalTotal"] },
+                  "$preliminaryPercent",
+                ],
+              },
+              100,
+            ],
+          },
         },
       },
+      {
+        $addFields: {
+          // What the work is worth, on the same cascade a certificate is built
+          // from. Contingency and VAT are deliberately out: neither is ever
+          // certified.
+          workValue: {
+            $add: [
+              "$totalCost",
+              "$provisionalTotal",
+              "$preliminaryTotal",
+              "$approvedVariationsTotal",
+            ],
+          },
+        },
+      },
+      // …and what the job is ESTIMATED at: the whole grand summary, the same
+      // figure the project's own Bill shows. The gallery labelled measured
+      // work "Estimated" because this route never sent one; it now sends the
+      // real one, on the one cascade every screen reads
+      // (client/src/features/projects/lib/projectTotals.js).
+      ...estimatedTotalStages(),
       { $sort: { updatedAt: -1 } },
     ]);
 
-    return res.json({ projects: list });
+    return res.json({ projects: maskSharedMoney(list, canSeeRates) });
+  }),
+);
+
+// GET /me/work-overview — the four things the Work dashboard needs that the
+// projects rollup cannot answer, because the rollup only reads a project's
+// items: certificates, variations, programme tasks, and how many bill lines
+// each RateGen rate is on.
+//
+// Read-only, web-only and additive: no desktop plugin calls it, nothing here
+// writes, and every figure is read exactly as stored (a certificate's
+// netPayable, a variation's qty x rate) so no total anywhere moves.
+//
+// Money on somebody else's project is hidden on the same rule the project
+// itself uses, so the dashboard can never show a figure the project page would
+// have masked.
+//
+// Each panel is independent on the client, so a facet that comes back empty
+// simply shows that panel's empty state.
+router.get(
+  "/work-overview",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const [raw, canSeeRates] = await Promise.all([
+      TakeoffProject.aggregate(buildWorkOverviewPipeline(userId, { now: new Date() })),
+      readerMaySeeRates(userId),
+    ]);
+    return res.json(shapeWorkOverview(raw, { canSeeRates }));
   }),
 );
 
@@ -2197,12 +2392,29 @@ router.get(
     // catalogue, so the rail reads "3 of 7" the way his design does — but with
     // 7 being however many products we sell today, not a number frozen into
     // the markup.
+    //
+    // Only LIVE licences for products we sell count. Every entitlement used to
+    // count, so add-on grants (boq-import, archicad) and expired licences read
+    // "7 of 6". ownedKeys lets the rail's My tools show what this account can
+    // open, rather than Richard's sample tenant.
+    const productKeys = await Product.find({ isCourse: { $ne: true } }, { key: 1 })
+      .lean()
+      .then((rows) => rows.map((r) => r.key).filter(Boolean))
+      .catch(() => []);
+    const sold = new Set(productKeys);
+    const now = dayjs();
     const owned = new Set(
-      (user?.entitlements || []).map((e) => e.productKey).filter(Boolean),
+      (user?.entitlements || [])
+        .filter(
+          (e) =>
+            e?.productKey &&
+            sold.has(e.productKey) &&
+            String(e.status || "").toLowerCase() === "active" &&
+            (!e.expiresAt || dayjs(e.expiresAt).isAfter(now)),
+        )
+        .map((e) => e.productKey),
     );
-    const catalogue = await Product.countDocuments({ isCourse: { $ne: true } }).catch(
-      () => 0,
-    );
+    const catalogue = productKeys.length;
 
     res.json({
       projects,
@@ -2210,8 +2422,13 @@ router.get(
       materials: rateLib.materials,
       gangs: rateLib.gangs,
       certificates,
+      // R11: assignments with a new alert (due soon, overdue, result in).
+      assignments: await myAssignments(userId, { links: false })
+        .then(alertCount)
+        .catch(() => 0),
       productsOwned: owned.size,
       productsTotal: catalogue,
+      ownedKeys: [...owned],
       name: user?.name || "",
       email: user?.email || "",
       organizationName: user?.organizationName || "",

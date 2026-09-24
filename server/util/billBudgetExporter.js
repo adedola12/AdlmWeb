@@ -40,6 +40,13 @@
 import ExcelJS from "exceljs";
 
 import { ADLM_EXPORT_COVER_NOTE, stampAdlmWorkbook } from "./adlmWorkbook.js";
+import {
+  canonicalKind,
+  isLabourKind,
+  isMaterialKind,
+  kindLabel as sharedKindLabel,
+  KIND as SHARED_KIND,
+} from "./resourceKind.js";
 
 /* ── formatting constants ─────────────────────────────────────────────── */
 
@@ -177,22 +184,17 @@ const BUCKET_PLANT = "plant";
 function bucketFor(kind) {
   const k = txt(kind).toLowerCase();
   if (!k) return BUCKET_MATERIAL;
-  if (k.startsWith("lab")) return BUCKET_LABOUR;
-  if (k.startsWith("mat")) return BUCKET_MATERIAL;
-  if (k.startsWith("consum")) return BUCKET_MATERIAL;
+  if (isLabourKind(k)) return BUCKET_LABOUR;
+  if (isMaterialKind(k)) return BUCKET_MATERIAL;
+  // A consumable is bought and delivered like a material, so it belongs on the
+  // Material schedule the buyer works off, not on Plant & Equipment.
+  if (canonicalKind(k) === SHARED_KIND.CONSUMABLE) return BUCKET_MATERIAL;
+  // Plant, Equipment, and any word we do not know: the Plant & Equipment sheet
+  // is the catch-all, so nothing a QS wrote can fall off the export.
   return BUCKET_PLANT;
 }
 
-function kindLabel(kind) {
-  const k = txt(kind).toLowerCase();
-  if (!k) return "Material";
-  if (k.startsWith("lab")) return "Labour";
-  if (k.startsWith("mat")) return "Material";
-  if (k.startsWith("consum")) return "Consumable";
-  if (k.startsWith("plant")) return "Plant";
-  if (k.startsWith("equip")) return "Equipment";
-  return k[0].toUpperCase() + k.slice(1);
-}
+const kindLabel = (kind) => sharedKindLabel(kind, "Material");
 
 function resourceName(line) {
   return txt(line?.materialName || line?.description || line?.takeoffLine) || "(unnamed resource)";

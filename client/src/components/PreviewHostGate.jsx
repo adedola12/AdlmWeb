@@ -1,4 +1,4 @@
-// preview.adlmstudio.com (and any other non-production host serving this
+// preview.adlmstudio.net (and any other non-production host serving this
 // branch) is for ADLM staff only.
 //
 // The branch build is the unfinished new site. On the live hosts

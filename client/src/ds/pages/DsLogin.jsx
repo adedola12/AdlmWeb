@@ -67,7 +67,7 @@ export default function DsLogin() {
               </Link>
             </p>
             {" "}
-            <form action="/manage" method="get">
+            <form action="/manage" method="get" data-fb="login" noValidate={true}>
               {" "}
               <div className="ds-field">
                 <label htmlFor="le">

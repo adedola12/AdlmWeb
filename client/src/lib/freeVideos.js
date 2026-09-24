@@ -54,6 +54,15 @@ export async function fetchFreeVideoSections(signal) {
   return Array.isArray(data?.sections) ? data.sections : [];
 }
 
+/** Every published lesson with its shelf, and the Learn page's chip row. */
+export async function fetchLessonLibrary(signal) {
+  const data = await getJson(`${API_BASE}/learn/free/sections`, signal);
+  return {
+    sections: Array.isArray(data?.sections) ? data.sections : [],
+    filters: Array.isArray(data?.filters) ? data.filters : [],
+  };
+}
+
 /** The short recommended strip for one catalogue product key. */
 export async function fetchRecommendedVideos(productKey, limit = 6, signal) {
   const key = String(productKey || "").trim();

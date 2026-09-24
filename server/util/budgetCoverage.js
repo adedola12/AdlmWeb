@@ -19,14 +19,29 @@
 // so user pricing/procurement edits survive re-heals via the sn|name|unit|kind
 // merge key.
 
+import { isLabourKind } from "./resourceKind.js";
+
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
+// The vocabulary is util/resourceKind.js. By the stored kind only — a row
+// NAMED "Mason" but stored as Material is a material here, because that is how
+// it is keyed, exported and priced everywhere else.
 function isLabour(b) {
+  return isLabourKind(b?.componentKind);
+}
+
+// The material bucket, tested explicitly. It used to be "anything that is not
+// labour", which quietly counted a Plant or Equipment row as material: a bill
+// line whose only non-labour row was excavator hire looked covered, so no
+// material line was ever synthesised for it and the QS had nothing to price
+// the materials on. Plant is its own resource class. A blank kind still counts
+// as material — that is what an unstamped row has always meant here.
+function isMaterial(b) {
   const k = String(b?.componentKind || "").trim().toLowerCase();
-  return k === "labour" || k === "labor";
+  return !k || k === "material";
 }
 
 // Work items that are pure labour (no material is bought/placed) — these show
@@ -175,7 +190,7 @@ export function ensureBillItemCoverage(items, budgetItems) {
     // Material only for items that actually carry material — labour-only items
     // (excavation, disposal, compaction, earthwork support, backfill…) stay
     // labour-only.
-    if (!isLabourOnly(it) && !lines.some((b) => !isLabour(b))) {
+    if (!isLabourOnly(it) && !lines.some(isMaterial)) {
       const name = cleanName(it?.description || it?.takeoffLine) || "Material";
       list.push(synth(it, code, "Material", name, 0));
     }

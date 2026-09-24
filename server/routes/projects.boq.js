@@ -11,6 +11,7 @@ import {
   requestUserId,
   userOwnsDoc,
 } from "../util/exportAccess.js";
+import { isApprovedVariation } from "../util/variationStatus.js";
 
 const router = express.Router();
 
@@ -102,7 +103,7 @@ async function normalizeProjectDoc(doc) {
   doc.name = doc.name || doc.title || "Project";
   doc.items = Array.isArray(doc.items) ? doc.items : [];
   if (!doc.mergeContainer) return doc;
-  const merged = await resolveMergedProject(doc, doc.userId);
+  const merged = await resolveMergedProject(doc);
   merged.name = doc.name;
   return merged;
 }
@@ -304,7 +305,9 @@ router.get(
         budgetItems: project.budgetItems || [],
         materialItems: project.materialItems || [],
         provisionalSums: project.provisionalSums || [],
-        variations: project.variations || [],
+        // S18 valuations: the workbook prices the approved variations only,
+        // so the exported total agrees with the bill on screen.
+        variations: (project.variations || []).filter(isApprovedVariation),
         preliminaryItems: project.preliminaryItems || [],
         preliminaryPercent: Number(project.contract?.preliminaryPercent) || 0,
         groupBy,
@@ -359,7 +362,9 @@ router.get(
         buildingType,
         foundationType: foundationType || undefined,
         provisionalSums: project.provisionalSums || [],
-        variations: project.variations || [],
+        // S18 valuations: the workbook prices the approved variations only,
+        // so the exported total agrees with the bill on screen.
+        variations: (project.variations || []).filter(isApprovedVariation),
         preliminaryItems: project.preliminaryItems || [],
         preliminaryPercent: Number(project.contract?.preliminaryPercent) || 0,
         // A BUILDING merge becomes one sheet per structure. A discipline merge

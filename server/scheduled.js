@@ -63,14 +63,38 @@ function ready() {
       { runVideoPoll },
       { runOpsDigest },
       { runReleaseNoticeDrain },
+      { runFreeLibraryAuto },
+      { FreeVideo },
+      { Setting },
     ] = await Promise.all([
       import("./util/expiryNotifier.js"),
       import("./util/autoRenew.js"),
       import("./util/videoNotifier.js"),
       import("./util/opsDigest.js"),
       import("./util/releaseNotifier.js"),
+      import("./util/freeLibraryAuto.js"),
+      import("./models/Learn.js"),
+      import("./models/Setting.js"),
     ]);
-    return { runExpiryNotifier, runAutoRenewals, runVideoPoll, runOpsDigest, runReleaseNoticeDrain };
+    // R02/R10: new uploads onto the free lesson shelves, from the channel's
+    // public feed (no API key), skipping videos staff have deleted.
+    const runFreeLibrary = () =>
+      runFreeLibraryAuto({
+        FreeVideo,
+        ignoredIds: () =>
+          Setting.findOne({ key: "global" })
+            .select("freeLibraryIgnored")
+            .lean()
+            .then((s) => s?.freeLibraryIgnored || []),
+      });
+    return {
+      runExpiryNotifier,
+      runAutoRenewals,
+      runVideoPoll,
+      runOpsDigest,
+      runReleaseNoticeDrain,
+      runFreeLibrary,
+    };
   })().catch((err) => {
     _readyPromise = null;
     throw err;
@@ -128,7 +152,20 @@ export async function runJob(job, jobs, context) {
     // is not a trade anybody would make, so infra points a second function
     // (VideoPollFn) at this same file — one copy of the code, two concurrency
     // budgets.
-    "video-poll": () => jobs.runVideoPoll(),
+    // R02/R10: new uploads onto the free lesson shelves first (runFreeLibrary,
+    // from ready()), with its own try/catch so a feed hiccup never stops the
+    // announcement poll, and the other way round.
+    "video-poll": async () => {
+      let freeLibrary;
+      try {
+        if (jobs.runFreeLibrary) freeLibrary = await jobs.runFreeLibrary();
+      } catch (err) {
+        console.error("[scheduled] free-library failed:", err?.message || err);
+        freeLibrary = { ok: false, error: String(err?.message || err) };
+      }
+      const poll = await jobs.runVideoPoll();
+      return { ...(poll && typeof poll === "object" ? poll : { poll }), freeLibrary };
+    },
     // Normally rides on expiry-notifier below; listed so it can be invoked by
     // hand with { "job": "ops-digest" } to resend a morning report.
     "ops-digest": () => jobs.runOpsDigest(),

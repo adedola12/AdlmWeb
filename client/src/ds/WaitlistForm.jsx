@@ -97,29 +97,21 @@ export default function WaitlistForm({ children }) {
   const status =
     state.status === "idle" || !host ? null : (
       <div
-        className="sform-status"
+        className={`sform-status ${state.status === "done" ? "done" : ""}`}
         role="status"
         aria-live="polite"
-        style={{
-          marginTop: state.status === "done" ? 0 : "14px",
-          padding: "18px 22px",
-          borderRadius: "14px",
-          border: "1px solid var(--line)",
-          background: "var(--bg-alt)",
-          textAlign: "center",
-        }}
       >
         {state.status === "sending" && <p>Sending…</p>}
         {state.status === "done" && (
           <>
-            <h4 style={{ marginBottom: "6px" }}>Thank you</h4>
+            <h4>Thank you</h4>
             <p>{state.message}</p>
           </>
         )}
         {state.status === "error" && (
           <>
-            <h4 style={{ marginBottom: "6px" }}>That didn&apos;t send</h4>
-            <p style={{ marginBottom: "14px" }}>{state.message}</p>
+            <h4>That didn&apos;t send</h4>
+            <p>{state.message}</p>
             <button
               type="button"
               className="ds-btn btn-o"

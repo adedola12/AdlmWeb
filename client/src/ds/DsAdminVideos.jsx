@@ -165,7 +165,7 @@ export default function DsAdminVideos() {
       h: "Recipients",
       w: "110px",
       num: true,
-      cell: (v) => (v.notifiedAt ? num(v.stats.sent) : <AdmDim>—</AdmDim>),
+      cell: (v) => (v.notifiedAt ? num(v.stats.sent) : <AdmDim>–</AdmDim>),
     },
     {
       h: "Failed",
@@ -173,7 +173,7 @@ export default function DsAdminVideos() {
       num: true,
       cell: (v) =>
         !v.notifiedAt ? (
-          <AdmDim>—</AdmDim>
+          <AdmDim>–</AdmDim>
         ) : v.stats.failed ? (
           <AdmChip tone="bad">{num(v.stats.failed)}</AdmChip>
         ) : (
@@ -187,7 +187,7 @@ export default function DsAdminVideos() {
       w: "160px",
       cell: (v) =>
         !v.notifiedAt ? (
-          <AdmDim>—</AdmDim>
+          <AdmDim>–</AdmDim>
         ) : (
           <AdmDim>
             {num(v.stats.skippedOptedOut)} opted out · {num(v.stats.skippedUnverified)} unconfirmed
@@ -267,10 +267,14 @@ export default function DsAdminVideos() {
           poller would, and a video that has already been announced is refused rather than sent
           twice.
         </span>
-        <div className="adm-inline" style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        {/* His field idiom is a wrapper, not a class on the input: .adm-fields
+            input carries the border, radius and padding. It was written as
+            .adm-inline + .ds-input, and .ds-input is defined nowhere — so the
+            only rule reaching it was .adm-inline input, which is the 68px
+            right-aligned cell editor and the wrong shape for a watch URL. */}
+        <div className="adm-fields" style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <input
             type="text"
-            className="ds-input"
             style={{ flex: 1, minWidth: 0 }}
             placeholder="https://www.youtube.com/watch?v=…"
             value={paste}

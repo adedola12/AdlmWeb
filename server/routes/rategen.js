@@ -14,6 +14,10 @@ import {
   normalizeRateOverride,
   toUserRateDefinition,
 } from "../util/rategenUserRates.js";
+import {
+  planBulkPriceChange,
+  MAX_BULK_ROWS,
+} from "../util/rategenBulkPrices.js";
 import { normalizeZone, ZONES } from "../util/zones.js";
 import { STATES, normalizeState, zoneForState } from "../util/states.js";
 import { ensureDb } from "../db.js";
@@ -207,6 +211,125 @@ router.put("/price-overrides", async (req, res) => {
     version: lib.priceOverridesVersion,
     state: stateKey,
   });
+});
+
+/**
+ * Move a whole category of the user's own prices by a percentage.
+ *
+ * CUSTOMER-LEVEL ONLY. This writes RateGenLibrary.priceOverrides for the state
+ * on the caller's profile, exactly like the single-row PUT above. It never
+ * touches the master catalogue: master prices are published from Rate Gen
+ * desktop, and the website's master write routes answer 405 MASTER_READ_ONLY.
+ *
+ * It returns `changed` so the screen can report a true number, and the
+ * overrides it replaced so the caller can offer an honest undo — a bulk
+ * mistake is otherwise very hard to back out of by hand.
+ */
+router.put("/price-overrides/bulk", async (req, res) => {
+  try {
+    await ensureDb();
+
+    const { kind, category, percent } = req.body || {};
+    if (kind !== "material" && kind !== "labour")
+      return res.status(400).json({ error: "kind must be material or labour" });
+
+    const pc = Number(percent);
+    if (!Number.isFinite(pc))
+      return res.status(400).json({ error: "percent must be a number" });
+    // A hundred per cent either way is already an extraordinary correction.
+    // Beyond that it is far more likely to be a typo than an intention.
+    if (pc < -100 || pc > 100)
+      return res.status(400).json({ error: "percent must be between -100 and 100" });
+
+    const stateKey = normalizeState(req.user.state) || null;
+    const zone = (stateKey ? zoneForState(stateKey) : null) || req.user.zone || null;
+
+    const userId = getUserId(req);
+    let lib = await RateGenLibrary.findOne({ userId });
+    if (!lib) lib = await RateGenLibrary.create({ userId });
+
+    const rows =
+      kind === "material"
+        ? await fetchMasterMaterials(zone, stateKey)
+        : await fetchMasterLabour(zone, stateKey);
+
+    const before = (lib.priceOverrides || []).map((o) =>
+      o?.toObject ? o.toObject() : { ...o },
+    );
+
+    const plan = planBulkPriceChange({
+      rows,
+      overrides: before,
+      kind,
+      category: category ?? null,
+      percent: pc,
+      stateKey,
+      limit: MAX_BULK_ROWS,
+    });
+
+    if (!plan.changed) {
+      return res.json({
+        ok: true,
+        changed: 0,
+        matched: plan.matched,
+        capped: plan.capped,
+        // The cap itself, so the screen can report the real number rather than
+        // repeating one it has hard-coded.
+        limit: MAX_BULK_ROWS,
+        version: lib.priceOverridesVersion || 1,
+        state: stateKey,
+      });
+    }
+
+    lib.priceOverrides = plan.overrides;
+    lib.priceOverridesVersion = (lib.priceOverridesVersion || 1) + 1;
+    await lib.save();
+
+    res.json({
+      ok: true,
+      changed: plan.changed,
+      matched: plan.matched,
+      capped: plan.capped,
+      limit: MAX_BULK_ROWS,
+      // The whole previous array, so "Undo" is a restore rather than a guess
+      // at which rows were replaced and which were created.
+      previous: before,
+      version: lib.priceOverridesVersion,
+      state: stateKey,
+    });
+  } catch (e) {
+    console.error("[/rategen/price-overrides/bulk] error:", e);
+    res.status(500).json({ error: e?.message || "Failed to update prices" });
+  }
+});
+
+/**
+ * Put back exactly what was there before a bulk change. The client sends the
+ * `previous` array it was given; the server normalises it through the schema
+ * on save, so a hand-made payload cannot write a shape the model rejects.
+ */
+router.put("/price-overrides/restore", async (req, res) => {
+  try {
+    await ensureDb();
+    const { items } = req.body || {};
+    if (!Array.isArray(items))
+      return res.status(400).json({ error: "items must be an array" });
+    if (items.length > MAX_BULK_ROWS)
+      return res.status(400).json({ error: "too many rows to restore" });
+
+    const userId = getUserId(req);
+    let lib = await RateGenLibrary.findOne({ userId });
+    if (!lib) lib = await RateGenLibrary.create({ userId });
+
+    lib.priceOverrides = items;
+    lib.priceOverridesVersion = (lib.priceOverridesVersion || 1) + 1;
+    await lib.save();
+
+    res.json({ ok: true, items: lib.priceOverrides, version: lib.priceOverridesVersion });
+  } catch (e) {
+    console.error("[/rategen/price-overrides/restore] error:", e);
+    res.status(500).json({ error: e?.message || "Failed to restore prices" });
+  }
 });
 
 router.get("/library", async (req, res) => {

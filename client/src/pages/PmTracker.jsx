@@ -622,9 +622,41 @@ export default function PmTracker() {
     }
   }
 
-  function handleExportCalendar() {
+  // R16: the token went in the query string, which the API does not read
+  // (Bearer only), so this opened a 401 and left the token in the browser's
+  // history. Fetched with the header instead and saved as a file, the way
+  // ProjectsGeneric already does it.
+  async function handleExportCalendar() {
     if (!selectedId) return;
-    window.open(`${API_BASE}${EP.pmCalendar(selectedId)}?token=${accessToken}`, "_blank");
+    try {
+      const res = await fetch(`${API_BASE}${EP.pmCalendar(selectedId)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || `Calendar export failed (${res.status})`);
+      }
+      let filename = "";
+      try {
+        filename = decodeURIComponent(res.headers.get("X-Calendar-Filename") || "");
+      } catch {
+        /* ignore */
+      }
+      if (!filename) {
+        const name = projects.find((p) => String(p._id) === String(selectedId))?.name || "project";
+        filename = `${name.replace(/[\\/:*?"<>|]+/g, "-").trim() || "project"}.ics`;
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      setErr(e?.message || "Failed to export calendar.");
+    }
   }
 
   // ── Task handlers ──────────────────────────────────────────────────
@@ -781,7 +813,7 @@ export default function PmTracker() {
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
-              to="/dashboard"
+              to="/manage"
               className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition"
             >
               <FaArrowLeft className="text-xs" />

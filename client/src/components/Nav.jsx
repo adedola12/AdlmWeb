@@ -163,6 +163,8 @@ export default function Nav() {
           Because fixed removes the navbar from flow, a spacer div below
           (h-14) reserves the 56px so page content doesn't slide up under it. */}
       <header
+        // Sits under the launch countdown strip when it is showing (R20).
+        style={{ top: "var(--launch-strip-h, 0px)" }}
         className={`fixed inset-x-0 top-0 z-[100] transition-all duration-300 ${
           scrolled
             ? "bg-adlm-navy/95 backdrop-blur-xl border-b border-adlm-navy-tertiary shadow-lg shadow-black/30"
@@ -216,7 +218,7 @@ export default function Nav() {
             ) : (
               <>
                 <DesktopLink to="/purchase">Purchase</DesktopLink>
-                <DesktopLink to="/dashboard">Dashboard</DesktopLink>
+                <DesktopLink to="/manage">Overview</DesktopLink>
                 <DesktopLink to="/time-management">Time Log</DesktopLink>
                 <DesktopLink to="/profile">Profile</DesktopLink>
                 {isStaff(user) && <DesktopLink to="/admin">Admin</DesktopLink>}
@@ -246,7 +248,11 @@ export default function Nav() {
           was in flow. Without this, page content (banners, main, etc.)
           would slide up under the now-fixed navbar. Marked aria-hidden so
           screen readers skip it. */}
-      <div aria-hidden="true" className="h-14 flex-shrink-0" />
+      <div
+        aria-hidden="true"
+        className="h-14 flex-shrink-0"
+        style={{ height: "calc(3.5rem + var(--launch-strip-h, 0px))" }}
+      />
 
       <div
         className={`fixed inset-0 z-[110] bg-black/50 backdrop-blur-sm transition-opacity md:hidden ${
@@ -316,7 +322,7 @@ export default function Nav() {
                 Account
               </div>
               <MobileLink to="/purchase" onClick={() => setOpen(false)} icon={<FiShoppingCart />}>Purchase</MobileLink>
-              <MobileLink to="/dashboard" onClick={() => setOpen(false)} icon={<FiGrid />}>Dashboard</MobileLink>
+              <MobileLink to="/manage" onClick={() => setOpen(false)} icon={<FiGrid />}>Overview</MobileLink>
               <MobileLink to="/time-management" onClick={() => setOpen(false)} icon={<FiCalendar />}>Time Log</MobileLink>
               <MobileLink to="/profile" onClick={() => setOpen(false)} icon={<FiUser />}>Profile</MobileLink>
               {isStaff(user) && (
