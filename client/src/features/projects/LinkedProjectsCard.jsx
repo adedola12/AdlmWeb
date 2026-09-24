@@ -176,7 +176,20 @@ export default function LinkedProjectsCard({
 
       {summaries.length === 0 ? (
         <div className="wk-empty" style={{ padding: "26px 22px" }}>
-          No linked projects yet.
+          <b>No linked projects yet</b>
+          <p>
+            A link rolls another project&rsquo;s total into this bill as one line and keeps it
+            live, so an MEP or services package measured separately is still counted here
+            without being measured again.
+          </p>
+          {/* The control is at the foot of this card, and only for somebody
+              who may edit the project. Saying "link one" to a reader who has
+              no button would be worse than saying nothing. */}
+          <p>
+            {canEdit
+              ? "Link a project, at the foot of this card, adds the first one."
+              : "You are reading this project rather than working on it, so you cannot link one."}
+          </p>
         </div>
       ) : (
         <div className="wk-use">
