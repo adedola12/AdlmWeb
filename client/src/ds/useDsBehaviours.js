@@ -93,28 +93,62 @@ function initTheme(root, s, openThemeMenu) {
 // and in again. threshold 0 rather than 0.08, because a section taller than
 // about sixteen viewports can never reach a ratio of 0.08 and so would never
 // appear at all.
+//
+// LATE ARRIVALS. His pages are static HTML: every `.rise` in the document
+// exists before this runs, so one sweep is all his version ever needed. Ours
+// are React, and a `.rise` can mount long afterwards — a panel behind
+// `{cond && …}`, a section that renders only once its fetch lands. Such an
+// element is never observed, never receives `in`, and `:root.js .ds .rise`
+// leaves it at opacity:0 for ever. It is on the page, it takes its space, and
+// the customer cannot see a thing. So the tree is watched, and anything added
+// to it gets exactly the same treatment as the elements present at mount.
 function initReveal(root, reduce, s) {
-  const risers = root.querySelectorAll(".rise");
-  if (!risers.length) return;
-  if (reduce || !("IntersectionObserver" in window)) {
-    risers.forEach((el) => el.classList.add("in"));
-    return;
+  // Without motion — or without the observer to drive it — a riser is simply
+  // shown. The same rule has to hold for one that arrives later.
+  const still = reduce || !("IntersectionObserver" in window);
+
+  let take;
+  if (still) {
+    take = (el) => el.classList.add("in");
+  } else {
+    const io = s.observe(
+      new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            const sibs = Array.from(e.target.parentNode?.children || []);
+            e.target.style.transitionDelay = `${Math.min(sibs.indexOf(e.target), 5) * 65}ms`;
+            e.target.classList.add("in");
+            io.unobserve(e.target);
+          }
+        },
+        { rootMargin: "0px 0px -10% 0px", threshold: 0 },
+      ),
+    );
+    // Re-observing a target already being observed is a no-op by spec, so a
+    // node swept twice costs nothing.
+    take = (el) => io.observe(el);
   }
-  const io = s.observe(
-    new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (!e.isIntersecting) continue;
-          const sibs = Array.from(e.target.parentNode?.children || []);
-          e.target.style.transitionDelay = `${Math.min(sibs.indexOf(e.target), 5) * 65}ms`;
-          e.target.classList.add("in");
-          io.unobserve(e.target);
-        }
-      },
-      { rootMargin: "0px 0px -10% 0px", threshold: 0 },
-    ),
+
+  const sweep = (node) => {
+    if (!node || node.nodeType !== 1) return;
+    if (node.classList.contains("rise") && !node.classList.contains("in")) take(node);
+    node.querySelectorAll(".rise:not(.in)").forEach(take);
+  };
+
+  sweep(root);
+
+  // childList only: a class changing on an existing node is this function's
+  // own work, and subtree without attributes keeps the callback to the nodes
+  // React has actually inserted.
+  const mo = s.observe(
+    new MutationObserver((records) => {
+      for (const r of records) {
+        for (const node of r.addedNodes) sweep(node);
+      }
+    }),
   );
-  risers.forEach((el) => io.observe(el));
+  mo.observe(root, { childList: true, subtree: true });
 }
 
 // ── count-up statistics ────────────────────────────────────────────────────
