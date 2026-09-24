@@ -1636,13 +1636,15 @@
    .wk-empty the same three parts, copied from his .pj-empty values so the
    two read identically wherever they sit next to each other.
 
-   Child selectors only: a .wk-empty holding one sentence, which is most of
-   them today, is untouched. */
-.ds .wk-empty b{display:block;font-size:16px;font-weight:500;color:var(--ink)}
-.ds .wk-empty p{margin:6px auto 14px;max-width:52ch;font-size:13px;font-weight:300;
+   Direct children only, unlike his descendant selectors: a .wk-empty holding
+   one sentence, which is most of them today, is untouched, and a panel that
+   happens to nest a paragraph deeper inside one is not restyled from a
+   distance. */
+.ds .wk-empty > b{display:block;font-size:16px;font-weight:500;color:var(--ink)}
+.ds .wk-empty > p{margin:6px auto 14px;max-width:52ch;font-size:13px;font-weight:300;
   color:var(--ink-3);line-height:1.6}
-.ds .wk-empty p:last-child{margin-bottom:0}
-.ds .wk-empty .b{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+.ds .wk-empty > p:last-child{margin-bottom:0}
+.ds .wk-empty > .b{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
 
 /* His .as-empty centres its text; his .as-acts is a left-aligned flex row,
    made for the buttons under an assignment card. An action inside the empty
