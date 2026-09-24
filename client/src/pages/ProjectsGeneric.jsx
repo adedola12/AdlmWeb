@@ -41,6 +41,9 @@ import {
   variationRow,
 } from "../features/projects/lib/projectRows.js";
 import { reconcileBill } from "../features/projects/rateReconcile.js";
+// The same product/host table the gallery names its tools from (P0.4), so the
+// two screens say "Measure in QUIV, inside Revit" in exactly the same words.
+import { SOURCES } from "../lib/projectGallery.js";
 import {
   budgetDrivenCodes as budgetDrivenCodesFor,
   nextRateStamp,
@@ -5511,6 +5514,16 @@ export default function ProjectsGeneric() {
     [rowsShown],
   );
 
+  // What the grid needs to tell a first run apart from a search that matched
+  // nothing, and both apart from a list that never loaded. The product and its
+  // host come from the same table the gallery uses, so the two screens name
+  // them identically; a tool with no entry falls back to wording that names no
+  // product rather than guessing one.
+  const gallerySource = React.useMemo(() => {
+    const base = normTool(tool).replace(/-materials?$/, "");
+    return SOURCES[base === "revitmep" ? "mep" : base] || null;
+  }, [tool]);
+
   // Explorer selection helpers
   function toggleSelect(id) {
     if (!id) return;
@@ -5759,6 +5772,12 @@ export default function ProjectsGeneric() {
                 sectionSummary={sectionSummary}
                 statusPastLabel={statusPastLabel}
                 storageInfo={storageInfo}
+                loadFailed={!!err}
+                searching={!!projectQ}
+                totalCount={rows.length}
+                sourceName={gallerySource?.name || ""}
+                hostName={gallerySource?.host || ""}
+                isMaterials={showMaterials}
               />
             ) : (
               <ProjectOpenView
