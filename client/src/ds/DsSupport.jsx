@@ -108,6 +108,8 @@ export default function DsSupport() {
   const [summary, setSummary] = React.useState(null);
   const [devices, setDevices] = React.useState(null);
   const [tickets, setTickets] = React.useState(null);
+  const [ticketsFailed, setTicketsFailed] = React.useState(false);
+  const [ticketsRetrying, setTicketsRetrying] = React.useState(false);
   const [catalogue, setCatalogue] = React.useState(null);
   const [deployments, setDeployments] = React.useState([]);
   const [failed, setFailed] = React.useState(false);
@@ -124,11 +126,20 @@ export default function DsSupport() {
   const [problem, setProblem] = React.useState("");
   useReportBack(said, problem);
 
+  // A read that failed is not an empty list. Catching to [] made the panel
+  // say "None raised · Nothing raised yet", which tells a customer with open
+  // tickets that they have none — and sends them to raise a duplicate.
   const loadTickets = React.useCallback(() => {
     if (!accessToken) return Promise.resolve();
+    setTicketsFailed(false);
     return apiAuthed("/api/support/tickets/mine", { token: accessToken })
       .then((d) => setTickets(d.tickets || []))
-      .catch(() => setTickets([]));
+      .catch(() => {
+        // The rest of the screen — the form above all — still works, so the
+        // panel reports its own failure rather than taking the page down.
+        setTickets([]);
+        setTicketsFailed(true);
+      });
   }, [accessToken]);
 
   React.useEffect(() => {
@@ -381,11 +392,33 @@ export default function DsSupport() {
             <div className="dsh-ph">
               <h2>Your tickets</h2>
               <span className="when">
-                {tickets.length ? `${tickets.length} raised` : "None raised"}
+                {ticketsFailed
+                  ? "Not loaded"
+                  : tickets.length
+                    ? `${tickets.length} raised`
+                    : "None raised"}
               </span>
             </div>
             <div className="dsh-body">
-              {tickets.length ? (
+              {ticketsFailed ? (
+                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
+                  Your tickets could not be loaded just now. This list is empty because the
+                  read failed, not because you have none. Nothing has been lost: any ticket
+                  you have open is still open, and support can still see it.{" "}
+                  <button
+                    type="button"
+                    className="ds-btn btn-o ds-btn-sm"
+                    style={{ marginTop: 12 }}
+                    disabled={ticketsRetrying}
+                    onClick={() => {
+                      setTicketsRetrying(true);
+                      loadTickets().finally(() => setTicketsRetrying(false));
+                    }}
+                  >
+                    {ticketsRetrying ? "Trying…" : "Try again"}
+                  </button>
+                </p>
+              ) : tickets.length ? (
                 tickets.map((t) => <Ticket key={t._id} t={t} />)
               ) : (
                 // Item 13. The form that fills this panel is on the same page,

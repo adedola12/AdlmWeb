@@ -71,9 +71,28 @@ export default function DsTeam() {
   const [devices, setDevices] = React.useState(null);
   const [catalogue, setCatalogue] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
+  // A failed device read is not an empty device list. Catching to [] made the
+  // panel say "0 activated · No machine has activated a licence yet", which is
+  // a statement about the account, not about the request — and it reads as a
+  // lost licence to anyone who has a product installed and running.
+  const [devicesFailed, setDevicesFailed] = React.useState(false);
+  const [devicesRetrying, setDevicesRetrying] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const [problem, setProblem] = React.useState("");
   useReportBack("", problem);
+
+  const loadDevices = React.useCallback(() => {
+    if (!accessToken) return Promise.resolve();
+    setDevicesFailed(false);
+    return apiAuthed("/me/devices", { token: accessToken })
+      .then((d) => setDevices(d.devices || []))
+      // The machine list is one panel, not the screen. If it cannot be read the
+      // seat meters are still worth showing, so the panel says so on its own.
+      .catch(() => {
+        setDevices([]);
+        setDevicesFailed(true);
+      });
+  }, [accessToken]);
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
@@ -83,11 +102,7 @@ export default function DsTeam() {
       .then((d) => alive && setSummary(d))
       .catch(() => alive && setFailed(true));
 
-    apiAuthed("/me/devices", { token: accessToken })
-      .then((d) => alive && setDevices(d.devices || []))
-      // The machine list is one panel, not the screen. If it cannot be read the
-      // seat meters are still worth showing.
-      .catch(() => alive && setDevices([]));
+    loadDevices();
 
     fetch(`${API_BASE}/products`)
       .then((r) => (r.ok ? r.json() : null))
@@ -101,7 +116,7 @@ export default function DsTeam() {
     return () => {
       alive = false;
     };
-  }, [accessToken]);
+  }, [accessToken, loadDevices]);
 
   const view = React.useMemo(() => {
     if (!summary || !catalogue || !devices) return null;
@@ -296,11 +311,29 @@ export default function DsTeam() {
             <div className="dsh-ph">
               <h2>Machines</h2>
               <span className="when">
-                {devices.length} activated
+                {devicesFailed ? "Not loaded" : `${devices.length} activated`}
               </span>
             </div>
             <div className="dsh-body">
-              {devices.length ? (
+              {devicesFailed ? (
+                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
+                  Your machines could not be loaded just now. This list is empty because the
+                  read failed, not because nothing has activated a licence. No seat has been
+                  freed and no activation has been lost.{" "}
+                  <button
+                    type="button"
+                    className="ds-btn btn-o ds-btn-sm"
+                    style={{ marginTop: 12 }}
+                    disabled={devicesRetrying}
+                    onClick={() => {
+                      setDevicesRetrying(true);
+                      loadDevices().finally(() => setDevicesRetrying(false));
+                    }}
+                  >
+                    {devicesRetrying ? "Trying…" : "Try again"}
+                  </button>
+                </p>
+              ) : devices.length ? (
                 devices.map((d) => (
                   <div className="dsh-dl" key={d.fingerprint}>
                     <span className="ic">
