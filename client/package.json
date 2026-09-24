@@ -8,11 +8,15 @@
     "predev": "node scripts/gen-changelogs.mjs",
     "dev": "vite",
     "prebuild": "node scripts/gen-changelogs.mjs",
-    "build": "vite build",
+    "build": "vite build && npm run build:ssr",
+    "build:ssr": "vite build --ssr src/entry-server.jsx --outDir dist-ssr",
     "prelint": "node scripts/gen-changelogs.mjs",
     "lint": "eslint .",
     "preview": "vite preview --port 5173",
-    "postbuild": "node scripts/gen-sitemap.mjs"
+    "postbuild": "node scripts/gen-sitemap.mjs && node scripts/gen-indexnow-key.mjs",
+    "seo:check": "node scripts/seo-check.mjs",
+    "seo:serve": "node scripts/serve-ssr.mjs",
+    "seo:ping": "node scripts/indexnow-ping.mjs"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.2.3",

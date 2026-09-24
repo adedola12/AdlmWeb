@@ -11,6 +11,8 @@ import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";
 import { guideForChangelogSlug } from "../data/guides.js";
 import { Reveal } from "../components/effects.jsx";
+import Seo from "../components/Seo.jsx";
+import { breadcrumbSchema } from "../lib/schema.js";
 
 /* Visual treatment per change type — colour, icon and label. */
 const TYPE_META = {
@@ -34,28 +36,24 @@ const TYPE_META = {
   },
 };
 
-function ChangeGroup({ type, items }) {
+// Renders the New / Improved / Fixed pill for a release.
+//
+// It used to list every change item beneath the pill. Those bullets are our
+// internal record — they name file paths, environment variables and the exact
+// shape of past defects — so the generator no longer publishes them (see the
+// note in scripts/gen-changelogs.mjs). What a reader gets is the release's
+// one-to-two sentence highlight plus these pills; the depth lives in the user
+// guides.
+function ChangeGroup({ type }) {
   const meta = TYPE_META[type] || TYPE_META.new;
   const { Icon } = meta;
   return (
-    <div className="mt-5 first:mt-0">
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.pill}`}
-      >
-        <Icon className="w-3.5 h-3.5" />
-        {meta.label}
-      </span>
-      <ul className="mt-3 space-y-2.5">
-        {items.map((text, i) => (
-          <li key={i} className="flex gap-2.5">
-            <FiCheck className={`mt-0.5 w-4 h-4 flex-shrink-0 ${meta.dot}`} />
-            <span className="text-[15px] leading-relaxed text-slate-700 dark:text-adlm-dark-muted">
-              {text}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.pill}`}
+    >
+      <Icon className="w-3.5 h-3.5" />
+      {meta.label}
+    </span>
   );
 }
 
@@ -92,9 +90,13 @@ function ReleaseCard({ release, accent, index }) {
               {release.highlight}
             </p>
           )}
-          {release.changes?.map((g) => (
-            <ChangeGroup key={g.type} type={g.type} items={g.items} />
-          ))}
+          {release.changes?.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {release.changes.map((g) => (
+                <ChangeGroup key={g.type} type={g.type} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Reveal>
@@ -175,15 +177,27 @@ export default function WhatsNewProduct() {
     window.scrollTo({ top: 0 });
   }, [slug]);
 
-  React.useEffect(() => {
-    const prev = document.title;
-    document.title = product
-      ? `What's New — ${product.name} | ADLM Studio`
-      : "What's New | ADLM Studio";
-    return () => {
-      document.title = prev;
-    };
-  }, [product]);
+  // Replaces a bare document.title effect, which set a title and nothing else:
+  // no canonical, so every /whats-new/:slug page competed with the others for
+  // the same signals, and no breadcrumb saying which product it belongs to.
+  const seo = product ? (
+    <Seo
+      title={`${product.name} release notes`}
+      description={
+        `Release notes for ${product.name}. Every version, what changed in it, ` +
+        `and when it shipped. Updated with each release from ADLM Studio.`
+      }
+      path={`/whats-new/${String(slug || "").toLowerCase()}`}
+      jsonLd={breadcrumbSchema([
+        { name: "Home", path: "/" },
+        { name: "What's new", path: "/whats-new" },
+        {
+          name: product.name,
+          path: `/whats-new/${String(slug || "").toLowerCase()}`,
+        },
+      ])}
+    />
+  ) : null;
 
   // Still fetching live data and the slug isn't in the bundled seed — wait
   // before deciding it's a 404 (it may be a product added via the admin UI).
@@ -206,6 +220,7 @@ export default function WhatsNewProduct() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      {seo}
       <style>{`@keyframes fade-in-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
       {/* Back link */}
@@ -235,7 +250,7 @@ export default function WhatsNewProduct() {
           </h1>
           <p className="mt-3 max-w-2xl text-white/70">
             {product.tagline}
-            {hasReleases ? ". Here's everything we've shipped — newest first." : "."}
+            {hasReleases ? ". Here's everything we've shipped, newest first." : "."}
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
             {product.compatibility && (
@@ -272,7 +287,7 @@ export default function WhatsNewProduct() {
         </div>
       </header>
 
-      {/* User guide — the illustrated PDF covering this product */}
+      {/* User guide, the illustrated PDF covering this product */}
       {guide && (
         <Reveal className="mt-6">
           <div className="flex flex-col gap-4 rounded-adlm-lg border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center dark:border-adlm-dark-border dark:bg-adlm-dark-panel">

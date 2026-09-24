@@ -140,7 +140,7 @@ export default function ManagementReport({ report }) {
         kicker="Management Report"
         title={orgName}
         accent="Portfolio"
-        lede={`Organization-wide progress across ${t.projectCount ?? 0} projects — value, schedule health, risks and issues as at ${dayjs(report.generatedAt).format("DD MMMM YYYY")}.`}
+        lede={`Organization-wide progress across ${t.projectCount ?? 0} projects: value, schedule health, risks and issues as at ${dayjs(report.generatedAt).format("DD MMMM YYYY")}.`}
         metaPairs={[
           { label: "Organization", value: orgName },
           { label: "Projects", value: `${t.projectCount ?? 0}` },

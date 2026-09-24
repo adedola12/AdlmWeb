@@ -1,5 +1,6 @@
 // src/http.js
 import { API_BASE, IS_PROD } from "./config";
+import { reportNetworkFailure } from "./lib/netFailureBeacon";
 
 /* -------------------- helpers -------------------- */
 function ensureApiBase() {
@@ -114,14 +115,25 @@ async function coreFetch(path, init = {}, authed = false) {
     });
   };
 
-  let res = await makeFetch(token);
+  // A request that never completes ("Failed to fetch") leaves nothing in the
+  // server logs, so the browser reports it. See lib/netFailureBeacon.js.
+  const send = async (tkn) => {
+    try {
+      return await makeFetch(tkn);
+    } catch (e) {
+      if (e?.name !== "AbortError") reportNetworkFailure({ url, method: m, error: e });
+      throw e;
+    }
+  };
+
+  let res = await send(token);
 
   // refresh only for authed requests
   if (authed && res.status === 401) {
     try {
       const r = await refresh();
       window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: r }));
-      res = await makeFetch(r.accessToken);
+      res = await send(r.accessToken);
     } catch {
       const err = new Error("Unauthorized");
       err.status = 401;

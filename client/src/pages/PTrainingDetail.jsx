@@ -526,7 +526,7 @@ export default function PTrainingDetail() {
 
         <div className="mt-4 text-sm text-gray-700 space-y-2">
           <div>
-            <span className="font-semibold">Date:</span> {fmtDate(t.startAt)} —{" "}
+            <span className="font-semibold">Date:</span> {fmtDate(t.startAt)}, {" "}
             {fmtDate(t.endAt)}
           </div>
 

@@ -51,6 +51,7 @@ import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
 import * as schedulerTargets from "aws-cdk-lib/aws-scheduler-targets";
+import * as ses from "aws-cdk-lib/aws-ses";
 import { AdlmConfig, reservedConcurrency } from "../config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -171,6 +172,10 @@ export class AdlmApiStack extends Stack {
         ENABLE_RENEWAL_CRON: "false",
         // Never serve the frontend from the function.
         SERVE_CLIENT: "false",
+        // Ada's model provider — "bedrock", authenticated by this function's
+        // IAM role (see the grant below). Set from config rather than SSM on
+        // purpose; the reasoning is on AdlmConfig.agentProvider.
+        AGENT_PROVIDER: cfg.agentProvider,
       },
 
       logGroup: apiLogs,
@@ -231,6 +236,236 @@ export class AdlmApiStack extends Stack {
       }),
     );
 
+    /* ───────────── Permission to call Claude on Bedrock ─────────────
+     * This replaces an Anthropic API key, so the role IS the credential now.
+     *
+     * Two resources, because a cross-region inference profile is not one
+     * thing: the call is authorised against the PROFILE, and the profile then
+     * fans the request out to the underlying foundation model in whichever
+     * region it picks. Granting only the profile fails at the second hop with
+     * an AccessDenied that names a model ARN nobody asked for directly.
+     *
+     * Scoped to Anthropic models rather than "*" — this role serves the whole
+     * public API, so it should not be able to invoke every model in the
+     * account. The regions stay wildcarded because choosing them is the
+     * inference profile's job.
+     */
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["bedrock:InvokeModel"],
+        resources: [
+          `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
+          "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        ],
+      }),
+    );
+
+    /* ───────────────────── The sending identity ─────────────────────
+     *
+     * IN THIS REGION, DELIBERATELY.
+     *
+     * There is already a half-finished `adlmstudio.net` identity in us-east-1,
+     * created by hand in the console. It cannot serve this stack: an SES
+     * identity exists in exactly one region, sandbox status is granted per
+     * region, and this API runs in eu-west-1. Production access won in
+     * us-east-1 would leave these functions still capped at 200 messages a day.
+     *
+     * (The us-east-1 account is also on the Pro pricing plan — $105 a month
+     * before a single message — where eu-west-1 is on Essentials. Worth
+     * undoing by hand once nothing depends on it.)
+     *
+     * A DOMAIN identity, not an address. `adlmstudio.net` publishes
+     * `v=DMARC1; p=reject`, so a message SES signs only as `amazonses.com` is
+     * not delivered-to-spam, it is refused outright. Alignment needs DKIM on
+     * the domain itself, which is what Easy DKIM below sets up.
+     *
+     * WHAT THIS DOES NOT DO
+     *
+     * Publish the DNS. Authoritative DNS for adlmstudio.net is Google Cloud
+     * DNS (ns-cloud-d1.googledomains.com), not Route 53, so CDK cannot write
+     * the records — it can only tell you what they are. They come out as
+     * stack outputs; the identity stays PENDING until somebody puts them in
+     * Google's console, and SES rechecks on its own afterwards.
+     */
+    /* ───────────── Bounces and complaints ─────────────
+     *
+     * Until this existed, nothing consumed them. A dead address stayed on the
+     * list and was mailed again on every campaign, which is precisely how a
+     * sender's reputation is spent: providers judge you on the share of your
+     * mail that fails, so a handful of addresses that will never accept
+     * anything again slowly cost delivery for everybody who would have read it.
+     *
+     * SES → SNS → Lambda, and deliberately NOT SES → SNS → HTTPS webhook. A
+     * webhook means a public URL anybody can POST to, signature verification
+     * we have to get right, and a subscription-confirmation dance. With an
+     * SNS-to-Lambda subscription only SNS can invoke the function, and AWS
+     * proves that rather than us.
+     */
+    const mailEventsTopic = new sns.Topic(this, "MailEventsTopic", {
+      displayName: "SES bounces and complaints",
+      // enforceSSL on the topic policy: there is no reason for anything to
+      // publish here over plain HTTP, and SES does not.
+      enforceSSL: true,
+    });
+
+    const mailConfigSet = new ses.ConfigurationSet(this, "MailConfigSet", {
+      // Reputation metrics are what make the SES console's bounce and
+      // complaint rates real numbers rather than blanks — and those two rates
+      // are what AWS watches when deciding whether to keep the account.
+      reputationMetrics: true,
+      // Stop sending automatically if the account is placed under review
+      // rather than sending into a suspension.
+      sendingEnabled: true,
+    });
+
+    mailConfigSet.addEventDestination("BouncesAndComplaints", {
+      destination: ses.EventDestination.snsTopic(mailEventsTopic),
+      // Only the two that carry a decision. Sends and deliveries are real
+      // events SES will happily publish, and subscribing to them here would
+      // mean paying to deliver, invoke and ignore one message per recipient
+      // per campaign — the volume is the whole audience, not the failures.
+      //
+      // Opens and clicks used to be on that list for the same reason. They are
+      // now subscribed deliberately, on their own destination below, because
+      // "did anybody read it" turned out to be worth the volume. Keeping them
+      // separate means they can be switched off again without touching the
+      // bounce path, which must never stop working.
+      events: [ses.EmailSendingEvent.BOUNCE, ses.EmailSendingEvent.COMPLAINT],
+    });
+
+    /*
+     * OPEN AND CLICK TRACKING LIVES ON ITS OWN CONFIGURATION SET, NOT THIS ONE.
+     *
+     * On 12 Sep 2026 it was briefly added to the set above and had to come off
+     * within the hour. The reason is worth keeping, because the change looks
+     * harmless:
+     *
+     * The set above is attached to the EMAIL IDENTITY as its default (see
+     * mailIdentity below), so it applies to every message the domain sends.
+     * Subscribing it to OPEN and CLICK therefore turned tracking on for all
+     * mail - and SES implements tracking by injecting a 1x1 pixel and
+     * REWRITING EVERY LINK through awstrack.me. Password-reset and sign-in
+     * security-code mail went out with their links pointing at an AWS tracking
+     * domain: alarming to read, and blocked outright by corporate filters. The
+     * failure mode is a customer who cannot reset their password, caused by a
+     * change only ever meant to measure a newsletter.
+     *
+     * So campaigns get their own set and name it explicitly. util/mailer.js
+     * passes `tracked: true` for a campaign send and nothing else does, and
+     * util/sesTransport.js turns that into this set's name. Receipts, resets
+     * and security codes keep clean links and are never measured.
+     */
+    const marketingConfigSet = new ses.ConfigurationSet(this, "MarketingConfigSet", {
+      reputationMetrics: true,
+      sendingEnabled: true,
+    });
+
+    marketingConfigSet.addEventDestination("OpensAndClicks", {
+      destination: ses.EventDestination.snsTopic(mailEventsTopic),
+      events: [ses.EmailSendingEvent.OPEN, ses.EmailSendingEvent.CLICK],
+    });
+
+    // Bounces and complaints matter on campaign mail too - arguably more, since
+    // a campaign is where a complaint actually happens. Same topic, same
+    // handler, so a bounce from a newsletter marks the address undeliverable
+    // exactly as one from an invoice does.
+    marketingConfigSet.addEventDestination("BouncesAndComplaints", {
+      destination: ses.EventDestination.snsTopic(mailEventsTopic),
+      events: [ses.EmailSendingEvent.BOUNCE, ses.EmailSendingEvent.COMPLAINT],
+    });
+
+    /*
+     * STILL OUTSTANDING before this is something to be proud of:
+     *
+     *   1. A custom redirect domain (TrackingOptions) so rewritten links sit on
+     *      an ADLM subdomain instead of awstrack.me. Campaign links currently
+     *      show an AWS domain on hover. Needs DNS and a certificate.
+     *   2. The privacy policy has to say that opens and clicks are recorded per
+     *      recipient. That is not optional once the data is kept.
+     */
+
+    const mailIdentity = new ses.EmailIdentity(this, "MailIdentity", {
+      identity: ses.Identity.domain(cfg.domainName),
+      // Attached to the IDENTITY, not just passed per-send. A configuration
+      // set named in application code only applies to the sends that remember
+      // to name it; set as the identity's default, it applies to everything
+      // from this domain including the paths nobody thought about. The app
+      // also passes it explicitly (SES_CONFIGURATION_SET) — the two agree, and
+      // either alone would work.
+      configurationSet: mailConfigSet,
+      // The envelope sender, so SPF is evaluated against a domain ADLM owns
+      // rather than amazonses.com — the second of the two DMARC alignment
+      // routes, and the one that keeps forwarded mail working.
+      //
+      // `mail.` and not `send.`: `send.adlmstudio.net` is Resend's, and it has
+      // to keep working untouched until the cutover is finished and the key is
+      // withdrawn. Two systems sharing one MAIL FROM subdomain is how you end
+      // up unable to turn either of them off.
+      mailFromDomain: `mail.${cfg.domainName}`,
+      // Default behaviour on MX failure is USE_DEFAULT_VALUE, which means SES
+      // quietly falls back to amazonses.com while the MX record is missing.
+      // That is the right way round here: mail keeps flowing during the DNS
+      // gap instead of failing closed on a record nobody has published yet.
+    });
+
+    mailIdentity.dkimRecords.forEach((record, i) => {
+      new CfnOutput(this, `MailDkim${i + 1}`, {
+        value: `${record.name} CNAME ${record.value}`,
+        description: `Publish in Google Cloud DNS - DKIM ${i + 1} of 3 for ${cfg.domainName}`,
+      });
+    });
+
+    new CfnOutput(this, "MailFromRecords", {
+      value:
+        `mail.${cfg.domainName} MX 10 feedback-smtp.${cfg.region}.amazonses.com | ` +
+        `mail.${cfg.domainName} TXT "v=spf1 include:amazonses.com ~all"`,
+      description:
+        "Publish in Google Cloud DNS. The apex SPF and the Google Workspace MX are NOT touched by this.",
+    });
+
+    /* ───────────── Permission to send mail through SES ─────────────
+     *
+     * This replaces the Resend API key and the Gmail app password, the same
+     * way the Bedrock grant above replaced an Anthropic key: the role IS the
+     * credential now, so there is nothing left in SSM that could send as the
+     * studio if it leaked.
+     *
+     * Scoped to this domain's identities and nothing else. A role that serves
+     * the whole public API should not be able to send as any identity the
+     * account happens to own — and during the cutover the account owns a
+     * couple that exist only for testing.
+     *
+     * Both identity shapes are listed because the migration passes through
+     * two: an ADDRESS identity is what you can verify in five minutes to prove
+     * the plumbing works, and a DOMAIN identity is what DMARC actually
+     * requires (adlmstudio.net publishes p=reject, so an unaligned message is
+     * not delivered-to-spam, it is refused).
+     *
+     * ses:GetAccount carries no resource ARN — it is an account-level read,
+     * and the app uses it to discover the real send rate rather than guess one
+     * (see server/util/sesTransport.js). Without it the pool falls back to a
+     * timid default and everything still works, just slowly.
+     */
+    const sesSend = new iam.PolicyStatement({
+      actions: ["ses:SendEmail", "ses:SendRawEmail"],
+      resources: [
+        `arn:aws:ses:${cfg.region}:${this.account}:identity/${cfg.domainName}`,
+        `arn:aws:ses:${cfg.region}:${this.account}:identity/*@${cfg.domainName}`,
+        `arn:aws:ses:${cfg.region}:${this.account}:configuration-set/*`,
+      ],
+    });
+    const sesReadQuota = new iam.PolicyStatement({
+      actions: ["ses:GetAccount"],
+      resources: ["*"],
+    });
+    fn.addToRolePolicy(sesSend);
+    fn.addToRolePolicy(sesReadQuota);
+    fn.addEnvironment("SES_CONFIGURATION_SET", mailConfigSet.configurationSetName);
+    fn.addEnvironment(
+      "SES_MARKETING_CONFIGURATION_SET",
+      marketingConfigSet.configurationSetName,
+    );
+
     /* ─────────────────── Function URL ───────────────────
      * The plan requires verifying the API here BEFORE any DNS change, and it
      * leaves a known-good fallback hostname if CloudFront misbehaves mid-outage.
@@ -251,8 +486,8 @@ export class AdlmApiStack extends Stack {
      */
     const distribution = new cloudfront.Distribution(this, "ApiDistribution", {
       comment: certificate
-        ? `ADLM Cloud API — ${cfg.apiHostname}`
-        : "ADLM Cloud API — CloudFront domain only (no custom domain yet)",
+        ? `ADLM Cloud API - ${cfg.apiHostname}`
+        : "ADLM Cloud API - CloudFront domain only (no custom domain yet)",
       // A custom domain requires a certificate; with neither, CloudFront serves
       // on its own *.cloudfront.net name using AWS's own certificate.
       ...(certificate
@@ -323,7 +558,7 @@ export class AdlmApiStack extends Stack {
     const alarms: cloudwatch.Alarm[] = [
       new cloudwatch.Alarm(this, "ErrorsAlarm", {
         alarmDescription:
-          "Lambda function errors — 5xx from the API. Check CloudWatch Logs Insights.",
+          "Lambda function errors - 5xx from the API. Check CloudWatch Logs Insights.",
         metric: fn.metricErrors({ period: Duration.minutes(5) }),
         threshold: 5,
         evaluationPeriods: 2,
@@ -340,7 +575,7 @@ export class AdlmApiStack extends Stack {
       }),
       new cloudwatch.Alarm(this, "DurationAlarm", {
         alarmDescription:
-          "p99 duration approaching the function timeout — requests are about to be cut off.",
+          "p99 duration approaching the function timeout - requests are about to be cut off.",
         metric: fn.metricDuration({
           period: Duration.minutes(5),
           statistic: "p99",
@@ -361,6 +596,29 @@ export class AdlmApiStack extends Stack {
      * overlap, a batch-length timeout, and its own alarms so a failed nightly
      * job is not lost inside the API's error rate.
      */
+    /* Shared by both job functions below. Lifted out of ScheduledFn when the
+     * video poller became a second function pointing at the same entry point:
+     * two copies of this drift, and the one that drifts silently is the source
+     * map setting, which is only ever noticed while reading a stack trace at
+     * the worst possible moment. */
+    const JOB_BUNDLING = {
+      externalModules: [],
+      minify: true,
+      sourceMap: true,
+      // The map without this is 30MB against 8MB of actual code, and Lambda
+      // downloads and unpacks the whole package on every cold start — so three
+      // quarters of that download was the original sources embedded in the
+      // map. Dropping them keeps file/line mappings in stack traces and costs
+      // only the inline source snippet.
+      sourcesContent: false,
+      target: "node22",
+      format: OutputFormat.ESM,
+      banner:
+        "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);" +
+        "import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';" +
+        "const __filename=__f(import.meta.url);const __dirname=__d(__filename);",
+    };
+
     // Hoisted for the same reason as apiLogs — see the note there.
     const scheduledLogs = new logs.LogGroup(this, "ScheduledFnLogs", {
       retention: cfg.logRetentionDays,
@@ -397,26 +655,56 @@ export class AdlmApiStack extends Stack {
 
       logGroup: scheduledLogs,
 
-      bundling: {
-        externalModules: [],
-        minify: true,
-        sourceMap: true,
-        // The map without this is 30MB against 8MB of actual code, and Lambda
-        // downloads and unpacks the whole package on every cold start — so
-        // three quarters of that download was the original sources embedded
-        // in the map. Dropping them keeps file/line mappings in stack traces
-        // and costs only the inline source snippet.
-        sourcesContent: false,
-        target: "node22",
-        format: OutputFormat.ESM,
-        banner:
-          "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);" +
-          "import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';" +
-          "const __filename=__f(import.meta.url);const __dirname=__d(__filename);",
-      },
+      bundling: JOB_BUNDLING,
     });
 
-    scheduledFn.addToRolePolicy(
+    /* ── the video poller ──────────────────────────────────────────────────
+     *
+     * The SAME entry point as ScheduledFn — scheduled.js dispatches on the job
+     * name — but deliberately a SECOND function, because the two have
+     * incompatible shapes. ScheduledFn is concurrency 1 so two runs of a job
+     * that charges cards can never overlap. This one fires every fifteen
+     * minutes and a send to the whole customer base takes minutes, so on that
+     * function it would eventually still be running at 08:00, throttle the
+     * auto-renewal invocation, and dead-letter it. Cards going uncharged
+     * because a tutorial announcement was busy is not a trade worth making.
+     *
+     * One copy of the code, two concurrency budgets, two sets of alarms.
+     */
+    const videoPollLogs = new logs.LogGroup(this, "VideoPollFnLogs", {
+      retention: cfg.logRetentionDays,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    const videoPollFn = new NodejsFunction(this, "VideoPollFn", {
+      entry: path.join(SERVER_DIR, "scheduled.js"),
+      handler: "handler",
+      projectRoot: SERVER_DIR,
+      depsLockFilePath: path.join(SERVER_DIR, "package-lock.json"),
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: cfg.memoryMb,
+
+      // Under the 10-minute Mongo job-lock TTL in util/videoNotifier.js, for
+      // the same reason ScheduledFn sits under its own: a timed-out run dies
+      // without releasing the lock, so the TTL must expire after the process
+      // is definitely gone.
+      timeout: Duration.minutes(9),
+
+      ...(cfg.useReservedConcurrency ? { reservedConcurrentExecutions: 1 } : {}),
+
+      environment: {
+        NODE_ENV: "production",
+        SSM_PREFIX: cfg.ssmPrefix,
+        MONGO_MAX_POOL: String(cfg.mongoMaxPool),
+        NODE_OPTIONS: "--enable-source-maps",
+      },
+
+      logGroup: videoPollLogs,
+      bundling: JOB_BUNDLING,
+    });
+
+    for (const fn of [scheduledFn, videoPollFn]) fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["ssm:GetParametersByPath", "ssm:GetParameter", "ssm:GetParameters"],
         resources: [
@@ -425,13 +713,135 @@ export class AdlmApiStack extends Stack {
         ],
       }),
     );
-    scheduledFn.addToRolePolicy(
+    for (const fn of [scheduledFn, videoPollFn]) fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["kms:Decrypt"],
         resources: ["*"],
         conditions: {
           StringEquals: { "kms:ViaService": `ssm.${cfg.region}.amazonaws.com` },
         },
+      }),
+    );
+    // Both of these send mail — renewal notices and expiry warnings from the
+    // scheduler, tutorial announcements from the video poller — so both need
+    // the same grant the API function has. The video poller is the one that
+    // sends to the whole customer base at once, which makes it the reason the
+    // quota read is here too.
+    // The daily operations report (server/util/opsDigest.js) goes to staff
+    // inboxes that are not on this domain. In the SES sandbox AWS checks the
+    // recipient identity as well as the sender, so without this every report
+    // is refused with AccessDenied. Listed addresses only, and only on the job
+    // that sends the report.
+    if (cfg.opsReportRecipients.length) {
+      scheduledFn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["ses:SendEmail", "ses:SendRawEmail"],
+          resources: cfg.opsReportRecipients.map(
+            (addr) => `arn:aws:ses:${cfg.region}:${this.account}:identity/${addr}`,
+          ),
+        }),
+      );
+    }
+
+    // The morning report also checks whether this account is still a member of
+    // the AWS Organization that pays its bills (util/opsDigest.js coverageState).
+    // There is no card on file, so leaving that org is the one billing event we
+    // must not miss. DescribeOrganization is an account-level read with no ARN.
+    scheduledFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["organizations:DescribeOrganization"],
+        resources: ["*"],
+      }),
+    );
+
+    for (const fn of [scheduledFn, videoPollFn]) {
+      fn.addToRolePolicy(sesSend);
+      fn.addToRolePolicy(sesReadQuota);
+      fn.addEnvironment("SES_CONFIGURATION_SET", mailConfigSet.configurationSetName);
+      fn.addEnvironment(
+        "SES_MARKETING_CONFIGURATION_SET",
+        marketingConfigSet.configurationSetName,
+      );
+    }
+
+    /* ── the bounce and complaint consumer ────────────────────────────────
+     *
+     * A THIRD function, for the reason the video poller is a second one:
+     * ScheduledFn runs at reserved concurrency 1 so two runs of a job that
+     * CHARGES CARDS can never overlap. Bounces arrive in bursts — a campaign
+     * to a stale list produces them all within a minute — and a burst sitting
+     * in front of the 08:00 renewal run would throttle it into the dead-letter
+     * queue. Nobody would trade an uncharged card for faster bounce handling.
+     *
+     * Small and quick: it reads one document and writes two. The default
+     * memory would be generous, but the Mongo connection is the cost here, not
+     * the work, so it matches the others rather than being tuned separately.
+     */
+    const mailEventsLogs = new logs.LogGroup(this, "MailEventsFnLogs", {
+      retention: cfg.logRetentionDays,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    const mailEventsFn = new NodejsFunction(this, "MailEventsFn", {
+      entry: path.join(SERVER_DIR, "mailEvents.js"),
+      handler: "handler",
+      projectRoot: SERVER_DIR,
+      depsLockFilePath: path.join(SERVER_DIR, "package-lock.json"),
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: cfg.memoryMb,
+      // Well clear of the work. A minute here is a cold start plus an Atlas
+      // handshake plus two writes; anything longer is a database that is gone,
+      // and waiting ten minutes to discover that helps nobody.
+      timeout: Duration.minutes(1),
+
+      // NO reserved concurrency. This one should absorb a burst rather than
+      // queue behind itself — the writes are per-address and idempotent in
+      // effect (marking an already-marked address changes nothing), so there
+      // is nothing to serialise.
+
+      environment: {
+        NODE_ENV: "production",
+        SSM_PREFIX: cfg.ssmPrefix,
+        MONGO_MAX_POOL: String(cfg.mongoMaxPool),
+        NODE_OPTIONS: "--enable-source-maps",
+      },
+
+      logGroup: mailEventsLogs,
+      bundling: JOB_BUNDLING,
+    });
+
+    mailEventsFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParametersByPath", "ssm:GetParameter", "ssm:GetParameters"],
+        resources: [
+          `arn:aws:ssm:${cfg.region}:${this.account}:parameter${cfg.ssmPrefix}`,
+          `arn:aws:ssm:${cfg.region}:${this.account}:parameter${cfg.ssmPrefix}/*`,
+        ],
+      }),
+    );
+    mailEventsFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["kms:Decrypt"],
+        resources: ["*"],
+        conditions: {
+          StringEquals: { "kms:ViaService": `ssm.${cfg.region}.amazonaws.com` },
+        },
+      }),
+    );
+
+    /* An event that fails every retry must land somewhere visible rather than
+     * evaporating — the same rule as the schedule DLQ below, and its own queue
+     * rather than a shared one so "a bounce could not be recorded" and "the
+     * nightly renewal never ran" stay distinguishable at a glance. */
+    const mailEventsDlq = new sqs.Queue(this, "MailEventsDlq", {
+      retentionPeriod: Duration.days(14),
+      enforceSSL: true,
+    });
+
+    mailEventsTopic.addSubscription(
+      new subscriptions.LambdaSubscription(mailEventsFn, {
+        deadLetterQueue: mailEventsDlq,
       }),
     );
 
@@ -491,7 +901,7 @@ export class AdlmApiStack extends Stack {
       job: "auto-renew",
       hour: "8",
       retryAttempts: 0,
-      description: "ADLM auto-renewal charges — 08:00 Africa/Lagos daily",
+      description: "ADLM auto-renewal charges - 08:00 Africa/Lagos daily",
     });
 
     // 09:00 Lagos — sends "expiring soon" email. Idempotent and harmless to
@@ -501,7 +911,29 @@ export class AdlmApiStack extends Stack {
       job: "expiry-notifier",
       hour: "9",
       retryAttempts: 2,
-      description: "ADLM entitlement expiry notifier — 09:00 Africa/Lagos daily",
+      description: "ADLM entitlement expiry notifier - 09:00 Africa/Lagos daily",
+    });
+
+    /* Every fifteen minutes, and a RATE rather than a cron: this has no
+     * opinion about the time of day, only about how stale an announcement is
+     * allowed to be. Fifteen minutes is also comfortably inside quota — two
+     * API units a run is under 200 a day against a default 10,000.
+     *
+     * retryAttempts: 2 and a DLQ. Unlike auto-renew, a retry here is genuinely
+     * safe: the notifier claims a video with an atomic findOneAndUpdate before
+     * mailing anybody, so a replayed invocation finds it claimed and sends
+     * nothing. maxEventAge is one poll interval — a poll replayed twenty
+     * minutes late has already been answered by the poll that came after it.
+     */
+    new scheduler.Schedule(this, "VideoPollSchedule", {
+      description: "ADLM new-video check - every 15 minutes",
+      schedule: scheduler.ScheduleExpression.rate(Duration.minutes(15)),
+      target: new schedulerTargets.LambdaInvoke(videoPollFn, {
+        input: scheduler.ScheduleTargetInput.fromObject({ job: "video-poll" }),
+        retryAttempts: 2,
+        maxEventAge: Duration.minutes(15),
+        deadLetterQueue: scheduleDlq,
+      }),
     });
 
     /* Keep-warm ping — see config.warmIntervalMinutes for the rationale, the
@@ -515,7 +947,7 @@ export class AdlmApiStack extends Stack {
      * has already gone cold, so it should be dropped rather than replayed. */
     if (cfg.warmIntervalMinutes > 0) {
       new scheduler.Schedule(this, "ApiWarmSchedule", {
-        description: `Keeps one API container and its Mongo pool warm — every ${cfg.warmIntervalMinutes} min`,
+        description: `Keeps one API container and its Mongo pool warm - every ${cfg.warmIntervalMinutes} min`,
         schedule: scheduler.ScheduleExpression.rate(
           Duration.minutes(cfg.warmIntervalMinutes),
         ),
@@ -529,7 +961,7 @@ export class AdlmApiStack extends Stack {
 
     const scheduledErrors = new cloudwatch.Alarm(this, "ScheduledErrorsAlarm", {
       alarmDescription:
-        "A nightly job threw. Auto-renew failing means entitlements silently lapse — check " +
+        "A nightly job threw. Auto-renew failing means entitlements silently lapse - check " +
         "the ScheduledFn log group for the run that failed.",
       metric: scheduledFn.metricErrors({ period: Duration.hours(1) }),
       threshold: 1,
@@ -551,7 +983,55 @@ export class AdlmApiStack extends Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    [scheduledErrors, dlqDepth].forEach((a) => a.addAlarmAction(notify));
+    /* Its own alarm, and a threshold of 2 rather than 1.
+     *
+     * The poller fires 96 times a day against a third-party API, so a single
+     * failed run is a transient YouTube blip and alarming on it would train
+     * everybody to ignore the alarm. Two inside an hour is the API key having
+     * actually expired, the quota being spent, or the channel id being wrong —
+     * and those are silent failures, because a poller that cannot reach
+     * YouTube looks exactly like a channel that has not published anything.
+     */
+    const videoPollErrors = new cloudwatch.Alarm(this, "VideoPollErrorsAlarm", {
+      alarmDescription:
+        "The new-video poller has failed more than once in an hour. Nobody is being told " +
+        "about new videos, and the symptom is silence - check the VideoPollFn log group " +
+        "for a quotaExceeded or keyInvalid from YouTube.",
+      metric: videoPollFn.metricErrors({ period: Duration.hours(1) }),
+      threshold: 2,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    /* A bounce that could not be recorded.
+     *
+     * The failure mode this catches is quiet by nature: the mail keeps going
+     * out, every send looks fine, and the only symptom is that dead addresses
+     * stop being retired — so the list decays and the delivery rate slides for
+     * weeks before anybody connects the two. A message in this queue means at
+     * least one bounce was never applied to an account.
+     *
+     * Threshold 0 and not 2, unlike the poller alarm: this is not a flaky
+     * third-party call that blips. SNS has already retried before
+     * dead-lettering, so anything reaching the queue has failed repeatedly.
+     */
+    const mailEventsDlqDepth = new cloudwatch.Alarm(this, "MailEventsDlqAlarm", {
+      alarmDescription:
+        "A SES bounce or complaint could not be recorded and was dead-lettered. Dead " +
+        "addresses are no longer being retired, which costs delivery for everybody else. " +
+        "Drain MailEventsDlq and check the MailEventsFn log group.",
+      metric: mailEventsDlq.metricApproximateNumberOfMessagesVisible({
+        period: Duration.minutes(5),
+      }),
+      threshold: 0,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    [scheduledErrors, dlqDepth, videoPollErrors, mailEventsDlqDepth].forEach((a) =>
+      a.addAlarmAction(notify),
+    );
 
     /* ═══════════════ MPXJ converter ═══════════════
      * The Java service in tools/mpxj-converter, which turns .mpp into MS
@@ -577,6 +1057,9 @@ export class AdlmApiStack extends Stack {
      * It is deliberately NOT behind the CloudFront distribution. Nothing
      * external calls it — only the API function does, server to server.
      */
+    // Hoisted so the ADLM-Live dashboard can include the converter's error
+    // metric when it is deployed, without reaching into this block's scope.
+    let mpxjErrorMetric: cloudwatch.IMetric | undefined;
     if (cfg.deployMpxj) {
       const mpxjLogs = new logs.LogGroup(this, "MpxjFnLogs", {
         retention: cfg.logRetentionDays,
@@ -635,6 +1118,11 @@ export class AdlmApiStack extends Stack {
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       });
       mpxjErrors.addAlarmAction(notify);
+      mpxjErrorMetric = mpxjFn.metricErrors({
+        period: Duration.minutes(5),
+        statistic: "Sum",
+        label: "Programme (MPXJ)",
+      });
 
       new CfnOutput(this, "MpxjFunctionUrl", {
         value: mpxjUrl.url,
@@ -679,10 +1167,88 @@ export class AdlmApiStack extends Stack {
     new CfnOutput(this, "ReservedConcurrency", {
       value: cfg.useReservedConcurrency
         ? String(reservedConcurrency(cfg))
-        : "not set — bounded by the account concurrency quota instead",
+        : "not set - bounded by the account concurrency quota instead",
       description: cfg.useReservedConcurrency
         ? `Max ${reservedConcurrency(cfg) * cfg.mongoMaxPool} Atlas connections of ${cfg.atlasConnectionLimit}`
         : `Atlas connections are capped at (account quota) x ${cfg.mongoMaxPool}. Raise the Lambda quota, then set useReservedConcurrency: true.`,
+    });
+
+    /* ─────────────────── Live dashboard ─────────────────── */
+    // One mobile-friendly view of the whole ADLM backend: API traffic and
+    // latency, errors across every function, whether the crons are still firing,
+    // and a live tail of the API log. Codifies the ADLM-Live dashboard that was
+    // first put up by hand, so it now moves with the stack.
+    const backendErrorMetrics: cloudwatch.IMetric[] = [
+      fn.metricErrors({ period: Duration.minutes(5), statistic: "Sum", label: "API" }),
+      scheduledFn.metricErrors({ period: Duration.minutes(5), statistic: "Sum", label: "Scheduled/cron" }),
+      videoPollFn.metricErrors({ period: Duration.minutes(5), statistic: "Sum", label: "Video poll" }),
+      mailEventsFn.metricErrors({ period: Duration.minutes(5), statistic: "Sum", label: "Mail events" }),
+    ];
+    if (mpxjErrorMetric) backendErrorMetrics.push(mpxjErrorMetric);
+
+    new cloudwatch.Dashboard(this, "LiveDashboard", {
+      dashboardName: "ADLM-Live",
+      defaultInterval: Duration.hours(3),
+      widgets: [
+        [
+          new cloudwatch.TextWidget({
+            markdown:
+              "# ADLM Live - eu-west-1 (Ireland). Keep the mobile app region on Europe (Ireland).",
+            width: 24,
+            height: 1,
+          }),
+        ],
+        [
+          new cloudwatch.GraphWidget({
+            title: "API traffic - requests & errors (per min)",
+            width: 12,
+            height: 6,
+            left: [
+              fn.metricInvocations({ period: Duration.minutes(1), statistic: "Sum", label: "Requests" }),
+              fn.metricErrors({ period: Duration.minutes(1), statistic: "Sum", label: "Errors", color: cloudwatch.Color.RED }),
+              fn.metricThrottles({ period: Duration.minutes(1), statistic: "Sum", label: "Throttles", color: cloudwatch.Color.ORANGE }),
+            ],
+          }),
+          new cloudwatch.GraphWidget({
+            title: "API latency (ms)",
+            width: 12,
+            height: 6,
+            left: [
+              fn.metricDuration({ period: Duration.minutes(1), statistic: "p50", label: "p50" }),
+              fn.metricDuration({ period: Duration.minutes(1), statistic: "p90", label: "p90" }),
+              fn.metricDuration({ period: Duration.minutes(1), statistic: "p99", label: "p99", color: cloudwatch.Color.RED }),
+            ],
+          }),
+        ],
+        [
+          new cloudwatch.GraphWidget({
+            title: "Backend errors - all functions (should stay flat at 0)",
+            width: 12,
+            height: 6,
+            left: backendErrorMetrics,
+          }),
+          new cloudwatch.GraphWidget({
+            title: "Background jobs - are the crons running?",
+            width: 12,
+            height: 6,
+            left: [
+              scheduledFn.metricInvocations({ period: Duration.hours(1), statistic: "Sum", label: "Scheduled/cron" }),
+              videoPollFn.metricInvocations({ period: Duration.hours(1), statistic: "Sum", label: "Video poll" }),
+              mailEventsFn.metricInvocations({ period: Duration.hours(1), statistic: "Sum", label: "Mail events" }),
+            ],
+          }),
+        ],
+        [
+          new cloudwatch.LogQueryWidget({
+            title: "Live API log - errors, mail sends, sign-ins",
+            width: 24,
+            height: 8,
+            logGroupNames: [apiLogs.logGroupName],
+            view: cloudwatch.LogQueryVisualizationType.TABLE,
+            queryLines: ["fields @timestamp, @message", "sort @timestamp desc", "limit 50"],
+          }),
+        ],
+      ],
     });
   }
 }

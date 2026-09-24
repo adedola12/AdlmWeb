@@ -92,7 +92,7 @@ export default function ThumbTutorial({ flyer, accent, days, palette }) {
         </div>
       </div>
 
-      {/* ── Right half — device frame ── */}
+      {/* ── Right half, device frame ── */}
       <div
         style={{
           width: RIGHT_W,

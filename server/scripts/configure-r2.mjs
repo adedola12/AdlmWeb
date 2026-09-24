@@ -23,6 +23,9 @@
  *   node scripts/configure-r2.mjs                      # report what is set
  *   node scripts/configure-r2.mjs --set R2_PUBLIC_BASE_URL=https://pkg.example
  *   node scripts/configure-r2.mjs --verify             # prove the URL is public
+ *   node scripts/configure-r2.mjs --set R2_INSTALLERS_BUCKET=adlm-installers
+ *                                                     # switch installers to
+ *                                                     # private, signed delivery
  *
  * Values are never printed. Secrets are masked to a length and a 4-char tail
  * so you can tell two keys apart without exposing either.
@@ -47,13 +50,31 @@ const REQUIRED = [
   "R2_BUCKET",
   "R2_PUBLIC_BASE_URL",
 ];
-const OPTIONAL = ["R2_S3_ENDPOINT"];
+// R2_INSTALLERS_BUCKET is the switch for private installer delivery. Unset,
+// packages sit in the public R2_BUCKET and every packageUri is a permanent,
+// credential-free download link that any entitled user can pass to anyone.
+// Set it to a SEPARATE non-public bucket and /me/deployments signs a
+// short-lived GET per request instead. Optional because the code must be
+// deployable ahead of the bucket — see utils/r2Upload.js.
+const OPTIONAL = [
+  "R2_S3_ENDPOINT",
+  "R2_INSTALLERS_BUCKET",
+  "R2_INSTALLER_URL_TTL_SECONDS",
+];
 
 // R2_PUBLIC_BASE_URL and R2_BUCKET are not secrets — a public download host
 // and a bucket name. Storing them as String keeps them readable without
 // kms:Decrypt, which matters when someone is debugging a failed install and
-// only has read access.
-const PLAINTEXT = new Set(["R2_PUBLIC_BASE_URL", "R2_BUCKET", "R2_S3_ENDPOINT"]);
+// only has read access. The installer bucket name and its TTL are no more
+// secret than those: the bucket is private because of its policy, not
+// because nobody knows what it is called.
+const PLAINTEXT = new Set([
+  "R2_PUBLIC_BASE_URL",
+  "R2_BUCKET",
+  "R2_S3_ENDPOINT",
+  "R2_INSTALLERS_BUCKET",
+  "R2_INSTALLER_URL_TTL_SECONDS",
+]);
 
 const ssm = new SSMClient({ region: REGION });
 
@@ -191,11 +212,35 @@ async function main() {
 
   console.log("\nAll five present.");
 
+  // Say which delivery mode is live before --verify runs, because the check
+  // below means different things in each. With a private installers bucket,
+  // R2_PUBLIC_BASE_URL no longer serves packages at all — it is still the
+  // host for site media, so it must stay public, but a 403 there would no
+  // longer be the "every customer install fails" emergency the message says.
+  const installersBucket = String(params.get("R2_INSTALLERS_BUCKET") || "").trim();
+  if (installersBucket) {
+    console.log(
+      `\nInstaller delivery: PRIVATE (bucket "${installersBucket}").` +
+        "\n  /me/deployments signs a short-lived GET per request; no packageUri" +
+        "\n  works without a credential. --verify below checks R2_PUBLIC_BASE_URL," +
+        "\n  which now serves only site media — NOT installers.",
+    );
+  } else {
+    console.log(
+      "\nInstaller delivery: PUBLIC — every packageUri is a permanent," +
+        "\n  credential-free download link, handed to every entitled user by" +
+        "\n  /me/deployments and usable by anyone they pass it to." +
+        "\n  Close this by moving adlm/installers into a separate non-public" +
+        "\n  bucket and setting R2_INSTALLERS_BUCKET. MOVE the objects, do not" +
+        "\n  copy: a copy leaves the public originals downloadable.",
+    );
+  }
+
   if (doVerify) {
     const ok = await verifyPublic(normalizeBaseUrl(params.get("R2_PUBLIC_BASE_URL")));
     if (!ok) process.exit(1);
   } else {
-    console.log("Run again with --verify to prove the public host actually serves objects.");
+    console.log("\nRun again with --verify to prove the public host actually serves objects.");
   }
 
   console.log(

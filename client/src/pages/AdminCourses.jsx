@@ -82,12 +82,26 @@ function ModuleRow({ m, i, onChange, onRemove, accessToken }) {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 border rounded p-2">
+    <div className="grid grid-cols-1 sm:grid-cols-6 gap-2 border rounded p-2">
       <input
         className="input"
         placeholder="Code"
         value={m.code}
         onChange={(e) => onChange(i, { ...m, code: e.target.value })}
+      />
+      {/* Which week of the programme this session belongs to. Leave at 0 and
+          the course stays a flat numbered list; set it and the player groups
+          the sidebar by week and says "Week 3" instead of "Lesson 7 of 18". */}
+      <input
+        className="input"
+        type="number"
+        min="0"
+        placeholder="Week"
+        title="Week of the programme. 0 = not organised into weeks."
+        value={m.week ?? 0}
+        onChange={(e) =>
+          onChange(i, { ...m, week: Math.max(0, Number(e.target.value) || 0) })
+        }
       />
       <input
         className="input sm:col-span-2"
@@ -184,10 +198,10 @@ export default function AdminCourses() {
       description: "",
       thumbnailUrl: "",
       onboardingVideoUrl: "",
-      classroomJoinUrl: "",
-      classroomProvider: "google_classroom",
-      classroomCourseId: "",
-      classroomNotes: "",
+      tutorName: "",
+      tutorTitle: "",
+      capstoneTitle: "",
+      capstoneDueAt: "",
       certificateTemplateUrl: "",
       isPublished: true,
       sort: 0,
@@ -204,10 +218,12 @@ export default function AdminCourses() {
       description: course.description || "",
       thumbnailUrl: course.thumbnailUrl || "",
       onboardingVideoUrl: course.onboardingVideoUrl || "",
-      classroomJoinUrl: course.classroomJoinUrl || "",
-      classroomProvider: course.classroomProvider || "google_classroom",
-      classroomCourseId: course.classroomCourseId || "",
-      classroomNotes: course.classroomNotes || "",
+      tutorName: course.tutorName || "",
+      tutorTitle: course.tutorTitle || "",
+      capstoneTitle: course.capstoneTitle || "",
+      capstoneDueAt: course.capstoneDueAt
+        ? String(course.capstoneDueAt).slice(0, 10)
+        : "",
       certificateTemplateUrl: course.certificateTemplateUrl || "",
       isPublished: course.isPublished !== false,
       sort: course.sort ?? 0,
@@ -247,7 +263,7 @@ export default function AdminCourses() {
     try {
       const res = await apiAuthed("/admin/softwares", { token: accessToken });
       setSoftwares(Array.isArray(res?.items) ? res.items : []);
-    } catch (e) {
+    } catch {
       // silent — picker just shows empty
     }
   }, [accessToken]);
@@ -344,7 +360,7 @@ export default function AdminCourses() {
         setSwDraft((prev) => ({ ...prev, installVideoUrl: res.secure_url }));
         setSwMsg("Install video uploaded.");
       } else {
-        setSwMsg("Upload failed — no URL returned");
+        setSwMsg("Upload failed, no URL returned");
       }
     } catch (err) {
       setSwMsg(err?.message || "Video upload failed");
@@ -482,10 +498,10 @@ export default function AdminCourses() {
             description: product.description || "",
             thumbnailUrl: product.thumbnailUrl || product.images?.[0] || "",
             onboardingVideoUrl: product.previewUrl || "",
-            classroomJoinUrl: "",
-            classroomProvider: "google_classroom",
-            classroomCourseId: "",
-            classroomNotes: "",
+            tutorName: "",
+            tutorTitle: "",
+            capstoneTitle: "",
+            capstoneDueAt: "",
             certificateTemplateUrl: "",
             isPublished: false,
             sort: product.sort ?? 0,
@@ -501,7 +517,7 @@ export default function AdminCourses() {
 
           if (!ignore) {
             setDraft(courseToDraft(created));
-            setMsg("Course setup created for this product. Add your Google Classroom link and save.");
+            setMsg("Course setup created for this product. Add your modules and save.");
             load();
           }
         } catch (inner) {
@@ -644,6 +660,40 @@ export default function AdminCourses() {
             }
           />
 
+          {/* Who teaches it, and what it ends in. Both show on the course
+              player: the tutor beside the running time, the capstone in its
+              own box above the certificate. Leave them blank and the player
+              drops those cells rather than showing an empty label. */}
+          <input
+            className="input"
+            placeholder="Tutor name"
+            value={draft.tutorName}
+            onChange={(e) => setDraft((prev) => ({ ...prev, tutorName: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="Tutor title (e.g. Senior QS)"
+            value={draft.tutorTitle}
+            onChange={(e) => setDraft((prev) => ({ ...prev, tutorTitle: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="Capstone title"
+            value={draft.capstoneTitle}
+            onChange={(e) => setDraft((prev) => ({ ...prev, capstoneTitle: e.target.value }))}
+          />
+          <label className="text-sm">
+            <div className="mb-1">Capstone due</div>
+            <input
+              className="input"
+              type="date"
+              value={draft.capstoneDueAt}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, capstoneDueAt: e.target.value }))
+              }
+            />
+          </label>
+
           <label className="text-sm">
             <div className="mb-1">Thumbnail URL</div>
             <input
@@ -734,57 +784,6 @@ export default function AdminCourses() {
               </div>
             ) : null}
           </div>
-
-          <label className="text-sm sm:col-span-2">
-            <div className="mb-1">Google Classroom join link</div>
-            <input
-              className="input"
-              placeholder="https://classroom.google.com/..."
-              value={draft.classroomJoinUrl}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, classroomJoinUrl: e.target.value }))
-              }
-            />
-          </label>
-
-          <label className="text-sm">
-            <div className="mb-1">Classroom provider</div>
-            <select
-              className="input"
-              value={draft.classroomProvider}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, classroomProvider: e.target.value }))
-              }
-            >
-              <option value="google_classroom">Google Classroom</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-
-          <label className="text-sm">
-            <div className="mb-1">Classroom course ID</div>
-            <input
-              className="input"
-              placeholder="Optional Google course id"
-              value={draft.classroomCourseId}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, classroomCourseId: e.target.value }))
-              }
-            />
-          </label>
-
-          <label className="text-sm sm:col-span-2">
-            <div className="mb-1">Learner note</div>
-            <textarea
-              className="input"
-              rows={3}
-              placeholder="Instructions for joining or using the classroom"
-              value={draft.classroomNotes}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, classroomNotes: e.target.value }))
-              }
-            />
-          </label>
 
           <label className="text-sm sm:col-span-2">
             <div className="mb-1">Certificate template (PDF)</div>
@@ -956,7 +955,7 @@ export default function AdminCourses() {
                   value={swPickerId}
                   onChange={(e) => setSwPickerId(e.target.value)}
                 >
-                  <option value="">— Add from software library —</option>
+                  <option value="">. Add from software library, </option>
                   {softwares
                     .filter((s) => !draft.softwareIds.includes(String(s._id)))
                     .map((s) => (
@@ -1122,7 +1121,7 @@ export default function AdminCourses() {
                   ...prev,
                   modules: [
                     ...prev.modules,
-                    { code: "", title: "", requiresSubmission: false },
+                    { code: "", title: "", week: 0, requiresSubmission: false },
                   ],
                 }))
               }
@@ -1195,16 +1194,6 @@ export default function AdminCourses() {
               >
                 Product
               </Link>
-              {course.classroomJoinUrl ? (
-                <a
-                  className="btn btn-sm"
-                  href={course.classroomJoinUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Classroom
-                </a>
-              ) : null}
               <button
                 className="btn btn-sm"
                 onClick={() =>

@@ -365,7 +365,7 @@ function MetaForm({ draft, onField }) {
         </select>
       </div>
 
-      {/* Live card preview — what the hub will show */}
+      {/* Live card preview, what the hub will show */}
       <div className="md:col-span-2">
         <label className={LABEL}>Preview</label>
         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-adlm-dark-border dark:bg-adlm-dark-raised">
@@ -718,11 +718,11 @@ export default function AdminChangelogs() {
 
                     <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500 dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-muted">
                       {draft._id
-                        ? "Saved in the database — these notes override this product's bundled markdown on the public page."
+                        ? "Saved in the database, these notes override this product's bundled markdown on the public page."
                         : "Currently served from bundled markdown. Saving creates a database copy that overrides the markdown for the public page."}
                       {draft.slug === "heron" ? (
                         <span className="mt-1 block text-amber-600 dark:text-amber-400">
-                          HERON&apos;s notes are auto-synced from the plugin changelog monthly — saving here takes over from that sync.
+                          HERON&apos;s notes are auto-synced from the plugin changelog monthly, saving here takes over from that sync.
                         </span>
                       ) : null}
                     </div>
@@ -748,7 +748,7 @@ export default function AdminChangelogs() {
 
                     {draft.releases.length === 0 ? (
                       <p className="rounded-lg border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400 dark:border-adlm-dark-border">
-                        No releases yet. Add one — the top release is shown as “Latest”.
+                        No releases yet. Add one. The top release is shown as “Latest”.
                       </p>
                     ) : (
                       <div className="space-y-4">

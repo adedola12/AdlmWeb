@@ -93,7 +93,7 @@ export default function RequestTechnicalHelp() {
           continue;
         }
         if (f.size > MAX_IMAGE_BYTES) {
-          setErr(`"${f.name}" is larger than 2MB — please compress or crop it.`);
+          setErr(`"${f.name}" is larger than 2MB, please compress or crop it.`);
           continue;
         }
         next.push({ file: f, preview: URL.createObjectURL(f) });
@@ -173,7 +173,7 @@ export default function RequestTechnicalHelp() {
           <a className="text-adlm-blue-700 hover:underline" href="https://anydesk.com/download" target="_blank" rel="noreferrer">
             AnyDesk
           </a>{" "}
-          and paste your AnyDesk address below — our team will connect at the
+          and paste your AnyDesk address below. Our team will connect at the
           scheduled time.
         </p>
       </div>
@@ -247,7 +247,7 @@ export default function RequestTechnicalHelp() {
             <label className="block text-sm font-semibold mb-1">
               Screenshots{" "}
               <span className="text-slate-400 font-normal">
-                (optional — up to {MAX_IMAGES} images, 2MB each)
+                (optional: up to {MAX_IMAGES} images, 2MB each)
               </span>
             </label>
             <input

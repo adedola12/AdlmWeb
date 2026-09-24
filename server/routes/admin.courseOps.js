@@ -1,20 +1,15 @@
 /**
- * Admin operations for running a course on the platform rather than in Google
- * Classroom: quiz authoring, and the cockpit that answers "how is this cohort
- * actually doing" without opening four different screens.
+ * Admin operations for running a course on the platform: quiz authoring, and
+ * the cockpit that answers "how is this cohort actually doing" without opening
+ * four different screens.
  */
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { PlaybackSession } from "../models/PlaybackSession.js";
 import { Quiz, QuizAttempt } from "../models/Quiz.js";
-
-function requireAdmin(req, res, next) {
-  if (req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin, express.json());
@@ -80,6 +75,14 @@ function sanitizeQuiz(body = {}) {
         .filter(Boolean),
       correctIndex: Math.max(0, Number(q?.correctIndex ?? 0) || 0),
       explanation: String(q?.explanation || "").trim(),
+      // Where in the lecture it is asked. null is "not placed", which is a
+      // different thing from second zero — the whitelist here is why this
+      // needs saying: anything not named is dropped on every save, so a field
+      // added to the schema and not added here is a field that never persists.
+      atSec:
+        q?.atSec === null || q?.atSec === undefined || q?.atSec === ""
+          ? null
+          : Math.max(0, Math.floor(Number(q.atSec) || 0)),
     })),
   };
 }

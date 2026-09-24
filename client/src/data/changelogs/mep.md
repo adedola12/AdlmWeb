@@ -11,9 +11,9 @@ order: 4
 summary: Mechanical, electrical & plumbing quantity takeoff right inside Revit — covers ductwork, pipework, electrical and plumbing disciplines in a dockable, cloud-connected workspace.
 ---
 
-## 1.8.3 — 31 July 2026 — Sign-in restored
+## 1.8.3 — 31 July 2026 — Sign-in that follows the service
 
-ADLM MEP could not sign in after ADLM's servers moved. It now finds the service through your machine's settings rather than an address fixed when the plugin was built.
+ADLM MEP now resolves the ADLM service through your machine's settings, so sign-in stays reliable and future infrastructure changes never require a new download.
 
 ### 🔧 Improved
 
@@ -25,6 +25,8 @@ ADLM MEP could not sign in after ADLM's servers moved. It now finds the service 
 - **Cloud takeoff saves and reopens** recover with this update; they shared the same cause.
 
 ## 1.8.2 — July 2026 — Sign in from any network
+
+Your licence seat now stays with your machine wherever you work — office, site or home — so switching networks never interrupts sign-in.
 
 ### 🐛 Fixed
 

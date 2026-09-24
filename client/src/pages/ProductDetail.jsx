@@ -23,10 +23,17 @@ import { useAuth } from "../store.jsx";
 import Seo from "../components/Seo.jsx";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 import StorageBar from "../components/StorageBar.jsx";
+import RecommendedVideos from "../components/RecommendedVideos.jsx";
 import { apiAuthed } from "../api.js";
 import { Reveal, Stagger, StaggerItem } from "../components/effects.jsx";
 import { Eyebrow } from "../components/brand.jsx";
-import { productSchema, courseSchema, breadcrumbSchema } from "../lib/schema.js";
+import {
+  softwareApplicationSchema,
+  courseSchema,
+  breadcrumbSchema,
+  faqSchema,
+} from "../lib/schema.js";
+import { readPreloaded } from "../lib/preload.js";
 import { termOptions, termTotalNGN, unitPrices } from "../lib/termPricing.js";
 import { addProductToCart, getProductKey, getCategory } from "../lib/cart.js";
 import { faqFor } from "../data/productFaq.js";
@@ -114,8 +121,15 @@ export default function ProductDetail() {
   const { user, accessToken } = useAuth();
   const navigate = useNavigate();
 
-  const [p, setP] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
+  // Seeded from whatever the server already fetched for this key. On a
+  // server-rendered request that is the product itself, so the first browser
+  // render matches the HTML being hydrated instead of flashing the skeleton
+  // over a page that was already complete. Everywhere else it is undefined and
+  // the effect below fetches exactly as it always did.
+  const preloadedProduct = readPreloaded(`product:${String(key || "").trim()}`);
+
+  const [p, setP] = React.useState(preloadedProduct ?? null);
+  const [loading, setLoading] = React.useState(!preloadedProduct);
   const [err, setErr] = React.useState("");
   const [productStorage, setProductStorage] = React.useState(null);
   const [siblings, setSiblings] = React.useState([]);
@@ -123,7 +137,16 @@ export default function ProductDetail() {
   const [added, setAdded] = React.useState(false);
   const [openFaq, setOpenFaq] = React.useState(0);
 
+  // Set once the seeded product has been consumed, so this only ever skips the
+  // very first fetch. Navigating to a different product still loads normally.
+  const usedPreload = React.useRef(Boolean(preloadedProduct));
+
   React.useEffect(() => {
+    if (usedPreload.current) {
+      usedPreload.current = false;
+      return undefined;
+    }
+
     const ctl = new AbortController();
     let mounted = true;
 
@@ -451,20 +474,28 @@ export default function ProductDetail() {
                 description: metaDescription,
                 url: `https://www.adlmstudio.net${canonicalPath}`,
               })
-            : productSchema({
+            : softwareApplicationSchema({
                 name: p.name,
                 description: metaDescription,
                 image: p.thumbnailUrl,
                 url: `https://www.adlmstudio.net${canonicalPath}`,
                 priceNGN: activePrice,
                 interval: cadence,
+                // The plugins load inside Revit, ArchiCAD and PlanSwift, all of
+                // which are Windows-only. The cloud platform is not.
+                operatingSystem: /cloud/i.test(productKey || "")
+                  ? "Web browser"
+                  : "Windows",
               }),
           breadcrumbSchema([
             { name: "Home", path: "/" },
             { name: "Products", path: "/products" },
             { name: p.name, path: canonicalPath },
           ]),
-        ]}
+          // Built from the same array the accordion below renders, so the
+          // marked-up questions and the visible ones cannot drift apart.
+          faqSchema(faq.map((item) => ({ question: item.q, answer: item.a }))),
+        ].filter(Boolean)}
       />
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-10 md:space-y-14">
@@ -556,7 +587,7 @@ export default function ProductDetail() {
           {/* Buy panel */}
           <Reveal className="lg:flex-1 min-w-0" y={16} delay={80}>
             {/* getCategory falls back to the literal "General" because Product
-                has no category field — an eyebrow reading "GENERAL" tells the
+                has no category field, an eyebrow reading "GENERAL" tells the
                 visitor nothing and looks like a placeholder someone forgot. */}
             <Eyebrow tone="blue">
               {isCourse
@@ -576,7 +607,7 @@ export default function ProductDetail() {
 
             {isComingSoon && (
               <div className="mt-4 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
-                Coming soon — not yet available for purchase
+                Coming soon, not yet available for purchase
               </div>
             )}
 
@@ -710,7 +741,7 @@ export default function ProductDetail() {
                     }
                     className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-adlm-blue-200 dark:border-adlm-blue-700/40 bg-adlm-blue-50 dark:bg-adlm-blue-700/10 px-3 py-2 text-xs font-semibold text-adlm-blue-700 dark:text-adlm-blue-300 hover:bg-adlm-blue-100 dark:hover:bg-adlm-blue-700/20 transition"
                   >
-                    Add 10 project slots — {ngn(storageUpgradeNGN)}
+                    Add 10 project slots, {ngn(storageUpgradeNGN)}
                   </button>
                 )}
               </div>
@@ -742,6 +773,11 @@ export default function ProductDetail() {
             </Stagger>
           </section>
         )}
+
+        {/* ── RECOMMENDED VIDEOS ───────────────────────────────────────── */}
+        {/* From the free library: the videos flagged for this product's shelf,
+            then the shared install walkthrough. Renders nothing when empty. */}
+        <RecommendedVideos productKey={productKey} productName={p.name} />
 
         {/* ── ABOUT ────────────────────────────────────────────────────── */}
         {p.description && (
@@ -796,7 +832,7 @@ export default function ProductDetail() {
                   }
                   className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-adlm-blue-700 text-white text-sm font-semibold hover:bg-adlm-blue-600 transition shadow-md"
                 >
-                  Add 10 slots — {ngn(storageUpgradeNGN)}
+                  Add 10 slots, {ngn(storageUpgradeNGN)}
                 </button>
               )}
             </div>
@@ -865,7 +901,7 @@ export default function ProductDetail() {
             <Link to="/support" className="font-semibold text-adlm-blue-700 dark:text-adlm-blue-400 hover:underline">
               Ask us directly
             </Link>{" "}
-            — we would rather answer than have you guess.
+. We would rather answer than have you guess.
           </Reveal>
         </section>
 

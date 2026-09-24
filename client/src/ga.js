@@ -63,3 +63,45 @@ export function trackEvent(eventName, params = {}) {
     ts: nowMs(),
   });
 }
+
+/**
+ * Identify the signed-in visitor to GA4, and clear it on sign-out.
+ *
+ * WHY THIS EXISTS
+ * Without it a GA "user" is a browser, not a person. The same subscriber on a
+ * laptop and a phone counted as two, a cleared cookie counted as a new one, and
+ * nothing connected a paying customer to their behaviour on the site. Setting
+ * user_id lets GA4 stitch those together and separates customers from
+ * strangers in every report.
+ *
+ * WHAT IS SENT
+ * The account's database id and nothing else. Google's terms forbid sending
+ * personally identifiable information to Analytics, so no email, no name. The
+ * id is opaque to anyone without the database and is already what every other
+ * system here keys on.
+ *
+ * THE OTHER HALF IS IN GTM
+ * This pushes the value into the dataLayer. It reaches GA4 only once the GA4
+ * Configuration tag in container GTM-THPFGFZS reads a Data Layer Variable
+ * named `user_id` and maps it to the User ID field. Until that mapping exists
+ * this is inert, which is the safe direction for it to fail.
+ */
+export function setAnalyticsUser(userId) {
+  if (typeof window === "undefined") return;
+  window.dataLayer = window.dataLayer || [];
+
+  const id = userId ? String(userId) : null;
+
+  // Re-pushing the same id on every render would inflate nothing but would
+  // bloat the dataLayer, which GTM walks on each event.
+  if (window.__ADLM_GA_UID === id) return;
+  window.__ADLM_GA_UID = id;
+
+  window.dataLayer.push({
+    event: id ? "user_identified" : "user_signed_out",
+    // Explicit null on sign-out. Omitting the key would leave the previous
+    // visitor's id in the dataLayer for GTM to keep reading, so a shared
+    // machine would attribute the next person's session to whoever came first.
+    user_id: id,
+  });
+}

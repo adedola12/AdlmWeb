@@ -31,6 +31,18 @@ export function monthStart(d = new Date()) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
 
+/** First instant of today (UTC) — the window for limits marked window:"day". */
+export function dayStart(d = new Date()) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** When a window next resets, said the way a person would say it. */
+function resetsWhen(window) {
+  return window === "day"
+    ? "It resets at midnight UTC."
+    : "It resets at the start of next month.";
+}
+
 /* ────────────────────────────── recording ────────────────────────────── */
 
 /**
@@ -41,7 +53,7 @@ export function monthStart(d = new Date()) {
  * @param {object} evt
  * @param {string} evt.feature        feature key (config/aiPricing.js)
  * @param {object} [evt.user]         lean User doc (or {_id,email,name,role})
- * @param {string} [evt.provider]     anthropic | openai | adlm-ai-service
+ * @param {string} [evt.provider]     bedrock | anthropic | openai | adlm-ai-service
  * @param {string} [evt.model]
  * @param {object} [evt.usage]        {inputTokens,outputTokens,cacheReadTokens,cacheWriteTokens}
  * @param {string} [evt.tokenSource]  reported | estimated | none
@@ -105,12 +117,37 @@ export function recordAiUsage(evt = {}) {
     // Keep the in-process allowance snapshot honest for the rest of its TTL.
     bumpCached(doc);
 
-    AiUsage.create(doc).catch((e) =>
+    // Returned, not awaited.
+    //
+    // Every caller inside the server ignores this, which is the point: metering
+    // must never hold up an answer to a customer. But a SCRIPT that makes a
+    // call and then disconnects from the database beats the write, and the row
+    // is lost — which is how a staff-run drafting script can spend real money
+    // and leave nothing on the AI usage screen. Handing the promise back lets
+    // those callers wait for it without changing anything for the ones that do
+    // not.
+    const wrote = AiUsage.create(doc).catch((e) =>
       console.error("[aiUsage] record failed:", e?.message || e),
     );
+    pending.add(wrote);
+    wrote.finally(() => pending.delete(wrote));
+    return wrote;
   } catch (e) {
     console.error("[aiUsage] record threw:", e?.message || e);
+    return Promise.resolve();
   }
+}
+
+/**
+ * Every metering write still in flight.
+ *
+ * A script cannot await what it did not call — createMessage() records usage
+ * internally, so the caller never sees that promise. This is how a script
+ * waits for the books to be closed before it disconnects.
+ */
+const pending = new Set();
+export function flushAiUsage() {
+  return Promise.allSettled([...pending]);
 }
 
 /** Pull a usage block out of whatever shape a provider hands back. */
@@ -189,10 +226,28 @@ function bumpCached(doc) {
   add(snap.used.total);
   snap.used.byFeature[doc.feature] = snap.used.byFeature[doc.feature] || emptyBucket();
   add(snap.used.byFeature[doc.feature]);
+
+  // The daily tally needs the same treatment, or a burst inside one cache TTL
+  // is invisible to a daily cap: ten prompts in thirty seconds would each read
+  // the same stale "0 used today" and all be allowed.
+  if (snap.usedToday) {
+    add(snap.usedToday.total);
+    snap.usedToday.byFeature[doc.feature] =
+      snap.usedToday.byFeature[doc.feature] || emptyBucket();
+    add(snap.usedToday.byFeature[doc.feature]);
+  }
 }
 
 async function loadUsedThisMonth(userId) {
-  const match = { at: { $gte: monthStart() } };
+  return loadUsedSince(userId, monthStart());
+}
+
+async function loadUsedToday(userId) {
+  return loadUsedSince(userId, dayStart());
+}
+
+async function loadUsedSince(userId, since) {
+  const match = { at: { $gte: since } };
   match.userId = userId ? new mongoose.Types.ObjectId(String(userId)) : null;
 
   const rows = await AiUsage.aggregate([
@@ -262,24 +317,36 @@ export async function checkAiAllowance({ user = null, feature = "", ip = "" } = 
     const cacheKey = userId || "guest";
 
     let snap = allowCache.get(cacheKey);
-    if (!snap || Date.now() - snap.at > CACHE_MS) {
-      const [def, used] = await Promise.all([
+    if (!snap || Date.now() - snap.at > CACHE_MS || snap.day !== dayStart().getTime()) {
+      const [def, used, usedToday] = await Promise.all([
         getDefaultAllocation(),
         loadUsedThisMonth(userId),
+        loadUsedToday(userId),
       ]);
       let allocation = def;
       if (userId) {
         const own = await AiAllocation.findOne({ userId }).lean();
         if (own) allocation = own;
       }
-      snap = { at: Date.now(), allocation, def, hasOwn: allocation !== def, used };
+      // `day` is stamped so a snapshot taken before midnight is not reused
+      // after it — otherwise the first callers of a new day would be measured
+      // against yesterday's tally for as long as the cache lived.
+      snap = {
+        at: Date.now(),
+        day: dayStart().getTime(),
+        allocation,
+        def,
+        hasOwn: allocation !== def,
+        used,
+        usedToday,
+      };
       allowCache.set(cacheKey, snap);
       if (allowCache.size > 5000) {
         for (const [k, v] of allowCache) if (Date.now() - v.at > CACHE_MS) allowCache.delete(k);
       }
     }
 
-    const { allocation, def, used } = snap;
+    const { allocation, def, used, usedToday } = snap;
 
     // ── 1. Platform kill switch ──────────────────────────────────────────
     // Deliberately checked before the per-user allocation: "turn AI off" has
@@ -378,12 +445,24 @@ export async function checkAiAllowance({ user = null, feature = "", ip = "" } = 
     // anything it leaves out still falls back to the platform default, so
     // adding one override doesn't silently uncap every other feature.
     const featureLimit = featureLimitOf(allocation, feature) || defFeature;
-    const featHit = exceeded(used.byFeature[feature] || emptyBucket(), featureLimit);
+
+    // A daily limit is measured against today's rows, a monthly one against
+    // the month's. Reading a daily cap off the monthly tally would lock a user
+    // out on the 3rd and keep them out until the 1st.
+    const featureWindow = featureLimit?.window === "day" ? "day" : "month";
+    const featureUsed =
+      featureWindow === "day"
+        ? (usedToday?.byFeature?.[feature] || emptyBucket())
+        : (used.byFeature[feature] || emptyBucket());
+
+    const featHit = exceeded(featureUsed, featureLimit);
     if (featHit) {
       return {
         allowed: false,
         code: "AI_FEATURE_QUOTA_EXCEEDED",
-        reason: `This account has used its monthly allowance for ${featureLabel(feature)} (${fmtMetric(featHit)}). It resets at the start of next month.`,
+        reason:
+          `This account has used its ${featureWindow === "day" ? "daily" : "monthly"} allowance for ` +
+          `${featureLabel(feature)} (${fmtMetric(featHit)}). ${resetsWhen(featureWindow)}`,
         used,
         limits: featureLimit || null,
       };

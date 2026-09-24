@@ -1,14 +1,22 @@
 // server/services/aiClient.js
 // Provider-agnostic chat transport for the ADLM AI Agent.
 //
-//   AGENT_PROVIDER=anthropic (default) → Claude via REST (native tool use).
+//   AGENT_PROVIDER=bedrock (default)   → Claude on Amazon Bedrock (IAM auth).
+//   AGENT_PROVIDER=anthropic           → Claude via REST, with an API key.
 //   AGENT_PROVIDER=openai              → OpenAI SDK (function-calling).
 //
-// BOTH providers support tools, so the full agent (Buy/Sign-up buttons + lead
-// capture) works either way. The canonical message/tool format used across the
-// agent loop is Anthropic-style content blocks; the OpenAI adapter translates
-// that to/from OpenAI's chat format on each call, so salesAgent.js never needs
-// to know which provider is active.
+// ALL THREE support tools, so the full agent (Buy/Sign-up buttons + lead
+// capture) works whichever is active. The canonical message/tool format used
+// across the agent loop is Anthropic-style content blocks; the OpenAI adapter
+// translates that to/from OpenAI's chat format on each call, so salesAgent.js
+// never needs to know which provider is active.
+//
+// WHY BEDROCK IS THE DEFAULT: the direct Anthropic endpoint authenticates with
+// an API key drawn against a prepaid credit balance, and both of those are
+// single points of failure that have already taken Ada down — every message
+// for hours, with the provider answering "your credit balance is too low".
+// Bedrock authenticates with the function's own IAM role and bills to AWS, so
+// there is no key to revoke, rotate or leak and no separate balance to drain.
 //
 // The agent loop (services/salesAgent.js) owns the tools and the multi-turn
 // tool-result exchange; this module only normalizes one model round-trip into:
@@ -17,20 +25,61 @@
 
 import fetch from "node-fetch";
 import OpenAI from "openai";
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { recordAiUsage, normalizeUsage } from "./aiUsage.js";
 
-const PROVIDER = (process.env.AGENT_PROVIDER || "anthropic").toLowerCase();
+const PROVIDER = (process.env.AGENT_PROVIDER || "bedrock").toLowerCase();
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MS || 30000);
 
-const DEFAULT_MODEL =
-  process.env.AGENT_MODEL ||
-  (PROVIDER === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001");
+// Bedrock pins the Messages API contract in the body rather than a header.
+const BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31";
 
-// Output-token cap per model round-trip. Bounds spend on a public key; the
-// caller may pass a smaller value but never a larger one.
+// Lambda sets AWS_REGION for us; the literal is only for local runs.
+const BEDROCK_REGION =
+  process.env.BEDROCK_REGION || process.env.AWS_REGION || "eu-west-1";
+
+// A cross-region inference profile, not a bare foundation-model id — the newer
+// Claude models are only on-demand invocable through one. The `eu.` prefix is
+// tied to the EU regions: deploying outside them means changing this to the
+// matching prefix (`us.`, `apac.`) via BEDROCK_MODEL_ID, and the model has to
+// be enabled for the account in the Bedrock console first either way.
+const BEDROCK_MODEL_ID =
+  process.env.BEDROCK_MODEL_ID || "eu.anthropic.claude-haiku-4-5-20251001-v1:0";
+
+// Bedrock is keyed on BEDROCK_MODEL_ID and ignores AGENT_MODEL entirely: the
+// two id formats are not interchangeable, and AGENT_MODEL is already set to a
+// direct-API id in every environment carried over from the API-key era.
+// Letting it win here would only mislabel the usage rows, since the call
+// itself always goes to BEDROCK_MODEL_ID.
+const DEFAULT_MODEL =
+  PROVIDER === "bedrock"
+    ? BEDROCK_MODEL_ID
+    : process.env.AGENT_MODEL ||
+      (PROVIDER === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001");
+
+// Output-token default per model round-trip, for a caller that does not say.
+// Not a ceiling: an explicit ask is honoured up to HARD_MAX_TOKENS below.
 const DEFAULT_MAX_TOKENS = Number(process.env.AGENT_MAX_TOKENS || 700);
+
+/**
+ * The most any single call may ask for.
+ *
+ * DEFAULT_MAX_TOKENS is what a caller gets when it does not say — it exists to
+ * keep Ada's chat replies short and cheap. It was also being used as a CEILING
+ * via Math.min(asked, DEFAULT), which meant a caller asking for more was
+ * silently given 700 instead. Nothing errored; the reply just stopped
+ * mid-sentence. Every one of the thirty-two generated quizzes came back
+ * truncated because of it.
+ *
+ * So: unspecified still gets the small default, an explicit ask is honoured,
+ * and this is the real ceiling.
+ */
+const HARD_MAX_TOKENS = Number(process.env.AGENT_HARD_MAX_TOKENS || 8192);
+
+const capTokens = (asked) =>
+  Math.min(Number(asked) || DEFAULT_MAX_TOKENS, HARD_MAX_TOKENS);
 
 let _openai = null;
 function openai() {
@@ -38,10 +87,27 @@ function openai() {
   return _openai;
 }
 
+/**
+ * Can the selected provider be called at all? Credentials only — this asks
+ * nothing about whether any particular FEATURE is switched on.
+ *
+ * Separate from agentEnabled() because Ada is not the only caller: HelpBot has
+ * its own master switch, and hanging its availability off Ada's would mean
+ * turning the chat widget off silently took the help search's answers with it.
+ */
+export function providerConfigured() {
+  if (PROVIDER === "openai") return !!process.env.OPENAI_API_KEY;
+  // Bedrock authenticates with the function's IAM role. There is deliberately
+  // no key to check here — removing that check is the point of the move, not
+  // an omission. A missing role shows up as an AccessDenied on the first call
+  // rather than as a silently disabled agent.
+  if (PROVIDER === "bedrock") return true;
+  return !!process.env.ANTHROPIC_API_KEY;
+}
+
 export function agentEnabled() {
   if (process.env.AGENT_ENABLED !== "true") return false;
-  if (PROVIDER === "openai") return !!process.env.OPENAI_API_KEY;
-  return !!process.env.ANTHROPIC_API_KEY;
+  return providerConfigured();
 }
 
 export function agentProvider() {
@@ -113,7 +179,7 @@ function anthropicSystem(system, { extendedTtl = false } = {}) {
 }
 
 /* ------------------------- Anthropic ------------------------- */
-async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}) {
+async function anthropicCreate({ system, messages, tools, maxTokens, temperature }, opts = {}) {
   const extendedTtl = opts.extendedTtl ?? useExtendedTtl();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -130,26 +196,42 @@ async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
-        max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+        max_tokens: capTokens(maxTokens),
         system: anthropicSystem(system, { extendedTtl }),
         messages,
         ...(tools && tools.length ? { tools } : {}),
+        ...(temperature != null ? { temperature } : {}),
       }),
     });
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = data?.error?.message || `Anthropic API ${res.status}`;
-      // If the extended TTL is what it objected to, fall back to the standard
-      // 5m cache and remember not to ask again. A pricing optimisation must
-      // never be able to take the agent down.
-      if (extendedTtl && res.status === 400 && looksLikeTtlRejection(msg)) {
-        extendedTtlUnavailable = true;
-        console.warn(
-          `[aiClient] 1h prompt cache rejected (${msg}) — falling back to the 5m cache.`,
-        );
+      // A pricing optimisation must never be able to take the agent down, so
+      // ANY 400 raised while the beta header is on earns one retry without it.
+      // This used to require the message to mention a TTL, which made the
+      // safety net only as good as our guess at Anthropic's wording — reword
+      // the rejection and the retry never fires, so the fallback is missing
+      // exactly when it is needed. Retrying blind costs one cheap round-trip
+      // when the header was innocent, and the real error still surfaces from
+      // the second attempt.
+      //
+      // Only a TTL-shaped complaint disables the header for the rest of the
+      // process. An unrelated 400 must not quietly downgrade every later call
+      // to the pricier 5m cache.
+      if (extendedTtl && res.status === 400) {
+        if (looksLikeTtlRejection(msg)) {
+          extendedTtlUnavailable = true;
+          console.warn(
+            `[aiClient] 1h prompt cache rejected (${msg}) — falling back to the 5m cache.`,
+          );
+        } else {
+          console.warn(
+            `[aiClient] 400 while the 1h cache header was set (${msg}) — retrying once without it.`,
+          );
+        }
         clearTimeout(timer);
-        return anthropicCreate({ system, messages, tools, maxTokens }, { extendedTtl: false });
+        return anthropicCreate({ system, messages, tools, maxTokens, temperature }, { extendedTtl: false });
       }
       throw new Error(msg);
     }
@@ -170,6 +252,129 @@ async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}
       assistantContent: content, // echo back verbatim on the next turn
       stopReason: data.stop_reason || "end_turn",
       model: data.model || DEFAULT_MODEL,
+      usage: normalizeUsage(data.usage),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* ------------------------- Bedrock ------------------------- */
+// Claude on Amazon Bedrock speaks the same Messages API as Anthropic's own
+// endpoint, so the request body, the tool definitions and the response content
+// blocks are all identical and the agent loop above needs no adapter. Three
+// things differ, and all three are handled here:
+//
+//   1. the model is the InvokeModel target, not a `model` body field;
+//   2. `anthropic_version` is required IN THE BODY, pinned to a Bedrock-
+//      specific string that is not the date used on the direct API;
+//   3. there is no anthropic-beta header, so the 1h cache TTL cannot be asked
+//      for at all — Bedrock offers the standard ephemeral cache and nothing
+//      longer. Asking anyway would be a hard validation error, so the
+//      extendedTtl machinery above is simply not reachable from this path.
+
+let _bedrock = null;
+function bedrock() {
+  if (!_bedrock) _bedrock = new BedrockRuntimeClient({ region: BEDROCK_REGION });
+  return _bedrock;
+}
+
+// Set if Bedrock ever objects to the cache_control blocks, so we degrade to an
+// uncached prompt for the rest of the process instead of failing every call.
+// Same principle as the extended-TTL fallback: a cost optimisation must never
+// be the reason the agent is down. Prompt-cache support varies by model, and
+// BEDROCK_MODEL_ID is deliberately easy to change.
+let bedrockCacheUnavailable = false;
+
+function looksLikeCacheRejection(msg) {
+  const s = String(msg || "").toLowerCase();
+  return s.includes("cache") || s.includes("cachepoint");
+}
+
+/**
+ * The InvokeModel request body. Exported for tests: the shape is the whole
+ * contract with Bedrock, and every way of getting it wrong fails identically
+ * from outside — a ValidationException and an agent that answers nothing.
+ * Notably it must carry `anthropic_version` and must NOT carry `model`, which
+ * is the opposite of the direct API on both counts.
+ */
+export function bedrockRequestBody({
+  system,
+  messages,
+  tools,
+  maxTokens,
+  temperature,
+  useCache = true,
+}) {
+  return {
+    anthropic_version: BEDROCK_ANTHROPIC_VERSION,
+    max_tokens: capTokens(maxTokens),
+    // Never the extended TTL on this path — see the note above.
+    system: useCache
+      ? anthropicSystem(system, { extendedTtl: false })
+      : flattenSystem(system),
+    messages,
+    ...(tools && tools.length ? { tools } : {}),
+    // Omitted unless asked for, so each provider keeps its own default.
+    ...(temperature != null ? { temperature } : {}),
+  };
+}
+
+async function bedrockCreate({ system, messages, tools, maxTokens, temperature }, opts = {}) {
+  const useCache = opts.useCache ?? (CACHE_ENABLED && !bedrockCacheUnavailable);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+
+  try {
+    const body = bedrockRequestBody({ system, messages, tools, maxTokens, temperature, useCache });
+
+    let res;
+    try {
+      res = await bedrock().send(
+        new InvokeModelCommand({
+          modelId: BEDROCK_MODEL_ID,
+          contentType: "application/json",
+          accept: "application/json",
+          body: JSON.stringify(body),
+        }),
+        { abortSignal: ctrl.signal },
+      );
+    } catch (err) {
+      const msg = String(err?.message || err);
+      if (useCache && looksLikeCacheRejection(msg)) {
+        bedrockCacheUnavailable = true;
+        console.warn(
+          `[aiClient] Bedrock rejected prompt caching (${msg}) — retrying without it.`,
+        );
+        clearTimeout(timer);
+        return bedrockCreate({ system, messages, tools, maxTokens, temperature }, { useCache: false });
+      }
+      // Keep the SDK's error NAME in the message. It is the difference between
+      // "the role cannot invoke this model" (AccessDeniedException) and "this
+      // model id does not exist in this region" (ValidationException), and the
+      // health endpoint classifies on this text.
+      throw new Error(`Bedrock ${err?.name || "error"}: ${msg}`);
+    }
+
+    const data = JSON.parse(new TextDecoder().decode(res.body));
+    const content = Array.isArray(data.content) ? data.content : [];
+    const text = content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    const toolUses = content
+      .filter((b) => b.type === "tool_use")
+      .map((b) => ({ id: b.id, name: b.name, input: b.input || {} }));
+
+    return {
+      text,
+      toolUses,
+      assistantContent: content, // echo back verbatim on the next turn
+      stopReason: data.stop_reason || "end_turn",
+      // Bedrock does not echo the model, and the id it was invoked with is
+      // what the cost table needs to match on anyway.
+      model: BEDROCK_MODEL_ID,
       usage: normalizeUsage(data.usage),
     };
   } finally {
@@ -242,11 +447,16 @@ function toOpenAiMessages(system, messages) {
   return out;
 }
 
-async function openaiCreate({ system, messages, tools, maxTokens }) {
+async function openaiCreate({ system, messages, tools, maxTokens, temperature }) {
   const res = await openai().chat.completions.create({
     model: DEFAULT_MODEL,
-    max_tokens: maxTokens || 700,
-    temperature: 0.3,
+    // Same two tiers as the Anthropic and Bedrock paths. This used to be
+    // `maxTokens || 700`, which had no ceiling at all: switching the provider
+    // to OpenAI quietly removed the spend bound on a public endpoint.
+    max_tokens: capTokens(maxTokens),
+    // 0.3 was this path's existing default and stays the default; a caller
+    // that asks for something more deterministic now gets it.
+    temperature: temperature ?? 0.3,
     messages: toOpenAiMessages(system, messages),
     ...(tools && tools.length
       ? { tools: toOpenAiTools(tools), tool_choice: "auto" }
@@ -299,13 +509,15 @@ async function openaiCreate({ system, messages, tools, maxTokens }) {
  * model call the website makes, so metering lives here rather than in each
  * caller — a new agent feature is metered the moment it calls createMessage().
  */
-export async function createMessage({ system, messages, tools, maxTokens, meta }) {
+export async function createMessage({ system, messages, tools, maxTokens, temperature, meta }) {
   const started = Date.now();
   try {
     const out =
       PROVIDER === "openai"
-        ? await openaiCreate({ system, messages, tools, maxTokens })
-        : await anthropicCreate({ system, messages, tools, maxTokens });
+        ? await openaiCreate({ system, messages, tools, maxTokens, temperature })
+        : PROVIDER === "bedrock"
+          ? await bedrockCreate({ system, messages, tools, maxTokens, temperature })
+          : await anthropicCreate({ system, messages, tools, maxTokens, temperature });
 
     recordAiUsage({
       feature: meta?.feature || "ada-chat",
@@ -342,5 +554,5 @@ export async function createMessage({ system, messages, tools, maxTokens, meta }
 }
 
 export function supportsTools() {
-  return true; // both providers support tools now
+  return true; // all three providers support tools
 }

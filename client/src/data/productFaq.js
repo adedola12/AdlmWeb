@@ -10,7 +10,7 @@
 export const GENERAL_FAQ = [
   {
     q: "How do I get the software after I pay?",
-    a: "Your licence activates as soon as payment is confirmed. Sign in to the ADLM Installer Hub with the same account, and the products you have paid for appear ready to install — no licence keys to copy, no email to wait for.",
+    a: "Your licence activates as soon as payment is confirmed. Sign in to the ADLM Installer Hub with the same account, and the products you have paid for appear ready to install, no licence keys to copy, no email to wait for.",
   },
   {
     q: "Does the subscription renew automatically?",
@@ -18,11 +18,11 @@ export const GENERAL_FAQ = [
   },
   {
     q: "What happens when my subscription ends?",
-    a: "The plugin stops activating, but nothing you produced is taken away — your projects, bills and exports stay in your account and on your machine. Resubscribing restores access without redoing any setup.",
+    a: "The plugin stops activating, but nothing you produced is taken away: your projects, bills and exports stay in your account and on your machine. Resubscribing restores access without redoing any setup.",
   },
   {
     q: "Can I pay for a longer term?",
-    a: "Yes, and it costs less per month. Pick 6 months or a year at checkout and the discount is applied to the total — the price shown on this page is the price you pay.",
+    a: "Yes, and it costs less per month. Pick 6 months or a year at checkout and the discount is applied to the total. The price shown on this page is the price you pay.",
   },
   {
     q: "I am outside Nigeria. Can I still buy?",
@@ -52,13 +52,13 @@ export const PRODUCT_FAQ = {
   mep: [
     {
       q: "How is this different from QUIV for Revit?",
-      a: "Same idea, different discipline. The MEP plugin understands services elements — ducts, pipes, fittings, equipment — and schedules them the way an M&E bill is structured, rather than treating them as generic geometry.",
+      a: "Same idea, different discipline. The MEP plugin understands services elements: ducts, pipes, fittings, equipment, and schedules them the way an M&E bill is structured, rather than treating them as generic geometry.",
     },
   ],
   planswift: [
     {
       q: "I work from PDFs and drawings, not 3D models. Is this the right one?",
-      a: "Yes — HERON is the 2D tool. You scale the drawing, measure on it with the ADLM templates, and price the result. No model required.",
+      a: "Yes, HERON is the 2D tool. You scale the drawing, measure on it with the ADLM templates, and price the result. No model required.",
     },
   ],
   rategen: [
@@ -70,7 +70,7 @@ export const PRODUCT_FAQ = {
   civil3d: [
     {
       q: "What does CIVIQ measure?",
-      a: "Civil works quantities out of Civil 3D — earthworks, corridors and the linear items that a building-focused tool handles badly.",
+      a: "Civil works quantities out of Civil 3D: earthworks, corridors and the linear items that a building-focused tool handles badly.",
     },
   ],
   bimbld: [
@@ -86,7 +86,7 @@ export const PRODUCT_FAQ = {
   BIMMEP: [
     {
       q: "Is this the same course as the Building Works one?",
-      a: "No — this one covers building services: mechanical, electrical and HVAC. The Building Works course covers the architectural and structural side. They are separate programmes and can be taken in either order.",
+      a: "No: this one covers building services: mechanical, electrical and HVAC. The Building Works course covers the architectural and structural side. They are separate programmes and can be taken in either order.",
     },
     {
       q: "How long do I keep access?",

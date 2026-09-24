@@ -1,16 +1,12 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { withFileLinks } from "../util/submissionLinks.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { User } from "../models/User.js";
 import PDFDocument from "pdfkit";
 import cloudinary from "../utils/cloudinaryConfig.js";
-
-function requireAdmin(req, res, next) {
-  if (req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
@@ -20,7 +16,7 @@ router.get("/submissions", async (_req, res) => {
   const items = await CourseSubmission.find({ gradeStatus: "pending" })
     .sort({ createdAt: 1 })
     .lean();
-  res.json(items);
+  res.json(await withFileLinks(items));
 });
 
 // grade

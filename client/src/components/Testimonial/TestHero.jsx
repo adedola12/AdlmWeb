@@ -84,18 +84,23 @@ const TestHero = () => {
   const satisfactionRate = stats?.heroSatisfactionRate ?? 0;
   const countriesServed = stats?.heroCountriesServed ?? 0;
 
-  const title = stats?.heroTitle || "Customer Testimonials";
+  const title = stats?.heroTitle || "What our customers say";
+  // The previous default here was template copy: it named "ConstructTech", a
+  // company that is not this one, and claimed 10,000+ customers, a figure
+  // nothing in the business supports. It shipped whenever the stats API was
+  // slow or had no heroSubtitle set, which is every server render.
   const subtitle =
     stats?.heroSubtitle ||
-    "Hear from over 10,000+ satisfied customers who have transformed their construction projects with ConstructTech";
+    "Quantity surveyors, contractors and consultancies across Nigeria use ADLM Studio software and training on live projects. These are their words.";
 
   return (
     <section className="w-full bg-[#163E96] text-white py-12 md:py-16 px-4">
       <div className="max-w-5xl mx-auto text-center">
-        {/* Heading */}
-        <p className="text-2xl md:text-3xl lg:text-4xl font-semibold mb-2 tracking-wide">
+        {/* The page heading. Was a styled <p>, which looked identical and told
+            a crawler this page has no subject. */}
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-semibold mb-2 tracking-wide">
           {title}
-        </p>
+        </h1>
         <p className="text-xs md:text-sm lg:text-base max-w-3xl mx-auto leading-relaxed text-white/80">
           {subtitle}
         </p>

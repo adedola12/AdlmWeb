@@ -12,7 +12,7 @@ export default function ArchiCADVersionSelector({
   currentVersionId = null,
   selectedVersionId = null, // null = viewing the current version
   onSelect, // (versionId | null) => void
-  onReapply, // () => void — only offered on the current version
+  onReapply, // () => void, only offered on the current version
   reapplying = false,
   currency = "NGN",
 }) {
@@ -39,9 +39,9 @@ export default function ArchiCADVersionSelector({
           .filter((v) => v?.versionId && v.versionId !== currentVersionId)
           .map((v) => (
             <option key={v.versionId} value={v.versionId}>
-              {`v${v.versionNumber} — ${
+              {`v${v.versionNumber}, ${
                 v.extractedAt ? dayjs(v.extractedAt).format("DD MMM YYYY HH:mm") : "unknown date"
-              } — ${fmtMoney(v.grandTotal, currency)}`}
+              }, ${fmtMoney(v.grandTotal, currency)}`}
             </option>
           ))}
       </select>

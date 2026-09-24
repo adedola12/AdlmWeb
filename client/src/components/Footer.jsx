@@ -3,15 +3,20 @@ import { Link, useNavigate } from "react-router-dom";
 import appleLogo from "../assets/icons/apple-logo.png";
 import googlePlayLogo from "../assets/icons/playstore.png";
 import ComingSoonModal from "./ComingSoonModal.jsx";
+import { API_BASE } from "../config.js";
 
+// The current APK (the one set in Admin → Site Settings on 18 Sep 2026), used
+// until the API answers. The older copy this used to name was out of date.
 const FALLBACK_APP_URL =
-  "https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link";
+  "https://drive.google.com/file/d/1Pr16vXqTRAOgQrB2Fk3GzZnyMBPiHPRO/view?usp=sharing";
 
 export default function Footer() {
   const [appUrl, setAppUrl] = useState(FALLBACK_APP_URL);
 
   useEffect(() => {
-    fetch("/settings/mobile-app-url")
+    // From the API, not the web host: the relative URL reached the website,
+    // got its HTML page back, and so always fell back to the old APK.
+    fetch(`${API_BASE}/settings/mobile-app-url`)
       .then((r) => r.json())
       .then((d) => { if (d?.mobileAppUrl) setAppUrl(d.mobileAppUrl); })
       .catch(() => {});
@@ -28,6 +33,7 @@ export default function Footer() {
         "/trainings",
         "/testimonials",
         "/dashboard",
+        "/manage",
         "/profile",
       ]),
     []
@@ -38,7 +44,8 @@ export default function Footer() {
     () => [
       /^\/product\/[^/]+$/, // /product/:key
       /^\/trainings\/[^/]+$/, // /trainings/:id
-      /^\/learn\/course\/[^/]+$/, // /learn/course/:sku
+      /^\/dash-course\/[^/]+$/, // /dash-course/:sku
+      /^\/learn\/course\/[^/]+$/, // redirects to the above
       /^\/learn\/free\/[^/]+$/, // /learn/free/:id
       /^\/projects\/[^/]+$/, // /projects/:tool
     ],
@@ -80,7 +87,7 @@ export default function Footer() {
 
   const openNotAvailable = (label = "This page") => {
     setModalInfo({
-      title: "Sorry — page not available",
+      title: "Sorry: page not available",
       message: `${label} isn’t available yet. Please explore our products while we finish this section.`,
     });
     setShowComingSoonModal(true);
@@ -88,7 +95,7 @@ export default function Footer() {
 
   return (
     <footer className="relative overflow-hidden bg-adlm-navy text-white">
-      {/* Premium top edge — brand gradient hairline + soft glow */}
+      {/* Premium top edge, brand gradient hairline + soft glow */}
       <div aria-hidden="true" className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-adlm-orange/70 to-transparent" />
       <div aria-hidden="true" className="absolute -top-24 left-1/2 -translate-x-1/2 w-[40rem] h-48 bg-adlm-blue-600/10 blur-3xl rounded-full" />
       <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-40 mask-radial" />

@@ -725,6 +725,24 @@ const TakeoffProjectSchema = new mongoose.Schema(
     // "takeoff-derived" marks a materials project that was auto-created from a
     // takeoff save (vs a manual Material-module save). "" for normal projects.
     origin: { type: String, default: "" },
+
+    // The bill this schedule was derived from.
+    //
+    // A material & labour schedule is saved as its own project so the Material
+    // module has somewhere to live, but it is not independent work — it is the
+    // same bill, broken down. Until now the only thing relating the two was a
+    // matching modelTitle, which is a string comparison that fails the moment
+    // somebody renames one of them. This is the actual link: set on the
+    // schedule, pointing at the takeoff.
+    //
+    // Empty on a takeoff project, and on a schedule saved directly from the
+    // Material module with no bill behind it.
+    sourceProjectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TakeoffProject",
+      default: null,
+      index: true,
+    },
     mergeSameTypeLevel: { type: Boolean, default: true },
     name: { type: String, required: true, trim: true },
     // The employer/client the bill is being prepared for. Purely descriptive —

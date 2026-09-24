@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DeleteOrgVideoMasters",
+      "Effect": "Allow",
+      "Action": ["s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::adlm-course-archive/org-videos/*"
+    },
+    {
+      "Sid": "ManageOrgVideoLadders",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::adlm-course-delivery",
+      "Condition": { "StringLike": { "s3:prefix": ["hls/org-videos/*"] } }
+    },
+    {
+      "Sid": "DeleteOrgVideoLadders",
+      "Effect": "Allow",
+      "Action": ["s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::adlm-course-delivery/hls/org-videos/*"
+    }
+  ]
+}

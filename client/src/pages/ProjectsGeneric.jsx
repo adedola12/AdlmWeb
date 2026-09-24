@@ -61,6 +61,10 @@ function isMaterialsTool(tool) {
 // tab except 3D Model and linking.
 const BOQ_IMPORT_ORIGIN = "boq-import";
 
+// Written into every workbook this page exports. The Excel importer rejects a
+// workbook carrying it — see server/util/adlmWorkbook.js for why.
+const ADLM_EXPORT_MARKER = "adlm-export";
+
 // The feature grant. "quiv-boq-import" is the pre-2026-08 key, from when this
 // was Quiv-only — still honoured so existing grants keep working.
 const BOQ_IMPORT_ENTITLEMENTS = ["boq-import", "quiv-boq-import"];
@@ -68,10 +72,10 @@ const BOQ_IMPORT_ENTITLEMENTS = ["boq-import", "quiv-boq-import"];
 // tool → { route segment on the API, entitlement that unlocks it }.
 // MEP is "mep" for the entitlement, the project bucket and the route alike —
 // "revitmep" is not a key any user actually holds.
+// Excel BoQ import is a HERON feature only. Projects imported earlier under
+// another product still open; they just cannot import again.
 const BOQ_IMPORT_TOOLS = {
-  revit: { route: "revit", entitlement: "revit" },
   planswift: { route: "planswift", entitlement: "planswift" },
-  mep: { route: "mep", entitlement: "mep" },
 };
 
 function entActive(ents, productKey) {
@@ -1190,9 +1194,8 @@ export default function ProjectsGeneric() {
   // Which API routes this tool's BoQ import uses (null = not available here).
   const boqImport = boqImportFor(authUser, toolNorm);
   const canBoqImport = Boolean(boqImport);
-  const boqRoute = boqImport?.route || "revit";
-  const boqImportBadge =
-    toolNorm === "planswift" ? "HERON" : toolNorm === "mep" ? "MEP" : "QUIV";
+  const boqRoute = boqImport?.route || "planswift";
+  const boqImportBadge = "HERON";
   const [boqImportOpen, setBoqImportOpen] = React.useState(false);
   const [boqImportBusy, setBoqImportBusy] = React.useState(false);
   const [boqImportFile, setBoqImportFile] = React.useState(null);
@@ -1799,7 +1802,7 @@ export default function ProjectsGeneric() {
       if (r.changed) parts.push(`${r.changed} task${r.changed === 1 ? "" : "s"} moved`);
       if (r.anchored) parts.push(`${r.anchored} anchored at start`);
       if (r.cycles) parts.push(`${r.cycles} cycle(s) detected`);
-      setNotice(parts.length ? `Rescheduled — ${parts.join(", ")}.` : "Rescheduled.");
+      setNotice(parts.length ? `Rescheduled, ${parts.join(", ")}.` : "Rescheduled.");
     } catch (e) {
       setPmImportError(e?.message || "Failed to reschedule tasks.");
     }
@@ -2173,8 +2176,8 @@ export default function ProjectsGeneric() {
         "",
         summary,
         "",
-        "OK — separate buildings; each gets its own sheet in the exported bill",
-        "Cancel — disciplines of one structure (architectural + structural)",
+        "OK: separate buildings; each gets its own sheet in the exported bill",
+        "Cancel: disciplines of one structure (architectural + structural)",
       ].join("\n"),
     );
     const name = window.prompt(
@@ -3651,7 +3654,7 @@ export default function ProjectsGeneric() {
       } else {
         // Fallback for legacy unprotected locks — keep the confirmation prompt.
         if (!window.confirm(
-          "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely — variations will no longer be auto-tracked until you lock again.",
+          "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely: variations will no longer be auto-tracked until you lock again.",
         )) return null;
       }
     }
@@ -3798,7 +3801,8 @@ export default function ProjectsGeneric() {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: "include",
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok)
+        throw new Error(await errorMessageFrom(res, "Export failed"));
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -3879,7 +3883,8 @@ export default function ProjectsGeneric() {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: "include",
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok)
+        throw new Error(await errorMessageFrom(res, "Export failed"));
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -3899,7 +3904,7 @@ export default function ProjectsGeneric() {
     if (!["architectural", "structural", "mep"].includes(discipline)) return null;
     const MAX = 100 * 1024 * 1024;
     if (file.size > MAX) {
-      setErr(`File is ${(file.size / 1024 / 1024).toFixed(1)} MB — limit is 100 MB.`);
+      setErr(`File is ${(file.size / 1024 / 1024).toFixed(1)} MB, limit is 100 MB.`);
       return null;
     }
     setModelUploadBusy((prev) => ({ ...prev, [discipline]: true }));
@@ -3969,7 +3974,7 @@ export default function ProjectsGeneric() {
             ? payload.sampleMissing.slice(0, 8).join(", ")
             : "";
           throw new Error(
-            `Wrong or outdated ${discipline} model — it is missing ` +
+            `Wrong or outdated ${discipline} model. It is missing ` +
               `${payload.missingCount} of ${payload.requiredCount} element(s) your ` +
               `${discipline} quantities were measured from` +
               `${sample ? ` (e.g. IDs ${sample}…)` : ""}. ` +
@@ -3984,7 +3989,7 @@ export default function ProjectsGeneric() {
         const v = result.validation || result.model.validation;
         if (v?.status === "valid") {
           setNotice(
-            `${discipline} model verified — all ${v.matchedCount}/${v.requiredCount} ` +
+            `${discipline} model verified, all ${v.matchedCount}/${v.requiredCount} ` +
               `quantity elements found.`,
           );
         } else if (v?.status === "no-quantities") {
@@ -3993,7 +3998,7 @@ export default function ProjectsGeneric() {
           );
         } else if (v?.status === "unchecked") {
           setNotice(
-            `${discipline} model uploaded (fragments — not Element-ID checked).`,
+            `${discipline} model uploaded (fragments, not Element-ID checked).`,
           );
         } else {
           setNotice(`${discipline} model uploaded.`);
@@ -4591,6 +4596,14 @@ export default function ProjectsGeneric() {
     ];
 
     const wb = XLSX.utils.book_new();
+    // Stamp it as an ADLM export. Mirrors server/util/adlmWorkbook.js: the
+    // Excel importer refuses a workbook we generated, so a download can never
+    // be re-uploaded as a second copy of a project the account already has.
+    wb.Props = {
+      Author: "ADLM Studio",
+      Keywords: ADLM_EXPORT_MARKER,
+      Category: ADLM_EXPORT_MARKER,
+    };
 
     // ── Material & Labour budget breakdown (formula-linked) ─────────────
     // One block per bill line: its material + labour rows with live
@@ -4858,7 +4871,7 @@ export default function ProjectsGeneric() {
         );
         return [cat, rows.length, Number(subtotal.toFixed(2))];
       }),
-      ["Measured work — subtotal", computedAll.length, Number(grossAmount.toFixed(2))],
+      ["Measured work: subtotal", computedAll.length, Number(grossAmount.toFixed(2))],
       ...(provTotal > 0
         ? [["Provisional sums", cleanedProvSums.length, Number(provTotal.toFixed(2))]]
         : []),
@@ -4906,10 +4919,24 @@ export default function ProjectsGeneric() {
     const filename = `${sanitizeFilename(sel?.name || "Project")} - BoQ${
       useTrade ? " (Trade)" : ""
     }.xlsx`;
-    XLSX.writeFile(wb, filename);
+    XLSX.writeFile(wb, filename, { Props: wb.Props });
   }
 
   // add near the top with other imports
+
+  // The API answers errors as JSON. Showing the envelope verbatim
+  // ({"error":"Server error"}) is what users were being handed on a failed
+  // export — read the message out of it.
+  async function errorMessageFrom(res, fallback) {
+    const raw = await res.text().catch(() => "");
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed?.error || parsed?.message || fallback;
+    } catch {
+      return raw;
+    }
+  }
 
   // helper
   function filenameFromDisposition(disposition, fallback) {
@@ -4923,19 +4950,12 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function exportElementalBoQFromBackend(
-    buildingType = "bungalow",
-    foundationType,
-    format = "elemental",
-  ) {
-    if (!selectedId) return;
-
-    const normalizedBuilding = buildingType === "multistorey" ? "multistorey" : "bungalow";
+  // Fetch an .xlsx from the export API and save it. Shared by every workbook
+  // the backend builds, so they all get the same content-type guard (an HTML
+  // error page saved as .xlsx is the one failure users cannot diagnose) and
+  // the same filename handling.
+  async function downloadWorkbook(path, fallbackName, failureMessage) {
     const base = API_BASE || window.location.origin;
-    const qs = new URLSearchParams({ building: normalizedBuilding });
-    if (foundationType) qs.set("foundation", String(foundationType));
-    if (format && format !== "elemental") qs.set("format", String(format));
-    const path = `/projectsboq/${toolNorm}/${selectedId}/export/boq?${qs.toString()}`;
     const absUrl = new URL(path, base).toString();
 
     const res = await fetch(absUrl, {
@@ -4949,13 +4969,10 @@ export default function ProjectsGeneric() {
     });
 
     if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(msg || "Failed to export BoQ");
+      throw new Error(await errorMessageFrom(res, failureMessage));
     }
 
     const ct = String(res.headers.get("content-type") || "").toLowerCase();
-
-    // If we accidentally got HTML/JSON, don't download it as .xlsx
     const looksExcel =
       ct.includes("spreadsheetml.sheet") ||
       ct.includes("application/octet-stream");
@@ -4967,10 +4984,10 @@ export default function ProjectsGeneric() {
     }
 
     const blob = await res.blob();
-    const cd = res.headers.get("content-disposition");
-    const formatLabel = format === "trade" ? "Trade" : "Elemental";
-    const fallbackName = `${sanitizeFilename(sel?.name || "Project")} - ${formatLabel} BOQ.xlsx`;
-    const filename = filenameFromDisposition(cd, fallbackName);
+    const filename = filenameFromDisposition(
+      res.headers.get("content-disposition"),
+      fallbackName,
+    );
 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -4979,6 +4996,43 @@ export default function ProjectsGeneric() {
     a.click();
     a.remove();
     URL.revokeObjectURL(a.href);
+  }
+
+  async function exportElementalBoQFromBackend(
+    buildingType = "bungalow",
+    foundationType,
+    format = "elemental",
+  ) {
+    if (!selectedId) return;
+
+    const normalizedBuilding = buildingType === "multistorey" ? "multistorey" : "bungalow";
+    const qs = new URLSearchParams({ building: normalizedBuilding });
+    if (foundationType) qs.set("foundation", String(foundationType));
+    if (format && format !== "elemental") qs.set("format", String(format));
+
+    const formatLabel = format === "trade" ? "Trade" : "Elemental";
+    await downloadWorkbook(
+      `/projectsboq/${toolNorm}/${selectedId}/export/boq?${qs.toString()}`,
+      `${sanitizeFilename(sel?.name || "Project")} - ${formatLabel} BOQ.xlsx`,
+      "Failed to export BoQ",
+    );
+  }
+
+  // The bill exactly as it is held here — its own sections, subtitles and
+  // totals — with the budget beside it: material, labour and plant on separate
+  // schedules, a schedule of current material prices and a material summary.
+  // This is the export an Excel-imported bill needs; the elemental/trade ones
+  // re-cut the bill against a mapping built for plugin takeoffs.
+  async function exportBillBudgetFromBackend(groupBy = "category") {
+    if (!selectedId) return;
+    const qs = new URLSearchParams();
+    if (groupBy === "trade") qs.set("groupBy", "trade");
+    const query = qs.toString();
+    await downloadWorkbook(
+      `/projectsboq/${toolNorm}/${selectedId}/export/bill-budget${query ? `?${query}` : ""}`,
+      `${sanitizeFilename(sel?.name || "Project")} - Bill & Budget.xlsx`,
+      "Failed to export the bill & budget",
+    );
   }
   React.useEffect(() => {
     load({ keepSelection: true });
@@ -5052,7 +5106,7 @@ export default function ProjectsGeneric() {
   return (
     <div className="min-h-screen p-4 md:p-6">
       <div className={`mx-auto flex flex-col gap-4 ${sel ? "max-w-[1700px]" : "max-w-7xl md:flex-row"}`}>
-        {/* SIDEBAR — vertical while browsing; collapses to a slim
+        {/* SIDEBAR, vertical while browsing; collapses to a slim
             horizontal bar once a project is open so the data tables get
             the full width of the screen. */}
         <aside className={sel ? "w-full" : "md:w-[260px]"}>
@@ -5139,7 +5193,7 @@ export default function ProjectsGeneric() {
                           type="button"
                           onClick={() => boqReimportInputRef.current?.click()}
                           disabled={boqImportBusy}
-                          title="Update this project from a newer copy of its Excel BoQ"
+                          title="Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
                           className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
                         >
                           <FaFileExcel className="text-[12px]" />
@@ -5165,7 +5219,7 @@ export default function ProjectsGeneric() {
             </div>
           ) : (
           <div className="card !p-0 overflow-hidden md:sticky md:top-6">
-            {/* Identity band — tells the user exactly which tool & mode
+            {/* Identity band, tells the user exactly which tool & mode
                 they're in, so the rest of the sidebar is purely navigation. */}
             <div className="relative overflow-hidden bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 p-4 text-white">
               <div
@@ -5191,7 +5245,7 @@ export default function ProjectsGeneric() {
             </div>
 
             <div className="space-y-4 p-3">
-              {/* Group 1 — Mode: switch between Takeoffs and Materials for
+              {/* Group 1, Mode: switch between Takeoffs and Materials for
                   the same tool. A segmented control reads as "pick one",
                   unlike the old stack of identical bordered links. */}
               {showRevitToggle && (
@@ -5228,7 +5282,7 @@ export default function ProjectsGeneric() {
                 </div>
               )}
 
-              {/* Group 2 — Navigate: leave the tool or refresh the list.
+              {/* Group 2, Navigate: leave the tool or refresh the list.
                   "Back to projects" lives on the project header itself,
                   so it isn't duplicated here. */}
               <div>
@@ -5261,7 +5315,7 @@ export default function ProjectsGeneric() {
                   {toolNorm === "revit" && (
                     <Link
                       to="/pm-tracker"
-                      title="PM Tracker — standalone project schedules (QUIV)"
+                      title="PM Tracker, standalone project schedules (QUIV)"
                       className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
                     >
                       <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
@@ -5280,7 +5334,7 @@ export default function ProjectsGeneric() {
                         setBoqImportErr("");
                         setBoqImportOpen(true);
                       }}
-                      title="Create a project from an Excel Bill of Quantities — the material & labour schedule is built for you"
+                      title="Create a project from an Excel Bill of Quantities, the material & labour schedule is built for you"
                       className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
                     >
                       <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -5292,11 +5346,11 @@ export default function ProjectsGeneric() {
                       </span>
                     </button>
                   )}
-                  {/* Portfolio Dashboard sits last — it's the cross-product
+                  {/* Portfolio Dashboard sits last, it's the cross-product
                       roll-up you leave the tool for, so it anchors the group. */}
                   <Link
                     to="/portfolio-dashboard"
-                    title="Portfolio dashboard — all projects"
+                    title="Portfolio dashboard, all projects"
                     className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
                   >
                     <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
@@ -5493,6 +5547,14 @@ export default function ProjectsGeneric() {
                 onExportGenericTradeBoQ={() => {
                   setExportOpen(false);
                   exportGenericBoQ("trade");
+                }}
+                onExportBillBudget={async (groupBy) => {
+                  setExportOpen(false);
+                  try {
+                    await exportBillBudgetFromBackend(groupBy);
+                  } catch (e) {
+                    setErr(e?.message || "Failed to export the bill & budget");
+                  }
                 }}
                 onExportElementalBoQ={async (buildingType, foundationType, format) => {
                   setExportOpen(false);
@@ -5774,13 +5836,20 @@ export default function ProjectsGeneric() {
                 </h3>
                 <p className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
                   Creates a {boqImportBadge} project from an Excel Bill of
-                  Quantities. Categories, planned-vs-actual columns and an
-                  optional Material &amp; Labour sheet are read from the
+                  Quantities. Categories, planned-vs-actual columns and
+                  optional Material &amp; Labour schedules are read from the
                   workbook. Where the workbook has no schedule, one is built
-                  for you — cement, sand, granite, blocks, formwork, rebar and
-                  labour, priced from your Material Constants and RateGen —
+                  for you: cement, sand, granite, blocks, formwork, rebar and
+                  labour, priced from your Material Constants and RateGen: 
                   and it stays live across the Dashboard, BoQ, Budget and
                   Valuation tabs.
+                </p>
+                <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+                  Upload your own bill, not one exported from here. An ADLM
+                  export is refused: importing it would spend a project slot on
+                  a duplicate of a bill you already have. To update quantities,
+                  re-measure at the source and sync, or edit the bill in the
+                  project itself.
                 </p>
               </div>
               <button

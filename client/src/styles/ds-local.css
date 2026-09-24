@@ -1,0 +1,1409 @@
+/* Hand-authored additions to the ported design system.
+ *
+ * Everything else under src/styles/ds*.css is generated from Richard's
+ * stylesheets and must not be edited — a re-run of scripts/port-ds-css.mjs
+ * would discard the change. This file is where a control that exists in our
+ * build but not in his gets its styling, written in his idiom and using his
+ * tokens so it does not read as a bolt-on.
+ *
+ * Scoped under .ds by hand, for the same reason the generated sheets are:
+ * nothing here may reach a page that has not opted in.
+ */
+
+/* On-site training: his tile leaves this "On enquiry", because his static
+ * build has no way to know the price. Ours does — every training location is
+ * a city and a participant band with a real fee — so the stepper is replaced
+ * by a select and an optional add-on. */
+.ds .qt-site {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ds .qt-site select {
+  width: 100%;
+  max-width: 340px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.ds .qt-site select:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.ds .qt-bim {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.ds .qt-bim input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--action);
+  flex: none;
+}
+
+/* The QR beside the signature. Ours, not his — his signature block is the
+ * signature alone. Sized in points like the rest of the sheet so it prints at
+ * a scannable size rather than a screen-pixel size that shrinks on paper. */
+.ds .doc-signrow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 18pt;
+}
+
+.ds .doc-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4pt;
+  flex: none;
+}
+
+.ds .doc-qr svg {
+  width: 54pt;
+  height: 54pt;
+  display: block;
+}
+
+.ds .doc-qr span {
+  font-size: 6.2pt;
+  color: var(--doc-navy);
+  opacity: 0.72;
+  text-align: center;
+  max-width: 76pt;
+  line-height: 1.3;
+}
+
+/* Checkout: the receipt upload and the status line. Neither exists in his
+ * build — his form posts nowhere and proof of a transfer went over WhatsApp. */
+.ds .chk-receipt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.ds .chk-receipt label {
+  cursor: pointer;
+  flex: none;
+}
+
+.ds .chk-msg {
+  margin-top: 14px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.ds .chk-msg.is-ok {
+  background: color-mix(in srgb, var(--action) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--action) 34%, transparent);
+  color: var(--ink);
+}
+
+.ds .chk-msg.is-err {
+  background: color-mix(in srgb, #e5484d 12%, transparent);
+  border: 1px solid color-mix(in srgb, #e5484d 38%, transparent);
+  color: var(--ink);
+}
+
+/* A product in the basket that is not finished yet. Not an error: the buyer
+ * did nothing wrong, and the sale for everything else is still live. Styled
+ * as a note rather than a failure for that reason. */
+.ds .chk-soon {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--action) 30%, transparent);
+  background: color-mix(in srgb, var(--action) 8%, transparent);
+}
+
+.ds .chk-soon b {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.ds .chk-soon p {
+  margin-bottom: 10px;
+}
+
+/* The waitlist row inside .chk-soon. Two fields and a button when nobody is
+ * signed in; the button alone when we already know who is asking. */
+.ds .chk-wl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ds .chk-wl input {
+  flex: 1 1 170px;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.ds .chk-wl input:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.ds .chk-wl button {
+  flex: none;
+}
+
+/* Ada is thinking.
+ *
+ * Richard's Ada has no such state and needs none: she scores keywords and
+ * answers in the same tick. Ours asks Claude, which takes a second or three,
+ * and a panel that sits perfectly still for three seconds after you press
+ * send reads as broken. Three dots in one of his own assistant bubbles.
+ */
+.ds .ada-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 0;
+}
+.ds .ada-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  animation: ada-bounce 1.1s infinite ease-in-out;
+}
+.ds .ada-dots i:nth-child(2) { animation-delay: 0.15s; }
+.ds .ada-dots i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes ada-bounce {
+  0%, 70%, 100% { transform: translateY(0); opacity: 0.45; }
+  35%           { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Somebody who has asked not to see motion should not be made to. */
+@media (prefers-reduced-motion: reduce) {
+  .ds .ada-dots i { animation: none; }
+}
+
+/* "Ask Ada" was invisible in dark mode.
+ *
+ * His rule pairs a hardcoded white label with a themed background:
+ *
+ *   .ada-btn { color: #fff; background: var(--ink); }
+ *
+ * --ink is #061423 in light, so white on near-black reads fine. In dark it is
+ * #F2F7FC, so the same white label sits on a near-white pill and disappears.
+ * Broken on his site too, not something the port introduced — worth sending
+ * back to him.
+ *
+ * The fix is to let the label take the token that is always --ink's opposite.
+ * --bg is #FFFFFF in light and #02080F in dark, so the pair inverts together
+ * and stays legible in both, in his colours rather than new ones.
+ *
+ * Here rather than in ds.css because that file is generated by
+ * scripts/port-ds-css.mjs and the next run would discard the edit.
+ */
+.ds .ada-btn {
+  color: var(--bg);
+}
+
+/* A muted standalone paragraph.
+ *
+ * `.sub` is one of the ten names port-ds-css.mjs renames on the way in, so his
+ * `.sub` became `.ds-sub` — but he only ever uses it as a DESCENDANT
+ * (`.dsh-stat .sub`, `.wk-proj .sub`), and those descendant rules survive under
+ * their parents. A standalone `<p class="sub">`, which is what every loading
+ * and empty state here uses, matched nothing at all and rendered as body copy.
+ *
+ * One rule, in his tokens, rather than seventeen inline styles.
+ */
+.ds p.sub {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  font-weight: 300;
+  color: var(--ink-3);
+  line-height: 1.65;
+}
+
+/* A real recording in his stage.
+ *
+ * His .lx-stage is a still image with a simulated transport drawn over it — a
+ * play button, a seek bar and the words "playback simulated". Ours has an
+ * actual <video> with its own controls, a watermark overlay and a concurrency
+ * seat behind it, so the simulation comes off and the frame stays: the
+ * aspect ratio, the radius and the border are the parts worth keeping.
+ *
+ * The ::after scrim has to go with it. Over a still it is a gradient that
+ * makes his white transport legible; over a live video it dims the picture and
+ * swallows every click meant for the controls underneath. */
+.ds .lx-stage.live { background: #000; }
+.ds .lx-stage.live::after { display: none; }
+.ds .lx-stage.live video,
+.ds .lx-stage.live iframe { width: 100%; height: 100%; display: block; }
+
+/* The two states that replace the picture: a seat held on another device, and
+ * a session whose recording has not been uploaded. Both keep the stage's
+ * shape so the page does not jump when one becomes the other. */
+.ds .lx-stage.msg {
+  display: grid; place-items: center; text-align: center; padding: 24px;
+  background: var(--bg-alt);
+}
+.ds .lx-stage.msg::after { display: none; }
+.ds .lx-stage.msg b {
+  display: block; font-size: 15px; font-weight: 500; color: var(--ink);
+  letter-spacing: -.015em;
+}
+.ds .lx-stage.msg p {
+  margin: 8px auto 0; max-width: 46ch; font-size: 13px; font-weight: 300;
+  color: var(--ink-3); line-height: 1.6;
+}
+
+/* The watermark note under the stage, and the lecture/recap switch above it. */
+.ds .lx-guard {
+  display: flex; align-items: center; gap: 7px; margin: 10px 0 0;
+  font-size: 11.5px; font-weight: 300; color: var(--ink-3);
+}
+.ds .lx-guard svg { width: 13px; height: 13px; flex: none; }
+.ds .lx-tabs.track { margin: 0 0 12px; }
+
+/* His .lx-res rows are links. An upload control and a graded submission are
+ * not links, so they get the same shell without the anchor. */
+.ds .lx-res .row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--bg);
+}
+.ds .lx-res .row b { font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.ds .lx-res .row em {
+  font-style: normal; font-size: 11.5px; color: var(--ink-3);
+  margin-left: auto; flex: none;
+}
+.ds .lx-res .row.ok { border-color: color-mix(in srgb, var(--action) 40%, var(--line)); }
+
+/* The module quiz.
+ *
+ * He has no student-facing quiz anywhere in his build — the word only appears
+ * in his admin screens — so there is nothing to port. This is written in his
+ * idiom instead: his tokens, his radii, his weights, and the same row shape
+ * .lx-res uses, so an answer reads like the rest of the lesson panel rather
+ * than like a form bolted on.
+ *
+ * Grading is server-side; the key never reaches the browser. That is why the
+ * correct/incorrect states only exist as classes applied after a submission. */
+.ds .lx-quiz-h {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; margin-bottom: 6px;
+}
+.ds .lx-quiz-h b {
+  font-size: 15px; font-weight: 500; color: var(--ink); letter-spacing: -.015em;
+}
+.ds .lx-quiz-h span {
+  font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+
+/* The verdict, in the shape of his .lx-cont key line. */
+.ds .lx-verdict {
+  margin: 16px 0 0; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg-alt);
+}
+.ds .lx-verdict b {
+  display: block; font-size: 13.5px; font-weight: 500; color: var(--ink);
+}
+.ds .lx-verdict span {
+  display: block; margin-top: 4px; font-size: 12.5px; font-weight: 300;
+  color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+.ds .lx-verdict.pass {
+  border-color: color-mix(in srgb, var(--ok) 38%, var(--line));
+  background: color-mix(in srgb, var(--ok) 7%, var(--bg-alt));
+}
+.ds .lx-verdict.pass b { color: var(--ok); }
+:root.dark .ds .lx-verdict.pass b { color: var(--ok-d); }
+.ds .lx-verdict.fail {
+  border-color: color-mix(in srgb, var(--orange-600) 42%, var(--line));
+  background: color-mix(in srgb, var(--orange-600) 8%, var(--bg-alt));
+}
+
+.ds .lx-qs { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 22px; }
+.ds .lx-q > b {
+  display: block; font-size: 14px; font-weight: 500; color: var(--ink);
+  line-height: 1.5; max-width: 66ch;
+}
+.ds .lx-opts { display: grid; gap: 8px; margin-top: 11px; }
+
+/* One option. Same shell as .lx-res a, but it is a control, so it carries a
+   real radio rather than a link's affordances. */
+.ds .lx-opt {
+  display: flex; align-items: flex-start; gap: 11px; padding: 11px 14px;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--bg);
+  cursor: pointer; transition: border-color 220ms var(--e-fast),
+    background 220ms var(--e-fast);
+}
+.ds .lx-opt:hover { border-color: var(--line-2); }
+.ds .lx-opt input { margin: 2px 0 0; accent-color: var(--action); flex: none; }
+.ds .lx-opt span {
+  font-size: 13.5px; font-weight: 300; color: var(--ink-2); line-height: 1.55;
+}
+.ds .lx-opt.on { border-color: var(--action); background: var(--pal-light-wash); }
+.ds .lx-opt.on span { color: var(--ink); font-weight: 400; }
+
+/* After marking. `key` is the right answer whether or not it was picked;
+   `wrong` is only ever the answer that was picked and was not it. */
+.ds .lx-opt.key {
+  border-color: color-mix(in srgb, var(--ok) 46%, var(--line));
+  background: color-mix(in srgb, var(--ok) 8%, var(--bg));
+}
+.ds .lx-opt.key span { color: var(--ink); font-weight: 400; }
+.ds .lx-opt.wrong {
+  border-color: color-mix(in srgb, var(--orange-600) 55%, var(--line));
+  background: color-mix(in srgb, var(--orange-600) 10%, var(--bg));
+}
+.ds .lx-opt.wrong span { color: var(--ink); font-weight: 400; }
+/* His idiom: the token holds the light value and dark gets its own rule. On a
+   dark sheet #C4531A is nearly the background, which is how a wrong answer
+   came to look unmarked even once it had a colour. */
+:root.dark .ds .lx-opt.wrong {
+  border-color: color-mix(in srgb, var(--orange-400) 58%, var(--line));
+  background: color-mix(in srgb, var(--orange-400) 14%, var(--bg));
+}
+:root.dark .ds .lx-opt.key {
+  border-color: color-mix(in srgb, var(--ok-d) 50%, var(--line));
+  background: color-mix(in srgb, var(--ok-d) 12%, var(--bg));
+}
+:root.dark .ds .lx-verdict.fail {
+  border-color: color-mix(in srgb, var(--orange-400) 46%, var(--line));
+  background: color-mix(in srgb, var(--orange-400) 12%, var(--bg-alt));
+}
+.ds .lx-opt.done { cursor: default; }
+.ds .lx-why {
+  margin: 9px 0 0; padding-left: 14px; border-left: 2px solid var(--line-2);
+  font-size: 12.5px; font-weight: 300; color: var(--ink-3); line-height: 1.6;
+  max-width: 66ch;
+}
+.ds .lx-qacts {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line);
+}
+.ds .lx-qacts em {
+  font-style: normal; font-size: 12px; font-weight: 300; color: var(--ink-3);
+}
+.ds .lx-qacts em.bad { color: var(--orange-600); }
+:root.dark .ds .lx-qacts em.bad { color: var(--orange-400); }
+
+/* Playback speed, on the line under the stage.
+ *
+ * The native speed menu is switched off by controlsList, alongside download
+ * and remote playback, so the control has to be ours. It sits on the guard
+ * line rather than over the video: his .lx-bot transport is a simulation we
+ * replaced with a real <video>, and floating a second control over the
+ * browser's own would collide with it.
+ *
+ * A ninety-six minute lecture is the whole reason this exists. */
+.ds .lx-guard { justify-content: flex-start; }
+.ds .lx-guard > span:first-of-type { min-width: 0; }
+.ds .lx-rate {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin-left: auto; flex: none;
+}
+.ds .lx-rate label {
+  font-size: 11.5px; font-weight: 300; color: var(--ink-3);
+}
+.ds .lx-rate select {
+  padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); font-family: var(--font);
+  font-size: 12px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.ds .lx-rate select:hover { border-color: var(--line-2); }
+.ds .lx-rate select:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+
+
+/* ============================================ programme — the two additions
+
+   His "Where the time comes from" table is five columns: item, trade,
+   quantity, output, gang-days. Ours carries a sixth, the line's own money off
+   the bill, because a programme that cannot say what a week of blockwork is
+   worth is only half the answer — and the whole point of deriving it from the
+   bill is that the money is already there.
+
+   The other change is that his Output cell prints a number and ours takes
+   one. His comes from the rate that priced the line; we have no such link yet,
+   so the one figure the bill does not carry is typed in the column that was
+   already for it, rather than in a panel he never drew. */
+.ds .prg-qt .wk-qhd,
+.ds .prg-qt .wk-qr {
+  grid-template-columns: 1fr 110px 104px 116px 92px 124px;
+}
+.ds .prg-qt .wk-qr .v {
+  font-size: 13.5px; color: var(--ink); text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ds .prg-qt .wk-qhd span:nth-child(n + 3) { text-align: right; }
+
+/* The input sits in the cell at the weight of the text it replaces, so the
+   column still reads as a column and not as a form dropped into a table. */
+.ds .wk-qr .r .prg-out {
+  width: 62px; padding: 3px 6px; text-align: right;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px; font-weight: 300;
+  font-variant-numeric: tabular-nums;
+}
+.ds .wk-qr .r .prg-out:hover { border-color: var(--line-2); }
+.ds .wk-qr .r .prg-out:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+.ds .wk-qr .r i {
+  font-style: normal; font-size: 11px; color: var(--ink-3); margin-left: 5px;
+}
+
+/* Same collapse his own table does on a phone: the header goes, the line
+   stacks, and the money keeps the top-right corner where the eye expects it. */
+@media (max-width: 900px) {
+  .ds .prg-qt .wk-qr { grid-template-columns: 1fr auto; }
+  .ds .prg-qt .wk-qr .v { grid-column: 2; grid-row: 1; }
+  .ds .prg-qt .wk-qr .ds-a { grid-column: 2; grid-row: 2; font-size: 13px; }
+  .ds .prg-qt .wk-qr .r { grid-column: 1; grid-row: 4; text-align: left; }
+  .ds .prg-qt .wk-qr .s { grid-column: 2; grid-row: 3 / 5; }
+  /* prg-qhd-fold — the rows above fold into two lines at this width, so a
+     six-column header over them labels columns that no longer exist. His
+     own sheet hides .wk-qhd when his rows fold (760px); ours fold earlier,
+     so the header has to go at the same point they do. */
+  .ds .prg-qt .wk-qhd { display: none; }
+}
+
+/* His .wk-proj is an anchor. On the programme it is a button, because opening
+   a product is a change of view rather than a destination — so it needs the
+   browser's button styling taken off before it can look like his card. The
+   Projects screen does the same thing with inline styles; this is that, named. */
+.ds .wk-proj.prg-card {
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: none; -webkit-appearance: none; appearance: none;
+}
+.ds .wk-proj.prg-card .t h3 img {
+  width: 20px; height: 20px; vertical-align: -4px;
+  margin-right: 9px; object-fit: contain;
+}
+
+/* The way back up a level. A link in weight, a button in behaviour, sitting in
+   his .wk-ref slot above the heading. */
+.ds .prg-back {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font-family: var(--font); font-size: inherit; color: var(--ink-3);
+}
+.ds .prg-back:hover { color: var(--action); }
+
+/* The note under the product shelf spans it, rather than sitting in a cell of
+   the card grid as if it were another product. */
+.ds .wk-projs .prg-aside { grid-column: 1 / -1; padding: 4px 2px 0; }
+
+/* The estimator sits in his .wk-locnote slot, at the weight of the note it
+   shares a line with — it is an offer, not the panel's headline. */
+.ds .wk-ph .prg-est {
+  margin-left: 12px; padding: 3px 10px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg-alt);
+  color: var(--ink-2); font-family: var(--font); font-size: 11.5px; font-weight: 300;
+}
+.ds .wk-ph .prg-est:hover:not(:disabled) { border-color: var(--action); color: var(--ink); }
+.ds .wk-ph .prg-est:disabled { opacity: .55; cursor: default; }
+
+/* An estimated output is marked so it can be told apart from one somebody
+   typed — a dotted rule, the way an abbreviation carries its expansion, with
+   the reasoning on the title. Typing over it clears the mark and the basis. */
+.ds .wk-qr .r .prg-out.est {
+  border-bottom-style: dashed;
+  border-bottom-color: color-mix(in srgb, var(--action) 55%, transparent);
+}
+
+
+/* ============================== what his account menus needed from us: nothing
+
+   Two blocks lived here — a marked Admin / User pair for .dsh-menu, and a
+   whole .adm-menu shaped after his .dsh-menu for the admin header. Both were
+   stand-ins written before his surface.js and .adm-memenu were read properly.
+   His switcher (.sw / .sw-row / .sw-now, site.css) and his admin menu
+   (.adm-memenu, admin.css) were already ported and are now what renders, from
+   src/ds/DsSurfaceSwitch.jsx. His .adm-top carries the positioning. */
+.ds .adm-acc { display: inline-flex; }
+
+
+/* The register search. His .adm-find is sized for the header, where it sits
+   beside a title and an avatar; on a register it is the primary control and
+   wants the width of the table above it. */
+.ds .adm-find-wide {
+  display: flex; width: 100%; max-width: 520px; margin: 0 0 18px;
+}
+.ds .adm-find-wide input { flex: 1; }
+
+
+/* ============================================ the submission viewer, and the
+   split it sits in
+
+   Richard's submissions screen lists the attached files and leaves opening
+   them to the browser. A marker who has to download every attachment, open it,
+   decide, then come back and find their place marks in batches of one — so the
+   work opens beside the queue instead, and the row stays where it was.
+
+   None of this is in his sheet, because his screen does not do it. Built from
+   the same tokens as his panels so it belongs to them. */
+.ds .adm-split { display: grid; gap: 20px; align-items: start; }
+.ds .adm-split.on { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+
+.ds .adm-view {
+  position: sticky; top: 12px;
+  display: flex; flex-direction: column; max-height: calc(100dvh - 120px);
+  border: 1px solid var(--line); border-radius: 16px;
+  background: var(--bg-alt); overflow: hidden;
+}
+.ds .adm-view-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line);
+}
+.ds .adm-view-head b { display: block; font-size: 14px; font-weight: 500; color: var(--ink); }
+.ds .adm-view-head span { display: block; font-size: 12px; color: var(--ink-3); margin-top: 3px; }
+
+.ds .adm-view-body {
+  flex: 1; min-height: 220px; overflow: auto; padding: 16px;
+  background: var(--bg-inset);
+}
+.ds .adm-view-body img { display: block; width: 100%; height: auto; border-radius: 10px; }
+.ds .adm-view-body iframe {
+  display: block; width: 100%; height: 58vh; border: 0; border-radius: 10px; background: #fff;
+}
+.ds .adm-view-note {
+  margin: 14px 0 0; padding: 12px 14px; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--line);
+  font-size: 13px; color: var(--ink-2);
+}
+.ds .adm-view-note b { display: block; font-weight: 500; color: var(--ink); margin-bottom: 4px; }
+
+.ds .adm-view-foot { padding: 14px 16px; border-top: 1px solid var(--line); }
+.ds .adm-view-foot label {
+  display: block; font-size: 11.5px; color: var(--ink-3); margin-bottom: 10px;
+}
+.ds .adm-view-foot textarea {
+  display: block; width: 100%; margin-top: 6px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 13px; resize: vertical;
+}
+.ds .adm-view-foot textarea:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+.ds .adm-view-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* On a narrow screen the work goes under the queue rather than beside it. */
+@media (max-width: 1100px) {
+  .ds .adm-split.on { grid-template-columns: 1fr; }
+  .ds .adm-view { position: static; max-height: none; }
+  .ds .adm-view-body iframe { height: 52vh; }
+}
+
+/* The outcome picker in the follow-up register. Eight outcomes is too many for
+   a row until somebody asks for them, so the row carries one button and opens
+   the list in place rather than in a dialog that loses your position. */
+.ds .adm-log { display: inline-flex; flex-wrap: wrap; gap: 4px; max-width: 320px; }
+.ds .adm-log .adm-b { font-size: 11.5px; padding: 3px 8px; }
+
+/* The status picker on a support row. A select rather than a row of buttons:
+   five statuses across six columns would push the table wider than the page. */
+.ds .adm-sel {
+  padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12px; cursor: pointer;
+}
+.ds .adm-sel:hover { border-color: var(--line-2); }
+.ds .adm-sel:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+
+/* An action beside a register heading. His .adm-pagehead already lays out two
+   children; this is the second one. */
+.ds .adm-acts { display: flex; gap: 8px; align-items: center; flex: none; }
+
+/* Two or three small actions in the last column of a register. His
+   .adm-rowacts, which the ported sheet already styles for Commerce. */
+.ds .adm-rowacts { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ds .adm-rowacts .adm-b { font-size: 11.5px; padding: 3px 9px; }
+
+/* Editing a rate in place. Three numbers and a save — a rate's price is the
+   only thing on that register anybody changes often, and sending somebody to
+   a separate editor to change one figure loses their place in 130 rows. */
+.ds .adm-edit { display: inline-flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
+.ds .adm-edit label {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+}
+.ds .adm-edit input {
+  width: 74px; padding: 3px 6px; text-align: right;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ds .adm-edit input:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+
+
+/* =========================================================== the rate builder
+
+   Richard drew no rate builder — his admin has no such screen, because his
+   prototype had no rate library behind it. Built from his tokens so it belongs
+   to the same admin: his .adm-panel for the two halves, his .adm-tabs for the
+   library switch, his .adm-none for the empty states. */
+.ds .rb-head {
+  display: grid; grid-template-columns: 2.2fr 0.7fr 1fr 1fr; gap: 14px; margin: 0 0 20px;
+}
+.ds .rb-head label { display: block; font-size: 11.5px; color: var(--ink-3); }
+.ds .rb-head input,
+.ds .rb-head select {
+  display: block; width: 100%; margin-top: 6px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 13.5px;
+}
+.ds .rb-head input:focus,
+.ds .rb-head select:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+
+.ds .rb-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 20px; align-items: start; }
+
+/* The library list is long — 595 materials — so it scrolls inside its panel
+   rather than pushing the build-up off the page. */
+.ds .rb-lib { max-height: 46vh; overflow: auto; margin-top: 6px; }
+.ds .rb-item {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; width: 100%;
+  padding: 9px 10px; border: 0; border-bottom: 1px solid var(--line);
+  background: none; text-align: left; cursor: pointer; font-family: var(--font);
+}
+.ds .rb-item:hover { background: var(--pal-light-wash); }
+/* Placed explicitly. Left to auto-placement the price took the first cell and
+   the name was pushed into the second, which read as though every component
+   were called by its price. */
+.ds .rb-item .n { grid-column: 1; grid-row: 1; font-size: 13px; color: var(--ink); }
+.ds .rb-item .c { grid-column: 1; grid-row: 2; font-size: 11px; color: var(--ink-3); }
+.ds .rb-item .p {
+  grid-column: 2; grid-row: 1 / 3; align-self: center; justify-self: end;
+  font-size: 13px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ds .rb-item .p i { font-style: normal; font-size: 11px; color: var(--ink-3); }
+
+.ds .rb-lhd, .ds .rb-line {
+  display: grid; grid-template-columns: 22px 1fr 108px 78px 104px 108px 76px;
+  gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+
+/* ── the rate library's opened build-up ───────────────────────────────────── */
+
+/* His library row is a link to a rate's own page. Here the build-up opens under
+   the row instead, because an administrator is checking a figure rather than
+   working in it, and losing your place in a list of 130 to read four lines is a
+   poor trade. Indented under the row it belongs to, so the list still reads as
+   a list. */
+.ds .rl-open {
+  padding: 12px 16px 14px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--pal-light-wash);
+}
+.ds .rl-bu > div {
+  display: grid; grid-template-columns: 1fr 120px 110px 120px;
+  gap: 10px; align-items: baseline; padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.ds .rl-bu > div:last-child { border-bottom: 0; }
+.ds .rl-bu b { display: block; font-size: 13px; font-weight: 400; color: var(--ink); }
+.ds .rl-bu em { font-style: normal; font-size: 11px; color: var(--ink-3); }
+.ds .rl-bu > div > span:nth-child(n+2) {
+  text-align: right; font-size: 12.5px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* rl-bu-phone — the build-up on a phone.
+   Four columns needed 350px of fixed width; a phone has about 331, so the
+   quantity and price ran off the right edge with nothing to scroll them into
+   view. His answer for the same shape in work.css is "the build-up stops being
+   a table and becomes a stack of stated facts" (.wk-bl), at his 760px break,
+   and this is that move: what it is and what it costs share the first line,
+   quantity and waste go underneath in the quieter ink. Read-only rows, so
+   nothing is lost by folding them. */
+@media (max-width: 760px) {
+  .ds .rl-bu > div { grid-template-columns: 1fr auto; gap: 4px 14px; padding: 10px 0; }
+  .ds .rl-bu > div > span:nth-child(1) { grid-column: 1; grid-row: 1; }
+  .ds .rl-bu > div > span:nth-child(4) { grid-column: 2; grid-row: 1; }
+  .ds .rl-bu > div > span:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 12px; color: var(--ink-3); }
+  .ds .rl-bu > div > span:nth-child(3) { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--ink-3); text-align: right; }
+}
+.ds .rl-sum { margin-top: 10px; font-size: 12.5px; color: var(--ink-3); }
+.ds .rl-sum b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* The library's own filter and zone controls sit in his `wk-dd` shell, which he
+   fills with a scripted listbox. A native select inside it needs the label and
+   the control on one line, and no second border of its own. */
+.ds .wk-dd { display: inline-flex; align-items: center; gap: 8px; }
+.ds .wk-dd > span {
+  font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+.ds .wk-dd select {
+  border: 0; background: none; color: var(--ink);
+  font-family: var(--font); font-size: 13px; cursor: pointer; max-width: 190px;
+}
+
+/* ── dragging a component into the build-up ───────────────────────────────── */
+
+.ds .rb-item { cursor: grab; }
+.ds .rb-item:active { cursor: grabbing; }
+
+/* Only while something is in the air. A panel that glows at rest is decoration;
+   one that answers the moment a component lifts is an instruction. */
+.ds .rb-zone.is-live {
+  outline: 1px dashed var(--line-2); outline-offset: -6px; border-radius: 12px;
+}
+.ds .rb-empty { transition: color .12s ease; }
+
+/* Where it will land. Two pixels of accent reads at a glance without shifting
+   the rows around it — a gap that opens up makes the list jump under the
+   pointer and the target you were aiming at moves. */
+.ds .rb-mark {
+  height: 2px; margin: -1px 0; border-radius: 2px;
+  background: var(--pal-accent, currentColor); opacity: .9;
+}
+
+.ds .rb-grip {
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: grab; color: var(--ink-3); opacity: .55;
+}
+.ds .rb-grip:hover { opacity: 1; }
+.ds .rb-grip:active { cursor: grabbing; }
+.ds .rb-grip svg { fill: currentColor; }
+.ds .rb-line.is-lift { opacity: .4; }
+.ds .rb-lhd {
+  font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--line-2);
+}
+.ds .rb-lhd span:nth-child(n+2), .ds .rb-line .ro { text-align: right; }
+.ds .rb-line .n b { display: block; font-size: 13px; font-weight: 400; color: var(--ink); }
+.ds .rb-line .n em { font-style: normal; font-size: 11px; color: var(--ink-3); }
+.ds .rb-line input {
+  width: 100%; padding: 5px 8px; text-align: right;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.ds .rb-line span i { font-style: normal; font-size: 10.5px; color: var(--ink-3); margin-left: 4px; }
+.ds .rb-line .ro { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* rb-lines-scroll — the line editor on a phone.
+   Seven columns carry about 556px of fixed width and gaps, against a phone's
+   331. Unlike the rate library's build-up these rows hold inputs, and folding
+   a quantity field under a waste field makes a form nobody can read, so the
+   rows keep their shape and scroll inside their own box. That is what his
+   admin tables do: .adm-tw scrolls, .adm-table holds a min-width.
+
+   Scoped to his 760px break on purpose. On a desktop the builder shares the
+   screen with the component library and its column can be narrower than this
+   floor, so an unconditional min-width would put a scrollbar where there has
+   never been one. The 1px padding holds the drop marker's -1px margin, which
+   would otherwise make the box scroll vertically by a pixel. */
+@media (max-width: 760px) {
+  .ds .rb-lines { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 1px 0; }
+  .ds .rb-lhd, .ds .rb-line { min-width: 680px; }
+}
+
+.ds .rb-sum { margin-top: 18px; border-top: 1px solid var(--line-2); padding-top: 12px; }
+.ds .rb-sum > div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 5px 0;
+}
+.ds .rb-sum span { font-size: 13px; color: var(--ink-3); display: inline-flex; align-items: center; gap: 6px; }
+.ds .rb-sum span input {
+  width: 56px; padding: 3px 6px; text-align: right;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 12px;
+}
+.ds .rb-sum b { font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ds .rb-sum .tot { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
+.ds .rb-sum .tot span { font-size: 15px; color: var(--ink); font-weight: 500; }
+.ds .rb-sum .tot b { font-size: 24px; font-weight: 500; letter-spacing: -.02em; }
+.ds .rb-sum .tot b i { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: 6px; }
+
+.ds .rb-acts { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+@media (max-width: 1180px) {
+  .ds .rb-split { grid-template-columns: 1fr; }
+  .ds .rb-head { grid-template-columns: 1fr 1fr; }
+  .ds .rb-lib { max-height: 34vh; }
+}
+
+/* ── storage: how full an account is ──────────────────────────────────────
+   The bar and the chip carry the same three bands, so colour never says one
+   thing in the bar and another beside it. */
+.ds .adm-fill { display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end; }
+.ds .adm-fill i {
+  display: block; height: 100%; border-radius: 999px; background: var(--ok);
+}
+.ds .adm-fill::before {
+  content: ""; order: -1; width: 72px; height: 6px; border-radius: 999px;
+  background: var(--line-2); overflow: hidden; flex: none;
+}
+.ds .adm-fill b {
+  font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2);
+  min-width: 34px; text-align: right;
+}
+/* The bar is drawn as a track with an inset fill rather than two nested
+   elements, so the row height cannot shift when a bar appears. */
+.ds .adm-fill { position: relative; }
+.ds .adm-fill i {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  height: 6px; max-width: 72px;
+}
+.ds .adm-fill.is-full i    { background: var(--orange-600); }
+.ds .adm-fill.is-filling i { background: var(--orange-400); }
+.ds .adm-fill.is-fine i    { background: var(--ok); }
+
+/* Inline edit inside a table cell — a figure, and the control that changes it. */
+.ds .adm-inline { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.ds .adm-inline input {
+  width: 68px; padding: 4px 7px; text-align: right;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+
+/* A link inside a table cell. His admin-catalogue.js reaches for .adm-link
+ * (the YouTube link on a course preview) but his stylesheet never defines it,
+ * so it renders as body text and nobody can tell it is clickable. One rule,
+ * in his tokens. Worth sending back to him. */
+.ds .adm-link {
+  color: var(--action); text-decoration: underline;
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+}
+.ds .adm-link:hover { color: var(--ink); }
+
+/* The saved wording of an email, shown as text rather than rendered. An
+ * admins own HTML running inside the admin is a door nobody needs open. */
+.ds .adm-pre {
+  margin: 6px 0 0; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--pal-light-wash); color: var(--ink-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 46vh; overflow: auto;
+}
+
+/* ── Ada must not sit on top of anything you can press ────────────────────
+ *
+ * She is position:fixed at right:22px bottom:22px with z-index 880, so she
+ * floats over whatever happens to be in the bottom-right corner — which, on
+ * a form or a register, is exactly where the save and the row actions are.
+ *
+ * The fix is room rather than z-index. Raising the page above her would put
+ * the page's own content over a floating button, which looks broken from the
+ * other direction; moving her breaks his design. So every scrolling surface
+ * reserves the height of the pill plus its shadow at the bottom, and the last
+ * control on a page can always be scrolled clear of her.
+ *
+ * --ada-clear rather than a literal, so the day she changes size this is one
+ * number in one place.
+ */
+:root { --ada-clear: 92px; }
+
+.ds .adm-page-in,
+.ds .dsh-main,
+.ds .wk-main,
+.ds .lx-main { padding-bottom: var(--ada-clear); }
+
+/* A drawer scrolls inside itself and sits ABOVE her (z-index on .adm-drawer-
+   wrap), so its footer needs no gap — but its scrolling body does, or the last
+   field hides behind the footer on a short screen. */
+.ds .adm-drawer-b { padding-bottom: 18px; }
+
+/* On a phone she goes full-width across the bottom, so the reserve has to be
+   taller or she covers two rows rather than one corner. */
+@media (max-width: 720px) {
+  :root { --ada-clear: 116px; }
+}
+
+/* Somebody printing a register does not want a chat button on the paper. */
+@media print {
+  .ds .ada-w { display: none !important; }
+}
+
+/* ── reading a message in the admin ──────────────────────────────────────── */
+
+.ds .adm-mail-subject { margin: 2px 0 16px; font-size: 14.5px; color: var(--ink); }
+
+/* The mail rendered as a customer sees it. White regardless of the admin
+   theme, because that is what an inbox does — showing it on a dark ground
+   would misrepresent what was actually sent. */
+.ds .adm-mail-frame {
+  width: 100%; height: 460px; border: 1px solid var(--line);
+  border-radius: 10px; background: #fff; display: block;
+}
+
+.ds .adm-mail-orig { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.ds .adm-mail-orig summary {
+  cursor: pointer; font-size: 13px; color: var(--ink-2); margin-bottom: 10px;
+}
+.ds .adm-mail-orig summary:hover { color: var(--ink); }
+
+/* ── Ada moves aside for a drawer, rather than leaving ──────────────────────
+ *
+ * She floats at z-index 880; every admin drawer sits at 120. So she covered
+ * the drawer's own Save button — the one thing somebody opened it to press.
+ *
+ * The first fix hid her, which solved the overlap and created a worse
+ * problem: a drawer is exactly when somebody has a question. Reading a
+ * message they are about to send to every customer is the moment to ask
+ * "is this wording right?", and an assistant that vanishes precisely then
+ * is an assistant that is missing whenever it would be most use.
+ *
+ * So she steps left instead, into the dimmed area beside the drawer. Still
+ * floating, still one click, and no longer over anything that can be pressed.
+ * Anything that puts a layer over the page sets data-overlay on <html>.
+ *
+ * Written as :root[data-overlay] .ada-w, NOT .ds [data-overlay] — the
+ * attribute is on <html>, an ANCESTOR of .ds, so a descendant selector would
+ * never match. Same trap that kept the admin rail wide in both states.
+ */
+:root[data-overlay] .ada-w {
+  /* The drawer is min(480px, 100%) hard against the right edge. Clearing it
+     by its own width plus a gap puts her beside it, not under it. */
+  right: calc(480px + 34px);
+}
+
+/* Below this the drawer takes the whole screen, so there is no beside to
+   move to. She fades instead — the one case where going away is right,
+   because the alternative is sitting on top of the thing being read. */
+@media (max-width: 620px) {
+  :root[data-overlay] .ada-w {
+    right: 22px;
+    opacity: 0;
+    transform: translateY(10px) scale(.96);
+    pointer-events: none;
+  }
+}
+
+.ds .ada-w {
+  transition: right 220ms var(--e-out), opacity 180ms var(--e-out),
+    transform 180ms var(--e-out);
+  /* A page with a fixed action bar at the bottom can raise her by setting
+     --ada-lift on any ancestor, instead of each one inventing its own
+     offset and drifting apart. */
+  bottom: calc(22px + var(--ada-lift, 0px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds .ada-w { transition: none; }
+}
+
+/* ── Billboard: the thumbnail, the order arrows and the preview ───────────── */
+
+.ds .adm-bb-thumb {
+  width: 62px; height: 40px; object-fit: cover;
+  border-radius: 5px; border: 1px solid var(--line); display: block;
+}
+/* A slide with no picture is not a broken slide - the band gives the copy the
+   full width instead - so the placeholder is quiet, not an error state. */
+.ds .adm-bb-thumb.is-none {
+  background: repeating-linear-gradient(
+    -45deg, var(--line-2) 0 5px, transparent 5px 10px);
+}
+
+.ds .adm-ord { display: inline-flex; gap: 4px; }
+.ds .adm-ord-b {
+  width: 26px; height: 26px; padding: 0; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--ink-2);
+  font: 400 13px/1 var(--font);
+}
+.ds .adm-ord-b:hover:not(:disabled) { color: var(--ink); border-color: var(--line-2); }
+.ds .adm-ord-b:disabled { opacity: .4; cursor: default; }
+
+/* The band, redrawn small. Its proportions match the real one - picture left,
+   copy right - so what is approved here is what goes up. */
+.ds .adm-bb-preview {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center;
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  background: var(--pal-light-wash);
+}
+.ds .adm-bb-preview img { width: 100%; height: 100%; min-height: 150px; object-fit: cover; display: block; }
+.ds .adm-bb-copy { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; padding: 16px 18px 16px 0; }
+.ds .adm-bb-preview:not(:has(img)) .adm-bb-copy { padding-left: 18px; }
+.ds .adm-bb-copy .tag {
+  font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3);
+}
+.ds .adm-bb-copy b { font-size: 17px; line-height: 1.25; color: var(--ink); }
+.ds .adm-bb-copy .when { font-size: 12.5px; color: var(--action); }
+.ds .adm-bb-copy p { margin: 0; font-size: 13px; color: var(--ink-2); }
+
+/* ── the composer, inside our admin shell ────────────────────────────────────
+ *
+ * His composer renders in .adm - a standalone page shell, height:100dvh with a
+ * 296px | 1fr grid for its own nav. Ours already has a rail and a top bar, so
+ * that grid put the toolbar in a 296px column and pushed the rest off the
+ * screen. This wrapper replaces it: the composer's three regions, sized to
+ * what is left of the viewport. Everything inside is still his.
+ */
+.ds .adm-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  /* His .adm-split is flex:1 inside a flex column, so the chain needs a real
+     height at the top or every panel collapses to nothing - which is exactly
+     what it did. 132px is the admin top bar plus the page padding. */
+  height: calc(100dvh - 132px);
+  min-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* The right-hand panel. His .adm-side is a left nav in his build, so the
+   border goes on the other edge here. */
+.ds .adm-compose .adm-side {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+
+/* Two screens share the class name .adm-split: his composer (source | sheet)
+   and our Submissions screen (queue | viewer, further up this file). The
+   Submissions rule sets align-items:start so its viewer sits at the top of the
+   row, and that reached the composer too. A start-aligned grid item is sized
+   by its content instead of stretched to the row, so the sheet column grew to
+   the height of every page, .adm-compose clipped it with overflow:hidden, and
+   nothing scrolled - the document just stopped at the bottom of the window.
+   Stretching puts the column back to the row's height, which lets .doc-stage
+   be the scroll container his admin.css intends (and .adm-src likewise). The
+   20px gap is Submissions' too; his panes meet at a hairline. */
+.ds .adm-compose .adm-split {
+  align-items: stretch;
+  gap: 0;
+}
+
+/* Hiding the source gives the sheet the whole width. */
+.ds .adm-split.is-solo { grid-template-columns: 1fr; }
+
+.ds .adm-kept-acts {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px;
+}
+
+@media (max-width: 1100px) {
+  .ds .adm-compose { grid-template-columns: 1fr; height: auto; }
+  .ds .adm-compose .adm-side { border-left: 0; border-top: 1px solid var(--line); }
+  .ds .adm-compose .adm-split { grid-template-columns: 1fr; }
+}
+
+/* The composer sidebar, sitting under his .adm-grp labels rather than inside
+   them. The saved list needs the small wrapper his markup implies. */
+.ds .adm-compose .adm-side .adm-seg { margin: 0 6px; }
+.ds .adm-compose .adm-side .adm-tpls,
+.ds .adm-compose .adm-side .adm-fields,
+.ds .adm-compose .adm-side .adm-saved { padding: 0 6px; }
+.ds .adm-compose .adm-side .adm-kept-acts { padding: 0 6px; }
+
+/* ── a picture inside a document ─────────────────────────────────────────────
+ *
+ * Sized in points like the rest of the sheet, so it prints at the size it
+ * shows. Capped at half a page: an image that pushes the paragraph after it
+ * onto a second sheet makes a document look assembled rather than written.
+ */
+.ds .doc-figure {
+  margin: 10pt 0 12pt;
+  display: flex;
+  flex-direction: column;
+  gap: 5pt;
+  break-inside: avoid;
+}
+
+.ds .doc-figure img {
+  display: block;
+  width: 100%;
+  max-height: 340pt;
+  object-fit: cover;
+  border-radius: 3pt;
+  /* A hairline, not a shadow: on paper a shadow prints as a grey smear. */
+  border: 0.5pt solid color-mix(in srgb, var(--doc-navy, #091E39) 18%, transparent);
+}
+
+.ds .doc-figure figcaption {
+  font-size: 7.6pt;
+  line-height: 1.45;
+  color: var(--doc-navy, #091E39);
+  opacity: 0.72;
+}
+
+/* A button that reads as a link, for a secondary action inside a hint. */
+.ds .adm-linkish {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font: inherit; color: var(--action); text-decoration: underline;
+}
+.ds .adm-linkish:hover { opacity: .82; }
+
+
+/* ================================================= the free video library
+
+   OURS, NOT HIS — AND IT LIVES HERE FOR A REASON
+
+   These rules were appended to the bottom of ds.css, which is generated by
+   scripts/port-ds-css.mjs from his site.css. The next port erased them, and
+   the free library lost its shelf headings without anything failing loudly
+   enough to notice. Anything of ours that is written by hand belongs in this
+   file; ds.css is output, and output gets overwritten.
+
+   What it dresses: the rest of the YouTube channel, shelved by software under
+   his nine Learn tiles, and the "Recommended videos" strip on the product
+   pages. Tiles reuse his .lgrid / .ltile — only the shelf headings are new.
+   Components: src/ds/DsFreeLibrary.jsx, src/ds/DsRecommendedVideos.jsx. */
+.ds .ds-lib{margin-top:72px;padding-top:56px;border-top:1px solid rgba(var(--shadow-c),.10)}
+.ds .ds-lib .sec-head{margin-bottom:32px}
+.ds .lib-shelf{margin-top:44px;scroll-margin-top:96px}
+.ds .lib-shelf-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+  flex-wrap:wrap;margin-bottom:18px}
+.ds .lib-shelf-head h3{margin:0;font-size:22px;line-height:1.2;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.ds .lib-shelf-head h3 .lcount{font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;opacity:.6}
+.ds .lib-shelf-head p{margin:6px 0 0;font-size:14.5px;line-height:1.5;opacity:.72;max-width:60ch}
+.ds .lib-shelf .lmore{margin-top:18px}
+.ds .ltile.lib-tile h4{font-size:17px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ds .ltile.lib-tile .eyebrow{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.ds #videos .lgrid{margin-top:8px}
+.ds #videos .lmore{margin-top:26px}
+@media (max-width:640px){.ds .ds-lib{margin-top:48px;padding-top:36px}.ds .lib-shelf-head h3{font-size:19px}}
+
+
+/* ================================== the Allowed cell on the AI usage screen
+
+   OURS. A chip over a line of detail, which looks like his .adm-two and must
+   not use it: .adm-two span is display:block, and a chip IS a span — nested in
+   there it stopped hugging its text and stretched to the width of the column.
+
+   Same shape, own class. Used by src/ds/DsAdminAiUsage.jsx. */
+.ds .adm-allow { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.ds .adm-allow > span:last-child {
+  font-size: 11.5px; color: var(--ink-3); line-height: 1.35;
+}
+
+
+/* ================================= the Holds cell on the AI usage screen
+
+   OURS, and deliberately not .adm-allow above: that one stacks a chip over a
+   line of detail, and a row of licences wants the opposite — they read across
+   and wrap when there are too many. An account holding five products in a
+   column made its row four times the height of every other one. */
+.ds .adm-holds { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 5px; }
+.ds .adm-holds .adm-dim { font-size: 11.5px; }
+
+
+/* =========================== the Share column on the AI usage breakdowns
+
+   OURS, and a fix rather than a preference. His .adm-bar-t is a <span> with a
+   height and no display, which is fine everywhere else on his site because it
+   sits in a grid and gets blockified. In a table cell it stays inline, height
+   is ignored, and the Share column renders as nothing — empty in his own build
+   too, which is how the bug survived. The column exists to carry the bar, so
+   the bar is made a block here. */
+.ds .adm-table .adm-bar-t { display: block; }
+
+
+/* ======================= per-feature limits, in the AI usage limits drawer
+
+   OURS: he has no per-feature form, because his allowance is a number on a
+   page. Built out of his own field styles (.adm-f, .adm-f-l) so the inputs are
+   the ones the rest of the admin uses, with a row per feature carrying the
+   plain-English description of what that feature actually is — the person
+   setting a cap on "ai-outliers" at 9pm should not have to know the codebase
+   to find out what they are capping. */
+.ds .adm-flim { margin-top: 26px; }
+.ds .adm-flim-say {
+  margin: 0 0 14px; font-size: 12px; line-height: 1.6; color: var(--ink-3);
+}
+.ds .adm-flim-say b { color: var(--ink-2); font-weight: 500; }
+.ds .adm-flim-r {
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+}
+.ds .adm-flim-r.off { background: color-mix(in srgb, #C4551A 6%, transparent); }
+.ds .adm-flim-sw { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.ds .adm-flim-sw input { margin: 2px 0 0; width: 15px; height: 15px; flex: none; accent-color: var(--action); }
+.ds .adm-flim-sw b {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 13px; font-weight: 500; color: var(--ink);
+}
+.ds .adm-flim-sw em {
+  display: block; margin-top: 3px; font-style: normal;
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-3);
+}
+.ds .adm-flim-f {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 12px 0 0;
+}
+.ds .adm-flim-off { margin: 10px 0 0; font-size: 11.5px; color: var(--ink-3); }
+@media (max-width: 560px) { .ds .adm-flim-f { grid-template-columns: 1fr; } }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   TOKENS THAT DO NOT EXIST FAIL SILENTLY
+
+   var(--warn), var(--bad) and var(--due) were used here and are defined
+   nowhere. A var() with no fallback makes the whole declaration invalid at
+   computed-value time, so the browser drops it without a word: the rule is in
+   the stylesheet, the class is on the element, and nothing happens.
+
+   That is how a student came to submit a quiz and see the right answers in
+   green with their own wrong answers unmarked — .lx-opt.wrong had a class and
+   no colour. The AI usage burn-down bars were invisible for the same reason.
+
+   His palette is --ok / --ok-d for green and the --orange-* scale for alarm.
+   There is no --warn. If a token is needed that he does not have, give it a
+   fallback — var(--x, #hex) — so the declaration survives being wrong.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ============================================== checkpoints in the lecture
+
+   OURS. Richard has no student-facing quiz anywhere in his build, so there was
+   nothing to port — this is written in his idiom instead: his .lx-* naming,
+   his tokens, and the card shape his .lx-* panels use.
+
+   The overlay covers the player rather than sitting beside it, because a
+   question next to a playing video is a question nobody answers. Components:
+   src/components/LectureCheckpoints.jsx. */
+.ds .lx-cp {
+  position: absolute; inset: 0; z-index: 6;
+  display: flex; align-items: center; justify-content: center;
+  padding: 18px;
+  background: rgba(8, 12, 18, .82);
+  backdrop-filter: blur(3px);
+  border-radius: 18px;
+}
+.ds .lx-cp-card {
+  width: min(560px, 100%); max-height: 100%; overflow: auto;
+  background: var(--bg, #fff); border: 1px solid var(--line); border-radius: 16px;
+  padding: 18px 20px; box-shadow: 0 24px 60px rgba(4, 12, 22, .34);
+}
+.ds .lx-cp-k {
+  display: block; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 500;
+}
+.ds .lx-cp-card h4 {
+  margin: 8px 0 14px; font-size: 16px; line-height: 1.35; font-weight: 500; color: var(--ink);
+}
+.ds .lx-cp-opts { display: grid; gap: 7px; }
+.ds .lx-cp-opt {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: 11px; border: 1px solid var(--line);
+  background: none; cursor: pointer; font: inherit; font-size: 13.5px; color: var(--ink-2);
+}
+.ds .lx-cp-opt i {
+  flex: none; font-style: normal; font-size: 11px; font-weight: 600; line-height: 18px;
+  width: 18px; height: 18px; text-align: center; border-radius: 5px;
+  background: var(--bg-inset); color: var(--ink-3);
+}
+.ds .lx-cp-opt:hover:not(:disabled) { background: var(--pal-light-wash); color: var(--ink); }
+.ds .lx-cp-opt.on { border-color: var(--action); color: var(--ink); }
+.ds .lx-cp-opt.on i { background: var(--action); color: var(--action-ink); }
+.ds .lx-cp-opt.right { border-color: var(--ok); color: var(--ok); }
+.ds .lx-cp-opt.right i { background: var(--ok); color: #fff; }
+.ds .lx-cp-opt.wrong { border-color: #C4551A; color: #C4551A; }
+.ds .lx-cp-opt:disabled { cursor: default; }
+
+.ds .lx-cp-said { margin-top: 13px; padding: 11px 13px; border-radius: 11px; font-size: 13px; }
+.ds .lx-cp-said b { display: block; margin-bottom: 3px; font-weight: 500; }
+.ds .lx-cp-said p { margin: 0; color: var(--ink-2); line-height: 1.5; }
+.ds .lx-cp-said.ok { background: color-mix(in srgb, var(--ok) 10%, var(--bg)); color: var(--ok); }
+.ds .lx-cp-said.no { background: rgba(196, 85, 26, .10); color: #C4551A; }
+
+/* Stuck to the bottom of the card, not flowing off it.
+   A 16/9 stage is short, and once an explanation is on screen the card
+   scrolls — which put "Carry on" below the fold, so the one control a student
+   needs to get back to the lecture was the one they had to hunt for. */
+.ds .lx-cp-acts {
+  position: sticky; bottom: -18px; z-index: 1;
+  display: flex; align-items: center; gap: 8px;
+  margin: 15px -20px -18px; padding: 12px 20px 18px;
+  background: var(--bg, #fff);
+}
+.ds .lx-cp-acts > :first-child { margin-right: auto; }
+.ds .lx-cp-skip, .ds .lx-cp-again, .ds .lx-cp-go {
+  border: 1px solid var(--line); background: none; cursor: pointer; font: inherit;
+  font-size: 12.5px; padding: 7px 13px; border-radius: 9px; color: var(--ink-2);
+}
+.ds .lx-cp-skip { border-color: transparent; color: var(--ink-3); }
+.ds .lx-cp-go { background: var(--action); border-color: var(--action); color: var(--action-ink); }
+.ds .lx-cp-go:disabled { opacity: .5; cursor: default; }
+
+/* Where the questions sit, shown before any of them fire so nobody is
+   ambushed by the first one. */
+.ds .lx-cp-strip {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+}
+.ds .lx-cp-strip .lx-cp-k { margin-right: 4px; }
+.ds .lx-cp-strip button {
+  border: 1px solid var(--line); background: none; cursor: pointer; font: inherit;
+  font-size: 11.5px; padding: 3px 9px; border-radius: 99px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.ds .lx-cp-strip button:hover { color: var(--ink); border-color: var(--action); }
+.ds .lx-cp-strip button.on { border-color: var(--ok); color: var(--ok); }
+
+/* fit-answer-bar — his sticky footer bar, for /fit.
+   Copied verbatim from .bb-bar in his beyondbim.css (ported as
+   ds-beyondbim.css), because loading that whole sheet on /fit is not safe: it
+   also carries .art-d/.art-l rules that exist in no other sheet, and the Press
+   page uses those classes, so visiting /fit first would hide one of Press's
+   images for the rest of the session. These are the eleven bar rules and
+   nothing else. If he changes .bb-bar, change these to match — the selector
+   names are his, so the two copies are identical and harmless together.
+
+   Why /fit needs it: on a phone the answer panel sits about 5,000px below the
+   picker, so choosing a card changed nothing you could see. The bar carries
+   the answer up to where the thumb is, and hides again once the panel itself
+   is on screen — his own rule, "never covers" the thing it points to. */
+.ds .bb-bar{position:fixed;left:0;right:0;bottom:0;z-index:70;
+  transform:translateY(110%);transition:transform 480ms var(--e-out);
+  background:color-mix(in srgb,var(--bg) 90%,transparent);
+  backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+  border-top:1px solid var(--line)}
+.ds .bb-bar.up{transform:none}
+.ds .bb-bar-in{max-width:var(--shell);margin:0 auto;padding:12px 32px 12px;display:flex;
+  align-items:center;gap:18px}
+.ds .bb-bar b{font-size:15px;font-weight:500;color:var(--ink);letter-spacing:-.015em}
+.ds .bb-bar span{font-size:12.5px;font-weight:300;color:var(--ink-3);display:block;margin-top:2px}
+.ds .bb-bar .ds-btn{margin-left:auto;flex:none;margin-right:150px}
+@media (max-width:1560px){
+  .ds .bb-bar .ds-btn{margin-right:0}
+}
+@media (max-width:620px){
+  .ds .bb-bar-in{padding:10px 18px}
+  .ds .bb-bar b{font-size:13.5px}
+  .ds .bb-bar span{display:none}
+  .ds .bb-bar .ds-btn{margin-right:56px}
+}

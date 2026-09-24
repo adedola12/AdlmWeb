@@ -780,12 +780,12 @@ export default function AdminFreebies() {
                     {it.downloadUrl ? (
                       <span>✅ Download</span>
                     ) : (
-                      <span>— No download</span>
+                      <span>, No download</span>
                     )}
                     {Array.isArray(it.videos) && it.videos.length > 0 ? (
                       <span>🎥 {it.videos.length} video(s)</span>
                     ) : (
-                      <span>— No videos</span>
+                      <span>, No videos</span>
                     )}
                   </div>
                 </div>

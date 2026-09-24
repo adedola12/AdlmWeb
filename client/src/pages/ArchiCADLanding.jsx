@@ -37,7 +37,7 @@ function ConnectorHowTo() {
           with your ArchiCAD model open.
         </li>
         <li>
-          Extract quantities and push the BoQ to ADLM Cloud — the project will
+          Extract quantities and push the BoQ to ADLM Cloud. The project will
           appear here automatically.
         </li>
       </ol>

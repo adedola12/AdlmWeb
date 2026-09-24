@@ -9,6 +9,11 @@ import { AgentConversation } from "../models/AgentConversation.js";
 import { runSalesAgent } from "../services/salesAgent.js";
 import { agentEnabled, agentProvider } from "../services/aiClient.js";
 import { checkAiAllowance } from "../services/aiUsage.js";
+import {
+  agentHealthSnapshot,
+  recordAgentFailure,
+  recordAgentSuccess,
+} from "../services/agentHealth.js";
 
 const router = express.Router();
 
@@ -76,8 +81,24 @@ function rateLimit(req, res, next) {
 }
 
 /* ------------------ health ------------------ */
-router.get("/health", (_req, res) => {
-  res.json({ ok: true, enabled: agentEnabled(), provider: agentProvider() });
+// `ok` still means "this endpoint is alive", unchanged, because uptime checks
+// key on it. Whether the AGENT is working is the `agent` block: a configured,
+// enabled agent that rejects every message used to look identical here to a
+// perfectly healthy one.
+//
+// optionalAuth so an admin can read the provider's own words. Everyone else
+// gets the classification and the hint, which is enough to tell "our card was
+// declined" from "our egress is broken" without leaking request details to
+// whoever curls a public endpoint.
+router.get("/health", optionalAuth, (req, res) => {
+  const role = req.agentUser?.role;
+  const isAdmin = role === "admin" || role === "mini_admin";
+  res.json({
+    ok: true,
+    enabled: agentEnabled(),
+    provider: agentProvider(),
+    agent: agentHealthSnapshot({ includeMessage: isAdmin }),
+  });
 });
 
 /* ------------------ chat ------------------ */
@@ -169,9 +190,11 @@ router.post("/chat", rateLimit, optionalAuth, async (req, res) => {
       ).catch(() => {});
     }
 
+    recordAgentSuccess();
     res.json({ reply, actions, sessionId });
   } catch (err) {
     console.error("POST /agent/chat error:", err?.message || err);
+    recordAgentFailure(err);
     res.status(500).json({
       reply:
         "Sorry — I hit a snag. Please try again, or reach us on WhatsApp and we'll help you right away.",

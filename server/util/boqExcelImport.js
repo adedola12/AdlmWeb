@@ -36,6 +36,8 @@
 
 import ExcelJS from "exceljs";
 
+import { isAdlmWorkbook } from "./adlmWorkbook.js";
+
 // ── generic cell helpers ────────────────────────────────────────────────────
 
 function num(v) {
@@ -362,10 +364,28 @@ function importError(message) {
   return err;
 }
 
+function exportNotImportable() {
+  const err = new Error(
+    "This workbook was exported from ADLM, so it cannot be imported back in — " +
+      "you would end up with a second project holding a copy of a bill you " +
+      "already have, and a project slot spent on the duplicate. To change " +
+      "quantities, re-measure in the source model (Revit, PlanSwift or " +
+      "ArchiCAD) and sync the project, or edit the bill on the Bill tab; to " +
+      "change prices, edit the rates on the Budget tab. Then export again. " +
+      "Only a workbook you or your QS wrote can be imported.",
+  );
+  err.statusCode = 400;
+  err.code = "ADLM_EXPORT_NOT_IMPORTABLE";
+  return err;
+}
+
 // ── sheet classification ────────────────────────────────────────────────────
 
-const SKIP_SHEET_RE = /cover|summary|milestone|read ?me|instruction|note/i;
-const SCHEDULE_SHEET_RE = /material|labour|labor/i;
+// Roll-up / reference sheets. Their numbers are already counted on the pages
+// they collect, so importing them would double the bill.
+const SKIP_SHEET_RE = /cover|summary|milestone|read ?me|instruction|note|collection|prices?\b/i;
+// Resource build-up sheets (the budget), not measured work.
+const SCHEDULE_SHEET_RE = /material|labour|labor|plant|equipment/i;
 
 function classifySheets(workbook) {
   const bills = [];
@@ -614,6 +634,15 @@ export async function parseBoqWorkbook(buffer) {
     throw importError("Could not read the file. Upload an Excel .xlsx workbook.");
   }
 
+  // A workbook this platform exported is a report, not a source. Importing one
+  // makes a SECOND project holding a copy of a bill the account already has: a
+  // project slot spent on a duplicate, and two records of one job that drift
+  // apart as soon as either is touched. Quantities belong to the model they
+  // were measured from, so that is where an update starts.
+  if (isAdlmWorkbook(workbook)) {
+    throw exportNotImportable();
+  }
+
   const { bills, schedules } = classifySheets(workbook);
   if (!bills.length && !schedules.length) {
     throw importError(
@@ -733,13 +762,17 @@ export function buildBoqTemplateWorkbook() {
     "  • Actual Qty / Actual Rate / % Complete are optional — use them to track actual (site) data",
     "    against the planned bill. % Complete accepts 0-100 (or a %-formatted cell).",
     "",
-    "Sheet 'Material & Labour' (optional)",
-    "  • The build-up behind each bill line. Bill S/N ties a row to the BoQ line with that S/N.",
-    "  • Component: Material, Labour, Plant, Equipment or Consumable.",
+    "Sheets 'Material Schedule' and 'Labour Schedule' (optional)",
+    "  • The build-up behind each bill line, split the way a QS keeps it: what you BUY on the",
+    "    Material Schedule, what you PAY FOR on the Labour Schedule. Fill in either, or both.",
+    "  • Bill S/N ties a row to the BoQ line with that S/N.",
+    "  • Component is optional — each sheet already implies its own kind. Fill it in only to",
+    "    put a Plant, Equipment or Consumable row on the Material Schedule.",
     "  • Overhead % / Profit % are applied on top of the net build-up cost.",
-    "  • When this sheet is present, bill rates are DERIVED live from the build-up (the budget",
-    "    engine keeps them in sync). When absent, a budget is generated automatically from the",
-    "    bill so the Budget tab is ready to price.",
+    "  • When either sheet is present, bill rates are DERIVED live from the build-up (the budget",
+    "    engine keeps them in sync). When both are absent, a budget is generated automatically",
+    "    from the bill so the Budget tab is ready to price.",
+    "  • One combined 'Material & Labour' sheet still works — older templates keep importing.",
     "",
     "Already have a finished bill? Upload it as-is — the importer also reads standard QS",
     "workbooks: multiple bill sheets (PRELIMINARIES, MAIN BUILDING, …) with ITEM/DESCRIPTION/",
@@ -794,8 +827,10 @@ export function buildBoqTemplateWorkbook() {
     rate: 65000,
   });
 
-  const ml = wb.addWorksheet("Material & Labour");
-  ml.columns = [
+  // Material and labour get a sheet each — the arrangement a QS actually keeps
+  // (and the one the Bill & Budget export writes back out), rather than one
+  // combined sheet the reader has to filter by eye.
+  const scheduleColumns = () => [
     { header: "Bill S/N", key: "ref", width: 10 },
     { header: "Component", key: "kind", width: 14 },
     { header: "Description", key: "description", width: 45 },
@@ -805,10 +840,20 @@ export function buildBoqTemplateWorkbook() {
     { header: "Overhead %", key: "oh", width: 12 },
     { header: "Profit %", key: "profit", width: 12 },
   ];
-  styleHeaderRow(ml.getRow(1));
-  ml.addRow({ ref: 2, kind: "Material", description: "Cement (50kg bags)", unit: "bags", qty: 30, rate: 9500, oh: 5, profit: 10 });
-  ml.addRow({ ref: 2, kind: "Material", description: "Sharp sand", unit: "m3", qty: 6, rate: 18000, oh: 5, profit: 10 });
-  ml.addRow({ ref: 2, kind: "Labour", description: "Concrete gang — blinding", unit: "m2", qty: 85, rate: 450, oh: 5, profit: 10 });
+
+  const materials = wb.addWorksheet("Material Schedule");
+  materials.columns = scheduleColumns();
+  styleHeaderRow(materials.getRow(1));
+  materials.addRow({ ref: 2, kind: "Material", description: "Cement (50kg bags)", unit: "bags", qty: 30, rate: 9500, oh: 5, profit: 10 });
+  materials.addRow({ ref: 2, kind: "Material", description: "Sharp sand", unit: "m3", qty: 6, rate: 18000, oh: 5, profit: 10 });
+  materials.addRow({ ref: 3, kind: "Material", description: "Cement (50kg bags)", unit: "bags", qty: 224, rate: 9500, oh: 8, profit: 12 });
+  materials.addRow({ ref: 3, kind: "Material", description: 'Granite 3/4"', unit: "m3", qty: 25, rate: 42000, oh: 8, profit: 12 });
+
+  const labour = wb.addWorksheet("Labour Schedule");
+  labour.columns = scheduleColumns();
+  styleHeaderRow(labour.getRow(1));
+  labour.addRow({ ref: 2, kind: "Labour", description: "Concrete gang — blinding", unit: "m2", qty: 85, rate: 450, oh: 5, profit: 10 });
+  labour.addRow({ ref: 3, kind: "Labour", description: "Carpenter — column formwork", unit: "m2", qty: 180, rate: 1200, oh: 8, profit: 12 });
 
   return wb;
 }

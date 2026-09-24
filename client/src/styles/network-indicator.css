@@ -1,0 +1,87 @@
+/* Network indicator (src/components/NetworkIndicator.jsx).
+   Lit bars are semantic - green / amber / red - and the same in both themes;
+   the unlit bars and the label take the surrounding chrome's muted ink, so the
+   widget sits in the app top bar and the admin top bar without its own palette.
+   Tokens come from ds.css (:root / :root.dark). */
+.net-ind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-3, #72859a);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 200ms ease, color 200ms ease;
+}
+.net-ind:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: var(--ink-2, #46586b);
+}
+.net-ind:focus-visible {
+  outline: 2px solid var(--action, #0b7fdb);
+  outline-offset: 2px;
+}
+.net-ind svg {
+  flex: none;
+  display: block;
+  overflow: visible;
+}
+.net-ind rect.unlit {
+  fill: currentColor;
+  opacity: 0.32;
+}
+.net-ind rect.lit {
+  fill: var(--net-lit, currentColor);
+}
+.net-ind .slash {
+  stroke: #dc2626;
+  stroke-width: 1.6;
+}
+.net-ind-label {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tone per level */
+.net-ind--excellent,
+.net-ind--good {
+  --net-lit: #16a34a;
+}
+.net-ind--fair,
+.net-ind--unreachable {
+  --net-lit: #d97706;
+}
+.net-ind--poor {
+  --net-lit: #dc2626;
+}
+.net-ind--offline,
+.net-ind--unknown {
+  --net-lit: currentColor;
+}
+:root.dark .net-ind--excellent,
+:root.dark .net-ind--good {
+  --net-lit: #4ade80;
+}
+:root.dark .net-ind--fair,
+:root.dark .net-ind--unreachable {
+  --net-lit: #fbbf24;
+}
+:root.dark .net-ind--poor {
+  --net-lit: #f87171;
+}
+:root.dark .net-ind .slash {
+  stroke: #f87171;
+}
+
+/* The word disappears first when the top bar gets tight; the bars stay. */
+@media (max-width: 720px) {
+  .net-ind-label {
+    display: none;
+  }
+}

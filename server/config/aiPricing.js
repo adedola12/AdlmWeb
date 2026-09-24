@@ -4,11 +4,16 @@
 // reads all three from here so a new feature or model only has to be declared
 // once.
 //
-// WHY billing accounts matter: ADLM's QS cost-intelligence features run on the
-// separate AWS AI service (Bedrock), so their spend burns the AWS credit pool.
-// Ada (the sales agent) currently calls the Anthropic API directly, which is a
-// different bill. Mixing the two into one "AI spend" number would make the
-// credit runway meaningless, so every usage row is tagged with its account.
+// WHY billing accounts matter: a usage row is only comparable to another row
+// on the same bill, so every one is tagged with the account that pays for it.
+//
+// As of 2026-08-13 every AI feature runs on AWS and burns the same credit
+// pool: the QS cost-intelligence tools via the separate AI service, and Ada
+// and HelpBot via Bedrock. Both of the latter moved off third-party API keys
+// after an exhausted Anthropic credit balance took Ada down for hours. The
+// per-account split stays because the code still supports pointing Ada or
+// HelpBot back at Anthropic or OpenAI, and the day that happens the runway
+// number has to keep meaning something.
 
 /* ───────────────────────────── features ───────────────────────────── */
 // key          — stored on every AiUsage row and on per-feature allocations
@@ -34,9 +39,60 @@ export const AI_FEATURES = [
     key: "helpbot",
     label: "HelpBot fallback",
     desc: "One-shot answer when the catalogue search finds nothing.",
-    provider: "openai",
+    // "agent", like Ada: it goes through the shared transport and so follows
+    // AGENT_PROVIDER. It was pinned to OpenAI until it moved off its own key.
+    provider: "agent",
     metered: true,
     guestAllowed: true,
+  },
+  {
+    // The single largest line on the bill, and it was not in this list at all
+    // until 2026-09-12 — so it could be seen on the dashboard and not capped,
+    // because sanitizeFeatures() drops a limit set against a key it does not
+    // know.
+    //
+    // Not a screen: scripts/generate-module-quizzes.mjs, run from a terminal by
+    // a member of staff, one call per lecture. A whole transcript goes in, so
+    // one call is thousands of input tokens where an Ada round-trip is
+    // hundreds. Its rows carry no account, which is correct rather than a gap —
+    // nobody signed in, the studio ran it.
+    key: "course-quiz-draft",
+    label: "Quiz drafting",
+    desc: "Drafts a quiz from one lecture transcript. A staff-run script rather than a screen, so its calls belong to nobody.",
+    provider: "agent",
+    metered: true,
+    guestAllowed: false,
+  },
+  {
+    // Also missing until 2026-09-12. Same consequence: visible, unnameable in a
+    // limit, and unfilterable in the call log.
+    key: "programme-outputs",
+    label: "Programme — gang outputs",
+    desc: "Estimates a gang output per trade on a bill so the programme can put durations against it. One round-trip per programme.",
+    provider: "agent",
+    metered: true,
+    guestAllowed: false, // it works on a signed-in account's own project
+  },
+  {
+    key: "quiv-prompt",
+    label: "QUIV prompt (Revit)",
+    desc: "One model round-trip turning a typed instruction into takeoff actions, from the plugin's AI bar.",
+    provider: "adlm-ai-service",
+    metered: true,
+    guestAllowed: false, // the plugin only runs signed in
+  },
+  {
+    // Metered by CALLS only. A handover run makes no model round-trip at all -
+    // it builds its own action list and drives the modules - so it burns no
+    // tokens and its token and cost columns are always zero. It is here
+    // because it is an expensive privilege worth rationing, not because it is
+    // an AI cost.
+    key: "quiv-handover",
+    label: "QUIV full handover run (Revit)",
+    desc: "One automated end-to-end takeoff run. Deterministic - no model round-trip, so no tokens.",
+    provider: "none",
+    metered: true,
+    guestAllowed: false,
   },
   {
     key: "ai-boq-check",

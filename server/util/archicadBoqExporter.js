@@ -6,6 +6,8 @@
 // of routes/admin.invoices.js.
 
 import ExcelJS from "exceljs";
+
+import { stampAdlmWorkbook } from "./adlmWorkbook.js";
 import PDFDocument from "pdfkit";
 import dayjs from "dayjs";
 
@@ -93,6 +95,7 @@ function addColumnHeaderRow(ws) {
  */
 export async function exportArchicadBoqXlsx({ projectName, preparedBy, boq }) {
   const workbook = new ExcelJS.Workbook();
+  stampAdlmWorkbook(workbook);
   workbook.calcProperties.fullCalcOnLoad = true;
 
   const categories = Array.isArray(boq?.categories) ? boq.categories : [];

@@ -809,7 +809,7 @@ export default function PmTracker() {
               <div>
                 <h1 className="text-lg font-bold text-slate-800">Your PM Projects</h1>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Standalone project management — tasks, risks, and issues.
+                  Standalone project management: tasks, risks, and issues.
                 </p>
               </div>
               <Btn

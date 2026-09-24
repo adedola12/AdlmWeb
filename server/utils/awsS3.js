@@ -204,3 +204,22 @@ export async function uploadStream({
   await upload.done();
   return { bucket, key };
 }
+
+/**
+ * Read a small object out of the archive bucket as text.
+ *
+ * For the transcript JSON, which the browser never sees directly — the route
+ * reduces it to cues first, so the storage layout stays server-side like every
+ * other key in this pipeline.
+ *
+ * `transformToString` is fine here because these are tens of kilobytes. Do not
+ * reach for this to read a lecture: that would pull a multi-gigabyte master
+ * into memory.
+ */
+export async function getObjectText(key, bucket = archiveBucket()) {
+  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+  const res = await s3Client().send(
+    new GetObjectCommand({ Bucket: bucket, Key: key }),
+  );
+  return res.Body.transformToString();
+}

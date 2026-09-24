@@ -100,9 +100,14 @@ const TestComp = () => {
           </span>
         </div>
 
+        {/* The fallback here used to be a hardcoded 500, so a slow or empty
+            stats call published "Over 500+ companies" as fact. There is no
+            verified organisation count, so when the API has nothing we say
+            nothing rather than inventing a number. */}
         <p className="mt-2 text-xs md:text-sm text-slate-600">
-          Over {stats?.companiesTrained || 500}+ companies have completed our
-          comprehensive training programs
+          {stats?.companiesTrained
+            ? `Over ${stats.companiesTrained.toLocaleString()} companies have completed our training programmes`
+            : "Firms whose teams have completed ADLM training programmes"}
         </p>
       </div>
 

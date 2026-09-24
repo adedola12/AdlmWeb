@@ -166,15 +166,15 @@ function StatusBanner({ status, delta = 0, sharedBy = "" }) {
         </div>
       </div>
       <div className="px-5 py-3 text-sm text-slate-700">{c.detail}</div>
-      {/* QS contact CTA — visible across all statuses because clients
+      {/* QS contact CTA, visible across all statuses because clients
           always want to know who to call, especially when the badge is
           green. */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-3">
         <div className="text-xs text-slate-600">
           <span className="font-semibold text-slate-900">Need more detail?</span>{" "}
           {sharedBy
-            ? `Reach out to ${sharedBy} — your Quantity Surveyor — for the certificate breakdown, variation log, or anything else not shown here.`
-            : "Reach out to your Quantity Surveyor — for the certificate breakdown, variation log, or anything else not shown here."}
+            ? `Reach out to ${sharedBy}: your Quantity Surveyor: for the certificate breakdown, variation log, or anything else not shown here.`
+            : "Reach out to your Quantity Surveyor: for the certificate breakdown, variation log, or anything else not shown here."}
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-adlm-blue-700 px-3 py-1.5 text-[11px] font-bold text-white">
           ✉ Contact your QS
@@ -230,7 +230,7 @@ function UpcomingSpend({ rows = [], total = 0 }) {
         <div>
           <div className="text-sm font-semibold text-slate-900">Planned next spend</div>
           <div className="text-xs text-slate-500">
-            Highest-value items remaining — likely upcoming disbursements.
+            Highest-value items remaining, likely upcoming disbursements.
           </div>
         </div>
         <div className="text-right">
@@ -348,7 +348,7 @@ export default function PublicProjectDashboard() {
             <div className="flex-1">
               <div className="text-lg font-semibold text-slate-900">Progress Overview</div>
               <div className="text-sm text-slate-500 mt-1">
-                Physical delivery vs financial progress — see where cost is sitting relative to actual completion.
+                Physical delivery vs financial progress. See where cost is sitting relative to actual completion.
               </div>
             </div>
             <ProgressRing
@@ -373,7 +373,7 @@ export default function PublicProjectDashboard() {
               <div className="text-xs text-slate-500">
                 {data.contractLocked
                   ? `Locked${data.contractLockedAt ? " on " + new Date(data.contractLockedAt).toLocaleDateString() : ""}`
-                  : "Draft — contract not yet locked"}
+                  : "Draft, contract not yet locked"}
               </div>
             </div>
             <div className="text-right">
@@ -393,7 +393,7 @@ export default function PublicProjectDashboard() {
               ) : null}
             </div>
           </div>
-          {/* QS grand-summary cascade — every visible row sums to the
+          {/* QS grand-summary cascade, every visible row sums to the
               Planned contract sum displayed above:
                 Measured + Provisional + Prelim = BoQ sub-total
                 + Contingency = pre-tax total
@@ -421,7 +421,7 @@ export default function PublicProjectDashboard() {
               </div>
             </div>
           </div>
-          {/* Contingency + Tax row — only rendered when either is set. */}
+          {/* Contingency + Tax row, only rendered when either is set. */}
           {safeNum(data.contractBreakdown?.contingency) > 0 ||
           safeNum(data.contractBreakdown?.tax) > 0 ? (
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-2 text-xs border-t border-slate-100 pt-2">
@@ -443,7 +443,7 @@ export default function PublicProjectDashboard() {
               </div>
             </div>
           ) : null}
-          {/* Variations row — outside the planned sum; only shown when
+          {/* Variations row, outside the planned sum; only shown when
               there are any (most pre-execution projects have none). */}
           {safeNum(data.contractBreakdown?.variations ?? data.variationsTotal) !== 0 ? (
             <div className="mt-3 grid grid-cols-1 text-xs border-t border-slate-100 pt-2">
@@ -521,7 +521,7 @@ export default function PublicProjectDashboard() {
           </div>
         ) : null}
 
-        {/* Cost & forecast panel — client-friendly view of the EVM
+        {/* Cost & forecast panel, client-friendly view of the EVM
             numbers. The previous panel used QS jargon (BAC / BCWP /
             ACWP / VAC) which made sense for the QS dashboard but
             confused clients reading the public share link.
@@ -554,7 +554,7 @@ export default function PublicProjectDashboard() {
                   Actual cost incurred so far
                 </div>
               </div>
-              {/* Value delivered — same source as BCWP/EV; tells the
+              {/* Value delivered, same source as BCWP/EV; tells the
                   client how much of the contract value has been
                   completed (regardless of what's been paid out). */}
               <div>
@@ -566,7 +566,7 @@ export default function PublicProjectDashboard() {
                   Work completed at contract rates
                 </div>
               </div>
-              {/* Performance — CPI rendered as plain English. Above
+              {/* Performance, CPI rendered as plain English. Above
                   1.00 = healthy/under budget; below = at risk. */}
               <div>
                 <div className="text-slate-500">Performance</div>
@@ -591,7 +591,7 @@ export default function PublicProjectDashboard() {
                       : "No actuals recorded yet"}
                 </div>
               </div>
-              {/* Expected Final Cost — EAC renamed for the client.
+              {/* Expected Final Cost, EAC renamed for the client.
                   EAC = BAC / CPI on the server; with no spend (CPI
                   defaults to 1.0) it equals the contract total, which
                   is the natural "what will I pay at the end" answer. */}
@@ -677,7 +677,7 @@ export default function PublicProjectDashboard() {
                 Attached BIM models
               </div>
               <div className="text-xs text-slate-500">
-                IFC files used to produce this BoQ — a web 3D viewer is coming
+                IFC files used to produce this BoQ, a web 3D viewer is coming
                 soon.
               </div>
             </div>

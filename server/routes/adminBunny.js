@@ -1,11 +1,7 @@
+import { requireAdmin } from "../middleware/auth.js";
 // server/routes/adminBunny.js
 import express from "express";
 import multer from "multer";
-
-function requireAdmin(req, res, next) {
-  if (req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
 
 const router = express.Router();
 const upload = multer();

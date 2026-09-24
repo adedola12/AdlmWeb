@@ -427,7 +427,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
           This is a milestone (zero duration marker)
         </label>
 
-        {/* Critical-path toggle — auto-set by MS Project import, but
+        {/* Critical-path toggle: auto-set by MS Project import, but
             users can flip it on manual tasks to mark sequencing
             bottlenecks the importer didn't see (subcontractor lead
             time, weather windows, etc.). */}
@@ -438,7 +438,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
             onChange={(e) => set("criticalPath", e.target.checked)}
             className="rounded"
           />
-          On critical path (zero slack — any delay slips finish date)
+          On critical path (zero slack, any delay slips finish date)
         </label>
         {form.criticalPath ? (
           <div className="ml-6 text-[10px] text-slate-500">

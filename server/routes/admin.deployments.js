@@ -12,6 +12,9 @@ import {
 } from "../utils/r2Upload.js";
 import { deleteAsset } from "../utils/cloudinary.js";
 import cloudinary from "../utils/cloudinaryConfig.js";
+import { recordDeploymentRelease, recordDeploymentWithdrawn } from "../util/releaseNotifier.js";
+import { getGateConfig, isGatedChange, recordGateEvent } from "../util/releaseGate.js";
+import { stageRelease } from "../util/releaseGateFlow.js";
 
 const router = express.Router();
 const upload = multer({
@@ -229,7 +232,13 @@ router.post(
     const contentType =
       String(req.body?.contentType || "").trim() || "application/octet-stream";
 
-    const presigned = await createPresignedPutUrl({ key: objectKey, contentType });
+    // installer: true routes the object into the private installers bucket
+    // when one is configured, so the package is never publicly readable.
+    const presigned = await createPresignedPutUrl({
+      key: objectKey,
+      contentType,
+      installer: true,
+    });
 
     // createPresignedPutUrl signs only ContentType, so that is the one header
     // the client must replay verbatim — anything else breaks the signature.
@@ -276,6 +285,7 @@ router.post(
       out = await uploadBufferToR2(req.file.buffer, {
         key: objectKey,
         contentType: req.file.mimetype || "application/octet-stream",
+        installer: true,
       });
       storageProvider = "r2";
     } else {
@@ -423,6 +433,46 @@ router.put(
     const productKey = String(req.params.productKey || "").trim().toLowerCase();
     const normalized = normalizeDeployment(req.body || {}, productKey);
 
+    // The version this PUT replaces, read before the write overwrites it, so a
+    // version that went UP can be announced to the product's licence holders.
+    // `undefined` (not null) when the read itself failed: "could not tell" must
+    // never be mistaken for "first deployment", and must never fail the release.
+    const previous = await ProductDeployment.findOne({ productKey })
+      .select("version enabled packageUri")
+      .lean()
+      .catch(() => undefined);
+
+    // RELEASE GATE. A change that puts something new in front of customers is
+    // queued for the release approver instead of going live (docs/RELEASE_GATE.md).
+    // There is no flag, header or role that skips this; the only way past it is
+    // POST /admin/releases/:id/emergency, which is recorded and emailed.
+    // A read failure here must not wave a release through, so it rethrows.
+    const current = await ProductDeployment.findOne({ productKey }).lean();
+    if (!req.demoMode && isGatedChange(current, normalized)) {
+      const candidate = await stageRelease({
+        productKey,
+        normalized,
+        previous: current,
+        body: req.body || {},
+        actor: actor.toLowerCase(),
+        req,
+      });
+      const cfg = await getGateConfig();
+      return res.status(202).json({
+        ok: true,
+        pendingApproval: true,
+        candidateId: String(candidate._id),
+        // `item` is the STAGED build, so release scripts that download
+        // item.packageUri to verify it still check the right bytes.
+        item: { ...normalized, productKey },
+        live: current ? { version: current.version, packageUri: current.packageUri } : null,
+        message:
+          `Staged ${productKey} v${normalized.version || "?"} for sign-off by ` +
+          `${cfg.approverName || cfg.approverEmail || "the release approver (none set)"}. ` +
+          `Customers keep v${current?.version || "-"} until it is approved.`,
+      });
+    }
+
     const item = await ProductDeployment.findOneAndUpdate(
       { productKey },
       {
@@ -441,7 +491,33 @@ router.put(
       },
     );
 
-    return res.json({ ok: true, item });
+    // Records at most one "new version is ready" notice and sends nothing: the
+    // mail goes out from POST /admin/release-notifications/:id/send or the
+    // fifteen-minute job (util/releaseNotifier.js), which holds a new notice
+    // for ten minutes so the release script can check the build and cancel.
+    // A PUT that switches the product off, leaves it with no package, or rolls
+    // it back cancels the unfinished announcements it makes untrue. Body
+    // extras, both optional and ignored by normalizeDeployment:
+    // notifySubscribers:false for silence, releaseNotes (markdown) for what
+    // changed. Nothing in here can fail the release script's PUT.
+    let releaseNotice;
+    try {
+      releaseNotice =
+        previous === undefined
+          ? { created: false, reason: "previous-version-unreadable" }
+          : await recordDeploymentRelease({
+              previous,
+              item: item?.toObject ? item.toObject() : item,
+              body: req.body || {},
+              demoMode: !!req.demoMode,
+              actor,
+            });
+    } catch (err) {
+      console.error(`[release-mail] ${productKey}: could not record a notice:`, err?.message || err);
+      releaseNotice = { created: false, error: String(err?.message || err) };
+    }
+
+    return res.json({ ok: true, item, releaseNotice });
   }),
 );
 
@@ -453,6 +529,31 @@ router.delete(
 
     if (!out) {
       return res.status(404).json({ error: "Deployment not found" });
+    }
+
+    // Withdrawing a product is a safety action and never waits for sign-off,
+    // but it is recorded like every other gate event.
+    if (!req.demoMode) {
+      await recordGateEvent(
+        "deployment.deleted",
+        { productKey, version: out.version || "", packageUri: out.packageUri || "" },
+        req,
+      );
+    }
+
+    // Nobody is to be emailed about a build that can no longer be downloaded:
+    // cancel the product's unfinished "new version is ready" notices
+    // (util/releaseNotifier.js, which also re-checks the deployment before
+    // every batch). Never fails the delete.
+    let releaseNoticesCancelled;
+    try {
+      releaseNoticesCancelled = await recordDeploymentWithdrawn({
+        productKey,
+        reason: `Deployment deleted by ${String(req.user?.email || "admin").trim()}`,
+        demoMode: !!req.demoMode,
+      });
+    } catch (err) {
+      console.error(`[release-mail] ${productKey}: could not cancel notices:`, err?.message || err);
     }
 
     // Clean up cloud-stored package file
@@ -481,6 +582,7 @@ router.delete(
     return res.json({
       ok: true,
       cleanupErrors: cleanupErrors.length > 0 ? cleanupErrors : undefined,
+      releaseNoticesCancelled,
     });
   }),
 );

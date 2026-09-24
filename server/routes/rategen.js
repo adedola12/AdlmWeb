@@ -114,8 +114,11 @@ router.get("/master", async (req, res) => {
     const labour = applyPriceOverrides(rawLabour, ov, "labour", qState, "description");
 
     // accountState is the state saved on the profile, as opposed to `state` which
-    // echoes what was actually priced. The desktop compares the two so a location
-    // changed on the website reaches the app without a second request.
+    // echoes what was actually priced. The two only diverge for a caller that
+    // passes ?state=, so the desktop never sees a difference: it deliberately
+    // sends no state and lets the profile decide. The real consumer is the web
+    // library, which falls back to accountState when a request priced by zone
+    // alone leaves `state` null.
     res.json({
       materials,
       labour,

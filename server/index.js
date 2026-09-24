@@ -1,3 +1,6 @@
+// MUST be first: registers the demo-tenancy plugin before any model is
+// compiled. See server/models/demoTenancy.js.
+import "./models/tenancy.bootstrap.js";
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
@@ -13,9 +16,12 @@ import { connectDB } from "./db.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
+import { runVideoPoll } from "./util/videoNotifier.js";
 import { ensureRolesSeeded } from "./util/rbac.js";
+import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
+import { buildCorsOptions } from "./util/corsPolicy.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
@@ -27,13 +33,13 @@ import meBillingRoutes from "./routes/me.billing.js";
 import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
+import { designMode } from "./middleware/designMode.js";
 import adminRoutes from "./routes/admin.js";
+import { demoModeGuard } from "./middleware/demoMode.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
 import adminCourses from "./routes/adminCourses.js";
 import adminCourseOps from "./routes/admin.courseOps.js";
 import adminSoftwares from "./routes/admin.softwares.js";
-import adminClassrooms from "./routes/admin.classrooms.js";
-import meClassrooms from "./routes/me.classrooms.js";
 import adminCourseGrading from "./routes/adminCourseGrading.js";
 import purchaseRoutes from "./routes/purchase.js";
 import learnPublic from "./routes/Learn.js";
@@ -58,10 +64,12 @@ import changelogsPublic from "./routes/changelogs.js";
 import adminChangelogs from "./routes/admin.changelogs.js";
 import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
+import waitlistPublic from "./routes/waitlist.public.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 import agentRoutes from "./routes/agent.js";
 import aiRoutes from "./routes/ai.js";
+import programmeRoutes from "./routes/programme.js";
 import geoRoutes from "./routes/geo.js";
 
 import meTrainingsRoutes from "./routes/me-trainings.js";
@@ -81,6 +89,18 @@ import adminRateGenLibrary from "./routes/admin.rategen.library.js";
 import adminRateGenRates from "./routes/admin.rategen.rates.js";
 import adminRateGenCompute from "./routes/admin.rategen.compute.js";
 import adminRateGenMaster from "./routes/admin.rategen.master.js";
+import adminEmails from "./routes/admin.emails.js";
+import adminBroadcast from "./routes/admin.broadcast.js";
+import adminCampaigns from "./routes/admin.campaigns.js";
+import adminBillboard, { publicBillboard } from "./routes/admin.billboard.js";
+import { sweepStaleOrders } from "./util/staleOrders.js";
+import unsubscribeRouter, {
+  videoUnsubscribeRouter,
+  productUpdatesUnsubscribeRouter,
+} from "./routes/unsubscribe.js";
+import adminVideos from "./routes/admin.videos.js";
+import adminReleaseNotifications from "./routes/admin.releaseNotifications.js";
+import adminReleases from "./routes/admin.releases.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -92,6 +112,10 @@ import modelCheckRoutes from "./routes/model-checks.js";
 import usageRoutes from "./routes/usage.js";
 import adminUsage from "./routes/admin.usage.js";
 import adminAiUsage from "./routes/admin.aiUsage.js";
+import adminCertificates from "./routes/admin.certificates.js";
+import verifyRoutes from "./routes/verify.js";
+import telemetryTakeoff from "./routes/telemetry.takeoff.js";
+import adminTakeoff from "./routes/admin.takeoff.js";
 
 import trainingLocationsPublic from "./routes/training-locations.js";
 import adminTrainingLocations from "./routes/admin.training-locations.js";
@@ -112,44 +136,10 @@ const __dirname = path.dirname(__filename);
 app.set("trust proxy", 1);
 
 /* -------- CORS (MUST be BEFORE body parsers) -------- */
-const IS_PROD = process.env.NODE_ENV === "production";
-
-// Base whitelist from env, plus explicit production origins
-const envWhitelist = (process.env.CORS_ORIGINS || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-// Exact, vetted production origins — no wildcards
-const PROD_ORIGINS = [
-  "https://adlmstudio.net",
-  "https://www.adlmstudio.net",
-  "https://adlm-web.vercel.app",
-];
-
-const whitelist = Array.from(new Set([...envWhitelist, ...PROD_ORIGINS]));
-
-const corsOptions = {
-  origin(origin, cb) {
-    if (!origin) return cb(null, true);
-    if (whitelist.includes(origin)) return cb(null, true);
-    // Localhost only allowed in non-production for dev work
-    if (!IS_PROD && /^http:\/\/localhost:\d+$/.test(origin)) {
-      return cb(null, true);
-    }
-    return cb(new Error(`Not allowed by CORS: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "x-admin-key",
-    "x-adlm-client",
-    "x-adlm-fp-version",
-    "X-Requested-With",
-  ],
-};
+// CORS_ORIGINS from env, the vetted production origins, and the API's own
+// origin (API_BASE_URL), so the unsubscribe pages it serves can post their
+// own form. See util/corsPolicy.js.
+const corsOptions = buildCorsOptions(process.env);
 
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
@@ -180,6 +170,13 @@ app.use(
           "https://www.google-analytics.com",
           "https://region1.google-analytics.com",
           "https://stats.g.doubleclick.net",
+          // The three token endpoints the PKCE exchange posts to. No vendor
+          // SDK is loaded, so nothing is needed in scriptSrc — but the browser
+          // does make this one cross-origin call itself, and without these the
+          // exchange fails after the person has already approved the sign-in.
+          "https://oauth2.googleapis.com",
+          "https://login.microsoftonline.com",
+          "https://developer.api.autodesk.com",
         ],
         frameSrc: [
           "https://js.paystack.co",
@@ -213,7 +210,27 @@ app.use("/webhooks", webhooksRouter);
 app.use(express.json({ limit: "16mb" }));
 app.use(express.urlencoded({ extended: false, limit: "16mb" }));
 // Structured, parseable access logs in production; colourful logs locally.
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+//
+// COST: one log line per request is the single biggest CloudWatch item —
+// ~$122/mo of Logs INGESTION (about a quarter of the whole AWS bill), driven by
+// the warmup pings, health checks and routine 2xx traffic. In production we now
+// log only what is worth reading — anything >= 400 (errors) — which drops the
+// volume by roughly 90% without losing the signal a log is actually for. Set
+// LOG_ALL_REQUESTS=1 to restore full access logging temporarily when diagnosing.
+app.use(
+  morgan(process.env.NODE_ENV === "production" ? "combined" : "dev", {
+    skip: (req, res) =>
+      process.env.NODE_ENV === "production" &&
+      process.env.LOG_ALL_REQUESTS !== "1" &&
+      res.statusCode < 400,
+  }),
+);
+
+// Personal JSON is never cached and never answered with 304. Express would
+// otherwise ETag every body and hand a browser 304 on match, which is only
+// as good as that browser's cache; see middleware/noStore.js for the firm
+// whose dashboard read "Failed to fetch" for weeks on clean 304s.
+app.use(noStore);
 
 // Lightweight health/readiness probe for uptime checks & load balancers.
 // Public and dependency-free so it answers even while the DB is reconnecting.
@@ -232,10 +249,16 @@ app.get(["/health", "/healthz"], (_req, res) => {
 // meant to be reached anonymously from end-user machines.
 app.use("/.well-known", wellKnownRoutes);
 
+// The network check behind /network-check on the site. Public, tiny, and it
+// answers with what it received rather than what it assumes; see routes/diag.js.
+app.use("/diag", diagRoutes);
+
 // Best-effort audit trail for the break-glass God support account. Mounted
 // before the routes so it observes every mutating request, but it never gates
 // (per-route auth still applies). See server/middleware/auditGod.js.
 import { auditGod } from "./middleware/auditGod.js";
+import { noStore } from "./middleware/noStore.js";
+import diagRoutes from "./routes/diag.js";
 app.use(auditGod);
 
 // Apply rate limiting to auth and device endpoints
@@ -280,10 +303,15 @@ app.use("/showcase", showcasePublic);
 // Public "What's New" product changelogs (read-only).
 app.use("/changelogs", changelogsPublic);
 app.use("/coupons", couponsPublic);
+// Public marketing-form capture (CIVIQ waitlist, solutions enquiries).
+app.use("/waitlist", waitlistPublic);
+// The "Latest from ADLM" band on the marketing pages.
 app.use("/helpbot", helpbotRoutes);
 app.use("/agent", agentRoutes);
 // AI cost-intelligence for the desktop plugins (auth required, metered).
 app.use("/ai", aiRoutes);
+app.use("/programme", programmeRoutes);
+app.use("/api/programme", programmeRoutes);
 app.use("/geo", geoRoutes);
 
 // Public settings (no auth) — mobile app URL etc.
@@ -319,6 +347,15 @@ app.get("/settings/force-reinstall", async (_req, res) => {
 /* =========================
    ✅ ADMIN ROUTES
    ========================= */
+// The two view-only masks. Both MUST stay ahead of every /admin router: each
+// turns its own role into a look-but-never-touch admin by rewriting the
+// response with placeholder data, and anything mounted above them would be
+// served unmasked. The per-area gates downstream only admit these roles
+// because these have already run.
+// See server/middleware/designMode.js and server/middleware/demoMode.js.
+app.use("/admin", designMode);
+app.use("/admin", demoModeGuard);
+
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes);
 
@@ -332,8 +369,6 @@ app.use("/admin/deployments", adminDeploymentsRoutes);
 app.use("/admin/courses", adminCourses);
 app.use("/admin/course-ops", adminCourseOps);
 app.use("/admin/softwares", adminSoftwares);
-app.use("/admin/classrooms", adminClassrooms);
-app.use("/me/classrooms", meClassrooms);
 app.use("/admin/course-grading", adminCourseGrading);
 app.use("/admin/settings", adminSettings);
 
@@ -350,6 +385,31 @@ app.use("/rategen-v2", servicesRouter);
 
 app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
+app.use("/admin/emails", adminEmails);
+app.use("/admin/certificates", adminCertificates);
+// Public on purpose: an employer checking a certificate has no account here.
+app.use("/verify", verifyRoutes);
+app.use("/admin/broadcast", adminBroadcast);
+// "QUIV 3.1.11 is ready" emails, recorded by the deployment PUT. See
+// util/releaseNotifier.js.
+app.use("/admin/release-notifications", adminReleaseNotifications);
+app.use("/admin/releases", adminReleases);
+app.use("/admin/campaigns", adminCampaigns);
+app.use("/admin/billboard", adminBillboard);
+// Public and unauthenticated: it is what every page of the site reads to draw
+// the band, and it returns only the slides that are live today.
+app.use("/billboard", publicBillboard);
+// Public and unauthenticated on purpose: it is opened from an email, in a
+// browser nobody is signed in to. See the note at the top of the router.
+app.use("/unsubscribe", unsubscribeRouter);
+// Same reasoning, one list rather than all of them: opened from a video
+// announcement, in a browser nobody is signed in to. The token carries the
+// topic, so this link cannot be edited into a general unsubscribe.
+// The product-updates list is mounted first; its paths have two segments, so
+// the video router's /:token could not match them either way.
+app.use("/api/email/unsubscribe/product-updates", productUpdatesUnsubscribeRouter);
+app.use("/api/email/unsubscribe", videoUnsubscribeRouter);
+app.use("/admin/videos", adminVideos);
 app.use("/admin/rategen-v2/library", adminRateGenLibrary);
 
 app.use("/admin/rategen-compute", adminRateGenCompute);
@@ -364,6 +424,12 @@ app.use("/admin/usage", adminUsage);
 // AI spend, per-user allocations & AWS credit burn-down
 app.use("/admin/ai-usage", adminAiUsage);
 
+// Takeoff Time Log: plugins post takeoff sessions, the admin reads time saved.
+// See docs/takeoff-time-log.md.
+app.use("/telemetry", telemetryTakeoff);
+app.use("/api/telemetry", telemetryTakeoff);
+app.use("/admin/takeoff", adminTakeoff);
+
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
 app.use("/admin/flyers", adminFlyers);
@@ -377,9 +443,37 @@ app.use("/admin/roles", adminRoles);
 // catch-all "/admin" so their staff-grantable ("support") and admin-exclusive
 // ("audit") gates apply instead of the catch-all's admin-only middleware.
 import adminSupport from "./routes/admin.support.js";
+import adminWaitlist from "./routes/admin.waitlist.js";
+import adminOrgVideos from "./routes/admin.orgVideos.js";
+import meOrgVideos from "./routes/me.orgVideos.js";
+import adminToday from "./routes/admin.today.js";
+import adminPurchaseQueue from "./routes/admin.purchaseQueue.js";
+import adminInstallQueue from "./routes/admin.installQueue.js";
+import adminPeople from "./routes/admin.people.js";
+import adminLearnQueues from "./routes/admin.learnQueues.js";
+import adminCommerce from "./routes/admin.commerce.js";
+import adminCatalogue from "./routes/admin.catalogue.js";
+import adminLearnContent from "./routes/admin.learnContent.js";
+import adminDocuments from "./routes/admin.documents.js";
 import adminAudit from "./routes/admin.audit.js";
+import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
+app.use("/admin/waitlist", adminWaitlist);
+app.use("/admin/org-videos", adminOrgVideos);
+app.use("/me/org-videos", meOrgVideos);
+app.use("/admin/today", adminToday);
+// Mounted on its own path rather than under /admin/purchases, which already
+// answers for the old hub and carries a :id route that "queue" would match.
+app.use("/admin/purchase-queue", adminPurchaseQueue);
+app.use("/admin/install-queue", adminInstallQueue);
+app.use("/admin/people", adminPeople);
+app.use("/admin/queues", adminLearnQueues);
+app.use("/admin/commerce", adminCommerce);
+app.use("/admin/catalogue", adminCatalogue);
+app.use("/admin/lc", adminLearnContent);
+app.use("/admin/docs", adminDocuments);
 app.use("/admin/audit-log", adminAudit);
+app.use("/admin/followups", adminFollowUps);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin
@@ -515,6 +609,10 @@ export function bootstrap() {
 
   _readyPromise = (async () => {
     validateEnv();
+    // Fail loudly if any model dodged the demo-tenancy plugin. An untenanted
+    // model would serve REAL rows to a demo session, silently — better to
+    // refuse to boot than to leak. Deliberately NOT caught below.
+    assertTenancyApplied();
     await connectDB(process.env.MONGO_URI);
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission
@@ -559,6 +657,80 @@ function startCronJobs() {
     );
 
     console.log("[expiry-notifier] cron scheduled:", EXPIRY_CRON);
+  }
+
+  /* ── orders that were never approved ──────────────────────────────────
+   *
+   * After fifty days a pending order is closed and the buyer is told, with
+   * the steps to start again. It runs an hour after the expiry notifier so
+   * the two are not sending at the same minute.
+   *
+   * Capped per run on purpose - see the note in util/staleOrders.js. When
+   * this shipped, 30 orders were already past fifty days with the oldest at
+   * 290, and thirty mails in one burst is how a warming domain gets marked.
+   */
+  const ENABLE_STALE_ORDERS =
+    String(process.env.ENABLE_STALE_ORDER_CRON || "true") !== "false";
+  const STALE_ORDER_CRON = String(process.env.STALE_ORDER_CRON || "0 10 * * *");
+
+  if (ENABLE_STALE_ORDERS) {
+    cron.schedule(
+      STALE_ORDER_CRON,
+      async () => {
+        try {
+          const out = await sweepStaleOrders();
+          console.log("[stale-orders] done:", out.closed, "closed,", out.waiting, "waiting");
+          if (out.paidButPending) {
+            // Paid and never approved is a failure on our side. It is never
+            // auto-closed, so it is said out loud instead of sitting quiet.
+            console.warn(
+              "[stale-orders]",
+              out.paidButPending,
+              "PAID orders are still unapproved and were not touched - somebody should look",
+            );
+          }
+        } catch (e) {
+          console.error("[stale-orders] failed:", e?.message || e);
+        }
+      },
+      { timezone: "Africa/Lagos" },
+    );
+
+    console.log("[stale-orders] cron scheduled:", STALE_ORDER_CRON);
+  }
+
+  /* ── new videos on the channel ─────────────────────────────────────────
+   *
+   * Every fifteen minutes rather than nightly, because the point is to reach
+   * people while the video is still the newest thing on the channel. Fifteen
+   * minutes is also what the YouTube quota comfortably affords: two API units
+   * per run is under 200 a day against a default 10,000.
+   *
+   * Off unless a key and a channel are configured — an unset poller must be
+   * silent, not a log line every quarter hour saying it cannot work.
+   */
+  const ENABLE_VIDEO_CRON =
+    String(process.env.ENABLE_VIDEO_CRON || "true") !== "false";
+  const VIDEO_CRON = String(process.env.VIDEO_CRON || "*/15 * * * *");
+
+  if (ENABLE_VIDEO_CRON) {
+    cron.schedule(
+      VIDEO_CRON,
+      async () => {
+        try {
+          const out = await runVideoPoll();
+          // Only worth a line when something happened. Ninety-five runs out of
+          // a hundred find nothing, and a log that says so every fifteen
+          // minutes is a log nobody reads.
+          if (out?.found) console.log("[video-poll] done:", out);
+        } catch (e) {
+          console.error("[video-poll] failed:", e?.message || e);
+        }
+      },
+      { timezone: "Africa/Lagos" },
+    );
+
+    console.log("[video-poll] cron scheduled:", VIDEO_CRON);
   }
 
   // Auto-renewal charges run BEFORE the 9am expiry notifier so a user whose

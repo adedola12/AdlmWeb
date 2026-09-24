@@ -35,6 +35,7 @@ import {
   BubbleChatIcon,
   BugIcon,
   Calendar03Icon,
+  Call02Icon,
   Cancel01Icon,
   CancelCircleIcon,
   ChartBarLineIcon,
@@ -291,7 +292,7 @@ export const FiZap = make(FlashIcon, "FiZap");
 
 /* ── Semantic names ───────────────────────────────────────────────────────
    These replaced hand-drawn inline <svg> blocks. Prefer these over the
-   react-icons aliases above when adding anything new — the aliases only
+   react-icons aliases above when adding anything new, the aliases only
    exist so the library swap could be done without touching any JSX. */
 export const IconAlertCircle = make(Alert01Icon, "IconAlertCircle");
 export const IconAlertTriangle = make(Alert02Icon, "IconAlertTriangle");
@@ -316,6 +317,7 @@ export const IconLink = make(Link01Icon, "IconLink");
 export const IconLock = make(LockIcon, "IconLock");
 export const IconMenu = make(Menu01Icon, "IconMenu");
 export const IconMoon = make(Moon02Icon, "IconMoon");
+export const IconPhone = make(Call02Icon, "IconPhone");
 export const IconPlayCircle = make(PlayCircleIcon, "IconPlayCircle");
 export const IconPlaySquare = make(PlaySquareIcon, "IconPlaySquare");
 export const IconPlus = make(Add01Icon, "IconPlus");

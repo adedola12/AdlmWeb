@@ -18,6 +18,20 @@ export const ADMIN_AREAS = [
   { key: "proposals", label: "Proposals", group: "Finance", staffGrantable: true },
   { key: "users", label: "Users", group: "People", staffGrantable: true },
   { key: "support", label: "Support Tickets", group: "Support", staffGrantable: true },
+  // Marketing-form captures: the CIVIQ waitlist and the solutions enquiries.
+  // Staff-grantable — it is a lead list to work, not an entitlement control.
+  { key: "waitlist", label: "Waitlist & Enquiries", group: "People", staffGrantable: true },
+  // The renewal call desk: expired subscriptions and unapproved purchases, with
+  // a call log. Staff-grantable and deliberately separate from "users" — the
+  // person making the calls needs a phone number and a notepad, not the user
+  // directory, and nothing on that screen can change an entitlement.
+  { key: "followups", label: "Follow-Up Calls", group: "People", staffGrantable: true },
+  // The rotating "Latest from ADLM" band on the marketing pages.
+  { key: "latest", label: "Latest from ADLM", group: "Content", staffGrantable: true },
+  // Videos recorded for one organisation (a demo walked through on a call,
+  // a training recap). Filed under the firm name and shown on that firm's
+  // accounts only. Staff-grantable: it is content, not an entitlement.
+  { key: "orgvideos", label: "Organisation videos", group: "Content", staffGrantable: true },
   // The main Admin Hub section pages (Pending, Active subscriptions,
   // Organizations, Storage, Installations, Settings …) and their API. Grant
   // deliberately — it includes purchase approval and entitlement management.
@@ -36,6 +50,10 @@ export const ADMIN_AREAS = [
   // it exposes cost data and can throttle every AI feature on the platform.
   { key: "aiusage", label: "AI Usage & Credit", group: "Core", staffGrantable: false },
   { key: "roles", label: "Roles & Access (UAC)", group: "Core", staffGrantable: false },
+  // Release sign-off desk (docs/RELEASE_GATE.md). Held by super-admins and by
+  // the built-in release_approver role. Seeing it is not approving: only the
+  // named approver can sign a release off.
+  { key: "releases", label: "Release sign-off", group: "Core", staffGrantable: false },
 ];
 
 export const ALL_AREA_KEYS = ADMIN_AREAS.map((a) => a.key);

@@ -209,7 +209,7 @@ export default function FlyerForm({ flyer, onChange, accessToken }) {
 
   return (
     <div style={{ fontFamily: "'Lexend', sans-serif" }}>
-      {/* Template switcher — filtered to current format */}
+      {/* Template switcher, filtered to current format */}
       {(() => {
         const fmtTemplates = templatesForFormat(fmt);
         const cols = fmtTemplates.length <= 3 ? fmtTemplates.length : 3;
@@ -271,7 +271,7 @@ export default function FlyerForm({ flyer, onChange, accessToken }) {
               </>
             )}
             {hasFeaturePills && (
-              <Field label="Feature pills" hint="Up to 4 — one per line">
+              <Field label="Feature pills" hint="Up to 4, one per line">
                 <textarea
                   style={{ ...inputStyle, minHeight: 80, resize: "vertical", lineHeight: 1.6 }}
                   value={(flyer.bullets || []).join("\n")}
@@ -394,7 +394,7 @@ export default function FlyerForm({ flyer, onChange, accessToken }) {
       <div style={{ marginBottom: 18 }}>
         <SectionHeader title="Co-branding" open={open.branding} onToggle={() => toggle("branding")} />
         {open.branding && (
-          <Field label="Partner logo" hint="Optional — sits beside the ADLM logo">
+          <Field label="Partner logo" hint="Optional, sits beside the ADLM logo">
             <ImageUpload value={flyer.partnerLogo} onChange={(v) => set("partnerLogo", v)} accessToken={accessToken} />
           </Field>
         )}

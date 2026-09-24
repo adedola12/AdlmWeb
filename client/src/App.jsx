@@ -1,7 +1,10 @@
 import React from "react";
-import { Outlet, useLocation, ScrollRestoration } from "react-router-dom";
+import { Link, Outlet, useLocation, ScrollRestoration } from "react-router-dom";
+import { useAuth } from "./store.jsx";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
+import DesignModeBanner from "./components/DesignModeBanner.jsx";
+import { isClassicAdminPath } from "./lib/classicAdminPaths.js";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import AiAgent from "./components/AiAgent.jsx";
@@ -14,6 +17,33 @@ import { initGA } from "./ga";
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
   const location = useLocation();
+  const { user: authUser } = useAuth();
+
+  // Screens that render inside his app frame — rail, app bar, own scroll
+  // container. They supply their own chrome and their own padding, so the
+  // marketing nav, the footer and the page gutter all step aside.
+  //
+  // The dash-* routes are the signed-in half of learning — My learning, the
+  // course player and the certificates — named after his own pages so a URL
+  // here reads the same as the corresponding one in his build. The public
+  // half stays at /learn with the marketing chrome, because it is a page for
+  // people who have not signed in.
+  //
+  // /projects/* and /time-management are NOT on this list until the new build
+  // goes fully live: customers get them as classic pages, with the site nav
+  // and footer. The 15 Sept release had wrapped them in his frame
+  // (pages/WorkShellRoute.jsx); at go-live, add them back here and re-wrap
+  // them in main.jsx.
+  // Routes that carry their own chrome and must not also get the marketing
+  // nav and footer. /admin joins the list because the admin section now has
+  // his rail: two sets of navigation over one page compete for the same job,
+  // and "Book a demo" does not belong above a refund queue.
+  // Classic admin screens (lib/classicAdminPaths.js) are the exception until
+  // go-live: they render without his frame, so they need the site nav back.
+  const appShellRoute =
+    /^\/(manage|work|dash-learning|dash-certificates|dash-course|admin)(\/|$)/.test(
+      location.pathname,
+    ) && !isClassicAdminPath(location.pathname);
 
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
@@ -58,19 +88,38 @@ export default function App() {
 
       {/* Mounted in the root layout so it sees every route change.
           It existed before this and was never rendered anywhere, which meant
-          GA recorded the first page of a session and nothing after it — in a
+          GA recorded the first page of a session and nothing after it, in a
           single-page app, almost every pageview was missing. */}
       <AnalyticsTracker />
 
-      <Nav />
+      {/* The signed-in app carries his rail and app bar instead. Leaving the
+          marketing nav above it puts "Book a demo" over somebody's dashboard,
+          and the two sets of navigation compete for the same job. His own
+          build does exactly that; it is on the snag list for him rather than
+          reproduced here. */}
+      {!appShellRoute && <Nav />}
 
-      <main className="w-full flex-1 px-4 md:px-8 py-4">
+      {/* Signed in but the email is not confirmed: say so on every page
+          (a licensed account is prompted here rather than locked out). */}
+      {authUser?.emailVerified === false && location.pathname !== "/verify-email" && (
+        <div className="w-full bg-amber-50 text-amber-900 border-b border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-800 text-sm px-4 py-2 text-center">
+          Confirm your email address to use your account.{" "}
+          <Link className="underline font-semibold" to={`/verify-email?next=${encodeURIComponent(location.pathname)}`}>
+            Enter the code
+          </Link>
+        </div>
+      )}
+
+      {/* Only renders for Design Access sessions, and only on /admin. */}
+      <DesignModeBanner />
+
+      <main className={appShellRoute ? "w-full flex-1" : "w-full flex-1 px-4 md:px-8 py-4"}>
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
       </main>
-
-      <Footer />
+        
+      {!appShellRoute && <Footer />}
       <AiAgent />
 
       {/* New-page navigations start at the top; the browser back/forward
@@ -83,7 +132,7 @@ export default function App() {
         open={showVideo}
         onClose={closeVideo}
         videoId={VIDEO_ID}
-        title="Welcome to ADLM — quick intro"
+        title="Welcome to ADLM, quick intro"
         maxSeconds={MAX_SECONDS}
         closeOnOutsideClick={true}
         hideControls={false}

@@ -102,9 +102,9 @@ export const QUIV_TRADES = [
   "Damp-proofing",
   "Carpentry & Roofing",
   "Joinery",
-  "Finishes — Floor",
-  "Finishes — Wall",
-  "Finishes — Ceiling",
+  "Finishes: Floor",
+  "Finishes: Wall",
+  "Finishes: Ceiling",
   "Decoration",
   "Structural Steelwork",
   "External Works",
@@ -154,11 +154,11 @@ const QUIV_TRADE_RULES = [
     re: /\b(steelwork|steel[\s-]?section|steel\s+weight|structural\s+steel)\b/i,
   },
   {
-    name: "Finishes — Floor",
+    name: "Finishes: Floor",
     re: /\b(floor[\s-]?finish|floor\s+tile|screed|floors?\s+(?:default|area)|floor\s+cover)\b/i,
   },
   {
-    name: "Finishes — Ceiling",
+    name: "Finishes: Ceiling",
     re: /\b(ceiling[\s-]?finish|ceiling\s+area|p\.?o\.?p\.?|pop\s+ceiling|plaster\s+of\s+paris)\b/i,
   },
   {
@@ -166,7 +166,7 @@ const QUIV_TRADE_RULES = [
     re: /\b(paint(?:ing)?|texcote|emulsion|decorat|model\s+item)\b/i,
   },
   {
-    name: "Finishes — Wall",
+    name: "Finishes: Wall",
     re: /\b(rendering|plaster(?:ing)?|wall\s+finish|finishes\s+walls?|wall\s+tile)\b/i,
   },
   {

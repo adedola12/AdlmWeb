@@ -4,8 +4,62 @@ import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
+import { ReleaseCandidate } from "../models/ReleaseCandidate.js";
+import { getGateConfig, isApprover } from "../util/releaseGate.js";
+import {
+  createPresignedGetUrl,
+  isPrivateInstallerStorageEnabled,
+  objectKeyFromPackageUri,
+} from "../utils/r2Upload.js";
+import {
+  HUB_CLIENT,
+  HUB_SCHEME,
+  HUB_SOURCE,
+  hubSharesAppIdentity,
+  isSchemeAwareBindingEnabled,
+} from "../util/deviceIdentity.js";
 
 const router = express.Router();
+
+/**
+ * Replaces each stored packageUri with a freshly signed, time-limited GET.
+ *
+ * The stored value is a permanent public URL, so handing it back means
+ * every entitled user walks away with a link that needs no credential,
+ * never expires, and works for anyone they pass it to — which for HERON
+ * left the proprietary takeoff package one GET from the world. Signing
+ * here keeps the download inside the entitlement check that already
+ * gates this route.
+ *
+ * Three deliberate properties:
+ *  - Off unless R2_INSTALLERS_BUCKET is set, so deploying this code on
+ *    its own changes nothing and the bucket move is the real cutover.
+ *  - A URI that does not resolve to an object key (a legacy Cloudinary
+ *    raw URL, say) is passed through untouched.
+ *  - A signing failure falls back to the stored URI instead of throwing.
+ *    Degrading to today's behaviour beats breaking every install on the
+ *    platform because one signature could not be produced.
+ */
+async function withSignedPackageUris(items) {
+  if (!isPrivateInstallerStorageEnabled()) return items;
+
+  return Promise.all(
+    items.map(async (item) => {
+      const key = objectKeyFromPackageUri(item?.packageUri);
+      if (!key) return item;
+
+      try {
+        return { ...item, packageUri: await createPresignedGetUrl({ key }) };
+      } catch (err) {
+        console.error(
+          `[me/deployments] could not sign packageUri for "${item?.productKey}" (${key}):`,
+          err?.message || err,
+        );
+        return item;
+      }
+    }),
+  );
+}
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -65,9 +119,26 @@ router.post(
       return res.status(404).json({ error: "Entitlement not found for this product" });
     }
 
-    normalizeLegacyEntitlement(ent);
-
     const fpVersion = Math.max(1, Number(req.get("x-adlm-fp-version")) || 1);
+    const schemeAware = isSchemeAwareBindingEnabled();
+
+    // QUIV (revit) and ArchiCAD never sign in with the id the Hub sends here,
+    // so a row written for them only ever took a seat away from the customer's
+    // own app (DEVICE_LIMIT_REACHED / DEVICE_MISMATCH on their own PC). For
+    // those products the app's own sign-in binds the machine; the Hub only
+    // needs a 2xx to carry on. No row is written or changed, and no v1 swap
+    // runs. Kill switch: DEVICE_SCHEME_AWARE_BINDING=0 (util/deviceIdentity.js).
+    if (schemeAware && !hubSharesAppIdentity(key)) {
+      console.log(
+        `[/me/deployments/bind-device] deferred to app: user=${user.email} ` +
+          `product=${key} fpVersion=${fpVersion} ` +
+          `client=${String(req.get("x-adlm-client") || "-")} ` +
+          `fp=${fp.slice(0, 10)}…`,
+      );
+      return res.json({ ok: true, bound: false, deferredToApp: true });
+    }
+
+    normalizeLegacyEntitlement(ent);
 
     const active = (ent.devices || []).filter((d) => !d.revokedAt);
     const maxSeats = Math.max(parseInt(ent.seats || 1, 10), 1);
@@ -116,6 +187,14 @@ router.post(
       lastSeenAt: new Date(),
       revokedAt: null,
       fpVersion: Math.max(1, Number(fpVersion) || 1),
+      // Provenance: this row is the Hub's, never an app sign-in.
+      ...(schemeAware
+        ? {
+            source: HUB_SOURCE,
+            scheme: fpVersion >= 2 ? HUB_SCHEME : "v1",
+            client: HUB_CLIENT,
+          }
+        : {}),
     });
 
     // Also set legacy field for backward compat
@@ -180,6 +259,24 @@ router.get(
       }
     }
 
+    // RELEASE GATE PREVIEW (docs/RELEASE_GATE.md). The release approver's own
+    // Hub is offered every pending build, so they can install and test exactly
+    // what they are being asked to sign off. Nobody else ever sees a pending
+    // build here. Secrets (envVars) still follow the entitlement rule below.
+    const pendingByKey = new Map();
+    try {
+      const cfg = await getGateConfig();
+      if (isApprover(cfg, req.user?.email)) {
+        const pending = await ReleaseCandidate.find({ status: "pending" }).lean();
+        for (const c of pending) {
+          pendingByKey.set(c.productKey, c);
+          allowedKeys.add(c.productKey);
+        }
+      }
+    } catch (err) {
+      console.error("[me/deployments] release preview lookup failed:", err?.message || err);
+    }
+
     if (allowedKeys.size === 0) {
       return res.json({ ok: true, items: [] });
     }
@@ -196,6 +293,22 @@ router.get(
     // product. localRandomVars is safe to return to anyone (the actual
     // values are generated on the client). The sha256 integrity hash is
     // also safe to expose.
+    // Overlay the approver's pending builds on the live rows (or add them when
+    // the product has never shipped). `preview` tells the Hub it is unreleased.
+    for (const [key, c] of pendingByKey) {
+      const live = rawItems.find((r) => r.productKey === key);
+      const staged = {
+        ...(live || {}),
+        ...c.payload,
+        productKey: key,
+        preview: true,
+        previewCandidateId: String(c._id),
+        liveVersion: live?.version || "",
+      };
+      if (live) rawItems[rawItems.indexOf(live)] = staged;
+      else rawItems.push(staged);
+    }
+
     const items = rawItems.map((item) => {
       const key = String(item?.productKey || "").trim().toLowerCase();
       if (entitledKeys.has(key)) return item;
@@ -204,7 +317,7 @@ router.get(
       return { ...withoutSecrets, envVars: undefined };
     });
 
-    return res.json({ ok: true, items });
+    return res.json({ ok: true, items: await withSignedPackageUris(items) });
   }),
 );
 

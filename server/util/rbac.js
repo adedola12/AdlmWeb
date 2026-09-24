@@ -6,7 +6,7 @@
 import { Role } from "../models/Role.js";
 import { STAFF_GRANTABLE_KEYS } from "../config/permissions.js";
 
-// roleKey -> { isSuperAdmin: boolean, perms: Set<string> }
+// roleKey -> { isSuperAdmin: boolean, designAccess: boolean, perms: Set<string> }
 let roleCache = new Map();
 
 export async function loadRoleCache() {
@@ -15,6 +15,8 @@ export async function loadRoleCache() {
   for (const r of roles) {
     next.set(r.key, {
       isSuperAdmin: !!r.isSuperAdmin,
+      designAccess: !!r.designAccess && !r.isSuperAdmin,
+      demoMode: !!r.demoMode,
       perms: new Set(r.permissions || []),
     });
   }
@@ -29,9 +31,16 @@ export function getRoleAccess(roleKey) {
 }
 
 // Pure decision: does this access record grant the area? Super-admin → always.
+// Both view-only roles see every area — each is meant to walk the whole admin
+// UI — and in both cases the breadth costs nothing because the response has
+// already been masked: designMode.js for one, demoModeGuard for the other.
+// Visibility here is visibility of the SCREEN, never of the data or the
+// ability to change it.
 export function decideAccess(access, area) {
   if (!access) return false;
   if (access.isSuperAdmin) return true;
+  if (access.designAccess) return true;
+  if (access.demoMode) return true;
   return access.perms.has(area);
 }
 
@@ -43,12 +52,22 @@ export function isSuperAdminRole(roleKey) {
   return !!getRoleAccess(roleKey)?.isSuperAdmin;
 }
 
+// Does this role browse the admin UI in placeholder-data mode? Two roles do,
+// by two different routes, and each middleware asks about its own.
+export function isDesignRole(roleKey) {
+  return !!getRoleAccess(roleKey)?.designAccess;
+}
+
+export function isDemoRole(roleKey) {
+  return !!getRoleAccess(roleKey)?.demoMode;
+}
+
 // The full list of area keys a role can see — used to serialize the user's
 // permissions to the client. Super-admin expands to every known area.
 export function rolePermissionList(roleKey, allAreaKeys) {
   const a = getRoleAccess(roleKey);
   if (!a) return [];
-  if (a.isSuperAdmin) return [...allAreaKeys];
+  if (a.isSuperAdmin || a.designAccess || a.demoMode) return [...allAreaKeys];
   return [...a.perms];
 }
 
@@ -59,6 +78,14 @@ export async function ensureRolesSeeded() {
   const defaults = [
     { key: "admin", name: "Administrator", system: true, isSuperAdmin: true, permissions: [] },
     {
+      key: "design",
+      name: "Design Access",
+      system: true,
+      isSuperAdmin: false,
+      designAccess: true,
+      permissions: [],
+    },
+    {
       key: "mini_admin",
       name: "Mini Admin",
       system: true,
@@ -66,6 +93,29 @@ export async function ensureRolesSeeded() {
       permissions: [...STAFF_GRANTABLE_KEYS],
     },
     { key: "user", name: "User", system: true, isSuperAdmin: false, permissions: [] },
+    // Release approver (docs/RELEASE_GATE.md) — the release sign-off desk and
+    // nothing else. Being in this role opens the screen and the staff preview;
+    // the right to approve comes from being the named approver in
+    // ReleaseGateConfig, not from the role.
+    {
+      key: "release_approver",
+      name: "Release Approver",
+      system: true,
+      isSuperAdmin: false,
+      permissions: ["releases"],
+    },
+    // Designer — sees every admin screen, read-only, with all identities and
+    // figures replaced by placeholders. `permissions` stays empty on purpose:
+    // access comes from the demoMode flag (see decideAccess above), so nobody
+    // can widen or narrow it by editing a permission matrix.
+    {
+      key: "designer",
+      name: "Designer (demo data)",
+      system: true,
+      isSuperAdmin: false,
+      demoMode: true,
+      permissions: [],
+    },
   ];
 
   // One query for all three, not one each. This runs on every Lambda cold
@@ -89,6 +139,20 @@ export async function ensureRolesSeeded() {
     }
     if (d.key === "admin" && !existing.isSuperAdmin) {
       existing.isSuperAdmin = true;
+      changed = true;
+    }
+    // Repair either view-only flag the same way as the superadmin flag: a
+    // built-in role that lost it would silently start serving real data.
+    if (d.demoMode && !existing.demoMode) {
+      existing.demoMode = true;
+      changed = true;
+    }
+    if (d.key === "release_approver" && !(existing.permissions || []).includes("releases")) {
+      existing.permissions = [...(existing.permissions || []), "releases"];
+      changed = true;
+    }
+    if (d.key === "design" && !existing.designAccess) {
+      existing.designAccess = true;
       changed = true;
     }
     if (changed) await existing.save();

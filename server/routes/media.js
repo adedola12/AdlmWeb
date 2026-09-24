@@ -1,7 +1,7 @@
 // server/routes/meMedia.js
 import express from "express";
 import crypto from "crypto";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import cloudinary from "../utils/cloudinaryConfig.js";
 
 // Any authenticated user can request a signed ticket for *image* uploads.
@@ -9,11 +9,6 @@ import cloudinary from "../utils/cloudinaryConfig.js";
 // body: { resource_type?: "image", folder?: "adlm/avatars", public_id?, eager? }
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
-
-function requireAdmin(req, _res, next) {
-  if (req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
 
 // cloudinary.config({
 //   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

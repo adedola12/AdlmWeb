@@ -7,12 +7,12 @@
  * modules, so enrolled students see "No modules yet." on /courses/bim-bld-arch.
  *
  * Weeks 2, 3 and 4 are taken straight from the class recordings. Weeks 1, 5
- * and 6 follow the session titles and posted summaries in the Google
- * Classroom (Week 1 -- Introduction to BIM + Data Analysis, Week 5 -- Data
- * Analysis in Quantity Surveying, Week 6 -- Bringing it all Together), so the
- * titles here match what students already see there; the coverage notes for
- * those three weeks are written from the titles and summaries rather than
- * from a full transcript.
+ * and 6 follow the session titles and summaries posted when the course was
+ * run as a live cohort (Week 1 -- Introduction to BIM + Data Analysis, Week 5
+ * -- Data Analysis in Quantity Surveying, Week 6 -- Bringing it all
+ * Together), so the titles here match what those students saw; the coverage
+ * notes for those three weeks are written from the titles and summaries
+ * rather than from a full transcript.
  *
  *   node scripts/seed-course-bim-bld-arch.mjs            # dry run, prints diff
  *   node scripts/seed-course-bim-bld-arch.mjs --apply    # writes to the DB
@@ -50,7 +50,7 @@ What you work with:
 
 How it runs:
 • 6 weeks, three evening sessions per week, delivered live and recorded
-• 100% online on Google Classroom — every recording, resource and assignment lives there
+• 100% online on the ADLM Studio platform — every recording, resource and assignment lives on the course page
 • A weekly assignment builds one continuous portfolio project, graded with feedback
 • Google Drive is set up as a working common data environment (CDE) to ISO 19650
   folder and file-naming conventions, so you practise the process, not just the software
@@ -78,7 +78,7 @@ const modules = [
     code: "W1D2",
     title: "Week 1 · Day 2 — BIM workflows, documentation and standards",
     instructions:
-      "The documents that make a BIM project a BIM project: the Employer's Information Requirements, the BIM Execution Plan, and the LOD schedule — with Uniformat and OmniClass classification codes, which exist so anyone picking up your document anywhere in the world can trace an element back to its description. The common data environment as defined by ISO 19650, and the folder and file-naming discipline that follows from it. Sample BEP and LOD documents are in the week 1 resource materials in Classroom — read them and build your own; do not template them.",
+      "The documents that make a BIM project a BIM project: the Employer's Information Requirements, the BIM Execution Plan, and the LOD schedule — with Uniformat and OmniClass classification codes, which exist so anyone picking up your document anywhere in the world can trace an element back to its description. The common data environment as defined by ISO 19650, and the folder and file-naming discipline that follows from it. Sample BEP and LOD documents are in the week 1 resource materials on the course page — read them and build your own; do not template them.",
   },
   {
     code: "W1D3",
@@ -89,7 +89,7 @@ const modules = [
 Quantitative versus qualitative analysis: structured-data tools like Excel and Python against qualitative tools like Atlas.ti and NVivo, and when each is the right instrument.
 
 Building a career in analytics: start your portfolio now, practise consistently, and share the work publicly — visibility is what attracts collaboration and opportunity.`,
-    assignmentPrompt: `Two parts, both submitted in Google Classroom.
+    assignmentPrompt: `Two parts, both submitted on the course page.
 
 1. Post a reflective summary of the week 1 lectures on LinkedIn, tag ADLM Studio, and attach the link to your submission (use "Add → Link").
 
@@ -98,7 +98,7 @@ Building a career in analytics: start your portfolio now, practise consistently,
    • your BIM Execution Plan (BEP)
    • your LOD schedule, with the Uniformat and OmniClass codes filled in
 
-Build these from scratch using the sample documents in Classroom as a guide — do not template them. Where the sample only lists precast concrete, rename it to suit local practice (cast in-place); anything the list does not cover goes under the supplementary components row.`,
+Build these from scratch using the sample documents in the week 1 resource materials as a guide — do not template them. Where the sample only lists precast concrete, rename it to suit local practice (cast in-place); anything the list does not cover goes under the supplementary components row.`,
   },
 
   // ── Week 2 — 3D BIM ─────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ Metric vs imperial templates; RVT (models) vs RFA/RTE (families and templates). 
 
 Link vs Import — always link, so a change at source updates downstream. IFC as the ISO-mandated interoperability format between Revit, ArchiCAD, SketchUp and structural packages.
 
-Also covered: how to submit assignments in Google Classroom.`,
+Also covered: how to submit assignments on the course page.`,
   },
   {
     code: "W2D2",
@@ -138,7 +138,7 @@ AI in the workflow: creating a ChatGPT account, then prompt-chaining rather than
 
 Collaboration: enabling Worksharing turns the file into a central model. Worksets — Shared Levels and Grids plus your own for walls, floors, ceilings, roof and doors — set editable or not so the QS can take off but cannot move a grid line. Local copies vs "detach from central", Synchronize with Central with a comment, Show History exported to CSV, the Worksharing Monitor, and restoring a backup. Moving the central model from Work in Progress to Approved and re-pointing the local copies.
 
-COBie: the ADLM COBie Exporter plugin (installer in Classroom) — select elements in Revit, auto-fill serial numbers, manufacturer, model and installation date, generate a barcode per element, write the values back into the Revit parameters, and export the COBie CSV into the CDE.`,
+COBie: the ADLM COBie Exporter plugin (installer in the course resource materials) — select elements in Revit, auto-fill serial numbers, manufacturer, model and installation date, generate a barcode per element, write the values back into the Revit parameters, and export the COBie CSV into the CDE.`,
     assignmentPrompt: `Continue with the project you proposed in week 1.
 
 1. Model your building in Revit 2024 — levels, walls, floors, doors, windows, ceilings, roof and railings — working from a 2D sketch of your own brief.
@@ -218,14 +218,14 @@ CostX: new building, add drawings, calibrate the x-axis, dimension groups, workb
 
 Then the ADLM plugins: the PlanSwift takeoff plugin and the Revit Quantity Calculator producing a full substructure bill AND a material schedule to Excel from a single selection — the difference between the manual route and the automated one, measured in minutes.
 
-Also previewed: the clash-detected architectural, structural and MEP models in Classroom — walls stopping short of the beam, no floor slabs in the architectural file — and why that model looks "wrong" until you understand week 6.`,
+Also previewed: the clash-detected architectural, structural and MEP models in the course resource materials — walls stopping short of the beam, no floor slabs in the architectural file — and why that model looks "wrong" until you understand week 6.`,
   },
   {
     code: "W4D3",
     title: "Week 4 · Day 3 — 5D BIM final session: cash-flow forecasting",
     requiresSubmission: true,
     instructions:
-      "Turning the takeoff into money: completing the bill of quantities, building the material schedule, rate build-up, and preparing the cash-flow forecast off the priced bill and the week 3 programme. The Understanding 5D BIM quiz and the ADLM PlanSwift and Revit plugin video playlists are posted alongside this session in Classroom.",
+      "Turning the takeoff into money: completing the bill of quantities, building the material schedule, rate build-up, and preparing the cash-flow forecast off the priced bill and the week 3 programme. The Understanding 5D BIM quiz and the ADLM PlanSwift and Revit plugin video playlists are posted alongside this session on the course page.",
     assignmentPrompt: `Using your own model and drawings:
 
 1. Take off your project — substructure through to finishes — using PlanSwift or CostX for the 2D work and Revit Schedules and Quantities for the model-based work.
@@ -266,7 +266,7 @@ Also previewed: the clash-detected architectural, structural and MEP models in C
     code: "W6D2",
     title: "Week 6 · Day 2 — Navisworks, clash detection, 4D and 5D",
     instructions:
-      "Federating the architectural, structural and MEP models into one, and why linking rather than importing is what keeps that federation live. Running clash detection, issuing results back to the responsible discipline, and the model edits that follow — wall top offsets, floor thicknesses, beam base levels. This is why the coordinated models in Classroom look 'wrong' until you know what was resolved out of them.",
+      "Federating the architectural, structural and MEP models into one, and why linking rather than importing is what keeps that federation live. Running clash detection, issuing results back to the responsible discipline, and the model edits that follow — wall top offsets, floor thicknesses, beam base levels. This is why the coordinated models in the course resource materials look 'wrong' until you know what was resolved out of them.",
   },
   {
     code: "W6D3",

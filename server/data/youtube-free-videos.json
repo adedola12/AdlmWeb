@@ -1,0 +1,1336 @@
+{
+  "channel": "https://www.youtube.com/@ADLMStudio",
+  "channelId": "UCJ-dn5t2MiEGpMhPgtMYhKQ",
+  "pulledOn": "2026-09-09",
+  "note": "Every long-form video on the channel, filed onto a shelf of the free library. Shorts are left out on purpose: they are hashtag promos, not lessons. Regenerate with yt-dlp and scripts/sync-youtube-free-videos.mjs; see docs in that script.",
+  "videos": [
+    {
+      "youtubeId": "bRr51FqpAmM",
+      "title": "How to Install ADLM Softwares & Plugins | From Purchase to Setup in 7 Minutes",
+      "durationSec": 445,
+      "publishedAt": "2026-04-10",
+      "section": "getting-started",
+      "productLabel": "Getting started",
+      "recommended": true,
+      "sort": 100,
+      "playlists": []
+    },
+    {
+      "youtubeId": "uWpjzdvYGcc",
+      "title": "I Built a Revit Plugin That Prepares Full BOQ in Minutes — Meet QUIV by ADLM Studio",
+      "durationSec": 3394,
+      "publishedAt": "2026-05-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": true,
+      "sort": 100,
+      "playlists": [
+        "QUIV"
+      ]
+    },
+    {
+      "youtubeId": "q2OB7zAIxe8",
+      "title": "Full BoQ in 20 Minutes | Live Demo with Nigerian QS | ADLM Studio",
+      "durationSec": 2096,
+      "publishedAt": "2026-07-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": true,
+      "sort": 95,
+      "playlists": [
+        "QUIV"
+      ]
+    },
+    {
+      "youtubeId": "Lapxt3qNGt8",
+      "title": "AI Prepared My Full Bill of Quantities and Budget in Minutes",
+      "durationSec": 419,
+      "publishedAt": "2026-08-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": true,
+      "sort": 90,
+      "playlists": [
+        "QUIV"
+      ]
+    },
+    {
+      "youtubeId": "BH_KuHFgXHQ",
+      "title": "Generate Accurate Bill of Quantities in Minutes with ADLM REVIT Plugin",
+      "durationSec": 769,
+      "publishedAt": "2025-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": true,
+      "sort": 85,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "7WR-9DUo1c0",
+      "title": "Master Architectural Quantity Takeoff with ADLM Revit Plugin | Walls, Windows, Doors, and More!",
+      "durationSec": 371,
+      "publishedAt": "2024-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": true,
+      "sort": 80,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "xqlslf_k9CQ",
+      "title": "Simplify Your Quantity Takeoff with ADLM Revit Plugin | Columns, Beams, and Slabs",
+      "durationSec": 533,
+      "publishedAt": "2024-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": true,
+      "sort": 75,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "kYZLL_2ofSM",
+      "title": "BIM to Bill of Quantites– Fast Quantity Takeoff & BoQ for Structural Models (Beams, Columns, Slabs)",
+      "durationSec": 602,
+      "publishedAt": "2025-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": false,
+      "sort": 70,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "DbSMnXqvlws",
+      "title": "Efficient Frames Quantity Takeoff & BoQ Creation with ADLM Revit Plugin",
+      "durationSec": 649,
+      "publishedAt": "2025-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": false,
+      "sort": 65,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "EB2Je4sjawQ",
+      "title": "ADLM Revit Plugin v2 Demo: Wall & Window Quantity Takeoff for Bungalows and Multi-Story Buildings",
+      "durationSec": 941,
+      "publishedAt": "2025-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": false,
+      "sort": 60,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "s22souGFlTU",
+      "title": "Master Superstructural Bill of Quantity for Bungalow Buildings with ADLM Revit Plugin",
+      "durationSec": 542,
+      "publishedAt": "2024-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": false,
+      "sort": 55,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "OgFXdugEHZM",
+      "title": "Master Bungalow Substructure Bill of Quantity Preparation with ADLM Plugin",
+      "durationSec": 425,
+      "publishedAt": "2024-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": false,
+      "sort": 50,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "5NL-TQUhMEo",
+      "title": "Introducing the ADLM QS Calculator V2: Revolutionizing Quantity Takeoff and Material Scheduling!",
+      "durationSec": 794,
+      "publishedAt": "2025-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": false,
+      "sort": 45,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "s6HBnk_H9rU",
+      "title": "ADLM Revit Plugin for Structural works",
+      "durationSec": 205,
+      "publishedAt": "2024-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": false,
+      "sort": 40,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "jLml5XWioRE",
+      "title": "ADLM Revit Plugin - TheQSCalculator",
+      "durationSec": 126,
+      "publishedAt": "2024-09-10",
+      "section": "quiv",
+      "productLabel": "QUIV",
+      "recommended": false,
+      "sort": 35,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "glLoSHrBNck",
+      "title": "Your BOQ Can Now Measure Itself — HERON for PlanSwift",
+      "durationSec": 255,
+      "publishedAt": "2026-08-13",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": true,
+      "sort": 100,
+      "playlists": [
+        "HERON"
+      ]
+    },
+    {
+      "youtubeId": "EaiTjkwEkRM",
+      "title": "HERON for PlanSwift: Full QS Workflow — BOQ, Valuation, Variation & Final Account",
+      "durationSec": 1965,
+      "publishedAt": "2026-06-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": true,
+      "sort": 95,
+      "playlists": [
+        "HERON"
+      ]
+    },
+    {
+      "youtubeId": "PsyyMwFPfKc",
+      "title": "Quantity Takeoff to Bill of Quantities — HERON × PlanSwift Full Workflow (Real-Time, No Talking)",
+      "durationSec": 11448,
+      "publishedAt": "2026-07-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": true,
+      "sort": 90,
+      "playlists": [
+        "HERON"
+      ]
+    },
+    {
+      "youtubeId": "49Okqc-fqYk",
+      "title": "Bungalow with Heron",
+      "durationSec": 1190,
+      "publishedAt": "2026-08-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": true,
+      "sort": 85,
+      "playlists": [
+        "HERON"
+      ]
+    },
+    {
+      "youtubeId": "Q6zCmwRdKdY",
+      "title": "Getting Started with the ADLM PlanSwift Plugin: Step-by-Step Guide for New Users",
+      "durationSec": 823,
+      "publishedAt": "2025-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": true,
+      "sort": 80,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "BVgF58siHHg",
+      "title": "Mastering the ADLM PlanSwift Plugin: Complete BoQ and Material Schedule for Bungalow Building",
+      "durationSec": 2181,
+      "publishedAt": "2025-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": true,
+      "sort": 75,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "4cuQjd3w11Q",
+      "title": "PART 1: How to Prepare Bill of Quantities (BOQ) Using PlanSwift | Foundation Takeoff Tutorial",
+      "durationSec": 2216,
+      "publishedAt": "2025-12-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 72,
+      "playlists": [
+        "Bill Of Quantites Preparation"
+      ]
+    },
+    {
+      "youtubeId": "sOCtukl3AkA",
+      "title": "PART 2: How to Prepare Bill of Quantities (BOQ) Using PlanSwift | Frame Takeoff Tutorial",
+      "durationSec": 2759,
+      "publishedAt": "2025-12-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 71,
+      "playlists": [
+        "Bill Of Quantites Preparation"
+      ]
+    },
+    {
+      "youtubeId": "UibPcyLIvHg",
+      "title": "PART 3: How to prepare bill of quantities using PlanSwift | Walls, Window,s and Doors",
+      "durationSec": 3110,
+      "publishedAt": "2026-01-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 70,
+      "playlists": [
+        "Bill Of Quantites Preparation"
+      ]
+    },
+    {
+      "youtubeId": "88RLCoO2bnw",
+      "title": "How to prepare bill of quantities using PlanSwift | Roof works",
+      "durationSec": 909,
+      "publishedAt": "2026-01-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 69,
+      "playlists": [
+        "Bill Of Quantites Preparation"
+      ]
+    },
+    {
+      "youtubeId": "XZ6kMiSy--w",
+      "title": "How to prepare bill of quantities using PlanSwift | Finishes works",
+      "durationSec": 1309,
+      "publishedAt": "2026-02-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 68,
+      "playlists": [
+        "Bill Of Quantites Preparation"
+      ]
+    },
+    {
+      "youtubeId": "s0Dn3PyHT-g",
+      "title": "Master Quantity Takeoff with ADLM PlanSwift Plugin: Substructure & Structural Frame Explained!",
+      "durationSec": 1463,
+      "publishedAt": "2025-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 60,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "Jbcs06helJk",
+      "title": "Master Quantity Takeoff with ADLM PlanSwift Plugin: Blockwork and Openings Explained!",
+      "durationSec": 532,
+      "publishedAt": "2025-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 58,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "l0gzruvTIXk",
+      "title": "Master Quantity Takeoff with ADLM PlanSwift Plugin: Blockwork and Openings Explained Part 2!",
+      "durationSec": 352,
+      "publishedAt": "2025-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 57,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "7JR7dB-Qlto",
+      "title": "ADLM Planswift Plugin: Accurate Roof Quantity TakeOff & Export to Excel for Construction Projects",
+      "durationSec": 570,
+      "publishedAt": "2025-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 55,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "LFdRUAbz9zA",
+      "title": "Accurate Measurement of Finishes and Material Scheduling for Construction Projects",
+      "durationSec": 716,
+      "publishedAt": "2025-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 50,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "TqTswi-ddRI",
+      "title": "Unlock Efficient Electrical Quantity Takeoffs with the ADLM Plugin",
+      "durationSec": 1384,
+      "publishedAt": "2025-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 45,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "Z4yLgIezZjA",
+      "title": "How to Measure for Substructure (Pad Foundation) using the ADLM Planswift PLugin",
+      "durationSec": 2235,
+      "publishedAt": "2022-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 40,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "LGQvtYKqOYE",
+      "title": "How to Measure for Frames using ADLM Planswift Plugin (Column, Beam, and Slab)",
+      "durationSec": 2489,
+      "publishedAt": "2022-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 35,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "947Dplro2Go",
+      "title": "How to Measure for Masonry works (Wall, Windows and Doors) using ADLM Planswift Plugin",
+      "durationSec": 1278,
+      "publishedAt": "2022-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 30,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "BTU5aXKucr0",
+      "title": "How to use ADLM Planswift Material Plugin",
+      "durationSec": 209,
+      "publishedAt": "2022-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 25,
+      "playlists": []
+    },
+    {
+      "youtubeId": "_JMuD7CbxVs",
+      "title": "How to prepare Material Schedule with Planswift (Part 1)",
+      "durationSec": 808,
+      "publishedAt": "2024-09-10",
+      "section": "heron",
+      "productLabel": "HERON",
+      "recommended": false,
+      "sort": 20,
+      "playlists": []
+    },
+    {
+      "youtubeId": "79cFlEOWLBM",
+      "title": "How to Use The ADLM Revit Plugin for MEP and HVAC Quantity Takeoff",
+      "durationSec": 527,
+      "publishedAt": "2025-09-10",
+      "section": "mep",
+      "productLabel": "Revit MEP",
+      "recommended": true,
+      "sort": 100,
+      "playlists": [
+        "ADLM MEP and HVAC Plugin"
+      ]
+    },
+    {
+      "youtubeId": "XFtGw2n1hB8",
+      "title": "BIM to Bill of Quantities: 1-Click Quantity Takeoff for HVAC, Plumbing & Electrical",
+      "durationSec": 779,
+      "publishedAt": "2025-10-10",
+      "section": "mep",
+      "productLabel": "Revit MEP",
+      "recommended": true,
+      "sort": 95,
+      "playlists": [
+        "ADLM Revit Plugin - TheQSCalculator"
+      ]
+    },
+    {
+      "youtubeId": "ig9LwVpw3zo",
+      "title": "ADLM Rate App Walkthrough | Rate Library, Custom Pricing & Construction Workflow Tool",
+      "durationSec": 1014,
+      "publishedAt": "2025-09-10",
+      "section": "rategen",
+      "productLabel": "RateGen",
+      "recommended": true,
+      "sort": 100,
+      "playlists": [
+        "ADLM Rate Gen"
+      ]
+    },
+    {
+      "youtubeId": "cuN4XWVQOL8",
+      "title": "ADLM Revit Plugin + RateGen = Accurate Costing!",
+      "durationSec": 1331,
+      "publishedAt": "2025-09-10",
+      "section": "rategen",
+      "productLabel": "RateGen",
+      "recommended": true,
+      "sort": 95,
+      "playlists": [
+        "ADLM Rate Gen"
+      ]
+    },
+    {
+      "youtubeId": "LsvVbhV0868",
+      "title": "Microsoft Project Course (Part 1)",
+      "durationSec": 1782,
+      "publishedAt": "2026-07-10",
+      "section": "timepro",
+      "productLabel": "MS Project",
+      "recommended": true,
+      "sort": 100,
+      "playlists": [
+        "Construction Project Management using MS Project"
+      ]
+    },
+    {
+      "youtubeId": "A4l9Lj_-2Vk",
+      "title": "Microsoft Project Course (Part 2)",
+      "durationSec": 3453,
+      "publishedAt": "2026-07-10",
+      "section": "timepro",
+      "productLabel": "MS Project",
+      "recommended": true,
+      "sort": 95,
+      "playlists": [
+        "Construction Project Management using MS Project"
+      ]
+    },
+    {
+      "youtubeId": "Nd6KOfXz-ho",
+      "title": "How to Create Complete Program of Work with MS Project",
+      "durationSec": 1553,
+      "publishedAt": "2022-09-10",
+      "section": "timepro",
+      "productLabel": "MS Project",
+      "recommended": true,
+      "sort": 90,
+      "playlists": []
+    },
+    {
+      "youtubeId": "D5CI_g0eY5A",
+      "title": "Mastering PlanSwift Software for Quantity Takeoff: Lesson 1",
+      "durationSec": 2872,
+      "publishedAt": "2024-09-10",
+      "section": "planswift-basics",
+      "productLabel": "PlanSwift",
+      "recommended": false,
+      "sort": 100,
+      "playlists": [
+        "Planswift Beginner Course",
+        "Planswift Course"
+      ]
+    },
+    {
+      "youtubeId": "OstSxktvnM4",
+      "title": "Mastering PlanSwift Software for Quantity Takeoff: Lesson 2",
+      "durationSec": 2716,
+      "publishedAt": "2024-09-10",
+      "section": "planswift-basics",
+      "productLabel": "PlanSwift",
+      "recommended": false,
+      "sort": 95,
+      "playlists": [
+        "Planswift Beginner Course",
+        "Planswift Course"
+      ]
+    },
+    {
+      "youtubeId": "Rr_3fIIDqQk",
+      "title": "Mastering PlanSwift Software for Quantity Takeoff: Lesson 3",
+      "durationSec": 3678,
+      "publishedAt": "2024-09-10",
+      "section": "planswift-basics",
+      "productLabel": "PlanSwift",
+      "recommended": false,
+      "sort": 90,
+      "playlists": [
+        "Planswift Beginner Course",
+        "Planswift Course"
+      ]
+    },
+    {
+      "youtubeId": "mIQTa77spzM",
+      "title": "How to measure for Excavation using PLANSWIFT 2025",
+      "durationSec": 889,
+      "publishedAt": "2022-09-10",
+      "section": "planswift-basics",
+      "productLabel": "PlanSwift",
+      "recommended": false,
+      "sort": 80,
+      "playlists": [
+        "QS Software Training"
+      ]
+    },
+    {
+      "youtubeId": "sIM8D4vFlY8",
+      "title": "How to Measure for Pile Cap on Planswift",
+      "durationSec": 794,
+      "publishedAt": "2022-09-10",
+      "section": "planswift-basics",
+      "productLabel": "PlanSwift",
+      "recommended": false,
+      "sort": 75,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "-0w1N9rue3k",
+      "title": "How to measure for Concrete Beam using Planswift",
+      "durationSec": 1047,
+      "publishedAt": "2022-09-10",
+      "section": "planswift-basics",
+      "productLabel": "PlanSwift",
+      "recommended": false,
+      "sort": 70,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "XSlt-DLMA1c",
+      "title": "How to Measure for Slab Reinforcement on Planswift",
+      "durationSec": 736,
+      "publishedAt": "2022-09-10",
+      "section": "planswift-basics",
+      "productLabel": "PlanSwift",
+      "recommended": false,
+      "sort": 65,
+      "playlists": [
+        "ADLM Planswift Plugin"
+      ]
+    },
+    {
+      "youtubeId": "cd6RG1KissQ",
+      "title": "How to do quantity takeoff for Slab and Beam Reinforcement using Planswift #beam",
+      "durationSec": 927,
+      "publishedAt": "2022-09-10",
+      "section": "planswift-basics",
+      "productLabel": "PlanSwift",
+      "recommended": false,
+      "sort": 60,
+      "playlists": [
+        "QS Software Training"
+      ]
+    },
+    {
+      "youtubeId": "vKmpdiFumZI",
+      "title": "Autodesk Revit 2020 Tutorial; 01. How to Start a new project",
+      "durationSec": 206,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 99,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "VWpuNXGBjWk",
+      "title": "How to create walls with Autodesk revit (Latest)",
+      "durationSec": 367,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 98,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "suL1rdMjLXo",
+      "title": "Autodesk Revit 2020 Tutorial; 03. How To Edit Walls",
+      "durationSec": 199,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 97,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "euqdVOpp1o8",
+      "title": "Autodesk Revit 2020 Tutorial; 04. How to Create Floor Plan.",
+      "durationSec": 323,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 96,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "u_bpRgMxQhs",
+      "title": "Autodesk Revit 2020 Tutorial; 05. How to Adjust Walls Using Dimensions",
+      "durationSec": 552,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 95,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "uVC8avbEXbc",
+      "title": "Autodesk Revit 2020 Tutorial; 06. How to Add Doors and Edit Doors.",
+      "durationSec": 456,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 94,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "l9UpmSZYsGo",
+      "title": "Autodesk Revit 2020 Tutorial; 07. How to Add and Edit Windows.",
+      "durationSec": 411,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 93,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "nw13FlltgZY",
+      "title": "Autodesk Revit 2025 Tutorial; 08. How to Save your project",
+      "durationSec": 85,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 92,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "WqN37GOxoec",
+      "title": "Autodesk Revit 2020 Tutorial; 09. How to use Modify Tools (Trim, Move, Cut, Align, Extend and Copy)",
+      "durationSec": 191,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 91,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "lsAdLpumQFE",
+      "title": "Autodesk Revit 2020 Tutorial; 10. How to Create and Add Floors to Revit Floor Plan layout",
+      "durationSec": 637,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 90,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "QTGuOdK_BzA",
+      "title": "Autodesk Revit 2020 Tutorial; 11. How to add Texture to Floors",
+      "durationSec": 603,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 89,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "M3LkzzfqzdQ",
+      "title": "Autodesk Revit 2020 Tutorial; 12. How to Add Railing to Floot Plan",
+      "durationSec": 109,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 88,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "dRWkMay83WM",
+      "title": "Autodesk Revit 2020 Tutorial; 13. How to Change Visual Styles",
+      "durationSec": 135,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 87,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "cQzYCOTTF2E",
+      "title": "Autodesk Revit 2020 Tutorial; 14. How to Change Views in Your Project",
+      "durationSec": 223,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 86,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "b1bg49NAR8U",
+      "title": "Autodesk Revit 2020 Tutorial; 15. How to Create and Edit Roof in Your Project",
+      "durationSec": 753,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 85,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "Ssmkqeo9hOI",
+      "title": "Autodesk Revit 2020 Tutorial; 16. How to Create and add new floor levels for upper floors",
+      "durationSec": 319,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 84,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "xqY6kOCQQRU",
+      "title": "Autodesk Revit 2020 Tutorial; 17. How to Create Ceiling in Autodesk Revit 2020",
+      "durationSec": 424,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 83,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "KiZIGBDZJpY",
+      "title": "Autodesk Revit 2020 Tutorial; 18. How to Create Upper Floor Slab",
+      "durationSec": 615,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 82,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "nkn-Dn0aCjo",
+      "title": "Autodesk Revit 2020 Tutorial; 19. How to add Stairs to Building Design",
+      "durationSec": 961,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 81,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "lPO3jmObNZI",
+      "title": "Autodesk Revit 2020 Tutorial; 20. How to add upper floor walls",
+      "durationSec": 1321,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 80,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "p1BKbkF1LlY",
+      "title": "Autodesk Revit 2020 Tutorial; 21. How to add fascial board for roof (Roof Accessories)",
+      "durationSec": 689,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 79,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "S10341w4_Zw",
+      "title": "Autodesk Revit 2025 Tutorial; 22. How to add flat roof to building design Advanced",
+      "durationSec": 1510,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 78,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "qDUmT37X7hc",
+      "title": "Autodesk Revit 2020 Tutorial; 23. How to add concrete fascia to building design Advanced",
+      "durationSec": 635,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 77,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "IreshdSe5E4",
+      "title": "Autodesk Revit 2020 Tutorial; 24. How to add Ceiling to building design Advanced #AutodeskRevit",
+      "durationSec": 457,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 76,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "6tofQVdemoA",
+      "title": "How to Edit Wall Space Using Dimensions #3DWalls #Architecture",
+      "durationSec": 171,
+      "publishedAt": "2020-09-10",
+      "section": "revit-basics",
+      "productLabel": "Revit",
+      "recommended": false,
+      "sort": 60,
+      "playlists": [
+        "Autodesk Revit  Beginners tutorial"
+      ]
+    },
+    {
+      "youtubeId": "juFLbVFG1jw",
+      "title": "BIM Course Week 1 Day 1 | Foundations of Building Information Modelling | ADLM Studio",
+      "durationSec": 5458,
+      "publishedAt": "2026-08-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": true,
+      "sort": 100,
+      "playlists": [
+        "ADLM BIM COURSE"
+      ]
+    },
+    {
+      "youtubeId": "GyOnCGnUwiM",
+      "title": "BIM Course Week 1 Day 2 | ISO 19650 Explained | ADLM Studio",
+      "durationSec": 5130,
+      "publishedAt": "2026-08-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": true,
+      "sort": 95,
+      "playlists": [
+        "ADLM BIM COURSE"
+      ]
+    },
+    {
+      "youtubeId": "kvVb_6Jnl8Q",
+      "title": "BIM Course Week 1 Day 3 | Digital Twins, BIM Tools & 5D BIM | ADLM Studio",
+      "durationSec": 5523,
+      "publishedAt": "2026-08-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": true,
+      "sort": 90,
+      "playlists": [
+        "ADLM BIM COURSE"
+      ]
+    },
+    {
+      "youtubeId": "rAMf3xJ6TJc",
+      "title": "BIM Class: Integration of BIM, AI, and Data Analytical Tools into the Quantity Surveying Workflow",
+      "durationSec": 621,
+      "publishedAt": "2025-09-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": false,
+      "sort": 85,
+      "playlists": []
+    },
+    {
+      "youtubeId": "-MccJBd_MfU",
+      "title": "ADLM BIM Training Overview",
+      "durationSec": 1000,
+      "publishedAt": "2022-09-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": false,
+      "sort": 80,
+      "playlists": [
+        "QS Software Training"
+      ]
+    },
+    {
+      "youtubeId": "A7AwQX_3Lxs",
+      "title": "ADLM Course Overview",
+      "durationSec": 429,
+      "publishedAt": "2023-09-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": false,
+      "sort": 75,
+      "playlists": []
+    },
+    {
+      "youtubeId": "WE2f0zy_nNA",
+      "title": "Transform Your Career with ADLM's Advanced BIM & AI Course for Construction Professionals!",
+      "durationSec": 143,
+      "publishedAt": "2024-09-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": false,
+      "sort": 70,
+      "playlists": []
+    },
+    {
+      "youtubeId": "cNJeAP-K1mc",
+      "title": "Introducing the BIM, AI and Data Analysis Course | 6-Week Digital MEP & HVAC Works",
+      "durationSec": 384,
+      "publishedAt": "2025-09-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": false,
+      "sort": 65,
+      "playlists": []
+    },
+    {
+      "youtubeId": "_x6eFAWnQ6A",
+      "title": "Level Up Your MEP & HVAC: BIM, AI & Data — ADLM x SynthAnalytics Preview",
+      "durationSec": 144,
+      "publishedAt": "2025-09-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": false,
+      "sort": 60,
+      "playlists": []
+    },
+    {
+      "youtubeId": "rD7skiRjSiQ",
+      "title": "TRAINING ON QS SOFTWARE BY DLM",
+      "durationSec": 323,
+      "publishedAt": "2022-09-10",
+      "section": "bim-course",
+      "productLabel": "BIM course",
+      "recommended": false,
+      "sort": 55,
+      "playlists": [
+        "QS Software Training"
+      ]
+    },
+    {
+      "youtubeId": "3YIgxAr780o",
+      "title": "How to takeoff for excavation using CostX 2025 #CostX #Quantitytakeoff",
+      "durationSec": 1052,
+      "publishedAt": "2022-09-10",
+      "section": "costx",
+      "productLabel": "CostX",
+      "recommended": false,
+      "sort": 100,
+      "playlists": [
+        "Cost X"
+      ]
+    },
+    {
+      "youtubeId": "IQq5A76Dz20",
+      "title": "2024 Differentiate - Planswift VS CostX #Planswift #CostX",
+      "durationSec": 1824,
+      "publishedAt": "2022-09-10",
+      "section": "costx",
+      "productLabel": "CostX",
+      "recommended": false,
+      "sort": 95,
+      "playlists": []
+    },
+    {
+      "youtubeId": "YK5UDQATaP0",
+      "title": "Complete Bluebeam Lecture: Lesson 1",
+      "durationSec": 4060,
+      "publishedAt": "2024-09-10",
+      "section": "bluebeam",
+      "productLabel": "Bluebeam",
+      "recommended": false,
+      "sort": 100,
+      "playlists": [
+        "Bluebeam Revu Lecture"
+      ]
+    },
+    {
+      "youtubeId": "FPspgyrtBFg",
+      "title": "Complete Bluebeam Lecture: Lesson 2",
+      "durationSec": 4214,
+      "publishedAt": "2024-09-10",
+      "section": "bluebeam",
+      "productLabel": "Bluebeam",
+      "recommended": false,
+      "sort": 95,
+      "playlists": [
+        "Bluebeam Revu Lecture"
+      ]
+    },
+    {
+      "youtubeId": "tSBpJz-2A2w",
+      "title": "The Future of Construction Cost Estimation",
+      "durationSec": 935,
+      "publishedAt": "2023-09-10",
+      "section": "mybuildcost",
+      "productLabel": "MyBuildCost",
+      "recommended": false,
+      "sort": 100,
+      "playlists": [
+        "MyBuildCost"
+      ]
+    },
+    {
+      "youtubeId": "uidbK5a2xgg",
+      "title": "How to Create Substructure Rate Library using MyBuildCost",
+      "durationSec": 2221,
+      "publishedAt": "2023-09-10",
+      "section": "mybuildcost",
+      "productLabel": "MyBuildCost",
+      "recommended": false,
+      "sort": 95,
+      "playlists": [
+        "MyBuildCost"
+      ]
+    },
+    {
+      "youtubeId": "GkIFUdfL4Bk",
+      "title": "Strip Foundation Quantity Take Off using MyBuildCost",
+      "durationSec": 1858,
+      "publishedAt": "2023-09-10",
+      "section": "mybuildcost",
+      "productLabel": "MyBuildCost",
+      "recommended": false,
+      "sort": 90,
+      "playlists": []
+    },
+    {
+      "youtubeId": "qXUUrvnEAzQ",
+      "title": "Quantity Surveying Valuation; How to calculate for interim payment",
+      "durationSec": 2003,
+      "publishedAt": "2022-09-10",
+      "section": "qs-practice",
+      "productLabel": "QS practice",
+      "recommended": false,
+      "sort": 100,
+      "playlists": []
+    },
+    {
+      "youtubeId": "8D0pRFCX3DM",
+      "title": "Charting a Path in the Construction Industry - Insights & Strategies for Career Advancement",
+      "durationSec": 7674,
+      "publishedAt": "2024-09-10",
+      "section": "qs-practice",
+      "productLabel": "QS practice",
+      "recommended": false,
+      "sort": 95,
+      "playlists": []
+    },
+    {
+      "youtubeId": "JIYCDZUhDps",
+      "title": "Welcome to the Future: Introducing the ADLM Marketplace!",
+      "durationSec": 486,
+      "publishedAt": "2024-09-10",
+      "section": "marketplace",
+      "productLabel": "Marketplace",
+      "recommended": false,
+      "sort": 100,
+      "playlists": [
+        "ADLM MarketPlace"
+      ]
+    },
+    {
+      "youtubeId": "WOtX7JKwB_g",
+      "title": "How to upload your material on the ADLM Marketplace",
+      "durationSec": 121,
+      "publishedAt": "2024-09-10",
+      "section": "marketplace",
+      "productLabel": "Marketplace",
+      "recommended": false,
+      "sort": 95,
+      "playlists": [
+        "ADLM MarketPlace"
+      ]
+    },
+    {
+      "youtubeId": "m3smR7ebia4",
+      "title": "We Built The Future of Construction Cost Management | ADLM Studio 2026",
+      "durationSec": 291,
+      "publishedAt": "2026-04-10",
+      "section": "adlm-news",
+      "productLabel": "ADLM",
+      "recommended": false,
+      "sort": 100,
+      "playlists": []
+    },
+    {
+      "youtubeId": "_PXVjQbG9RU",
+      "title": "2026 Roadmap: What We’re Building, Our Website Launch & Partnership Goals",
+      "durationSec": 255,
+      "publishedAt": "2026-02-10",
+      "section": "adlm-news",
+      "productLabel": "ADLM",
+      "recommended": false,
+      "sort": 95,
+      "playlists": []
+    },
+    {
+      "youtubeId": "f6mO8KAOk3c",
+      "title": "ADLM Studio 2025 Mid-Year Recap: New Revit Plugins, MEP/HVAC Tools, RateGen, and BIM Course",
+      "durationSec": 972,
+      "publishedAt": "2025-09-10",
+      "section": "adlm-news",
+      "productLabel": "ADLM",
+      "recommended": false,
+      "sort": 90,
+      "playlists": []
+    },
+    {
+      "youtubeId": "A7A4-AY_Co8",
+      "title": "WELCOME TO THE DIGITIZATION OF QUANTITY SURVEYING || ADLM WEBSITE LAUNCH",
+      "durationSec": 491,
+      "publishedAt": "2026-01-10",
+      "section": "adlm-news",
+      "productLabel": "ADLM",
+      "recommended": false,
+      "sort": 85,
+      "playlists": []
+    },
+    {
+      "youtubeId": "YX6vJTaAUXA",
+      "title": "ADLM WEBSITE AND MOBILE APP LAUNCH",
+      "durationSec": 335,
+      "publishedAt": "2026-01-10",
+      "section": "adlm-news",
+      "productLabel": "ADLM",
+      "recommended": false,
+      "sort": 80,
+      "playlists": []
+    },
+    {
+      "youtubeId": "z5JE0WjSbvU",
+      "title": "Welcome to 2025: What to Expect from ADLM in 2025!",
+      "durationSec": 356,
+      "publishedAt": "2025-09-10",
+      "section": "adlm-news",
+      "productLabel": "ADLM",
+      "recommended": false,
+      "sort": 75,
+      "playlists": []
+    },
+    {
+      "youtubeId": "qdCCgJdHD_M",
+      "title": "What to Expect from ADLM at ConTech Event 2024!",
+      "durationSec": 435,
+      "publishedAt": "2025-09-10",
+      "section": "adlm-news",
+      "productLabel": "ADLM",
+      "recommended": false,
+      "sort": 70,
+      "playlists": []
+    }
+  ]
+}

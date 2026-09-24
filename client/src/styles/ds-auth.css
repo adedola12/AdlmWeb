@@ -1,0 +1,100 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/auth.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* Sign in and sign up — a full-height split: the argument on the left, the
+   form on the right. Loaded only by those two pages, so it cannot reach any
+   other marketing page. Form primitives (.field, .two-up, .btn) come from
+   site.css; nothing here redefines them. */
+.ds .auth2{display:grid;grid-template-columns:1.05fr 1fr;min-height:100vh;
+  min-height:100dvh;padding:0}
+
+
+/* ------------------------------------------------------------- the panel */
+.ds .auth2-art{position:relative;overflow:hidden;background:#0b1b31;display:flex;
+  align-items:flex-end;padding:52px 48px}
+.ds .auth2-art .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5}
+.ds .auth2-art::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(9,20,38,.62) 0%,rgba(9,20,38,.74) 42%,
+    rgba(9,20,38,.95) 100%)}
+.ds .auth2-art-in{position:relative;z-index:2;max-width:520px}
+.ds .auth2-art .lg{height:30px;width:auto;margin-bottom:auto}
+.ds .auth2-art h2{margin:38px 0 0;font-size:clamp(28px,3.1vw,42px);font-weight:500;
+  letter-spacing:-.035em;line-height:1.12;color:#fff}
+.ds .auth2-art h2 span{color:rgba(255,255,255,.56);display:block}
+.ds .auth2-art p{margin:16px 0 0;font-size:15px;font-weight:300;line-height:1.7;
+  color:rgba(255,255,255,.72);max-width:46ch}
+.ds .auth2-pts{list-style:none;margin:26px 0 0;padding:0;display:grid;gap:11px}
+.ds .auth2-pts li{position:relative;padding-left:26px;font-size:13.5px;font-weight:300;
+  color:rgba(255,255,255,.82);line-height:1.55}
+.ds .auth2-pts li::before{content:"";position:absolute;left:4px;top:4px;width:5px;height:10px;
+  border:solid #3fa9ff;border-width:0 1.7px 1.7px 0;transform:rotate(45deg)}
+
+
+/* -------------------------------------------------------------- the form */
+.ds .auth2-form{display:flex;align-items:center;justify-content:center;padding:96px 40px 56px;
+  background:var(--bg)}
+.ds .auth2-card{width:100%;max-width:400px}
+.ds .auth2-card h1{margin:0;font-size:29px;font-weight:500;letter-spacing:-.032em;color:var(--ink)}
+.ds .auth2-card .ds-sub{margin:9px 0 26px;font-size:14px;font-weight:300;color:var(--ink-3)}
+.ds .auth2-card .ds-sub a{color:var(--action)}
+.ds .auth2-card .flowsteps.sm{margin-bottom:26px;font-size:12px}
+.ds .auth2-card .flowsteps.sm div{font-size:12px}
+.ds .auth2-card .flowsteps.sm i{width:20px;height:20px;font-size:11px}
+.ds .auth2-card .flowsteps.sm s{width:14px}
+.ds .auth2-card .opt{font-size:11px;color:var(--ink-3)}
+.ds .auth2-row{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  flex-wrap:wrap;margin:-4px 0 18px}
+.ds .auth2-row a{font-size:12.5px;color:var(--action)}
+.ds .auth2-check{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);
+  cursor:pointer}
+.ds .auth2-check input{width:15px;height:15px;accent-color:var(--action)}
+.ds .auth2-alt{display:grid;gap:9px}
+@media (max-width:920px){
+.ds .auth2{grid-template-columns:1fr}
+.ds .auth2-art{min-height:290px;padding:104px 26px 30px;align-items:flex-end}
+.ds .auth2-art .lg{position:absolute;top:-56px;left:0}
+.ds .auth2-art h2{margin-top:0;font-size:26px}
+.ds .auth2-art p{font-size:14px}
+.ds .auth2-pts{display:none}
+.ds .auth2-form{padding:34px 22px 56px}
+.ds .auth2-card{max-width:460px}
+}
+
+
+/* The marketing header fights a full-bleed split — half of it would sit over
+   a dark photograph and half over a white form. A sign-in page needs one way
+   back to the site, and the logo in the panel is it. */
+.ds:has(.auth2) .nav, .ds:has(.auth2) .promo, .ds:has(.auth2) .npanel{display:none}
+.ds:has(.auth2) .auth2-form{padding-top:56px}
+.ds .auth2-art .lg{display:block;margin-bottom:auto}
+.ds .auth2-art .lg img{height:30px;width:auto;display:block}
+
+
+/* -------------------------------------------------------- verification code */
+.ds .vf-code{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin:4px 0 12px}
+.ds .vf-code input{width:100%;height:56px;text-align:center;font-family:var(--font);
+  font-size:22px;font-weight:500;color:var(--ink);border:1px solid var(--line-2);
+  border-radius:12px;background:var(--bg);font-variant-numeric:tabular-nums;
+  transition:border-color 180ms var(--e-fast),box-shadow 180ms var(--e-fast)}
+.ds .vf-code input:focus{outline:0;border-color:var(--action);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 16%,transparent)}
+.ds .vf-msg{margin:0 0 14px;font-size:12.5px;min-height:18px;color:var(--ink-3)}
+.ds .vf-msg.bad{color:var(--accent)}
+.ds .vf-msg.good{color:var(--ok,#17794B)}
+.ds .vf-resend{margin:16px 0 0;font-size:13px;color:var(--ink-3);text-align:center}
+.ds .linkish{border:0;background:none;padding:0;font-family:var(--font);font-size:13px;
+  color:var(--action);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.ds .linkish[disabled]{color:var(--ink-3);cursor:default;text-decoration:none}
+.ds #vf-wait{font-size:12px;color:var(--ink-3)}
+@media (max-width:420px){
+.ds .vf-code{gap:6px}
+.ds .vf-code input{height:48px;font-size:19px}
+}

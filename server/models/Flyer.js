@@ -8,6 +8,11 @@ import mongoose from "mongoose";
 // base64, so documents stay small.
 const FlyerSchema = new mongoose.Schema(
   {
+    // Where on the website this appears. His design's most useful column: the
+    // panel can fill a table all day, but if the site has no place for the
+    // thing, a visitor never sees it. Empty means nobody has said where.
+    slot: { type: String, default: "" },
+
     title: { type: String, trim: true, required: true, maxlength: 200 },
     template: {
       type: String,

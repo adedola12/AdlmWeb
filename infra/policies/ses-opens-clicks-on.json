@@ -1,0 +1,7 @@
+{
+  "Enabled": true,
+  "MatchingEventTypes": ["CLICK", "OPEN"],
+  "SnsDestination": {
+    "TopicArn": "arn:aws:sns:eu-west-1:065634457992:AdlmApi-MailEventsTopic82B5E23C-XCtv2nmdzGIZ"
+  }
+}

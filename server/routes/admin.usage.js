@@ -6,6 +6,7 @@
 import express from "express";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { UsageSession } from "../models/UsageSession.js";
+import { DiagnosticLog } from "../models/DiagnosticLog.js";
 
 const router = express.Router();
 
@@ -84,6 +85,79 @@ router.get("/user", async (req, res) => {
   } catch (err) {
     console.error("[/admin/usage/user] error:", err);
     res.status(500).json({ error: "Failed to load user usage" });
+  }
+});
+
+// GET /admin/usage/logs?days=30&product=revit&email=…
+// Beta testers' diagnostic logs, newest first, WITHOUT the content (the list
+// is per-row metadata plus the PerfLog lines; the full text is fetched by id).
+// → { days, rows: [{ id, userId, email, productKey, appVersion, hostTarget,
+//                    reason, lineCount, sizeBytes, perfLines, createdAt }] }
+router.get("/logs", async (req, res) => {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    const since = new Date(Date.now() - days * 86400000);
+
+    const match = { createdAt: { $gte: since } };
+    const product = String(req.query.product || "")
+      .trim()
+      .toLowerCase();
+    if (product) match.productKey = product;
+    const email = String(req.query.email || "")
+      .trim()
+      .toLowerCase();
+    if (email) match.email = email;
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 300, 1), 1000);
+
+    const rows = await DiagnosticLog.find(match)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select("-content")
+      .lean();
+
+    res.json({
+      days,
+      rows: rows.map((r) => ({
+        id: String(r._id),
+        userId: r.userId,
+        email: r.email,
+        productKey: r.productKey,
+        appVersion: r.appVersion,
+        hostTarget: r.hostTarget,
+        reason: r.reason,
+        lineCount: r.lineCount,
+        sizeBytes: r.sizeBytes,
+        perfLines: r.perfLines || [],
+        createdAt: r.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error("[/admin/usage/logs] error:", err);
+    res.status(500).json({ error: "Failed to load diagnostic logs" });
+  }
+});
+
+// GET /admin/usage/logs/:id — one log with its full text.
+router.get("/logs/:id", async (req, res) => {
+  try {
+    const doc = await DiagnosticLog.findById(req.params.id).lean();
+    if (!doc) return res.status(404).json({ error: "Not found" });
+    res.json({
+      id: String(doc._id),
+      email: doc.email,
+      productKey: doc.productKey,
+      appVersion: doc.appVersion,
+      hostTarget: doc.hostTarget,
+      reason: doc.reason,
+      lineCount: doc.lineCount,
+      sizeBytes: doc.sizeBytes,
+      createdAt: doc.createdAt,
+      content: doc.content || "",
+    });
+  } catch (err) {
+    console.error("[/admin/usage/logs/:id] error:", err);
+    res.status(500).json({ error: "Failed to load diagnostic log" });
   }
 });
 

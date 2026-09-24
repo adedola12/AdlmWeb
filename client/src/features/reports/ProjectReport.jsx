@@ -239,7 +239,7 @@ export default function ProjectReport({ report }) {
         kicker="Project Progress Report"
         title={meta.name}
         accent=""
-        lede={`${meta.productLabel} project — progress, contract value, valuation and procurement status as at ${dayjs(meta.generatedAt).format("DD MMMM YYYY")}.`}
+        lede={`${meta.productLabel} project: progress, contract value, valuation and procurement status as at ${dayjs(meta.generatedAt).format("DD MMMM YYYY")}.`}
         metaPairs={[
           { label: "Project", value: meta.name },
           { label: "Product", value: meta.productLabel },

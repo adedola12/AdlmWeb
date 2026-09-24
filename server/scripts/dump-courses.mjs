@@ -20,7 +20,6 @@ for (const c of courses) {
   console.log(`blurb: ${c.blurb || "(none)"}`);
   console.log(`description: ${c.description || "(none)"}`);
   console.log(`onboardingVideo: ${c.onboardingVideoUrl || "(none)"}`);
-  console.log(`classroom: ${c.classroomJoinUrl || "(none)"}`);
   console.log(`modules (${(c.modules || []).length}):`);
   for (const m of c.modules || []) {
     console.log(`  - [${m.code}] ${m.title}`);

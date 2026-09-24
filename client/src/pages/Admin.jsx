@@ -7,6 +7,8 @@ import { apiAuthed } from "../http.js";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
+import OrgVideosQuickAdd from "../features/admin/OrgVideosQuickAdd.jsx";
+import SeatsEditor from "../features/admin/SeatsEditor.jsx";
 import { FiShield } from "../components/icons.jsx";
 
 const MONTH_CHOICES = [
@@ -28,13 +30,9 @@ const BOQ_IMPORT_PRODUCT_KEY = "boq-import";
 const BOQ_IMPORT_LEGACY_KEY = "quiv-boq-import";
 const BOQ_IMPORT_KEYS = [BOQ_IMPORT_PRODUCT_KEY, BOQ_IMPORT_LEGACY_KEY];
 
-// Products whose bills can be imported. A grant is only useful to someone who
-// already subscribes to one of them.
-const BOQ_IMPORT_PRODUCTS = [
-  { key: "revit", label: "QUIV" },
-  { key: "planswift", label: "Heron" },
-  { key: "mep", label: "MEP" },
-];
+// Products whose bills can be imported: HERON only (17 Sep 2026). A grant is
+// only useful to someone who already subscribes to it.
+const BOQ_IMPORT_PRODUCTS = [{ key: "planswift", label: "Heron" }];
 
 // Above this we skip the integrity hash rather than pull the whole file into a
 // single ArrayBuffer — SubtleCrypto has no streaming digest, and a browser tab
@@ -91,7 +89,7 @@ function putFileWithProgress(url, file, contentType, onProgress) {
     xhr.onerror = () =>
       reject(
         new Error(
-          "Upload failed — the browser could not reach R2. This is usually a missing CORS rule on the bucket.",
+          "Upload failed. The browser could not reach R2. This is usually a missing CORS rule on the bucket.",
         ),
       );
     xhr.onabort = () => reject(new Error("Upload cancelled"));
@@ -229,7 +227,7 @@ function getDaysLeft(expiresAt) {
 
 function timeLeftBadge(expiresAt) {
   const d = getDaysLeft(expiresAt);
-  if (d == null) return <span className="text-xs text-slate-500">—</span>;
+  if (d == null) return <span className="text-xs text-slate-500">–</span>;
 
   if (d < 0) return <Badge label={`Expired ${Math.abs(d)}d`} tone="red" />;
   if (d === 0) return <Badge label="Expires today" tone="red" />;
@@ -617,7 +615,6 @@ const SECTION_META = {
   storage: { label: "Storage", slug: "storage" },
   installations: { label: "Installations", slug: "installations" },
   tlocations: { label: "Training Locations", slug: "training-locations" },
-  classrooms: { label: "Classrooms", slug: "classrooms" },
   settings: { label: "Settings", slug: "settings" },
 };
 
@@ -646,6 +643,11 @@ export default function Admin({ section = null }) {
   // "email|productKey" → { lastActiveAt, minutes, sessions, appVersion } from
   // /admin/usage/summary (30-day window built from plugin heartbeats).
   const [usage, setUsage] = React.useState({});
+  // "email|productKey" → [log rows, newest first] from /admin/usage/logs:
+  // diagnostic logs sent by beta testers' plugins (no content; fetched by id).
+  const [diagLogs, setDiagLogs] = React.useState({});
+  // The log being read in the viewer modal: { row, content, loading, error }.
+  const [logView, setLogView] = React.useState(null);
   const [purchases, setPurchases] = React.useState([]);
   // Bulk approve/reject on the pending tab: id → true for the ticked rows.
   const [purchaseSel, setPurchaseSel] = React.useState({});
@@ -772,205 +774,6 @@ export default function Admin({ section = null }) {
   const [vatApplyInvoices, setVatApplyInvoices] = React.useState(true);
   const [vatBusy, setVatBusy] = React.useState(false);
   const [vatMsg, setVatMsg] = React.useState("");
-
-  // ── Classrooms state ──
-  // The modal is reused for both Create (editingClassroomId === null) and
-  // Edit (editingClassroomId === <_id>). pendingMembers tracks the current
-  // roster being staged in the form; in edit mode it's preloaded from the
-  // classroom and diffed against the original on save.
-  const [classrooms, setClassrooms] = React.useState([]);
-  const [classroomBusy, setClassroomBusy] = React.useState(false);
-  const [classroomMsg, setClassroomMsg] = React.useState("");
-  const [classroomModalOpen, setClassroomModalOpen] = React.useState(false);
-  const [editingClassroomId, setEditingClassroomId] = React.useState(null);
-  const [classroomDraft, setClassroomDraft] = React.useState({
-    title: "",
-    description: "",
-    classroomCode: "",
-    classroomUrl: "",
-    companyName: "",
-  });
-  const [pendingMembers, setPendingMembers] = React.useState([]); // [{userId, userEmail, userName}]
-  const [originalMemberIds, setOriginalMemberIds] = React.useState([]); // for edit-mode diff
-  const [classroomQuery, setClassroomQuery] = React.useState("");
-  const [classroomSuggestions, setClassroomSuggestions] = React.useState([]);
-  const [classroomSearching, setClassroomSearching] = React.useState(false);
-
-  const loadClassrooms = React.useCallback(async () => {
-    try {
-      const res = await apiAuthed("/admin/classrooms?includeInactive=true", {
-        token: accessToken,
-      });
-      setClassrooms(Array.isArray(res?.items) ? res.items : []);
-    } catch (e) {
-      setClassroomMsg(e?.message || "Failed to load classrooms");
-    }
-  }, [accessToken]);
-
-  React.useEffect(() => {
-    if (tab === "classrooms" && accessToken) loadClassrooms();
-  }, [tab, accessToken, loadClassrooms]);
-
-  // Debounced user autocomplete for the "create classroom" modal.
-  React.useEffect(() => {
-    if (!classroomModalOpen) return;
-    const q = classroomQuery.trim();
-    if (q.length < 2) {
-      setClassroomSuggestions([]);
-      return;
-    }
-    let cancelled = false;
-    setClassroomSearching(true);
-    const t = setTimeout(async () => {
-      try {
-        const res = await apiAuthed(
-          `/admin/classrooms/users-suggest?q=${encodeURIComponent(q)}`,
-          { token: accessToken },
-        );
-        if (!cancelled) setClassroomSuggestions(Array.isArray(res?.users) ? res.users : []);
-      } catch {
-        if (!cancelled) setClassroomSuggestions([]);
-      } finally {
-        if (!cancelled) setClassroomSearching(false);
-      }
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [classroomQuery, classroomModalOpen, accessToken]);
-
-  // Add a user from the autocomplete to the staged-members list. Skips
-  // duplicates (matched by userId) so picking the same user twice is a no-op.
-  function pickClassroomUser(u) {
-    setPendingMembers((prev) => {
-      if (prev.some((m) => String(m.userId) === String(u._id))) return prev;
-      return [
-        ...prev,
-        {
-          userId: String(u._id),
-          userEmail: u.email || "",
-          userName: u.name || u.email || "",
-        },
-      ];
-    });
-    setClassroomQuery("");
-    setClassroomSuggestions([]);
-  }
-
-  function removeStagedMember(userId) {
-    setPendingMembers((prev) => prev.filter((m) => String(m.userId) !== String(userId)));
-  }
-
-  function openCreateClassroomModal() {
-    setEditingClassroomId(null);
-    setClassroomMsg("");
-    setClassroomDraft({
-      title: "",
-      description: "",
-      classroomCode: "",
-      classroomUrl: "",
-      companyName: "",
-    });
-    setPendingMembers([]);
-    setOriginalMemberIds([]);
-    setClassroomQuery("");
-    setClassroomSuggestions([]);
-    setClassroomModalOpen(true);
-  }
-
-  function openEditClassroomModal(c) {
-    setEditingClassroomId(c._id);
-    setClassroomMsg("");
-    setClassroomDraft({
-      title: c.title || "",
-      description: c.description || "",
-      classroomCode: c.classroomCode || "",
-      classroomUrl: c.classroomUrl || "",
-      companyName: c.companyName || "",
-    });
-    const members = (c.members || []).map((m) => ({
-      userId: String(m.userId),
-      userEmail: m.userEmail || "",
-      userName: m.userName || "",
-    }));
-    setPendingMembers(members);
-    setOriginalMemberIds(members.map((m) => m.userId));
-    setClassroomQuery("");
-    setClassroomSuggestions([]);
-    setClassroomModalOpen(true);
-  }
-
-  async function saveClassroom() {
-    if (!classroomDraft.title.trim()) {
-      setClassroomMsg("Title is required.");
-      return;
-    }
-    if (pendingMembers.length === 0) {
-      setClassroomMsg("Add at least one user.");
-      return;
-    }
-    setClassroomBusy(true);
-    setClassroomMsg("");
-    try {
-      if (editingClassroomId) {
-        // Diff staged roster against original to send minimal add/remove arrays.
-        const stagedIds = pendingMembers.map((m) => m.userId);
-        const addUserIds = stagedIds.filter((id) => !originalMemberIds.includes(id));
-        const removeUserIds = originalMemberIds.filter((id) => !stagedIds.includes(id));
-
-        await apiAuthed(`/admin/classrooms/${editingClassroomId}`, {
-          token: accessToken,
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: classroomDraft.title.trim(),
-            description: classroomDraft.description.trim(),
-            classroomCode: classroomDraft.classroomCode.trim(),
-            classroomUrl: classroomDraft.classroomUrl.trim(),
-            companyName: classroomDraft.companyName.trim(),
-            ...(addUserIds.length ? { addUserIds } : {}),
-            ...(removeUserIds.length ? { removeUserIds } : {}),
-          }),
-        });
-        setClassroomMsg("Classroom updated.");
-      } else {
-        await apiAuthed("/admin/classrooms", {
-          token: accessToken,
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userIds: pendingMembers.map((m) => m.userId),
-            title: classroomDraft.title.trim(),
-            description: classroomDraft.description.trim(),
-            classroomCode: classroomDraft.classroomCode.trim(),
-            classroomUrl: classroomDraft.classroomUrl.trim(),
-            companyName: classroomDraft.companyName.trim(),
-          }),
-        });
-        setClassroomMsg(`Classroom created with ${pendingMembers.length} member(s).`);
-      }
-      setClassroomModalOpen(false);
-      await loadClassrooms();
-    } catch (e) {
-      setClassroomMsg(e?.message || "Failed to save classroom");
-    } finally {
-      setClassroomBusy(false);
-    }
-  }
-
-  async function revokeClassroom(id) {
-    if (!confirm("Revoke this classroom from all members? This cannot be undone.")) return;
-    try {
-      await apiAuthed(`/admin/classrooms/${id}`, {
-        token: accessToken,
-        method: "DELETE",
-      });
-      await loadClassrooms();
-    } catch (e) {
-      setClassroomMsg(e?.message || "Failed to revoke");
-    }
-  }
 
   // ── Force-reinstall broadcast state ──
   const [frActive, setFrActive] = React.useState(false);
@@ -1247,7 +1050,7 @@ export default function Admin({ section = null }) {
           setIhVideoDraft(res.secure_url);
           setIhMsg("Video uploaded! Click Save to apply.");
         } else {
-          setIhMsg("Upload failed — no URL returned");
+          setIhMsg("Upload failed, no URL returned");
         }
       } catch (err) {
         setIhMsg(err?.message || "Upload failed");
@@ -1321,7 +1124,7 @@ export default function Admin({ section = null }) {
             `APK uploaded (SHA-256 ${(res.sha256 || "").slice(0, 12)}…). Click Save to apply.`,
           );
         } else {
-          setSettingsMsg("Upload failed — no URL returned");
+          setSettingsMsg("Upload failed, no URL returned");
         }
       } catch (err) {
         setSettingsMsg(err?.message || "APK upload failed");
@@ -1363,6 +1166,21 @@ export default function Admin({ section = null }) {
         setUsage(m);
       } catch {
         setUsage({});
+      }
+
+      // Beta testers' diagnostic logs — additive for the same reason.
+      try {
+        const dl = await apiAuthed(`/admin/usage/logs?days=30`, {
+          token: accessToken,
+        });
+        const m = {};
+        (dl?.rows || []).forEach((r) => {
+          const k = usageKey(r.email, r.productKey);
+          (m[k] = m[k] || []).push(r);
+        });
+        setDiagLogs(m);
+      } catch {
+        setDiagLogs({});
       }
     } catch (e) {
       setMsg(e?.message || "Failed to load admin data");
@@ -2124,6 +1942,26 @@ export default function Admin({ section = null }) {
                                 v{uRow.appVersion}
                               </div>
                             ) : null}
+                            {(() => {
+                              const logs =
+                                (diagLogs || {})[
+                                  usageKey(r.email, r.productKey)
+                                ] || [];
+                              if (!logs.length) return null;
+                              const latest = logs[0];
+                              return (
+                                <button
+                                  type="button"
+                                  className="mt-1 text-left text-adlm-blue-700 hover:underline"
+                                  title={`Beta tester · ${logs.length} diagnostic log${logs.length === 1 ? "" : "s"} in 30 days. Latest: ${latest.reason || "scheduled"}`}
+                                  onClick={() => openDiagLog(latest, logs)}
+                                >
+                                  🧪 {logs.length} log
+                                  {logs.length === 1 ? "" : "s"} · latest{" "}
+                                  {dayjs(latest.createdAt).format("MM-DD HH:mm")}
+                                </button>
+                              );
+                            })()}
                           </div>
                         );
                       })()}
@@ -2133,6 +1971,11 @@ export default function Admin({ section = null }) {
                       <div className="text-xs text-slate-700">
                         <b>{r.seatsUsed}</b> / {r.seats} used
                       </div>
+
+                      {/* Set the seat count for this account on this software.
+                          Its own component: the row re-renders on load(), and
+                          the editor re-seeds from the fresh row. */}
+                      <SeatsEditor row={r} onSaved={load} onMessage={setMsg} />
 
                       <div className="mt-2 flex gap-2">
                         <button
@@ -2388,8 +2231,119 @@ export default function Admin({ section = null }) {
     return <Badge label={s || "—"} tone="slate" />;
   }
 
+  // Open a beta tester's diagnostic log in the viewer. The list rows carry no
+  // content, so the text is fetched by id on demand; `siblings` lets the
+  // viewer step through the same user's other logs without a reload.
+  async function openDiagLog(row, siblings) {
+    if (!row?.id) return;
+    setLogView({ row, siblings: siblings || [row], content: "", loading: true });
+    try {
+      const full = await apiAuthed(`/admin/usage/logs/${row.id}`, {
+        token: accessToken,
+      });
+      setLogView((v) =>
+        v && v.row?.id === row.id
+          ? { ...v, content: full?.content || "", loading: false }
+          : v,
+      );
+    } catch (e) {
+      setLogView((v) =>
+        v && v.row?.id === row.id
+          ? { ...v, loading: false, error: e?.message || "Could not load log" }
+          : v,
+      );
+    }
+  }
+
+  function DiagLogViewer() {
+    if (!logView) return null;
+    const { row, siblings, content, loading, error } = logView;
+    const perf = Array.isArray(row.perfLines) ? row.perfLines : [];
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+        onClick={() => setLogView(null)}
+      >
+        <div
+          className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-4 border-b p-4">
+            <div className="min-w-0">
+              <div className="font-semibold truncate">
+                🧪 {row.email} · {row.productKey}
+              </div>
+              <div className="text-xs text-slate-500">
+                {dayjs(row.createdAt).format("YYYY-MM-DD HH:mm")} ·{" "}
+                {row.reason || "scheduled"} · v{row.appVersion || "?"}
+                {row.hostTarget ? ` · Revit ${row.hostTarget}` : ""} ·{" "}
+                {row.lineCount} lines
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {siblings && siblings.length > 1 ? (
+                <select
+                  className="text-xs border rounded px-2 py-1"
+                  value={row.id}
+                  onChange={(e) => {
+                    const next = siblings.find((s) => s.id === e.target.value);
+                    if (next) openDiagLog(next, siblings);
+                  }}
+                >
+                  {siblings.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {dayjs(s.createdAt).format("MM-DD HH:mm")} ·{" "}
+                      {s.reason || "scheduled"}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  // Clipboard access can be refused; a failed copy is not worth a dialog.
+                  navigator.clipboard?.writeText(content || "").catch(() => {});
+                }}
+                disabled={loading || !content}
+              >
+                Copy
+              </button>
+              <button className="btn btn-sm" onClick={() => setLogView(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          {perf.length ? (
+            <div className="border-b p-4 bg-slate-50">
+              <div className="text-xs font-semibold text-slate-600 mb-1">
+                Timings ([PERF] lines, newest last)
+              </div>
+              <pre className="text-[11px] leading-4 whitespace-pre overflow-auto max-h-40 font-mono">
+                {perf.slice(-40).join("\n")}
+              </pre>
+            </div>
+          ) : null}
+
+          <div className="p-4 overflow-auto grow">
+            {loading ? (
+              <div className="text-sm text-slate-500">Loading log…</div>
+            ) : error ? (
+              <div className="text-sm text-red-600">{error}</div>
+            ) : (
+              <pre className="text-[11px] leading-4 whitespace-pre font-mono">
+                {content}
+              </pre>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      <DiagLogViewer />
       <AdminPageHeader
         icon={FiShield}
         title={isHub ? "Admin Hub" : SECTION_META[section]?.label || "Admin Hub"}
@@ -2416,7 +2370,7 @@ export default function Admin({ section = null }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-semibold">Admin</h1>
 
-          {/* Hub controls only — every tool shortcut lives in the launcher grid
+          {/* Hub controls only, every tool shortcut lives in the launcher grid
               above, so we no longer duplicate them here. */}
           <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
             <input
@@ -2430,7 +2384,7 @@ export default function Admin({ section = null }) {
               Refresh
             </button>
 
-            {/* ✅ Expiry reminders — grouped so the daily tool stays one click
+            {/* ✅ Expiry reminders, grouped so the daily tool stays one click
                 away without crowding the toolbar. */}
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-adlm-dark-border px-2.5 py-1.5">
               <span className="text-xs font-medium text-slate-500 dark:text-adlm-dark-muted whitespace-nowrap">
@@ -2508,7 +2462,7 @@ export default function Admin({ section = null }) {
                   ? "border-adlm-blue-700 text-adlm-blue-700"
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
-              title="Organization accounts — software held, devices in use, subscription durations & expiries"
+              title="Organization accounts: software held, devices in use, subscription durations & expiries"
             >
               Organizations ({organizationsCount})
             </button>
@@ -2575,17 +2529,6 @@ export default function Admin({ section = null }) {
               }`}
             >
               Training Locations
-            </button>
-
-            <button
-              onClick={() => openSection("classrooms")}
-              className={`py-2 -mb-px border-b-2 transition ${
-                tab === "classrooms"
-                  ? "border-adlm-blue-700 text-adlm-blue-700"
-                  : "border-transparent text-slate-600 hover:text-slate-800"
-              }`}
-            >
-              Classrooms
             </button>
 
             <button
@@ -3239,13 +3182,13 @@ export default function Admin({ section = null }) {
       {/* ------------------ active tab ------------------ */}
       {tab === "active" && (
         <>
-        {/* BoQ Import & M&L Schedule — admin-granted feature access (UAC).
+        {/* BoQ Import & M&L Schedule, admin-granted feature access (UAC).
             Not a purchasable product: this panel is the only way users get it. */}
         <div className="card mb-4">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-[260px]">
               <h2 className="font-semibold">
-                BoQ Import &amp; M&amp;L Schedule — Feature Access
+                BoQ Import &amp; M&amp;L Schedule, Feature Access
               </h2>
               <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
                 Unlocks Excel Bill-of-Quantities import on the{" "}
@@ -3255,7 +3198,7 @@ export default function Admin({ section = null }) {
                 constants library). Imported projects appear on the user's main
                 projects page and count toward their storage limit. Only
                 accounts with an <b>active QUIV, Heron or MEP subscription</b>{" "}
-                are eligible — other accounts are rejected by the server. A user
+                are eligible, other accounts are rejected by the server. A user
                 can only import bills for the products they actually subscribe
                 to, and access pauses automatically if that subscription lapses.
               </p>
@@ -3469,6 +3412,8 @@ export default function Admin({ section = null }) {
       )}
 
       {/* ------------------ organizations tab ------------------ */}
+      {tab === "organizations" && <OrgVideosQuickAdd fullRegister={false} />}
+
       {tab === "organizations" && (
         <div className="card">
           <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
@@ -3476,7 +3421,7 @@ export default function Admin({ section = null }) {
             <div className="flex items-center gap-3">
               <div className="text-xs text-slate-500">
                 Software held, seats vs bound devices, subscription duration &
-                expiry — grouped by organization.
+                expiry, grouped by organization.
               </div>
               <button className="btn btn-sm" onClick={loadOrganizations}>
                 Refresh
@@ -3630,7 +3575,7 @@ export default function Admin({ section = null }) {
                           <tr className="border-b bg-slate-50/60 dark:bg-white/5">
                             <td colSpan={8} className="py-3 px-3">
                               <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                                Software — {org.organizationName}
+                                Software, {org.organizationName}
                               </div>
                               {(org.contacts || []).length ? (
                                 <div className="mb-2 text-xs text-slate-600 dark:text-adlm-dark-muted">
@@ -3841,6 +3786,9 @@ export default function Admin({ section = null }) {
                           <div className="text-xs text-slate-700">
                             <b>{r.seatsUsed}</b> / {r.seats} used
                           </div>
+
+                          {/* Set the seat count for this account on this software. */}
+                          <SeatsEditor row={r} onSaved={load} onMessage={setMsg} />
                           <div className="mt-2 flex gap-2">
                             <button
                               className="btn btn-sm"
@@ -4340,7 +4288,7 @@ export default function Admin({ section = null }) {
                         {instStatus === "complete" && (
                           <button
                             className="px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm hover:bg-amber-100 transition"
-                            title="Mark as uninstalled — reverses the installation status"
+                            title="Mark as uninstalled, reverses the installation status"
                             onClick={async () => {
                               setMsg("");
                               try {
@@ -4363,7 +4311,7 @@ export default function Admin({ section = null }) {
                         {instStatus === "uninstalled" && (
                           <button
                             className="btn"
-                            title="Revert to pending — allows re-installation"
+                            title="Revert to pending, allows re-installation"
                             onClick={async () => {
                               setMsg("");
                               try {
@@ -4796,323 +4744,6 @@ export default function Admin({ section = null }) {
         </div>
       )}
 
-      {/* ------------------ classrooms tab ------------------ */}
-      {tab === "classrooms" && (
-        <div className="card">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div>
-              <h2 className="font-semibold">Classrooms</h2>
-              <div className="text-xs text-slate-500 mt-1">
-                Grant a Google Classroom (or other LMS) to a specific user. The classroom appears in their "My Courses" section on the dashboard.
-              </div>
-            </div>
-            <button
-              className="btn btn-sm"
-              onClick={openCreateClassroomModal}
-            >
-              + Create classroom
-            </button>
-          </div>
-
-          {classroomMsg && (
-            <div
-              className={`mb-3 text-sm ${
-                classroomMsg.toLowerCase().includes("fail") ||
-                classroomMsg.toLowerCase().includes("required") ||
-                classroomMsg.toLowerCase().includes("first")
-                  ? "text-red-600"
-                  : "text-green-600"
-              }`}
-            >
-              {classroomMsg}
-            </div>
-          )}
-
-          {classrooms.length === 0 ? (
-            <div className="text-sm text-slate-600">No classrooms yet.</div>
-          ) : (
-            <div className="space-y-2">
-              {classrooms.map((c) => {
-                const members = Array.isArray(c.members) ? c.members : [];
-                const previewNames = members
-                  .slice(0, 3)
-                  .map((m) => m.userName || m.userEmail || "Unknown")
-                  .join(", ");
-                const extra = Math.max(0, members.length - 3);
-                return (
-                  <div
-                    key={c._id}
-                    className="rounded border bg-white p-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{c.title}</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-700 border">
-                          {members.length} member{members.length === 1 ? "" : "s"}
-                        </span>
-                        {!c.isActive && (
-                          <span className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100 text-slate-600 border">
-                            Inactive
-                          </span>
-                        )}
-                      </div>
-                      {c.companyName && (
-                        <div className="text-xs text-slate-600 mt-0.5">
-                          {c.companyName}
-                        </div>
-                      )}
-                      <div className="text-xs text-slate-600 mt-0.5 truncate">
-                        {previewNames}
-                        {extra > 0 ? ` +${extra} more` : ""}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        {c.classroomCode ? `Code: ${c.classroomCode}` : ""}
-                        {c.classroomCode && c.classroomUrl ? " · " : ""}
-                        {c.classroomUrl ? (
-                          <a
-                            href={c.classroomUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline"
-                          >
-                            {c.classroomUrl.length > 60
-                              ? c.classroomUrl.slice(0, 60) + "…"
-                              : c.classroomUrl}
-                          </a>
-                        ) : null}
-                      </div>
-                      {c.description && (
-                        <div className="text-xs text-slate-500 mt-1">{c.description}</div>
-                      )}
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        className="btn btn-sm"
-                        onClick={() => openEditClassroomModal(c)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn btn-sm"
-                        onClick={() => revokeClassroom(c._id)}
-                      >
-                        Revoke
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ------------------ create / edit classroom modal ------------------ */}
-      {classroomModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={() => !classroomBusy && setClassroomModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded-lg shadow-xl w-full max-w-lg p-5 max-h-[90vh] overflow-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between mb-3">
-              <h3 className="font-semibold">
-                {editingClassroomId ? "Edit classroom" : "Create classroom"}
-              </h3>
-              <button
-                className="text-slate-400 hover:text-slate-600"
-                onClick={() => !classroomBusy && setClassroomModalOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Members (multi-select) */}
-            <label className="block text-sm font-medium mb-1">
-              Members{" "}
-              <span className="text-xs font-normal text-slate-500">
-                ({pendingMembers.length})
-              </span>
-            </label>
-
-            {pendingMembers.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {pendingMembers.map((m) => (
-                  <span
-                    key={m.userId}
-                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs"
-                  >
-                    <span className="font-medium">
-                      {m.userName || m.userEmail || m.userId}
-                    </span>
-                    {m.userName && m.userEmail && (
-                      <span className="text-slate-500">{m.userEmail}</span>
-                    )}
-                    <button
-                      type="button"
-                      className="text-slate-500 hover:text-red-600 ml-0.5"
-                      onClick={() => removeStagedMember(m.userId)}
-                      title="Remove"
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="relative mb-3">
-              <input
-                className="input w-full"
-                placeholder="Add user — search by name or email…"
-                value={classroomQuery}
-                onChange={(e) => setClassroomQuery(e.target.value)}
-                autoFocus={pendingMembers.length === 0}
-              />
-              {(classroomSuggestions.length > 0 || classroomSearching) && (
-                <div className="absolute z-10 mt-1 w-full rounded border bg-white shadow-lg max-h-56 overflow-auto">
-                  {classroomSearching && (
-                    <div className="px-3 py-2 text-xs text-slate-500">
-                      Searching…
-                    </div>
-                  )}
-                  {classroomSuggestions
-                    .filter(
-                      (u) =>
-                        !pendingMembers.some(
-                          (m) => String(m.userId) === String(u._id),
-                        ),
-                    )
-                    .map((u) => (
-                      <button
-                        key={u._id}
-                        type="button"
-                        className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
-                        onClick={() => pickClassroomUser(u)}
-                      >
-                        <div className="font-medium">{u.name || u.email}</div>
-                        {u.name && u.email && (
-                          <div className="text-xs text-slate-500">{u.email}</div>
-                        )}
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-
-            <label className="block text-sm font-medium mb-1">Title</label>
-            <input
-              className="input w-full mb-3"
-              placeholder="e.g. Revit Architecture Training"
-              value={classroomDraft.title}
-              onChange={(e) =>
-                setClassroomDraft((p) => ({ ...p, title: e.target.value }))
-              }
-            />
-
-            <label className="block text-sm font-medium mb-1">
-              Classroom code{" "}
-              <span className="text-xs font-normal text-slate-500">
-                (Google Classroom join code)
-              </span>
-            </label>
-            <input
-              className="input w-full mb-3"
-              placeholder="e.g. abc123def"
-              value={classroomDraft.classroomCode}
-              onChange={(e) =>
-                setClassroomDraft((p) => ({ ...p, classroomCode: e.target.value }))
-              }
-            />
-
-            <label className="block text-sm font-medium mb-1">
-              Classroom URL{" "}
-              <span className="text-xs font-normal text-slate-500">
-                (optional — overrides code if set)
-              </span>
-            </label>
-            <input
-              className="input w-full mb-3"
-              placeholder="https://classroom.google.com/c/..."
-              value={classroomDraft.classroomUrl}
-              onChange={(e) =>
-                setClassroomDraft((p) => ({ ...p, classroomUrl: e.target.value }))
-              }
-            />
-
-            <label className="block text-sm font-medium mb-1">
-              Company / organisation{" "}
-              <span className="text-xs font-normal text-slate-500">(optional)</span>
-            </label>
-            <input
-              className="input w-full mb-3"
-              placeholder="Acme Corp"
-              value={classroomDraft.companyName}
-              onChange={(e) =>
-                setClassroomDraft((p) => ({ ...p, companyName: e.target.value }))
-              }
-            />
-
-            <label className="block text-sm font-medium mb-1">
-              Description{" "}
-              <span className="text-xs font-normal text-slate-500">(optional)</span>
-            </label>
-            <textarea
-              className="input w-full mb-4"
-              rows={2}
-              placeholder="Notes shown on each member's card"
-              value={classroomDraft.description}
-              onChange={(e) =>
-                setClassroomDraft((p) => ({ ...p, description: e.target.value }))
-              }
-            />
-
-            {classroomMsg && (
-              <div
-                className={`mb-3 text-xs ${
-                  classroomMsg.toLowerCase().includes("fail") ||
-                  classroomMsg.toLowerCase().includes("required") ||
-                  classroomMsg.toLowerCase().includes("at least")
-                    ? "text-red-600"
-                    : "text-green-600"
-                }`}
-              >
-                {classroomMsg}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2">
-              <button
-                className="btn btn-sm"
-                onClick={() => setClassroomModalOpen(false)}
-                disabled={classroomBusy}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-sm bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
-                onClick={saveClassroom}
-                disabled={
-                  classroomBusy ||
-                  !classroomDraft.title.trim() ||
-                  pendingMembers.length === 0
-                }
-              >
-                {classroomBusy
-                  ? editingClassroomId
-                    ? "Saving…"
-                    : "Creating…"
-                  : editingClassroomId
-                    ? "Save changes"
-                    : `Create (${pendingMembers.length})`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ------------------ settings tab ------------------ */}
       {tab === "settings" && (
         <div className="card">
@@ -5279,7 +4910,7 @@ export default function Admin({ section = null }) {
                     Installer Hub Download URL
                   </label>
                   <p className="text-xs text-slate-500 mb-2">
-                    Upload the Hub setup file (.exe / .msi / .zip / .msix) directly — small files go to Cloudinary, larger ones to Cloudflare R2 — or paste a hosted URL.
+                    Upload the Hub setup file (.exe / .msi / .zip / .msix) directly: small files go to Cloudinary, larger ones to Cloudflare R2, or paste a hosted URL.
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     <input
@@ -5406,7 +5037,7 @@ export default function Admin({ section = null }) {
               </div>
             </div>
 
-            {/* Force Global Reinstall — DANGER ZONE */}
+            {/* Force Global Reinstall, DANGER ZONE */}
             <div className="border-t pt-6">
               <h3 className="font-semibold text-base mb-1 text-red-700">
                 Force Global Reinstall (Danger Zone)

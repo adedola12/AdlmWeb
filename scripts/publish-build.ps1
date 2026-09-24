@@ -1,4 +1,4 @@
-# publish-build.ps1
+﻿# publish-build.ps1
 # ============================================================================
 # Uploads a built package to ADLM cloud storage and points a product's
 # InstallerHub deployment record at it, so every user gets the new version on
@@ -235,9 +235,19 @@ Good "Uploaded to $($upload.storageProvider): $($upload.packageUri)"
 $payload.packageUri = $upload.packageUri
 
 try {
-    $saved = (Invoke-RestMethod -Method Put -Uri "$ApiBaseUrl/admin/deployments/$key" `
+    $putResp = Invoke-RestMethod -Method Put -Uri "$ApiBaseUrl/admin/deployments/$key" `
         -Headers $headers -ContentType "application/json" `
-        -Body ($payload | ConvertTo-Json -Depth 6)).item
+        -Body ($payload | ConvertTo-Json -Depth 6)
+    $saved = $putResp.item
+    # Release gate (docs/RELEASE_GATE.md): a PUT that changes the package
+    # answers 202 with pendingApproval. $saved is then the STAGED build and
+    # customers keep the old one until the approver signs it off. There is no
+    # release notice yet either: the server records it on approval.
+    $pending = [bool]$putResp.pendingApproval
+    # The "new version is ready" email the server queued for this PUT, if any
+    # (server/util/releaseNotifier.js). The fifteen-minute job holds it for ten
+    # minutes, so a failed check below can cancel it before anyone is mailed.
+    $releaseNotice = $putResp.releaseNotice
 } catch {
     Fail @"
 Upload succeeded but the record update FAILED: $($_.Exception.Message)
@@ -248,26 +258,77 @@ users are unaffected. Re-run this script - it is safe to repeat.
 }
 
 # ── 6. Read back and confirm ────────────────────────────────────────────────
-Write-Host "`nSaved record"
+Write-Host "`n$(if ($pending) { 'Staged build (awaiting release sign-off)' } else { 'Saved record' })"
 Write-Host "  version     : $($saved.version)"
 Write-Host "  packageUri  : $($saved.packageUri)"
 Write-Host "  sha256      : $($saved.sha256)"
 Write-Host "  operations  : $(@($saved.operations).Count) step(s)"
-Write-Host "  envVars     : $(@($saved.envVars.PSObject.Properties).Count) set"
+if ($pending) {
+    # The staged item only carries envVars when the PUT sent them, and this
+    # script never does. On approval the stored envVars are left as they are.
+    Write-Host "  envVars     : unchanged ($(@($current.envVars.PSObject.Properties).Count) set on the live record)"
+} else {
+    Write-Host "  envVars     : $(@($saved.envVars.PSObject.Properties).Count) set"
+}
 
 $problems = @()
 if ($saved.version -ne $Version) { $problems += "version did not stick" }
 if ($saved.sha256 -ne $sha) { $problems += "sha256 did not stick" }
 if (@($saved.operations).Count -ne @($current.operations).Count) { $problems += "operations count changed - install steps were lost" }
-if (@($saved.envVars.PSObject.Properties).Count -lt @($current.envVars.PSObject.Properties).Count) { $problems += "envVars were lost - ADLM_API_BASE_URL may be gone" }
+if (-not $pending -and @($saved.envVars.PSObject.Properties).Count -lt @($current.envVars.PSObject.Properties).Count) { $problems += "envVars were lost - ADLM_API_BASE_URL may be gone" }
 
 if ($problems.Count) {
     Write-Host ""
     foreach ($p in $problems) { Write-Host "  PROBLEM: $p" -ForegroundColor Red }
+    # Nobody is to be emailed about a build that failed its own check.
+    if ($releaseNotice -and $releaseNotice.key) {
+        try {
+            Invoke-RestMethod -Method Post -Uri "$ApiBaseUrl/admin/release-notifications/$([uri]::EscapeDataString($releaseNotice.key))/cancel" `
+                -Headers $headers -ContentType "application/json" -Body "{}" | Out-Null
+            Note "Release email $($releaseNotice.key) cancelled."
+        } catch {
+            Write-Host "  Could NOT cancel release email $($releaseNotice.key): $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "  Cancel it now in the admin API (POST /admin/release-notifications/<key>/cancel)" -ForegroundColor Red
+            Write-Host "  or the fifteen-minute job will mail customers about this build." -ForegroundColor Red
+        }
+    }
+    if ($pending) {
+        Fail "Staged, but the staged build is not what was intended. Ask the approver to reject candidate $($putResp.candidateId) on https://www.adlmstudio.net/admin/releases, then re-run."
+    }
     Fail "Published, but the record is not what was intended. Fix it in the admin UI before anyone installs."
 }
 
+if ($pending) {
+    Good "`n$key $Version is STAGED for release sign-off, not live."
+    if ($putResp.message) { Note $putResp.message }
+    Note "Candidate  : $($putResp.candidateId)"
+    Note "Live now   : $(if ($putResp.live) { "$($putResp.live.version)  $($putResp.live.packageUri)" } else { '(nothing deployed yet)' })"
+    Note "Approve at : https://www.adlmstudio.net/admin/releases"
+    Note "No release email yet: the server records it when the approver signs it off."
+    Write-Host @"
+
+  Next: the approver verifies before approving. While this is pending, only
+  the approver's own InstallerHub is offered this build.
+    1. Uninstall / remove their local copy of this product
+    2. Run InstallerHub and let it install
+    3. Launch the app and sign in
+    4. reg query "HKCU\Environment" /v ADLM_API_BASE_URL
+
+  If InstallerHub reports a hash mismatch, the upload was corrupted -
+  reject the candidate and re-run this script rather than clearing the sha256.
+
+"@
+    exit 0
+}
+
 Good "`n$key is live on $Version."
+if ($releaseNotice -and $releaseNotice.key) {
+    Note "Release email $($releaseNotice.key) queued ($($releaseNotice.status)): customers are mailed in 10-25 minutes."
+    Note "To hold it until you have verified below: POST $ApiBaseUrl/admin/release-notifications/$($releaseNotice.key)/cancel"
+    Note "now, and afterwards POST $ApiBaseUrl/admin/release-notifications with {productKey, version} to reopen it."
+} elseif ($releaseNotice) {
+    Note "No release email queued ($($releaseNotice.reason))."
+}
 Write-Host @"
 
   Next: verify on ONE machine before announcing.

@@ -1,18 +1,14 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { Setting } from "../models/Setting.js";
 import { User } from "../models/User.js";
 
 function requireAdminOrMiniAdmin(req, res, next) {
+  // See server/middleware/demoMode.js — read-only, masked demo sessions view only.
+  if (req.demoMode) return next();
   const role = req.user?.role;
   if (role === "admin" || role === "mini_admin") return next();
   return res.status(403).json({ error: "Admin or Mini-Admin only" });
-}
-
-function requireAdminOnly(req, res, next) {
-  const role = req.user?.role;
-  if (role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
 }
 
 const router = express.Router();
@@ -121,7 +117,7 @@ const DEFAULT_REINSTALL_MESSAGE =
 
 // POST trigger global reinstall: revoke ALL active devices and set the broadcast message.
 // Admin only — this signs out every active install fleet-wide.
-router.post("/force-reinstall", requireAdminOnly, async (req, res) => {
+router.post("/force-reinstall", requireAdmin, async (req, res) => {
   const customMessage =
     typeof req.body?.message === "string" ? req.body.message.trim() : "";
   const message = customMessage || DEFAULT_REINSTALL_MESSAGE;
@@ -226,7 +222,7 @@ router.post("/vat", async (req, res) => {
 });
 
 // POST clear the active reinstall broadcast (admin only). Does not re-bind any devices.
-router.post("/force-reinstall/clear", requireAdminOnly, async (_req, res) => {
+router.post("/force-reinstall/clear", requireAdmin, async (_req, res) => {
   const s = await Setting.findOneAndUpdate(
     { key: "global" },
     { forceReinstallActive: false },
@@ -237,6 +233,84 @@ router.post("/force-reinstall/clear", requireAdminOnly, async (_req, res) => {
     active: !!s.forceReinstallActive,
     message: s.forceReinstallMessage || "",
   });
+});
+
+// ── Dashboard notice ──
+// The announcement banner. Read /force-reinstall above before reaching for
+// that one instead: it revokes every device binding fleet-wide and forces
+// re-activation, which is not what "tell users about an update" should cost.
+// This endpoint touches nothing but the message itself.
+
+const NOTICE_LEVELS = new Set(["info", "success", "warn"]);
+
+function noticePayload(s) {
+  return {
+    active: !!s?.noticeActive,
+    title: s?.noticeTitle || "",
+    message: s?.noticeMessage || "",
+    level: NOTICE_LEVELS.has(s?.noticeLevel) ? s.noticeLevel : "info",
+    linkUrl: s?.noticeLinkUrl || "",
+    linkLabel: s?.noticeLinkLabel || "",
+    at: s?.noticeAt || null,
+  };
+}
+
+router.get("/notice", async (_req, res) => {
+  const s = await Setting.findOne({ key: "global" }).lean();
+  res.json(noticePayload(s));
+});
+
+// POST publish a notice { title, message, level?, linkUrl?, linkLabel? }
+router.post("/notice", async (req, res) => {
+  const b = req.body || {};
+  const title = String(b.title || "").trim();
+  const message = String(b.message || "").trim();
+
+  if (!message) {
+    return res.status(400).json({ error: "message is required" });
+  }
+
+  const level = NOTICE_LEVELS.has(String(b.level || "").trim())
+    ? String(b.level).trim()
+    : "info";
+
+  // A label with no destination renders a dead button; a destination with no
+  // label renders nothing to click. Either way the reader is stuck, so treat
+  // the pair as all-or-nothing.
+  const linkUrl = String(b.linkUrl || "").trim();
+  const linkLabel = String(b.linkLabel || "").trim();
+  if (Boolean(linkUrl) !== Boolean(linkLabel)) {
+    return res.status(400).json({ error: "linkUrl and linkLabel must be given together" });
+  }
+  if (linkUrl && !/^https?:\/\//i.test(linkUrl)) {
+    return res.status(400).json({ error: "linkUrl must start with http:// or https://" });
+  }
+
+  const s = await Setting.findOneAndUpdate(
+    { key: "global" },
+    {
+      noticeActive: true,
+      noticeTitle: title,
+      noticeMessage: message,
+      noticeLevel: level,
+      noticeLinkUrl: linkUrl,
+      noticeLinkLabel: linkLabel,
+      noticeAt: new Date(),
+    },
+    { upsert: true, new: true },
+  );
+
+  res.json({ ok: true, ...noticePayload(s) });
+});
+
+// POST take the notice down. The wording is kept so it can be re-published.
+router.post("/notice/clear", async (_req, res) => {
+  const s = await Setting.findOneAndUpdate(
+    { key: "global" },
+    { noticeActive: false },
+    { upsert: true, new: true },
+  );
+  res.json({ ok: true, ...noticePayload(s) });
 });
 
 export default router;

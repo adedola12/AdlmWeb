@@ -1,5 +1,5 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireVerifiedEmail } from "../middleware/auth.js";
 import { Purchase } from "../models/Purchase.js";
 import { Product } from "../models/Product.js";
 import { Setting } from "../models/Setting.js";
@@ -13,6 +13,11 @@ import {
   computeRecurring,
 } from "../util/pricing.js";
 import { saveCardAuthorization } from "../util/paymentMethods.js";
+import multer from "multer";
+import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
+import { notifyAdminOfPurchase } from "../util/purchaseAlert.js";
+import { sendProformaInvoice } from "../util/proformaInvoice.js";
+import { payoutAccount } from "../util/payoutAccount.js";
 
 const router = express.Router();
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
@@ -27,7 +32,7 @@ const minOrgSeatsFor = (key) =>
 // If you are on Node < 18, uncomment:
 // import fetch from "node-fetch";
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireVerifiedEmail, async (req, res) => {
   const { productKey, months = 1 } = req.body || {};
   if (!productKey)
     return res.status(400).json({ error: "productKey required" });
@@ -62,7 +67,7 @@ router.post("/", requireAuth, async (req, res) => {
   });
 });
 
-router.post("/cart", requireAuth, async (req, res) => {
+router.post("/cart", requireAuth, requireVerifiedEmail, async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
     const currency = String(req.body?.currency || "NGN").toUpperCase();
@@ -107,13 +112,47 @@ router.post("/cart", requireAuth, async (req, res) => {
     const keys = [...new Set(items.map((i) => i.productKey).filter(Boolean))];
     if (!keys.length) return res.status(400).json({ error: "Invalid items" });
 
-    const products = await Product.find({
-      key: { $in: keys },
-      isPublished: true,
-      isComingSoon: { $ne: true },
-    }).lean();
+    // Fetched without the sellability filter, then filtered here, so the
+    // reason a line cannot be bought is known rather than inferred.
+    // "Invalid product: civil3d" was true but useless: CIVIQ is a real product
+    // that we are still building, and telling a buyer their basket is invalid
+    // when the honest answer is "that one is not finished yet" loses the sale
+    // and the waitlist signup with it.
+    const found = await Product.find({ key: { $in: keys } })
+      .lean();
 
-    const byKey = Object.fromEntries(products.map((p) => [p.key, p]));
+    const sellable = found.filter((p) => p.isPublished && !p.isComingSoon);
+    const byKey = Object.fromEntries(sellable.map((p) => [p.key, p]));
+    const products = sellable;
+
+    // Anything the buyer asked for that cannot be sold today, with the reason.
+    // Returned as data so the client can act on it — drop the line, explain the
+    // build status, offer the waitlist — instead of parsing an error string.
+    const unavailable = [];
+    for (const key of keys) {
+      if (byKey[key]) continue;
+      const p = found.find((x) => x.key === key) || null;
+      unavailable.push({
+        key,
+        name: p?.name || key,
+        reason: !p ? "unknown" : p.isComingSoon ? "coming_soon" : "unpublished",
+      });
+    }
+
+    if (unavailable.length) {
+      const soon = unavailable.filter((u) => u.reason === "coming_soon");
+      return res.status(400).json({
+        error:
+          soon.length === unavailable.length
+            ? `${soon.map((u) => u.name).join(", ")} ${
+                soon.length === 1 ? "is" : "are"
+              } still in development and cannot be bought yet.`
+            : `Some items cannot be bought: ${unavailable
+                .map((u) => u.name)
+                .join(", ")}.`,
+        unavailable,
+      });
+    }
     const fx = await getFxRate();
 
     const lines = [];
@@ -123,10 +162,14 @@ router.post("/cart", requireAuth, async (req, res) => {
 
     for (const i of items) {
       const p = byKey[i.productKey];
-      if (!p)
-        return res
-          .status(400)
-          .json({ error: `Invalid product: ${i.productKey}` });
+      // Unreachable now that `unavailable` is computed above — kept so a future
+      // change to that block cannot let an unpriced line through silently.
+      if (!p) {
+        return res.status(400).json({
+          error: `That product is not available to buy right now.`,
+          unavailable: [{ key: i.productKey, name: i.productKey, reason: "unknown" }],
+        });
+      }
 
       const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10) || 1, 1);
       const minSeats = minOrgSeatsFor(p.key);
@@ -298,6 +341,9 @@ router.post("/cart", requireAuth, async (req, res) => {
       storageAddons,
       status: "pending",
       autoRenewRequested,
+      paymentMethod: PAYMENT_METHODS.has(String(req.body?.paymentMethod))
+        ? String(req.body.paymentMethod)
+        : "card",
 
       coupon: couponRes.coupon
         ? {
@@ -312,6 +358,32 @@ router.post("/cart", requireAuth, async (req, res) => {
         : undefined,
     });
 
+    // Transfers and invoice requests need a human before the licence
+    // activates, so tell the team now rather than waiting for someone to open
+    // the admin list. Deliberately not awaited into the response: the buyer
+    // should not wait on our SMTP, and a failed alert must not fail the order.
+    if (purchase.paymentMethod !== "card") {
+      notifyAdminOfPurchase(purchase, { reason: "new" }).then((sent) => {
+        if (sent) {
+          Purchase.updateOne(
+            { _id: purchase._id },
+            { $set: { adminNotifiedAt: new Date() } },
+          ).catch(() => {});
+        }
+      });
+    }
+
+    // "Request invoice" said we would email a proforma invoice to the billing
+    // contact, and nothing sent one. It goes to the billing email the buyer
+    // gave, falling back to the account it was ordered from.
+    let invoiceSentTo = null;
+    if (purchase.paymentMethod === "invoice") {
+      invoiceSentTo = String(
+        purchase.organization?.email || purchase.email || req.user?.email || "",
+      ).trim();
+      if (invoiceSentTo) sendProformaInvoice(purchase, invoiceSentTo);
+    }
+
     return res.json({
       ok: true,
       purchaseId: purchase._id,
@@ -322,7 +394,12 @@ router.post("/cart", requireAuth, async (req, res) => {
       vatAmount,
       vatLabel,
       total: totalWithVat,
+      // Same figure under the name the rest of the app uses for it. The
+      // checkout panel read `totalAmount`, found nothing, and rendered a Pay
+      // button with no amount on it and a bank box with no Amount row.
+      totalAmount: totalWithVat,
       currency,
+      invoiceSentTo,
       coupon: purchase.coupon?.code ? { code: purchase.coupon.code } : null,
       paystack: null,
       message:
@@ -439,7 +516,7 @@ router.get("/verify", async (req, res) => {
 // from the server-side Purchase record — the client only supplies the id, so
 // a tampered frontend can never change what gets charged. Foreign cards pay
 // in NGN too (their bank handles FX); 3DS runs inside the Paystack popup.
-router.post("/:id/paystack/init", requireAuth, async (req, res) => {
+router.post("/:id/paystack/init", requireAuth, requireVerifiedEmail, async (req, res) => {
   try {
     if (!PAYSTACK_SECRET)
       return res.status(400).json({ error: "Paystack not configured" });
@@ -516,10 +593,93 @@ router.post("/:id/paystack/init", requireAuth, async (req, res) => {
 
 // Bank details served from env — keeps sensitive data out of frontend source
 router.get("/bank-details", requireAuth, (_req, res) => {
-  res.json({
-    accountNumber: process.env.BANK_ACCOUNT_NUMBER || "1634998770",
-    accountName: process.env.BANK_ACCOUNT_NAME || "ADLM Studio",
-    bankName: process.env.BANK_NAME || "Access Bank",
+  res.json(payoutAccount());
+});
+
+// Which methods a buyer may choose. Kept beside the route rather than only in
+// the schema so an unknown value is rejected at the door.
+const PAYMENT_METHODS = new Set(["card", "transfer", "invoice"]);
+
+// Receipt upload for a bank transfer.
+//
+// One file, images or PDF, 8MB. Memory storage so the buffer goes straight to
+// Cloudinary without touching disk — the same shape support.js uses for
+// screenshots.
+const uploadReceipt = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(png|jpe?g|webp|heic|heif)$|^application\/pdf$/i.test(file.mimetype);
+    cb(ok ? null : new Error("Upload a photo or a PDF of the receipt."), ok);
+  },
+}).single("receipt");
+
+/**
+ * POST /purchase/:id/receipt
+ *
+ * Replaces "send the receipt to us on WhatsApp". The proof now lives on the
+ * order, so whoever approves it can see the evidence without leaving the
+ * admin, and it is still there when a phone is replaced.
+ */
+router.post("/:id/receipt", requireAuth, (req, res) => {
+  uploadReceipt(req, res, async (err) => {
+    if (err) {
+      const msg =
+        err.code === "LIMIT_FILE_SIZE"
+          ? "That file is larger than 8MB — please upload a smaller photo."
+          : err.message || "That file could not be read.";
+      return res.status(400).json({ error: msg });
+    }
+    if (!req.file) return res.status(400).json({ error: "No receipt was attached." });
+
+    try {
+      const p = await Purchase.findById(req.params.id);
+      if (!p) return res.status(404).json({ error: "Purchase not found" });
+      if (String(p.userId) !== String(req.user._id)) {
+        return res.status(403).json({ error: "Not allowed" });
+      }
+      // An approved order is settled; a new receipt against it is either a
+      // mistake or an attempt to overwrite the evidence for a decision that
+      // has already been made.
+      if (p.status !== "pending") {
+        return res.status(400).json({ error: "This purchase has already been decided." });
+      }
+
+      const isPdf = /pdf$/i.test(req.file.mimetype);
+      const up = await uploadBufferToCloudinary(req.file.buffer, {
+        folder: process.env.CLOUDINARY_RECEIPTS_FOLDER || "adlm/receipts",
+        resourceType: isPdf ? "raw" : "image",
+      });
+
+      p.paymentProof = {
+        url: up.secure_url,
+        publicId: up.public_id,
+        filename: req.file.originalname || "",
+        bytes: req.file.size || 0,
+        uploadedAt: new Date(),
+      };
+      // Uploading the receipt IS the buyer saying they have paid.
+      if (!p.userConfirmedAt) p.userConfirmedAt = new Date();
+      if (p.paymentMethod === "card") p.paymentMethod = "transfer";
+      await p.save();
+
+      const sent = await notifyAdminOfPurchase(p, { reason: "receipt" });
+      if (sent) {
+        p.adminNotifiedAt = new Date();
+        await p.save();
+      }
+
+      return res.json({
+        ok: true,
+        receiptUrl: up.secure_url,
+        message: "Receipt received. We will confirm your licence shortly.",
+      });
+    } catch (e) {
+      console.error("[purchase] receipt upload failed:", e?.message || e);
+      return res
+        .status(500)
+        .json({ error: "We could not save that receipt — please try again." });
+    }
   });
 });
 

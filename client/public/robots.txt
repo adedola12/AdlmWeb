@@ -15,6 +15,10 @@ Disallow: /admin/
 # Signed-in areas: personal, and useless to anyone arriving from a search
 Disallow: /dashboard
 Disallow: /profile
+# Both sit behind ProtectedRoute. They were in the sitemap until now, which
+# invited crawlers to spend budget on pages that can only redirect them away.
+Disallow: /freebies
+Disallow: /time-management
 Disallow: /change-password
 Disallow: /purchase
 Disallow: /checkout/
@@ -35,6 +39,11 @@ Disallow: /projects/shared/
 # Auth pages carry no content and compete with the pages that do
 Disallow: /login
 Disallow: /signup
+
+# Design-system preview: the redesign staged beside the live pages for review.
+# Duplicate content by definition — it is the same copy as the real page in new
+# markup — so it must never be indexed alongside the original.
+Disallow: /preview/
 
 # Filtered views of the same grid. The canonical already points back at the
 # clean URL, but not spending crawl budget on them at all is cheaper.

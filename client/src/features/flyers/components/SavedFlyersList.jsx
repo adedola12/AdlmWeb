@@ -88,7 +88,7 @@ export default function SavedFlyersList({
       </div>
 
       {/* Bulk export bar. Rendered whenever anything is saved, so the control
-          is discoverable before you have selected anything — a toolbar that
+          is discoverable before you have selected anything, a toolbar that
           only appears once you already know it exists teaches nobody. */}
       {list.length > 0 && (
         <div

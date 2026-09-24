@@ -17,7 +17,7 @@ export default function ThumbBoldTitle({ flyer, accent, days, palette }) {
         fontFamily: FONT,
       }}
     >
-      {/* Right accent block — split-screen panel */}
+      {/* Right accent block, split-screen panel */}
       <div
         style={{
           position: "absolute",

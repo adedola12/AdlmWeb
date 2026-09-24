@@ -206,13 +206,13 @@ export default function PmBoqItemPicker({
                 <span className="max-w-[180px] truncate" title={item.description}>
                   {item.description || `Item ${item.sn}`}
                 </span>
-                {/* Weight input — defaults to 100%. Use this to split a
+                {/* Weight input, defaults to 100%. Use this to split a
                     single BoQ line across multiple tasks (e.g. 70% first
                     fix, 30% final fix). Live updates the chip's
                     contribution and the parent's baselineCost. */}
                 <span
                   className="inline-flex items-center gap-0.5 rounded-full bg-white/70 dark:bg-white/10 px-1.5 py-0.5 border border-blue-200/60"
-                  title="Weight (%) — share of this BoQ line allocated to the current task. Lower this when other tasks also link to the same line."
+                  title="Weight (%). Share of this BoQ line allocated to the current task. Lower this when other tasks also link to the same line."
                 >
                   <input
                     type="number"
@@ -342,7 +342,7 @@ export default function PmBoqItemPicker({
         </div>
       ) : null}
 
-      {/* Live sum hint — weighted across all links. Mentions the
+      {/* Live sum hint, weighted across all links. Mentions the
           weights when any are < 100% so the user understands why the
           baseline isn't simply the sum of selected items. */}
       {selectedItems.length > 0 ? (

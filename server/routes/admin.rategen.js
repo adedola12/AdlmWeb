@@ -203,7 +203,43 @@ router.get("/grid", async (req, res) => {
  * Upserts per-zone docs.
  * If client sends only ONE zone price, server auto-duplicates it to other zones (missing keys).
  */
-router.put("/grid", async (req, res) => {
+/**
+ * Master prices are edited in Rate Gen now, not here.
+ *
+ * The desktop application is where a price is seen in context — beside the
+ * rates built from it — so that is where it is changed, and it publishes
+ * through PATCH /admin/rategen-v2/master/prices, which audits every change.
+ *
+ * These two write routes stayed reachable after that decision, which would
+ * have left two places editing the same figure with no rule about which wins.
+ * They refuse now and say where to go. The handlers below are left in place
+ * rather than deleted: they are the reference for what a write used to do, and
+ * this guard runs first regardless.
+ *
+ * The GET is untouched — the website still shows the master library, it simply
+ * no longer changes it.
+ *
+ * HELD OPEN UNTIL GO-LIVE. The 15 Sept release put this lock live together
+ * with the new admin, before the new build was meant to go live. The classic
+ * RateGen admin screens are back (6de46ea), and until go-live staff edit
+ * master prices there as they did before, so the lock lets writes through.
+ * While it is open, a web edit is not audited and can cross with one
+ * published from Rate Gen. At go-live, set this to false (or revert the
+ * commit that added it).
+ */
+const MASTER_WEB_EDITS_OPEN_UNTIL_GO_LIVE = true;
+
+function masterIsReadOnly(_req, res, next) {
+  if (MASTER_WEB_EDITS_OPEN_UNTIL_GO_LIVE) return next();
+  return res.status(405).json({
+    error:
+      "Master prices are edited in ADLM Rate Gen and published from there. " +
+      "This screen shows them; it no longer changes them.",
+    code: "MASTER_READ_ONLY",
+  });
+}
+
+router.put("/grid", masterIsReadOnly, async (req, res) => {
   const { kind = "material", rows } = req.body || {};
   const cfg = KIND[String(kind).toLowerCase()];
   if (!cfg) return res.status(400).json({ error: "Invalid kind" });
@@ -256,7 +292,7 @@ router.put("/grid", async (req, res) => {
  * Deletes the item across ALL zones (all docs with that exact name, case-insensitive).
  * Optional: pass { onlySource: "web" } to restrict delete to web-created rows.
  */
-router.delete("/grid", async (req, res) => {
+router.delete("/grid", masterIsReadOnly, async (req, res) => {
   const { kind = "material", name, onlySource } = req.body || {};
   const cfg = KIND[String(kind).toLowerCase()];
   if (!cfg) return res.status(400).json({ error: "Invalid kind" });

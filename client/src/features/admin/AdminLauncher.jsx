@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../store.jsx";
 import { can } from "../../utils/roles.js";
 import { Reveal } from "../../components/effects.jsx";
-import { FiActivity, FiBell, FiBookOpen, FiBox, FiCalendar, FiCheckSquare, FiClipboard, FiCpu, FiDollarSign, FiFileText, FiGift, FiHelpCircle, FiImage, FiLifeBuoy, FiMapPin, FiPlayCircle, FiPlusSquare, FiShield, FiShoppingCart, FiStar, FiTag, FiUsers } from "../../components/icons.jsx";
+import { IconPhone, FiActivity, FiBell, FiBookOpen, FiBox, FiCalendar, FiCheckSquare, FiClipboard, FiCpu, FiDollarSign, FiFileText, FiGift, FiHelpCircle, FiImage, FiLifeBuoy, FiMapPin, FiPlayCircle, FiPlusSquare, FiShield, FiShoppingCart, FiStar, FiTag, FiUsers } from "../../components/icons.jsx";
 
 // area = the permission key that gates the card (see server/config/permissions.js)
 const TOOLS = [
@@ -17,6 +17,8 @@ const TOOLS = [
   { area: "trainings", to: "/admin/trainings", label: "Trainings", desc: "Online trainings & events", icon: FiCalendar },
   { area: "ptrainings", to: "/admin/ptrainings", label: "Physical Trainings", desc: "In-person events & enrolment", icon: FiMapPin },
   { area: "learn", to: "/admin/learn", label: "Learn", desc: "Video courses & library", icon: FiPlayCircle },
+  { area: "learn", to: "/admin/youtube", label: "YouTube Status", desc: "Channel vs library, held videos, availability", icon: FiPlayCircle },
+  { area: "orgvideos", to: "/admin/organizations", label: "Organisation Videos", desc: "Demos & recaps recorded for one firm", icon: FiPlayCircle },
   { area: "courses", to: "/admin/courses", label: "Courses", desc: "Paid online courses", icon: FiBookOpen },
   { area: "grading", to: "/admin/course-grading", label: "Grading", desc: "Grade course submissions", icon: FiCheckSquare },
   { area: "courses", to: "/admin/course-cockpit", label: "Course Cockpit", desc: "Watch time, assignments & who has stalled", icon: FiActivity },
@@ -32,8 +34,12 @@ const TOOLS = [
   { area: "freebies", to: "/admin/freebies", label: "Freebies", desc: "Free resources", icon: FiGift },
   { area: "flyers", to: "/admin/flyers", label: "Flyer Engine", desc: "Design flyers & thumbnails", icon: FiImage },
   { area: "support", to: "/admin/support-tickets", label: "Support Tickets", desc: "User help requests & AnyDesk", icon: FiLifeBuoy },
+  { area: "waitlist", to: "/admin/waitlist", label: "Waitlist & Enquiries", desc: "CIVIQ waitlist & solutions leads", icon: FiUsers },
+  { area: "orgvideos", to: "/admin/org-videos", label: "Organisation Videos", desc: "Demos & recaps recorded for one firm", icon: FiPlayCircle },
+  { area: "followups", to: "/admin/follow-ups", label: "Follow-Up Calls", desc: "Expired subscriptions & unpaid orders to chase", icon: IconPhone },
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },
   { area: "aiusage", to: "/admin/ai-usage", label: "AI Usage", desc: "AI spend, quotas & AWS credit", icon: FiCpu },
+  { area: "releases", to: "/admin/releases", label: "Release sign-off", desc: "Approve updates before customers get them", icon: FiShield },
 ];
 
 export default function AdminLauncher({ title = "Admin tools", compact = false }) {

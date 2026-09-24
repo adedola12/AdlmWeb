@@ -22,6 +22,8 @@ import { App, Tags } from "aws-cdk-lib";
 import { config } from "../config.js";
 import { AdlmEdgeStack } from "../lib/adlm-edge-stack.js";
 import { AdlmApiStack } from "../lib/adlm-api-stack.js";
+import { AdlmOpsAlertsStack } from "../lib/adlm-ops-alerts-stack.js";
+import { AdlmReleaseGateStack } from "../lib/adlm-release-gate-stack.js";
 
 const app = new App();
 
@@ -83,14 +85,14 @@ if (useExternalDns) {
     // No zone: the CNAME is added by hand at the existing DNS provider.
     env: { account: config.account, region: config.region },
     description:
-      "ADLM Cloud — Express API on Lambda behind CloudFront (external DNS)",
+      "ADLM Cloud - Express API on Lambda behind CloudFront (external DNS)",
   });
 } else {
   const edge = new AdlmEdgeStack(app, "AdlmEdge", {
     config,
     env: { account: config.account, region: config.edgeRegion },
     description:
-      "ADLM Cloud — Route 53 hosted zone + CloudFront ACM certificate",
+      "ADLM Cloud - Route 53 hosted zone + CloudFront ACM certificate",
     // Required so the eu-west-1 stack can consume this stack's outputs.
     crossRegionReferences: true,
   });
@@ -100,15 +102,57 @@ if (useExternalDns) {
     zone: edge.zone,
     certificateArn: certificateArnOverride ?? edge.certificateArn,
     env: { account: config.account, region: config.region },
-    description: "ADLM Cloud — Express API on Lambda behind CloudFront",
+    description: "ADLM Cloud - Express API on Lambda behind CloudFront",
     crossRegionReferences: true,
   });
 
   api.addStackDependency(edge);
 }
 
+// Alerting lives in its own stacks, so a deploy of AdlmApi from the wrong
+// checkout can never delete it. See lib/adlm-ops-alerts-stack.ts.
+//
+//   npx cdk bootstrap aws://<account>/us-east-1      (once, before the first deploy)
+//   npx cdk deploy AdlmOpsAlerts AdlmOpsAlertsEu
+//
+// Then click the two AWS Notifications confirmation emails.
+new AdlmOpsAlertsStack(app, "AdlmOpsAlerts", {
+  // Support case updates and account-wide Health events are emitted here.
+  env: { account: config.account, region: "us-east-1" },
+  alertEmail: config.opsAlertEmail,
+  watchSupportCases: true,
+  description: "ADLM - AWS Support case updates and account-wide Health events to the ops inbox",
+});
+new AdlmOpsAlertsStack(app, "AdlmOpsAlertsEu", {
+  env: { account: config.account, region: config.region },
+  alertEmail: config.opsAlertEmail,
+  watchSupportCases: false,
+  digestLogGroupName: config.scheduledLogGroupName,
+  dmarcReportDomain: config.dmarcReportDomain,
+  description: "ADLM - regional Health events and the daily operations report watchdog",
+});
+
 // Makes the Activate credit burn-down attributable per application in Cost
 // Explorer, which is what the Phase 9 cost report is built from.
 Tags.of(app).add("app", "adlm-cloud");
 Tags.of(app).add("env", "prod");
 Tags.of(app).add("managed-by", "cdk");
+
+// Release gate (docs/RELEASE_GATE.md): the locked audit bucket, the hourly
+// watcher and the GitHub alert role. Its own stack so an AdlmApi deploy can
+// never take it with it. Deploy alone:  npx cdk deploy AdlmReleaseGate
+new AdlmReleaseGateStack(app, "AdlmReleaseGate", {
+  env: { account: config.account, region: config.region },
+  description: "ADLM release gate - locked audit trail and main-branch watcher",
+  terminationProtection: true,
+  repo: "adedola12/AdlmWeb",
+  mailDomain: "adlmstudio.net",
+  fromAddress: "ADLM Studio <notifications@adlmstudio.net>",
+  ownerEmail: "admin@adlmstudio.net",
+  // The API function's execution role (AdlmApi-ApiFn). It keeps its name
+  // across AdlmApi deploys; if AdlmApi is ever rebuilt from scratch, update it.
+  apiRoleArn: "arn:aws:iam::065634457992:role/AdlmApi-ApiFnServiceRoleD18AAE0E-uu6SwJf1pQr7",
+  // Three years. COMPLIANCE mode: nobody, root included, can shorten this for
+  // an object once written.
+  retentionDays: 1095,
+});

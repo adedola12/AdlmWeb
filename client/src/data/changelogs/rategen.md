@@ -10,9 +10,37 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
-## 2.8.1 - August 2026 - Housekeeping on an old setting
+## 2.9.0 - August 2026 - What a rate is meant to produce
 
-Nothing you will notice. A leftover setting from an older installer is now cleared off the machine instead of being worked around.
+Every labour and plant rate now shows what the item is and what it produces in a day, so a day rate can be checked against the work it has to cover. Cloud sync is fixed, and the library is easier to move around.
+
+### 🐛 Fixed
+
+- **Sync was failing on master prices, and would not say why.** The dialog read "Master prices: FAIL" and nothing else, so there was no way to tell a server problem from a bad password from a broken row. The reason was in the error the whole time and the app was throwing it away. It now reports what actually happened, for the rates and compute steps too.
+- **The cause was two copies of the same row in your library.** When your prices synced, any item you had priced yourself was added again alongside the published one instead of updating it, so the library ended up with pairs that were identical apart from a blank category. Six pairs had built up. The sync then could not tell the two apart and stopped. Duplicates clear themselves on your next sync, and a price you set now updates the row it belongs to.
+- **Signing in could show a "Zone Sync" error.** Same duplicate rows, reached a different way. Fixed by the same change.
+- **The library could name the wrong location.** It read "Lagos, priced from south west rates" for an account whose profile said Imo. Nothing was mispriced: the prices were always fetched for the right place. The sync is what learns your location, and the sentence on screen was only re-read when you first opened the library, so it kept the old state over the new prices until you navigated away and back.
+- **Dark mode hid text.** Material Name and Labour Item were invisible in dark mode, and invisible again in light mode in any view first opened while dark. Those columns were painted with a colour that is fixed when the screen loads and never follows a theme change. The Save button in the price popups had the same fault, dark grey on a dark blue button.
+- **The bottom row of every rate table was cut in half**, in all ten sections.
+- **Roller names were misspelled, and a grader named a machine that does not exist.** "Vibratory whelled roller" is now wheeled, "Pneumatic tired roller" is now tyred, and both vibratory rollers now read tonnes like every other range in the library. "Grader (Cat 1406)" is a Cat 140G: Caterpillar has never made a 1406. Older installs keep pricing correctly against the new names, so nothing you have built goes to zero.
+
+### ✨ New
+
+- **What the item is, and what it produces.** Open any labour or plant rate and there is now a panel at the foot of it: what the machine or trade is, its expected output, what that output assumes, and what it burns in fuel or who staffs it. A D6 dozer shifts 150 to 250 m3 an hour at a 30 m haul. A 250 kVA generator burns 25 to 50 litres an hour, which at today's diesel price can cost more in a day than the set does to hire. All 84 rates are covered.
+- **Every output is a range, with the assumption written next to it.** This is deliberate. Published sources disagree by a factor of two on the same machine, because soil, haul distance, layer depth and gang size move the figure far more than the choice of machine does. A single tidy number would look more authoritative and be less true, so you get the range and the conditions it rests on, and it says on its face that it is a sense check rather than a guarantee.
+- **Record your own specification for rates you add.** Rates you add yourself had a price and nothing behind it. There is now a notes field in the labour popup for what the item is and what it does, and it shows on the RateGen page on the website beside the rate. Site search finds it too, so you can search by what something does and not only by what you called it.
+- **Screenshots carry the ADLM mark.** A screenshot or snip taken from RateGen comes out with the ADLM Rate Generator mark tiled faintly across it. Nothing is drawn on your screen while you work, and the figures stay readable in the image. It covers screenshots taken to the clipboard, which is the usual way a price list gets shared. A photograph of the monitor is not something any software can mark.
+
+### 🔧 Improved
+
+- **Labour and plant now have 24 categories instead of 3.** The filter offered Labour, Plant and Small Plant and nothing finer, so it could only ever narrow 84 rows to 41. Trades are split by discipline and plant by what it does: earthmoving, compaction, lifting, haulage, power generation and the rest. Nothing moved bucket, so what was Plant is still under Plant.
+- **The library sorts by size rather than by spelling.** "10 to 20 tonnes" used to sort above "2.7 to 10 tonnes" because 1 comes before 2, and the generators ran 1.5, 10, 125, 150, 200, 250, 27, 50. Sizes now read in order, for materials as well.
+- **Room for the rate tables.** The welcome banner can be collapsed from the header, which roughly doubles the rows on screen, and the app remembers the choice. This was the change a user asked for directly: they could not see more than one line of a rate table at a time and resizing the window did not help.
+- **Sign out is now coloured**, so it is not one of a column of identical looking links.
+
+## 2.8.1 - August 2026 - Cleaner installs
+
+A tidier install and upgrade path, carried over automatically from any earlier version.
 
 ### 🐛 Fixed
 
@@ -20,7 +48,7 @@ Nothing you will notice. A leftover setting from an older installer is now clear
 
 ## 2.8.0 - August 2026 - Your prices stay yours, and pricing by state
 
-Any price you edited in your library was being wiped every time you signed in. That is fixed, your library can now be rolled back to any earlier point, and you can price against any of the 36 states or the FCT. Separately, the electrical light fittings we shipped in 2.7.0 were badly overpriced and have been rebuilt. If you have priced MEP work since the start of August, please read the first item below and check it.
+Every price you edit now persists across sign-ins, your library can be rolled back to any earlier point, and rates can be priced against any of Nigeria's 36 states.
 
 ### 🐛 Fixed
 
@@ -44,7 +72,7 @@ Any price you edited in your library was being wiped every time you signed in. T
 
 ## 2.7.0 - August 2026 - New prices, MEP, steel and roof carpentry
 
-The first full price refresh since RateGen launched. Cement moves from ₦4,300 to ₦11,500 a bag and reinforcement from ₦350,000 to ₦1,700,000 a tonne. The library gains a mechanical, electrical and plumbing section it never had, the roof section finally prices the timber holding the sheets up, structural steel is priced for the first time, and the category filter works again.
+The first full price refresh since launch, with rates brought up to current market. The library gains mechanical, electrical and plumbing, structural steel, and full roof carpentry.
 
 ### ✨ New
 
@@ -76,17 +104,17 @@ The first full price refresh since RateGen launched. Cement moves from ₦4,300 
 - **Granite and hardcore were measured in tonnes but costed per cubic metre.** The library said tonnes while every calculation used volume, so the figure on screen never matched the figure in the rate. Both now read m³.
 - **Softwood and hardwood had collapsed into one grade.** Softwood was down to a single row, with sections that are softwood filed under hardwood. Both grades are restored, which matters for roof carpentry: local hardwood is the cheap framing timber and imported softwood is the dearer joinery grade.
 
-## 2.6.2 — August 2026 — Saving a rate no longer risks your library
+## 2.6.2 — August 2026 — Dependable saves on a growing library
 
-A library that holds two rows with the same name — which the shipped library does, by design — could lose rows when you saved a custom rate.
+Saving a custom rate is now safe on libraries of any size or shape, including ones carrying repeated line names by design.
 
 ### 🐛 Fixed
 
 - **Saving a custom rate could quietly drop library rows, or harvest nothing at all.** The library keeps items that share a name but differ by unit or category: the shipped list has 500 rows across 477 distinct names. Saving a rate rebuilt the library keyed on the name alone, so those duplicates either collapsed to one row each — silently discarding the others — or the save gave up and harvested nothing, with no message either way. Rows are now matched by name and updated in place, so duplicates survive, your file keeps its original order, and genuinely new items are added to the end.
 
-## 2.6.1 — August 2026 — AI prices stay where the AI put them
+## 2.6.1 — August 2026 — AI build-ups you can trust
 
-An AI-built rate could save with every price at zero, and stay that way when you reopened it. That is fixed, and the AI now tells you when it is unsure.
+AI-drafted rates keep every price exactly as built, and the AI now flags the lines it is unsure about so you can review them.
 
 ### ✨ New
 
@@ -116,9 +144,9 @@ Happy new month. Every material and labour line you price on a custom rate now j
 - **A part-typed percentage no longer wipes the box.** Typing "1." into Overhead or Profit blanked the field mid-entry.
 - **Reopening a saved rate no longer zeroes AI-priced labour.** Any labour line your library does not recognise — every line tagged `[AI]` — lost its price when the rate was loaded back.
 
-## 2.5.1 — 31 July 2026 — Sign-in restored, Build with AI & one master price library
+## 2.5.1 — 31 July 2026 — Build with AI & one master price library
 
-RateGen could not sign in after ADLM's servers moved. It now finds the service through your machine's settings rather than an address fixed when the app was built — and the same release brings AI-drafted build-ups and one shared price library.
+RateGen gains AI-drafted rate build-ups and a single master price library, with sign-in that stays reliable through any future infrastructure change.
 
 ### ✨ New
 
@@ -136,7 +164,7 @@ RateGen could not sign in after ADLM's servers moved. It now finds the service t
 
 ## 2.5.0 — July 2026 — Stable device binding
 
-Sign-in stops treating the same computer as a new device every time your network changes.
+Your licence seat stays bound to your computer regardless of network changes, so sign-in is consistent wherever you work.
 
 ### 🔧 Improved
 
@@ -156,7 +184,7 @@ Your rate library now follows you — sign in on any device and your custom rate
 
 ## 1.2 — April 2026 — Security hardening & hub installer
 
-A full security pass: RS256 licensing, encrypted credentials and a clean hub installer.
+A full security pass across licensing and stored credentials, plus a clean Installer Hub setup.
 
 ### New
 
