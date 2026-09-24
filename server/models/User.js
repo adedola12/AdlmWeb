@@ -137,6 +137,8 @@ const UserSchema = new mongoose.Schema(
     whatsappVerifiedAt: { type: Date, default: null },
     whatsappVerifiedNumber: { type: String, default: "" },
     whatsappCodeHash: { type: String, default: "" },
+    // The number the pending code went to: a code proves that number only.
+    whatsappCodeNumber: { type: String, default: "" },
     whatsappCodeExpires: { type: Date, default: null },
     whatsappCodeSentAt: { type: Date, default: null },
     whatsappCodeAttempts: { type: Number, default: 0 },
