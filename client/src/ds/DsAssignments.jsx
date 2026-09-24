@@ -7,7 +7,7 @@
 // dot; opening the page on it clears it.
 
 import React from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { useFeedback } from "./feedback/feedbackContext.js";
@@ -170,13 +170,20 @@ export default function DsAssignments() {
   const { accessToken } = useAuth();
   const location = useLocation();
   const [items, setItems] = React.useState(null);
+  // A failed read used to land here as an empty list, so a dead call looked
+  // exactly like a new account with nothing set. They are different sentences.
+  const [failed, setFailed] = React.useState(false);
   const [tab, setTab] = React.useState("todo");
   const hash = location.hash.replace(/^#/, "");
 
   const load = React.useCallback(() => {
+    setFailed(false);
     apiAuthed("/me/courses/assignments", { token: accessToken })
       .then((d) => setItems(d.items || []))
-      .catch(() => setItems([]));
+      .catch(() => {
+        setItems([]);
+        setFailed(true);
+      });
   }, [accessToken]);
 
   React.useEffect(() => {
@@ -235,16 +242,42 @@ export default function DsAssignments() {
         ))}
       </div>
 
-      {items === null ? (
+      {/* Three different things, three different sentences: the list could not
+          be read, the account has never had an assignment set, or this tab is
+          empty while the others are not. */}
+      {failed ? (
+        <div className="as-empty">
+          <b>Your assignments could not be loaded</b>
+          <p>
+            This page could not read them just now. Nothing you have submitted and no mark you
+            have been given is affected. Refresh to try again.
+          </p>
+        </div>
+      ) : items === null ? (
         <p className="wk-note">Loading…</p>
       ) : shown.length === 0 ? (
         <div className="as-empty">
-          <b>{tab === "todo" ? "Nothing to do" : tab === "submitted" ? "Nothing waiting to be marked" : "Nothing marked yet"}</b>
+          <b>
+            {items.length === 0
+              ? "No assignments yet"
+              : tab === "todo"
+                ? "Nothing to do"
+                : tab === "submitted"
+                  ? "Nothing waiting to be marked"
+                  : "Nothing marked yet"}
+          </b>
           <p>
             {items.length === 0
-              ? "Assignments appear here when you are enrolled on a course that sets them."
+              ? "This is where a course's set work is handed in: you upload the file here, your tutor marks it here, and the mark and their written comment come back to this page. Nothing is set yet because no course on this account has set any."
               : "Assignments move between these tabs as you submit them and your tutor marks them."}
           </p>
+          {items.length === 0 ? (
+            <div className="as-acts">
+              <Link className="ds-btn btn-p ds-btn-sm" to="/learn">
+                See what is taught
+              </Link>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="as-list">
