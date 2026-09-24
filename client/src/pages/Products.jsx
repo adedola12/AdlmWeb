@@ -27,6 +27,9 @@ import {
 /* -------------------- UI helpers -------------------- */
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
 
+// How many physical trainings the section shows before "View all" opens the rest.
+const PT_PREVIEW = 6;
+
 function CardVideo({ src, poster }) {
   const ref = React.useRef(null);
 
@@ -162,6 +165,7 @@ export default function Products() {
 
   const [trainings, setTrainings] = React.useState([]);
   const [trainingsErr, setTrainingsErr] = React.useState("");
+  const [showAllTrainings, setShowAllTrainings] = React.useState(false);
 
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
@@ -477,6 +481,14 @@ export default function Products() {
     if (totalQty != null) setCartCount(totalQty);
   }
 
+  /* -------------------- Physical trainings: the preview and the rest -------------------- */
+  // GET /ptrainings/events returns every published event; the section leads
+  // with a preview and "View all" opens the remainder in place.
+  const trainingList = trainings || [];
+  const shownTrainings = showAllTrainings
+    ? trainingList
+    : trainingList.slice(0, PT_PREVIEW);
+
   /* -------------------- animations CSS -------------------- */
   const style = `
     @keyframes fade-in-up { from {opacity:0; transform: translateY(8px);} to {opacity:1; transform: translateY(0);} }
@@ -650,24 +662,41 @@ export default function Products() {
               </div>
             </div>
           </div>
-          <button
-            className="shrink-0 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-adlm-dark-border font-semibold text-sm hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
-            onClick={() => navigate("/trainings")}
-            type="button"
-          >
-            View all
-          </button>
+          {/* "View all" used to navigate to /trainings. That is the ONLINE
+              course list — it reads GET /trainings and links to /trainings/:id
+              — so the reader left a list of physical trainings and landed on a
+              page holding none of them. There is no /ptrainings index to send
+              them to, and /learn/calendar sits behind TRAINING_CALENDAR_LIVE
+              (off) and lists only future sessions, so neither is a page that
+              reliably holds what was just on screen. This page is: the
+              breadcrumb on /ptrainings/:key names /products as the parent
+              (417e40b). So the button now opens the rest of the list where the
+              reader already is, and only appears when there is a rest. */}
+          {trainingList.length > PT_PREVIEW ? (
+            <button
+              className="shrink-0 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-adlm-dark-border font-semibold text-sm hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
+              onClick={() => setShowAllTrainings((v) => !v)}
+              aria-expanded={showAllTrainings}
+              aria-controls="physical-trainings"
+              type="button"
+            >
+              {showAllTrainings ? "Show fewer" : `View all ${trainingList.length}`}
+            </button>
+          ) : null}
         </div>
 
         {trainingsErr ? (
           <div className="mt-3 text-sm text-red-600">{trainingsErr}</div>
         ) : null}
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(trainings || []).slice(0, 6).map((t) => (
+        <div
+          id="physical-trainings"
+          className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        >
+          {shownTrainings.map((t) => (
             <TrainingCard key={t._id} t={t} />
           ))}
-          {!(trainings || []).length ? (
+          {!trainingList.length ? (
             <div className="text-sm text-slate-500 dark:text-adlm-dark-muted">
               No trainings published yet.
             </div>
