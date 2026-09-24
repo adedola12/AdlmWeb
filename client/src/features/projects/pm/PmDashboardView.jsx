@@ -139,7 +139,15 @@ function TasksDonut({ buckets, totalTasks }) {
   const total = totalTasks || completed + inProgress + blocked + notStarted;
 
   if (total === 0) {
-    return <div className="wk-empty">No tasks yet</div>;
+    // Item 13: "No tasks yet" on its own leaves a new project with nothing to
+    // do about it. The panel is small, so the action is a sentence, not a row
+    // of buttons — those are on the onboarding panel above.
+    return (
+      <div className="wk-empty" style={{ fontSize: 13 }}>
+        No tasks yet. Generate one per bill item, import an MS Project file, or add a task by
+        hand, and this counts them by status.
+      </div>
+    );
   }
   const pct = (n) => (n / total) * 100;
   return (

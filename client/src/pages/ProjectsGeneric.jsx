@@ -12,6 +12,14 @@ import { FaCubes, FaFolder, FaInfoCircle } from "../components/icons.jsx";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
+// The workspace is drawn in his project pieces (.pj-empty, .pj-kpi, .pj-buy,
+// .pj-vars, .pj-stage, .pj-sumbox) but nothing on this route ever loaded the
+// sheet that defines them: DsAppShell brings ds-work.css, and ds-work-proj.css
+// was imported only by the gallery and Work's overview. So the buy schedule's
+// and the variation list's empty states rendered as bare text unless the
+// reader happened to have visited /work first in the same session. Importing
+// it here makes the route look the same whichever door it was opened by.
+import "../styles/ds-work-proj.css";
 import WkModal from "../ds/WkModal.jsx";
 import { useFeedback } from "../ds/feedback/feedbackContext.js";
 import {
@@ -33,6 +41,9 @@ import {
   variationRow,
 } from "../features/projects/lib/projectRows.js";
 import { reconcileBill } from "../features/projects/rateReconcile.js";
+// The same product/host table the gallery names its tools from (P0.4), so the
+// two screens say "Measure in QUIV, inside Revit" in exactly the same words.
+import { SOURCES } from "../lib/projectGallery.js";
 import {
   budgetDrivenCodes as budgetDrivenCodesFor,
   nextRateStamp,
@@ -5503,6 +5514,16 @@ export default function ProjectsGeneric() {
     [rowsShown],
   );
 
+  // What the grid needs to tell a first run apart from a search that matched
+  // nothing, and both apart from a list that never loaded. The product and its
+  // host come from the same table the gallery uses, so the two screens name
+  // them identically; a tool with no entry falls back to wording that names no
+  // product rather than guessing one.
+  const gallerySource = React.useMemo(() => {
+    const base = normTool(tool).replace(/-materials?$/, "");
+    return SOURCES[base === "revitmep" ? "mep" : base] || null;
+  }, [tool]);
+
   // Explorer selection helpers
   function toggleSelect(id) {
     if (!id) return;
@@ -5751,6 +5772,12 @@ export default function ProjectsGeneric() {
                 sectionSummary={sectionSummary}
                 statusPastLabel={statusPastLabel}
                 storageInfo={storageInfo}
+                loadFailed={!!err}
+                searching={!!projectQ}
+                totalCount={rows.length}
+                sourceName={gallerySource?.name || ""}
+                hostName={gallerySource?.host || ""}
+                isMaterials={showMaterials}
               />
             ) : (
               <ProjectOpenView

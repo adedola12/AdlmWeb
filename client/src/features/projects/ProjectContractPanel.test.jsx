@@ -158,6 +158,49 @@ describe("contract administration panel (S18)", () => {
     expect(screen.getByText("No variations yet")).toBeTruthy();
   });
 
+  // Item 13. An empty screen has to answer three things: what it is for, why
+  // it is empty, and the one action that fills it. The third is the one that
+  // goes wrong — a first-run screen pointing at a control the reader has not
+  // got is worse than saying nothing.
+  it("names the action on the empty variations list, and only where it can be taken", () => {
+    render(
+      <ProjectContractPanel
+        {...baseProps}
+        variationRows={[]}
+        canEditProject
+        onRaiseVariation={vi.fn()}
+      />,
+    );
+    openVariations();
+    expect(screen.getByText("Add variation raises the first one.")).toBeTruthy();
+  });
+
+  it("tells a read-only viewer why the empty variations list has no action", () => {
+    render(<ProjectContractPanel {...baseProps} variationRows={[]} />);
+    openVariations();
+    expect(screen.getByText(/reading this project rather than working on it/i)).toBeTruthy();
+    expect(screen.queryByText("Add variation raises the first one.")).toBeNull();
+  });
+
+  it("does not point a closed final account at the issue button it has greyed out", () => {
+    render(
+      <ProjectContractPanel
+        {...baseProps}
+        certificates={[]}
+        finalAccount={{ finalized: true, finalizedAt: "2026-09-01T00:00:00Z" }}
+      />,
+    );
+    expect(screen.getByText("No certificates issued yet")).toBeTruthy();
+    expect(screen.getByText(/The final account is closed, so no new certificate/i)).toBeTruthy();
+  });
+
+  it("names the issue action on an open project with no certificates", () => {
+    render(<ProjectContractPanel {...baseProps} certificates={[]} />);
+    expect(
+      screen.getByText("Issue certificate makes IPC 01 against the current value to date."),
+    ).toBeTruthy();
+  });
+
   it("puts both readings on the final account, each labelled", () => {
     render(
       <ProjectContractPanel

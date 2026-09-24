@@ -2502,7 +2502,16 @@ export default function ProjectBillTable({
 
         {!items.length ? (
           <div className="wk-empty">
-            This project does not have any saved items yet.
+            <b>No bill yet</b>
+            <p>
+              The bill is the measured work: every item, its quantity and the rate it is priced
+              at. Items are not written here. They arrive with the project, from the takeoff it
+              was measured in or from the Excel bill it was imported from.
+            </p>
+            <p>
+              Save the project again from where it was measured, and the items land here to
+              price, value and programme.
+            </p>
           </div>
         ) : null}
 
@@ -3756,10 +3765,18 @@ export default function ProjectBillTable({
                 </table>
               </div>
             ) : (
-              <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                No variations logged yet. Click "+ Add variation" to record a
-                site instruction or change order: it waits for approval on the
-                Valuation tab before it counts toward the project total.
+              // His .wk-empty, not the slate Tailwind box that was here: that
+              // box painted its own border, background and text colour as
+              // literals, so it stayed a light-grey card in dark and in his
+              // black theme.
+              <div className="wk-empty" style={{ marginTop: 12, padding: "20px 18px" }}>
+                <b>No variations logged yet</b>
+                <p>
+                  A variation is a site instruction or change order recorded against the
+                  contract. It waits for approval on the Valuation tab, and only then does it
+                  count toward the project total, so logging one changes no figure on its own.
+                </p>
+                <p>Add variation, above, records the first one.</p>
               </div>
             )}
           </div>
@@ -4099,9 +4116,18 @@ export default function ProjectBillTable({
                 </table>
               </div>
             ) : (
-              <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                No preliminary items yet. Open the project once to seed the
-                BESMM4 defaults, or click "+ Add item".
+              // Same again: his .wk-empty in place of the slate literals.
+              <div className="wk-empty" style={{ marginTop: 12, padding: "20px 18px" }}>
+                <b>No preliminary items yet</b>
+                <p>
+                  Preliminaries are the site-wide costs that belong to no single measured item:
+                  supervision, site accommodation, plant standing, insurances. They are priced
+                  here and carried into the bill total.
+                </p>
+                <p>
+                  Opening the project once seeds the BESMM4 defaults, and &ldquo;+ Add item&rdquo;
+                  adds one of your own.
+                </p>
               </div>
             )}
           </div>

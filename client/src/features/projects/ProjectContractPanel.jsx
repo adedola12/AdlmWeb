@@ -135,8 +135,20 @@ function CertificatesSection({
 
       {sorted.length === 0 ? (
         <div className="wk-panel wk-empty" style={NO_MB}>
-          No certificates issued yet. Click “Issue certificate” to generate
-          IPC #01 against the current value-to-date.
+          <b>No certificates issued yet</b>
+          <p>
+            A certificate is what the client is asked to pay against: the value of work to
+            date, less what has already been certified, less retention, with VAT and
+            withholding tax applied. Each one is numbered and keeps its own figures, so
+            reissuing never rewrites an earlier one.
+          </p>
+          {/* Telling somebody to press a button that is greyed out is worse
+              than saying nothing, so the sentence follows the button. */}
+          <p>
+            {disabled
+              ? "The final account is closed, so no new certificate can be issued. Reopen it to issue IPC 01 against the current value to date."
+              : "Issue certificate makes IPC 01 against the current value to date."}
+          </p>
         </div>
       ) : (
         <div className="wk-panel" style={{ marginBottom: 0, overflowX: "auto" }}>
@@ -446,6 +458,19 @@ function VariationsSection({
             Log architect’s instructions, site instructions and client changes
             here. An approved variation changes the project total and the final
             account; a pending one changes nothing until it is approved.
+          </p>
+          {/* The action, and only where it can actually be taken: a reader
+              without edit rights, on a closed account, or on a shared project
+              with the rates hidden, is told which of those it is instead of
+              being pointed at a control they do not have. */}
+          <p>
+            {!canEdit
+              ? "You are reading this project rather than working on it, so you cannot raise one."
+              : disabled
+                ? "The final account is closed. Reopen it to raise the first one."
+                : !canSeeRates
+                  ? "Rates are hidden on this shared project, and a variation has to carry a value, so you cannot raise one here."
+                  : "Add variation raises the first one."}
           </p>
         </div>
       )}

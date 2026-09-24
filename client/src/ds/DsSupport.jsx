@@ -381,15 +381,19 @@ export default function DsSupport() {
             <div className="dsh-ph">
               <h2>Your tickets</h2>
               <span className="when">
-                {tickets.length} raised
+                {tickets.length ? `${tickets.length} raised` : "None raised"}
               </span>
             </div>
             <div className="dsh-body">
               {tickets.length ? (
                 tickets.map((t) => <Ticket key={t._id} t={t} />)
               ) : (
+                // Item 13. The form that fills this panel is on the same page,
+                // so the action is a scroll away rather than a link.
                 <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
-                  Nothing raised yet. Anything you open appears here with its replies.
+                  Nothing raised yet. Every ticket you open lands here with its replies, so
+                  this is where an answer comes back to rather than your inbox alone. Use the
+                  form on this page to open the first one.
                 </p>
               )}
             </div>

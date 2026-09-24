@@ -1746,3 +1746,28 @@
   .ds .pj-views button { width: 40px; height: 40px; }
   .ds .wk-modal-x { width: 40px; height: 40px; }
 }
+/* ------------------------------------------------- first-run empty states
+   His empty state has three parts: a heading, a line saying why the screen
+   is empty, and a row with the one action that fills it. He styled that as
+   .pj-empty, in ds-work-proj.css.
+
+   The work shell loads ds-work.css, not ds-work-proj.css, and .wk-empty in
+   ds-work.css only ever styled a single bare sentence — so a work screen
+   that wanted the three parts had nowhere to put them. These rules give
+   .wk-empty the same three parts, copied from his .pj-empty values so the
+   two read identically wherever they sit next to each other.
+
+   Direct children only, unlike his descendant selectors: a .wk-empty holding
+   one sentence, which is most of them today, is untouched, and a panel that
+   happens to nest a paragraph deeper inside one is not restyled from a
+   distance. */
+.ds .wk-empty > b{display:block;font-size:16px;font-weight:500;color:var(--ink)}
+.ds .wk-empty > p{margin:6px auto 14px;max-width:52ch;font-size:13px;font-weight:300;
+  color:var(--ink-3);line-height:1.6}
+.ds .wk-empty > p:last-child{margin-bottom:0}
+.ds .wk-empty > .b{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+
+/* His .as-empty centres its text; his .as-acts is a left-aligned flex row,
+   made for the buttons under an assignment card. An action inside the empty
+   state has to sit under the sentence rather than off to one side. */
+.ds .as-empty .as-acts{justify-content:center}

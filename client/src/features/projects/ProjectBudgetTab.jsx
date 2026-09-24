@@ -912,8 +912,16 @@ export default function ProjectBudgetTab({
             <div className="pj-empty">
               <b>Nothing to buy yet</b>
               <p>
-                Price the bill first: the buy schedule is built from each bill
-                line’s material build-up.
+                The buy schedule works backwards from the programme: every
+                material a bill line needs, dated by when its task starts, less
+                the lead time above. It is a shopping list with dates on it, not
+                a second bill.
+              </p>
+              <p>
+                It is empty because the breakdown on this project holds no
+                material or plant lines yet: what is in it is labour, and labour
+                is not bought ahead. Price a bill line against a rate that
+                carries materials and they arrive here with their dates.
               </p>
             </div>
           ) : (
