@@ -109,6 +109,40 @@ anything reusing `.fgrid` expecting the documented 2 columns will come out unusa
 weights but serves one, so every weight renders identically. Either ship real per-weight files or
 declare a single variable font with a `font-weight: 100 900` range.
 
+### B7. The mobile menu collapses to a 126px sliver once the page is scrolled ⭐
+*Found 24 September 2026, reproduced in your build, not just in the port.*
+
+`.mnav` is `position:fixed;inset:0` and sits inside `<nav class="nav">`. As soon as the page
+is scrolled the nav takes `.stuck`, which adds `backdrop-filter:blur(18px) saturate(160%)` —
+and **a backdrop-filter other than `none` makes an element the containing block for its
+fixed-position descendants**. So `inset:0` stops meaning the viewport and starts meaning the
+63px header. The drawer's own padding is 86px top + 40px bottom, so the box cannot go below
+126px: the menu opens as a 126px sliver holding 812px of links, with an inner scrollbar and the
+page showing through underneath.
+
+**To reproduce**, in `site/` at 375px wide, on any page:
+
+```js
+document.querySelector('.nav').classList.add('stuck');   // what scrolling does
+document.querySelector('.burger').click();
+const m = document.querySelector('.mnav');
+m.getBoundingClientRect().height;   // 126 — should be 812
+m.scrollHeight;                     // 812
+```
+
+At the top of the page there is no `.stuck` and no blur, so the menu is correct — which is
+probably why it has not been caught.
+
+**The fix we are using**, in case you want the same one: drop the blur while the menu is open,
+which also gives the opaque header `.mnav-open .nav` is already asking for.
+
+```css
+.mnav-open .nav{backdrop-filter:none;-webkit-backdrop-filter:none;transition:none}
+```
+
+`transition:none` matters: `.nav` transitions backdrop-filter over 340ms, and a value part-way
+through that transition is still not `none`, so without it the sliver is simply animated.
+
 ### B6. Two corrupt images, unrecoverable from source
 `hd-engineer.jpg` and `hd-night.jpg` are truncated JPEGs that decode to flat grey over the bottom
 13% and 38%. Your notes confirm the originals in `Images/` are also corrupt, so they need
