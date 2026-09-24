@@ -1665,3 +1665,84 @@
 .ds .sform-status h4{margin:0 0 6px}
 .ds .sform-status p{margin:0}
 .ds .sform-status .ds-btn{margin-top:14px}
+
+/* ================================================== the phone pass, signed in
+   Item 20 on his open list: "the marketing site is mobile-clean; Manage, Work
+   and Admin have had spot fixes only." Everything below is measured at 375px,
+   checked at 768px, and written against his own breakpoints (720/760/900) and
+   tokens. Nothing here changes a desktop width.                             */
+
+
+/* ---- the app bar had no room left for the one thing it is for ------------
+   .dsh-top is a flex row: burger 36, title, network indicator, bell 36, the
+   account chip. Only the title can shrink — it is the one child with
+   overflow:hidden, so its automatic minimum size is 0 — and every other child
+   is flex:none or holds its min-content. At 375px the fixed children add up
+   to more than the bar: 32 padding + 36 burger + 50 gaps + ~97 network
+   ("Excellent" at 12px plus the bars) + 36 bell + ~118 account chip. The
+   title is squeezed to nothing first, and then the bar itself overflows, and
+   because .dsh-main sets overflow-y:auto its overflow-x computes to auto too
+   — so the whole signed-in page scrolls sideways.
+
+   The signal in the indicator is the four bars; the word is a gloss on them,
+   and it has a title and an aria-label besides. Dropping the word on a phone
+   gives the screen name back its room and takes the bar under the viewport.
+   The admin bar is built the same way and does the same thing, so one rule
+   covers both. */
+@media (max-width: 720px) {
+  .ds .dsh-top .net-ind-label, .ds .adm-top .net-ind-label { display: none; }
+  /* with the word gone the bars are the whole control, so it takes a
+     thumb-sized box rather than shrinking to the width of the glyph */
+  .ds .dsh-top .net-ind, .ds .adm-top .net-ind {
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+  }
+}
+
+/* Below 560px the first name on the account chip goes the same way. The
+   avatar is the affordance — it is what opens the menu, and the menu names
+   the person on its first line — so the word beside it is decoration at the
+   width where the title has none. His own rail collapses its labels exactly
+   this way (.rail-tight .dsh-grp-b .lb). The admin bar loses its search box
+   at this width for the same reason his app bar loses .dsh-search below
+   1000px: an input squeezed to 40px is not a search box, and every admin
+   screen is one tap away in the rail. */
+@media (max-width: 560px) {
+  .ds .dsh-top .dsh-me { padding: 5px 6px; }
+  .ds .dsh-top .dsh-me > span:not(.dsh-avi) { display: none; }
+  .ds .adm-top .adm-me { padding: 5px; }
+  .ds .adm-top .adm-me > span:not(.avi) { display: none; }
+  .ds .adm-top .adm-find { display: none; }
+}
+
+
+/* ---- the project list clipped its own figures ---------------------------
+   /work/projects in list view. His phone rule folds .pj-table .rw to
+   `1fr auto`, but a bare 1fr track is minmax(auto,1fr) and .pj-table .p b is
+   white-space:nowrap — so the track sized itself to the full project name and
+   .pj-table's own overflow:hidden cut the stage, the estimated figure and the
+   date off the right-hand edge. A long name hid the money.
+
+   min-width:0 on the row's cells is the fix he uses everywhere else himself
+   — .pj-bill, .pj-rt and .pj-buy all fold to minmax(0,1fr), and his dash
+   sheet carries the same declaration for .dsh-cols > *. With it the track can
+   shrink and the ellipsis .pj-table .p b already carries does its job. */
+@media (max-width: 900px) {
+  .ds .pj-table .rw > span { min-width: 0; }
+}
+
+
+/* ---- controls a thumb can actually land on ------------------------------
+   His work controls are sized for a pointer: the tab strip and the basis
+   switch are 8px of padding on a 13px line (~34px tall), the layout switch
+   in the project gallery is 34x30, and the modal close is 34x34. Below 760px
+   — where his own rules already stretch these to the full width of the row —
+   they take a 40px minimum as well. Padding, colour and type are untouched,
+   so nothing moves on a desktop and nothing here is a new value. */
+@media (max-width: 760px) {
+  .ds .wk-tabs button, .ds .wk-loc-sw button, .ds .wk-dd-b { min-height: 40px; }
+  .ds .pj-views button { width: 40px; height: 40px; }
+  .ds .wk-modal-x { width: 40px; height: 40px; }
+}
