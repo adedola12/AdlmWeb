@@ -5,6 +5,7 @@ import { useAuth } from "../store.jsx";
 import { trackEvent } from "../ga";
 import SocialSignIn from "../components/SocialSignIn.jsx";
 import { AFTER_SIGN_IN } from "../lib/afterSignIn.js";
+import { HONEYPOT_FIELD, useSignupTicket } from "../lib/signupTicket.js";
 
 export default function Signup() {
   const nav = useNavigate();
@@ -17,6 +18,8 @@ export default function Signup() {
   const [password, setPassword] = React.useState("");
   const [err, setErr] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  // Sign-up protection (2026-09-22): the form ticket and the hidden field.
+  const getTicket = useSignupTicket();
 
   function normalizeWhatsApp(v) {
     // Strip spaces/dashes; keep + and digits
@@ -29,12 +32,18 @@ export default function Signup() {
 
   async function submit(e) {
     e.preventDefault();
+    // Read from the form itself: a bot that sets values directly never fires
+    // React's change events.
+    const trap = String(e.currentTarget.elements?.[HONEYPOT_FIELD]?.value || "");
     setErr("");
     setBusy(true);
     try {
+      const ticket = await getTicket();
       const res = await api("/auth/signup", {
         method: "POST",
         body: JSON.stringify({
+          ticket,
+          [HONEYPOT_FIELD]: trap,
           email,
           password,
           firstName: firstName.trim(),
@@ -65,6 +74,20 @@ export default function Signup() {
     <div className="max-w-md mx-auto card">
       <h1 className="text-xl font-semibold mb-4">Create account</h1>
       <form onSubmit={submit} className="space-y-3">
+        {/* Not for people: off screen, out of the tab order, hidden from
+            screen readers and autofill. */}
+        <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", top: "auto", width: 1, height: 1, overflow: "hidden" }}>
+          <label>
+            Company website
+            <input
+              type="text"
+              name={HONEYPOT_FIELD}
+              tabIndex={-1}
+              autoComplete="off"
+              defaultValue=""
+            />
+          </label>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <input
             className="input"
