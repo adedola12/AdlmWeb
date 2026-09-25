@@ -54,6 +54,13 @@ export const PROJECT_LIST_MONEY_FIELDS = Object.freeze([
   "estimatedTotal",
 ]);
 
+// The money on a merged contract's row in /me/projects-rollup
+// `mergedContracts`: the only two figures a container holds in its own right.
+export const MERGED_CONTRACT_MONEY_FIELDS = Object.freeze([
+  "certifiedToDate",
+  "approvedVariationsTotal",
+]);
+
 /**
  * Hide the money on rows the reader does not own, when they may not see rates.
  * The row stays — a collaborator is meant to see the project, its quantities
