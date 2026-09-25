@@ -580,6 +580,20 @@ export default function DsManageOverview() {
               </p>
             </div>
           )}
+          {/* R3: an unpaid account gets no Hub link from the server, only
+              allowed:false; say why and where to go instead. */}
+          {!view.hub.downloadUrl && view.hub.allowed === false && (
+            <div className="dsh-hub">
+              <h3>ADLM Installer Hub</h3>
+              <p>
+                The Installer Hub comes with a paid licence. Buy or renew a product and it will be
+                ready to download here.
+              </p>
+              <Link className="ds-btn btn-p ds-btn-sm" to="/products">
+                See the products
+              </Link>
+            </div>
+          )}
 
           {/* Recent activity — his .dsh-feed, on the real trail.
               recordActivity() already writes one of these at every project and

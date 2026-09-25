@@ -1,6 +1,7 @@
 // server/routes/me.js
 import express from "express";
 import { resolveDownload } from "../util/downloadLinks.js";
+import { canDownloadInstallerHub, HUB_REQUIRES_PAID } from "../util/installerHubAccess.js";
 import { alertCount } from "../util/assignmentAlerts.js";
 import { myAssignments } from "../util/myAssignments.js";
 import cloudinary from "../cloudinary.js";
@@ -396,6 +397,10 @@ router.get(
       email: 1,
       refreshVersion: 1,
       createdAt: 1,
+      // R3: who may have the Installer Hub link (util/installerHubAccess.js).
+      role: 1,
+      isGod: 1,
+      disabled: 1,
     });
     if (!user) return res.status(404).json({ error: "User missing" });
 
@@ -615,7 +620,14 @@ router.get(
     // R15: from our own storage when the file is there, the Admin setting
     // otherwise. An hour, because this sits on a page until it is clicked; the
     // new Downloads screen asks /me/downloads/installer-hub for a fresh one.
-    const hubDownload = await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600 });
+    // R3: an unpaid account gets no link at all, only the reason, so the page
+    // can point it at the products instead of at a file it may not have.
+    const hubAllowed = canDownloadInstallerHub(
+      typeof user.toObject === "function" ? user.toObject() : user,
+    );
+    const hubDownload = hubAllowed
+      ? await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600 })
+      : { url: "" };
 
     return res.json({
       email: user.email,
@@ -629,6 +641,8 @@ router.get(
       // Installer Hub settings (global, admin-configured)
       installerHub: {
         downloadUrl: hubDownload.url,
+        allowed: hubAllowed,
+        lockedCode: hubAllowed ? null : HUB_REQUIRES_PAID,
         videoUrl: globalSettings?.installerHubVideoUrl || "",
         // Always present — falls back to the copy bundled with the site.
         guideUrl: resolveUserGuideUrl(globalSettings?.installerHubGuideUrl),
