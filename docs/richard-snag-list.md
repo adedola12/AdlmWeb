@@ -66,10 +66,26 @@ solutions pages got.
 28 Unsplash images added in August are all architecture and sites, no portraits. Needs real
 headshots.
 
-### A4. Learn — fourth course copy is provisional
+### A4. Learn — fourth course copy is provisional — **ANSWERED, pulled 26 September**
 `learn.html` carries a fourth course with a name, a **₦85,000 price** and a syllabus that your
 notes flag as written-from-real-products but unconfirmed. It must not ship as real. Either confirm
 it or pull it.
+
+**The owner pulled it.** There is no such course — `GET /learn/courses` returns two, BIM for
+Building Works and BIM for MEP & HVAC — and its "View course" button pointed at `learn#courses`,
+the section it was already in. Our porter now removes the `#course-4` article and switches that
+row from `.pgrid-4` to your `.pgrid`, so the three remaining cards sit in an even three-column
+row instead of leaving the fourth column empty. **Your `learn.html` still has it**, so it is worth
+removing upstream too; if the course is ever built, the card comes back and gets wired to the
+catalogue like the other two.
+
+### A4b. Learn and Beyond BIM still promise Google Classroom ⭐ *new, 26 September*
+`learn.html` says "100% online · Google Classroom · self-paced" on every course card and
+"delivered through Google Classroom" in the FAQ; `beyondbim.html` says courses are "self-paced
+through Google Classroom". **We retired Google Classroom** — courses run on the ADLM Studio
+platform now, and our own pages were corrected in September. Because your build predates that,
+every port run reinstated it, so the porter now rewrites all four. Upstream, the wording we use is
+"100% online · self-paced" and "delivered on the ADLM Studio platform".
 
 ---
 
