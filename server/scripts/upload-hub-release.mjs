@@ -20,6 +20,10 @@
  *   Unlike adlm/installers, this prefix has to be fetchable by someone with no
  *   account — it is how you get the Hub in the first place. It is deliberately
  *   out of scope for migrate-installers-to-private-bucket.mjs.
+ *   R3 (2026-09-26) reverses the premise: the Hub is for paid accounts only,
+ *   handed out by /me/downloads/installer-hub. Prefer
+ *   `node scripts/upload-download.mjs installer-hub <file>` (the private
+ *   store, signed links). A public object here bypasses that gate.
  *
  * USAGE
  *   node scripts/upload-hub-release.mjs <path-to-zip>
