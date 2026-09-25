@@ -8,14 +8,17 @@
 //
 // READ-ONLY, DELIBERATELY
 //
-// /admin/roles can create, rename, re-scope and delete a role, and moving
-// somebody between roles changes what they can see. Those are exactly the
-// actions that want a considered screen — a confirmation, an audit line, a
-// warning when the last super-admin is about to lose their own access — and
-// none of that is designed yet. Showing the state truthfully is worth having
-// now; a delete button that skips the thinking is not.
+// Creating, re-scoping and deleting a role, and moving somebody between roles,
+// change who can see customer data. Those want a considered screen, and none
+// is drawn in his grammar yet. Until it is, "Edit roles" opens the older
+// build's editor at /admin/roles/edit. It confirms before a delete or a
+// revoke, audits every move between roles, and sits behind the server's
+// guards against removing the last administrator or demoting yourself. Area
+// toggles there save at once, unconfirmed and unaudited — the gap a drawn
+// editor should close.
 
 import React from "react";
+import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { AdmTable, AdmTwo, AdmDim, AdmChip } from "./adminUi.jsx";
@@ -102,6 +105,11 @@ export default function DsAdminRoles() {
             exactly these permissions, so a person never sees a screen that would turn them away.
           </p>
         </div>
+        <div className="adm-acts">
+          <Link className="ds-btn btn-p ds-btn-sm" to="/admin/roles/edit">
+            Edit roles
+          </Link>
+        </div>
       </div>
 
       {!d ? (
@@ -116,9 +124,9 @@ export default function DsAdminRoles() {
       )}
 
       <p className="adm-foot-note">
-        This screen reads. Creating a role, changing what one reaches, or moving somebody between
-        roles all change who can see customer data — those want a confirmation and an audit line
-        before a button, and that is not designed yet.
+        This screen reads. To create a role, change what one reaches, or move somebody between
+        roles, use Edit roles. Area changes there save as you click; deleting a role or taking
+        one away asks first, and every move between roles is written to the audit trail.
       </p>
     </>
   );

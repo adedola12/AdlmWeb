@@ -1046,6 +1046,19 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
+      {
+        // The editor behind the Roles register: create a role, change the
+        // areas it reaches, move people between roles. His register reads
+        // only; until an editor is drawn in his grammar, the older build's
+        // screen does the writing (with its confirmations, the role-move audit
+        // trail, and the server's last-admin and self-demotion guards).
+        path: "admin/roles/edit",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <AdminRoles />
+          </AdminRoute>
+        ),
+      },
 
       // ✅ Release sign-off (docs/RELEASE_GATE.md): super-admins + the release approver
       {
