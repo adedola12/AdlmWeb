@@ -114,7 +114,7 @@ export default function AdminReleases() {
 
       {data?.awaitingReview?.length > 0 && (
         <div className="card space-y-3 border border-purple-200">
-          <h2 className="font-semibold text-purple-800">Emergency releases waiting for review</h2>
+          <h2 className="text-base md:text-lg font-semibold leading-snug text-purple-800">Emergency releases waiting for review</h2>
           {data.awaitingReview.map((c) => {
             const overdue = c.reviewDueAt && new Date(c.reviewDueAt) < new Date();
             return (
@@ -154,7 +154,7 @@ export default function AdminReleases() {
 
       <div className="card space-y-3">
         <div className="flex items-center gap-3">
-          <h2 className="font-semibold mr-auto">Waiting for sign-off</h2>
+          <h2 className="text-base md:text-lg font-semibold leading-snug mr-auto">Plugin releases waiting for sign-off</h2>
           <button className="btn btn-sm" onClick={load}>Refresh</button>
         </div>
         {!data ? (
@@ -210,8 +210,44 @@ export default function AdminReleases() {
         )}
       </div>
 
+      <div className="card space-y-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-base md:text-lg font-semibold leading-snug mr-auto">Website, API and service changes</h2>
+          <span className="text-xs text-slate-500">Signed off on GitHub</span>
+        </div>
+        <p className="text-sm text-slate-500">
+          These changes cannot merge until {approver.name || "the approver"} approves the pull request on GitHub.
+          Try a website change first at{" "}
+          <a className="underline" href="https://preview.adlmstudio.net" target="_blank" rel="noreferrer">preview.adlmstudio.net</a>.
+        </p>
+        {data?.code?.error && <div className="text-sm text-amber-700">{data.code.error}</div>}
+        {!data ? null : !data.code?.pulls?.length ? (
+          <div className="text-sm text-slate-500">No open pull requests.</div>
+        ) : (
+          data.code.pulls.map((p) => (
+            <div key={`${p.repo}#${p.number}`} className="rounded-lg border border-slate-200 p-3 flex flex-wrap items-center gap-2">
+              <div className="min-w-0 mr-auto">
+                <div className="font-medium break-words">{p.title}</div>
+                <div className="text-xs text-slate-500">
+                  {p.label} · #{p.number} by {p.author}{p.draft ? " · draft" : ""} · opened {fmt(p.createdAt)}
+                </div>
+              </div>
+              <Badge status={p.state === "approved" ? "approved" : p.state === "changes_requested" ? "rejected" : "pending"} />
+              <a
+                className="btn btn-sm"
+                href={p.state === "waiting" ? `${p.url}/files` : p.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {you.isApprover && p.state === "waiting" ? "Review on GitHub" : "Open"}
+              </a>
+            </div>
+          ))
+        )}
+      </div>
+
       <div className="card">
-        <h2 className="font-semibold mb-3">History</h2>
+        <h2 className="text-base md:text-lg font-semibold leading-snug mb-3">History</h2>
         {data?.recent?.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

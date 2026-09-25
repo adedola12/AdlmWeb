@@ -281,6 +281,11 @@ const UserSchema = new mongoose.Schema(
     // the server is not a way to get around it.
     emailVerifySentAt: { type: Date, default: null },
     emailVerifyAttempts: { type: Number, default: 0 },
+    // Unconfirmed accounts: verification codes sent today, and how many times
+    // the address was changed while confirming (routes/auth.js limits both).
+    emailVerifyResends: { type: Number, default: 0 },
+    emailVerifyResendDay: { type: String, default: "" },
+    emailChangeCount: { type: Number, default: 0 },
 
     /* ── does this address still accept mail? ─────────────────────────────
      *

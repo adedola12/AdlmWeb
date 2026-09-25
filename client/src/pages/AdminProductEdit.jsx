@@ -273,36 +273,6 @@ function MediaBrowserModal({
   );
 }
 
-// -------------------- DISCOUNT HELPERS --------------------
-function toUiDiscount(d) {
-  if (!d || !d.type) {
-    return { type: "none", valueNGN: "", valueUSD: "" };
-  }
-  return {
-    type: d.type, // "percent" | "fixed"
-    valueNGN: d.valueNGN ?? "",
-    valueUSD: d.valueUSD == null ? "" : d.valueUSD,
-  };
-}
-
-function buildDiscount(ui) {
-  const type = String(ui?.type || "none").toLowerCase();
-  if (type === "none") return undefined;
-
-  const valueNGN = Number(ui?.valueNGN || 0) || 0;
-  const rawUSD = ui?.valueUSD;
-  const valueUSD = rawUSD === "" || rawUSD == null ? null : Number(rawUSD || 0);
-
-  // require at least one positive value
-  if (valueNGN <= 0 && (valueUSD == null || valueUSD <= 0)) return undefined;
-
-  return {
-    type: type === "fixed" ? "fixed" : "percent",
-    valueNGN,
-    valueUSD,
-  };
-}
-
 export default function AdminProductEdit() {
   const { id } = useParams();
   const { accessToken } = useAuth();
@@ -336,12 +306,6 @@ export default function AdminProductEdit() {
   });
 
   const [storageSlotPriceNGN, setStorageSlotPriceNGN] = React.useState("");
-
-  // ✅ NEW: discounts state for edit page
-  const [discountsUi, setDiscountsUi] = React.useState({
-    sixMonths: { type: "none", valueNGN: "", valueUSD: "" },
-    oneYear: { type: "none", valueNGN: "", valueUSD: "" },
-  });
 
   const [previewUrl, setPreviewUrl] = React.useState("");
   const [thumbnailUrl, setThumbnailUrl] = React.useState("");
@@ -427,12 +391,6 @@ export default function AdminProductEdit() {
           discountedYearlyUSD: data.price?.discountedYearlyUSD ?? "",
         });
 
-        // ✅ NEW: load existing discounts into UI
-        setDiscountsUi({
-          sixMonths: toUiDiscount(data.discounts?.sixMonths),
-          oneYear: toUiDiscount(data.discounts?.oneYear),
-        });
-
         setStorageSlotPriceNGN(data.storageSlotPriceNGN ?? "");
         setPreviewUrl(data.previewUrl || "");
         setThumbnailUrl(data.thumbnailUrl || "");
@@ -456,12 +414,6 @@ export default function AdminProductEdit() {
     setSaving(true);
     setMsg("");
     try {
-      const discounts = {
-        sixMonths: buildDiscount(discountsUi.sixMonths),
-        oneYear: buildDiscount(discountsUi.oneYear),
-      };
-      const hasDiscounts = !!discounts.sixMonths || !!discounts.oneYear;
-
       const payload = {
         name,
         blurb,
@@ -474,11 +426,6 @@ export default function AdminProductEdit() {
           yearlyNGN: Number(price.yearlyNGN || 0),
           installNGN: Number(price.installNGN || 0),
         },
-
-        // ✅ IMPORTANT:
-        // - if user has discounts -> send them
-        // - if user cleared discounts -> send {} so API can UNSET them
-        discounts: hasDiscounts ? discounts : {},
 
         previewUrl: previewUrl || undefined,
         thumbnailUrl: thumbnailUrl || undefined,

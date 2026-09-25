@@ -576,11 +576,14 @@ app.use((err, _req, res, _next) => {
 // adds no new outage surface — it only catches a broken future deploy).
 function validateEnv() {
   const critical = ["MONGO_URI", "JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"];
+  // SMTP_PASS is deliberately absent. Mail goes out on SES using the
+  // Lambda role, and the Gmail app password it named was deleted from SSM
+  // once the cutover was confirmed - warning about a credential we removed on
+  // purpose trains people to ignore this line.
   const recommended = [
     "JWT_LICENSE_SECRET",
     "PAYSTACK_SECRET_KEY",
     "CLOUDINARY_API_SECRET",
-    "SMTP_PASS",
   ];
   const missingCritical = critical.filter((k) => !process.env[k]);
   if (missingCritical.length) {

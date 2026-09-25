@@ -36,6 +36,12 @@ export const ADMIN_AREAS = [
   // Organizations, Storage, Installations, Settings …) and their API. Grant
   // deliberately — it includes purchase approval and entitlement management.
   { key: "adminhub", label: "Admin Hub (purchases & subscriptions)", group: "Core", staffGrantable: true },
+  // Sign in to the staff-only preview site (preview.adlmstudio.net and the
+  // staged /preview/* pages) and look around. No admin screen or admin API
+  // checks this key, so on its own it opens nothing else: a role holding only
+  // "preview" does not count as staff (client/src/utils/roles.js). For tech
+  // support checking the new site ahead of launch.
+  { key: "preview", label: "Preview site (view only)", group: "Access", staffGrantable: true },
 
   // ── Admin-exclusive (never grantable — always require the admin superuser) ──
   { key: "audit", label: "Audit Log & Break-glass", group: "Core", staffGrantable: false },
