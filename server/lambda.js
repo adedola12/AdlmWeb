@@ -72,6 +72,31 @@ async function loadSecretsIntoEnv() {
 }
 
 /**
+ * The header CloudFront adds so the API can tell it from a direct Function URL
+ * call (middleware/originVerify.js). Only the secret's ARN is configured; the
+ * value is fetched here, once per container, and never logged. A failure
+ * leaves ORIGIN_VERIFY_SECRET unset, which turns the check off for this
+ * container rather than refusing every request.
+ */
+async function loadOriginVerifySecret() {
+  const arn = process.env.ORIGIN_VERIFY_SECRET_ARN;
+  if (!arn || process.env.ORIGIN_VERIFY_SECRET) return;
+  try {
+    const { SecretsManagerClient, GetSecretValueCommand } = await import(
+      "@aws-sdk/client-secrets-manager"
+    );
+    const out = await new SecretsManagerClient({}).send(
+      new GetSecretValueCommand({ SecretId: arn }),
+    );
+    if (out.SecretString) process.env.ORIGIN_VERIFY_SECRET = out.SecretString;
+  } catch (err) {
+    console.error(
+      `[origin-verify] could not read the secret, check is OFF for this container: ${err?.name || err}`,
+    );
+  }
+}
+
+/**
  * Resolves to { app, bootstrap } with secrets already in process.env.
  * Cached, so the SSM round-trip and the module graph evaluation happen once
  * per container rather than once per request.
@@ -80,7 +105,9 @@ function loadApp() {
   if (_appModulePromise) return _appModulePromise;
 
   _appModulePromise = (async () => {
-    await loadSecretsIntoEnv();
+    // In parallel: a cold start already waits on SSM, so the second read
+    // adds no latency of its own.
+    await Promise.all([loadSecretsIntoEnv(), loadOriginVerifySecret()]);
     // Deferred on purpose — see the note at the top of this file.
     return import("./index.js");
   })().catch((err) => {

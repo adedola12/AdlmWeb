@@ -301,6 +301,22 @@ export interface AdlmConfig {
    * from there. AdlmApi depends on AdlmFiles, so the bucket exists first.
    */
   filesBucket: boolean;
+
+  /**
+   * Only CloudFront may reach the API (owner item 0c, 2026-09-26). CloudFront
+   * adds a secret origin header; server/middleware/originVerify.js checks it.
+   * Used instead of functionUrlAuth "AWS_IAM": CloudFront OAC needs an
+   * x-amz-content-sha256 body hash on every POST/PUT and signs with its own
+   * Authorization header, and no ADLM client sends the hash or anything but
+   * "Authorization: Bearer", so OAC would break every write and sign-in.
+   *
+   * "off"     no header, no check.
+   * "report"  header added; the app logs requests that arrive without it
+   *           ("[origin-verify] would refuse ...") and lets them through.
+   * "enforce" the app refuses them with 403. Move here only after the report
+   *           log shows nothing legitimate calling the Function URL direct.
+   */
+  originVerify: "off" | "report" | "enforce";
 }
 
 export const config: AdlmConfig = {
@@ -380,6 +396,8 @@ export const config: AdlmConfig = {
   functionUrlAuth: "NONE",
 
   filesBucket: true,
+
+  originVerify: "report",
 };
 
 /**
