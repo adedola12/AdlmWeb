@@ -11,7 +11,9 @@ import { createRequire } from "module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DESIGNS } from "../seed/samples/duplexModel.js";
-import { buildSampleProject } from "../seed/samples/sampleProject.js";
+import { assembleSampleProject, duplexScheme } from "../seed/samples/sampleProject.js";
+import { mepScheme } from "../seed/samples/mepSample.js";
+import { ROAD_DESIGNS, roadScheme } from "../seed/samples/roadSample.js";
 import { writeIfc } from "../seed/samples/ifcWriter.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -24,19 +26,26 @@ const api = new WebIFC.IfcAPI();
 await api.Init();
 
 let bad = 0;
-for (const d of DESIGNS) {
-  const { project, model } = buildSampleProject(d, "revit");
-  for (const disc of ["architectural", "structural"]) {
+// Every model-based sample: QUIV (duplex), Revit MEP (services), CIVIQ (roads).
+const cases = [
+  ...DESIGNS.map((d) => ({ d, scheme: duplexScheme(d, "revit"), productKey: "revit" })),
+  ...DESIGNS.map((d) => ({ d, scheme: mepScheme(d), productKey: "mep" })),
+  ...ROAD_DESIGNS.map((d) => ({ d, scheme: roadScheme(d), productKey: "civil3d" })),
+];
+for (const { d, scheme, productKey } of cases) {
+  const { project } = assembleSampleProject(scheme, productKey);
+  const model = scheme.model;
+  for (const disc of scheme.modelDisciplines) {
     const txt = writeIfc({
       projectName: project.name,
-      buildingName: d.title,
+      buildingName: scheme.design.title,
       siteName: d.location,
       elements: model.elements,
       discipline: disc,
       seed: `${d.key}-${disc}`,
       storeyHeight: d.storeyHeight,
-    });
-    const id = api.OpenModel(new Uint8Array(Buffer.from(txt)));
+      storeyLevels: scheme.storeyLevels,
+    });    const id = api.OpenModel(new Uint8Array(Buffer.from(txt)));
     const tagsWithMesh = new Set();
     api.StreamAllMeshes(id, (m) => {
       const tag = Number(api.GetLine(id, m.expressID)?.Tag?.value);
@@ -55,7 +64,7 @@ for (const d of DESIGNS) {
     const ok = !missing.length && !noGeom.length;
     if (!ok) bad += 1;
     console.log(
-      `${ok ? "ok  " : "FAIL"} ${d.key.padEnd(17)} ${disc.padEnd(13)} ${(txt.length / 1024).toFixed(0)}KB`,
+      `${ok ? "ok  " : "FAIL"} ${productKey.padEnd(8)} ${d.key.padEnd(17)} ${disc.padEnd(13)} ${(txt.length / 1024).toFixed(0)}KB`,
       `elements ${tagsWithMesh.size}, cited ${need.size}, missing ${missing.length}, without geometry ${noGeom.length}`,
     );
   }

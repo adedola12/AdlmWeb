@@ -1,15 +1,20 @@
-// Seeds the read-only sample projects (learning material) for QUIV and HERON:
-// four duplex designs, one per foundation type, each a complete job with bill,
-// budget, locked contract, certificates, variations and programme. QUIV samples
-// also carry architectural and structural IFC models, uploaded to R2.
+// Seeds the read-only sample projects (learning material) for every ADLM
+// product with a cloud project view:
+//   revit (QUIV), planswift (HERON)  four duplexes, one per foundation type
+//   mep (Revit MEP)                  the services for the same four duplexes
+//   civil3d (CIVIQ)                  four roads (asphalt, concrete, interlock, laterite)
+//   archicad (ArchiCAD)              the four duplexes, with their ArchiCAD BoQ versions
+// Each is a complete job: bill, budget, locked contract, certificates,
+// variations and programme. Model-based samples also carry IFC models, uploaded
+// to R2.
 //
 // Dry run by default: builds everything, writes the IFC files and project JSON
 // to seed/samples/.out for review, and prints a summary. Nothing is written to
 // the database or R2 without --apply.
 //
 // Usage (from server/):
-//   node scripts/seed-sample-projects.mjs                  # dry run, both products
-//   node scripts/seed-sample-projects.mjs --product revit  # dry run, QUIV only
+//   node scripts/seed-sample-projects.mjs                  # dry run, every product
+//   node scripts/seed-sample-projects.mjs --product mep    # dry run, one product
 //   node scripts/seed-sample-projects.mjs --apply          # write DB + R2
 //   node scripts/seed-sample-projects.mjs --remove --apply # delete every sample
 //
@@ -20,7 +25,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DESIGNS } from "../seed/samples/duplexModel.js";
-import { buildSampleProject } from "../seed/samples/sampleProject.js";
+import { assembleSampleProject, duplexScheme } from "../seed/samples/sampleProject.js";
+import { mepScheme } from "../seed/samples/mepSample.js";
+import { ROAD_DESIGNS, roadScheme } from "../seed/samples/roadSample.js";
+import { archicadVersionDoc } from "../seed/samples/archicadSample.js";
 import { writeIfc } from "../seed/samples/ifcWriter.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,18 +42,25 @@ const opt = (name) => {
 };
 const APPLY = flag("apply");
 const REMOVE = flag("remove");
-const PRODUCTS = opt("product") ? [opt("product")] : ["revit", "planswift"];
+// productKey -> the product's name, its designs and how each becomes a scheme.
+const REGISTRY = {
+  revit: { name: "QUIV", designs: DESIGNS, scheme: (d) => duplexScheme(d, "revit") },
+  planswift: { name: "HERON", designs: DESIGNS, scheme: (d) => duplexScheme(d, "planswift") },
+  mep: { name: "Revit MEP", designs: DESIGNS, scheme: mepScheme },
+  civil3d: { name: "CIVIQ", designs: ROAD_DESIGNS, scheme: roadScheme },
+  archicad: { name: "ArchiCAD", designs: DESIGNS, scheme: (d) => duplexScheme(d, "archicad") },
+};
+const PRODUCTS = opt("product") ? [opt("product")] : Object.keys(REGISTRY);
 const ONLY = opt("only");
 
 for (const p of PRODUCTS) {
-  if (!["revit", "planswift"].includes(p)) {
-    console.error(`Unknown --product ${p}. Use revit (QUIV) or planswift (HERON).`);
+  if (!REGISTRY[p]) {
+    console.error(`Unknown --product ${p}. Use one of: ${Object.keys(REGISTRY).join(", ")}.`);
     process.exit(1);
   }
 }
 
 const naira = (n) => `N${(n / 1e6).toFixed(2)}m`;
-const designs = DESIGNS.filter((d) => !ONLY || d.key === ONLY);
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
@@ -65,56 +80,65 @@ async function main() {
       console.log(`[dry run] would delete every sample project for: ${PRODUCTS.join(", ")}`);
       return;
     }
+    if (PRODUCTS.includes("archicad")) {
+      const { ArchicadBoqVersion: V } = await import("../models/ArchicadBoqVersion.js");
+      const ids = await TakeoffProject.find({ isSample: true, productKey: "archicad" }).distinct("_id");
+      await V.deleteMany({ projectId: { $in: ids } });
+    }
     const r = await TakeoffProject.deleteMany(filter);
     console.log(`Deleted ${r.deletedCount} sample project(s). R2 objects under adlm/samples/ were left in place.`);
     return;
   }
 
-  // IFC files are the same for every run, so they are built once per design.
-  const ifcFiles = {};
-  for (const d of designs) {
-    const { model, project } = buildSampleProject(d, "revit");
-    for (const disc of ["architectural", "structural"]) {
-      const text = writeIfc({
-        projectName: project.name,
-        buildingName: d.title,
-        siteName: d.location,
-        elements: model.elements,
-        discipline: disc,
-        seed: `${d.key}-${disc}`,
-        storeyHeight: d.storeyHeight,
-      });
-      const file = `${d.key}-${disc}.ifc`;
-      fs.writeFileSync(path.join(OUT, file), text);
-      ifcFiles[`${d.key}:${disc}`] = { file, buffer: Buffer.from(text, "ascii") };
-    }
+  let ArchicadBoqVersion = null;
+  if (APPLY && PRODUCTS.includes("archicad")) {
+    ({ ArchicadBoqVersion } = await import("../models/ArchicadBoqVersion.js"));
   }
 
   const rows = [];
+  // An IFC file depends only on the scheme's model, so one upload serves
+  // every product that shares it (QUIV and ArchiCAD share the duplex).
+  const uploaded = {};
   for (const productKey of PRODUCTS) {
-    for (const d of designs) {
+    const reg = REGISTRY[productKey];
+    for (const d of reg.designs.filter((x) => !ONLY || x.key === ONLY)) {
+      const scheme = reg.scheme(d);
       const modelUrls = {};
-      if (productKey === "revit") {
-        for (const disc of ["architectural", "structural"]) {
-          const f = ifcFiles[`${d.key}:${disc}`];
-          const key = `adlm/samples/ifc/${f.file}`;
+      for (const disc of scheme.modelDisciplines || []) {
+        const file = `${d.key}-${disc}.ifc`;
+        if (!uploaded[file]) {
+          const text = writeIfc({
+            projectName: `Sample: ${scheme.design.title}`,
+            buildingName: scheme.design.title,
+            siteName: d.location,
+            elements: scheme.model.elements,
+            discipline: disc,
+            seed: `${d.key}-${disc}`,
+            storeyHeight: d.storeyHeight,
+            storeyLevels: scheme.storeyLevels,
+          });
+          fs.writeFileSync(path.join(OUT, file), text);
+          const buffer = Buffer.from(text, "ascii");
+          const key = `adlm/samples/ifc/${file}`;
           if (APPLY) {
-            const up = await uploadBufferToR2(f.buffer, {
+            const up = await uploadBufferToR2(buffer, {
               key,
               contentType: "application/x-step",
               cacheControl: "public, max-age=3600",
             });
-            modelUrls[disc] = { key: up.public_id, url: up.secure_url, sizeBytes: f.buffer.length };
+            uploaded[file] = { key: up.public_id, url: up.secure_url, sizeBytes: buffer.length };
           } else {
-            modelUrls[disc] = { key, url: "", sizeBytes: f.buffer.length };
+            uploaded[file] = { key, url: "", sizeBytes: buffer.length };
           }
         }
+        modelUrls[disc] = uploaded[file];
       }
 
-      const { project } = buildSampleProject(d, productKey, { modelUrls });
+      const { project } = assembleSampleProject(scheme, productKey, { modelUrls });
+      const boq = productKey === "archicad" ? archicadVersionDoc(scheme, project) : null;
       fs.writeFileSync(
         path.join(OUT, `${productKey}-${d.key}.json`),
-        JSON.stringify(project, null, 2),
+        JSON.stringify(boq ? { project, boq } : project, null, 2),
       );
 
       let action = "dry run";
@@ -125,12 +149,17 @@ async function main() {
         doc.set(project);
         await doc.save();
         action = existing ? `updated ${doc._id}` : `created ${doc._id}`;
+        if (boq) {
+          // One current BoQ version per ArchiCAD sample, replaced on re-seed.
+          await ArchicadBoqVersion.deleteMany({ projectId: doc._id });
+          await ArchicadBoqVersion.create({ projectId: doc._id, ...boq });
+        }
       }
 
       const measured = project.items.reduce((a, it) => a + it.qty * it.rate, 0);
       const last = project.certificates[project.certificates.length - 1];
       rows.push({
-        product: productKey === "revit" ? "QUIV" : "HERON",
+        product: reg.name,
         sample: d.key,
         lines: project.items.length,
         budget: project.budgetItems.length,
@@ -139,6 +168,7 @@ async function main() {
         certs: project.certificates.length,
         valued: `${Math.round((last.cumulativeValue / project.contract.contractSum) * 100)}%`,
         final: project.finalAccount.finalized ? "yes" : "",
+        model: Object.keys(modelUrls).join("+"),
         action,
       });
     }

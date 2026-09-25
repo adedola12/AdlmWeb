@@ -15,6 +15,7 @@ import {
 } from "./priceBook.js";
 import { QUIV_TRADES } from "../../util/boqCategory.js";
 import { deriveBillRatesFromBudget } from "../../util/deriveBillRates.js";
+import { archicadLines } from "./archicadSample.js";
 
 const r2 = (n) => Math.round(n * 100) / 100;
 const r3 = (n) => Math.round(n * 1000) / 1000;
@@ -485,13 +486,32 @@ export function duplexScheme(design, productKey) {
   const isQuiv = productKey === "revit";
   const isArchicad = productKey === "archicad";
   const model = buildDuplex(design);
-  const lines = measuredLines(model);
+  const lines = isArchicad ? archicadLines(measuredLines(model), design.foundation) : measuredLines(model);
   const tag = isQuiv ? "QUIV" : isArchicad ? "ArchiCAD" : "HERON";
   const modelBased = isQuiv || isArchicad;
   const pileCount = model.elements.filter((e) => e.ifc === "IfcPile").length;
   const gridAPiles = model.elements.filter((e) => e.ifc === "IfcPile" && e.shapes[0].cx === 0).length;
 
   const itemFor = (l, i) => {
+    // ArchiCAD: the lossy mapping archicad.routes.js embedLinesOnProject() writes.
+    if (isArchicad) {
+      return {
+        sn: i + 1,
+        qty: l.qty,
+        unit: l.unit,
+        rate: 0,
+        description: l.quiv,
+        code: l.archicad.itemRef,
+        category: l.archicad.categoryTitle,
+        trade: l.archicad.categoryTitle,
+        type: l.archicad.quivType,
+        level: l.level,
+        discipline: "architectural",
+        appliedRateKey: l.heron,
+        completed: false,
+        percentComplete: 0,
+      };
+    }
     const code = modelBased
       ? `${l.takeoffLine}:${l.key}:${l.level}`.toLowerCase().replace(/\s+/g, "-")
       : `${l.section}:${l.heron}`;

@@ -57,6 +57,21 @@ const STYLES = {
   tile: [0.86, 0.84, 0.8, 0],
   ceiling: [0.99, 0.99, 0.99, 0],
   roof: [0.62, 0.16, 0.12, 0],
+  // MEP
+  fixture: [0.98, 0.93, 0.55, 0],
+  electrical: [0.35, 0.35, 0.4, 0],
+  sanitary: [0.97, 0.97, 0.99, 0],
+  pipeCold: [0.2, 0.45, 0.85, 0],
+  pipeWaste: [0.45, 0.45, 0.45, 0],
+  equipment: [0.85, 0.87, 0.9, 0],
+  cable: [0.1, 0.1, 0.1, 0],
+  // Civil
+  asphalt: [0.18, 0.18, 0.2, 0],
+  base: [0.6, 0.55, 0.45, 0],
+  subbase: [0.72, 0.45, 0.28, 0],
+  fill: [0.6, 0.42, 0.26, 0],
+  paver: [0.62, 0.3, 0.25, 0],
+  marking: [0.97, 0.97, 0.95, 0],
 };
 
 export function writeIfc({
@@ -67,6 +82,7 @@ export function writeIfc({
   discipline,
   seed,
   storeyHeight = 3.3,
+  storeyLevels = null,
 }) {
   const lines = [];
   let n = 0;
@@ -109,7 +125,7 @@ export function writeIfc({
   // Storeys in elevation order; elements are placed in world coordinates, so
   // their placements are absolute (no PlacementRelTo) and the storey only
   // carries the elevation for the spatial tree.
-  const storeyDefs = [
+  const storeyDefs = storeyLevels || [
     ["Foundation", -1.5],
     ["Ground Floor", 0],
     ["First Floor", storeyHeight],
@@ -194,8 +210,12 @@ export function writeIfc({
       default:
         ref = e(`${el.ifc.toUpperCase()}(${head},${el.predefined ? `.${el.predefined}.` : "$"})`);
     }
-    if (!byStorey.has(el.level)) byStorey.set(el.level, []);
-    byStorey.get(el.level).push(ref);
+    // el.storey places an element whose bill "level" is not a storey (an
+    // external MEP item, a road chainage band) in the spatial tree.
+    const storeyName = el.storey || el.level;
+    if (!storeys.has(storeyName)) throw new Error(`No storey "${storeyName}" for element ${el.id}`);
+    if (!byStorey.has(storeyName)) byStorey.set(storeyName, []);
+    byStorey.get(storeyName).push(ref);
   }
   for (const [level, refs] of byStorey) {
     e(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${g(`contain:${level}`)},$,$,$,(${refs.join(",")}),${storeys.get(level)})`);

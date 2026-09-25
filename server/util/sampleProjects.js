@@ -13,7 +13,9 @@ export async function rejectSampleWrites(req, res, next, id) {
   try {
     if (req.method === "GET" || req.method === "HEAD") return next();
     if (!mongoose.Types.ObjectId.isValid(String(id))) return next();
-    const sample = await TakeoffProject.exists({ _id: id, isSample: true });
+    // A plain awaited findOne (not exists(), which chains .select()) so the
+    // route tests' TakeoffProject.findOne stub serves it too.
+    const sample = await TakeoffProject.findOne({ _id: id, isSample: true }, { _id: 1 });
     if (!sample) return next();
     return res.status(403).json({
       error: "Sample projects are read-only learning material.",

@@ -127,6 +127,8 @@ export const PRICES = {
   labSanitary: ["Fix and connect sanitary fitting", "nr", 15000, "Labour"],
   labEquipment: ["Install and commission equipment", "nr", 35000, "Labour"],
   labManhole: ["Excavate and build inspection chamber", "nr", 28000, "Labour"],
+  labTestElec: ["Test, commission and certify electrical installation", "item", 350000, "Labour"],
+  labTestPlumb: ["Pressure test, flush and commission plumbing", "item", 180000, "Labour"],
 
   // ── Civil works (CIVIQ samples) ──
   crushedStone: ["Crushed stone base course material", "m3", 42000, "Material"],
@@ -145,6 +147,9 @@ export const PRICES = {
   labCulvert: ["Lay and joint culvert pipe", "m", 14000, "Labour"],
   labSign: ["Erect road sign", "nr", 12000, "Labour"],
   plantMarking: ["Road marking machine", "m", 350, "Plant"],
+  paver: ["80mm interlocking paving stones", "m2", 8500, "Material"],
+  labPaver: ["Lay pavers on sand bed and vibrate", "m2", 1500, "Labour"],
+  plantDozer: ["Dozer and loader", "m3", 2600, "Plant"],
 };
 
 // Build-ups: [priceKey, quantity per ONE unit of the bill line].
@@ -213,6 +218,8 @@ export const BUILDUPS = {
   manhole: [["manhole", 1], ["labManhole", 1]],
   smoke: [["smoke", 1], ["labAccessory", 1]],
   extinguisher: [["extinguisher", 1], ["labAccessory", 0.5]],
+  testElec: [["labTestElec", 1]],
+  testPlumb: [["labTestPlumb", 1]],
 
   // Civil
   subBase: [["laterSub", 1.25], ["labRoadBase", 1], ["plantGrader", 1]],
@@ -223,6 +230,12 @@ export const BUILDUPS = {
   culvert900: [["culvert", 1], ["cement", 0.5], ["labCulvert", 1]],
   marking: [["roadPaint", 1], ["plantMarking", 1]],
   roadSign: [["signPost", 1], ["labSign", 1]],
+  topsoil: [["plantDozer", 1], ["plantTipper", 0.4]],
+  bulkCut: [["plantExcavator", 1], ["plantDozer", 0.4]],
+  embankFill: [["laterite", 1.25], ["labRoadBase", 1], ["plantGrader", 1]],
+  ditch: [["labExcavate", 0.2], ["plantExcavator", 0.8]],
+  uDrain: [["cement", 2.3], ["sand", 0.17], ["granite", 0.33], ["plywood", 0.15], ["hw2x3", 0.5], ["rebar", 12], ["labConcrete", 0.35], ["labFormwork", 1.6], ["labRebar", 12]],
+  interlock: [["paver", 1.03], ["sand", 0.05], ["labPaver", 1], ["plantCompactor", 0.05]],
 };
 
 const round2 = (n) => Math.round(n * 100) / 100;
