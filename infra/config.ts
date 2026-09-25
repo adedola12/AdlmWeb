@@ -293,6 +293,14 @@ export interface AdlmConfig {
    *           function. Tighter. Switch to this after the soak.
    */
   functionUrlAuth: "NONE" | "AWS_IAM";
+
+  /**
+   * Give the API FILES_BUCKET (the AdlmFiles stack's bucket), so
+   * server/util/fileStore.js stores NEW private uploads in S3 instead of
+   * Cloudflare R2. Files already in R2 carry storage "r2" and are still read
+   * from there. AdlmApi depends on AdlmFiles, so the bucket exists first.
+   */
+  filesBucket: boolean;
 }
 
 export const config: AdlmConfig = {
@@ -370,6 +378,8 @@ export const config: AdlmConfig = {
     "arn:aws:acm:us-east-1:065634457992:certificate/b8b2a821-6e72-4911-8a12-ba0bdbffcf76",
 
   functionUrlAuth: "NONE",
+
+  filesBucket: true,
 };
 
 /**

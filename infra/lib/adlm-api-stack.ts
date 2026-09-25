@@ -35,6 +35,7 @@ import {
   TimeZone,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { filesBucketName } from "./adlm-files-stack.js";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
@@ -465,6 +466,12 @@ export class AdlmApiStack extends Stack {
       "SES_MARKETING_CONFIGURATION_SET",
       marketingConfigSet.configurationSetName,
     );
+
+    // The private files bucket lives in its own stack (AdlmFiles), which
+    // grants this function's role; the API only needs its name.
+    if (cfg.filesBucket) {
+      fn.addEnvironment("FILES_BUCKET", filesBucketName(this.account, this.region));
+    }
 
     /* ─────────────────── Function URL ───────────────────
      * The plan requires verifying the API here BEFORE any DNS change, and it
