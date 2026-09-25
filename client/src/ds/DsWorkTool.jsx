@@ -12,6 +12,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import DsProjectGallery from "./DsProjectGallery.jsx";
+import SampleProjectsStrip from "../features/projects/SampleProjectsStrip.jsx";
 import { useProjects } from "./useProjects.js";
 import { FaChevronRight, FaLock } from "../components/icons.jsx";
 import { SOURCES, compact, estimatedOf, short, sourceOf } from "../lib/projectGallery.js";
@@ -30,6 +31,7 @@ export default function DsWorkTool() {
   const { accessToken } = useAuth();
   const { projects, failed } = useProjects();
   const [owned, setOwned] = React.useState(null);
+  const [samples, setSamples] = React.useState([]);
   const key = BY_SLUG[String(t || "").toLowerCase()];
   const S = SOURCES[key];
 
@@ -45,6 +47,18 @@ export default function DsWorkTool() {
       alive = false;
     };
   }, [accessToken]);
+
+  // Read-only learning samples for this tool; none (or an older API) hides the row.
+  React.useEffect(() => {
+    if (!accessToken || !key) return undefined;
+    let alive = true;
+    apiAuthed(`/projects/${key}/samples`, { token: accessToken })
+      .then((d) => alive && setSamples(Array.isArray(d) ? d : []))
+      .catch(() => alive && setSamples([]));
+    return () => {
+      alive = false;
+    };
+  }, [accessToken, key]);
 
   if (String(t).toLowerCase() === "rategen") return <Navigate to="/work/library" replace />;
   if (!S || !STEPS[key]) return <Navigate to="/work/projects" replace />;
@@ -114,6 +128,8 @@ export default function DsWorkTool() {
           Open the {S.name} workspace
         </Link>
       </div>
+
+      <SampleProjectsStrip samples={samples} productKey={key} />
 
       {failed ? (
         <p className="ds-sub">Your projects could not be loaded just now. Please refresh.</p>

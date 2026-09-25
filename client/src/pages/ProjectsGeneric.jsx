@@ -5763,7 +5763,7 @@ export default function ProjectsGeneric() {
         <main>
             {!sel ? (
               <>
-              <SampleProjectsStrip samples={samples} onOpenProject={view} />
+              <SampleProjectsStrip samples={samples} onOpenProject={view} productKey={normTool(tool)} />
               <ProjectExplorerGrid
                 rowsShown={rowsShown}
                 selectedIdsCount={selectedIds.length}

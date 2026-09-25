@@ -45,13 +45,13 @@ const trade = {
 // Programme phases. A bill line belongs to exactly one; progress, certificates
 // and PM tasks are all expressed per phase.
 export const PHASES = [
-  { n: 1, name: "Substructure", days: 24, resource: "Groundworks gang" },
-  { n: 2, name: "Ground floor frame and blockwork", days: 21, resource: "Concrete and masonry gang" },
-  { n: 3, name: "First floor slab, beams and staircase", days: 18, resource: "Concrete gang, carpenters" },
-  { n: 4, name: "First floor frame, blockwork and roof beam", days: 21, resource: "Concrete and masonry gang" },
-  { n: 5, name: "Roof carpentry and covering", days: 14, resource: "Roofing subcontractor" },
-  { n: 6, name: "Doors and windows", days: 12, resource: "Joinery and aluminium fabricator" },
-  { n: 7, name: "Finishes (plaster, screed, tiles, POP, paint)", days: 42, resource: "Finishing gangs" },
+  { n: 1, name: "Substructure", days: 24, resource: "Groundworks gang", priority: "high" },
+  { n: 2, name: "Ground floor frame and blockwork", days: 21, resource: "Concrete and masonry gang", priority: "high" },
+  { n: 3, name: "First floor slab, beams and staircase", days: 18, resource: "Concrete gang, carpenters", priority: "high" },
+  { n: 4, name: "First floor frame, blockwork and roof beam", days: 21, resource: "Concrete and masonry gang", priority: "high" },
+  { n: 5, name: "Roof carpentry and covering", days: 14, resource: "Roofing subcontractor", lead: "Finishing supervisor" },
+  { n: 6, name: "Doors and windows", days: 12, resource: "Joinery and aluminium fabricator", lead: "Finishing supervisor", slack: 10 },
+  { n: 7, name: "Finishes (plaster, screed, tiles, POP, paint)", days: 42, resource: "Finishing gangs", lead: "Finishing supervisor" },
 ];
 
 // ── Measured lines ─────────────────────────────────────────────────────────
@@ -478,17 +478,21 @@ export function valueToDate(project) {
 }
 
 // ── The sample project document ───────────────────────────────────────────
-export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) {
+// The duplex scheme: what QUIV, HERON and ArchiCAD share. Other products
+// (MEP, CIVIQ) build their own scheme in mepSample.js / roadSample.js and hand
+// it to assembleSampleProject below.
+export function duplexScheme(design, productKey) {
   const isQuiv = productKey === "revit";
+  const isArchicad = productKey === "archicad";
   const model = buildDuplex(design);
-  const stage = STAGES[design.key];
   const lines = measuredLines(model);
-  const tag = isQuiv ? "QUIV" : "HERON";
-  const start = stage.start;
+  const tag = isQuiv ? "QUIV" : isArchicad ? "ArchiCAD" : "HERON";
+  const modelBased = isQuiv || isArchicad;
+  const pileCount = model.elements.filter((e) => e.ifc === "IfcPile").length;
+  const gridAPiles = model.elements.filter((e) => e.ifc === "IfcPile" && e.shapes[0].cx === 0).length;
 
-  // Bill items, in the order the plugin would send them.
-  const items = lines.map((l, i) => {
-    const code = isQuiv
+  const itemFor = (l, i) => {
+    const code = modelBased
       ? `${l.takeoffLine}:${l.key}:${l.level}`.toLowerCase().replace(/\s+/g, "-")
       : `${l.section}:${l.heron}`;
     const base = {
@@ -496,15 +500,15 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
       qty: l.qty,
       unit: l.unit,
       rate: 0,
-      description: isQuiv ? l.quiv : l.heron,
-      takeoffLine: isQuiv ? l.takeoffLine : "",
+      description: modelBased ? l.quiv : l.heron,
+      takeoffLine: modelBased ? l.takeoffLine : "",
       materialName: "",
-      level: isQuiv ? l.level : l.section,
-      type: isQuiv ? l.type : "item",
+      level: modelBased ? l.level : l.section,
+      type: modelBased ? l.type : "item",
       code,
       category: l.category,
       trade: l.trade,
-      discipline: isQuiv ? l.discipline : "",
+      discipline: modelBased ? l.discipline : "",
       appliedRateKey: l.heron,
       completed: false,
       percentComplete: 0,
@@ -515,7 +519,49 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
       base.elementQuantitiesEstimated = false;
     }
     return base;
-  });
+  };
+
+  const toolLine = isQuiv
+    ? "3D Model: architectural and structural IFC models. Pick a bill line to see the elements it was measured from, or click an element to find its lines."
+    : isArchicad
+      ? "Measured in ArchiCAD: every line keeps the elements it came from, grouped by work section, with the costed bill saved as a BoQ version."
+      : "Measured in HERON from PDF drawings: lines are grouped by takeoff folder (Substructure, Frame, Blockwork, Roofing, Doors & Windows, Finishes).";
+
+  return {
+    design,
+    model,
+    lines,
+    tag,
+    phases: PHASES,
+    stage: STAGES[design.key],
+    provisional: PROVISIONAL,
+    suppliers: SUPPLIERS,
+    itemFor,
+    variationQty: (v) => (v.qtyFrom === "piles" ? pileCount : v.qtyFrom === "gridA2m" ? gridAPiles * 2 : v.qty),
+    modelTitle: isQuiv ? `${design.title}.rvt` : isArchicad ? `${design.title}.pln` : `${design.title}.pdf`,
+    modelDisciplines: isQuiv ? ["architectural", "structural"] : [],
+    label: design.foundationLabel,
+    summary: `${design.title} at ${design.location}. Ground: ${design.soil}.`,
+    toolLine,
+  };
+}
+
+export function buildSampleProject(design, productKey, opts = {}) {
+  return assembleSampleProject(duplexScheme(design, productKey), productKey, opts);
+}
+
+// Turns a scheme (design, measured lines, phases, stage plan) into the full
+// sample TakeoffProject: bill, budget, locked contract, certificates,
+// variations, programme, and model slots.
+export function assembleSampleProject(scheme, productKey, { modelUrls = {} } = {}) {
+  const { design, model, lines, tag, stage } = scheme;
+  const PHASES = scheme.phases;
+  const SUPPLIERS = scheme.suppliers;
+  const PROVISIONAL = scheme.provisional;
+  const start = stage.start;
+
+  // Bill items, in the order the plugin would send them.
+  const items = lines.map((l, i) => scheme.itemFor(l, i));
 
   // Budget: one material/labour/plant row per build-up component per bill line.
   let bsn = 1;
@@ -556,7 +602,7 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
     clientName: design.clientName,
     slug: `sample-${design.key}`,
     clientProjectKey: `sample-${productKey}-${design.key}`,
-    modelTitle: isQuiv ? `${design.title}.rvt` : `${design.title}.pdf`,
+    modelTitle: scheme.modelTitle,
     origin: "",
     isSample: true,
     userId: null,
@@ -637,12 +683,8 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
 
   // ── Variations (design changes and site instructions) ──
   const lineRate = (key) => project.items[lines.findIndex((l) => l.key === key)]?.rate || 0;
-  const pileCount = model.elements.filter((e) => e.ifc === "IfcPile").length;
-  const gridAPiles = model.elements.filter((e) => e.ifc === "IfcPile" && e.shapes[0].cx === 0).length;
   project.variations = stage.variations.map((v) => {
-    let qty = v.qty;
-    if (v.qtyFrom === "piles") qty = pileCount;
-    if (v.qtyFrom === "gridA2m") qty = gridAPiles * 2;
+    const qty = scheme.variationQty ? scheme.variationQty(v) : v.qty;
     return {
       description: `${v.reference}: ${v.description}`,
       qty,
@@ -850,17 +892,17 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
       actualDurationDays: actualEnd ? ph.days + slip - Math.max(0, slip) : 0,
       percentComplete: pct,
       status: pct >= 100 ? "completed" : pct > 0 ? "in-progress" : "not-started",
-      priority: ph.n <= 4 ? "high" : "medium",
+      priority: ph.priority || "medium",
       predecessors: [`T${ph.n - 1}`],
       linkedBoqIdentities: idxs.map((i) => itemIdentity(project.items[i], i)),
       linkedBoqWeights: idxs.map(() => 100),
       baselineCost: planned,
       actualCost: r2(planned * (pct / 100) * (1 + (pi % 2 === 0 ? 0.04 : -0.02))),
       isMilestone: false,
-      criticalPath: ph.n !== 6,
-      totalSlackDays: ph.n === 6 ? 10 : 0,
+      criticalPath: !ph.slack,
+      totalSlackDays: ph.slack || 0,
       resourceNames: ph.resource,
-      assignedTo: ph.n <= 4 ? "Site engineer" : "Finishing supervisor",
+      assignedTo: ph.lead || "Site engineer",
       source: "boq",
       notes: "",
     });
@@ -868,8 +910,8 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
   });
   const finish = cursor;
   tasks.push({
-    taskId: "T8",
-    wbs: "9",
+    taskId: `T${PHASES.length + 1}`,
+    wbs: `${PHASES.length + 2}`,
     name: "Practical completion and handover",
     startDate: finish,
     endDate: finish,
@@ -881,7 +923,7 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
     actualStartDate: stage.finalAccount ? finish : null,
     actualEndDate: stage.finalAccount ? finish : null,
     priority: "critical",
-    predecessors: ["T7"],
+    predecessors: [`T${PHASES.length}`],
     linkedBoqIdentities: [],
     linkedBoqWeights: [],
     isMilestone: true,
@@ -924,9 +966,9 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
     lastEditedAt: asOf,
   };
 
-  // ── IFC models (QUIV only; HERON is measured from drawings) ──
-  if (isQuiv) {
-    for (const disc of ["architectural", "structural"]) {
+  // ── IFC models (model-based tools only; HERON is measured from drawings) ──
+  {
+    for (const disc of scheme.modelDisciplines || []) {
       const need = new Set(
         items.filter((it) => it.discipline === disc).flatMap((it) => it.elementIds),
       );
@@ -960,24 +1002,16 @@ export function buildSampleProject(design, productKey, { modelUrls = {} } = {}) 
     `Valuation: contract locked at the agreed sum, ${certCount} certificate${certCount === 1 ? "" : "s"} with retention, VAT and WHT, and ${project.variations.length} variations.`,
     `PM Dashboard: ${tasks.length}-task programme linked to the bill, with earned value, ${stage.risks.length} risks and ${stage.issues.length} issues.`,
   ];
-  if (isQuiv) {
-    highlights.push(
-      "3D Model: architectural and structural IFC models. Pick a bill line to see the elements it was measured from, or click an element to find its lines.",
-    );
-  } else {
-    highlights.push(
-      "Measured in HERON from PDF drawings: lines are grouped by takeoff folder (Substructure, Frame, Blockwork, Roofing, Doors & Windows, Finishes).",
-    );
-  }
+  highlights.push(scheme.toolLine);
   if (stage.finalAccount) highlights.push("Final account: finalised, with savings against the contract sum.");
 
   project.sample = {
     key: design.key,
     order: design.order,
-    foundation: design.foundationLabel,
+    foundation: scheme.label,
     location: design.location,
     stage: stage.stage,
-    summary: `${design.title} at ${design.location}. Ground: ${design.soil}. ${tag} sample showing a job from takeoff to ${stage.finalAccount ? "final account" : "valuation"}.`,
+    summary: `${scheme.summary} ${tag} sample showing a job from takeoff to ${stage.finalAccount ? "final account" : "valuation"}.`,
     highlights,
   };
 

@@ -2,9 +2,27 @@
 // read-only sample projects (bill, budget, valuations, programme, model) every
 // subscriber can open to see how the cloud workspace is used on a real job.
 // Served by GET /projects/:productKey/samples; hidden when there are none.
+//
+// Drawn in the design-system project pieces (.pj-note, .pj-grid, .pj-card,
+// .pj-flag) so it sits the same in the classic /projects page and the /work
+// gallery. With onOpenProject the cards are buttons (ProjectsGeneric opens the
+// sample in place); without it they link to the product's workspace.
 
 import React from "react";
-import { FaCube, FaEye, FaHardHat } from "../../components/icons.jsx";
+import { Link } from "react-router-dom";
+import { FaCube, FaEye } from "../../components/icons.jsx";
+import { projectWorkspaceHref } from "../../lib/projectLinks.js";
+
+// What the row says a sample is, per product. Anything unlisted gets the
+// generic line.
+const BLURBS = {
+  revit: "Worked duplex projects, one per foundation type, each measured from its own 3D model.",
+  planswift: "Worked duplex projects, one per foundation type, measured from PDF drawings.",
+  mep: "Services for the worked duplexes: electrical, plumbing and drainage, and air conditioning.",
+  civil3d: "Worked road and drainage jobs, measured chainage by chainage from the corridor.",
+  archicad: "Worked duplex projects, one per foundation type, measured from the ArchiCAD model.",
+};
+const GENERIC = "Worked projects with every tab filled in on a real-looking job.";
 
 function naira(n) {
   const v = Number(n) || 0;
@@ -12,7 +30,44 @@ function naira(n) {
   return `₦${Math.round(v).toLocaleString()}`;
 }
 
-export default function SampleProjectsStrip({ samples = [], onOpenProject }) {
+function CardBody({ s }) {
+  return (
+    <>
+      <div className="top">
+        <span className="pj-flag warn">{s.sample?.foundation || s.sample?.variant || "Sample"}</span>
+        <span className="src" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <FaEye size={12} aria-hidden="true" /> Read-only
+        </span>
+      </div>
+      <b className="nm">{String(s.name || "").replace(/^Sample:\s*/, "")}</b>
+      <span className="cl">{s.sample?.location}</span>
+      <span className="cl">{s.sample?.stage}</span>
+      <div className="ft">
+        <div>
+          <span>Contract</span>
+          <b>{naira(s.contractSum)}</b>
+        </div>
+        <div>
+          <span>Lines</span>
+          <b>{s.itemCount}</b>
+        </div>
+        <div>
+          <span>Certificates</span>
+          <b>{s.certificateCount}</b>
+        </div>
+      </div>
+      {s.hasModel ? (
+        <div className="fl">
+          <span className="pj-flag mute" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <FaCube size={11} aria-hidden="true" /> 3D model
+          </span>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export default function SampleProjectsStrip({ samples = [], onOpenProject, productKey }) {
   const [open, setOpen] = React.useState(() => {
     try {
       return localStorage.getItem("adlm.samples.collapsed") !== "1";
@@ -22,6 +77,7 @@ export default function SampleProjectsStrip({ samples = [], onOpenProject }) {
   });
   if (!samples.length) return null;
 
+  const key = String(productKey || samples[0]?.productKey || "").toLowerCase();
   const toggle = () => {
     setOpen((v) => {
       try {
@@ -34,61 +90,37 @@ export default function SampleProjectsStrip({ samples = [], onOpenProject }) {
   };
 
   return (
-    <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-500/20 dark:bg-amber-500/5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <section style={{ margin: "0 0 20px" }}>
+      <div className="pj-note warn" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
         <div>
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-            <FaHardHat className="text-amber-600" />
-            Learning samples
-          </div>
-          <div className="text-xs text-slate-600 dark:text-adlm-dark-muted">
-            Worked duplex projects, one per foundation type. Open one to see every tab
-            filled in on a real job. Samples are read-only.
-          </div>
+          <b>Learning samples</b>
+          <br />
+          {BLURBS[key] || GENERIC} Open one to see every tab filled in. Samples are read-only.
         </div>
-        <button type="button" className="btn btn-sm" onClick={toggle} aria-expanded={open}>
+        <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={toggle} aria-expanded={open}>
           {open ? "Hide samples" : `Show ${samples.length} samples`}
         </button>
       </div>
 
       {open ? (
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {samples.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => onOpenProject?.(s.id)}
-              className="group flex h-full flex-col rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-depth transition hover:-translate-y-0.5 hover:border-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-adlm-dark-border dark:bg-adlm-dark-panel"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-                  {s.sample?.foundation || "Sample"}
-                </span>
-                <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-                  <FaEye /> Read-only
-                </span>
-              </div>
-              <div className="mt-2 text-sm font-semibold leading-snug text-slate-900 dark:text-white">
-                {String(s.name || "").replace(/^Sample:\s*/, "")}
-              </div>
-              <div className="mt-0.5 text-xs text-slate-500 dark:text-adlm-dark-muted">
-                {s.sample?.location}
-              </div>
-              <div className="mt-2 text-xs text-slate-700 dark:text-slate-300">{s.sample?.stage}</div>
-              <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-                <span>{s.itemCount} lines</span>
-                <span>Contract {naira(s.contractSum)}</span>
-                <span>
-                  {s.certificateCount} cert{s.certificateCount === 1 ? "" : "s"}
-                </span>
-                {s.hasModel ? (
-                  <span className="inline-flex items-center gap-1">
-                    <FaCube /> 3D model
-                  </span>
-                ) : null}
-              </div>
-            </button>
-          ))}
+        <div className="pj-grid">
+          {samples.map((s) =>
+            onOpenProject ? (
+              <button
+                key={s.id}
+                type="button"
+                className="pj-card"
+                style={{ textAlign: "left", cursor: "pointer", font: "inherit" }}
+                onClick={() => onOpenProject(s.id)}
+              >
+                <CardBody s={s} />
+              </button>
+            ) : (
+              <Link key={s.id} className="pj-card" to={projectWorkspaceHref(s)}>
+                <CardBody s={s} />
+              </Link>
+            ),
+          )}
         </div>
       ) : null}
     </section>
