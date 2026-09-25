@@ -54,6 +54,19 @@ export const SEED = [
     refs: "AdlmWeb PR #19 (hotfix/review-fixes)",
     design: { status: "not-needed" },
   },
+  {
+    key: "admin-roles-editor",
+    title: "Launch build: admins can assign roles and edit role areas again",
+    products: ["website"],
+    kind: "fix",
+    stage: "awaiting-signoff",
+    summary: "On the launch build /admin/roles is a read-only register, and the classic role editor had no route. After go-live nobody could give a person a role (for example Tech Support, PR #28) or change what a role reaches.",
+    progress: "The classic editor is routed at /admin/roles/edit (admins only) and linked from the register as 'Edit roles'. Lint is clean and the client build passes. Opened 25 Sep against release.",
+    pending: "Richard approves PR #29 into release. Then one signed-in check on preview.adlmstudio.net: Roles, Edit roles, give someone Tech Support. Afterwards, an editor drawn in his design, which also confirms and audits area changes (today those save at once, unconfirmed and unaudited).",
+    blockedOn: "PR #29 review",
+    refs: "AdlmWeb PR #29 (fix/admin-roles-editor -> release) · client/src/ds/DsAdminRoles.jsx · client/src/pages/AdminRoles.jsx · server/routes/admin.roles.js",
+    design: { status: "needed", surfaces: "Roles editor in his admin grammar: create and delete a role, the area matrix, assigning people, a confirmation and an audit line on every change, a warning before the last administrator loses access" },
+  },
 
   // ── Richard's redesign ───────────────────────────────────────────────────
   {
