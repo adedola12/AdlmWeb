@@ -98,6 +98,28 @@ export const SEED = [
 
   // ── QUIV (Revit) ─────────────────────────────────────────────────────────
   {
+    key: "quiv-4-redesign",
+    title: "QUIV 4.0: rebuild the Revit plugin on Richard's plugin design, saving to ADLM Cloud",
+    products: ["quiv", "website"],
+    kind: "feature",
+    stage: "proposed",
+    progress: "Built ahead of approval at the owner's request, tested in Revit 2026 by Adedolapo (26 Sep). The panel is Richard's design end to end: dock sign-in from his splash, Home, New project, take-off list, the three-step Item screen for all 20 elements, auto take-off with confidence and accept, Review and save, light and dark. The QUIV 3 engine is unchanged underneath; no QUIV 3 page appears in the panel. Builds for Revit 2024, 2026 and 2027; 342 tests green.",
+    pending: "Richard's approval, then one push and PR. Outside his design and needing his design or sign-off: raft option, External works group, foundation none/multiple (none drops Substructure and Frame), remove-from-list with Undo, auto take-off Stop and clock, Sign out, theme switch, Create account on the sign-in, the RateGen card on Review. Still to design: full bill and budget, exports, RateGen mapping, client bill fill (no longer reachable in the panel).",
+    refs: "QUIV feat/quiv-4 0232549 (worktree nw/RevitPluginArch-quiv4), on 0fe8110 RateGen licence rule. Local only.",
+    design: { status: "needed", link: "https://adlm-studio.vercel.app/plugin-quiv", surfaces: "The items above marked outside the design; the full bill, budget, exports, RateGen mapping and client bill fill." },
+  },
+  {
+    key: "quiv-takeoff-timing",
+    title: "QUIV 4.0: record how long auto take-off (and a manual take-off) really takes, for marketing figures",
+    products: ["quiv", "website"],
+    kind: "feature",
+    stage: "proposed",
+    progress: "Built ahead of approval at the owner's request. Reuses the existing Takeoff Time Log (/telemetry/takeoff-sessions, baselines, Time saved dashboard) instead of a new collection. QUIV 4.0 sends one record per auto take-off run (mode auto) and one per hand-measured take-off at its first cloud save (mode assisted): timings and counts only, model as a one-way hash, offline outbox. Server: the summary filters and groups by mode, reports medianItems, and leaves ADLM staff out by default.",
+    pending: "Richard's approval. A privacy-policy line on take-off timing statistics before it goes live. A mode filter on the admin Time saved page needs Richard's design. The server change must be deployed before QUIV records are split by mode.",
+    refs: "QUIV feat/quiv-4 0232549 · ADLMWebsite feat/quiv-takeoff-timing 5ae2766 (worktree ADLMWebsite-takeofftiming). Local only.",
+    design: { status: "needed", surfaces: "Admin Time saved page: an auto / hand-measured filter and the median elements figure." },
+  },
+  {
     key: "client-bill-fill",
     title: "Client bill fill: import any firm's own BoQ, and AI fills the quantities from QUIV",
     products: ["quiv", "ai-service"],
