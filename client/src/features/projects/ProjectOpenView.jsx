@@ -2,7 +2,7 @@ import React from "react";
 import { useSearchParams } from "react-router-dom";
 import { rememberPlace } from "../../lib/lastPlace.js";
 import { useDismiss as useSharedDismiss } from "../../ds/dismiss.js";
-import { FaCheck, FaCopy, FaTrash } from "../../components/icons.jsx";
+import { FaCheck, FaCopy, FaEye, FaTrash } from "../../components/icons.jsx";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
@@ -393,6 +393,9 @@ export default function ProjectOpenView({
     canManage: true,
     canSeeRates: true,
   },
+  // Sample project descriptor (project.sample) when this is read-only learning
+  // material; null for real projects.
+  sampleInfo = null,
   linkedGroupsCount = 0,
   // Cross-project links (MEP services → this general bill). Feature P1.
   linkedSummaries = [],
@@ -614,7 +617,8 @@ export default function ProjectOpenView({
   const canManage = access?.canManage !== false;
   const canSeeRates = access?.canSeeRates !== false;
   const accessRole = access?.role || "owner";
-  const isShared = accessRole !== "owner";
+  const isSample = accessRole === "sample" || !!sampleInfo;
+  const isShared = accessRole !== "owner" && !isSample;
 
   // P0.4, his "continue where you left off": a link from the Work overview
   // carries ?tab= (and &line= for the bill). They are used once, when that
@@ -778,6 +782,35 @@ export default function ProjectOpenView({
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
+      {isSample ? (
+        <div
+          className="mk-note"
+          style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px" }}>
+            <b style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <FaEye /> Sample project · Read-only learning material
+            </b>
+            {sampleInfo?.foundation ? <b>{sampleInfo.foundation}</b> : null}
+            {sampleInfo?.stage ? <span>{sampleInfo.stage}</span> : null}
+          </div>
+          {sampleInfo?.summary ? <p style={{ margin: "6px 0 0" }}>{sampleInfo.summary}</p> : null}
+          {Array.isArray(sampleInfo?.highlights) && sampleInfo.highlights.length ? (
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 600 }}>What to look at in this sample</summary>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                {sampleInfo.highlights.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <p style={{ margin: "6px 0 0" }}>
+            You can open every tab, filter, and export, but nothing can be changed. Sync
+            your own model from the plugin to start a project of your own.
+          </p>
+        </div>
+      ) : null}
       {isShared ? (
         <p className="mk-note" style={{ margin: 0 }}>
           <b>Shared project · {canEdit ? "Full access" : "View only"}</b>
