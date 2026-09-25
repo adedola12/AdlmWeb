@@ -27,16 +27,19 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
-import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import CertTicket from "./LxCertTicket.jsx";
+import CertHost from "./cert/CertHost.jsx";
+import { useCertName } from "./cert/useCertName.js";
 import DsOrgVideos from "./DsOrgVideos.jsx";
-import { COUNT, accountName, ago, certificateName, clock, toRow, trim } from "./lxCourses.js";
+import { COUNT, accountName, ago, clock, toRow, trim } from "./lxCourses.js";
 
 export default function DsLearning() {
   const { accessToken, user } = useAuth();
   const [courses, setCourses] = React.useState(null);
   const [failed, setFailed] = React.useState("");
-  const [certModal, setCertModal] = React.useState(null);
+  const [certOpen, setCertOpen] = React.useState(null);
+  const [finishOf, setFinishOf] = React.useState({});
+  const cn = useCertName(accessToken, user);
   const [freeWatched, setFreeWatched] = React.useState([]);
 
   React.useEffect(() => {
@@ -61,7 +64,7 @@ export default function DsLearning() {
   const view = React.useMemo(() => {
     if (!courses) return null;
 
-    const rows = courses.map(toRow);
+    const rows = courses.map(toRow).map((r) => (finishOf[r.sku] ? { ...r, finish: finishOf[r.sku] } : r));
 
     // The hero is whatever is furthest along but unfinished — the thing
     // somebody came back for. A course not started is a worse answer than one
@@ -76,7 +79,7 @@ export default function DsLearning() {
     const hero = open.filter((r) => r.pct > 0).sort((a, b) => b.pct - a.pct)[0] || open[0] || null;
 
     return { rows, hero };
-  }, [courses]);
+  }, [courses, finishOf]);
 
   if (failed) {
     return (
@@ -94,7 +97,6 @@ export default function DsLearning() {
   }
 
   const { rows, hero } = view;
-  const certName = certificateName(user);
   const holder = accountName(user);
 
   return (
@@ -264,17 +266,9 @@ export default function DsLearning() {
               <CertTicket
                 key={r.sku}
                 row={r}
-                certName={certName}
-                onDownload={(row, opts) =>
-                  setCertModal({
-                    sku: row.sku,
-                    title: row.title,
-                    description: row.blurb,
-                    completionDate: row.issuedAt,
-                    reference: row.certificateRef,
-                    preview: !!opts?.preview,
-                  })
-                }
+                certName={cn.name}
+                claimed={cn.locked}
+                onOpen={(row, action) => setCertOpen({ row, action })}
               />
             ))}
           </div>
@@ -330,15 +324,12 @@ export default function DsLearning() {
           </p>
       </section>
 
-      <CertificateNameModal
-        open={!!certModal}
-        onClose={() => setCertModal(null)}
-        courseSku={certModal?.sku}
-        courseTitle={certModal?.title}
-        courseDescription={certModal?.description}
-        completionDate={certModal?.completionDate}
-        reference={certModal?.reference}
-        preview={certModal?.preview}
+      <CertHost
+        open={certOpen}
+        cn={cn}
+        token={accessToken}
+        onFinish={(sku, finish) => setFinishOf((m) => ({ ...m, [sku]: finish }))}
+        onClose={() => setCertOpen(null)}
       />
     </div>
   );

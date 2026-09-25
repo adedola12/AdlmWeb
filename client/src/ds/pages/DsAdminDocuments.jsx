@@ -806,6 +806,30 @@ export default function DsAdminDocuments() {
               </p>
               {" "}
               <div className="adm-grp">
+                Signature
+              </div>
+              {" "}
+              <div className="adm-seg" id="adm-sign" role="group" aria-label="Signature">
+                {" "}
+                <button type="button" data-sign="dolapo">
+                  Dolapo’s
+                </button>
+                {" "}
+                <button type="button" className="on" data-sign="line">
+                  Blank line
+                </button>
+                {" "}
+                <button type="button" data-sign="none">
+                  None
+                </button>
+                {" "}
+              </div>
+              {" "}
+              <p className="adm-hint">
+                Append the CEO’s signature to an ADLM letter, quotation or invoice. It is never offered on a practice’s paper.
+              </p>
+              {" "}
+              <div className="adm-grp">
                 Template
               </div>
               {" "}

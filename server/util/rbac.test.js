@@ -35,3 +35,11 @@ test("demo access does not depend on the permission matrix", () => {
   const demo = { isSuperAdmin: false, demoMode: true, perms: new Set(["trainings"]) };
   assert.equal(decideAccess(demo, "invoices"), true);
 });
+
+test("a preview-only role (Tech Support) opens no admin area", () => {
+  const support = { isSuperAdmin: false, perms: new Set(["preview"]) };
+  assert.equal(decideAccess(support, "preview"), true);
+  assert.equal(decideAccess(support, "users"), false);
+  assert.equal(decideAccess(support, "support"), false);
+  assert.equal(decideAccess(support, "adminhub"), false);
+});

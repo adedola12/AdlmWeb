@@ -95,7 +95,7 @@ export default function Purchase() {
 
   const [qs] = useSearchParams();
   const navigate = useNavigate();
-  const returnTo = qs.get("return") || "/dashboard";
+  const returnTo = qs.get("return") || "/manage";
 
   // Use the real 3D scene unless the user prefers reduced motion. Starts false
   // so the first paint uses the lightweight SVG, then upgrades to 3D.
@@ -192,10 +192,6 @@ export default function Purchase() {
     Math.round((Number(x || 0) + Number.EPSILON) * 100) / 100;
   const money = (x) =>
     currency === "USD" ? round2(x) : Math.round(Number(x || 0));
-
-  // Kept for backward compatibility — unused by new tier logic
-  function pickBundleDiscount() { return null; }
-  function discountFixedValue() { return 0; }
 
   // ---------- load products ----------
   React.useEffect(() => {
@@ -1118,7 +1114,7 @@ export default function Purchase() {
       {/* Products (vertical list) · Configurator (middle) · Summary (right) */}
       <div className="grid lg:grid-cols-[260px_1fr_340px] gap-5 items-start">
         {/* LEFT, vertical product list */}
-        <aside className="lg:sticky lg:top-20">
+        <aside className="lg:sticky lg:top-[calc(5rem+var(--launch-strip-h,0px))]">
           <div className="text-sm font-semibold text-slate-900 dark:text-white mb-2">
             Products
           </div>
@@ -1406,7 +1402,7 @@ export default function Purchase() {
         </section>
 
         {/* RIGHT, sticky live summary */}
-        <aside ref={summaryRef} className="lg:sticky lg:top-20 scroll-mt-24">
+        <aside ref={summaryRef} className="lg:sticky lg:top-[calc(5rem+var(--launch-strip-h,0px))] scroll-mt-24">
           <div className="card">
             <h2 className="font-semibold mb-2">Summary</h2>
 

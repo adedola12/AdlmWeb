@@ -122,3 +122,24 @@ test("release-notices by hand runs the drain alone", async () => {
 test("an unknown job is refused before anything connects", async () => {
   await assert.rejects(handler({ job: "mail-everyone" }, {}), /Unknown job "mail-everyone"/);
 });
+
+test("video-poll: new uploads are filed on the free shelves first, then the poll, then the drain", async () => {
+  const { jobs, calls } = fakeJobs();
+  jobs.runFreeLibrary = async () => {
+    calls.push({ name: "free-library" });
+    return { ok: true, added: 2 };
+  };
+  const out = await quietly(() => runJob("video-poll", jobs, context));
+  assert.deepEqual(calls.map((c) => c.name), ["free-library", "video-poll", "release-notices"]);
+  assert.deepEqual(out.freeLibrary, { ok: true, added: 2 });
+});
+
+test("a failing channel feed never stops the poll or the drain", async () => {
+  const { jobs, calls } = fakeJobs();
+  jobs.runFreeLibrary = async () => {
+    throw new Error("feed timed out");
+  };
+  const out = await quietly(() => runJob("video-poll", jobs, context));
+  assert.deepEqual(calls.map((c) => c.name), ["video-poll", "release-notices"]);
+  assert.deepEqual(out.freeLibrary, { ok: false, error: "feed timed out" });
+});

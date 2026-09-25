@@ -221,32 +221,32 @@ export default function DsWorkProject() {
         <div className="dsh-stat">
           <span className="k">Bill total</span>
           <b>{money(view.total)}</b>
-          <span className="ds-sub">
+          <p className="ds-sub">
             {num(view.priced.length)} priced line{view.priced.length === 1 ? "" : "s"}
-          </span>
+          </p>
         </div>
         <div className="dsh-stat">
           <span className="k">Completed to date</span>
           <b>{money(view.completed)}</b>
-          <span className="ds-sub">
+          <p className="ds-sub">
             {view.total
               ? `${Math.round((view.completed / view.total) * 100)}% of the bill`
               : "nothing measured yet"}
-          </span>
+          </p>
         </div>
         <div className="dsh-stat">
           <span className="k">Outstanding</span>
           <b>{money(view.total - view.completed)}</b>
-          <span className="ds-sub">still to do at these rates</span>
+          <p className="ds-sub">still to do at these rates</p>
         </div>
         <div className={`dsh-stat${view.unpriced.length ? " warn" : ""}`}>
           <span className="k">Not priced</span>
           <b>{num(view.unpriced.length)}</b>
-          <span className="ds-sub">
+          <p className="ds-sub">
             {view.unpriced.length
               ? "carrying nothing in the total"
               : "every line has a rate"}
-          </span>
+          </p>
         </div>
       </div>
 

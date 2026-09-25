@@ -39,12 +39,41 @@ const GROUPS = [
   {
     title: "Work surface",
     note: "His work-* screens, against his own sample data.",
-    slugs: ["work-home", "work-projects", "work-project", "work-library", "work-rate", "work-programme"],
+    slugs: [
+      "work-home", "work-projects", "work-project", "work-tool", "work-library",
+      "work-rate", "work-programme",
+    ],
+  },
+  {
+    // These two were ported and routable but linked from nowhere, so the only
+    // way to see them was to know the URL.
+    title: "Plugins (side one)",
+    note:
+      "Design references for the desktop add-ins: QUIV inside Revit, HERON beside PlanSwift. " +
+      "They render bare, as his build does — no nav, no footer, no Ada. The behaviour they " +
+      "picture lives in the C# plugins, not here. HERON was rebuilt on 22 Sep 2026 on how it " +
+      "actually works: it reads the ADLM template, not the drawing.",
+    badge: "design reference",
+    slugs: ["plugin-quiv", "plugin-heron"],
+  },
+  {
+    // His 22 September update. Staged so the design is recorded and can never
+    // be mistaken for a customer route — not so it can be reviewed here.
+    title: "Windows products (Installer Hub and splash screens)",
+    note:
+      "Designs for software that runs on a QS's PC, not pages of this website: the Installer " +
+      "Hub drawn as a desktop app, and the four launch screens, where the splash settles into " +
+      "the sign-in. Building them is a desktop job for the owner. Each of his sources is a " +
+      "mount point only — what the screen draws is in his assets/js/splash.js and hub.js, " +
+      "which are not ported — so these staged pages are near enough empty on purpose. " +
+      "Review the real thing in his own repo, ADLMWebNewUI.",
+    badge: "design reference",
+    slugs: ["hub", "splash-hub", "splash-quiv", "splash-heron", "splash-rategen"],
   },
   { title: "Other", slugs: ["ada", "doc-preview"] },
 ];
 
-function Row({ slug }) {
+function Row({ slug, badge }) {
   const live = MAP[SLUG_TO_KEY[slug] || slug] ?? null;
   // A route this app does not have yet — the redesign adds it.
   const isNew =
@@ -63,7 +92,9 @@ function Row({ slug }) {
       <span className="flex-1" />
       {isNew ? (
         <span className="text-xs px-2 py-0.5 rounded bg-adlm-orange/15 text-adlm-orange">
-          new route
+          {/* "new route" is wrong for a page that will never become one — the
+              plugin references have no live counterpart by design. */}
+          {badge || "new route"}
         </span>
       ) : (
         <a href={live} className="text-sm text-slate-500 hover:underline">
@@ -80,8 +111,9 @@ export default function DsPreviewIndex() {
       <ScrollRestoration />
       <h1 className="text-2xl font-semibold mb-2">Redesign preview</h1>
       <p className="text-slate-600 dark:text-slate-400 mb-8">
-        {DS_PAGES.length} marketing pages ported from Richard&apos;s rebuild, staged beside the
-        live site. Nothing here replaces a real route yet, and the whole
+        {DS_PAGES.length} pages ported from Richard&apos;s rebuild, staged beside the live site.
+        Nothing here replaces a real route yet — and the design references at the foot never
+        will, because they are drawings of the Windows products. The whole
         <code className="mx-1 px-1 rounded bg-slate-100 dark:bg-slate-800">/preview/</code>
         tree is disallowed in robots.txt.
       </p>
@@ -110,7 +142,7 @@ export default function DsPreviewIndex() {
             {g.slugs
               .filter((s) => DS_PAGES.some((p) => p.slug === s))
               .map((s) => (
-                <Row key={s} slug={s} />
+                <Row key={s} slug={s} badge={g.badge} />
               ))}
           </ul>
         </section>

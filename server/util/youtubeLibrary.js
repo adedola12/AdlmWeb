@@ -18,7 +18,7 @@
 // planning and the summary are pure, and tested as such.
 
 import catalogueJson from "../data/youtube-free-videos.json" with { type: "json" };
-import { FREE_VIDEO_SECTIONS, sectionOf, isSectionSlug } from "./freeVideoSections.js";
+import { FREE_VIDEO_SECTIONS, sectionOf, isSectionSlug, fileVideo } from "./freeVideoSections.js";
 
 export function loadCatalogue() {
   return catalogueJson;
@@ -61,7 +61,10 @@ export function planSync(catalogueVideos, existingDocs, { force = false, publish
   const updates = [];
   let unchanged = 0;
 
-  for (const v of catalogueVideos || []) {
+  for (const raw of catalogueVideos || []) {
+    // R10: an entry with no hand-set shelf is filed by the rules.
+    const section = fileVideo(raw);
+    const v = { ...raw, section, productLabel: raw.productLabel || sectionOf(section)?.label || "" };
     const doc = byId.get(v.youtubeId);
     const publishedAt = v.publishedAt ? new Date(v.publishedAt) : undefined;
     if (!doc) {

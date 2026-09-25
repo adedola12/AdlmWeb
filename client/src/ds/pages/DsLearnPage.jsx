@@ -171,7 +171,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · self-paced
+                  100% online · Google Classroom · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -244,7 +244,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · self-paced
+                  100% online · Google Classroom · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -381,7 +381,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · self-paced
+                  100% online · Google Classroom · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -501,298 +501,7 @@ export default function DsLearnPage({ d }) {
             </p>
             {" "}
           </div>
-          {" "}
-          <div className="filters rise" id="lesson-filters">
-            {" "}
-            <button type="button" className="on" data-f="all">
-              All
-            </button>
-            {" "}
-            <button type="button" data-f="Revit">
-              Revit
-            </button>
-            {" "}
-            <button type="button" data-f="PlanSwift">
-              PlanSwift
-            </button>
-            {" "}
-            <button type="button" data-f="Rates">
-              Rates
-            </button>
-            {" "}
-            <button type="button" data-f="Getting started">
-              Getting started
-            </button>
-            {" "}
-          </div>
-          {" "}
-          <div className="lgrid" id="lesson-grid">
-            {" "}
-            <Link className="ltile" data-cat="Revit" data-v="arch-takeoff" to="/learn/free/arch-takeoff" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/ls-frame.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  Revit · 12:41
-                </span>
-                {" "}
-                <h4>
-                  Master architectural quantity takeoff
-                </h4>
-                {" "}
-                <p>
-                  Walls, windows, doors and more, measured element by element.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-            <Link className="ltile" data-cat="PlanSwift" data-v="foundation-takeoff" to="/learn/free/foundation-takeoff" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/ls-steel.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  PlanSwift · 11:27
-                </span>
-                {" "}
-                <h4>
-                  Foundation takeoff tutorial
-                </h4>
-                {" "}
-                <p>
-                  Preparing a bill of quantities from a flat foundation drawing.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-            <Link className="ltile" data-cat="Rates" data-v="defensible-rate" to="/learn/free/defensible-rate" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/bg-rategen.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  Rates · 14:20
-                </span>
-                {" "}
-                <h4>
-                  Building a defensible rate
-                </h4>
-                {" "}
-                <p>
-                  Materials, waste and labour output in RateGen.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-            <Link className="ltile" data-cat="Revit" data-v="structural-takeoff" to="/learn/free/structural-takeoff" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/bg-quiv.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  Revit · 09:18
-                </span>
-                {" "}
-                <h4>
-                  Columns, beams and slabs
-                </h4>
-                {" "}
-                <p>
-                  Simplify structural takeoff with the ADLM Revit plugin.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-            <Link className="ltile" data-cat="PlanSwift" data-v="frame-takeoff" to="/learn/free/frame-takeoff" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/bg-heron.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  PlanSwift · 10:44
-                </span>
-                {" "}
-                <h4>
-                  Frame takeoff tutorial
-                </h4>
-                {" "}
-                <p>
-                  Columns, beams and slabs measured from 2D sheets.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-            <Link className="ltile" data-cat="Getting started" data-v="hub-install" to="/learn/free/hub-install" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/bg-timepro.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  Getting started · 06:35
-                </span>
-                {" "}
-                <h4>
-                  Installing with the Hub
-                </h4>
-                {" "}
-                <p>
-                  Signing in, installing your products and applying updates.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-            <Link className="ltile" data-cat="Revit" data-v="boq-in-minutes" to="/learn/free/boq-in-minutes" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/ls-city.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  Revit · 15:02
-                </span>
-                {" "}
-                <h4>
-                  Generate a BoQ in minutes
-                </h4>
-                {" "}
-                <p>
-                  From a coordinated model to a priced bill of quantities.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-            <Link className="ltile" data-cat="PlanSwift" data-v="openings" to="/learn/free/openings" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/ls-survey.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  PlanSwift · 13:09
-                </span>
-                {" "}
-                <h4>
-                  Walls, windows and doors
-                </h4>
-                {" "}
-                <p>
-                  Measuring openings correctly so the bill nets off.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-            <Link className="ltile" data-cat="PlanSwift" data-v="roof-works" to="/learn/free/roof-works" data-ds-page="lesson">
-              {" "}
-              <img src="/ds/ls-crane.jpg" alt="" />
-              {" "}
-              <div className="lt">
-                {" "}
-                <span className="playbtn">
-                  <svg viewBox="0 0 24 24">
-                    <use href="#i-play" />
-                  </svg>
-                </span>
-                {" "}
-                <span className="eyebrow">
-                  PlanSwift · 08:52
-                </span>
-                {" "}
-                <h4>
-                  Roof works
-                </h4>
-                {" "}
-                <p>
-                  Pitched and flat roof coverings, measured to SMM.
-                </p>
-                {" "}
-              </div>
-              {" "}
-            </Link>
-            {" "}
-          </div>
-          {" "}
-          <div className="lmore">
-            {" "}
-            <button type="button" className="ds-btn btn-o" id="more-lessons">
-              Show more lessons
-            </button>
-            {" "}
-            <span className="lcount" id="lesson-count">
-            </span>
-            {" "}
-          </div>
-          {d.library}{" "}
+          {" "}{d.lessons}{" "}
         </div>
         {" "}
       </section>
@@ -1909,14 +1618,14 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <Link to="/docs/ADLM-Installer-Hub-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-Installer-Hub-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="docs/ADLM-Installer-Hub-User-Guide.pdf" data-title="Installer Hub">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-Installer-Hub-User-Guide.pdf" data-title="Installer Hub">
                     Preview
                   </button>
                   {" "}
@@ -1949,14 +1658,14 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <Link to="/docs/ADLM-QUIV-Revit-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-QUIV-Revit-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="docs/ADLM-QUIV-Revit-User-Guide.pdf" data-title="QUIV for Revit">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-QUIV-Revit-User-Guide.pdf" data-title="QUIV for Revit">
                     Preview
                   </button>
                   {" "}
@@ -1991,14 +1700,14 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <Link to="/docs/ADLM-RateGen-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-RateGen-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="docs/ADLM-RateGen-User-Guide.pdf" data-title="ADLM RateGen">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-RateGen-User-Guide.pdf" data-title="ADLM RateGen">
                     Preview
                   </button>
                   {" "}
@@ -2031,14 +1740,14 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <Link to="/docs/ADLM-Complete-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-Complete-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="docs/ADLM-Complete-User-Guide.pdf" data-title="Installer Hub &amp; HERON">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-Complete-User-Guide.pdf" data-title="Installer Hub &amp; HERON">
                     Preview
                   </button>
                   {" "}
@@ -2100,7 +1809,7 @@ export default function DsLearnPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Self-paced, delivered on the ADLM Studio platform, with weekly assessments to keep you moving. Support is available while you work through it.
+                Self-paced, delivered through Google Classroom, with weekly assessments to keep you moving. Support is available while you work through it.
               </div>
               {" "}
             </details>

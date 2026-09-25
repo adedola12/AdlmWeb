@@ -22,6 +22,7 @@
 // .dsh-seg / .dsh-kv / .dsh-step / .dsh-hub / .tbl.
 
 import React from "react";
+import { useReportBack } from "./feedback/useReportBack.js";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
@@ -111,6 +112,7 @@ export default function DsBilling() {
   const [seatOverride, setSeatOverride] = React.useState({});
   const [said, setSaid] = React.useState("");
   const [problem, setProblem] = React.useState("");
+  useReportBack(said, problem);
 
   React.useEffect(() => {
     if (!accessToken) return undefined;

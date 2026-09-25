@@ -1,0 +1,423 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/hub.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* ADLM Installer Hub — the desktop app.
+
+   Framed as a real Windows application rather than a page: the products it
+   installs are Windows plugins, so the window chrome, the rail and the density
+   are the ones a QS already knows. ADLM tokens throughout, so the Hub, the
+   plugins and the website are visibly one piece of software. */
+:root, .ds{ height: 100%; }
+.ds{ margin: 0; overflow: hidden; background: #0a1420; }
+.ds .hb{
+  display: grid; grid-template-rows: 36px minmax(0, 1fr);
+  height: 100vh; background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 14px;
+}
+
+
+/* --------------------------------------------------------- window chrome */
+.ds .hb-title{
+  display: flex; align-items: center; gap: 8px; padding: 0 0 0 12px;
+  background: var(--bg-inset); border-bottom: 1px solid var(--line);
+  font-size: 12.5px; -webkit-user-select: none; user-select: none;
+}
+.ds .hb-tlogo{ display: grid; place-items: center; width: 18px; height: 18px; }
+.ds .hb-tlogo img{ width: 18px; height: 18px; }
+.ds .hb-tname{ font-weight: 600; }
+.ds .hb-tver{ color: var(--ink-3); }
+.ds .hb-win{ margin-left: auto; display: flex; }
+.ds .hb-win button{
+  width: 44px; height: 36px; border: 0; background: none; color: var(--ink-2);
+  font-size: 13px; line-height: 1; cursor: pointer;
+}
+.ds .hb-win button:hover{ background: var(--bg-alt); }
+.ds .hb-win button.x:hover{ background: #d13438; color: #fff; }
+.ds .hb-shell{ display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 0; }
+
+
+/* ------------------------------------------------------------------ rail */
+.ds .hb-rail{
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 12px;
+  background: var(--bg-alt); border-right: 1px solid var(--line); overflow: auto;
+}
+.ds .hb-rail nav{ display: flex; flex-direction: column; gap: 2px; }
+.ds .hb-rail nav button{
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 0;
+  border-radius: 10px; background: none; color: var(--ink-2);
+  font: 500 13.5px var(--font); text-align: left; cursor: pointer;
+}
+.ds .hb-rail nav button:hover{ background: var(--bg); color: var(--ink); }
+.ds .hb-rail nav button.on{ background: var(--action); color: var(--action-ink); font-weight: 600; }
+.ds .hb-rail nav button i{
+  margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 999px;
+  background: var(--accent); color: #fff; font: 700 11px var(--font); font-style: normal; text-align: center;
+}
+.ds .hb-rail nav button.on i{ background: rgba(255, 255, 255, .25); }
+.ds .hb-help{
+  margin-top: 22px; padding: 14px; border-radius: 14px;
+  background: var(--bg); border: 1px solid var(--line);
+}
+.ds .hb-help b{ font-size: 13px; }
+.ds .hb-help p{ margin: 4px 0 10px; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+.ds .hb-help .hb-b{ width: 100%; margin-bottom: 6px; }
+.ds .hb-rail-foot{ margin-top: auto; padding-top: 14px; display: flex; flex-direction: column; gap: 2px; }
+.ds .hb-rail-foot button{
+  padding: 8px 12px; border: 0; border-radius: 10px; background: none;
+  color: var(--ink-3); font: 500 12.5px var(--font); text-align: left; cursor: pointer;
+}
+.ds .hb-rail-foot button:hover{ background: var(--bg); color: var(--ink); }
+
+
+/* ------------------------------------------------------------------- top */
+.ds .hb-main{ display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.ds .hb-top{
+  display: flex; align-items: center; gap: 12px; padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.ds .hb-top b{ display: block; font-size: 17px; }
+.ds .hb-top span{ font-size: 12.5px; color: var(--ink-3); }
+.ds .hb-topact{ margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.ds .hb-net{ display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }
+.ds .hb-net::before{ content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.ds .hb-net.off::before{ background: var(--accent); }
+.ds .hb-bar{ margin: 0; padding: 10px 22px; background: rgba(232, 106, 39, .1); color: var(--accent); font-size: 12.5px; }
+.ds .hb-body{ overflow-y: auto; overflow-x: hidden; min-height: 0; background: var(--bg-alt); }
+.ds .hb-pad{ padding: 20px 22px 40px; display: flex; flex-direction: column; gap: 14px; }
+
+
+/* --------------------------------------------------------------- buttons */
+.ds .hb-b{
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 9px 16px; border: 1px solid transparent; border-radius: var(--r-btn);
+  background: var(--action-grad); color: var(--action-ink);
+  font: 600 13px var(--font); text-decoration: none; cursor: pointer; white-space: nowrap;
+}
+.ds .hb-b:hover{ filter: brightness(1.05); }
+.ds .hb-b.ghost{ background: var(--bg); color: var(--ink); border-color: var(--line-2); }
+.ds .hb-b.ghost:hover{ background: var(--bg-alt); }
+.ds .hb-b.sm{ padding: 7px 12px; font-size: 12.5px; }
+
+
+/* ----------------------------------------------------------------- cards */
+.ds .hb-card{ padding: 20px; border-radius: 18px; background: var(--bg); border: 1px solid var(--line); }
+.ds .hb-card h2{ margin: 0 0 4px; font-size: 16px; }
+.ds .hb-h3{ margin: 18px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
+.ds .hb-sub{ margin: 0 0 14px; font-size: 13px; color: var(--ink-2); line-height: 1.6; max-width: 76ch; }
+.ds .hb-none{ margin: 0; color: var(--ink-3); font-size: 13px; }
+.ds .hb-two{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.ds .hb-rows{ display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.ds .hb-mini{
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 12px; background: var(--bg-alt); border: 1px solid var(--line);
+}
+.ds .hb-mini img{ width: 28px; height: 28px; border-radius: 7px; }
+.ds .hb-mini div{ min-width: 0; }
+.ds .hb-mini b{ display: block; font-size: 13px; }
+.ds .hb-mini span{ font-size: 12px; color: var(--ink-3); }
+.ds .hb-mini > :nth-child(3){ margin-left: auto; }
+.ds .hb-dl{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 0; }
+.ds .hb-dl div{ padding: 9px 12px; border-radius: 10px; background: var(--bg-alt); }
+.ds .hb-dl dt{ font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; }
+.ds .hb-dl dd{ margin: 2px 0 0; font-size: 13px; font-weight: 500; }
+.ds .hb-hosts{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ds .hb-hosts li{ display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 9px; background: var(--bg-alt); font-size: 12.5px; }
+.ds .hb-hosts li::before{ content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+.ds .hb-hosts li.no::before{ background: var(--ink-3); }
+.ds .hb-hosts li span{ margin-left: auto; color: var(--ink-3); }
+.ds .hb-hosts li.no b, .ds .hb-hosts li.no span{ color: var(--ink-3); }
+
+
+/* ----------------------------------------------------------------- table */
+.ds .hb-t{ width: 100%; border-collapse: collapse; font-size: 13px; }
+.ds .hb-t th{
+  padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600;
+  letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--line-2);
+}
+.ds .hb-t td{ padding: 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ds .hb-t td em{ display: block; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+.ds .hb-t .r{ text-align: right; }
+.ds .hb-tag{
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+.ds .hb-tag.ok{ background: rgba(21, 128, 61, .12); color: var(--ok); }
+.ds .hb-tag.warn{ background: rgba(232, 106, 39, .14); color: var(--accent); }
+.ds .hb-tag.go{ background: rgba(35, 156, 255, .14); color: var(--action); }
+.ds .hb-tag.bad{ background: rgba(209, 52, 56, .14); color: #d13438; }
+.ds .hb-tag.mute{ background: var(--bg-inset); color: var(--ink-3); }
+
+
+/* ------------------------------------------------------ installation center */
+.ds .hb-bar2{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ds .hb-seg{ display: inline-flex; padding: 3px; border-radius: 10px; background: var(--bg-inset); }
+.ds .hb-seg button{
+  padding: 7px 13px; border: 0; border-radius: 8px; background: none;
+  font: 500 12.5px var(--font); color: var(--ink-2); cursor: pointer;
+}
+.ds .hb-seg button i{ font-style: normal; font-size: 11px; color: var(--ink-3); }
+.ds .hb-seg button.on{ background: var(--bg); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(var(--shadow-c), .12); }
+.ds .hb-q{
+  flex: 1; min-width: 200px; padding: 9px 13px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); font: 13px var(--font);
+}
+.ds .hb-app{
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 16px;
+  padding: 16px 18px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line);
+}
+.ds .hb-app.small{ grid-template-columns: minmax(0, 1fr) auto; }
+.ds .hb-app.busy{ border-color: var(--action); }
+.ds .hb-ico{ width: 56px; height: 56px; border-radius: 13px; object-fit: cover; }
+.ds .hb-app h3{ display: flex; align-items: center; gap: 8px; margin: 0 0 2px; font-size: 15px; flex-wrap: wrap; }
+.ds .hb-app p{ margin: 0 0 10px; font-size: 13px; color: var(--ink-2); }
+.ds .hb-facts{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 230px)); justify-content: start; gap: 3px 22px; font-size: 12.5px; }
+.ds .hb-facts li{ display: flex; gap: 8px; }
+.ds .hb-facts li span{ color: var(--ink-3); min-width: 66px; flex: none; }
+.ds .hb-facts li.w{ grid-column: 1 / -1; }
+.ds .hb-facts code{ font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11.5px; color: var(--ink-2); word-break: break-all; }
+.ds .hb-note{ margin: 10px 0 0; font-size: 12px; color: var(--ink-3); }
+.ds .hb-warn{
+  margin: 10px 0 0; padding: 9px 12px; border-radius: 10px;
+  background: rgba(232, 106, 39, .09); border: 1px solid rgba(232, 106, 39, .3);
+  color: var(--ink-2); font-size: 12.5px; line-height: 1.5;
+}
+.ds .hb-app-a{ display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 160px; }
+.ds .hb-prog{ height: 6px; margin-top: 12px; border-radius: 999px; background: var(--bg-inset); overflow: hidden; }
+.ds .hb-prog-b{ height: 100%; background: var(--action-grad); transition: width 200ms linear; }
+.ds .hb-progt{ margin: 6px 0 0; font-size: 12px; color: var(--ink-2); }
+@media (max-width: 1080px){
+.ds .hb-two{ grid-template-columns: minmax(0, 1fr); }
+.ds .hb-app{ grid-template-columns: 44px minmax(0, 1fr); }
+.ds .hb-app-a{ grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; }
+.ds .hb-ico{ width: 44px; height: 44px; }
+}
+@media (max-width: 760px){
+.ds .hb-shell{ grid-template-columns: 1fr; }
+.ds .hb-rail{ flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+.ds .hb-rail nav{ flex-direction: row; }
+.ds .hb-help, .ds .hb-rail-foot{ display: none; }
+.ds .hb-dl{ grid-template-columns: 1fr; }
+}
+
+
+
+
+/* --------------------------------------------------------- form primitives */
+
+/* Shared by the sign-in window and anywhere else the Hub asks for something. */
+.ds .hb-fld{ display: block; }
+.ds .hb-fld > span{ display: block; margin-bottom: 5px; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+.ds .hb-pw{ position: relative; display: block; }
+.ds .hb-check{ display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); }
+.ds .hb-check input{ accent-color: var(--action); }
+.ds .hb-link{
+  padding: 0; border: 0; background: none; color: var(--action);
+  font: 500 12px var(--font); cursor: pointer;
+}
+.ds .hb-link:hover{ text-decoration: underline; }
+.ds .hb-err{
+  margin: 0 0 10px; padding: 9px 12px; border-radius: 9px;
+  background: rgba(209,52,56,.1); border: 1px solid rgba(209,52,56,.3);
+  color: #d13438; font-size: 12.5px;
+}
+.ds .hb-b.wide{ width: 100%; }
+
+
+/* =====================================================================
+   Launch — a window on a desktop, not a page
+
+   The Hub is an .exe. Before it has anything to show it is a small plate
+   floating over whatever the customer has on screen, so splash and sign-in
+   are drawn at window scale over a desktop and taskbar. That is the shape
+   Richard drew for the RateGen sign-in, and it is what makes the size read
+   correctly in a browser preview.
+   ===================================================================== */
+.ds .hb.boot{ display: block; background: none; overflow: hidden; }
+
+/* Plain: the card is the design, and a photograph behind it is noise. */
+.ds .hb-desk{
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(90% 70% at 50% 42%, rgba(18,72,150,.42) 0%, rgba(6,18,38,0) 62%),
+    linear-gradient(160deg, #06152c 0%, #040f1f 54%, #02080f 100%);
+}
+
+
+/* the taskbar, for scale only */
+.ds .hb-task{
+  position: fixed; left: 0; right: 0; bottom: 0; height: 48px; z-index: 2;
+  display: flex; align-items: center; padding: 0 14px;
+  background: rgba(6,18,36,.78); backdrop-filter: blur(18px);
+  border-top: 1px solid rgba(255,255,255,.07);
+  color: rgba(255,255,255,.72); font-size: 11.5px;
+}
+.ds .hb-task-w em, .ds .hb-task-t em{ display: block; font-style: normal; opacity: .72; font-size: 10.5px; }
+.ds .hb-task-t{ margin-left: auto; text-align: right; }
+.ds .hb-task-apps{ position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; }
+.ds .hb-task-apps i{
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 5px;
+  background: rgba(255,255,255,.16);
+}
+.ds .hb-task-apps i.w{ background: #4cc2ff; }
+.ds .hb-task-apps i.f{ background: #ffc83d; }
+.ds .hb-task-apps i.e{ background: #1a9ae0; }
+.ds .hb-task-apps i.c{ background: #8a7cff; }
+.ds .hb-task-apps i.adlm{ background: #fff; position: relative; }
+.ds .hb-task-apps i.adlm img{ width: 15px; height: 15px; }
+.ds .hb-task-apps i.adlm.on::after{
+  content: ''; position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%);
+  width: 12px; height: 2px; border-radius: 2px; background: #4cc2ff;
+}
+
+
+/* the floating window */
+.ds .hb-float{
+  position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); z-index: 3;
+  border-radius: 16px; overflow: hidden; color: #eaf3ff;
+  background: linear-gradient(180deg, rgba(10,26,48,.93) 0%, rgba(5,15,29,.96) 100%);
+  border: 1px solid rgba(120,190,255,.3);
+  box-shadow: 0 40px 100px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.04) inset,
+              0 0 70px rgba(35,156,255,.16);
+}
+.ds .hb-float::before{
+  content: ''; position: absolute; inset: 0;
+  background: url("/ds/ab-build.jpg") center/cover no-repeat;
+  opacity: .14; filter: saturate(.3) brightness(.7);
+}
+.ds .hb-float.sp{ width: min(420px, 86vw); }
+.ds .hb-float.lg{ width: min(560px, 92vw); }
+.ds .hb-float-bar{
+  position: relative; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 34px;
+  background: rgba(3,11,22,.6); border-bottom: 1px solid rgba(255,255,255,.07);
+  font-size: 11.5px; color: rgba(234,243,255,.62);
+}
+.ds .hb-float-bar .hb-x{
+  margin-left: auto; width: 34px; height: 34px; border: 0; background: none;
+  color: rgba(234,243,255,.62); font-size: 15px; cursor: pointer;
+}
+.ds .hb-float-bar .hb-x:hover{ background: #d13438; color: #fff; }
+.ds .hb-float-in{ position: relative; padding: 30px 34px 26px; display: flex; flex-direction: column; }
+.ds .hb-float.sp .hb-float-in{ align-items: center; text-align: center; padding: 34px 34px 28px; }
+.ds .hb-float footer{
+  position: relative; display: flex; justify-content: space-between;
+  padding: 10px 18px; border-top: 1px solid rgba(255,255,255,.07);
+  font-size: 11px; color: rgba(234,243,255,.42);
+}
+
+
+/* lockup and wordmark */
+.ds .hb-lock{ display: flex; align-items: center; gap: 9px; margin-bottom: 18px; align-self: center; }
+.ds .hb-lock img{ width: 26px; height: 26px; border-radius: 6px; background: #fff; padding: 3px; box-sizing: border-box; }
+.ds .hb-lock b{ display: block; font-size: 14px; letter-spacing: .01em; }
+.ds .hb-lock span{ display: block; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: rgba(234,243,255,.45); }
+.ds .hb-wm{ text-align: center; align-self: center; margin-bottom: 26px; }
+.ds .hb-wm b{
+  display: block; font-size: 44px; line-height: 1; font-weight: 800; letter-spacing: .06em;
+  background: linear-gradient(180deg, #bfe2ff 0%, #4fb0ff 45%, #0f6fc4 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(35,156,255,.45));
+}
+.ds .hb-wm span{
+  display: block; margin-top: 5px; padding: 4px 0;
+  background: linear-gradient(180deg, #f6a15c 0%, #e86a27 100%);
+  color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .3em;
+  text-transform: uppercase; text-indent: .3em; border-radius: 3px;
+}
+
+
+/* splash progress */
+.ds .hb-sp-bar{ width: 100%; height: 3px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
+.ds .hb-sp-fill{ height: 100%; background: linear-gradient(90deg, #239cff, #7fcbff); transition: width 180ms linear; }
+.ds .hb-sp-t{ margin: 12px 0 0; font-size: 12px; color: rgba(234,243,255,.68); }
+
+
+/* sign-in fields, light plates on the dark plate, as drawn */
+.ds .hb-float .hb-fld{ margin-bottom: 13px; }
+.ds .hb-float .hb-fld > span{ color: rgba(234,243,255,.72); font-size: 11.5px; margin-bottom: 5px; }
+.ds .hb-float .hb-fld input{
+  width: 100%; padding: 12px 14px; border-radius: 9px; border: 1px solid rgba(255,255,255,.12);
+  background: rgba(238,244,250,.94); color: #0b1c30; font: 13.5px var(--font); box-sizing: border-box;
+}
+.ds .hb-float .hb-fld input::placeholder{ color: #7d8ea0; }
+.ds .hb-float .hb-fld input:focus{ outline: 2px solid #4fb0ff; outline-offset: 1px; border-color: transparent; }
+.ds .hb-float .hb-eye{
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; display: grid; place-items: center;
+  border: 0; border-radius: 7px; background: none; color: #56687c; cursor: pointer;
+}
+.ds .hb-float .hb-eye svg{ width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.ds .hb-float .hb-eye:hover{ background: rgba(11,28,48,.09); color: #0b1c30; }
+.ds .hb-float .hb-b.wide{ margin-top: 6px; padding: 13px; font-size: 14px; border-radius: 9px; }
+.ds .hb-float .hb-err{ background: rgba(255,120,120,.14); border-color: rgba(255,120,120,.4); color: #ffb3b3; }
+.ds .hb-float-links{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.ds .hb-float .hb-link{ color: #7fcbff; }
+.ds .hb-float .hb-check{ color: rgba(234,243,255,.6); font-size: 11.5px; margin-left: auto; }
+.ds .hb-float-n{ margin: 16px 0 0; text-align: center; font-size: 11px; line-height: 1.7; color: rgba(234,243,255,.45); }
+.ds .hb-float-n b{ color: rgba(234,243,255,.78); font-weight: 600; }
+@media (max-width: 560px){
+.ds .hb-wm b{ font-size: 34px; }
+.ds .hb-float-in{ padding: 24px 20px; }
+}
+
+
+/* ------------------------------------------------------------ rail icons */
+.ds .hb-rail nav button svg{
+  width: 17px; height: 17px; flex: none; fill: none;
+  stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.ds .hb-navh{
+  margin: 16px 0 4px; padding: 0 12px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+}
+
+
+/* --------------------------------------------------------- profile screen */
+.ds .hb-prof{ display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.ds .hb-av{
+  display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%;
+  background: var(--action-grad); color: #fff; font: 700 20px var(--font);
+}
+.ds .hb-prof b{ display: block; font-size: 16px; }
+.ds .hb-prof > div > span{ display: block; font-size: 12.5px; color: var(--ink-3); margin-bottom: 6px; }
+
+
+/* -------------------------------------------------------- settings screen */
+.ds .hb-set{
+  display: flex; align-items: center; gap: 16px; padding: 14px 0;
+  border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.ds .hb-set:last-child{ border-bottom: 0; padding-bottom: 0; }
+.ds .hb-set > div:first-child{ flex: 1; min-width: 220px; }
+.ds .hb-set b{ display: block; font-size: 13.5px; }
+.ds .hb-set span{ font-size: 12.5px; color: var(--ink-3); line-height: 1.5; }
+.ds .hb-seg.sm button{ padding: 6px 11px; font-size: 12px; }
+.ds .hb-sw{
+  position: relative; width: 42px; height: 24px; border-radius: 999px; border: 0;
+  background: var(--bg-inset); cursor: pointer; transition: background 160ms;
+}
+.ds .hb-sw i{
+  position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bg); box-shadow: 0 1px 3px rgba(var(--shadow-c), .3); transition: left 160ms;
+}
+.ds .hb-sw.on{ background: var(--action); }
+.ds .hb-sw.on i{ left: 21px; }
+.ds .hb-path{
+  padding: 6px 10px; border-radius: 8px; background: var(--bg-alt); border: 1px solid var(--line);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11.5px; color: var(--ink-2);
+}
+.ds .hb-maint{ display: flex; flex-wrap: wrap; gap: 8px; }
+
+
+/* --------------------------------------------------------- contact screen */
+.ds .hb-steps{ margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.ds .hb-steps li{ font-size: 12.5px; line-height: 1.6; color: var(--ink-2); }
+.ds .hb-steps b{ color: var(--ink); }

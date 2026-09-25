@@ -49,6 +49,21 @@ branch protection and CODEOWNERS, and the hourly watcher checks them too
 (`repos` in `infra/bin/adlm.ts`). Private repositories cannot be protected on
 GitHub Free; the plugin release gate on the API still covers what they ship.
 Offboarding: remove the approver from these repos as well.
+## Putting the gate on a repository
+
+```
+cd server
+node scripts/release-gate.mjs protect                                   # dry run, every repo
+node scripts/release-gate.mjs protect --confirm
+node scripts/release-gate.mjs protect --repo owner/name --branch main --confirm
+```
+
+It invites the approver, writes `.github/CODEOWNERS` and turns on branch
+protection with admins included, for every repository in `GATED_REPOS`
+(`server/scripts/release-gate.mjs`). Private repositories need **GitHub Pro**;
+on a free account GitHub answers 403 and the repo is reported as skipped, so
+the command is safe to run before upgrading. Offboarding removes the leaver
+from every repo in that list.
 
 ## The locked audit trail
 

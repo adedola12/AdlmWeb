@@ -9,26 +9,14 @@
 // .wk-dd-m holding one button per option.
 
 import React from "react";
+import { useDismiss } from "./dismiss.js";
 
 export default function WkDropdown({ label, value, options, onPick }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
 
-  React.useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e) => {
-      if (!ref.current?.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // Outside click, Escape, or another dropdown opening (ds/dismiss.js).
+  useDismiss(open, () => setOpen(false), [ref]);
 
   const current = options.find((o) => o.value === value) || options[0];
 

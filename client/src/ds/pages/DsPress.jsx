@@ -391,7 +391,7 @@ export default function DsPress() {
                 {" "}
                 <div className="bkit-dl">
                   {" "}
-                  <Link className="bkit-file" to="/ds/logo-light.svg" download="">
+                  <a className="bkit-file" href="/ds/logo-light.svg" download="">
                     {" "}
                     <span className="bkit-ext">
                       SVG
@@ -408,9 +408,9 @@ export default function DsPress() {
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <Link className="bkit-file" to="/ds/logo-dark.svg" download="">
+                  <a className="bkit-file" href="/ds/logo-dark.svg" download="">
                     {" "}
                     <span className="bkit-ext">
                       SVG
@@ -427,9 +427,9 @@ export default function DsPress() {
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
-                  <Link className="bkit-file" to="/ds/mark.svg" download="">
+                  <a className="bkit-file" href="/ds/mark.svg" download="">
                     {" "}
                     <span className="bkit-ext">
                       SVG
@@ -446,7 +446,7 @@ export default function DsPress() {
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
-                  </Link>
+                  </a>
                   {" "}
                 </div>
                 {" "}
@@ -1040,7 +1040,7 @@ export default function DsPress() {
                 {" "}
                 <div className="bkit-prods">
                   {" "}
-                  <Link className="bkit-prod" to="/ds/ic-quiv.png" download="">
+                  <a className="bkit-prod" href="/ds/ic-quiv.png" download="">
                     <img src="/ds/ic-quiv.png" alt="QUIV icon" />
                     <b>
                       QUIV
@@ -1048,9 +1048,9 @@ export default function DsPress() {
                     <span>
                       PNG · 512px
                     </span>
-                  </Link>
+                  </a>
                   {" "}
-                  <Link className="bkit-prod" to="/ds/ic-heron.png" download="">
+                  <a className="bkit-prod" href="/ds/ic-heron.png" download="">
                     <img src="/ds/ic-heron.png" alt="HERON icon" />
                     <b>
                       HERON
@@ -1058,9 +1058,9 @@ export default function DsPress() {
                     <span>
                       PNG · 512px
                     </span>
-                  </Link>
+                  </a>
                   {" "}
-                  <Link className="bkit-prod" to="/ds/ic-rategen.png" download="">
+                  <a className="bkit-prod" href="/ds/ic-rategen.png" download="">
                     <img src="/ds/ic-rategen.png" alt="RateGen icon" />
                     <b>
                       RateGen
@@ -1068,9 +1068,9 @@ export default function DsPress() {
                     <span>
                       PNG · 512px
                     </span>
-                  </Link>
+                  </a>
                   {" "}
-                  <Link className="bkit-prod" to="/ds/ic-mep.png" download="">
+                  <a className="bkit-prod" href="/ds/ic-mep.png" download="">
                     <img src="/ds/ic-mep.png" alt="Revit MEP icon" />
                     <b>
                       Revit MEP
@@ -1078,9 +1078,9 @@ export default function DsPress() {
                     <span>
                       PNG · 512px
                     </span>
-                  </Link>
+                  </a>
                   {" "}
-                  <Link className="bkit-prod" to="/ds/ic-timepro.png" download="">
+                  <a className="bkit-prod" href="/ds/ic-timepro.png" download="">
                     <img src="/ds/ic-timepro.png" alt="Time Pro icon" />
                     <b>
                       Time Pro
@@ -1088,9 +1088,9 @@ export default function DsPress() {
                     <span>
                       PNG · 512px
                     </span>
-                  </Link>
+                  </a>
                   {" "}
-                  <Link className="bkit-prod" to="/ds/ic-civiq.png" download="">
+                  <a className="bkit-prod" href="/ds/ic-civiq.png" download="">
                     <img src="/ds/ic-civiq.png" alt="CIVIQ icon" />
                     <b>
                       CIVIQ
@@ -1098,7 +1098,7 @@ export default function DsPress() {
                     <span>
                       PNG · 512px
                     </span>
-                  </Link>
+                  </a>
                   {" "}
                 </div>
                 {" "}

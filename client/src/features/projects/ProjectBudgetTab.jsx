@@ -1,8 +1,14 @@
 import React from "react";
-import { FaBoxes, FaCubes, FaHardHat, FaLayerGroup, FaSearch, FaTimes, FaTools } from "../../components/icons.jsx";
+import { FaBoxes, FaCubes, FaHardHat, FaLayerGroup, FaTimes, FaTools } from "../../components/icons.jsx";
 import SectionRail from "./SectionRail.jsx";
 import { RateCell } from "./ProjectBillTable.jsx";
 import { resolveAll, normalizeTitle } from "../../lib/budgetBillLink.js";
+import { isRateApplied } from "./rateReconcile.js";
+import {
+  buyByDate,
+  buyScheduleGroups,
+  clampLeadDays,
+} from "../../lib/buySchedule.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Project Budget tab — Material & Labour build-up of each Bill line.
@@ -12,7 +18,10 @@ import { resolveAll, normalizeTitle } from "../../lib/budgetBillLink.js";
 // then laid out in Bill order and the Bill's sections, with each line's
 // material AND labour bundled together. Users can price each row (manually or
 // from RateGen) and set a per-line Overhead & Profit %; the resulting
-// Bill Rate = Material + Labour + O&P flows up to the BoQ automatically.
+// rate = net build-up + O&P (every resource row, plant included) flows up to
+// the BoQ automatically — UNLESS the QS has applied a rate to that bill line
+// himself, in which case his rate stands and this tab prints what the build-up
+// comes to beside it rather than pretending to set the bill.
 // ─────────────────────────────────────────────────────────────────────
 
 function safeNum(v) {
@@ -24,6 +33,10 @@ function money(v) {
   return safeNum(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+function naira(v) {
+  return "₦" + money(v);
+}
+
 function lineDone(it) {
   return (
     Boolean(it?.procured || it?.purchased || it?.completed) ||
@@ -33,13 +46,48 @@ function lineDone(it) {
 }
 
 // componentKind → label + visual treatment.
+// His four palettes, one per resource kind, for his .wk-src chips.
+function tone(pal) {
+  return {
+    background: `var(--pal-${pal}-wash)`,
+    color: `var(--pal-${pal}-key)`,
+    borderColor: `var(--pal-${pal}-line)`,
+  };
+}
+const NO_MB = { marginBottom: 0 };
+// A slim toolbar panel: his card, laid out as one wrapping row.
+const STRIP = {
+  marginBottom: 0,
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "8px 12px",
+  padding: "12px 16px",
+};
+const INLINE_FIELD = { display: "inline-flex", alignItems: "center", gap: 4 };
+const STRIP_TITLE = { padding: 0 };
+const WARN_TEXT = { color: "var(--pal-orange-key)" };
+const TRUNCATE = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+// The search totals float over the page, so they take a solid ground.
+const FLOAT = {
+  position: "fixed",
+  bottom: 24,
+  left: 24,
+  zIndex: 30,
+  width: 288,
+  padding: 12,
+  marginBottom: 0,
+  backgroundColor: "var(--bg)",
+  boxShadow: "var(--shadow-c)",
+};
+
 const KIND_META = {
-  material: { label: "Material", icon: FaCubes, cls: "bg-amber-100 text-amber-800" },
-  labour: { label: "Labour", icon: FaHardHat, cls: "bg-blue-100 text-blue-800" },
-  labor: { label: "Labour", icon: FaHardHat, cls: "bg-blue-100 text-blue-800" },
-  plant: { label: "Plant", icon: FaTools, cls: "bg-violet-100 text-violet-800" },
-  equipment: { label: "Equipment", icon: FaTools, cls: "bg-violet-100 text-violet-800" },
-  consumable: { label: "Consumable", icon: FaBoxes, cls: "bg-emerald-100 text-emerald-800" },
+  material: { label: "Material", icon: FaCubes, tone: tone("orange") },
+  labour: { label: "Labour", icon: FaHardHat, tone: tone("light") },
+  labor: { label: "Labour", icon: FaHardHat, tone: tone("light") },
+  plant: { label: "Plant", icon: FaTools, tone: tone("deep") },
+  equipment: { label: "Equipment", icon: FaTools, tone: tone("deep") },
+  consumable: { label: "Consumable", icon: FaBoxes, tone: tone("grad") },
 };
 
 function kindMeta(kind) {
@@ -48,7 +96,7 @@ function kindMeta(kind) {
     KIND_META[key] || {
       label: kind ? String(kind) : "Item",
       icon: FaLayerGroup,
-      cls: "bg-slate-100 text-slate-700",
+      tone: undefined,
     }
   );
 }
@@ -101,9 +149,17 @@ export default function ProjectBudgetTab({
   // Rebuild the material & labour schedule from the current constants library.
   // Absent (null) for products/projects where regeneration does not apply.
   onRebuildSchedule = null,
+  // False on a shared project whose money this viewer may not see. Regenerating
+  // re-prices the whole schedule from the CALLER's constants, so the server
+  // refuses it for them (RATES_MASKED) — the control says so instead.
+  canSeeRates = true,
+  // S18: the procurement lead time is saved on the project now, so it
+  // survives a reload. The default is the same 14 days it always was.
+  leadDays: leadDaysProp = 14,
+  onLeadDaysChange = null,
 }) {
   const [view, setView] = React.useState("breakdown");
-  const [leadDays, setLeadDays] = React.useState(14);
+  const leadDays = clampLeadDays(leadDaysProp);
   const [query, setQuery] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [rebuilding, setRebuilding] = React.useState(false);
@@ -146,6 +202,12 @@ export default function ProjectBudgetTab({
         // independent of (and even when locked out of) per-line procurement.
         billCompleted: Boolean(it?.completed) || safeNum(it?.percentComplete) >= 100,
         billPercent: Boolean(it?.completed) ? 100 : safeNum(it?.percentComplete),
+        // The QS applied this line's rate himself, so the server no longer
+        // derives the bill rate from the build-up below. The figure this tab
+        // computes is then a costing, not the rate the client is charged, and
+        // the caption has to say which it is.
+        rateApplied: isRateApplied(it),
+        billRate: safeNum(it?.rate),
       });
     });
     return m;
@@ -225,6 +287,8 @@ export default function ProjectBudgetTab({
           // bill item ticked complete shows as done in the budget breakdown.
           billCompleted: meta ? Boolean(meta.billCompleted) : false,
           billPercent: meta ? safeNum(meta.billPercent) : 0,
+          rateApplied: meta ? Boolean(meta.rateApplied) : false,
+          billRate: meta ? safeNum(meta.billRate) : 0,
           lines: [],
         });
         seen += 1;
@@ -390,7 +454,7 @@ export default function ProjectBudgetTab({
       }
       const e = byKind.get(label);
       e.count += 1;
-      const unit = (l?.unit || "").toString().trim() || "—";
+      const unit = (l?.unit || "").toString().trim() || "–";
       e.qtyByUnit.set(unit, (e.qtyByUnit.get(unit) || 0) + safeNum(l.qty));
       if (lineDone(l)) e.done += 1;
       if (safeNum(l.rate) > 0) e.priced += 1;
@@ -499,16 +563,19 @@ export default function ProjectBudgetTab({
   // ── Buy schedule — "what to buy & when" ────────────────────────────────
   const buyRows = React.useMemo(() => {
     const tasks = pmDashboard?.tasks || [];
-    const codeToStart = new Map();
+    // code → the earliest linked task, so a row can name the task it is for.
+    const codeToTask = new Map();
     for (const t of tasks) {
-      const s = t?.startDate ? new Date(t.startDate) : null;
-      if (!s || Number.isNaN(s.getTime())) continue;
+      const start = t?.startDate ? new Date(t.startDate) : null;
+      if (!start || Number.isNaN(start.getTime())) continue;
       for (const ident of t?.linkedBoqIdentities || []) {
         const norm = String(ident).split("::")[1];
         const code = (norm || "").trim().toLowerCase();
         if (!code) continue;
-        const cur = codeToStart.get(code);
-        if (!cur || s < cur) codeToStart.set(code, s);
+        const cur = codeToTask.get(code);
+        if (!cur || start < cur.start) {
+          codeToTask.set(code, { start, name: String(t?.name || "").trim() });
+        }
       }
     }
     const rows = [];
@@ -517,16 +584,19 @@ export default function ProjectBudgetTab({
       const code = String(it?.billIdentity || it?.sourceTakeoffCode || "")
         .trim()
         .toLowerCase();
-      const needBy = code ? codeToStart.get(code) || null : null;
-      const buyBy = needBy
-        ? new Date(needBy.getTime() - leadDays * 86400000)
-        : null;
+      const task = code ? codeToTask.get(code) || null : null;
+      const needBy = task ? task.start : null;
+      const buyBy = buyByDate(needBy, leadDays);
       rows.push({
         key: keyOf(it),
+        line: it,
         name: lineName(it),
         qty: safeNum(it?.qty),
         unit: it?.unit || "",
         forLine: groupLabel(it),
+        taskName: task?.name || "",
+        // What this material is worth, on the same rate the breakdown uses.
+        amount: safeNum(it?.qty) * safeNum(it?.rate),
         needBy,
         buyBy,
         done: lineDone(it),
@@ -543,8 +613,12 @@ export default function ProjectBudgetTab({
 
   const scheduledCount = buyRows.filter((r) => r.buyBy).length;
 
+  // The three groups his KPI row counts, measured against TODAY — the real
+  // date, not a fixed one. A row already ticked as bought is in none of them.
+  const buyGroups = React.useMemo(() => buyScheduleGroups(buyRows), [buyRows]);
+
   function fmtDate(d) {
-    if (!d) return "—";
+    if (!d) return "–";
     try {
       return d.toLocaleDateString(undefined, {
         day: "numeric",
@@ -552,7 +626,7 @@ export default function ProjectBudgetTab({
         year: "numeric",
       });
     } catch {
-      return "—";
+      return "–";
     }
   }
 
@@ -592,20 +666,20 @@ export default function ProjectBudgetTab({
   }
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
       {/* Intro + the completion rule. */}
-      <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
-        <div className="text-base font-bold text-slate-900 dark:text-white">
-          Material &amp; Labour breakdown
+      <section className="wk-panel" style={NO_MB}>
+        <div className="wk-ph">
+          <h2>Material &amp; Labour breakdown</h2>
         </div>
-        <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
+        <p className="wk-note" style={{ paddingBottom: 0 }}>
           The build-up of each bill item, its materials and labour shown
           together, arranged in the same order and sections as your Bill of
           Quantity. Price each row (type a rate, paste a <code>=</code>formula,
           or pull from RateGen) and set Overhead &amp; Profit; the
           <b> Bill Rate = Material + Labour + O&amp;P</b> flows up to the BoQ.
-        </div>
-        <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+        </p>
+        <p className="mk-note" style={{ margin: "14px 20px 18px" }}>
           A bill item is only complete when <b>every</b> line below it is
           marked procured/done, buying the materials isn’t enough until the
           labour is done too.{" "}
@@ -616,12 +690,12 @@ export default function ProjectBudgetTab({
               : sourceLines.length === 0
                 ? "Re-save this project from the plugin to load its material & labour breakdown."
                 : "You have view-only access, so procurement marking is disabled."}
-        </div>
-      </div>
+        </p>
+      </section>
 
       {hasBreakdown ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-adlm-dark-border dark:bg-white/5">
+        <div className="wk-bar" style={NO_MB}>
+          <div className="wk-loc-sw" role="tablist" aria-label="Budget view">
             {[
               { id: "breakdown", label: "Breakdown" },
               { id: "schedule", label: "Buy schedule" },
@@ -631,13 +705,10 @@ export default function ProjectBudgetTab({
                 <button
                   key={opt.id}
                   type="button"
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => setView(opt.id)}
-                  className={[
-                    "rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
-                    active
-                      ? "bg-white text-adlm-blue-700 shadow-sm dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                      : "text-slate-600 hover:text-slate-900 dark:text-adlm-dark-muted dark:hover:text-white",
-                  ].join(" ")}
+                  className={active ? "on" : ""}
                 >
                   {opt.label}
                 </button>
@@ -646,38 +717,44 @@ export default function ProjectBudgetTab({
           </div>
 
           {view === "breakdown" ? (
-            <div className="relative min-w-[220px] flex-1 max-w-sm">
-              <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search material / labour…"
-                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-8 text-xs text-slate-900 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
-              />
+            <>
+              <label className="wk-find">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#hi-search" />
+                </svg>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search material / labour…"
+                  aria-label="Search material and labour"
+                  autoComplete="off"
+                />
+              </label>
               {query ? (
                 <button
                   type="button"
+                  className="ds-btn ds-btn-sm btn-o"
                   onClick={() => setQuery("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
                   title="Clear search"
                 >
-                  <FaTimes className="text-xs" />
+                  Clear
                 </button>
               ) : null}
-            </div>
+            </>
           ) : null}
         </div>
       ) : null}
 
       {hasBreakdown && view === "breakdown" ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs dark:border-adlm-dark-border dark:bg-white/5">
-          <span className="font-semibold text-slate-700 dark:text-adlm-dark-text">
+        <div className="wk-panel" style={STRIP}>
+          <span className="wk-grp" style={STRIP_TITLE}>
             Global Overhead &amp; Profit
           </span>
-          <span className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+          <span className="wk-locnote">
             one rate for every item, overrides each item’s own O&amp;P
           </span>
-          <label className="inline-flex items-center gap-1 text-slate-600 dark:text-adlm-dark-muted">
+          <label className="wk-locnote" style={INLINE_FIELD}>
             O/H
             <input
               type="number"
@@ -686,12 +763,12 @@ export default function ProjectBudgetTab({
               value={globalOH}
               disabled={!canEdit || saving}
               onChange={(e) => setGlobalOH(e.target.value)}
-              placeholder="—"
+              placeholder="–"
               className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-right text-slate-900 disabled:opacity-50 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
             />
             %
           </label>
-          <label className="inline-flex items-center gap-1 text-slate-600 dark:text-adlm-dark-muted">
+          <label className="wk-locnote" style={INLINE_FIELD}>
             Profit
             <input
               type="number"
@@ -700,7 +777,7 @@ export default function ProjectBudgetTab({
               value={globalPR}
               disabled={!canEdit || saving}
               onChange={(e) => setGlobalPR(e.target.value)}
-              placeholder="—"
+              placeholder="–"
               className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-right text-slate-900 disabled:opacity-50 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
             />
             %
@@ -709,7 +786,7 @@ export default function ProjectBudgetTab({
             type="button"
             disabled={!canEdit || saving || !globalActive}
             onClick={commitGlobalMarkup}
-            className="rounded-lg bg-adlm-blue-700 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-adlm-blue-600 disabled:opacity-50"
+            className="ds-btn ds-btn-sm btn-p"
             title="Write this Overhead & Profit onto every item"
           >
             Apply to all
@@ -722,11 +799,11 @@ export default function ProjectBudgetTab({
                   setGlobalOH("");
                   setGlobalPR("");
                 }}
-                className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-white dark:border-adlm-dark-border dark:text-adlm-dark-muted"
+                className="ds-btn ds-btn-sm btn-o"
               >
                 Clear
               </button>
-              <span className="text-[10px] font-semibold text-adlm-orange">
+              <span className="wk-locnote" style={WARN_TEXT}>
                 Previewing {safeNum(globalOH) + safeNum(globalPR)}% on every item
               </span>
             </>
@@ -735,17 +812,17 @@ export default function ProjectBudgetTab({
       ) : null}
 
       {onRebuildSchedule && view === "breakdown" ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs dark:border-adlm-dark-border dark:bg-white/5">
-          <span className="font-semibold text-slate-700 dark:text-adlm-dark-text">
+        <div className="wk-panel" style={STRIP}>
+          <span className="wk-grp" style={STRIP_TITLE}>
             Material &amp; Labour schedule
           </span>
-          <span className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+          <span className="wk-locnote">
             built from the bill using your constants. Your prices and
             procurement marks are kept
           </span>
           <button
             type="button"
-            disabled={!canEdit || saving || rebuilding}
+            disabled={!canEdit || saving || rebuilding || !canSeeRates}
             onClick={async () => {
               setRebuilding(true);
               try {
@@ -754,8 +831,12 @@ export default function ProjectBudgetTab({
                 setRebuilding(false);
               }
             }}
-            className="rounded-lg bg-adlm-blue-700 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-adlm-blue-600 disabled:opacity-50"
-            title="Re-derive every generated material and labour row from the current Material Constants"
+            className="ds-btn ds-btn-sm btn-p"
+            title={
+              canSeeRates
+                ? "Re-derive every generated material and labour row from the current Material Constants"
+                : "Rates are hidden on this shared project, so you cannot rebuild its schedule."
+            }
           >
             {rebuilding ? "Rebuilding…" : "Rebuild schedule"}
           </button>
@@ -763,7 +844,7 @@ export default function ProjectBudgetTab({
             href="/rategen/material-constants"
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-white dark:border-adlm-dark-border dark:text-adlm-dark-muted"
+            className="ds-btn ds-btn-sm btn-o"
           >
             Material constants →
           </a>
@@ -771,119 +852,141 @@ export default function ProjectBudgetTab({
       ) : null}
 
       {!hasBreakdown ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
+        <div className="wk-panel wk-empty" style={NO_MB}>
           No material &amp; labour breakdown on this project yet. The breakdown
           is generated when you save from QUIV or Heron and
           appears in the <span className="font-semibold">Materials</span> view.
         </div>
       ) : view === "schedule" ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                Procurement buy schedule
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-                What to buy &amp; when, materials timed off the Program of
-                Works. {scheduledCount} of {buyRows.length} dated.
-              </div>
+        <div style={{ display: "grid", gap: 14 }}>
+          <div className="pj-kpi c4">
+            <div className={buyGroups.late.length ? "warn" : ""}>
+              <span>Should already be bought</span>
+              <b>{buyGroups.late.length}</b>
+              <em>
+                {buyGroups.late.length
+                  ? `${naira(buyGroups.lateValue)} of materials`
+                  : "Nothing late"}
+              </em>
             </div>
-            <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-adlm-dark-muted">
-              Lead time
-              <input
-                type="number"
-                min="0"
-                value={leadDays}
-                onChange={(e) =>
-                  setLeadDays(Math.max(0, Number(e.target.value) || 0))
-                }
-                className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
-              />
-              days
-            </label>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 dark:bg-white/5 text-left text-slate-600 dark:text-adlm-dark-muted">
-                <tr>
-                  <th className="px-3 py-2">Buy by</th>
-                  <th className="px-3 py-2">Need on site</th>
-                  <th className="px-3 py-2">Material</th>
-                  <th className="px-3 py-2 text-right">Qty</th>
-                  <th className="px-3 py-2">Unit</th>
-                  <th className="px-3 py-2">For</th>
-                  <th className="px-3 py-2 text-center">Procured</th>
-                </tr>
-              </thead>
-              <tbody>
-                {buyRows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-3 py-6 text-center text-slate-500 dark:text-adlm-dark-muted"
-                    >
-                      No materials to buy on this project.
-                    </td>
-                  </tr>
+            <div>
+              <span>Buy this week</span>
+              <b>{buyGroups.week.length}</b>
+              <em>
+                {buyGroups.week.length ? naira(buyGroups.weekValue) : "Nothing due"}
+              </em>
+            </div>
+            <div>
+              <span>Not yet scheduled</span>
+              <b>{buyGroups.unscheduled.length}</b>
+              <em>
+                {buyGroups.unscheduled.length
+                  ? "Their bill lines are in no task"
+                  : "Every line is in a task"}
+              </em>
+            </div>
+            <div>
+              <span>Lead time</span>
+              <b>
+                {onLeadDaysChange ? (
+                  <>
+                    <input
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={leadDays}
+                      aria-label="Lead time in days"
+                      onChange={(e) => onLeadDaysChange(e.target.value)}
+                    />{" "}
+                    days
+                  </>
                 ) : (
-                  buyRows.map((r) => (
-                    <tr
-                      key={r.key}
-                      className={[
-                        "border-t border-slate-100 dark:border-adlm-dark-border",
-                        r.done ? "opacity-60" : "",
-                      ].join(" ")}
-                    >
-                      <td className="px-3 py-2 font-semibold text-slate-900 dark:text-white">
-                        {r.buyBy ? (
-                          fmtDate(r.buyBy)
-                        ) : (
-                          <span className="text-slate-400 dark:text-adlm-dark-dim">
-                            Not scheduled
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
-                        {fmtDate(r.needBy)}
-                      </td>
-                      <td className="px-3 py-2 font-medium text-slate-800 dark:text-adlm-dark-text">
-                        <span className="line-clamp-1" title={r.name}>
-                          {r.name}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
-                        {money(r.qty)}
-                      </td>
-                      <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
-                        {r.unit}
-                      </td>
-                      <td className="px-3 py-2 text-slate-500 dark:text-adlm-dark-muted">
-                        <span className="line-clamp-1" title={r.forLine}>
-                          {r.forLine}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {r.done ? (
-                          <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                            ✓
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-adlm-dark-dim">
-, 
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  `${leadDays} days`
                 )}
-              </tbody>
-            </table>
+              </b>
+              <em>Bought this long before work starts</em>
+            </div>
           </div>
-          <div className="border-t border-slate-100 dark:border-adlm-dark-border px-4 py-2 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-            “Need on site” is the earliest Program-of-Works task linked to each
-            item’s bill line; “Buy by” subtracts the lead time. Link bill lines
-            to tasks on the PM Dashboard to schedule the “Not scheduled” items.
-          </div>
+
+          {buyRows.length === 0 ? (
+            <div className="pj-empty">
+              <b>Nothing to buy yet</b>
+              <p>
+                The buy schedule works backwards from the programme: every
+                material a bill line needs, dated by when its task starts, less
+                the lead time above. It is a shopping list with dates on it, not
+                a second bill.
+              </p>
+              <p>
+                It is empty because the breakdown on this project holds no
+                material or plant lines yet: what is in it is labour, and labour
+                is not bought ahead. Price a bill line against a rate that
+                carries materials and they arrive here with their dates.
+              </p>
+            </div>
+          ) : (
+            <div className="pj-buy" role="table" aria-label="Buy schedule">
+              <div className="hd" role="row">
+                <span />
+                <span>Buy by</span>
+                <span>Material</span>
+                <span className="n">Quantity</span>
+                <span>For</span>
+              </div>
+              {buyRows.map((r) => {
+                const state = r.done
+                  ? "got"
+                  : !r.buyBy
+                    ? "none"
+                    : r.buyBy < buyGroups.today
+                      ? "late"
+                      : "";
+                return (
+                  <label className={`rw ${state}`.trim()} role="row" key={r.key}>
+                    <input
+                      type="checkbox"
+                      checked={r.done}
+                      disabled={!canEdit || saving}
+                      aria-label={`Bought: ${r.name}`}
+                      title={
+                        contractLocked
+                          ? "The contract is locked, procurement is frozen."
+                          : canEdit
+                            ? "Tick when this material has been bought"
+                            : "You cannot edit this project"
+                      }
+                      onChange={() => toggleLine(r.line)}
+                    />
+                    <span className="by">
+                      {r.buyBy ? fmtDate(r.buyBy) : "Not scheduled"}
+                      {r.needBy ? <em>on site {fmtDate(r.needBy)}</em> : null}
+                    </span>
+                    <span className="m">
+                      <b title={r.name}>{r.name}</b>
+                      <em>{r.amount ? naira(r.amount) : "–"}</em>
+                    </span>
+                    <span className="n">
+                      {money(r.qty)} {r.unit || ""}
+                    </span>
+                    <span className="f" title={r.forLine}>
+                      {r.forLine}
+                      {r.taskName ? <em>{r.taskName}</em> : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="pj-foot">
+            “On site” is the start of the earliest Program-of-Works task linked
+            to the material’s bill line; “Buy by” takes the lead time off it.
+            Link bill lines to tasks on the PM Dashboard to date the
+            unscheduled ones. {scheduledCount} of {buyRows.length} dated.
+            {onLeadDaysChange
+              ? " The lead time is saved with the project when you save."
+              : ""}
+          </p>
         </div>
       ) : (
         <div className="relative flex gap-4">
@@ -901,7 +1004,7 @@ export default function ProjectBudgetTab({
             <div ref={topRef} className="scroll-mt-24" aria-hidden="true" />
 
             {!q && sections.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
+              <div className="wk-panel wk-empty" style={NO_MB}>
                 No build-up on this project yet.
               </div>
             ) : null}
@@ -909,14 +1012,16 @@ export default function ProjectBudgetTab({
             {/* Search mode, flat results showing each resource's work item + section. */}
             {q ? (
               searchResults.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
+                <div className="wk-panel wk-empty" style={NO_MB}>
                   No material / labour matches “{query}”.
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth">
-                  <div className="border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
-                    {searchResults.length} result
-                    {searchResults.length === 1 ? "" : "s"} for “{query}”
+                <div className="wk-panel" style={NO_MB}>
+                  <div className="wk-ph">
+                    <h2>
+                      {searchResults.length} result
+                      {searchResults.length === 1 ? "" : "s"} for “{query}”
+                    </h2>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
@@ -946,9 +1051,10 @@ export default function ProjectBudgetTab({
                             >
                               <td className="px-3 py-2">
                                 <span
-                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.cls}`}
+                                  className="wk-src sm"
+                                  style={meta.tone}
                                 >
-                                  <Icon className="text-[9px]" />
+                                  <Icon size={11} />
                                   {meta.label}
                                 </span>
                               </td>
@@ -963,7 +1069,7 @@ export default function ProjectBudgetTab({
                                 </span>
                               </td>
                               <td className="px-3 py-2">
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-adlm-dark-muted">
+                                <span className="wk-src sm">
                                   {section}
                                 </span>
                               </td>
@@ -981,7 +1087,7 @@ export default function ProjectBudgetTab({
                                   <span className={`font-semibold ${doneTone}`}>✓</span>
                                 ) : (
                                   <span className="text-slate-300 dark:text-adlm-dark-dim">
-, 
+–
                                   </span>
                                 )}
                               </td>
@@ -1004,19 +1110,27 @@ export default function ProjectBudgetTab({
                 className="space-y-3 scroll-mt-24"
               >
                 {hasRealCategories ? (
-                  <div className="flex items-center justify-between gap-2 px-1 pt-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      padding: "4px 4px 0",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="wk-grp" style={STRIP_TITLE}>
                         {section.category}
                       </span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-adlm-dark-muted">
+                      <span className="wk-src sm">
                         {section.groups.length} item
                         {section.groups.length === 1 ? "" : "s"}
                       </span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
+                    <b style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
                       &#8358;{money(section.cost)}
-                    </span>
+                    </b>
                   </div>
                 ) : null}
 
@@ -1029,15 +1143,18 @@ export default function ProjectBudgetTab({
                   return (
                     <div
                       key={g.key}
-                      className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth"
+                      className="wk-panel" style={NO_MB}
                     >
                       {/* Bill-line header + rolled-up status. */}
-                      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                      <div
+                        className="wk-ph"
+                        style={{ flexWrap: "wrap", alignItems: "flex-start" }}
+                      >
+                        <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+                          <h2 style={TRUNCATE} title={g.label}>
                             {g.label}
-                          </div>
-                          <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+                          </h2>
+                          <div className="wk-locnote" style={{ marginTop: 4 }}>
                             {g.total} item{g.total === 1 ? "" : "s"} ·{" "}
                             {showMaterials ? "procured" : "done"} {g.doneCount}/
                             {g.total}
@@ -1051,8 +1168,8 @@ export default function ProjectBudgetTab({
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
                           {/* Overhead / Profit. */}
-                          <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-adlm-dark-muted">
-                            <label className="inline-flex items-center gap-1">
+                          <div className="wk-locnote" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <label style={INLINE_FIELD}>
                               O/H
                               <input
                                 type="number"
@@ -1090,7 +1207,7 @@ export default function ProjectBudgetTab({
                               />
                               %
                             </label>
-                            <label className="inline-flex items-center gap-1">
+                            <label style={INLINE_FIELD}>
                               Profit
                               <input
                                 type="number"
@@ -1129,7 +1246,12 @@ export default function ProjectBudgetTab({
                               %
                             </label>
                           </div>
-                          {/* Net + derived bill rate. */}
+                          {/* Net, and what this build-up makes of the rate.
+                              It is the BILL rate only while the server still
+                              derives it. Once the QS has applied a rate to the
+                              line himself, this figure is what the build-up
+                              costs — the Bill charges his, and the caption says
+                              so and prints it beside this one. */}
                           <div className="text-right leading-tight">
                             <div className="text-[10px] text-slate-400 dark:text-adlm-dark-dim">
                               net &#8358;{money(g.net)}
@@ -1138,20 +1260,33 @@ export default function ProjectBudgetTab({
                               &#8358;{money(billAmount)}
                             </div>
                             {g.billQty > 0 ? (
-                              <div className="text-[10px] text-adlm-orange">
-                                rate &#8358;{money(billRate)}/{g.billUnit}
+                              <div
+                                className="text-[10px] text-adlm-orange"
+                                title={
+                                  g.rateApplied
+                                    ? "The QS applied this line's rate on the Bill, so it is no longer derived from this build-up. This is what the build-up comes to."
+                                    : "The Bill charges this rate: it is derived from the build-up above."
+                                }
+                              >
+                                {g.rateApplied ? "build-up " : "bill rate "}
+                                &#8358;{money(billRate)}/{g.billUnit}
+                              </div>
+                            ) : null}
+                            {g.billQty > 0 && g.rateApplied ? (
+                              <div className="text-[10px] text-slate-400 dark:text-adlm-dark-dim">
+                                bill &#8358;{money(g.billRate)}/{g.billUnit}
                               </div>
                             ) : null}
                           </div>
                           <span
-                            className={[
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                            className="wk-src sm"
+                            style={
                               g.allDone
-                                ? "bg-emerald-100 text-emerald-800"
+                                ? tone("light")
                                 : g.doneCount > 0
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-adlm-dark-muted",
-                            ].join(" ")}
+                                  ? tone("orange")
+                                  : undefined
+                            }
                           >
                             {g.allDone
                               ? "Complete"
@@ -1164,7 +1299,7 @@ export default function ProjectBudgetTab({
                               type="button"
                               disabled={saving}
                               onClick={() => markGroup(g, !g.allDone)}
-                              className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-adlm-dark-border dark:text-adlm-dark-muted dark:hover:bg-white/5"
+                              className="ds-btn ds-btn-sm btn-o"
                               title={
                                 g.allDone
                                   ? "Unmark all lines"
@@ -1209,9 +1344,10 @@ export default function ProjectBudgetTab({
                                 >
                                   <td className="px-3 py-2">
                                     <span
-                                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.cls}`}
+                                      className="wk-src sm"
+                                  style={meta.tone}
                                     >
-                                      <Icon className="text-[9px]" />
+                                      <Icon size={11} />
                                       {meta.label}
                                     </span>
                                   </td>
@@ -1276,7 +1412,7 @@ export default function ProjectBudgetTab({
                                       </span>
                                     ) : (
                                       <span className="text-slate-300 dark:text-adlm-dark-dim">
-, 
+–
                                       </span>
                                     )}
                                   </td>
@@ -1292,25 +1428,23 @@ export default function ProjectBudgetTab({
               </div>
             ))}
 
-            {/* Compact totals. */}
-            <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 px-5 py-3 text-sm">
-              <span className="text-slate-600 dark:text-adlm-dark-muted">
-                {showMaterials ? "Procured" : "Done"} to date:{" "}
-                <b className="text-slate-900 dark:text-white">
-                  &#8358;{money(procuredTotal)}
-                </b>
-              </span>
-              <span className="text-slate-600 dark:text-adlm-dark-muted">
-                Net build-up:{" "}
-                <b className="text-slate-900 dark:text-white">
-                  &#8358;{money(budgetTotal)}
-                </b>
-              </span>
-              <span className="text-slate-600 dark:text-adlm-dark-muted">
-                Bill total (incl. O&amp;P):{" "}
-                <b className="text-adlm-orange">&#8358;{money(billTotal)}</b>
-              </span>
-            </div>
+            {/* Totals, in his expression rows. */}
+            <section className="wk-panel" style={NO_MB}>
+              <div className="wk-expr">
+                <div>
+                  <span>{showMaterials ? "Procured" : "Done"} to date</span>
+                  <b>&#8358;{money(procuredTotal)}</b>
+                </div>
+                <div>
+                  <span>Net build-up</span>
+                  <b>&#8358;{money(budgetTotal)}</b>
+                </div>
+                <div className="t">
+                  <span>Bill total (incl. O&amp;P)</span>
+                  <b>&#8358;{money(billTotal)}</b>
+                </div>
+              </div>
+            </section>
 
             <div ref={bottomRef} aria-hidden="true" />
           </div>
@@ -1319,9 +1453,9 @@ export default function ProjectBudgetTab({
 
       {/* Floating Material/Labour total for the active search. */}
       {view === "breakdown" && floatTotals && floatTotals.length ? (
-        <div className="fixed bottom-6 left-6 z-30 w-72 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-depth backdrop-blur dark:border-adlm-dark-border dark:bg-adlm-dark-panel/95">
+        <div className="wk-panel" style={FLOAT} role="status">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-900 dark:text-white">
+            <span className="wk-grp" style={STRIP_TITLE}>
               “{query}” totals
             </span>
             <button
@@ -1330,7 +1464,7 @@ export default function ProjectBudgetTab({
               className="rounded p-0.5 text-slate-400 hover:text-slate-700"
               title="Clear"
             >
-              <FaTimes className="text-[10px]" />
+              <FaTimes size={12} />
             </button>
           </div>
           <div className="space-y-2">

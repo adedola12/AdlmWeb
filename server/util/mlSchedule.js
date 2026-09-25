@@ -25,6 +25,13 @@
 //      railings, roof members) → the same share treatment, per the reference QS
 //      schedules (0.70 material / 0.15 labour).
 //
+// PLANT IS ITS OWN RESOURCE CLASS, not a slice of labour (the owner's rule,
+// 23 Sep 2026). A measured line can carry a Plant row alongside its Labour row,
+// priced from the line's Rate Gen rate where the caller can resolve one
+// (opts.plantFor) and otherwise from the Plant constants — which all ship at 0,
+// so a project that has never set one generates exactly what it did before.
+// Without that row the back-solve below books every naira of plant as PROFIT.
+//
 // RECONCILIATION IS THE INVARIANT. deriveBillRatesFromBudget() drives each bill
 // rate from its build-up, so a generated schedule that costs less than the bill
 // would silently cut the client's bill total. Every generated group therefore
@@ -539,6 +546,31 @@ export function labourRateFor(item, kind, K) {
   }
 }
 
+/**
+ * The constants plant allowance for a work kind, PER MEASURED UNIT — the
+ * mixer and poker behind a concrete pour, the roller behind a fill.
+ *
+ * Plant is its own resource class, not a slice of labour (the owner's rule,
+ * 23 Sep 2026), so it gets its own Budget line instead of being buried in the
+ * gang rate. Every one of these constants ships at 0, so a project that has
+ * not set one generates exactly the schedule it generated before.
+ */
+export function plantRateFor(item, kind, K) {
+  switch (kind) {
+    case "concrete":
+    case "blinding":
+      return K.get(MC.PlantConcretePerM3);
+    case "blockwork":
+      return K.get(MC.PlantBlockworkPerM2);
+    case "fill":
+      return K.get(MC.PlantFillPerM3);
+    case "labour-only":
+      return K.get(MC.PlantExcavationPerM3);
+    default:
+      return 0;
+  }
+}
+
 // ── share-based branches (services + supply-dominated work) ─────────────────
 
 const MEP_SHARE_KEYS = {
@@ -714,6 +746,16 @@ export function generateMlSchedule(items, budgetItems, K, opts = {}) {
   const bill = Array.isArray(items) ? items : [];
   const existing = Array.isArray(budgetItems) ? budgetItems : [];
   const priceFor = typeof opts.priceFor === "function" ? opts.priceFor : () => 0;
+  // A per-bill-unit plant allowance for one line. opts.plantFor lets a caller
+  // that can resolve the line's Rate Gen rate hand over that rate's plant
+  // subtotal; otherwise the Plant constants decide, and they are 0 by default.
+  const plantFor = (item, kind, basis) => {
+    if (typeof opts.plantFor === "function") {
+      const fromRate = num(opts.plantFor(item, kind));
+      if (fromRate > 0) return fromRate;
+    }
+    return plantRateFor(item, kind, K) * (basis?.factor ?? 1);
+  };
 
   // Bill lines that already have a REAL build-up (from a Material & Labour
   // sheet in the workbook, or priced by the QS) keep it. Only lines with
@@ -777,6 +819,28 @@ export function generateMlSchedule(items, budgetItems, K, opts = {}) {
         unit: String(item?.unit || "").trim(),
         rate: labourRateFor(item, kind, K) * basis.factor,
       });
+
+      // ── Plant ────────────────────────────────────────────────────────────
+      // Without this the back-solve below books every naira of plant as
+      // PROFIT: plant is in the bill rate the QS priced with, and was absent
+      // from the build-up, so the whole of it landed in the gap the back-solve
+      // calls overhead and profit. On the owner's concrete rate, per 100 m³,
+      // the Budget said cost ₦900,000 / profit ₦360,000 when the truth was
+      // ₦1,000,000 and ₦260,000.
+      //
+      // The figure comes from the rate's own plant subtotal where the caller
+      // can resolve one, else from the Plant constants — which are all 0 until
+      // someone sets them, so nothing is ever invented.
+      const plantRate = plantFor(item, kind, basis);
+      if (plantRate > 0) {
+        rows.push({
+          kind: "Plant",
+          name: "Plant",
+          qty,
+          unit: String(item?.unit || "").trim(),
+          rate: plantRate,
+        });
+      }
     }
 
     if (!rows.length) continue;

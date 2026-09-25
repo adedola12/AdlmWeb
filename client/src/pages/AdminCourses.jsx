@@ -119,6 +119,32 @@ function ModuleRow({ m, i, onChange, onRemove, accessToken }) {
         />
         Requires submission
       </label>
+      {/* R11: when the submission is due. A fixed date (a cohort) wins over
+          "days after enrolling"; neither means no deadline. */}
+      {m.requiresSubmission && (
+        <>
+          <label className="flex items-center gap-2 text-sm">
+            Due after
+            <input
+              className="input w-20"
+              type="number"
+              min="0"
+              value={m.dueAfterDays || ""}
+              onChange={(e) => onChange(i, { ...m, dueAfterDays: Number(e.target.value) || 0 })}
+            />
+            days
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            or on
+            <input
+              className="input"
+              type="date"
+              value={m.dueAt ? String(m.dueAt).slice(0, 10) : ""}
+              onChange={(e) => onChange(i, { ...m, dueAt: e.target.value ? `${e.target.value}T23:59:00+01:00` : null })}
+            />
+          </label>
+        </>
+      )}
       <button className="btn btn-sm" onClick={() => onRemove(i)}>
         Remove
       </button>

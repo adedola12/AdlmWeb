@@ -57,68 +57,75 @@ export default function JoinProject() {
     })();
   }, [code, accessToken, navigate]);
 
+  // One centred card in his panel: a status tile, his heading and note, and
+  // ds-btn actions. The tile takes his palette for the state it reports.
+  const tile = (pal) => ({
+    width: 52,
+    height: 52,
+    margin: "0 auto 16px",
+    borderRadius: 16,
+    display: "grid",
+    placeItems: "center",
+    background: `var(--pal-${pal}-wash)`,
+    color: `var(--pal-${pal}-key)`,
+    border: `1px solid var(--pal-${pal}-line)`,
+  });
+  const title = { margin: 0, fontSize: 20, fontWeight: 500, letterSpacing: "-.02em", color: "var(--ink)" };
+  const note = { margin: "8px 0 0", fontSize: 14, fontWeight: 300, color: "var(--ink-3)" };
+
   return (
-    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
-      {state === "joining" ? (
-        <>
-          <FaSpinner className="mb-4 animate-spin text-3xl text-adlm-blue-700" />
-          <div className="text-lg font-semibold text-slate-800 dark:text-white">
-            Joining project…
-          </div>
-          <div className="mt-1 text-sm text-slate-500 dark:text-adlm-dark-muted">
-            Redeeming your share code.
-          </div>
-        </>
-      ) : null}
+    <div style={{ display: "grid", placeItems: "center", minHeight: "60vh", padding: "24px 0" }}>
+      <section
+        className="wk-panel"
+        style={{ marginBottom: 0, width: "min(460px, 100%)", padding: "32px 28px", textAlign: "center" }}
+        aria-live="polite"
+      >
+        {state === "joining" ? (
+          <>
+            <div style={tile("light")}>
+              <FaSpinner size={22} className="animate-spin" />
+            </div>
+            <h1 style={title}>Joining project…</h1>
+            <p style={note}>Redeeming your share code.</p>
+          </>
+        ) : null}
 
-      {state === "upsell" ? (
-        <>
-          <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-amber-100 text-amber-700">
-            <FaUserPlus className="text-xl" />
-          </div>
-          <div className="text-lg font-semibold text-slate-800 dark:text-white">
-            Subscription required
-          </div>
-          <p className="mt-2 text-sm text-slate-500 dark:text-adlm-dark-muted">
-            {err ||
-              `You need an active ${upsell?.productName} subscription to open this shared project.`}
-          </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            <Link
-              to={`/product/${upsell?.requiredProductKey}`}
-              className="btn-3d rounded-lg px-4 py-2 text-sm font-bold text-white"
-            >
-              Get {upsell?.productName}
-            </Link>
-            <Link
-              to="/dashboard"
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-adlm-dark-border dark:text-adlm-dark-text"
-            >
-              Go to dashboard
-            </Link>
-          </div>
-        </>
-      ) : null}
+        {state === "upsell" ? (
+          <>
+            <div style={tile("orange")}>
+              <FaUserPlus size={22} />
+            </div>
+            <h1 style={title}>Subscription required</h1>
+            <p style={note}>
+              {err ||
+                `You need an active ${upsell?.productName} subscription to open this shared project.`}
+            </p>
+            <div className="wk-acts" style={{ justifyContent: "center", marginTop: 22 }}>
+              <Link to={`/product/${upsell?.requiredProductKey}`} className="ds-btn ds-btn-sm btn-p">
+                Get {upsell?.productName}
+              </Link>
+              <Link to="/manage" className="ds-btn ds-btn-sm btn-o">
+                Go to dashboard
+              </Link>
+            </div>
+          </>
+        ) : null}
 
-      {state === "error" ? (
-        <>
-          <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-orange-100 text-orange-700">
-            <FaExclamationTriangle className="text-xl" />
-          </div>
-          <div className="text-lg font-semibold text-slate-800 dark:text-white">
-            Couldn't join
-          </div>
-          <p className="mt-2 text-sm text-slate-500 dark:text-adlm-dark-muted">
-            {err}
-          </p>
-          <Link
-            to="/dashboard"
-            className="mt-5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-adlm-dark-border dark:text-adlm-dark-text"
-          >
-            Go to dashboard
-          </Link>
-        </>
-      ) : null}
+        {state === "error" ? (
+          <>
+            <div style={tile("orange")}>
+              <FaExclamationTriangle size={22} />
+            </div>
+            <h1 style={title}>Couldn&apos;t join</h1>
+            <p style={note}>{err}</p>
+            <div className="wk-acts" style={{ justifyContent: "center", marginTop: 22 }}>
+              <Link to="/manage" className="ds-btn ds-btn-sm btn-o">
+                Go to dashboard
+              </Link>
+            </div>
+          </>
+        ) : null}
+      </section>
     </div>
   );
 }

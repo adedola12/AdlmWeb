@@ -8,6 +8,7 @@
 // none of ds.css applies, which is precisely what keeps un-ported pages safe.
 
 import React from "react";
+import DsLaunchStrip from "./DsLaunchStrip.jsx";
 import DsSprite from "./chrome/DsSprite.jsx";
 import DsNav from "./chrome/DsNav.jsx";
 import DsFooter from "./chrome/DsFooter.jsx";
@@ -26,15 +27,16 @@ import { useTheme } from "../theme.jsx";
  */
 export default function DsShell({ children, mapHref }) {
   const ref = React.useRef(null);
-  // His nav carries a #tt theme button that writes its own data-theme
-  // attribute and localStorage key. Handing it ThemeProvider's toggle keeps
-  // one theme system rather than two fighting over <html>.
-  const { toggle } = useTheme();
-  useDsBehaviours(ref, { toggleTheme: toggle, mapHref });
+  // His nav carries a #tt theme button. It opens ThemeProvider's menu, so
+  // there is one theme system rather than two fighting over <html>.
+  const { openMenu } = useTheme();
+  useDsBehaviours(ref, { openThemeMenu: openMenu, mapHref });
 
   return (
     <div className="ds" ref={ref}>
       <DsSprite />
+      {/* R20: the launch countdown, above his fixed nav (config/launch.js). */}
+      <DsLaunchStrip />
       <DsNav />
       {/* Every form in his markup is `action="thanks" method="get"` and sends
           nothing anywhere. Wiring it here rather than per page means each

@@ -236,7 +236,7 @@ export default function PTrainingEnrollment() {
           {adminApproved ? (
             <div className="mt-2">
               <Link
-                to="/dashboard"
+                to="/manage"
                 className="inline-flex px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8]"
               >
                 Go to Dashboard →

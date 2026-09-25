@@ -4,6 +4,8 @@ import path from "node:path";
 import { isSsrPath } from "../lib/ssrPaths.js";
 import { PAGE_META, fullTitle } from "../lib/pageMeta.js";
 import { isGatedHost } from "../lib/previewHost.js";
+import { beyondBimEventSchema, ptrainingEventSchema } from "../lib/schema.js";
+import { injectJsonLd } from "../lib/jsonLdTag.js";
 
 const INDEX_CANDIDATES = [
   process.env.INDEX_HTML_PATH,
@@ -154,32 +156,6 @@ function injectBody(html, bodyHtml, preload) {
   );
 }
 
-/**
- * JSON-LD collected during the render, as script tags a crawler can read.
- *
- * The data-seo attribute is not decoration. <Seo> writes the same blocks from
- * an effect after hydration, and it clears the old ones by querying exactly
- * that attribute. Without it the server's copies are invisible to that cleanup
- * and the page ends up carrying every block twice — which describes a page
- * with two of everything and is the kind of thing Google penalises rather than
- * ignores. Tagging them here makes the client replace ours instead of adding to
- * them.
- */
-function injectJsonLd(html, blocks) {
-  if (!blocks?.length) return html;
-
-  const tags = blocks
-    .map(
-      (block) =>
-        `<script type="application/ld+json" data-seo="1">${JSON.stringify(
-          block,
-        ).replace(/</g, "\\u003c")}</script>`,
-    )
-    .join("\n");
-
-  return html.replace(/<\/head>/i, `${tags}\n</head>`);
-}
-
 function injectMeta(html, meta) {
   let out = html;
 
@@ -280,8 +256,22 @@ async function fetchJson(url, ms = 2500) {
   }
 }
 
+/** Matches the truthiness rule in src/config/flags.js, so both sides agree. */
+function flagOn(v) {
+  return /^(1|true|on|yes)$/i.test(String(v ?? "").trim());
+}
+
 async function resolveMeta({ baseUrl, pathname }) {
   const cleanPath = String(pathname || "/");
+
+  // Structured data for routes the server does not render a body for.
+  //
+  // A server-rendered route gets its blocks from the page's own <Seo> (see
+  // lib/serverHead.js) and never touches this. These are the public pages that
+  // hold real records but are not in ssrPaths.js — without this they would
+  // have no JSON-LD in the HTML at all, only whatever the browser writes after
+  // hydration, which a crawler that does not run JavaScript never sees.
+  const staticJsonLd = [];
   const canonical = new URL(cleanPath, baseUrl).toString();
   // Defaulted rather than left empty. Without the fallback this function
   // silently skipped every database-backed title whenever the env var was not
@@ -387,6 +377,15 @@ async function resolveMeta({ baseUrl, pathname }) {
           url: canonical,
           image: toOgImage(abs),
         };
+
+        // Same builder the page itself uses, fed the same record, so the block
+        // in the HTML and the block the browser writes after hydration are
+        // identical. It returns null when the record has no usable start date
+        // or location, and nothing is emitted rather than a guess.
+        if (j?.title) {
+          const ev = ptrainingEventSchema(j, { path: `/ptrainings/${slug}` });
+          if (ev) staticJsonLd.push(ev);
+        }
       } catch {
         // keep defaults
       }
@@ -399,7 +398,21 @@ async function resolveMeta({ baseUrl, pathname }) {
       "Explore and register for upcoming ADLM physical trainings.";
   }
 
-  return meta;
+  // /beyondbim — only once the programme is actually open.
+  //
+  // Reads the same environment variable the client build reads for
+  // FLAGS.BEYOND_BIM_LIVE (src/config/flags.js). While it is off the public
+  // sees a "Coming soon" page, and an Event block on a page that says nothing
+  // is happening yet is markup that does not match the page.
+  if (
+    /^\/beyondbim\/?$/i.test(cleanPath) &&
+    flagOn(process.env.VITE_FLAG_BEYOND_BIM_LIVE)
+  ) {
+    const ev = beyondBimEventSchema();
+    if (ev) staticJsonLd.push(ev);
+  }
+
+  return { meta, jsonLd: staticJsonLd };
 }
 
 /**
@@ -432,7 +445,7 @@ export default async function handler(req, res) {
     const pathname = full.searchParams.get("path") || "/";
 
     const template = readIndexHtml();
-    let meta = await resolveMeta({ baseUrl, pathname });
+    let { meta, jsonLd: staticJsonLd } = await resolveMeta({ baseUrl, pathname });
 
     // Body render. Everything past this point is best-effort: any failure
     // leaves the shell, which already carries correct <head> tags.
@@ -477,8 +490,11 @@ export default async function handler(req, res) {
     let html = injectMeta(template, meta);
     if (bodyHtml) {
       html = injectBody(html, bodyHtml, preload);
-      html = injectJsonLd(html, jsonLd);
     }
+    // A rendered page's own blocks win: it had the record in hand and knows
+    // more than the table above. The static ones are the fallback for the
+    // public routes the server does not render a body for.
+    html = injectJsonLd(html, jsonLd?.length ? jsonLd : staticJsonLd);
 
     res.statusCode = statusCode;
     res.setHeader("Content-Type", "text/html; charset=utf-8");

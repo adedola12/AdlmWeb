@@ -20,11 +20,14 @@
 // copy rather than two.
 
 import React from "react";
+import { useReportBack } from "./feedback/useReportBack.js";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import ConnectedAccounts from "../components/ConnectedAccounts.jsx";
 import { uploadImage } from "../lib/uploadImage.js";
+import { ThemePicker } from "./ThemeMenu.jsx";
+import WhatsAppVerify from "./WhatsAppVerify.jsx";
 
 const icon = (name) => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -61,6 +64,23 @@ function ago(d) {
   })}`;
 }
 
+// What the profile form would be refused for, as one message, or null.
+// The username rule applies only to a changed username: 11 accounts already
+// have one with a space or a comma, and they must still be able to save.
+function profileProblem(f, saved = {}) {
+  if (!String(f.firstName || "").trim() || !String(f.lastName || "").trim()) {
+    return "Enter both your first name and your last name.";
+  }
+  if (f.username && f.username !== saved.username && !/^[A-Za-z0-9._-]{3,30}$/.test(f.username)) {
+    return "A username is 3 to 30 characters: letters, numbers, dots, dashes or underscores, no spaces.";
+  }
+  const digits = String(f.whatsapp || "").replace(/[^\d]/g, "");
+  if (f.whatsapp && (digits.length < 7 || digits.length > 15)) {
+    return "That WhatsApp number does not look right. Include the country code, for example +234 803 000 0000.";
+  }
+  return null;
+}
+
 export default function DsSettings() {
   const { user, accessToken, setAuth } = useAuth();
 
@@ -72,6 +92,7 @@ export default function DsSettings() {
   const [saving, setSaving] = React.useState("");
   const [said, setSaid] = React.useState("");
   const [problem, setProblem] = React.useState("");
+  useReportBack(said, problem);
 
   const [avatarUrl, setAvatarUrl] = React.useState("");
   const [avatarPct, setAvatarPct] = React.useState(0);
@@ -170,9 +191,16 @@ export default function DsSettings() {
 
   const saveProfile = async (e) => {
     e.preventDefault();
-    setSaving("profile");
     setSaid("");
     setProblem("");
+    // Clear messages before the round trip (R08). The server has the final
+    // word; these catch what it would refuse, in plain words, per field.
+    const bad = profileProblem(form, profile || {});
+    if (bad) {
+      setProblem(bad);
+      return;
+    }
+    setSaving("profile");
     try {
       await apiAuthed("/me/profile", {
         token: accessToken,
@@ -180,6 +208,21 @@ export default function DsSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
+      // Load back what was stored: the server normalises the state and
+      // derives the zone, so the form shows the saved values, not the typed.
+      const fresh = await apiAuthed("/me/profile", { token: accessToken }).catch(() => null);
+      if (fresh) {
+        setProfile(fresh);
+        setForm({
+          firstName: fresh.firstName || "",
+          lastName: fresh.lastName || "",
+          username: fresh.username || "",
+          whatsapp: fresh.whatsapp || "",
+          firmName: fresh.firmName || "",
+          location: fresh.location || "",
+          state: fresh.state || "",
+        });
+      }
       setSaid("Saved.");
       // The top bar and the rail read the name off the auth payload, so a
       // saved name that is not written back there stays stale until a reload.
@@ -234,12 +277,15 @@ export default function DsSettings() {
           file,
           token: accessToken,
           onProgress: setAvatarPct,
+          avatar: true,
         });
+        // The photo alone. Re-sending the whole form made a photo fail on an
+        // unrelated field (an empty state read as "Invalid state").
         await apiAuthed("/me/profile", {
           token: accessToken,
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, avatarUrl: url }),
+          body: JSON.stringify({ avatarUrl: url }),
         });
         setAvatarUrl(url);
         setSaid("Picture saved.");
@@ -253,7 +299,7 @@ export default function DsSettings() {
         setSaving("");
       }
     },
-    [accessToken, form, user, setAuth],
+    [accessToken, user, setAuth],
   );
 
   // One switch at a time. The endpoint leaves absent keys alone, so sending
@@ -422,8 +468,8 @@ export default function DsSettings() {
                       lineHeight: 1.55,
                     }}
                   >
-                    JPG or PNG, square works best. It appears on the app bar and on anything
-                    this account issues.
+                    A square photo of your face, JPG or PNG, at least 200 × 200 pixels. It
+                    appears on the app bar and on anything this account issues.
                   </p>
                 </div>
               </div>
@@ -450,6 +496,11 @@ export default function DsSettings() {
                   <div className="ds-field">
                     <label htmlFor="st-tel">Phone</label>
                     <input id="st-tel" type="tel" value={form.whatsapp} onChange={set("whatsapp")} />
+                    <WhatsAppVerify
+                      accessToken={accessToken}
+                      savedNumber={profile.whatsapp || ""}
+                      typedNumber={form.whatsapp}
+                    />
                   </div>
                 </div>
                 <div className="ds-field">
@@ -735,6 +786,18 @@ export default function DsSettings() {
           {/* His Notifications. Real now: each switch writes to
               POST /me/notifications and the state comes back from the account
               rather than being remembered in this tab. */}
+          {/* His Appearance panel (17 Sep): the same four themes as the nav
+              menu. A device setting, so it saves on the spot, with no Save. */}
+          <section className="dsh-panel">
+            <div className="dsh-ph">
+              <h2>Appearance</h2>
+              <span className="when">This device</span>
+            </div>
+            <div className="dsh-body">
+              <ThemePicker />
+            </div>
+          </section>
+
           {notif && (
             <section className="dsh-panel">
               <div className="dsh-ph">
@@ -810,7 +873,7 @@ export default function DsSettings() {
                 <Link className="ds-btn btn-o ds-btn-sm" to="/profile">
                   Activity log
                 </Link>
-                <Link className="ds-btn btn-o ds-btn-sm" to="/support/request">
+                <Link className="ds-btn btn-o ds-btn-sm" to="/manage/support#ticket">
                   Ask for an export
                 </Link>
               </div>

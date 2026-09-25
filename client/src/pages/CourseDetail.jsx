@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
+import { useFeedback } from "../ds/feedback/feedbackContext.js";
 import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { clock } from "../ds/lxCourses.js";
@@ -133,6 +134,21 @@ export default function CourseDetail() {
   const [data, setData] = React.useState(null);
   const [err, setErr] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
+  const fb = useFeedback();
+  // R11: which of this course's assignments carry a new alert (red dot).
+  const [alertCodes, setAlertCodes] = React.useState(() => new Set());
+  const loadAlerts = React.useCallback(() => {
+    apiAuthed("/me/courses/assignments", { token: accessToken })
+      .then((d) =>
+        setAlertCodes(
+          new Set((d.items || []).filter((a) => a.courseSku === sku && a.alerts?.length).map((a) => a.moduleCode)),
+        ),
+      )
+      .catch(() => {});
+  }, [accessToken, sku]);
+  React.useEffect(() => {
+    loadAlerts();
+  }, [loadAlerts]);
   const [activeCode, setActiveCode] = React.useState("");
   const [track, setTrack] = React.useState("lecture");
   // His four-tab strip under the stage. "about" is the only one every
@@ -140,6 +156,20 @@ export default function CourseDetail() {
   // disappears — switching to a session with no assignment must not leave
   // the panel pointing at one.
   const [tab, setTab] = React.useState("about");
+  // Opening a session's Assignment tab clears its alert and marks a result
+  // read (R11/R13).
+  React.useEffect(() => {
+    const code = tab === "assignment" ? activeCode : "";
+    if (!code || !alertCodes.has(code)) return;
+    apiAuthed("/me/courses/assignments/seen", {
+      token: accessToken,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseSku: sku, moduleCode: code }),
+    })
+      .then(loadAlerts)
+      .catch(() => {});
+  }, [tab, activeCode, alertCodes, accessToken, sku, loadAlerts]);
   // His Notes tab. Kept on the account, per lesson — see LessonNote for why
   // that is the whole specification of the feature.
   const [note, setNote] = React.useState("");
@@ -330,12 +360,21 @@ export default function CourseDetail() {
         token: accessToken,
       });
       await load();
-      alert(
-        `Submitted: ${fileName} at ${submittedAt.toLocaleString()}. ` +
-          "Your instructor will mark it; the result and any comments appear here.",
-      );
+      loadAlerts();
+      // R13: what was sent, when, and what happens next.
+      // TODO(adlm): Richard's own modal design replaces this card when he sends it.
+      await fb.card({
+        tone: "success",
+        title: "Submitted",
+        msg: "Your tutor marks it next. The mark and their feedback come back to this tab and to Assignments.",
+        rows: [
+          ["File", fileName],
+          ["Submitted", submittedAt.toLocaleString()],
+        ],
+        primary: "Done",
+      });
     } catch (e) {
-      alert(e.message || "Submit failed");
+      fb.toast({ tone: "error", title: e.message || "That could not be submitted." });
     } finally {
       setUploading(false);
     }
@@ -424,6 +463,7 @@ export default function CourseDetail() {
     isIntro ? null : { id: "notes", label: "Notes" },
   ].filter(Boolean);
   const tabOn = TABS.some((t) => t.id === tab) ? tab : "about";
+
 
   const lessonTitle = isIntro
     ? "Start here, course intro"
@@ -608,6 +648,9 @@ export default function CourseDetail() {
                 onClick={() => setTab(t.id)}
               >
                 {t.label}
+                {t.id === "assignment" && alertCodes.has(active?.moduleCode) ? (
+                  <i className="adlm-dot" role="status" aria-label="New" />
+                ) : null}
               </button>
             ))}
           </div>
@@ -776,13 +819,32 @@ export default function CourseDetail() {
                       rel="noreferrer"
                     >
                       <IconLink />
-                      <b>
-                        {sub.fileName || (sub.fileUrl || "").split("?")[0].split("/").pop() || "Submission"}
-                        {sub.feedback ? ` — ${sub.feedback}` : ""}
-                      </b>
-                      <em>{sub.gradeStatus || "submitted"}</em>
+                      <b>{sub.fileName || (sub.fileUrl || "").split("?")[0].split("/").pop() || "Submission"}</b>
+                      <em>
+                        {sub.gradeStatus === "approved"
+                          ? "accepted"
+                          : sub.gradeStatus === "rejected"
+                            ? "returned"
+                            : "waiting to be marked"}
+                        {typeof sub.score === "number" ? ` · ${sub.score}/100` : ""}
+                      </em>
                     </a>
                   ))}
+                  {/* R13: the tutor's result, as a block of its own. */}
+                  {submissions
+                    .filter((sub) => sub.gradeStatus && sub.gradeStatus !== "pending")
+                    .slice(-1)
+                    .map((sub) => (
+                      <div className="as-fb" key={`fb-${sub._id}`}>
+                        <b>
+                          {sub.gradeStatus === "approved" ? "Accepted" : "Returned for another go"}
+                          {typeof sub.score === "number" ? ` · ${sub.score}/100` : ""}
+                          {sub.gradedByName ? ` · ${sub.gradedByName}` : ""}
+                          {sub.gradedAt ? ` · ${dayjs(sub.gradedAt).format("D MMM YYYY")}` : ""}
+                        </b>
+                        {sub.feedback || "No written comment."}
+                      </div>
+                    ))}
                 </div>
                 <p className="wk-note">
                   {submissions.length

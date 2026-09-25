@@ -1,6 +1,14 @@
 import React from "react";
 import { FaCube, FaDownload, FaFileInvoiceDollar, FaPlus, FaTrashAlt, FaUpload } from "../../components/icons.jsx";
 import { deriveItemDiscipline } from "../../lib/boqCategory.js";
+import WkModal from "../../ds/WkModal.jsx";
+import { useFeedback } from "../../ds/feedback/feedbackContext.js";
+import {
+  variationKpis,
+  variationRowsNewestFirst,
+  variationStatusLabel,
+  variationStatusClass,
+} from "../../lib/variations.js";
 
 function safeNum(v) {
   const n = Number(v);
@@ -14,9 +22,22 @@ function money(v) {
   });
 }
 
+function naira(v) {
+  return "₦" + money(v);
+}
+
+// A variation reads as +value or -value, and as an en dash when the viewer
+// may not see money at all.
+function signedMoney(v, canSeeRates = true) {
+  if (!canSeeRates) return "–";
+  const n = safeNum(v);
+  if (n === 0) return naira(0);
+  return (n > 0 ? "+" : "−") + naira(Math.abs(n));
+}
+
 function formatDate(v) {
   const d = v ? new Date(v) : null;
-  if (!d || Number.isNaN(d.getTime())) return "—";
+  if (!d || Number.isNaN(d.getTime())) return "–";
   return d.toLocaleDateString();
 }
 
@@ -28,30 +49,36 @@ function bytes(n) {
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-function SubTab({ active, onClick, label, count }) {
+// His palettes for chips and tones.
+function tone(pal) {
+  return {
+    background: `var(--pal-${pal}-wash)`,
+    color: `var(--pal-${pal}-key)`,
+    borderColor: `var(--pal-${pal}-line)`,
+  };
+}
+const NO_MB = { marginBottom: 0 };
+const STACK = { display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" };
+const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" };
+const ICON_BTN = { padding: "4px 8px" };
+
+// A section head inside the panel: his group title and a note, actions right.
+function SectionHead({ title, sub, children }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
-        active
-          ? "bg-adlm-blue-700 text-white"
-          : "text-slate-700 hover:bg-slate-100",
-      ].join(" ")}
+    <div
+      className="wk-bar"
+      style={{ marginBottom: 0, justifyContent: "space-between", alignItems: "flex-start" }}
     >
-      {label}
-      {typeof count === "number" && count > 0 ? (
-        <span
-          className={[
-            "rounded-full px-1.5 py-0.5 text-[10px]",
-            active ? "bg-white text-adlm-blue-700" : "bg-slate-200 text-slate-700",
-          ].join(" ")}
-        >
-          {count}
-        </span>
-      ) : null}
-    </button>
+      <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+        <p className="wk-grp" style={{ padding: 0, margin: 0 }}>
+          {title}
+        </p>
+        <div className="wk-locnote" style={{ marginTop: 4 }}>
+          {sub}
+        </div>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -79,20 +106,14 @@ function CertificatesSection({
   );
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="text-sm font-semibold text-slate-900">
-            Interim Payment Certificates
-          </div>
-          <div className="text-[11px] text-slate-500">
-            Each certificate is numbered and carries its own cumulative, less-previous,
-            retention, VAT and WHT values: ready for Architect / QS / Client sign-off.
-          </div>
-        </div>
+    <div style={STACK}>
+      <SectionHead
+        title="Interim payment certificates"
+        sub="Each certificate is numbered and carries its own cumulative, less-previous, retention, VAT and WHT values: ready for Architect / QS / Client sign-off."
+      >
         <button
           type="button"
-          className="btn btn-xs btn-primary inline-flex items-center gap-1"
+          className="ds-btn ds-btn-sm btn-p"
           onClick={() => onIssue?.()}
           disabled={busy || disabled}
           title={
@@ -101,24 +122,36 @@ function CertificatesSection({
               : "Issue a new interim certificate"
           }
         >
-          <FaPlus className="text-[9px]" />
+          <FaPlus size={12} />
           {busy ? "Issuing..." : "Issue certificate"}
         </button>
-      </div>
+      </SectionHead>
 
       {note ? (
-        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+        <p className="mk-note" style={{ margin: 0, ...NOTE_WARN }}>
           {note}
-        </div>
+        </p>
       ) : null}
 
       {sorted.length === 0 ? (
-        <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
-          No certificates issued yet. Click “Issue certificate” to generate
-          IPC #01 against the current value-to-date.
+        <div className="wk-panel wk-empty" style={NO_MB}>
+          <b>No certificates issued yet</b>
+          <p>
+            A certificate is what the client is asked to pay against: the value of work to
+            date, less what has already been certified, less retention, with VAT and
+            withholding tax applied. Each one is numbered and keeps its own figures, so
+            reissuing never rewrites an earlier one.
+          </p>
+          {/* Telling somebody to press a button that is greyed out is worse
+              than saying nothing, so the sentence follows the button. */}
+          <p>
+            {disabled
+              ? "The final account is closed, so no new certificate can be issued. Reopen it to issue IPC 01 against the current value to date."
+              : "Issue certificate makes IPC 01 against the current value to date."}
+          </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded border border-slate-200">
+        <div className="wk-panel" style={{ marginBottom: 0, overflowX: "auto" }}>
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
@@ -182,20 +215,24 @@ function CertificatesSection({
                         <button
                           type="button"
                           onClick={() => onDownload?.(c.number)}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+                          className="ds-btn ds-btn-sm btn-o"
+                          style={ICON_BTN}
+                          aria-label="Download certificate"
                           title="Download .xlsx"
                         >
-                          <FaDownload className="text-[10px]" />
+                          <FaDownload size={13} />
                         </button>
                         {isLast ? (
                           <button
                             type="button"
                             onClick={() => onDelete?.(c.number)}
                             disabled={disabled}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-red-50 text-slate-400 hover:text-red-600"
+                            className="ds-btn ds-btn-sm btn-o"
+                            style={ICON_BTN}
+                            aria-label="Delete certificate"
                             title="Delete (latest cert only)"
                           >
-                            <FaTrashAlt className="text-[10px]" />
+                            <FaTrashAlt size={13} />
                           </button>
                         ) : null}
                       </div>
@@ -223,6 +260,292 @@ function CertificatesSection({
   );
 }
 
+// ── Variations (S18) ──────────────────────────────────────────────────────
+// His .pj-kpi.c4 + .pj-vars list. A variation is raised pending and only
+// moves the project total once someone with edit access approves it.
+function VariationsSection({
+  rows = [],
+  onAdd,
+  onDecide,
+  canEdit = false,
+  canSeeRates = true,
+  disabled = false,
+  estimatedTotal = 0,
+}) {
+  const fb = useFeedback();
+  const [adding, setAdding] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [form, setForm] = React.useState({
+    description: "",
+    reference: "",
+    kind: "addition",
+    amount: "",
+  });
+
+  const kpis = React.useMemo(() => variationKpis(rows), [rows]);
+  const list = React.useMemo(() => variationRowsNewestFirst(rows), [rows]);
+
+  function resetForm() {
+    setForm({ description: "", reference: "", kind: "addition", amount: "" });
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (busy) return;
+    const description = form.description.trim();
+    if (!description) {
+      fb.toast({ tone: "error", title: "Say what changed" });
+      return;
+    }
+    const amount = Math.abs(Number(form.amount));
+    if (!Number.isFinite(amount) || amount === 0) {
+      fb.toast({ tone: "error", title: "Enter the value of the variation" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await onAdd?.({
+        description,
+        reference: form.reference.trim(),
+        kind: form.kind,
+        amount,
+      });
+      if (result) {
+        setAdding(false);
+        resetForm();
+        fb.toast({
+          tone: "success",
+          title: `V${Number(result.index ?? 0) + 1} added, pending approval`,
+          msg: "It counts once it is approved.",
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openRow(row) {
+    const rows2 = [
+      ["Value", signedMoney(row.amount, canSeeRates)],
+      ["Status", variationStatusLabel(row.status)],
+    ];
+    // What the project total becomes if this one is approved. For a decided
+    // variation the total already reflects it, so we say so plainly rather
+    // than showing a figure that would not change.
+    if (canSeeRates) {
+      rows2.push([
+        row.status === "pending" ? "Estimated total if approved" : "Estimated total",
+        naira(row.status === "pending" ? estimatedTotal + row.amount : estimatedTotal),
+      ]);
+    }
+    const canDecide = canEdit && !disabled && row.status === "pending";
+    const answer = await fb.card({
+      tone: "info",
+      noIcon: true,
+      title: `V${row.no} · ${row.description || "Variation"}`,
+      msg: [row.reference, formatDate(row.issuedAt)].filter(Boolean).join(" · "),
+      rows: rows2,
+      secondary: canDecide ? "Reject" : null,
+      primary: canDecide ? "Approve" : "Close",
+    });
+    if (!canDecide || !answer) return;
+    const status = answer === "primary" ? "approved" : "rejected";
+    const ok = await onDecide?.(row.index, status);
+    if (ok) {
+      fb.toast({
+        tone: status === "approved" ? "success" : "info",
+        title: `V${row.no} ${status === "approved" ? "approved" : "rejected"}`,
+        msg:
+          status === "approved"
+            ? "It now counts toward the project total and the final account."
+            : "It stays on record and is not counted.",
+      });
+    }
+  }
+
+  return (
+    <div style={STACK}>
+      <div className="pj-tb" style={NO_MB}>
+        <span className="wk-locnote" style={{ flex: "1 1 240px" }}>
+          Architect’s instructions, site instructions and client changes.
+          Only an approved variation moves the project total.
+        </span>
+        {canEdit ? (
+          <div className="pj-acts">
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-p"
+              onClick={() => setAdding(true)}
+              // A variation is born with a value, and there is no stored figure
+              // to restore onto one, so the server refuses to raise a variation
+              // for a viewer who cannot see rates (RATES_MASKED). Offer the
+              // reason instead of a button that can only fail.
+              disabled={disabled || !canSeeRates}
+              title={
+                disabled
+                  ? "The final account is closed. Reopen it to raise a variation."
+                  : !canSeeRates
+                    ? "Rates are hidden on this shared project, so you cannot raise a variation."
+                    : "Raise a variation against this contract"
+              }
+            >
+              <FaPlus size={12} /> Add variation
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="pj-kpi c4">
+        <div>
+          <span>Approved, net</span>
+          <b>{canSeeRates ? naira(kpis.approvedNet) : "–"}</b>
+          <em>Moves the project total</em>
+        </div>
+        <div>
+          <span>Additions</span>
+          <b>{canSeeRates ? naira(kpis.additions) : "–"}</b>
+          <em>
+            {kpis.additionsCount} approved
+          </em>
+        </div>
+        <div>
+          <span>Omissions</span>
+          <b>{canSeeRates ? naira(kpis.omissions) : "–"}</b>
+          <em>{kpis.omissionsCount} approved</em>
+        </div>
+        <div className={kpis.pendingCount ? "warn" : ""}>
+          <span>Waiting for approval</span>
+          <b>{kpis.pendingCount}</b>
+          <em>
+            {kpis.pendingCount
+              ? canSeeRates
+                ? `${naira(kpis.pendingNet)} not counted yet`
+                : "Not counted yet"
+              : "None"}
+          </em>
+        </div>
+      </div>
+
+      {list.length ? (
+        <div className="pj-vars">
+          {list.map((row) => (
+            <button
+              type="button"
+              key={`${row.index}-${row.no}`}
+              className="vr"
+              onClick={() => openRow(row)}
+            >
+              <span className="no">V{row.no}</span>
+              <span className="ds">
+                <b>{row.description || "Variation"}</b>
+                <em>
+                  {[row.reference || "No reference", formatDate(row.issuedAt)].join(" · ")}
+                </em>
+              </span>
+              <span className={`n ${row.amount < 0 ? "om" : "ad"}`}>
+                <b>{signedMoney(row.amount, canSeeRates)}</b>
+              </span>
+              <span className={`pj-stage ${variationStatusClass(row.status)}`}>
+                {variationStatusLabel(row.status)}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="pj-empty">
+          <b>No variations yet</b>
+          <p>
+            Log architect’s instructions, site instructions and client changes
+            here. An approved variation changes the project total and the final
+            account; a pending one changes nothing until it is approved.
+          </p>
+          {/* The action, and only where it can actually be taken: a reader
+              without edit rights, on a closed account, or on a shared project
+              with the rates hidden, is told which of those it is instead of
+              being pointed at a control they do not have. */}
+          <p>
+            {!canEdit
+              ? "You are reading this project rather than working on it, so you cannot raise one."
+              : disabled
+                ? "The final account is closed. Reopen it to raise the first one."
+                : !canSeeRates
+                  ? "Rates are hidden on this shared project, and a variation has to carry a value, so you cannot raise one here."
+                  : "Add variation raises the first one."}
+          </p>
+        </div>
+      )}
+
+      <p className="pj-foot" style={NO_MB}>
+        New lines added to the bill after the contract was locked are raised
+        here automatically, already approved, so the contract keeps its record
+        of the change.
+      </p>
+
+      <WkModal
+        open={adding}
+        title="Add a variation"
+        sub="From an architect’s instruction, a site instruction or a client change."
+        busy={busy}
+        onClose={() => {
+          setAdding(false);
+          resetForm();
+        }}
+      >
+        <form onSubmit={submit}>
+          <label className="wk-f">
+            <span>What changed</span>
+            <input
+              type="text"
+              value={form.description}
+              autoFocus
+              maxLength={500}
+              placeholder="e.g. Additional windows to stair core"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, description: e.target.value }))
+              }
+            />
+          </label>
+          <label className="wk-f half">
+            <span>Instruction reference</span>
+            <input
+              type="text"
+              value={form.reference}
+              maxLength={120}
+              placeholder="e.g. AI-012"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, reference: e.target.value }))
+              }
+            />
+          </label>
+          <label className="wk-f half">
+            <span>Type</span>
+            <select
+              value={form.kind}
+              onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}
+            >
+              <option value="addition">Addition</option>
+              <option value="omission">Omission</option>
+            </select>
+          </label>
+          <label className="wk-f half">
+            <span>Value (₦)</span>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+            />
+          </label>
+          <button type="submit" className="wk-modal-go" disabled={busy}>
+            {busy ? "Adding…" : "Add variation"}
+          </button>
+        </form>
+      </WkModal>
+    </div>
+  );
+}
+
 function FinalAccountSection({
   finalAccount,
   onFinalize,
@@ -244,6 +567,8 @@ function FinalAccountSection({
   // Actual spent so far — used for true over-run calculation
   // (spend exceeds planned), NOT for live BoQ drift.
   actualSpent = 0,
+  // S18 valuations: what the approved and paid certificates add up to.
+  certifiedToDate = 0,
   disabledFinalize,
 }) {
   const isFinalized = Boolean(finalAccount?.finalized);
@@ -335,164 +660,165 @@ function FinalAccountSection({
     ? { ...finalAccount, savingsLabel, savingsTone, savingsValue }
     : livePreview;
 
+  // Movement against the contract sum — a different question from the
+  // over-run above, and both are worth an answer, so both are shown and
+  // labelled. This one asks "has the contract VALUE moved since signing?";
+  // the over-run asks "is the SPEND ahead of the plan?". Neither changes a
+  // figure: they read the same totals the rest of the tab uses.
+  const finalTotal = safeNum(view.currentValue ?? view.finalContractValue);
+  const movement = contractLocked || isFinalized ? finalTotal - safeNum(contractSum) : 0;
+  const movementPct =
+    safeNum(contractSum) > 0 ? (movement / safeNum(contractSum)) * 100 : 0;
+  const certifiedPct = finalTotal > 0 ? (certifiedToDate / finalTotal) * 100 : 0;
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="text-sm font-semibold text-slate-900">Final Account</div>
-          <div className="text-[11px] text-slate-500">
-            {isFinalized
-              ? `Finalized on ${formatDate(finalAccount.finalizedAt)}, all project data is frozen.`
-              : contractLocked
-                ? "Preview of the closing settlement based on current data."
-                : "Pre-lock preview, savings / over-run only start tracking after the contract is locked."}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {isFinalized ? (
-            <>
-              <button
-                type="button"
-                className="btn btn-xs inline-flex items-center gap-1"
-                onClick={onDownload}
-              >
-                <FaDownload className="text-[9px]" /> Download
-              </button>
-              <button
-                type="button"
-                className="btn btn-xs"
-                onClick={onReopen}
-                title="Reopen the final account to make adjustments"
-              >
-                Reopen
-              </button>
-            </>
-          ) : (
+    <div style={STACK}>
+      <SectionHead
+        title="Final account"
+        sub={
+          isFinalized
+            ? `Closed on ${formatDate(finalAccount.finalizedAt)}. Items, variations and certificates are frozen.`
+            : contractLocked
+              ? "The closing settlement as it stands today. Nothing is frozen until you close it."
+              : "Pre-lock preview. Movement and over-run only start tracking once the contract is locked."
+        }
+      >
+        {isFinalized ? (
+          <div className="wk-acts">
+            <button type="button" className="ds-btn ds-btn-sm btn-o" onClick={onDownload}>
+              <FaDownload size={12} /> Download
+            </button>
             <button
               type="button"
-              className="btn btn-xs btn-primary inline-flex items-center gap-1"
+              className="ds-btn ds-btn-sm btn-o"
+              onClick={onReopen}
+              title="Reopen the final account to make adjustments"
+            >
+              Reopen
+            </button>
+          </div>
+        ) : null}
+      </SectionHead>
+
+      <div className="pj-final">
+        <section className="pj-card2">
+          <h3>Final account{isFinalized ? " · closed" : " · live"}</h3>
+          <dl className="brk">
+            <div>
+              <dt>Measured work</dt>
+              <dd>{naira(view.measuredWorkFinal)}</dd>
+            </div>
+            <div>
+              <dt>Preliminaries</dt>
+              <dd>{naira(view.preliminaryFinal)}</dd>
+            </div>
+            <div>
+              <dt>Provisional and PC sums</dt>
+              <dd>{naira(view.provisionalFinal)}</dd>
+            </div>
+            <div>
+              <dt>
+                Contingency
+                {contingencyPercent ? ` (${Number(contingencyPercent).toFixed(1)}%)` : ""}
+              </dt>
+              <dd>{naira(view.contingencyFinal)}</dd>
+            </div>
+            <div>
+              <dt>Approved variations</dt>
+              <dd>{naira(view.variationsFinal)}</dd>
+            </div>
+            <div>
+              <dt>VAT{taxPercent ? ` (${Number(taxPercent).toFixed(1)}%)` : ""}</dt>
+              <dd>{naira(view.taxFinal)}</dd>
+            </div>
+            <div className="t">
+              <dt>{contractLocked || isFinalized ? "Final account" : "Live project total"}</dt>
+              <dd>{naira(finalTotal)}</dd>
+            </div>
+          </dl>
+          <p className="pj-foot">
+            Only approved variations are in this total. Anything still waiting
+            for approval is on the Variations view and counts for nothing here.
+          </p>
+        </section>
+
+        <section className="pj-card2 cmp2">
+          <h3>Against the contract</h3>
+
+          <div className="big2">
+            <span>Contract sum</span>
+            <b>{contractLocked || isFinalized ? naira(contractSum) : "–"}</b>
+            <em>
+              {contractLocked || isFinalized
+                ? "Fixed when the contract was locked"
+                : "Lock the contract to fix it"}
+            </em>
+          </div>
+
+          <div className={`big2${movement > 0 ? " over" : movement < 0 ? " under" : ""}`}>
+            <span>
+              {movement > 0 ? "Over-run" : movement < 0 ? "Saving" : "On the contract sum"}
+            </span>
+            <b>{contractLocked || isFinalized ? (movement ? naira(Math.abs(movement)) : "–") : "–"}</b>
+            <em>
+              {contractLocked || isFinalized
+                ? `Contract value movement${
+                    safeNum(contractSum) > 0
+                      ? `, ${movementPct.toFixed(1)}% of the contract`
+                      : ""
+                  }`
+                : "Movement against the contract sum"}
+            </em>
+          </div>
+
+          <div
+            className={`big2${
+              view.savingsTone === "negative"
+                ? " over"
+                : view.savingsTone === "positive"
+                  ? " under"
+                  : ""
+            }`}
+          >
+            <span>{view.savingsLabel || "Actual against planned"}</span>
+            <b>
+              {!contractLocked && !isFinalized ? "–" : naira(safeNum(view.savingsValue))}
+            </b>
+            <em>
+              {!contractLocked && !isFinalized
+                ? "Lock the contract to start tracking"
+                : safeNum(view.actualSpent) === 0
+                  ? "No spend recorded yet"
+                  : `Spent ${naira(view.actualSpent)} of ${naira(view.plannedTotal + view.variationsFinal)} planned`}
+            </em>
+          </div>
+
+          <div className="big2">
+            <span>Certified so far</span>
+            <b>{naira(certifiedToDate)}</b>
+            <em>
+              {finalTotal > 0
+                ? `${Math.round(certifiedPct)}% of the final account`
+                : "Nothing certified yet"}
+            </em>
+          </div>
+
+          {!isFinalized ? (
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-p"
               onClick={() => onFinalize?.("")}
               disabled={disabledFinalize}
               title={
                 disabledFinalize
                   ? "Lock the contract first."
-                  : "Freeze the final account and compute settlement"
+                  : "Freeze the final account and compute the settlement"
               }
             >
-              <FaFileInvoiceDollar className="text-[9px]" /> Finalize
+              <FaFileInvoiceDollar size={12} /> Close the final account
             </button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid gap-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 text-xs sm:grid-cols-2 md:grid-cols-3">
-        <div>
-          <div className="text-slate-500 dark:text-slate-400">Measured work (final)</div>
-          <div className="font-semibold text-slate-900 dark:text-slate-100">
-            {money(view.measuredWorkFinal)}
-          </div>
-        </div>
-        <div>
-          <div className="text-slate-500 dark:text-slate-400">Provisional</div>
-          <div className="font-semibold text-slate-900 dark:text-slate-100">
-            {money(view.provisionalFinal)}
-          </div>
-        </div>
-        <div>
-          <div className="text-slate-500 dark:text-slate-400">Preliminaries</div>
-          <div className="font-semibold text-slate-900 dark:text-slate-100">
-            {money(view.preliminaryFinal)}
-          </div>
-        </div>
-        {/* Contingency + Tax, only render when set so old projects
-            without these values don't show ₦0 stub tiles. */}
-        {safeNum(view.contingencyFinal) > 0 || contingencyPercent > 0 ? (
-          <div>
-            <div className="text-slate-500 dark:text-slate-400">
-              Contingency ({Number(contingencyPercent || 0).toFixed(1)}%)
-            </div>
-            <div className="font-semibold text-slate-900 dark:text-slate-100">
-              {money(view.contingencyFinal)}
-            </div>
-          </div>
-        ) : null}
-        {safeNum(view.taxFinal) > 0 || taxPercent > 0 ? (
-          <div>
-            <div className="text-slate-500 dark:text-slate-400">
-              Tax / VAT ({Number(taxPercent || 0).toFixed(1)}%)
-            </div>
-            <div className="font-semibold text-slate-900 dark:text-slate-100">
-              {money(view.taxFinal)}
-            </div>
-          </div>
-        ) : null}
-        <div>
-          <div className="text-slate-500 dark:text-slate-400">Variations</div>
-          <div className="font-semibold text-slate-900 dark:text-slate-100">
-            {money(view.variationsFinal)}
-          </div>
-        </div>
-        <div>
-          <div className="text-slate-500 dark:text-slate-400">
-            {contractLocked || isFinalized
-              ? "Final contract value"
-              : "Live project total"}
-          </div>
-          <div className="text-base font-bold text-adlm-blue-700 dark:text-adlm-blue-300">
-            {money(view.currentValue ?? view.finalContractValue)}
-          </div>
-          {!contractLocked && !isFinalized ? (
-            <div className="mt-0.5 text-[10px] text-slate-400">
-              Pre-lock preview.
-            </div>
           ) : null}
-        </div>
-        {/* Actual spent, surfaces the live actuals figure so users can
-            see what their over-run is being calculated against. */}
-        <div>
-          <div className="text-slate-500 dark:text-slate-400">Actual spent to date</div>
-          <div className="text-base font-bold text-slate-900 dark:text-slate-100">
-            {money(view.actualSpent)}
-          </div>
-          {safeNum(view.actualSpent) === 0 ? (
-            <div className="mt-0.5 text-[10px] text-slate-400">No spend recorded yet.</div>
-          ) : null}
-        </div>
-        <div>
-          <div className="text-slate-500 dark:text-slate-400">
-            {view.savingsLabel ||
-              (view.savings >= 0 ? "Under-run (savings)" : "Over-run")}
-          </div>
-          <div
-            className={`text-base font-bold ${
-              view.savingsTone === "positive"
-                ? "text-emerald-700 dark:text-emerald-400"
-                : view.savingsTone === "negative"
-                  ? "text-red-700 dark:text-red-400"
-                  : "text-slate-500 dark:text-slate-400"
-            }`}
-            title={
-              !contractLocked && !isFinalized
-                ? "Lock the contract to start tracking savings or over-run against the agreed sum."
-                : safeNum(view.actualSpent) === 0
-                  ? "Over-run = max(0, actual spent − planned). With no spend recorded, the figure is 0."
-                  : `Over-run = Actual spent (₦${money(view.actualSpent)}) − Planned (₦${money(view.plannedTotal + view.variationsFinal)})`
-            }
-          >
-            {!contractLocked && !isFinalized
-              ? "—"
-              : money(safeNum(view.savingsValue))}
-          </div>
-          {!contractLocked && !isFinalized ? (
-            <div className="mt-0.5 text-[10px] text-slate-400">
-              Lock the contract to start tracking.
-            </div>
-          ) : safeNum(view.actualSpent) === 0 && safeNum(view.savingsValue) === 0 ? (
-            <div className="mt-0.5 text-[10px] text-slate-400">
-              No actual spend yet, no over-run.
-            </div>
-          ) : null}
-        </div>
+        </section>
       </div>
     </div>
   );
@@ -510,26 +836,19 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
 
   return (
     <div
-      className={[
-        "rounded border p-3 transition",
-        attached
-          ? "border-emerald-200 bg-emerald-50/30"
-          : "border-slate-200 bg-slate-50",
-      ].join(" ")}
+      className="wk-panel"
+      style={{
+        marginBottom: 0,
+        padding: 14,
+        ...(attached ? { borderColor: "var(--pal-light-line)" } : null),
+      }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-          <FaCube className={attached ? "text-emerald-600" : "text-slate-400"} />
+          <FaCube size={14} className={attached ? "text-emerald-600" : "text-slate-400"} />
           {label}
         </div>
-        <span
-          className={[
-            "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-            attached
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-slate-200 text-slate-600",
-          ].join(" ")}
-        >
+        <span className="wk-src sm" style={attached ? tone("light") : undefined}>
           {attached ? "Attached" : "Not attached"}
         </span>
       </div>
@@ -549,26 +868,27 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
                 const v = model.validation || {};
                 const map = {
                   valid: [
-                    "bg-emerald-100 text-emerald-800",
+                    tone("light"),
                     `✓ Verified, ${v.matchedCount}/${v.requiredCount} quantity elements found`,
                   ],
                   "no-quantities": [
-                    "bg-slate-200 text-slate-600",
+                    undefined,
                     "No quantities to verify against",
                   ],
                   unchecked: [
-                    "bg-amber-100 text-amber-800",
+                    tone("deep"),
                     "Not Element-ID checked",
                   ],
                   invalid: [
-                    "bg-red-100 text-red-800",
+                    tone("orange"),
                     `⚠ ${v.missingCount} of ${v.requiredCount} elements missing`,
                   ],
                 };
-                const [cls, text] = map[v.status] || map.unchecked;
+                const [chipTone, text] = map[v.status] || map.unchecked;
                 return (
                   <span
-                    className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold ${cls}`}
+                    className="wk-src sm"
+                    style={chipTone}
                     title={
                       v.ifcElementCount
                         ? `${v.ifcElementCount.toLocaleString()} elements in the IFC`
@@ -628,7 +948,7 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
             disabled={busy || disabled}
             title="Fallback: upload manually if the plugin wasn't used"
           >
-            <FaUpload className="text-[8px]" />
+            <FaUpload size={11} />
             {busy ? "Uploading..." : attached ? "Replace manually" : "Upload manually"}
           </button>
         </>
@@ -671,16 +991,16 @@ function ModelsPanel({
     return { elements: ids.size, lines };
   }, [items, productKey]);
   return (
-    <div className="space-y-3">
-      <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+    <div style={STACK}>
+      <p className="mk-note" style={{ margin: 0 }}>
         <b>Auto-attached from Revit.</b> When you save a project from the
         QUIV, the model is exported to IFC (compressed to stay under
         100 MB) and pushed here automatically. For large models the plugin
         asks first since saving takes longer. No manual upload needed.
-      </div>
+      </p>
 
       {unclassified.elements > 0 ? (
-        <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+        <p className="mk-note" style={{ margin: 0, ...NOTE_WARN }}>
           <b>
             {unclassified.elements.toLocaleString()} element
             {unclassified.elements === 1 ? "" : "s"}
@@ -689,11 +1009,13 @@ function ModelsPanel({
           {unclassified.lines === 1 ? "" : "s"} aren’t classified into a
           discipline, so they’re <b>not covered</b> by model validation. Re-save
           the project from the updated QUIV to tag them automatically.
-        </div>
+        </p>
       ) : null}
 
       {attached.length ? (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div
+          style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
+        >
           {["architectural", "structural", "mep"].map((d) => (
             <ModelStatus
               key={d}
@@ -708,29 +1030,31 @@ function ModelsPanel({
           ))}
         </div>
       ) : (
-        <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+        <div className="wk-panel wk-empty" style={NO_MB}>
           No BIM models attached yet. Save the project from QUIV
           to push the models automatically.
         </div>
       )}
 
-      <div className="flex items-center justify-between text-[11px]">
+      <div className="wk-bar" style={{ marginBottom: 0, justifyContent: "space-between" }}>
         <button
           type="button"
           onClick={() => setShowManual((v) => !v)}
-          className="text-slate-500 hover:text-slate-700 hover:underline"
+          className="ds-btn ds-btn-sm btn-o"
           title="Rarely needed, the plugin auto-pushes. Use if you have an IFC from elsewhere."
         >
           {showManual ? "Hide manual upload" : "Advanced: manual upload"}
         </button>
-        <span className="text-slate-400">
-          Open the <b className="font-semibold">3D Model</b> tab to view &amp;
+        <span className="wk-locnote">
+          Open the <b>3D Model</b> tab to view &amp;
           verify.
         </span>
       </div>
 
       {showManual ? (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div
+          style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
+        >
           {["architectural", "structural", "mep"].map((d) => (
             <ModelStatus
               key={`manual-${d}`}
@@ -781,170 +1105,147 @@ export default function ProjectContractPanel({
   contingencyPercent = 0,
   taxPercent = 0,
   actualSpent = 0,
+  // S18 valuations: the variation rows themselves, plus who may act on them.
+  variationRows = [],
+  onRaiseVariation,
+  onDecideVariation,
+  canEditProject = false,
+  canSeeRates = true,
 }) {
   const [tab, setTab] = React.useState("certificates");
-  // Collapsed state persists per-browser so users who never need
-  // certificates / final account / BIM can keep the section folded.
-  // localStorage key is scoped, not project-specific — the preference
-  // travels with the user across all projects.
-  const [collapsed, setCollapsed] = React.useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem("adlm:contractAdminCollapsed") === "1";
-    } catch {
-      return false;
-    }
-  });
-
-  function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(
-          "adlm:contractAdminCollapsed",
-          next ? "1" : "0",
-        );
-      } catch {
-        // ignore — feature still works without persistence
-      }
-      return next;
-    });
-  }
 
   const hasAnyFeature =
     onIssueCertificate || onFinalizeAccount || onUploadModel;
   if (!hasAnyFeature) return null;
 
   const modelCount = Object.values(projectModels || {}).filter(Boolean).length;
-  const certCount = certificates.length;
-  // Pre-compute a one-line summary the collapsed header can show. Gives
-  // users at-a-glance status without expanding.
-  const collapsedSummary = [
-    certCount ? `${certCount} certificate${certCount === 1 ? "" : "s"}` : null,
-    finalAccount?.finalized ? "Final account closed" : null,
-    modelCount ? `${modelCount} BIM model${modelCount === 1 ? "" : "s"}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const isFinalized = Boolean(finalAccount?.finalized);
+  // Certified so far: what the approved and paid certificates add up to.
+  // Drafts are not money yet, so they are not in this figure.
+  const certifiedToDate = (certificates || []).reduce(
+    (acc, c) =>
+      c?.status === "approved" || c?.status === "paid"
+        ? acc + safeNum(c.thisCertificate)
+        : acc,
+    0,
+  );
+  // The project total the Variations card quotes, on the same cascade the
+  // Bill and the Final account use.
+  const estimatedTotal =
+    safeNum(measured) +
+    safeNum(provisional) +
+    safeNum(preliminary) +
+    safeNum(contingency) +
+    safeNum(tax) +
+    safeNum(variations);
+
+  const views = [
+    { id: "certificates", label: "Certificates", count: certificates.length },
+    { id: "variations", label: "Variations", count: variationRows.length },
+    { id: "final", label: "Final account", count: null },
+    ...(hideModels
+      ? []
+      : [{ id: "models", label: "BIM models", count: modelCount }]),
+  ];
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-slate-900 dark:text-white">
-            Contract administration
-          </div>
-          <div className="text-[11px] text-slate-500">
-            {collapsed && collapsedSummary
-              ? collapsedSummary
-              : hideModels
-                ? "Certificates and final account. Everything a QS needs after contract award."
-                : "Certificates, final account and BIM models. Everything a QS needs after contract award."}
+    <section className="wk-panel" style={NO_MB}>
+      <div className="wk-ph" style={{ flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+          <h2>Contract administration</h2>
+          <div className="wk-locnote" style={{ marginTop: 4 }}>
+            Certificates, variations and the final account: everything a QS
+            needs after contract award.
           </div>
         </div>
-        {/* Collapse / expand toggle. Persists in localStorage so the
-            preference survives page reloads and crosses projects. */}
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-expanded={!collapsed}
-          aria-controls="contract-admin-body"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition"
-          title={collapsed ? "Show contract administration" : "Hide contract administration"}
+      </div>
+
+      <div id="contract-admin-body" style={{ ...STACK, padding: "16px 20px 20px" }}>
+        <div
+          className="pj-seg"
+          role="group"
+          aria-label="Contract administration"
+          style={{ maxWidth: "100%", overflowX: "auto", justifySelf: "start" }}
         >
-          <span
-            aria-hidden="true"
-            className={`inline-block transition-transform ${collapsed ? "" : "rotate-180"}`}
-          >
-            ▾
-          </span>
-          {collapsed ? "Show" : "Hide"}
-        </button>
-      </div>
+          {views.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              aria-pressed={tab === v.id}
+              onClick={() => setTab(v.id)}
+            >
+              {v.label}
+              {typeof v.count === "number" && v.count > 0 ? <em>{v.count}</em> : null}
+            </button>
+          ))}
+        </div>
 
-      {collapsed ? null : (
-      <div id="contract-admin-body" className="flex flex-wrap items-center gap-1 border-b border-slate-100 pb-2">
-        <SubTab
-          id="certificates"
-          active={tab === "certificates"}
-          onClick={() => setTab("certificates")}
-          label="Interim certificates"
-          count={certificates.length}
-        />
-        <SubTab
-          id="final"
-          active={tab === "final"}
-          onClick={() => setTab("final")}
-          label="Final account"
-        />
-        {hideModels ? null : (
-          <SubTab
-            id="models"
-            active={tab === "models"}
-            onClick={() => setTab("models")}
-            label="BIM models"
-            count={modelCount}
+        {tab === "certificates" ? (
+          <CertificatesSection
+            certificates={certificates}
+            onIssue={onIssueCertificate}
+            onUpdate={onUpdateCertificate}
+            onDelete={onDeleteCertificate}
+            onDownload={onDownloadCertificate}
+            busy={certBusy}
+            disabled={isFinalized}
+            note={
+              !contractLocked
+                ? "Tip: lock the contract first so each certificate has a stable baseline to measure against."
+                : null
+            }
           />
-        )}
+        ) : null}
+
+        {tab === "variations" ? (
+          <VariationsSection
+            rows={variationRows}
+            onAdd={onRaiseVariation}
+            onDecide={onDecideVariation}
+            canEdit={canEditProject && typeof onRaiseVariation === "function"}
+            canSeeRates={canSeeRates}
+            disabled={isFinalized}
+            estimatedTotal={estimatedTotal}
+          />
+        ) : null}
+
+        {tab === "final" ? (
+          <FinalAccountSection
+            finalAccount={finalAccount}
+            onFinalize={onFinalizeAccount}
+            onReopen={onReopenFinalAccount}
+            onDownload={onDownloadFinalAccount}
+            contractSum={contractSum}
+            // Pass contractLocked so the section can suppress the
+            // misleading "Over-run" reading before the contract is
+            // signed — pre-lock there's no agreement to over-run.
+            contractLocked={contractLocked}
+            measured={measured}
+            provisional={provisional}
+            preliminary={preliminary}
+            variations={variations}
+            contingency={contingency}
+            tax={tax}
+            contingencyPercent={contingencyPercent}
+            taxPercent={taxPercent}
+            actualSpent={actualSpent}
+            certifiedToDate={certifiedToDate}
+            disabledFinalize={!contractLocked}
+          />
+        ) : null}
+
+        {!hideModels && tab === "models" ? (
+          <ModelsPanel
+            projectModels={projectModels}
+            modelUploadBusy={modelUploadBusy}
+            onUploadModel={onUploadModel}
+            onDeleteModel={onDeleteModel}
+            items={items}
+            productKey={productKey}
+            disabled={isFinalized}
+          />
+        ) : null}
       </div>
-      )}
-
-      {!collapsed && tab === "certificates" ? (
-        <CertificatesSection
-          certificates={certificates}
-          onIssue={onIssueCertificate}
-          onUpdate={onUpdateCertificate}
-          onDelete={onDeleteCertificate}
-          onDownload={onDownloadCertificate}
-          busy={certBusy}
-          disabled={Boolean(finalAccount?.finalized)}
-          note={
-            !contractLocked
-              ? "Tip: lock the contract first so each certificate has a stable baseline to measure against."
-              : null
-          }
-        />
-      ) : null}
-
-      {!collapsed && tab === "final" ? (
-        <FinalAccountSection
-          finalAccount={finalAccount}
-          onFinalize={onFinalizeAccount}
-          onReopen={onReopenFinalAccount}
-          onDownload={onDownloadFinalAccount}
-          contractSum={contractSum}
-          // Pass contractLocked so the section can suppress the
-          // misleading "Over-run ₦Xm" reading before the contract is
-          // signed — pre-lock there's no agreement to over-run.
-          contractLocked={contractLocked}
-          measured={measured}
-          provisional={provisional}
-          preliminary={preliminary}
-          variations={variations}
-          // Full QS cascade — Contingency + Tax flow into the breakdown
-          // and into the planned-vs-actual over-run math.
-          contingency={contingency}
-          tax={tax}
-          contingencyPercent={contingencyPercent}
-          taxPercent={taxPercent}
-          // Actual spent so the over-run is computed off real
-          // expenditure, not BoQ drift.
-          actualSpent={actualSpent}
-          disabledFinalize={!contractLocked}
-        />
-      ) : null}
-
-      {!collapsed && !hideModels && tab === "models" ? (
-        <ModelsPanel
-          projectModels={projectModels}
-          modelUploadBusy={modelUploadBusy}
-          onUploadModel={onUploadModel}
-          onDeleteModel={onDeleteModel}
-          items={items}
-          productKey={productKey}
-          disabled={Boolean(finalAccount?.finalized)}
-        />
-      ) : null}
-    </div>
+    </section>
   );
 }

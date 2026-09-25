@@ -3,15 +3,58 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { useStepUp } from "../features/security/useStepUp.jsx";
 import { apiAuthed } from "../http.js";
-import { Link, useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 // ifcElements (which pulls in the ~1.5 MB web-ifc wasm wrapper) is imported
 // dynamically inside handleUploadModel so it is code-split out of the main
 // bundle and only fetched when a user actually uploads a model.
-import { FaChartBar, FaCubes, FaFileExcel, FaFolder, FaInfoCircle, FaKey, FaSearch, FaSyncAlt, FaTasks, FaThLarge, FaTimes, FaUserPlus } from "../components/icons.jsx";
+import { FaCubes, FaFolder, FaInfoCircle } from "../components/icons.jsx";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
+// The workspace is drawn in his project pieces (.pj-empty, .pj-kpi, .pj-buy,
+// .pj-vars, .pj-stage, .pj-sumbox) but nothing on this route ever loaded the
+// sheet that defines them: DsAppShell brings ds-work.css, and ds-work-proj.css
+// was imported only by the gallery and Work's overview. So the buy schedule's
+// and the variation list's empty states rendered as bare text unless the
+// reader happened to have visited /work first in the same session. Importing
+// it here makes the route look the same whichever door it was opened by.
+import "../styles/ds-work-proj.css";
+import WkModal from "../ds/WkModal.jsx";
+import { useFeedback } from "../ds/feedback/feedbackContext.js";
+import {
+  approvedVariationsEarned,
+  approvedVariationsTotal,
+  normalizeVariationStatus,
+  selAfterVariationWrite,
+  variationStatusLabel,
+} from "../lib/variations.js";
+import {
+  newPreliminaryItemRow,
+  newProvisionalSumRow,
+  newVariationRow,
+  preliminaryItemForSave,
+  preliminaryItemRow,
+  provisionalSumForSave,
+  provisionalSumRow,
+  variationForSave,
+  variationRow,
+} from "../features/projects/lib/projectRows.js";
+import { reconcileBill } from "../features/projects/rateReconcile.js";
+// The same product/host table the gallery names its tools from (P0.4), so the
+// two screens say "Measure in QUIV, inside Revit" in exactly the same words.
+import { SOURCES } from "../lib/projectGallery.js";
+import {
+  budgetDrivenCodes as budgetDrivenCodesFor,
+  nextRateStamp,
+  rateEditState,
+  rateFieldsForSave,
+} from "../features/projects/rateStamp.js";
+
+// His orange palette, for a note that is a warning rather than information.
+// Tokens only, so it follows the theme; there is no new CSS rule behind it.
+const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" };
+const NOTE_FULL = { gridColumn: "1 / -1", margin: 0 };
 import {
   allCategoriesForProductKey,
   deriveItemCategory,
@@ -20,17 +63,22 @@ import {
   UNCATEGORIZED,
 } from "../lib/boqCategory.js";
 
-const DASHBOARD_PATH = "/dashboard";
+const DASHBOARD_PATH = "/manage";
 
+// Product names as the rest of the app says them (the tool keys are the old
+// CAD-host slugs: revit = QUIV, planswift = HERON, civil3d = CIVIQ).
 const TITLES = {
-  revit: "Revit Takeoffs",
-  revitmep: "Revit MEP Projects",
-  planswift: "PlanSwift Projects",
-  civil3d: "Civil 3D Takeoffs",
-  "revit-materials": "Revit Materials",
-  "revit-material": "Revit Materials",
-  "planswift-materials": "PlanSwift Materials",
-  "planswift-material": "PlanSwift Materials",
+  revit: "QUIV projects",
+  revitmep: "Revit MEP projects",
+  mep: "Revit MEP projects",
+  planswift: "HERON projects",
+  civil3d: "CIVIQ projects",
+  "revit-materials": "QUIV",
+  "revit-material": "QUIV",
+  "planswift-materials": "HERON",
+  "planswift-material": "HERON",
+  "mep-materials": "Revit MEP",
+  "civil3d-materials": "CIVIQ",
 };
 
 function normTool(t) {
@@ -114,7 +162,7 @@ function getSidebarMeta(tool) {
     };
   }
 
-  if (t === "revitmep") {
+  if (t === "revitmep" || t === "mep") {
     return {
       app: "Revit MEP",
       section: "Projects",
@@ -196,6 +244,7 @@ function getEndpoints(tool) {
       share: (id) => "/projects/revit/materials/" + id + "/share",
       lock: (id) => "/projects/revit/materials/" + id + "/contract/lock",
       unlock: (id) => "/projects/revit/materials/" + id + "/contract/unlock",
+      tendered: (id) => "/projects/revit/materials/" + id + "/contract/tendered",
       ...pmEndpoints,
     };
   }
@@ -210,6 +259,7 @@ function getEndpoints(tool) {
       share: (id) => "/projects/planswift/materials/" + id + "/share",
       lock: (id) => "/projects/planswift/materials/" + id + "/contract/lock",
       unlock: (id) => "/projects/planswift/materials/" + id + "/contract/unlock",
+      tendered: (id) => "/projects/planswift/materials/" + id + "/contract/tendered",
       ...pmEndpoints,
     };
   }
@@ -229,12 +279,17 @@ function getEndpoints(tool) {
     share: (id) => "/projects/" + t + "/" + id + "/share",
     lock: (id) => "/projects/" + t + "/" + id + "/contract/lock",
     unlock: (id) => "/projects/" + t + "/" + id + "/contract/unlock",
+    tendered: (id) => "/projects/" + t + "/" + id + "/contract/tendered",
     budget: (id) => "/projects/" + t + "/" + id + "/budget",
     certificates: (id) => "/projects/" + t + "/" + id + "/certificates",
     certificate: (id, n) =>
       "/projects/" + t + "/" + id + "/certificates/" + n,
     certificateExport: (id, n) =>
       "/projects/" + t + "/" + id + "/certificates/" + n + "/export",
+    // S18 valuations: raise a variation (pending) and decide a pending one.
+    variations: (id) => "/projects/" + t + "/" + id + "/variations",
+    variationDecision: (id, index) =>
+      "/projects/" + t + "/" + id + "/variations/" + index,
     finalAccountFinalize: (id) =>
       "/projects/" + t + "/" + id + "/final-account/finalize",
     finalAccountReopen: (id) =>
@@ -507,13 +562,21 @@ function categoryMapsEqual(a, b) {
   return true;
 }
 
+// Every field a sum stores is compared, not just the two the first editor
+// had: ticking "Executed" or moving a row between the PC and provisional
+// groups is an edit, and a comparison that ignored it left the page reading
+// "nothing to save" while the change sat there unsaved.
 function provisionalSumsEqual(a, b) {
   const A = Array.isArray(a) ? a : [];
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    if (String(A[i]?.description || "") !== String(B[i]?.description || "")) return false;
-    if (Number(A[i]?.amount || 0) !== Number(B[i]?.amount || 0)) return false;
+    const X = provisionalSumRow(A[i]);
+    const Y = provisionalSumRow(B[i]);
+    if (X.description !== Y.description) return false;
+    if (X.amount !== Y.amount) return false;
+    if (X.kind !== Y.kind) return false;
+    if (X.completed !== Y.completed) return false;
   }
   return true;
 }
@@ -523,12 +586,14 @@ function preliminaryItemsEqual(a, b) {
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    const X = A[i] || {};
-    const Y = B[i] || {};
-    if (String(X.name || "") !== String(Y.name || "")) return false;
-    if (Number(X.allocation || 0) !== Number(Y.allocation || 0)) return false;
-    if (Boolean(X.completed) !== Boolean(Y.completed)) return false;
-    if (String(X.notes || "") !== String(Y.notes || "")) return false;
+    const X = preliminaryItemRow(A[i]);
+    const Y = preliminaryItemRow(B[i]);
+    if (X.name !== Y.name) return false;
+    if (X.allocation !== Y.allocation) return false;
+    if (X.completed !== Y.completed) return false;
+    if (X.notes !== Y.notes) return false;
+    // The QS's recorded spend is an edit like any other.
+    if (X.actualAmount !== Y.actualAmount) return false;
   }
   return true;
 }
@@ -538,14 +603,18 @@ function variationsEqual(a, b) {
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    const X = A[i] || {};
-    const Y = B[i] || {};
-    if (String(X.description || "") !== String(Y.description || "")) return false;
-    if (Number(X.qty || 0) !== Number(Y.qty || 0)) return false;
-    if (String(X.unit || "") !== String(Y.unit || "")) return false;
-    if (Number(X.rate || 0) !== Number(Y.rate || 0)) return false;
-    if (String(X.reference || "") !== String(Y.reference || "")) return false;
-    if (String(X.issuedAt || "") !== String(Y.issuedAt || "")) return false;
+    const X = variationRow(A[i]);
+    const Y = variationRow(B[i]);
+    if (X.description !== Y.description) return false;
+    if (X.qty !== Y.qty) return false;
+    if (X.unit !== Y.unit) return false;
+    if (X.rate !== Y.rate) return false;
+    if (X.reference !== Y.reference) return false;
+    if (X.issuedAt !== Y.issuedAt) return false;
+    if (X.status !== Y.status) return false;
+    // "Executed on site" is the tick that earns a variation its value, so a
+    // page that ignored it here called itself clean and never saved it.
+    if (X.completed !== Y.completed) return false;
   }
   return true;
 }
@@ -560,7 +629,16 @@ const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   vatPct: 7.5,
   withholdingPct: 2.5,
   basis: "boq",
+  // S18: the buy schedule's procurement lead time, in days.
+  procurementLeadDays: 14,
 });
+
+// A lead time is a whole number of days, 0-120. Same clamp as the server.
+function clampLeadDays(value, fallback = 14) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(120, Math.round(n)));
+}
 
 function clampPercentage(value, fallback = 0) {
   const num = Number(value);
@@ -606,6 +684,10 @@ function normalizeValuationSettings(settings) {
       source.basis === "budget" || source.basis === "boq"
         ? source.basis
         : DEFAULT_VALUATION_SETTINGS.basis,
+    procurementLeadDays: clampLeadDays(
+      source.procurementLeadDays,
+      DEFAULT_VALUATION_SETTINGS.procurementLeadDays,
+    ),
   };
 }
 
@@ -621,7 +703,8 @@ function valuationSettingsEqual(a, b) {
     safeNum(A.vatPct) === safeNum(B.vatPct) &&
     safeNum(A.withholdingPct) === safeNum(B.withholdingPct) &&
     A.rateSyncEnabled === B.rateSyncEnabled &&
-    A.basis === B.basis
+    A.basis === B.basis &&
+    safeNum(A.procurementLeadDays) === safeNum(B.procurementLeadDays)
   );
 }
 
@@ -1069,11 +1152,15 @@ export default function ProjectsGeneric() {
     : "Completed to date";
 
   const sidebarMeta = React.useMemo(() => getSidebarMeta(tool), [tool]);
-  const SidebarIcon = sidebarMeta.Icon;
 
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
+  // `err` is the page's general error line: a failed save, a rate sync that
+  // would not run, a rejected upload all land in it. The grid's empty state
+  // needs the narrower fact — did THIS list fail to load — or an unrelated
+  // failure relabels an empty grid "your projects could not be listed".
+  const [listFailed, setListFailed] = React.useState(false);
   const [storageInfo, setStorageInfo] = React.useState(null);
 
   // explorer selection
@@ -1087,6 +1174,18 @@ export default function ProjectsGeneric() {
   // rates editing
   const [rates, setRates] = React.useState({});
   const [baseRates, setBaseRates] = React.useState({});
+  // The rate map as it stands right now. A setRates updater does not run until
+  // React renders, so anything that has to know BOTH the new map and which
+  // lines it touched — the linked-group carry, the Rate Gen sync after its
+  // await — reads this instead and works the edit out once, in one place.
+  const ratesRef = React.useRef(rates);
+  ratesRef.current = rates;
+  // Where each line's rate came from, keyed the same way as `rates`:
+  //   { appliedRateKey, rateLockedAt } for a line the QS priced himself.
+  // Sent with the save so the server stops re-deriving that line out from
+  // under him (server/util/deriveBillRates.js, isRateApplied). A line nobody
+  // has touched has no entry and behaves exactly as it always has.
+  const [rateStamps, setRateStamps] = React.useState({});
   const [actualQtyMap, setActualQtyMap] = React.useState({});
   const [baseActualQtyMap, setBaseActualQtyMap] = React.useState({});
   const [actualRateMap, setActualRateMap] = React.useState({});
@@ -1202,6 +1301,12 @@ export default function ProjectsGeneric() {
   const [boqImportName, setBoqImportName] = React.useState("");
   const [boqImportErr, setBoqImportErr] = React.useState("");
   const boqReimportInputRef = React.useRef(null);
+  // Rates are hidden on a project shared with someone who has no RateGen
+  // subscription (server: resolveProjectAccess → maskRates). The server also
+  // REFUSES every write that would re-price such a project, so the controls
+  // that do that are disabled here with the reason, rather than offered and
+  // then answered with a 403.
+  const ratesHidden = sel?._access?.canSeeRates === false;
 
   // "Add shared project" (claim a project shared with me by code)
   const [claimOpen, setClaimOpen] = React.useState(false);
@@ -1289,6 +1394,10 @@ export default function ProjectsGeneric() {
     setMergeGroupOverride(null);
   }, [selectedId]);
 
+  // The site-wide toast (his feedback.js), for the actions on this page that
+  // do something a user would want reporting back — and undoing.
+  const fb = useFeedback();
+
   function itemKey(it, i) {
     const sn = it?.sn ?? i + 1;
     const code = String(it?.code || "");
@@ -1361,9 +1470,20 @@ export default function ProjectsGeneric() {
     const uiPercents = {};
     const baseCategories = {};
     const uiCategories = {};
+    const stamps = {};
     for (let i = 0; i < its.length; i++) {
       const k = itemKey(its[i], i);
       const r = safeNum(its[i]?.rate);
+      // Carry the stored provenance forward so a save that touches one line
+      // does not strip the stamp off every other line on the bill.
+      const storedKey = String(its[i]?.appliedRateKey || "").trim();
+      const storedLockedAt = its[i]?.rateLockedAt || null;
+      if (storedKey || storedLockedAt) {
+        stamps[k] = {
+          appliedRateKey: storedKey,
+          rateLockedAt: storedLockedAt,
+        };
+      }
       const actualQty = parseOptionalNumber(its[i]?.actualQty);
       const actualRate = parseOptionalNumber(its[i]?.actualRate);
       base[k] = r;
@@ -1416,36 +1536,28 @@ export default function ProjectsGeneric() {
     setCategoryMap(uiCategories);
     setBaseTradeMap(baseTrades);
     setTradeMap(uiTrades);
+    // Rows travel whole (features/projects/lib/projectRows.js): a sum keeps
+    // its group and its "executed" tick, a variation keeps its approval trail,
+    // and on a merged project both keep the source tag the server routes them
+    // home by. Rebuilding them field by field was what erased all of that on
+    // the next save.
     const sums = Array.isArray(project?.provisionalSums)
-      ? project.provisionalSums.map((s) => ({
-          description: String(s?.description || ""),
-          amount: Number(s?.amount) || 0,
-        }))
+      ? project.provisionalSums.map(provisionalSumRow)
       : [];
     setProvisionalSums(sums);
     setBaseProvisionalSums(sums.map((s) => ({ ...s })));
+    // S18 valuations: the approval status travels through load AND save —
+    // without it a save would send the row back with no status, the server
+    // would read that as approved, and a variation still waiting for approval
+    // would silently start moving money. So do `completed`, `source` and the
+    // decidedAt / decidedBy decision trail.
     const vars = Array.isArray(project?.variations)
-      ? project.variations.map((v) => ({
-          description: String(v?.description || ""),
-          qty: Number(v?.qty) || 0,
-          unit: String(v?.unit || ""),
-          rate: Number(v?.rate) || 0,
-          reference: String(v?.reference || ""),
-          issuedAt: v?.issuedAt
-            ? new Date(v.issuedAt).toISOString().slice(0, 10)
-            : "",
-        }))
+      ? project.variations.map(variationRow)
       : [];
     setVariations(vars);
     setBaseVariations(vars.map((v) => ({ ...v })));
     const prelimItems = Array.isArray(project?.preliminaryItems)
-      ? project.preliminaryItems.map((p) => ({
-          name: String(p?.name || ""),
-          allocation: Number(p?.allocation) || 0,
-          completed: Boolean(p?.completed),
-          completedAt: p?.completedAt || null,
-          notes: String(p?.notes || ""),
-        }))
+      ? project.preliminaryItems.map(preliminaryItemRow)
       : [];
     setPreliminaryItems(prelimItems);
     setBasePreliminaryItems(prelimItems.map((p) => ({ ...p })));
@@ -1523,6 +1635,7 @@ export default function ProjectsGeneric() {
     } else {
       setRates(ui);
     }
+    setRateStamps(stamps);
     if (cached && cached?.actualQty && typeof cached.actualQty === "object") {
       const nextActualQty = { ...uiActualQty };
       for (const [k, v] of Object.entries(cached.actualQty)) {
@@ -1574,6 +1687,7 @@ export default function ProjectsGeneric() {
     setSel(null);
     setRates({});
     setBaseRates({});
+    setRateStamps({});
     setActualQtyMap({});
     setBaseActualQtyMap({});
     setActualRateMap({});
@@ -1641,7 +1755,12 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function handlePmGenerateFromBoq({ projectStart, projectFinish } = {}) {
+  async function handlePmGenerateFromBoq({
+    projectStart,
+    projectFinish,
+    // S18 PR2-18: plan only the bill lines that are in no task yet.
+    onlyUnlinked = false,
+  } = {}) {
     if (!selectedId) return;
     setPmGenerating(true);
     setPmImportError("");
@@ -1649,13 +1768,20 @@ export default function ProjectsGeneric() {
       const body = {};
       if (projectStart) body.projectStart = projectStart;
       if (projectFinish) body.projectFinish = projectFinish;
+      if (onlyUnlinked) body.onlyUnlinked = true;
       const data = await apiAuthed(endpoints.pmGenerateFromBoq(selectedId), {
         token: accessToken,
         method: "POST",
         body,
       });
       if (data?.dashboard) setPmDashboard(data.dashboard);
-      setNotice(`Generated ${data?.generated || 0} task(s) from BoQ.`);
+      setNotice(
+        onlyUnlinked
+          ? data?.generated
+            ? `${data.generated} task(s) added for bill lines that were in no task.`
+            : "Every bill line is already in a task."
+          : `Generated ${data?.generated || 0} task(s) from BoQ.`,
+      );
     } catch (e) {
       setPmImportError(e?.message || "Failed to generate tasks from BoQ.");
     } finally {
@@ -2056,6 +2182,7 @@ export default function ProjectsGeneric() {
   async function load({ keepSelection = true } = {}) {
     setErr("");
     setNotice("");
+    setListFailed(false);
 
     try {
       const [list, storage] = await Promise.all([
@@ -2107,9 +2234,18 @@ export default function ProjectsGeneric() {
         }
       }
     } catch (e) {
-      setErr(e.message || "Failed to load projects");
+      // closeProject() clears the message, so it runs first: the other order
+      // left a lapsed subscription looking like an empty "0 projects" list.
       closeProject();
       setRows([]);
+      setListFailed(true);
+      const msg = e?.message || "Failed to load projects";
+      const product = String(TITLES[tool] || "this product").replace(/ projects$/, "");
+      setErr(
+        /subscription/i.test(msg)
+          ? `${msg}: ${product} projects can only be opened with an active ${product} subscription. Renew it under Manage > Products & seats to open them again; nothing has been deleted.`
+          : msg,
+      );
     }
   }
 
@@ -2130,11 +2266,15 @@ export default function ProjectsGeneric() {
 
       // Use slug in URL if available, otherwise fall back to ID
       const urlKey = p?.slug || id;
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("project", urlKey);
-        return next;
-      });
+      // replace: swapping an id for the slug is not a new place to go back to.
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("project", urlKey);
+          return next;
+        },
+        { replace: true },
+      );
 
       initRatesFromProject(p);
       const openedId = p?._id || p?.id || id;
@@ -2428,17 +2568,61 @@ export default function ProjectsGeneric() {
     });
   }
 
-  function handleRateChange(rowIndex, value) {
+  // Write the per-line stamp. Each entry carries its own library description,
+  // because a Rate Gen sync applies a different rate to every line it fills.
+  // A null rateLockedAt is a RELEASE, not a no-op: the line goes back to being
+  // derived from its Budget build-up.
+  function stampRateEntries(entries) {
+    if (!entries?.length) return;
+    setRateStamps((prev) => {
+      const next = { ...(prev || {}) };
+      for (const e of entries) {
+        if (!e?.key) continue;
+        next[e.key] = {
+          appliedRateKey: e.appliedRateKey || "",
+          rateLockedAt: e.rateLockedAt ?? null,
+        };
+      }
+      return next;
+    });
+  }
+
+  // Stamp a line (and any line a linked group carries the rate onto) as
+  // priced by the QS. `meta` comes from the rate cell: a Rate Gen pick carries
+  // the library description, a typed figure carries none. Called only from an
+  // explicit edit, never from a background re-fetch, so no project changes
+  // value unless the QS just changed it.
+  function stampRates(keys, meta, { keepRateKey = "" } = {}) {
+    if (!meta || !keys.length) return;
+    // What the meta does to the stamp lives in rateStamp.js, where it can be
+    // tested: an empty cell the QS has COMMITTED releases the stamp (the way
+    // back for a line stamped by mistake, keeping the plugin's own
+    // appliedRateKey because that records which library rate produced the
+    // figure and is not ours to erase); a keystroke on the way to retyping the
+    // figure returns null and moves nothing at all.
+    const stamp = nextRateStamp(meta, { keepRateKey });
+    if (!stamp) return;
+    stampRateEntries(keys.map((key) => ({ key, ...stamp })));
+  }
+
+  function handleRateChange(rowIndex, value, meta) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
     const it = its[rowIndex];
     if (!it) return;
     const k0 = itemKey(it, rowIndex);
     const groupId = groupIdForIndex(rowIndex);
-    setRates((prev) => {
-      const next = { ...(prev || {}), [k0]: value };
-      if (!groupId || !isGroupLinked(groupId)) return next;
-      if (String(value ?? "").trim() === "") return next;
+
+    // Work the whole edit out ONCE, here, and hand the same result to the rate
+    // map and to the stamp. The linked-group keys used to be collected inside
+    // the setRates updater, which React does not run until it renders: by the
+    // time stampRates read the array it still held only this row, so a rate
+    // carried onto a sibling was saved unstamped and reverted on the next save.
+    const prev = ratesRef.current || {};
+    const next = { ...prev, [k0]: value };
+    const stamped = [k0];
+    const blank = String(value ?? "").trim() === "";
+    if (groupId && isGroupLinked(groupId) && !blank) {
       for (let j = 0; j < its.length; j++) {
         if (j === rowIndex) continue;
         if (groupIdForIndex(j) !== groupId) continue;
@@ -2449,9 +2633,13 @@ export default function ProjectsGeneric() {
             : safeNum(next[kj]);
         if (onlyFillEmpty && existing !== 0) continue;
         next[kj] = value;
+        stamped.push(kj);
       }
-      return next;
-    });
+    }
+    setRates(next);
+    // A rate carried onto a linked sibling was applied by the QS just as much
+    // as the line he typed into, so it carries the same stamp.
+    stampRates(stamped, meta, { keepRateKey: String(it?.appliedRateKey || "") });
   }
   function handleActualQtyChange(rowIndex, value) {
     if (!sel) return;
@@ -2469,11 +2657,26 @@ export default function ProjectsGeneric() {
     const key = itemKey(it, rowIndex);
     setActualRateMap((prev) => ({ ...(prev || {}), [key]: value }));
   }
-  function handleAddProvisionalSum() {
+  // S18 bill: a sum is added into one of the two named groups. Anything that
+  // is not the literal "pc" is a provisional sum, which is what the whole list
+  // has always been, so the ribbon's plain "Add sum" button still adds exactly
+  // what it added before. The row starts with a name because the server's
+  // sanitiser drops a row with no description and no amount.
+  function handleAddProvisionalSum(kind) {
     setProvisionalSums((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      { description: "", amount: 0 },
+      newProvisionalSumRow(kind),
     ]);
+  }
+  // Put a removed sum back exactly where it was, for the toast's Undo.
+  function handleRestoreProvisionalSum(idx, sum) {
+    if (!sum) return;
+    setProvisionalSums((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      const at = Math.max(0, Math.min(next.length, Number(idx) || 0));
+      next.splice(at, 0, sum);
+      return next;
+    });
   }
   function handleUpdateProvisionalSum(idx, patch) {
     setProvisionalSums((prev) => {
@@ -2499,17 +2702,16 @@ export default function ProjectsGeneric() {
       return next;
     });
   }
+  // A variation raised from the Bill starts PENDING, exactly like one raised
+  // on the Valuation tab's Variations view. It is worth nothing until someone
+  // approves it there, so no user action can create money in an approved
+  // state. (It used to be added with no status, which the server reads as
+  // approved, so keying a row straight into the Bill moved the project total
+  // with no decision behind it.)
   function handleAddVariation() {
     setVariations((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      {
-        description: "",
-        qty: 0,
-        unit: "",
-        rate: 0,
-        reference: "",
-        issuedAt: "",
-      },
+      newVariationRow(),
     ]);
   }
   function handleUpdateVariation(idx, patch) {
@@ -2556,7 +2758,7 @@ export default function ProjectsGeneric() {
   function handleAddPreliminaryItem() {
     setPreliminaryItems((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      { name: "", allocation: 0, completed: false, completedAt: null, notes: "", actualAmount: 0 },
+      newPreliminaryItemRow(),
     ]);
   }
   function handleRemovePreliminaryItem(idx) {
@@ -2657,6 +2859,8 @@ export default function ProjectsGeneric() {
         next[field] = clampPercentage(value, next[field]);
       } else if (field === "rateSyncEnabled") {
         next.rateSyncEnabled = Boolean(value);
+      } else if (field === "procurementLeadDays") {
+        next.procurementLeadDays = clampLeadDays(value, next.procurementLeadDays);
       }
       return { ...next };
     });
@@ -2701,8 +2905,6 @@ export default function ProjectsGeneric() {
       const updatedItems = its.map((it, i) => {
         const k = itemKey(it, i);
         const raw = rates?.[k];
-        const use =
-          String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
         const statusValue = Boolean(statusMap?.[k]);
         // percentComplete falls back to the stored value when no UI input
         // has touched it; statusValue = true forces 100%.
@@ -2729,9 +2931,15 @@ export default function ProjectsGeneric() {
         const nextTrade =
           String(tradeMap?.[k] ?? "").trim() ||
           String(it?.trade || "").trim();
+        // Provenance travels with the rate. Without it the server re-derives
+        // the line from a Budget build-up that never saw this figure, the
+        // rate reverts, and the toast still says "Saved". An empty cell is not
+        // a rate of zero: it keeps the stored figure, and it is the stamp that
+        // decides whether the server keeps it. (rateStamp.js, tested there.)
+        const stamp = rateStamps?.[k] || null;
         return {
           ...it,
-          rate: use,
+          ...rateFieldsForSave(it, raw, stamp),
           actualQty: nextActualQty,
           actualRate: nextActualRate,
           [statusField]: statusValue,
@@ -2745,21 +2953,16 @@ export default function ProjectsGeneric() {
         items: updatedItems,
         valuationSettings: normalizeValuationSettings(valuationSettings),
         clientName: String(clientName || "").trim(),
+        // Whole rows, not a hand-written field list. The PUT replaces both
+        // arrays outright, so anything missing here is deleted — which is how
+        // a PC sum used to come back as a provisional sum and an executed
+        // variation used to un-execute itself. The server's sanitiser is the
+        // one whitelist.
         provisionalSums: provisionalSums
-          .map((s) => ({
-            description: String(s?.description || "").trim(),
-            amount: Number(s?.amount) || 0,
-          }))
+          .map(provisionalSumForSave)
           .filter((s) => s.description || s.amount > 0),
         variations: variations
-          .map((v) => ({
-            description: String(v?.description || "").trim(),
-            qty: Number(v?.qty) || 0,
-            unit: String(v?.unit || "").trim(),
-            rate: Number(v?.rate) || 0,
-            reference: String(v?.reference || "").trim(),
-            issuedAt: v?.issuedAt || null,
-          }))
+          .map(variationForSave)
           .filter((v) => v.description || v.qty > 0 || v.rate > 0),
         preliminaryPercent: Number(contract?.preliminaryPercent) || 0,
         // Contingency + tax (VAT) percentages — only sent when not
@@ -2767,15 +2970,9 @@ export default function ProjectsGeneric() {
         // these (the at-lock values stay frozen).
         contingencyPercent: Number(contract?.contingencyPercent) || 0,
         taxPercent: Number(contract?.taxPercent) || 0,
-        preliminaryItems: preliminaryItems.map((p) => ({
-          name: String(p?.name || "").trim(),
-          allocation: Number(p?.allocation) || 0,
-          completed: Boolean(p?.completed),
-          completedAt: p?.completedAt || null,
-          notes: String(p?.notes || "").trim(),
-          // actualAmount — QS-recorded spend (added in earlier session)
-          actualAmount: Number(p?.actualAmount) || 0,
-        })),
+        // Same rule for the preliminaries: whole rows, so the QS's recorded
+        // spend (actualAmount) survives a save instead of being sent as 0.
+        preliminaryItems: preliminaryItems.map(preliminaryItemForSave),
       };
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
@@ -3212,6 +3409,70 @@ export default function ProjectsGeneric() {
       : [];
   }
 
+  // ── S18 bill (PR2-10): pricing one line prices the matching unpriced ones ─
+  //
+  // His assign() (work-proj.js): when a rate is assigned, every other unpriced
+  // line that reads the same gets it too. "The same" here is our existing
+  // similarity group — the one the "Link similar items" toggle already uses —
+  // so the lines that follow are the lines the bill already treats as alike.
+  //
+  // Two rules keep it safe. A line that already carries a rate is never
+  // touched, so a deliberate difference survives. And a locked contract is
+  // left alone entirely.
+  //
+  // Returns the number of lines that followed, so the caller can say so.
+  function priceMatchingUnpricedLines(rowIndex, value) {
+    if (contract?.locked) return 0;
+    const rate = safeNum(value);
+    if (!rate) return 0;
+    const groupId = groupIdForIndex(rowIndex);
+    if (!groupId) return 0;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+
+    // Work out which lines follow from the rates on screen now, outside the
+    // state updater: an updater can be replayed, and a replay would record
+    // the "before" values it had just written.
+    const current = rates || {};
+    const before = [];
+    for (let j = 0; j < its.length; j += 1) {
+      if (j === rowIndex) continue;
+      if (groupIdForIndex(j) !== groupId) continue;
+      const kj = itemKey(its[j], j);
+      // The rate showing on the line right now: the unsaved input if there is
+      // one, otherwise what is stored.
+      const typed = String(current[kj] ?? "").trim();
+      const shown = typed === "" ? safeNum(its[j]?.rate) : safeNum(current[kj]);
+      if (shown !== 0) continue; // already priced — leave it alone
+      before.push([kj, current[kj]]);
+    }
+    if (!before.length) return 0;
+
+    setRates((prev) => {
+      const next = { ...(prev || {}) };
+      for (const [k] of before) next[k] = String(rate);
+      return next;
+    });
+
+    fb.toast({
+      tone: "info",
+      title: `${before.length} matching line${before.length === 1 ? "" : "s"} priced with it`,
+      msg: "Lines that already had a rate were left alone.",
+      action: {
+        label: "Undo",
+        run: () =>
+          setRates((prev) => {
+            const next = { ...(prev || {}) };
+            for (const [k, was] of before) {
+              if (was === undefined) delete next[k];
+              else next[k] = was;
+            }
+            return next;
+          }),
+      },
+    });
+    return before.length;
+  }
+
   function handlePickCandidate(rowIndex, candidate) {
     if (!candidate) return;
     const it = items[rowIndex];
@@ -3224,7 +3485,12 @@ export default function ProjectsGeneric() {
       ...(prev || {}),
       [mk]: pk,
     }));
-    handleRateChange(rowIndex, String(safeNum(candidate.price) || 0));
+    const price = String(safeNum(candidate.price) || 0);
+    handleRateChange(rowIndex, price, {
+      source: "rategen",
+      rateKey: String(candidate?.description || "").trim(),
+    });
+    priceMatchingUnpricedLines(rowIndex, price);
     setOpenPickKey(null);
   }
 
@@ -3240,7 +3506,21 @@ export default function ProjectsGeneric() {
       .trim();
   }
 
-  async function syncBoqRates(project) {
+  // `explicit` is the whole question here. This sync can fire two ways:
+  //
+  //   • the QS presses "Sync rates", or turns the auto-fill switch on — a
+  //     deliberate act of pricing, no different from picking a rate in the
+  //     cell, so the lines it fills carry the same stamp and the figures stick;
+  //   • an effect runs it on open, because rateSyncEnabled is saved in the
+  //     project's valuation settings. Nobody asked for that this minute, so
+  //     nothing is stamped: on a line with a priced build-up the server still
+  //     re-derives and the sync's figure is discarded on save.
+  //
+  // Stamping the second case would change the money on projects the QS only
+  // opened, which is the one thing this work must not do. So it stays
+  // unstamped — and the notice says plainly how many of the rates it just put
+  // on screen will not survive, instead of claiming all of them were "synced".
+  async function syncBoqRates(project, { explicit = false } = {}) {
     if (showMaterials) return;
     if (!canRateGen) return;
     if (!project?._id) return;
@@ -3272,47 +3552,78 @@ export default function ProjectsGeneric() {
 
       setBoqRateResolved(result);
 
+      // Bill codes with a priced build-up. The server derives those lines from
+      // the Budget, so an unstamped rate dropped into one is thrown away on the
+      // next save — that is the silent revert, and the QS is owed the count.
+      const derivedNet = new Map();
+      for (const b of Array.isArray(project?.budgetItems) ? project.budgetItems : []) {
+        const code = String(b?.billIdentity || "").trim().toLowerCase();
+        if (!code) continue;
+        derivedNet.set(
+          code,
+          (derivedNet.get(code) || 0) + safeNum(b?.qty) * safeNum(b?.rate),
+        );
+      }
+
       let matched = 0;
       let filled = 0;
+      let wontStick = 0;
 
-      setRates((prev) => {
-        const next = { ...(prev || {}) };
+      // Worked out once, here, so the stamps describe exactly the lines the
+      // rate map is about to be given (see ratesRef).
+      const next = { ...(ratesRef.current || {}) };
+      const stamps = [];
+      const rateLockedAt = new Date().toISOString();
 
-        for (let i = 0; i < its.length; i++) {
-          const it = its[i] || {};
-          const k = itemKey(it, i);
-          const descKey = normalizeBoqDescription(it.description);
-          const candidates = Array.isArray(result?.candidatesByKey?.[descKey])
-            ? result.candidatesByKey[descKey]
-            : [];
+      for (let i = 0; i < its.length; i++) {
+        const it = its[i] || {};
+        const k = itemKey(it, i);
+        const descKey = normalizeBoqDescription(it.description);
+        const candidates = Array.isArray(result?.candidatesByKey?.[descKey])
+          ? result.candidatesByKey[descKey]
+          : [];
 
-          if (!candidates.length) continue;
+        if (!candidates.length) continue;
 
-          const best = candidates[0];
-          if (!best) continue;
+        const best = candidates[0];
+        if (!best) continue;
 
-          matched += 1;
+        matched += 1;
 
-          const totalCost = safeNum(best.totalCost);
-          if (totalCost <= 0) continue;
+        const totalCost = safeNum(best.totalCost);
+        if (totalCost <= 0) continue;
 
-          const existing =
-            String(next[k] ?? "").trim() === ""
-              ? safeNum(it?.rate)
-              : safeNum(next[k]);
+        const existing =
+          String(next[k] ?? "").trim() === ""
+            ? safeNum(it?.rate)
+            : safeNum(next[k]);
 
-          if (onlyFillEmpty && existing !== 0) continue;
+        if (onlyFillEmpty && existing !== 0) continue;
 
-          next[k] = String(totalCost);
-          filled += 1;
+        next[k] = String(totalCost);
+        filled += 1;
+
+        if (explicit) {
+          stamps.push({
+            key: k,
+            appliedRateKey: String(best?.description || "").trim(),
+            rateLockedAt,
+          });
+        } else if (safeNum(derivedNet.get(String(it?.code || "").trim().toLowerCase())) > 0) {
+          wontStick += 1;
         }
+      }
 
-        return next;
-      });
+      setRates(next);
+      if (stamps.length) stampRateEntries(stamps);
 
+      const held =
+        wontStick > 0
+          ? ` ${wontStick} of them are priced by the Budget build-up and will go back to the Budget's rate when you save — press Sync rates to apply them yourself.`
+          : "";
       setNotice(
         filled > 0
-          ? `Synced ${filled} rate(s) from RateGen. (${matched} match(es) found)`
+          ? `Synced ${filled} rate(s) from RateGen. (${matched} match(es) found)${held}`
           : `No rates filled. (${matched} match(es) found)`,
       );
     } catch (e) {
@@ -3333,6 +3644,9 @@ export default function ProjectsGeneric() {
     if (autoFillBoqAppliedRef.current[selectedId]) return;
     autoFillBoqAppliedRef.current[selectedId] = true;
 
+    // Opening the project is not a decision to re-price it: this run can come
+    // from a setting saved months ago, so it fills the cells and stamps
+    // nothing.
     syncBoqRates(sel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMaterials, shouldAutoSyncBoq, canRateGen, selectedId]);
@@ -3350,7 +3664,8 @@ export default function ProjectsGeneric() {
     setRateGenPoolLoaded(false);
     autoFillBoqAppliedRef.current = {};
 
-    // Re-sync for the currently open project
+    // Re-sync for the currently open project. A zone change is not a pricing
+    // decision on this bill either, so this run stamps nothing.
     if (shouldAutoSyncBoq && sel && selectedId) {
       syncBoqRates(sel);
     }
@@ -3360,7 +3675,8 @@ export default function ProjectsGeneric() {
   function toggleAutoFillBoq(v) {
     setAutoFillBoqRates(v);
     if (selectedId) delete autoFillBoqAppliedRef.current[selectedId];
-    if (v && sel) syncBoqRates(sel);
+    // The QS just turned this on: the rates it brings in are his.
+    if (v && sel) syncBoqRates(sel, { explicit: true });
   }
 
   function getBoqCandidatesForItem(item) {
@@ -3373,7 +3689,12 @@ export default function ProjectsGeneric() {
 
   function handlePickBoqCandidate(rowIndex, candidate) {
     if (!candidate) return;
-    handleRateChange(rowIndex, String(safeNum(candidate.totalCost) || 0));
+    const price = String(safeNum(candidate.totalCost) || 0);
+    handleRateChange(rowIndex, price, {
+      source: "rategen",
+      rateKey: String(candidate?.description || "").trim(),
+    });
+    priceMatchingUnpricedLines(rowIndex, price);
     setOpenBoqPickKey(null);
   }
 
@@ -3697,6 +4018,40 @@ export default function ProjectsGeneric() {
     }
   }
 
+  // S18 bill (PR2-25): record, or take back, the day the priced bill went out
+  // to tender. It moves the project to the Tendered stage and changes no
+  // figure at all — no step-up, because no money moves.
+  async function handleMarkTendered(on = true) {
+    if (!selectedId || !accessToken) return null;
+    try {
+      const result = await apiAuthed(endpoints.tendered(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: { tendered: Boolean(on) },
+      });
+      if (result?.contract) {
+        setContract((prev) => ({
+          ...(prev || {}),
+          tenderedAt: result.contract.tenderedAt || null,
+        }));
+        setSel((prev) =>
+          prev
+            ? { ...prev, contract: result.contract, version: result.version ?? prev.version }
+            : prev,
+        );
+        setNotice(
+          on
+            ? "Marked as tendered. The project now shows at the Tendered stage."
+            : "Tender mark removed.",
+        );
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Could not update the tender date");
+      return null;
+    }
+  }
+
   function handlePreliminaryPercentChange(value) {
     const n = Math.max(0, Math.min(100, Number(value) || 0));
     setContract((prev) => ({ ...(prev || {}), preliminaryPercent: n }));
@@ -3708,6 +4063,68 @@ export default function ProjectsGeneric() {
   function handleTaxPercentChange(value) {
     const n = Math.max(0, Math.min(100, Number(value) || 0));
     setContract((prev) => ({ ...(prev || {}), taxPercent: n }));
+  }
+
+  // ── Variations: raise one (pending) and decide a pending one ──────────
+  // These go straight to the server rather than through the project save,
+  // for the same reason certificates do: a decision is an act, not a draft
+  // edit. The response is the truth, so local state is replaced from it.
+  function variationsFromServer(rows) {
+    return (Array.isArray(rows) ? rows : []).map(variationRow);
+  }
+
+  // The whole response, not just its rows: a raise and a decision each bump
+  // the document version, and the held project has to move with it or the next
+  // ordinary Bill save is refused as a conflict. See selAfterVariationWrite.
+  function adoptVariations(result) {
+    const rows = Array.isArray(result?.variations) ? result.variations : [];
+    const next = variationsFromServer(rows);
+    setVariations(next);
+    setBaseVariations(next.map((v) => ({ ...v })));
+    setSel((prev) => selAfterVariationWrite(prev, result));
+  }
+
+  // A raise/decide replaces the whole list from the server, so unsaved edits
+  // in the Bill's own variations editor would be lost. Say so instead.
+  function variationEditsPending() {
+    if (variationsEqual(variations, baseVariations)) return false;
+    setErr(
+      "Save your variation edits first: raising or deciding a variation reloads the list from the server.",
+    );
+    return true;
+  }
+
+  async function handleRaiseVariation(body) {
+    if (!selectedId || !accessToken) return null;
+    if (variationEditsPending()) return null;
+    try {
+      const result = await apiAuthed(endpoints.variations(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: body || {},
+      });
+      if (result?.variations) adoptVariations(result);
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to add the variation");
+      return null;
+    }
+  }
+
+  async function handleDecideVariation(index, status) {
+    if (!selectedId || !accessToken) return null;
+    if (variationEditsPending()) return null;
+    try {
+      const result = await apiAuthed(
+        endpoints.variationDecision(selectedId, index),
+        { token: accessToken, method: "PATCH", body: { status } },
+      );
+      if (result?.variations) adoptVariations(result);
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to record the decision");
+      return null;
+    }
   }
 
   // ── Interim certificates ──
@@ -4160,14 +4577,14 @@ export default function ProjectsGeneric() {
   const provDoneAmount = (Array.isArray(provisionalSums) ? provisionalSums : [])
     .reduce((acc, p) => acc + (p?.completed ? safeNum(p?.amount) : 0), 0);
 
-  const variationsTotalForOverview = (Array.isArray(variations) ? variations : [])
-    .reduce((acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate), 0);
-  const variationsDoneAmount = (Array.isArray(variations) ? variations : [])
-    .reduce(
-      (acc, v) =>
-        v?.completed ? acc + safeNum(v?.qty) * safeNum(v?.rate) : acc,
-      0,
-    );
+  // S18 valuations: only an APPROVED variation counts toward a total, and
+  // only an approved one that has been executed counts as earned. A row with
+  // no status is approved (that is every row written before the field
+  // existed), so no existing project's figures move. The server's rollups use
+  // the same rule — without it the Overview would quote a total the PM
+  // dashboard and the certificates disagree with.
+  const variationsTotalForOverview = approvedVariationsTotal(variations);
+  const variationsDoneAmount = approvedVariationsEarned(variations);
 
   const preliminaryPctForOverview = safeNum(contract?.preliminaryPercent) || 7.5;
   const preliminaryPoolForOverview =
@@ -4260,11 +4677,7 @@ export default function ProjectsGeneric() {
     (acc, s) => (s?.completed ? acc + safeNum(s?.amount) : acc),
     0,
   );
-  const variationActualTracked = (variations || []).reduce(
-    (acc, v) =>
-      v?.completed ? acc + safeNum(v?.qty) * safeNum(v?.rate) : acc,
-    0,
-  );
+  const variationActualTracked = approvedVariationsEarned(variations);
   const actualTrackedAmount =
     measuredActualTracked +
     prelimActualTracked +
@@ -4405,19 +4818,59 @@ export default function ProjectsGeneric() {
     return [...base.slice(0, -1), ...extra, last];
   }, [toolNorm, sel?.customCategories, sel?.excludedCategories, userCategories]);
 
-  // Codes whose bill rate is derived from a priced material/labour build-up —
-  // those BoQ rate cells become read-only (the Budget tab drives them).
-  const budgetDrivenCodes = React.useMemo(() => {
-    const totals = new Map();
-    for (const b of sel?.budgetItems || []) {
-      const code = String(b?.billIdentity || "").trim().toLowerCase();
-      if (!code) continue;
-      totals.set(code, (totals.get(code) || 0) + safeNum(b.qty) * safeNum(b.rate));
-    }
-    const set = new Set();
-    for (const [code, net] of totals) if (net > 0) set.add(code);
-    return set;
-  }, [sel?.budgetItems]);
+  // The bill as it stands on screen: stored lines with the unsaved rate and
+  // the unsaved provenance folded in. Used for the read-only decision and the
+  // reconciliation note so both describe what the QS is actually looking at.
+  const billLinesWithStamps = React.useMemo(() => {
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    return its.map((it, i) => {
+      const k = itemKey(it, i);
+      const raw = rates?.[k];
+      const stamp = rateStamps?.[k] || null;
+      return {
+        ...it,
+        rate: String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw),
+        appliedRateKey: stamp
+          ? stamp.appliedRateKey
+          : String(it?.appliedRateKey || ""),
+        rateLockedAt: stamp ? stamp.rateLockedAt : (it?.rateLockedAt ?? null),
+        // Screen-only: the QS has committed a release that is not saved yet.
+        // The line still holds its rate here and in the database; the next
+        // save hands it to the Budget. Never sent anywhere — saveRatesToCloud
+        // builds its payload from sel.items, not from this list.
+        rateReleased: rateEditState(it, stamp).released,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel?.items, rates, rateStamps, showMaterials]);
+
+  // Codes whose bill rate is derived from a priced build-up — those BoQ rate
+  // cells are read-only (the Budget tab drives them).
+  //
+  // Taken from the lines as STORED. An unsaved stamp may only ever UNLOCK a
+  // cell, never lock one: a rate the QS has just applied frees its cell at
+  // once, and a release he has committed leaves the cell editable until the
+  // save, so he can change his mind. Reading the live stamp in both directions
+  // is what used to swap the input he was typing in for a read-only lock chip
+  // the instant he backspaced it.
+  const budgetDrivenCodes = React.useMemo(
+    () =>
+      budgetDrivenCodesFor(sel?.items, sel?.budgetItems, (it, i) =>
+        rateStamps?.[itemKey(it, i)] || null,
+      ),
+    // itemKey is redeclared on every render, so listing it would defeat the
+    // memo; showMaterials is what it actually varies with and is listed. Same
+    // as the memo above it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sel?.items, sel?.budgetItems, rateStamps, showMaterials],
+  );
+
+  // Lines whose applied rate and Budget build-up do not agree. Empty on every
+  // project nobody has re-priced, so nothing new appears on an old bill.
+  const rateNotes = React.useMemo(
+    () => reconcileBill(billLinesWithStamps, sel?.budgetItems),
+    [billLinesWithStamps, sel?.budgetItems],
+  );
 
   // Add a user-defined category for this project's bill arrangement; persists
   // immediately (items untouched — only customCategories[] is sent).
@@ -4719,15 +5172,16 @@ export default function ProjectsGeneric() {
         rate: Number(v?.rate) || 0,
         reference: String(v?.reference || "").trim(),
         issuedAt: String(v?.issuedAt || ""),
+        // S18 valuations: an exported bill that totalled a variation still
+        // waiting for approval would be quoting money nobody has agreed to.
+        // Each row says where it stands, and the total is the approved net.
+        status: normalizeVariationStatus(v?.status),
       }))
       .filter((v) => v.description || v.qty > 0 || v.rate > 0);
-    const variationsTotal = cleanedVariations.reduce(
-      (acc, v) => acc + v.qty * v.rate,
-      0,
-    );
+    const variationsTotal = approvedVariationsTotal(cleanedVariations);
     if (cleanedVariations.length) {
       const varAoa = [
-        ["S/N", "Reference", "Description", "Qty", "Unit", "Rate", "Amount", "Issued"],
+        ["S/N", "Reference", "Description", "Qty", "Unit", "Rate", "Amount", "Status", "Issued"],
         ...cleanedVariations.map((v, i) => [
           i + 1,
           v.reference,
@@ -4736,9 +5190,20 @@ export default function ProjectsGeneric() {
           v.unit,
           Number(v.rate.toFixed(2)),
           Number((v.qty * v.rate).toFixed(2)),
+          variationStatusLabel(v.status),
           v.issuedAt,
         ]),
-        ["", "", "", "", "", "TOTAL", Number(variationsTotal.toFixed(2)), ""],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "TOTAL (approved)",
+          Number(variationsTotal.toFixed(2)),
+          "",
+          "",
+        ],
       ];
       const varWs = XLSX.utils.aoa_to_sheet(varAoa);
       varWs["!cols"] = [
@@ -4749,6 +5214,7 @@ export default function ProjectsGeneric() {
         { wch: 8 },
         { wch: 14 },
         { wch: 16 },
+        { wch: 12 },
         { wch: 12 },
       ];
       XLSX.utils.book_append_sheet(wb, varWs, "Variations");
@@ -5055,6 +5521,16 @@ export default function ProjectsGeneric() {
     [rowsShown],
   );
 
+  // What the grid needs to tell a first run apart from a search that matched
+  // nothing, and both apart from a list that never loaded. The product and its
+  // host come from the same table the gallery uses, so the two screens name
+  // them identically; a tool with no entry falls back to wording that names no
+  // product rather than guessing one.
+  const gallerySource = React.useMemo(() => {
+    const base = normTool(tool).replace(/-materials?$/, "");
+    return SOURCES[base === "revitmep" ? "mep" : base] || null;
+  }, [tool]);
+
   // Explorer selection helpers
   function toggleSelect(id) {
     if (!id) return;
@@ -5078,6 +5554,12 @@ export default function ProjectsGeneric() {
   }
 
   const title = TITLES[tool] || "Projects";
+
+  // There is no Materials page. A material & labour schedule is a project's
+  // Budget; one opened directly (?project=) still loads here from its own
+  // storage, but the bare materials list forwards to the product's list.
+  const materialsTool = /-materials?$/.test(toolNorm);
+  const materialsListOnly = materialsTool && !searchParams.get("project");
 
   // Persist procurement marking from the Budget tab. Isolated PUT that only
   // updates budgetItems[] — never touches the BoQ/valuation save path.
@@ -5103,350 +5585,171 @@ export default function ProjectsGeneric() {
   const checkboxCls =
     "h-4 w-4 accent-blue-600 border-0 outline-none ring-0 focus:ring-0 focus:outline-none";
 
+  if (materialsListOnly) {
+    const base = toolNorm.replace(/-materials?$/, "");
+    return <Navigate to={`/projects/${base === "revitmep" ? "mep" : base}`} replace />;
+  }
+
   return (
-    <div className="min-h-screen p-4 md:p-6">
-      <div className={`mx-auto flex flex-col gap-4 ${sel ? "max-w-[1700px]" : "max-w-7xl md:flex-row"}`}>
-        {/* SIDEBAR, vertical while browsing; collapses to a slim
-            horizontal bar once a project is open so the data tables get
-            the full width of the screen. */}
-        <aside className={sel ? "w-full" : "md:w-[260px]"}>
-          {sel ? (
-            <div className="space-y-3">
-              <div className="card !p-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue">
-                    <SidebarIcon className="text-base" />
-                  </div>
-                  <div className="min-w-0 leading-tight">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
-                      {sidebarMeta.app}
-                    </div>
-                    <div className="truncate text-sm font-bold text-slate-900 dark:text-white">
-                      {sidebarMeta.section}
-                    </div>
-                  </div>
-                </div>
-
-                {showRevitToggle && (
-                  <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-adlm-dark-border dark:bg-white/5">
-                    <Link
-                      to={`/projects/${toolFamily}`}
-                      className={[
-                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                        toolNorm === toolFamily
-                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      <FaFolder className="text-[12px]" />
-                      Takeoffs
-                    </Link>
-                    <Link
-                      to={`/projects/${toolFamily}-materials`}
-                      className={[
-                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                        isMaterialsTool(tool)
-                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      <FaCubes className="text-[12px]" />
-                      Materials
-                    </Link>
-                  </div>
-                )}
-
-                <div className="ml-auto flex items-center gap-2">
-                  <Link
-                    to={DASHBOARD_PATH}
-                    title="Back to dashboard"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
-                  >
-                    <FaThLarge className="text-[12px]" />
-                    <span className="hidden sm:inline">Dashboard</span>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => load({ keepSelection: true })}
-                    disabled={bulkBusy}
-                    title="Refresh projects"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
-                  >
-                    <FaSyncAlt className={`text-[12px] ${bulkBusy ? "animate-spin" : ""}`} />
-                    <span className="hidden sm:inline">{bulkBusy ? "Refreshing…" : "Refresh"}</span>
-                  </button>
-                  {canBoqImport &&
-                    sel?.origin === BOQ_IMPORT_ORIGIN &&
-                    sel?._access?.canEdit !== false && (
-                      <>
-                        <input
-                          ref={boqReimportInputRef}
-                          type="file"
-                          accept=".xlsx,.xlsm"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) reimportBoq(f);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => boqReimportInputRef.current?.click()}
-                          disabled={boqImportBusy}
-                          title="Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
-                          className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                        >
-                          <FaFileExcel className="text-[12px]" />
-                          <span className="hidden sm:inline">
-                            {boqImportBusy ? "Updating…" : "Update from Excel"}
-                          </span>
-                        </button>
-                      </>
-                    )}
-                </div>
-              </div>
-
-              {err && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {err}
-                </div>
-              )}
-              {notice && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  {notice}
-                </div>
-              )}
-            </div>
-          ) : (
-          <div className="card !p-0 overflow-hidden md:sticky md:top-6">
-            {/* Identity band, tells the user exactly which tool & mode
-                they're in, so the rest of the sidebar is purely navigation. */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 p-4 text-white">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl"
-              />
-              <div className="relative flex items-start gap-3">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
-                  <SidebarIcon className="text-lg text-white" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-100/90">
-                    {sidebarMeta.app}
-                  </div>
-                  <div className="truncate text-base font-bold leading-tight">
-                    {sidebarMeta.section}
-                  </div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-blue-100/80">
-                    {sidebarMeta.hint}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 p-3">
-              {/* Group 1, Mode: switch between Takeoffs and Materials for
-                  the same tool. A segmented control reads as "pick one",
-                  unlike the old stack of identical bordered links. */}
-              {showRevitToggle && (
-                <div>
-                  <div className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
-                    Mode
-                  </div>
-                  <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-adlm-dark-border dark:bg-white/5">
-                    <Link
-                      to={`/projects/${toolFamily}`}
-                      className={[
-                        "inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold transition",
-                        toolNorm === toolFamily
-                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      <FaFolder className="text-[12px]" />
-                      Takeoffs
-                    </Link>
-                    <Link
-                      to={`/projects/${toolFamily}-materials`}
-                      className={[
-                        "inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold transition",
-                        isMaterialsTool(tool)
-                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      <FaCubes className="text-[12px]" />
-                      Materials
-                    </Link>
-                  </div>
-                </div>
-              )}
-
-              {/* Group 2, Navigate: leave the tool or refresh the list.
-                  "Back to projects" lives on the project header itself,
-                  so it isn't duplicated here. */}
-              <div>
-                <div className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
-                  Navigate
-                </div>
-                <div className="space-y-1.5">
-                  <Link
-                    to={DASHBOARD_PATH}
-                    className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                    title="Back to dashboard"
-                  >
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                      <FaThLarge className="text-[12px]" />
-                    </span>
-                    Dashboard
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => load({ keepSelection: true })}
-                    disabled={bulkBusy}
-                    title="Refresh projects"
-                    className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                  >
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                      <FaSyncAlt className={`text-[12px] ${bulkBusy ? "animate-spin" : ""}`} />
-                    </span>
-                    {bulkBusy ? "Refreshing…" : "Refresh projects"}
-                  </button>
-                  {toolNorm === "revit" && (
-                    <Link
-                      to="/pm-tracker"
-                      title="PM Tracker, standalone project schedules (QUIV)"
-                      className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                    >
-                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                        <FaTasks className="text-[12px]" />
-                      </span>
-                      <span className="flex-1">PM Tracker</span>
-                      <span className="rounded-full bg-adlm-blue-700/10 px-1.5 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-700/20 dark:text-adlm-blue-300">
-                        QUIV
-                      </span>
-                    </Link>
-                  )}
-                  {canBoqImport && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBoqImportErr("");
-                        setBoqImportOpen(true);
-                      }}
-                      title="Create a project from an Excel Bill of Quantities, the material & labour schedule is built for you"
-                      className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                    >
-                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
-                        <FaFileExcel className="text-[12px]" />
-                      </span>
-                      <span className="flex-1 text-left">Import Excel BoQ</span>
-                      <span className="rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                        {boqImportBadge}
-                      </span>
-                    </button>
-                  )}
-                  {/* Portfolio Dashboard sits last, it's the cross-product
-                      roll-up you leave the tool for, so it anchors the group. */}
-                  <Link
-                    to="/portfolio-dashboard"
-                    title="Portfolio dashboard, all projects"
-                    className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                  >
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                      <FaChartBar className="text-[12px]" />
-                    </span>
-                    Portfolio Dashboard
-                  </Link>
-                </div>
-              </div>
-
-              {err && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {err}
-                </div>
-              )}
-              {notice && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  {notice}
-                </div>
-              )}
-            </div>
+    <div>
+      <div>
+        {/* His work-surface head. The rail already carries the app's
+            navigation, so the old identity sidebar folds into this: the tool
+            and mode in the heading, every action it held on the right. */}
+        <div className="wk-head">
+          <div>
+            <h1>{sel ? sel?.name || "Untitled project" : title}</h1>
+            <p className="wk-ref">
+              {sel
+                ? `${title}${sel?.origin === BOQ_IMPORT_ORIGIN ? " · imported from Excel" : ""}${materialsTool ? " · material & labour schedule" : ""}`
+                : [sidebarMeta.app, sidebarMeta.hint].filter(Boolean).join(" · ")}
+            </p>
           </div>
-          )}
-        </aside>
-
-        {/* MAIN */}
-        <main className="flex-1">
-          <div className="card">
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div className="min-w-0">
-                {sel ? (
-                  <>
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
-                      <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-adlm-orange" />
-                      {title}
-                    </div>
-                    <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                      <span aria-hidden="true" className="h-7 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
-                      <span className="truncate">{sel?.name || "Untitled project"}</span>
-                    </h1>
-                  </>
-                ) : (
-                  <>
-                    <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                      <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
-                      <span className="truncate">{title}</span>
-                    </h1>
-                    <div className="text-xs text-slate-500 dark:text-adlm-dark-muted mt-1">
-                      Select a project folder to open
-                    </div>
-                  </>
-                )}
+          <div className="wk-acts" style={{ flexWrap: "wrap" }}>
+            {showRevitToggle && (
+              <div className="wk-loc-sw" role="group" aria-label="Mode">
+                <button
+                  type="button"
+                  className={toolNorm === toolFamily ? "on" : ""}
+                  onClick={() => navigate(`/projects/${toolFamily}`)}
+                >
+                  Takeoffs
+                </button>
+                <button
+                  type="button"
+                  className={isMaterialsTool(tool) ? "on" : ""}
+                  onClick={() => navigate(`/projects/${toolFamily}-materials`)}
+                >
+                  Materials
+                </button>
               </div>
-
-              {/* Search projects + Add shared project (always visible) */}
-              {!sel && (
-                <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center md:w-auto">
-                  <div className="w-full md:w-[420px]">
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border px-3 py-2 bg-white dark:bg-adlm-dark-panel shadow-depth focus-within:ring-2 focus-within:ring-adlm-blue-700/40 transition">
-                      <FaSearch className="text-slate-400" />
-                      <input
-                        className="w-full outline-none text-sm bg-transparent"
-                        placeholder="Search projects..."
-                        value={projectQuery}
-                        onChange={(e) => setProjectQuery(e.target.value)}
-                      />
-                      {!!projectQuery && (
-                        <button
-                          type="button"
-                          className="text-slate-500 hover:text-slate-700"
-                          onClick={() => setProjectQuery("")}
-                          title="Clear"
-                        >
-                          <FaTimes />
-                        </button>
-                      )}
-                    </div>
-                  </div>
+            )}
+            <Link
+              to={DASHBOARD_PATH}
+              title="Back to dashboard"
+              className="ds-btn ds-btn-sm btn-o"
+            >
+              Dashboard
+            </Link>
+            <button
+              type="button"
+              onClick={() => load({ keepSelection: true })}
+              disabled={bulkBusy}
+              title="Refresh projects"
+              className="ds-btn ds-btn-sm btn-o"
+            >
+              {bulkBusy ? "Refreshing…" : sel ? "Refresh" : "Refresh projects"}
+            </button>
+            {!sel && toolNorm === "revit" && (
+              <Link
+                to="/pm-tracker"
+                title="PM Tracker, standalone project schedules (QUIV)"
+                className="ds-btn ds-btn-sm btn-o"
+              >
+                PM Tracker · QUIV
+              </Link>
+            )}
+            {!sel && canBoqImport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBoqImportErr("");
+                  setBoqImportOpen(true);
+                }}
+                title="Create a project from an Excel Bill of Quantities, the material & labour schedule is built for you"
+                className="ds-btn ds-btn-sm btn-o"
+              >
+                Import Excel BoQ · {boqImportBadge}
+              </button>
+            )}
+            {!sel && (
+              <Link
+                to="/portfolio-dashboard"
+                title="Portfolio dashboard, all projects"
+                className="ds-btn ds-btn-sm btn-o"
+              >
+                Portfolio Dashboard
+              </Link>
+            )}
+            {sel &&
+              canBoqImport &&
+              sel?.origin === BOQ_IMPORT_ORIGIN &&
+              sel?._access?.canEdit !== false && (
+                <>
+                  <input
+                    ref={boqReimportInputRef}
+                    type="file"
+                    accept=".xlsx,.xlsm"
+                    hidden
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) reimportBoq(f);
+                    }}
+                  />
                   <button
                     type="button"
-                    onClick={() => {
-                      setClaimErr("");
-                      setClaimUpsell(null);
-                      setClaimCode("");
-                      setClaimOpen(true);
-                    }}
-                    title="Add a project a colleague shared with you (enter the share code)"
-                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-adlm-blue-700 shadow-depth transition hover:-translate-y-0.5 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                    onClick={() => boqReimportInputRef.current?.click()}
+                    // A re-import REPLACES the bill with the workbook's own
+                    // rates, so the server refuses it for a collaborator who
+                    // cannot see the prices (RATES_MASKED). Same rule here.
+                    disabled={boqImportBusy || ratesHidden}
+                    title={
+                      ratesHidden
+                        ? "Rates are hidden on this shared project, so you cannot re-import its bill."
+                        : "Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
+                    }
+                    className="ds-btn ds-btn-sm btn-o"
                   >
-                    <FaUserPlus /> Add shared project
+                    {boqImportBusy ? "Updating…" : "Update from Excel"}
                   </button>
-                </div>
+                </>
               )}
-            </div>
+          </div>
+        </div>
 
+        {err && (
+          <p className="mk-note" role="alert" style={{ ...NOTE_WARN, marginBottom: 16 }}>
+            {err}
+          </p>
+        )}
+        {notice && (
+          <p className="mk-note" role="status" style={{ marginBottom: 16 }}>
+            {notice}
+          </p>
+        )}
+
+        {!sel && (
+          <div className="wk-bar">
+            <label className="wk-find">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#hi-search" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search projects..."
+                aria-label="Search projects"
+                autoComplete="off"
+                value={projectQuery}
+                onChange={(e) => setProjectQuery(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setClaimErr("");
+                setClaimUpsell(null);
+                setClaimCode("");
+                setClaimOpen(true);
+              }}
+              title="Add a project a colleague shared with you (enter the share code)"
+              className="ds-btn ds-btn-sm btn-o"
+            >
+              Add shared project
+            </button>
+          </div>
+        )}
+
+        <main>
             {!sel ? (
               <ProjectExplorerGrid
                 rowsShown={rowsShown}
@@ -5476,6 +5779,12 @@ export default function ProjectsGeneric() {
                 sectionSummary={sectionSummary}
                 statusPastLabel={statusPastLabel}
                 storageInfo={storageInfo}
+                loadFailed={listFailed}
+                searching={!!projectQ}
+                totalCount={rows.length}
+                sourceName={gallerySource?.name || ""}
+                hostName={gallerySource?.host || ""}
+                isMaterials={showMaterials}
               />
             ) : (
               <ProjectOpenView
@@ -5493,6 +5802,7 @@ export default function ProjectsGeneric() {
                 projectName={sel?.name || "Project"}
                 selectedId={selectedId}
                 showMaterials={showMaterials}
+                materialsSchedule={materialsTool}
                 statusLabel={statusLabel}
                 statusPastLabel={statusPastLabel}
                 checkboxCls={checkboxCls}
@@ -5506,7 +5816,9 @@ export default function ProjectsGeneric() {
                 autoFillBoqRates={autoFillBoqRates}
                 autoFillBoqBusy={autoFillBoqBusy}
                 canRateGenBoq={!showMaterials && canRateGen}
-                onSyncBoqRates={() => sel && syncBoqRates(sel)}
+                onSyncBoqRates={() =>
+                  sel && syncBoqRates(sel, { explicit: true })
+                }
                 onToggleAutoFillBoq={toggleAutoFillBoq}
                 getBoqCandidatesForItem={getBoqCandidatesForItem}
                 onPickBoqCandidate={handlePickBoqCandidate}
@@ -5645,6 +5957,7 @@ export default function ProjectsGeneric() {
                 onSearchBudgetRates={searchMaterialRates}
                 budgetRateGenReady={canRateGen}
                 budgetDrivenCodes={budgetDrivenCodes}
+                rateNotes={rateNotes}
                 onAddCategory={handleAddCategory}
                 onRemoveCategory={handleRemoveCategory}
                 onAddTrade={handleAddTrade}
@@ -5690,12 +6003,17 @@ export default function ProjectsGeneric() {
                 onDeleteModel={handleDeleteModel}
                 provisionalSums={provisionalSums}
                 onAddProvisionalSum={handleAddProvisionalSum}
+                onRestoreProvisionalSum={handleRestoreProvisionalSum}
+                onMarkTendered={handleMarkTendered}
+                measuredAmount={grossAmount}
                 onUpdateProvisionalSum={handleUpdateProvisionalSum}
                 onRemoveProvisionalSum={handleRemoveProvisionalSum}
                 variations={variations}
                 onAddVariation={handleAddVariation}
                 onUpdateVariation={handleUpdateVariation}
                 onRemoveVariation={handleRemoveVariation}
+                onRaiseVariation={handleRaiseVariation}
+                onDecideVariation={handleDecideVariation}
                 preliminaryItems={preliminaryItems}
                 onUpdatePreliminaryItem={handleUpdatePreliminaryItem}
                 onAddPreliminaryItem={handleAddPreliminaryItem}
@@ -5732,190 +6050,124 @@ export default function ProjectsGeneric() {
                 onDelete={() => delProject(selectedId, sel?.name)}
               />
             )}
-          </div>
         </main>
       </div>
 
-      {/* Add-shared-project (claim by code) modal */}
-      {claimOpen ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-            onClick={() => !claimBusy && setClaimOpen(false)}
-          />
-          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-adlm-dark-border dark:bg-adlm-dark-bg">
-            <div className="flex items-center justify-between bg-gradient-to-r from-adlm-blue-700 to-adlm-blue-600 px-5 py-4 text-white">
-              <div className="flex items-center gap-2.5">
-                <FaUserPlus />
-                <div className="text-sm font-bold">Add a shared project</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setClaimOpen(false)}
-                className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
-                aria-label="Close"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="space-y-3 p-5">
-              <p className="text-xs text-slate-500 dark:text-adlm-dark-muted">
-                Enter the share code a colleague gave you. You'll need the
-                matching plugin subscription to open the project.
-              </p>
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-adlm-dark-border">
-                <FaKey className="text-slate-400" />
-                <input
-                  autoFocus
-                  className="w-full bg-transparent font-mono text-sm tracking-wider outline-none dark:text-adlm-dark-text"
-                  placeholder="e.g. ABCDE-FGHIJ"
-                  value={claimCode}
-                  onChange={(e) => setClaimCode(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") claimSharedProject();
-                  }}
-                />
-              </div>
-
-              {claimErr ? (
-                <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300">
-                  {claimErr}
-                  {claimUpsell ? (
-                    <div className="mt-2">
-                      <Link
-                        to={`/product/${claimUpsell.requiredProductKey}`}
-                        onClick={() => setClaimOpen(false)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-orange px-3 py-1.5 text-xs font-bold text-white shadow-glow-orange"
-                      >
-                        Get {claimUpsell.productName}
-                      </Link>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setClaimOpen(false)}
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={claimSharedProject}
-                  disabled={claimBusy}
-                  className="btn-3d inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
-                >
-                  {claimBusy ? "Adding…" : "Add project"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ── Import Excel BoQ modal ── */}
-      {boqImportOpen ? (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-          onClick={() => {
-            if (!boqImportBusy) setBoqImportOpen(false);
+      {/* Add a project a colleague shared (claim by code) */}
+      <WkModal
+        open={claimOpen}
+        title="Add a shared project"
+        sub="Enter the share code a colleague gave you. You'll need the matching plugin subscription to open the project."
+        busy={claimBusy}
+        onClose={() => setClaimOpen(false)}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            claimSharedProject();
           }}
         >
-          <div
-            className="card w-full max-w-md !p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
-                  <FaFileExcel className="text-emerald-600" />
-                  Import Excel BoQ
-                </h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
-                  Creates a {boqImportBadge} project from an Excel Bill of
-                  Quantities. Categories, planned-vs-actual columns and
-                  optional Material &amp; Labour schedules are read from the
-                  workbook. Where the workbook has no schedule, one is built
-                  for you: cement, sand, granite, blocks, formwork, rebar and
-                  labour, priced from your Material Constants and RateGen: 
-                  and it stays live across the Dashboard, BoQ, Budget and
-                  Valuation tabs.
-                </p>
-                <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
-                  Upload your own bill, not one exported from here. An ADLM
-                  export is refused: importing it would spend a project slot on
-                  a duplicate of a bill you already have. To update quantities,
-                  re-measure at the source and sync, or edit the bill in the
-                  project itself.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="text-slate-400 transition hover:text-slate-600"
-                onClick={() => setBoqImportOpen(false)}
-                title="Close"
-              >
-                <FaTimes />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <label className="block text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
-                Project name (optional)
-                <input
-                  className="input mt-1 w-full"
-                  placeholder="Defaults to the file name"
-                  value={boqImportName}
-                  onChange={(e) => setBoqImportName(e.target.value)}
-                />
-              </label>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
-                Excel workbook (.xlsx)
-                <input
-                  type="file"
-                  accept=".xlsx,.xlsm"
-                  className="input mt-1 w-full"
-                  onChange={(e) => setBoqImportFile(e.target.files?.[0] || null)}
-                />
-              </label>
-              <button
-                type="button"
-                className="text-xs font-semibold text-adlm-blue-700 hover:underline dark:text-adlm-blue-300"
-                onClick={downloadBoqTemplate}
-              >
-                Download the import template
-              </button>
-              {boqImportErr ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {boqImportErr}
-                </div>
+          <label className="wk-f">
+            <span>Share code</span>
+            <input
+              autoFocus
+              placeholder="e.g. ABCDE-FGHIJ"
+              autoComplete="off"
+              spellCheck={false}
+              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", letterSpacing: ".08em" }}
+              value={claimCode}
+              onChange={(e) => setClaimCode(e.target.value)}
+            />
+          </label>
+          {claimErr ? (
+            <p className="mk-note" role="alert" style={{ ...NOTE_WARN, ...NOTE_FULL }}>
+              {claimErr}
+              {claimUpsell ? (
+                <>
+                  <br />
+                  <Link
+                    to={`/product/${claimUpsell.requiredProductKey}`}
+                    onClick={() => setClaimOpen(false)}
+                    className="ds-btn btn-p ds-btn-sm"
+                    style={{ marginTop: 10 }}
+                  >
+                    Get {claimUpsell.productName}
+                  </Link>
+                </>
               ) : null}
-            </div>
+            </p>
+          ) : null}
+          <button type="submit" className="wk-modal-go" disabled={claimBusy}>
+            {claimBusy ? "Adding…" : "Add project"}
+          </button>
+        </form>
+      </WkModal>
 
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setBoqImportOpen(false)}
-                disabled={boqImportBusy}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitBoqImport}
-                disabled={boqImportBusy || !boqImportFile}
-                className="btn-3d inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
-              >
-                {boqImportBusy ? "Importing…" : "Import project"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* Import Excel BoQ */}
+      <WkModal
+        open={boqImportOpen}
+        title="Import Excel BoQ"
+        busy={boqImportBusy}
+        onClose={() => setBoqImportOpen(false)}
+      >
+        <p>
+          Creates a {boqImportBadge} project from an Excel Bill of Quantities.
+          Categories, planned-vs-actual columns and optional Material &amp; Labour
+          schedules are read from the workbook. Where the workbook has no schedule, one
+          is built for you: cement, sand, granite, blocks, formwork, rebar and labour,
+          priced from your Material Constants and RateGen, and it stays live across the
+          Dashboard, BoQ, Budget and Valuation tabs.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!boqImportBusy && boqImportFile) submitBoqImport();
+          }}
+        >
+          <p className="mk-note" style={{ ...NOTE_WARN, ...NOTE_FULL }}>
+            Upload your own bill, not one exported from here. An ADLM export is refused:
+            importing it would spend a project slot on a duplicate of a bill you already
+            have. To update quantities, re-measure at the source and sync, or edit the
+            bill in the project itself.
+          </p>
+          <label className="wk-f">
+            <span>Project name (optional)</span>
+            <input
+              placeholder="Defaults to the file name"
+              value={boqImportName}
+              onChange={(e) => setBoqImportName(e.target.value)}
+            />
+          </label>
+          <label className="wk-f">
+            <span>Excel workbook (.xlsx)</span>
+            <input
+              type="file"
+              accept=".xlsx,.xlsm"
+              onChange={(e) => setBoqImportFile(e.target.files?.[0] || null)}
+            />
+          </label>
+          <button
+            type="button"
+            className="ds-btn btn-o ds-btn-sm"
+            style={{ gridColumn: "1 / -1", justifySelf: "start" }}
+            onClick={downloadBoqTemplate}
+          >
+            Download the import template
+          </button>
+          {boqImportErr ? (
+            <p className="mk-note" role="alert" style={{ ...NOTE_WARN, ...NOTE_FULL }}>
+              {boqImportErr}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            className="wk-modal-go"
+            disabled={boqImportBusy || !boqImportFile}
+          >
+            {boqImportBusy ? "Importing…" : "Import project"}
+          </button>
+        </form>
+      </WkModal>
     </div>
   );
 }

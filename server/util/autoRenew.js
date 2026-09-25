@@ -20,6 +20,7 @@
 //     to renew manually. Max RENEW_MAX_ATTEMPTS attempts per expiry cycle,
 //     at most one per day → "retry max 2x over 3 days" with daily cron.
 import crypto from "crypto";
+import { paystackSecret, paystackKeys, cardAccount } from "./paystackKeys.js";
 import mongoose from "mongoose";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
@@ -30,7 +31,8 @@ import { applyEntitlementsFromPurchase } from "./applyEntitlements.js";
 import { autoEnrollFromPurchase } from "./autoEnroll.js";
 import { toMoney, getEffectivePrices, computeRecurring } from "./pricing.js";
 
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+// R22: keys from util/paystackKeys.js. A renewal charges the card through the
+// account it was saved on, whichever account new payments use.
 
 const RENEW_WINDOW_DAYS = Math.max(
   parseInt(process.env.RENEW_WINDOW_DAYS || "3", 10) || 3,
@@ -209,7 +211,6 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
     periods,
     seats,
     currency: "NGN",
-    fx: 1,
   });
   if (!(recurring > 0)) {
     return { status: "skipped", reason: "no-price" };
@@ -269,7 +270,7 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET}`,
+          Authorization: `Bearer ${paystackSecret(process.env, cardAccount(user.paymentMethod))}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -350,7 +351,7 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
 /* ---------------- main entry ---------------- */
 
 export async function runAutoRenewals({ dryRun = false, limit = 0 } = {}) {
-  if (!PAYSTACK_SECRET) {
+  if (!paystackKeys().length) {
     return { ok: false, skipped: true, reason: "paystack-not-configured" };
   }
 

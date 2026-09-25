@@ -1,5 +1,19 @@
+// The project Dashboard tab, in his work-surface pieces.
+//
+// Every figure the old dashboard showed is still here, regrouped into what he
+// already uses: two .dsh-stats rows of four tiles, a .wk-panel with his
+// .dsh-meter for progress (he has no ring or donut anywhere, so the progress
+// ring became his meter), and a .wk-panel around the planned-vs-actual chart.
+//
+//   row one   planned total · completed to date · outstanding · progress
+//   row two   actual tracked · actual variance · actual coverage · latest update
+//             (the qty / rate override counts ride in the coverage sub-line)
+//
+// Inputs and their meaning are unchanged; this file only lays them out.
+
 import React from "react";
 import ProjectDashboardChart from "./ProjectDashboardChart.jsx";
+import { projectTotals } from "./lib/projectTotals.js";
 
 function safeNum(value) {
   const num = Number(value);
@@ -24,116 +38,29 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function MetricCard({ label, value, helper, format = "money", tone = "default" }) {
-  const displayValue =
-    format === "percent"
-      ? `${safeNum(value).toFixed(1)}%`
-      : format === "text"
-        ? String(value || "-")
-        : money(value);
+// His tiles are four fixed columns, sized for short figures. A full naira
+// figure at his tile size is ~210px, so the tiles wrap at a width that fits one.
+const FIT_TILES = { marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" };
 
-  const toneClass =
-    tone === "positive"
-      ? "text-emerald-700 dark:text-emerald-400"
-      : tone === "warning"
-        ? "text-amber-700 dark:text-amber-400"
-        : tone === "danger"
-          ? "text-rose-700 dark:text-rose-400"
-          : "text-slate-900 dark:text-white";
-
+function Tile({ label, value, sub, tone }) {
   return (
-    <div className="group relative spotlight rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-4 transition-shadow hover:shadow-depth-lg">
-      <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">{label}</div>
-      <div className={`mt-1 text-xl font-bold ${toneClass}`}>
-        {displayValue}
-      </div>
-      <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-dim">{helper}</div>
+    <div className={`dsh-stat${tone ? ` ${tone}` : ""}`}>
+      <span className="k">{label}</span>
+      <b>{value}</b>
+      <span className="ds-sub">{sub}</span>
     </div>
   );
 }
 
-function ProgressOverviewCard({
-  progressCount = 0,
-  progressPercent = 0,
-  progressTotal = 0,
-  statusLabel = "Completed",
-}) {
-  const normalizedProgress = Math.max(0, Math.min(100, safeNum(progressPercent)));
-  const remainingCount = Math.max(0, safeNum(progressTotal) - safeNum(progressCount));
-  const chartStyle = {
-    background:
-      normalizedProgress > 0
-        ? `conic-gradient(#005be3 0 ${normalizedProgress}%, rgba(148,163,184,0.35) ${normalizedProgress}% 100%)`
-        : "conic-gradient(rgba(148,163,184,0.28) 0 100%)",
-  };
-
+function CountRow({ label, sub, value }) {
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
-      {/* Header description sits above the chart at all widths now, 
-          previously it was inline at lg+ which ate horizontal space and
-          made the 3 stat cards crammed under the donut. */}
-      <div className="mb-4">
-        <div className="font-semibold text-slate-900 dark:text-white">Progress overview</div>
-        <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
-          Delivery progress based on the items of work marked {statusLabel.toLowerCase()}.
-        </div>
-      </div>
-
-      {/* Side-by-side donut + cards only at xl+ (≥1280px). Below that the
-          donut sits above the stat cards so each card has the full width
-          to render its label and helper without crushing the text. */}
-      <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)] xl:items-center">
-        <div className="mx-auto w-full max-w-[220px]">
-          <div className="relative mx-auto h-48 w-48 rounded-full" style={chartStyle}>
-            <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white dark:bg-adlm-dark-panel px-4 text-center shadow-inner">
-              <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">Progress</div>
-              <div className="mt-1 text-3xl font-semibold text-slate-900 dark:text-white">
-                {normalizedProgress.toFixed(1)}%
-              </div>
-              <div className="mt-1 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-                {progressCount} of {progressTotal} items of work
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-600">
-            <span className="inline-flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-adlm-blue-700" />
-              {statusLabel}
-            </span>
-            <span className="inline-flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-slate-300" />
-              Remaining
-            </span>
-          </div>
-        </div>
-
-        {/* Stat-card grid:
-             • mobile  → 1 column (stacked)
-             • sm-lg   → 3 columns (plenty of width)
-             • xl+     → 3 columns next to donut */}
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
-            <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">{statusLabel} work items</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{progressCount}</div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
-              Items of work {statusLabel.toLowerCase()} to date
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
-            <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">Remaining work items</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{remainingCount}</div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">Items of work outstanding</div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
-            <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">Total work items</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{progressTotal}</div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">All items of work in the project</div>
-          </div>
-        </div>
-      </div>
+    <div className="wk-useline">
+      <span className="p">
+        {label}
+        <em>{sub}</em>
+      </span>
+      <span className="q" />
+      <span className="v">{safeNum(value).toLocaleString()}</span>
     </div>
   );
 }
@@ -155,12 +82,43 @@ export default function ProjectDashboardSummary({
   progressCount = 0,
   progressPercent = 0,
   progressTotal = 0,
-  remainingAmount = 0,
   statusLabel = "Completed",
   statusPastLabel = "Completed to date",
   valuedAmount = 0,
   linkedSummaries = [],
+  // S18 bill (PR2-08): the pieces of the estimated total. `grossAmount` here
+  // is the project's whole scope as the tiles below it use it; the headline
+  // tile needs the grand summary instead, which is what the Bill shows.
+  measuredAmount = null,
+  provisionalSums = [],
+  variations = [],
+  preliminaryPercent = 0,
+  contingencyPercent = 0,
+  taxPercent = 0,
 }) {
+  const totals = React.useMemo(
+    () =>
+      projectTotals({
+        measured: measuredAmount == null ? grossAmount : measuredAmount,
+        provisionalSums,
+        variations,
+        preliminaryPercent,
+        contingencyPercent,
+        taxPercent,
+        linkedSummaries,
+      }),
+    [
+      measuredAmount,
+      grossAmount,
+      provisionalSums,
+      variations,
+      preliminaryPercent,
+      contingencyPercent,
+      taxPercent,
+      linkedSummaries,
+    ],
+  );
+
   const linkedGrandTotal = React.useMemo(
     () =>
       (Array.isArray(linkedSummaries) ? linkedSummaries : []).reduce(
@@ -169,117 +127,171 @@ export default function ProjectDashboardSummary({
       ),
     [linkedSummaries],
   );
+
+  // Overrun reads orange, a saving reads in his light-blue palette.
   const varianceTone =
     actualCoverageCount === 0
-      ? "default"
+      ? ""
       : actualVarianceAmount > 0
-        ? "warning"
+        ? "warn"
         : actualVarianceAmount < 0
-          ? "positive"
-          : "default";
+          ? "pal-on"
+          : "";
+
+  // ── The three headline money tiles, from one result (S18 review) ────────
+  // A reader adds these up without being asked, so they have to add up. The
+  // headline read the shared cascade while "Outstanding" was still derived the
+  // old way — the whole scope less what had been earned, which left out the
+  // contingency and the VAT — so the row did not reconcile. Outstanding is now
+  // simply what is left of the estimated total after what has been earned.
+  //
+  // Linked services stay out of all three, as they do in the Bill's Summary:
+  // that project carries its own cascade and is valued on its own
+  // certificates, so it is reported beside them instead of folded in.
+  const estimatedTotal = totals.total;
+  const completedToDate = safeNum(valuedAmount);
+  const outstanding = estimatedTotal - completedToDate;
+
+  const pct = Math.max(0, Math.min(100, safeNum(progressPercent)));
+  const remainingCount = Math.max(0, safeNum(progressTotal) - safeNum(progressCount));
+  const status = statusLabel.toLowerCase();
 
   return (
-    <div className="space-y-4">
-      <ProgressOverviewCard
-        progressCount={progressCount}
-        progressPercent={progressPercent}
-        progressTotal={progressTotal}
-        statusLabel={statusLabel}
-      />
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <MetricCard
-          label="Planned total"
-          value={grossAmount + linkedGrandTotal}
-          helper={
+    <div style={{ display: "grid", gap: 18 }}>
+      <div className="dsh-stats" style={FIT_TILES}>
+        {/* One figure, one formula. This tile used to say "Full project
+          value (measured + PC + prelim + variations)" over a number that was
+          neither — it left out contingency and VAT, so it never agreed with
+          the Bill, the final account or the contract sum. It now reads the
+          shared totals module, which is what every other screen reads. */}
+        <Tile
+          label="Estimated total"
+          value={money(estimatedTotal)}
+          sub={
             linkedGrandTotal > 0
-              ? `Own works + linked services (₦${grossAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })} own + ₦${linkedGrandTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })} linked)`
-              : "Full project value (measured + PC + prelim + variations)"
+              ? `Measured work, sums, prelims, contingency, VAT and approved variations · plus ${money(linkedGrandTotal)} of linked services, valued on their own project`
+              : "Measured work, sums, prelims, contingency, VAT and approved variations"
           }
         />
-        <MetricCard
+        <Tile
           label={statusPastLabel}
-          value={valuedAmount}
-          helper={`${statusLabel} items + executed PC sums, prelims & variations`}
+          value={money(completedToDate)}
+          sub={`${statusLabel} items + executed PC sums, prelims & variations`}
         />
-        <MetricCard
+        <Tile
           label="Outstanding balance"
-          value={remainingAmount + linkedGrandTotal}
-          helper="Project value still to earn or claim"
+          value={money(outstanding)}
+          sub={
+            linkedGrandTotal > 0
+              ? `The estimated total less what has been earned · ${money(linkedGrandTotal)} of linked services is claimed on its own project`
+              : "The estimated total less what has been earned"
+          }
         />
-        <MetricCard
+        <Tile
+          label="Progress"
+          value={`${pct.toFixed(1)}%`}
+          sub={`${progressCount} of ${progressTotal} work items ${status}`}
+        />
+      </div>
+
+      <section className="wk-panel">
+        <div className="wk-ph">
+          <h2>Progress overview</h2>
+          <span className="wk-locnote">
+            Delivery progress based on the items of work marked {status}.
+          </span>
+        </div>
+        <div style={{ padding: "18px 20px 4px" }}>
+          <div className="dsh-meter">
+            <div className="row">
+              <div className="lab">
+                <span>
+                  {statusLabel} · {progressCount} of {progressTotal} items of work
+                </span>
+                <b>{pct.toFixed(1)}%</b>
+              </div>
+              <div
+                className="track"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(pct)}
+                aria-label={`${statusLabel} progress`}
+              >
+                <i className={pct >= 100 ? "full" : undefined} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="wk-use">
+          <CountRow
+            label={`${statusLabel} work items`}
+            sub={`Items of work ${status} to date`}
+            value={progressCount}
+          />
+          <CountRow
+            label="Remaining work items"
+            sub="Items of work outstanding"
+            value={remainingCount}
+          />
+          <CountRow
+            label="Total work items"
+            sub="All items of work in the project"
+            value={progressTotal}
+          />
+        </div>
+      </section>
+
+      <div className="dsh-stats" style={FIT_TILES}>
+        <Tile
           label="Actual tracked value"
-          value={actualTrackedAmount}
-          helper={`${actualCoverageCount} work item${actualCoverageCount === 1 ? "" : "s"} with actual data`}
+          value={money(actualTrackedAmount)}
+          sub={`${actualCoverageCount} work item${actualCoverageCount === 1 ? "" : "s"} with actual data`}
         />
-        <MetricCard
+        <Tile
           label="Actual variance"
-          value={actualVarianceAmount}
-          helper={
+          value={money(actualVarianceAmount)}
+          tone={varianceTone}
+          sub={
             actualCoverageCount
               ? `${actualVariancePercent.toFixed(1)}% against planned value for tracked work items`
               : "Add actual qty or rate to start comparing against plan"
           }
-          tone={varianceTone}
         />
-        <MetricCard
-          label="Progress"
-          value={progressPercent}
-          format="percent"
-          helper={`${progressCount} of ${progressTotal} work items ${statusLabel.toLowerCase()}`}
+        <Tile
+          label="Actual coverage"
+          value={`${actualCoverageCount} of ${progressTotal}`}
+          sub={`${actualCoveragePercent.toFixed(1)}% of work items · ${actualQtyOverrideCount} qty and ${actualRateOverrideCount} rate override${actualRateOverrideCount === 1 ? "" : "s"}`}
+        />
+        <Tile
+          label="Latest actual update"
+          value={formatDateTime(actualLatestAt)}
+          sub="The most recent actual quantity or rate saved"
         />
       </div>
 
-      <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="font-semibold text-slate-900 dark:text-white">Actual vs planned performance</div>
-            <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
-              Compare entered actuals with the saved project plan and switch between chart styles.
-            </div>
-          </div>
-
-          <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Actual coverage</div>
-              <div className="mt-1 font-medium text-slate-900 dark:text-white">
-                {actualCoverageCount} of {progressTotal} work items ({actualCoveragePercent.toFixed(1)}%)
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Latest actual update</div>
-              <div className="mt-1 font-medium text-slate-900">
-                {formatDateTime(actualLatestAt)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Qty overrides</div>
-              <div className="mt-1 font-medium text-slate-900">{actualQtyOverrideCount}</div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">Rate overrides</div>
-              <div className="mt-1 font-medium text-slate-900">{actualRateOverrideCount}</div>
-            </div>
-          </div>
+      <section className="wk-panel">
+        <div className="wk-ph">
+          <h2>Actual vs planned performance</h2>
+          <span className="wk-locnote">
+            Compare entered actuals with the saved project plan.
+          </span>
         </div>
-
-        <div className="mt-4 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-4">
-          <ProjectDashboardChart
-            actualCoverageCount={actualCoverageCount}
-            actualCoveragePercent={actualCoveragePercent}
-            actualPlannedAmount={actualPlannedAmount}
-            actualTrackedAmount={actualTrackedAmount}
-            actualVarianceAmount={actualVarianceAmount}
-            chartMode={chartMode}
-            comparisonRows={comparisonRows}
-            onChartModeChange={onChartModeChange}
-            progressPercent={progressPercent}
-            progressCount={progressCount}
-            progressTotal={progressTotal}
-            statusLabel={statusLabel}
-          />
-        </div>
-      </div>
+        <ProjectDashboardChart
+          actualCoverageCount={actualCoverageCount}
+          actualCoveragePercent={actualCoveragePercent}
+          actualPlannedAmount={actualPlannedAmount}
+          actualTrackedAmount={actualTrackedAmount}
+          actualVarianceAmount={actualVarianceAmount}
+          chartMode={chartMode}
+          comparisonRows={comparisonRows}
+          onChartModeChange={onChartModeChange}
+          progressPercent={progressPercent}
+          progressCount={progressCount}
+          progressTotal={progressTotal}
+          statusLabel={statusLabel}
+        />
+      </section>
     </div>
   );
 }
