@@ -1,7 +1,8 @@
 // src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
+// `Navigate` went with the /dashboard redirect — that was its only use here.
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./store.jsx";
 import { StepUpProvider } from "./features/security/useStepUp.jsx";
 import { ThemeProvider, initThemeBeforeRender } from "./theme.jsx";
@@ -75,6 +76,9 @@ import Signup from "./pages/Signup.jsx";
 import Purchase from "./pages/Purchase.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import Profile from "./pages/Profile.jsx";
+// The classic dashboard, still the one customers use until 1 October. The
+// launch build stopped importing it when /dashboard became a redirect.
+import Dashboard from "./pages/Dashboard.jsx";
 import Learn from "./pages/Learn.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
 import Admin from "./pages/Admin.jsx";
@@ -320,14 +324,26 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      // Retired. /manage is the account overview now — his screen, on real
-      // data — and two dashboards competing for the same job is how one of
-      // them quietly goes stale.
+      // The dashboard customers actually use. /manage is his Manage overview
+      // and it is the one that replaces this — but only once the new build is
+      // the build, and that is 1 October. PR #24 merged on 24 September, six
+      // days early, and this route was a redirect to /manage from that moment:
+      // everybody who opened their dashboard landed on a screen they had never
+      // seen. Restored here rather than reverting the merge, because the rest
+      // of the new site is fine to be early and this is the one screen people
+      // are working in today.
       //
-      // A redirect rather than a deletion, and permanently so: this path is in
-      // receipts, in enrolment emails and in people's history, and the same
-      // reasoning already keeps /learn/course/:sku alive a few lines below.
-      { path: "dashboard", element: <Navigate to="/manage" replace /> },
+      // /manage keeps its own routes and is still reachable. Nothing about the
+      // new overview is removed; it simply stops being where customers are
+      // sent. Swap the two back on 1 October.
+      {
+        path: "dashboard",
+        element: (
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "freebies",
         element: (
