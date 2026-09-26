@@ -10,6 +10,7 @@ import AdminLauncher from "../features/admin/AdminLauncher.jsx";
 import OrgVideosQuickAdd from "../features/admin/OrgVideosQuickAdd.jsx";
 import SeatsEditor from "../features/admin/SeatsEditor.jsx";
 import { FiShield } from "../components/icons.jsx";
+import { isExpiryPast, daysUntilExpiry } from "../lib/expiryDays.js";
 
 const MONTH_CHOICES = [
   { label: "1 month", value: 1 },
@@ -205,27 +206,12 @@ function usageKey(email, productKey) {
 }
 
 function isEntExpired(ent) {
-  if (!ent?.expiresAt) return false;
-  const end = dayjs(ent.expiresAt).endOf("day");
-  return end.isValid() && end.isBefore(dayjs());
+  return isExpiryPast(ent?.expiresAt);
 }
 
+// Lagos calendar days, same count as the server's follow-up list.
 function getDaysLeft(expiresAt) {
-  if (!expiresAt) return null;
-  const end = dayjs(expiresAt).endOf("day");
-  if (!end.isValid()) return null;
-
-  const now = dayjs();
-  if (end.isBefore(now)) {
-    // Calendar days, as daysOverdue in server/util/followUps.js counts them.
-    // ceil(diff-in-hours / 24) truncated the partial hour and read one day
-    // short ("Expired 0d") for the first hour after midnight.
-    const daysAgo = now.startOf("day").diff(dayjs(expiresAt).startOf("day"), "day");
-    return -Math.max(daysAgo, 0);
-  }
-
-  const daysLeft = Math.ceil(end.diff(now, "hour") / 24);
-  return Math.max(daysLeft, 0);
+  return daysUntilExpiry(expiresAt);
 }
 
 function timeLeftBadge(expiresAt) {
