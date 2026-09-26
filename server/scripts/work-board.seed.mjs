@@ -155,6 +155,17 @@ export const SEED = [
     design: { status: "needed", surfaces: "Admin Time saved page: an auto / hand-measured filter and the median elements figure." },
   },
   {
+    key: "release-rollout-firms-first",
+    title: "Releases go to firms with more than 5 seats first, and to everyone else three months later",
+    products: ["platform", "website", "installer-hub"],
+    kind: "improvement",
+    stage: "proposed",
+    progress: "Built ahead of approval at the owner's request (26 Sep). Approving a plugin release sends it to firms with more than 5 organisation seats (added up across products and accounts). Single users stay on the live build until the approver presses Release to everyone, which unlocks three months later, with a reminder email. Hotfixes can go to everyone. Release emails follow the rollout. 17 new tests, including a real-database run.",
+    pending: "Richard's approval, then merging and deploying AdlmWeb#50. It must deploy before QUIV 4.0.0 is approved, or 4.0.0 goes to everyone under the old rule.",
+    refs: "AdlmWeb#50 feat/release-rollout 072f473 (worktree ADLMWebsite-rollout).",
+    design: { status: "needed", surfaces: "/admin/releases: the 'With firms, waiting for everyone' section and the hotfix switch on pending releases. Possibly an early-access label in the Installer Hub." },
+  },
+  {
     key: "client-bill-fill",
     title: "Client bill fill: import any firm's own BoQ, and AI fills the quantities from QUIV",
     products: ["quiv", "ai-service"],
