@@ -283,7 +283,7 @@ export default function AdminReleases() {
                 {you.isApprover && (
                   <div className="flex flex-wrap items-center gap-2">
                     <button
-                      className="btn btn-sm bg-green-600 hover:bg-green-700 text-white"
+                      className="btn btn-sm bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!!busy || !r.canReleaseToEveryone}
                       title={r.canReleaseToEveryone ? "" : `Unlocks on ${day(r.unlocksAt)}`}
                       onClick={() => releaseToEveryone(r)}

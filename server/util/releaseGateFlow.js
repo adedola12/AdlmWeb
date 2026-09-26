@@ -204,5 +204,5 @@ export async function withdrawEarlyAccess(productKey, { actor }) {
     { $set: { earlyAccess: null, updatedBy: actor } },
   );
   const cancelled = await cancelEarlyNotices({ productKey, reason: `v${early.version} taken back from firms` }).catch(() => []);
-  return { early, liveVersion: dep.version, cancelled };
+  return { early, liveVersion: dep.version, displayName: dep.displayName || productKey, cancelled };
 }

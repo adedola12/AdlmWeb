@@ -8,6 +8,7 @@ import {
   ROLLOUT_EVERYONE,
   ROLLOUT_ORGANIZATIONS,
   bigOrgKeys,
+  bigOrgNames,
   canReleaseToEveryone,
   earlyAccessFor,
   earlyAccessStillAhead,
@@ -80,6 +81,8 @@ test("seats: more than 5, added up across products and accounts of the same firm
   assert.equal(inEarlyRing(users[4], big, NOW), false);
   assert.equal(inEarlyRing(users[7], big, NOW), false);
   assert.equal(inEarlyRing(users[0], new Set(), NOW), false);
+  // Shown to people as their licences spell the name, once per firm.
+  assert.deepEqual(bigOrgNames(users, NOW), ["Cost-Link", "ITB Nigeria Limited", "Y.S. Associates Ltd"]);
 });
 
 test("three months: the button unlocks on the date, not before", () => {

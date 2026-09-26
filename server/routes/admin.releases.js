@@ -43,7 +43,7 @@ import {
   EARLY_ACCESS_MONTHS,
   EARLY_SEAT_THRESHOLD,
   ROLLOUT_EVERYONE,
-  bigOrgKeys,
+  bigOrgNames,
   canReleaseToEveryone,
   loadOrgUsers,
 } from "../util/releaseRollout.js";
@@ -79,7 +79,7 @@ async function listRollouts(now = new Date()) {
     .sort({ productKey: 1 })
     .lean();
   if (!rows.length) return { rollouts: [], firms: [] };
-  const firms = [...bigOrgKeys(await loadOrgUsers(User), now)].sort();
+  const firms = bigOrgNames(await loadOrgUsers(User), now);
   return {
     firms,
     rollouts: rows.map((r) => ({
@@ -396,7 +396,7 @@ router.post(
     );
     await gateMail({
       to: [ownerEmail(), cfg.approverEmail],
-      subject: `Taken back from firms: ${productKey} v${out.early.version}`,
+      subject: `Taken back from firms: ${out.displayName} v${out.early.version}`,
       title: "Build taken back from firms",
       lines: [
         `${esc(me(req))} took v${esc(out.early.version)} back; firms are offered v${esc(out.liveVersion)} again.`,
