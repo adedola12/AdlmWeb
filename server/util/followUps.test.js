@@ -63,23 +63,19 @@ test("daysOverdue counts whole days since the expiry day ended", () => {
   assert.equal(daysOverdue(null), 0);
   assert.equal(daysOverdue(future), 0);
 
-  // Pinned, because this one used to read the wall clock and was wrong for
-  // one hour a night. daysOverdue measures from the END of the expiry day and
-  // rounds up on `diff(..., "hour")`, which truncates: at 00:40 the 40 minutes
-  // past midnight are dropped, the division lands exactly on 9, and there is
-  // nothing left for the ceiling to round. So an expiry "10 days ago, same
-  // time" answered 10 all day and 9 between midnight and 01:00 — and a suite
-  // that fails only after midnight is one nobody trusts by morning.
+  // Pinned, because this read the wall clock and so failed for one hour a
+  // night: the hour-based count truncated the minutes past midnight and
+  // answered 9 where every other hour answered 10.
+  //
+  // 4397073 then fixed the cause rather than the symptom — the count is Lagos
+  // calendar days now — so the midnight hour answers 10 like the rest, and the
+  // tests below this one cover that directly. What is left here is the part
+  // still worth holding: the answer must not depend on when the suite runs.
   const at = (hhmm) => dayjs(`2026-09-26T${hhmm}:00`);
-  for (const hhmm of ["01:30", "09:00", "14:00", "23:30"]) {
+  for (const hhmm of ["00:10", "00:40", "01:30", "09:00", "14:00", "23:30"]) {
     const now = at(hhmm);
     assert.equal(daysOverdue(now.subtract(10, "day").toDate(), now), 10, hhmm);
   }
-
-  // The midnight hour, stated rather than left to be rediscovered: the expiry
-  // day ended 9 days and 40 minutes ago, so 9 whole days is the honest answer.
-  const midnight = at("00:40");
-  assert.equal(daysOverdue(midnight.subtract(10, "day").toDate(), midnight), 9);
 });
 
 test("daysOverdue is right in the hour after Lagos midnight", () => {
