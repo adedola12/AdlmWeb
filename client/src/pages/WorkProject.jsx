@@ -18,8 +18,26 @@
 import React from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { isStaff } from "../utils/roles.js";
+import { isStaff, canViewPreview } from "../utils/roles.js";
+import { isGatedHost } from "../lib/previewHost.js";
 import WorkProjectShell from "../features/workProject/WorkProjectShell.jsx";
+
+/**
+ * Who sees the new workspace.
+ *
+ * On a preview host, PreviewHostGate has already turned away everybody who is
+ * not staff or Tech Support before this route renders, so asking isStaff a
+ * second time here only locks out the people the preview exists for — which
+ * is what happened: the owner's own account holds the "preview" area and
+ * nothing else, and got the redirect on the very site built for reviewing.
+ *
+ * On adlmstudio.net nothing has gated the request, so isStaff stands: /work
+ * is staff-only there and Tech Support is the preview site and nothing else.
+ */
+function maySeeNewWorkspace(user) {
+  const onPreview = typeof window !== "undefined" && isGatedHost(window.location.hostname);
+  return onPreview ? canViewPreview(user) : isStaff(user);
+}
 
 export default function WorkProject() {
   const { productKey = "", id = "" } = useParams();
@@ -30,7 +48,7 @@ export default function WorkProject() {
   // in that frame would bounce a staff member out of the page they asked for.
   if (accessToken && !user) return null;
 
-  if (isStaff(user)) return <WorkProjectShell productKey={key} id={id} />;
+  if (maySeeNewWorkspace(user)) return <WorkProjectShell productKey={key} id={id} />;
 
   const to = key
     ? `/projects/${encodeURIComponent(key)}${id ? `?project=${encodeURIComponent(id)}` : ""}`

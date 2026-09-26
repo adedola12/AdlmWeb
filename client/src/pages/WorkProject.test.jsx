@@ -63,13 +63,11 @@ describe("the /work/project route", () => {
     expect(screen.queryByText("THE FULL WORKSPACE")).toBeNull();
   });
 
-  it("does NOT give tech_support the new workspace — that role is the preview site only", () => {
-    // The distinction is deliberate and easy to get backwards. isStaff puts
-    // "preview" in NON_ADMIN_AREAS (utils/roles.js), so a role holding only
-    // that area is not staff; canViewPreview is the predicate that lets it
-    // onto preview.adlmstudio.net and the /preview/* pages. /work is an app
-    // surface, not the preview site, so this route uses isStaff and Tech
-    // Support keeps the redirect like any other customer.
+  it("does NOT give tech_support the new workspace on the LIVE host", () => {
+    // jsdom serves these tests from localhost, which isGatedHost treats as a
+    // live host — so this is the adlmstudio.net rule. There /work is
+    // staff-only, and Tech Support is the preview site and nothing else.
+    // On a preview host the answer flips; see the next test.
     currentUser = { email: "help@adlmstudio.net", role: "tech_support", permissions: ["preview"] };
     currentToken = "t";
     mount();
@@ -84,6 +82,25 @@ describe("the /work/project route", () => {
     const { container } = mount();
     expect(screen.queryByText("THE FULL WORKSPACE")).toBeNull();
     expect(container.textContent).toBe("");
+  });
+
+  it("DOES give tech_support the new workspace on a preview host", () => {
+    // PreviewHostGate has already turned away everyone who is not staff or
+    // Tech Support by the time this route renders, so re-checking isStaff
+    // there only locks out the people the preview exists for — which is
+    // exactly what happened to the owner's own account.
+    const original = window.location;
+    delete window.location;
+    window.location = { ...original, hostname: "preview.adlmstudio.net" };
+    currentUser = { email: "help@adlmstudio.net", role: "tech_support", permissions: ["preview"] };
+    currentToken = "t";
+    try {
+      mount();
+      expect(screen.getByRole("tab", { name: /Overview/ })).toBeTruthy();
+      expect(screen.queryByText("THE FULL WORKSPACE")).toBeNull();
+    } finally {
+      window.location = original;
+    }
   });
 
   it("shows a HERON project its own tabs, not a Revit project's", () => {
