@@ -8,6 +8,7 @@ import { FiShield } from "../components/icons.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { WorkInFlight } from "../features/work/WorkBoard.jsx";
 
 function fmt(d) {
   return d ? new Date(d).toLocaleString() : "—";
@@ -210,6 +211,8 @@ export default function AdminReleases() {
         )}
       </div>
 
+      {/* Everything in flight, so a release arrives with its context. */}
+      <WorkInFlight />
       <div className="card space-y-3">
         <div className="flex items-center gap-3">
           <h2 className="text-base md:text-lg font-semibold leading-snug mr-auto">Website, API and service changes</h2>

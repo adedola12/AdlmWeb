@@ -1086,6 +1086,16 @@ const router = createBrowserRouter([
         ),
       },
 
+      // ✅ Work board (docs/WORK_BOARD.md): same audience as the release desk
+      {
+        path: "admin/work",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminWork />
+          </AdminRoute>
+        ),
+      },
+
       // ✅ AI spend, per-user allocations & AWS credit burn-down (admin-only)
       {
         path: "admin/ai-usage",
