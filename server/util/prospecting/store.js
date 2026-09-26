@@ -134,6 +134,45 @@ export function createStore(models) {
     await Prospect.updateOne({ _id: prospectId }, { $set: { statusNote: String(note || "").slice(0, 2000) } });
   }
 
+  /**
+   * Prospects waiting for emails: status "new", oldest first, each with its
+   * primary contact. A prospect with no primary contact is left out; there is
+   * nobody to write to.
+   */
+  async function prospectsToDraft(limit = 20) {
+    const rows = await Prospect.find({ status: "new" }).sort({ createdAt: 1 }).limit(limit * 3).lean();
+    const out = [];
+    for (const p of rows) {
+      if (out.length >= limit) break;
+      const contact = await ProspectContact.findOne({ prospectId: p._id, primary: true }).lean();
+      if (contact) out.push({ prospect: p, contact });
+    }
+    return out;
+  }
+
+  /**
+   * Stores a draft for review and moves the prospect to "drafted". Refuses a
+   * second open draft for the same prospect, and re-checks suppression at the
+   * last moment, so an opt-out that landed while the model was writing wins.
+   */
+  async function saveDraft({ prospect, contact, emails, model }) {
+    if (await isSuppressed(contact.email)) return { saved: false, reason: "suppressed" };
+    const open = await OutreachDraft.findOne({ prospectId: prospect._id, status: { $in: ["pending_review", "approved"] } }).select("_id").lean();
+    if (open) return { saved: false, reason: "already_drafted" };
+
+    const [draft] = await OutreachDraft.insertMany([{
+      prospectId: prospect._id,
+      contactId: contact._id,
+      profileId: prospect.profileId,
+      product: prospect.matchedProduct,
+      emails,
+      model,
+      status: "pending_review",
+    }]);
+    await Prospect.updateOne({ _id: prospect._id }, { $set: { status: "drafted", statusNote: "" } });
+    return { saved: true, draft };
+  }
+
   /** Is this address, or its domain, on the suppression list? */
   async function isSuppressed(email) {
     const hash = hashEmail(email);
@@ -226,6 +265,8 @@ export function createStore(models) {
     knownDomains,
     setPrimaryContact,
     noteProspect,
+    prospectsToDraft,
+    saveDraft,
     isSuppressed,
     optOut,
     deleteProspectData,

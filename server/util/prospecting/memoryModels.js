@@ -76,7 +76,7 @@ export function memoryModel(uniqueKey) {
       const writeErrors = [];
       for (const d of docs) {
         if (clash(d)) { writeErrors.push({ code: 11000 }); continue; }
-        const row = { _id: newId(), createdAt: new Date(), ...d };
+        const row = { createdAt: new Date(), ...d, _id: d._id ?? newId() };
         rows.push(row);
         inserted.push(row);
       }

@@ -108,6 +108,17 @@ export const AI_FEATURES = [
     guestAllowed: false,
   },
   {
+    // Outbound prospecting's email writer (util/prospecting/writer.js): three
+    // emails per prospect, with at most one rewrite when a rule is broken.
+    // Goes through the shared transport, so it follows AGENT_PROVIDER.
+    key: "prospect-email-draft",
+    label: "Prospect email drafts",
+    desc: "Writes the first email and two follow-ups for one prospect, for a reviewer to approve.",
+    provider: "agent",
+    metered: true,
+    guestAllowed: false,
+  },
+  {
     key: "ai-boq-check",
     label: "BoQ market rate check",
     desc: "Per-line verdict vs the RateGen benchmarks (AWS AI service).",
