@@ -9,6 +9,13 @@
 //                                        emailed, and flagged for review
 //   POST /admin/releases/:id/review      approver only; upholds or objects to
 //                                        an emergency release after the fact
+//   POST /admin/releases/rollouts/:productKey/everyone
+//                                        approver only; a build that has been
+//                                        with firms for three months goes to
+//                                        everyone (util/releaseRollout.js)
+//   POST /admin/releases/rollouts/:productKey/withdraw
+//                                        approver only; takes a build back from
+//                                        firms, note required
 //
 // Deliberately absent: any route that changes who the approver is. That is
 // done by server/scripts/release-gate.mjs, which records and emails the change,
@@ -16,6 +23,8 @@
 import express from "express";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { ReleaseCandidate } from "../models/ReleaseCandidate.js";
+import { ProductDeployment } from "../models/ProductDeployment.js";
+import { User } from "../models/User.js";
 import { isSuperAdminRole } from "../util/rbac.js";
 import {
   EMERGENCY_REVIEW_HOURS,
@@ -29,7 +38,15 @@ import {
   recordGateEvent,
   releasesUrl,
 } from "../util/releaseGate.js";
-import { applyCandidate } from "../util/releaseGateFlow.js";
+import { applyCandidate, releaseToEveryone, withdrawEarlyAccess } from "../util/releaseGateFlow.js";
+import {
+  EARLY_ACCESS_MONTHS,
+  EARLY_SEAT_THRESHOLD,
+  ROLLOUT_EVERYONE,
+  bigOrgKeys,
+  canReleaseToEveryone,
+  loadOrgUsers,
+} from "../util/releaseRollout.js";
 import { listPullsAwaitingApprover } from "../util/releaseGatePulls.js";
 
 const router = express.Router();
@@ -49,6 +66,37 @@ function refuseViewOnly(req, res) {
   return false;
 }
 
+/** "is live" / "has gone to firms", for the mails and the page. */
+const whereItWent = (appliedTo) =>
+  appliedTo === ROLLOUT_EVERYONE
+    ? "is live for everyone"
+    : `has gone to firms with more than ${EARLY_SEAT_THRESHOLD} seats`;
+
+/** Builds with firms and waiting for everyone. The payload (envVars) stays here. */
+async function listRollouts(now = new Date()) {
+  const rows = await ProductDeployment.find({ earlyAccess: { $ne: null } })
+    .select("productKey displayName version earlyAccess.version earlyAccess.firstVersion earlyAccess.startedAt earlyAccess.unlocksAt earlyAccess.approvedBy earlyAccess.approvedAt")
+    .sort({ productKey: 1 })
+    .lean();
+  if (!rows.length) return { rollouts: [], firms: [] };
+  const firms = [...bigOrgKeys(await loadOrgUsers(User), now)].sort();
+  return {
+    firms,
+    rollouts: rows.map((r) => ({
+      productKey: r.productKey,
+      displayName: r.displayName || r.productKey,
+      generalVersion: r.version || "",
+      earlyVersion: r.earlyAccess.version || "",
+      firstVersion: r.earlyAccess.firstVersion || "",
+      startedAt: r.earlyAccess.startedAt || null,
+      unlocksAt: r.earlyAccess.unlocksAt || null,
+      approvedBy: r.earlyAccess.approvedBy || "",
+      approvedAt: r.earlyAccess.approvedAt || null,
+      canReleaseToEveryone: canReleaseToEveryone(r.earlyAccess, now),
+    })),
+  };
+}
+
 async function loadCandidate(req, res, status) {
   const c = await ReleaseCandidate.findById(req.params.id);
   if (!c) {
@@ -66,11 +114,12 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const cfg = await getGateConfig();
-    const [pending, recent, awaitingReview, code] = await Promise.all([
+    const [pending, recent, awaitingReview, code, rollout] = await Promise.all([
       ReleaseCandidate.find({ status: "pending" }).sort({ submittedAt: -1 }).lean(),
       ReleaseCandidate.find({ status: { $ne: "pending" } }).sort({ updatedAt: -1 }).limit(50).lean(),
       ReleaseCandidate.find({ status: "emergency", reviewedAt: null }).sort({ decidedAt: -1 }).lean(),
       listPullsAwaitingApprover(cfg.approverGithub).catch((err) => ({ pulls: [], error: String(err?.message || err) })),
+      listRollouts().catch((err) => ({ rollouts: [], firms: [], error: String(err?.message || err) })),
     ]);
     res.json({
       ok: true,
@@ -81,6 +130,11 @@ router.get(
         canEmergency: isSuperAdminRole(req.userRole),
       },
       emergencyReviewHours: EMERGENCY_REVIEW_HOURS,
+      // Firms first, everyone later (util/releaseRollout.js).
+      rolloutRule: { seatsMoreThan: EARLY_SEAT_THRESHOLD, months: EARLY_ACCESS_MONTHS },
+      rollouts: rollout.rollouts,
+      earlyFirms: rollout.firms,
+      rolloutError: rollout.error || "",
       pending,
       awaitingReview,
       recent,
@@ -119,19 +173,30 @@ router.post(
     );
     if (!claimed) return res.status(409).json({ error: "Someone else already decided this release." });
 
-    const { item, releaseNotice } = await applyCandidate(claimed, { actor: me(req) });
+    // The approver may switch a build to a hotfix (everyone now) or back.
+    const rollout = req.body?.rollout ? String(req.body.rollout) : undefined;
+    const { item, releaseNotice, appliedTo } = await applyCandidate(claimed, { actor: me(req), rollout });
+    claimed.appliedTo = appliedTo;
+    await ReleaseCandidate.updateOne({ _id: claimed._id }, { $set: { appliedTo } });
     await recordGateEvent(
       "release.approved",
-      { productKey: claimed.productKey, candidateId: String(claimed._id), toVersion: claimed.toVersion, note: claimed.decisionNote },
+      { productKey: claimed.productKey, candidateId: String(claimed._id), toVersion: claimed.toVersion, note: claimed.decisionNote, appliedTo },
       req,
     );
     await gateMail({
       to: [ownerEmail(), claimed.submittedBy],
-      subject: `Approved: ${claimed.displayName} v${claimed.toVersion} is live`,
+      subject: `Approved: ${claimed.displayName} v${claimed.toVersion} ${whereItWent(appliedTo)}`,
       title: "Release approved",
-      lines: [describeCandidate(claimed), `Signed off by ${esc(me(req))}.`, claimed.decisionNote ? `Note: ${esc(claimed.decisionNote)}` : ""].filter(Boolean),
+      lines: [
+        describeCandidate(claimed),
+        `Signed off by ${esc(me(req))}.`,
+        appliedTo === ROLLOUT_EVERYONE
+          ? ""
+          : `Everyone else stays on v${esc(item?.version || claimed.fromVersion)} until it is released to them, which can happen in ${EARLY_ACCESS_MONTHS} months.`,
+        claimed.decisionNote ? `Note: ${esc(claimed.decisionNote)}` : "",
+      ].filter(Boolean),
     });
-    res.json({ ok: true, candidate: claimed, item, releaseNotice });
+    res.json({ ok: true, candidate: claimed, item: publicItem(item), releaseNotice, appliedTo });
   }),
 );
 
@@ -217,7 +282,9 @@ router.post(
     );
     if (!claimed) return res.status(409).json({ error: "Someone else already decided this release." });
 
-    const { item, releaseNotice } = await applyCandidate(claimed, { actor: me(req) });
+    const { item, releaseNotice, appliedTo } = await applyCandidate(claimed, { actor: me(req) });
+    await ReleaseCandidate.updateOne({ _id: claimed._id }, { $set: { appliedTo } });
+    claimed.appliedTo = appliedTo;
     await gateMail({
       to: [cfg.approverEmail, ownerEmail()],
       subject: `EMERGENCY release without sign-off: ${claimed.displayName} v${claimed.toVersion}`,
@@ -230,7 +297,7 @@ router.post(
       ],
       cta: { label: "Review the emergency release", href: releasesUrl() },
     });
-    res.json({ ok: true, candidate: claimed, item, releaseNotice });
+    res.json({ ok: true, candidate: claimed, item: publicItem(item), releaseNotice, appliedTo });
   }),
 );
 
@@ -268,5 +335,85 @@ router.post(
     res.json({ ok: true, candidate: c });
   }),
 );
+
+router.post(
+  "/rollouts/:productKey/everyone",
+  asyncHandler(async (req, res) => {
+    if (refuseViewOnly(req, res)) return;
+    const cfg = await getGateConfig();
+    if (!isApprover(cfg, me(req))) {
+      return res.status(403).json({ error: "Only the release approver can release a build to everyone." });
+    }
+    const productKey = String(req.params.productKey || "").trim().toLowerCase();
+    let out;
+    try {
+      out = await releaseToEveryone(productKey, { actor: me(req), demoMode: req.demoMode });
+    } catch (err) {
+      if (!err?.status) throw err;
+      return res.status(err.status).json({ error: err.message, unlocksAt: err.unlocksAt });
+    }
+    const name = out.item?.displayName || productKey;
+    await recordGateEvent(
+      "release.everyone",
+      { productKey, candidateId: out.early.candidateId, fromVersion: out.previousVersion, toVersion: out.early.version, startedAt: out.early.startedAt },
+      req,
+    );
+    await gateMail({
+      to: [ownerEmail(), cfg.approverEmail],
+      subject: `Released to everyone: ${name} v${out.early.version}`,
+      title: "Released to everyone",
+      lines: [
+        `${esc(name)} v${esc(out.early.version)} was with firms from ${esc(new Date(out.early.startedAt).toDateString())}.`,
+        `${esc(me(req))} released it to everyone; single users move from v${esc(out.previousVersion)}.`,
+      ],
+    });
+    res.json({ ok: true, item: publicItem(out.item), releaseNotice: out.releaseNotice });
+  }),
+);
+
+router.post(
+  "/rollouts/:productKey/withdraw",
+  asyncHandler(async (req, res) => {
+    if (refuseViewOnly(req, res)) return;
+    const cfg = await getGateConfig();
+    if (!isApprover(cfg, me(req))) {
+      return res.status(403).json({ error: "Only the release approver can take a build back from firms." });
+    }
+    const note = String(req.body?.note || "").trim();
+    if (note.length < 5) return res.status(400).json({ error: "Say why it is being taken back." });
+    const productKey = String(req.params.productKey || "").trim().toLowerCase();
+    let out;
+    try {
+      out = await withdrawEarlyAccess(productKey, { actor: me(req) });
+    } catch (err) {
+      if (!err?.status) throw err;
+      return res.status(err.status).json({ error: err.message });
+    }
+    await recordGateEvent(
+      "release.early-withdrawn",
+      { productKey, candidateId: out.early.candidateId, version: out.early.version, backTo: out.liveVersion, note },
+      req,
+    );
+    await gateMail({
+      to: [ownerEmail(), cfg.approverEmail],
+      subject: `Taken back from firms: ${productKey} v${out.early.version}`,
+      title: "Build taken back from firms",
+      lines: [
+        `${esc(me(req))} took v${esc(out.early.version)} back; firms are offered v${esc(out.liveVersion)} again.`,
+        `<em>${esc(note)}</em>`,
+      ],
+    });
+    res.json({ ok: true, cancelledNotices: out.cancelled });
+  }),
+);
+
+/** A deployment for an admin response: never the second copy of envVars. */
+function publicItem(item) {
+  const o = item?.toObject ? item.toObject() : item;
+  if (!o?.earlyAccess) return o;
+  // eslint-disable-next-line no-unused-vars
+  const { payload, ...early } = o.earlyAccess;
+  return { ...o, earlyAccess: early };
+}
 
 export default router;

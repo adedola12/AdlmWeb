@@ -13,6 +13,7 @@
 
 import { tallyCounts } from "./releaseNotifier.js";
 import { maxVersion } from "./releaseVersion.js";
+import { bigOrgKeys, inEarlyRing } from "./releaseRollout.js";
 
 const OPEN = ["pending", "sending", "failed"];
 const clone = (x) => (x == null ? x : structuredClone(x));
@@ -52,8 +53,12 @@ export function memoryStore({ users = [], changelogs = {}, deployments = {} } = 
       notices.set(doc.key, n);
       return { notice: clone(n), created: true };
     },
-    async lastAnnouncedVersion(pk) {
-      return maxVersion([...notices.values()].filter((n) => n.productKey === pk && n.status !== "cancelled").map((n) => n.version));
+    async lastAnnouncedVersion(pk, { everyoneOnly = false } = {}) {
+      return maxVersion(
+        [...notices.values()]
+          .filter((n) => n.productKey === pk && n.status !== "cancelled" && (!everyoneOnly || n.audience !== "organizations"))
+          .map((n) => n.version),
+      );
     },
     async setNotice(key, set, where = null) {
       writes.push("setNotice");
@@ -65,7 +70,7 @@ export function memoryStore({ users = [], changelogs = {}, deployments = {} } = 
     async closeOpenNotices(pk, { exceptKey = "", match, set }) {
       const hit = [];
       for (const n of notices.values()) {
-        if (n.productKey === pk && OPEN.includes(n.status) && n.key !== exceptKey && match(n.version)) {
+        if (n.productKey === pk && OPEN.includes(n.status) && n.key !== exceptKey && match(n.version, n)) {
           writes.push("closeOpenNotices");
           Object.assign(n, clone(set));
           hit.push(n.key);
@@ -100,6 +105,11 @@ export function memoryStore({ users = [], changelogs = {}, deployments = {} } = 
             ),
         )
         .map(clone);
+    },
+    // The same rule as the Mongo path (util/releaseRollout.js), over `users`.
+    async earlyRingUserIds(now) {
+      const big = bigOrgKeys(users, now);
+      return users.filter((u) => inEarlyRing(u, big, now)).map((u) => String(u._id));
     },
     async usersByIds(ids) {
       const want = new Set(ids.map(String));

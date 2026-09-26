@@ -462,6 +462,8 @@ router.put(
         ok: true,
         pendingApproval: true,
         candidateId: String(candidate._id),
+        // "organizations" (firms first) or "everyone" (a hotfix).
+        rollout: candidate.rollout,
         // `item` is the STAGED build, so release scripts that download
         // item.packageUri to verify it still check the right bytes.
         item: { ...normalized, productKey },

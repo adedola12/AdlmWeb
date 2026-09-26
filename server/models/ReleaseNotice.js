@@ -73,6 +73,14 @@ const ReleaseNoticeSchema = new mongoose.Schema(
 
     status: { type: String, enum: NOTICE_STATUSES, default: "pending", index: true },
 
+    // Who it is for (util/releaseRollout.js). "organizations" while the build
+    // is only with firms of more than 5 seats; widened to "everyone" when it is
+    // released to everyone, and the licence holders not yet mailed are enrolled
+    // then. Absent on notices older than the rollout, which meant everyone.
+    audience: { type: String, enum: ["everyone", "organizations"], default: "everyone" },
+    widenedBy: { type: String, default: "" },
+    widenedAt: { type: Date, default: null },
+
     // Where it came from: "deployment" (the PUT) or "manual" (an admin).
     source: { type: String, default: "deployment" },
     createdBy: { type: String, default: "" },
