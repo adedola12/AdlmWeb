@@ -39,6 +39,7 @@ import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import { designMode } from "./middleware/designMode.js";
+import { originVerify } from "./middleware/originVerify.js";
 import adminRoutes from "./routes/admin.js";
 import { demoModeGuard } from "./middleware/demoMode.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
@@ -140,6 +141,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.set("trust proxy", 1);
+
+/* -------- only CloudFront may call in (see middleware/originVerify.js) -------- */
+app.use(originVerify());
 
 /* -------- CORS (MUST be BEFORE body parsers) -------- */
 // CORS_ORIGINS from env, the vetted production origins, and the API's own

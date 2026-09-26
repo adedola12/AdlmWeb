@@ -35,7 +35,9 @@ import {
   TimeZone,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { filesBucketName } from "./adlm-files-stack.js";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -466,6 +468,12 @@ export class AdlmApiStack extends Stack {
       marketingConfigSet.configurationSetName,
     );
 
+    // The private files bucket lives in its own stack (AdlmFiles), which
+    // grants this function's role; the API only needs its name.
+    if (cfg.filesBucket) {
+      fn.addEnvironment("FILES_BUCKET", filesBucketName(this.account, this.region));
+    }
+
     /* ─────────────────── Function URL ───────────────────
      * The plan requires verifying the API here BEFORE any DNS change, and it
      * leaves a known-good fallback hostname if CloudFront misbehaves mid-outage.
@@ -479,6 +487,30 @@ export class AdlmApiStack extends Stack {
       // it here too would produce duplicate Access-Control-* headers, which
       // browsers reject.
     });
+
+    /* ────────── Origin verification (config.originVerify, item 0c) ──────────
+     * CloudFront adds a secret header that a request sent straight to the
+     * Function URL cannot know; server/middleware/originVerify.js checks it.
+     * Secrets Manager generates the value. CloudFront gets it through a
+     * {{resolve:secretsmanager}} dynamic reference, and the function reads it
+     * at cold start (server/lambda.js) with only the ARN in its environment,
+     * so the value is in no template, env var, git history or log. Not
+     * rotated: CloudFront holds a copy, so a rotation is a redeploy.
+     */
+    const originVerifySecret =
+      cfg.originVerify === "off"
+        ? undefined
+        : new secretsmanager.Secret(this, "OriginVerifySecret", {
+            description:
+              "ADLM API - header CloudFront adds so the API can tell it from a direct Function URL call",
+            generateSecretString: { passwordLength: 48, excludePunctuation: true },
+            removalPolicy: RemovalPolicy.RETAIN,
+          });
+    if (originVerifySecret) {
+      originVerifySecret.grantRead(fn);
+      fn.addEnvironment("ORIGIN_VERIFY_SECRET_ARN", originVerifySecret.secretArn);
+      fn.addEnvironment("ORIGIN_VERIFY_MODE", cfg.originVerify);
+    }
 
     /* ─────────────────── CloudFront ───────────────────
      * Terminates TLS at the edge (including Lagos), which is where the latency
@@ -503,6 +535,14 @@ export class AdlmApiStack extends Stack {
           readTimeout: Duration.seconds(cfg.originTimeoutSeconds),
           // Give a cold start room to finish rather than retrying it.
           keepaliveTimeout: Duration.seconds(60),
+          // Replaces any viewer-sent header of the same name.
+          ...(originVerifySecret
+            ? {
+                customHeaders: {
+                  "x-adlm-origin-verify": `{{resolve:secretsmanager:${originVerifySecret.secretArn}:SecretString}}`,
+                },
+              }
+            : {}),
         }),
         // An API must never be cached. This also keeps us clear of the 1,000
         // free invalidation paths per month, since there is nothing to invalidate.
