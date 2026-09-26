@@ -81,3 +81,29 @@ test("daysOverdue counts whole days since the expiry day ended", () => {
   const midnight = at("00:40");
   assert.equal(daysOverdue(midnight.subtract(10, "day").toDate(), midnight), 9);
 });
+
+test("daysOverdue is right in the hour after Lagos midnight", () => {
+  // 23:50 UTC on 25 Sep is 00:50 WAT on 26 Sep. The old hour-based count read
+  // 9 here, because the 50 minutes past midnight were truncated away.
+  const now = dayjs("2026-09-25T23:50:00Z");
+  assert.equal(daysOverdue(new Date("2026-09-15T23:50:00Z"), now), 10);
+  assert.equal(daysOverdue(new Date("2026-09-24T23:00:00Z"), now), 1);
+  for (let m = 0; m < 60; m += 5) {
+    const t = dayjs("2026-09-25T23:00:00Z").add(m, "minute");
+    assert.equal(daysOverdue(t.subtract(10, "day").toDate(), t), 10, t.toISOString());
+  }
+});
+
+test("the expiry day is a Lagos day, whatever zone the server runs in", () => {
+  // 23:30 UTC on 15 Sep is 00:30 WAT on 16 Sep, so the customer has all of
+  // 16 Sep in Lagos. At 23:30 WAT that evening they are not yet overdue; a
+  // UTC-day count would already call them one day late.
+  const exp = new Date("2026-09-15T23:30:00Z");
+  const lateOnExpiryDay = dayjs("2026-09-16T22:30:00Z");
+  assert.equal(daysOverdue(exp, lateOnExpiryDay), 0);
+  assert.equal(effectiveStatus({ status: "active", expiresAt: exp }, lateOnExpiryDay), "active");
+
+  const nextLagosDay = dayjs("2026-09-16T23:10:00Z"); // 00:10 WAT, 17 Sep
+  assert.equal(daysOverdue(exp, nextLagosDay), 1);
+  assert.equal(effectiveStatus({ status: "active", expiresAt: exp }, nextLagosDay), "expired");
+});
