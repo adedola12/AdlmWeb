@@ -145,7 +145,11 @@ new AdlmReleaseGateStack(app, "AdlmReleaseGate", {
   env: { account: config.account, region: config.region },
   description: "ADLM release gate - locked audit trail and main-branch watcher",
   terminationProtection: true,
-  repo: "adedola12/AdlmWeb",
+  repos: [
+    "adedola12/AdlmWeb@main",
+    "adedola12/adlm-ai-service@main",
+    "adedola12/ADLMRateGen-SingleUser@may30-version",
+  ],
   mailDomain: "adlmstudio.net",
   fromAddress: "ADLM Studio <notifications@adlmstudio.net>",
   ownerEmail: "admin@adlmstudio.net",
