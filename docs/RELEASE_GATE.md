@@ -24,6 +24,36 @@ Switching a product **off** is never gated: that is the safety action.
   Hub is offered the pending build (`GET /me/deployments` overlays it for the
   approver only), so they install and test exactly the bytes they approve.
 
+## Rollout: firms first, everyone three months later
+
+Standing rule from 26 Sep 2026 (`server/util/releaseRollout.js`).
+
+- **Who goes first.** Every account of a firm holding **more than 5** active
+  organisation seats. Seats are added up across all the firm's products and all
+  its accounts. A firm is the organisation name on its entitlements, compared
+  trimmed and case-folded, the way `/admin/organizations` groups them.
+- **Approve means "to firms".** On approval the build is stored as the
+  deployment's `earlyAccess`. The live fields, which everyone else is offered,
+  do not change. `GET /me/deployments` swaps in the early build for accounts in
+  the first group, flagged `earlyAccess: true` with `generalVersion`. The
+  "new version" email goes to those accounts only.
+- **Everyone, by hand, after three months.** The "Release to everyone" button
+  on `/admin/releases` unlocks three calendar months after the build first went
+  to firms, and the approver is emailed that morning. Nothing moves on its own.
+  Pressing it writes the build to the live row and widens its email to every
+  licence holder not already mailed.
+- **A newer build during the window** replaces the firms' build but keeps the
+  original clock, so fixes do not push single users back another three months.
+- **Hotfixes go to everyone.** Tick "Hotfix: release to everyone now" on the
+  pending release, or stage it with `rollout: "everyone"` / `hotfix: true` in
+  the PUT body. It still needs the approver. If it catches up with the firms'
+  build, the early stage ends.
+- **First releases, a product switched back on, same-version fixes and
+  rollbacks** always go to everyone, because single users would otherwise have
+  nothing to stay on.
+- **Take back from firms** (note required) clears the early build. Firms are
+  offered the live build again, and its unsent firms-only email is cancelled.
+
 ## The emergency override (visible, not secret)
 
 There is **no hidden bypass**, and none should ever be added. A secret way

@@ -22,6 +22,12 @@ const ReleaseCandidateSchema = new mongoose.Schema(
     payload: { type: mongoose.Schema.Types.Mixed, required: true },
     // Extras the release notifier reads (releaseNotes, notifySubscribers).
     notifyBody: { type: mongoose.Schema.Types.Mixed, default: null },
+    // Who it goes to on approval (util/releaseRollout.js): "organizations"
+    // (firms with more than 5 seats, everyone else three months later) or
+    // "everyone" (a hotfix). The approver can switch it when approving.
+    rollout: { type: String, enum: ["organizations", "everyone"], default: "organizations" },
+    // Where it actually went, set on approval.
+    appliedTo: { type: String, enum: ["", "organizations", "everyone"], default: "" },
 
     status: {
       type: String,
