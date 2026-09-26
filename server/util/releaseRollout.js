@@ -125,6 +125,19 @@ export function bigOrgKeys(users = [], now = new Date()) {
   return new Set([...seats].filter(([, n]) => n > EARLY_SEAT_THRESHOLD).map(([k]) => k));
 }
 
+/** The same firms by name as their licences spell it, for people to read. */
+export function bigOrgNames(users = [], now = new Date()) {
+  const big = bigOrgKeys(users, now);
+  const names = new Map();
+  for (const u of users) {
+    for (const e of u?.entitlements || []) {
+      const k = orgKey(e?.organizationName);
+      if (big.has(k) && !names.has(k)) names.set(k, String(e.organizationName).trim());
+    }
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b));
+}
+
 /** Is this account part of one of those firms? */
 export function inEarlyRing(user, bigOrgs, now = new Date()) {
   if (!bigOrgs?.size) return false;
