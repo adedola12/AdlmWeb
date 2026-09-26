@@ -53,7 +53,11 @@ export function resolveTab(requested, productKey) {
  */
 export function tabCount(tabKey, project) {
   if (tabKey !== "bill") return null;
-  const n = project?.itemCount ?? project?.items?.length;
+  // The bill lines themselves first, and the summary's itemCount only as a
+  // fallback. They are not the same number: the rollup's count folds a
+  // project's material & labour schedule in with its bill, so a 65-line bill
+  // was printing 110 on the tab while the workspace beside it said 65.
+  const n = project?.items?.length ?? project?.itemCount;
   return Number.isFinite(Number(n)) ? Number(n) : null;
 }
 

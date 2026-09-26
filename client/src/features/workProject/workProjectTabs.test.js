@@ -87,3 +87,17 @@ describe("the attention dot", () => {
     expect(tabNeedsAttention("bill", { stale: 5 })).toBe(false);
   });
 });
+
+describe("the bill count against a real project", () => {
+  it("counts bill lines, not the rollup's folded total", () => {
+    // Seen on the sample duplex: the rollup's itemCount folds the material &
+    // labour schedule in with the bill, so the tab read 110 while the
+    // workspace beside it said 65.
+    const project = { itemCount: 110, items: new Array(65).fill({}) };
+    expect(tabCount("bill", project)).toBe(65);
+  });
+
+  it("still uses itemCount when the bill itself has not been loaded", () => {
+    expect(tabCount("bill", { itemCount: 65 })).toBe(65);
+  });
+});

@@ -17,7 +17,15 @@
 import React from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useProjects } from "../../ds/useProjects.js";
+import { apiAuthed } from "../../api.js";
+import { useAuth } from "../../store.jsx";
 import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectTabs.js";
+import WorkProjectOverview from "./WorkProjectOverview.jsx";
+import DsAppShell from "../../ds/DsAppShell.jsx";
+// His project-view rules. Imported here because this route is the first thing
+// outside DsProjectGallery/DsWorkHome to use them — without it the whole view
+// renders as an unstyled stack of divs.
+import "../../styles/ds-work-proj.css";
 
 const TOOL_NAMES = {
   revit: "QUIV",
@@ -63,11 +71,39 @@ const TAB_BODIES = {
 
 export default function WorkProjectShell({ productKey, id }) {
   const { projects, failed } = useProjects();
+  const { accessToken } = useAuth();
   const [params, setParams] = useSearchParams();
 
-  const project = React.useMemo(
+  const summary = React.useMemo(
     () => findProject(projects, productKey, id),
     [projects, productKey, id],
+  );
+
+  // The rollup carries the head — name, client, tool — but not the bill, and
+  // the Overview is mostly arithmetic over bill lines. This is the same
+  // address the full workspace loads a project from
+  // (ProjectsGeneric.jsx:278), so there is one way in, not two.
+  const [full, setFull] = React.useState(null);
+  const [fullFailed, setFullFailed] = React.useState(false);
+  React.useEffect(() => {
+    if (!accessToken || !id || !productKey) return undefined;
+    let alive = true;
+    setFullFailed(false);
+    apiAuthed(`/projects/${encodeURIComponent(productKey)}/by-slug/${encodeURIComponent(id)}`, {
+      token: accessToken,
+    })
+      .then((d) => alive && setFull(d?.project || d || null))
+      .catch(() => alive && setFullFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [accessToken, productKey, id]);
+
+  // The full document where we have it, the summary where we do not, so the
+  // head still fills in while the bill is loading.
+  const project = React.useMemo(
+    () => (full ? { ...summary, ...full } : summary),
+    [full, summary],
   );
 
   const tabs = tabsFor(productKey);
@@ -103,7 +139,7 @@ export default function WorkProjectShell({ productKey, id }) {
   const viewOnly = project?.access === "view" || project?.readOnly === true;
 
   return (
-    <div className="ds">
+    <DsAppShell title={project?.name || "Project"} page="work-projects">
       <div className="pj-head">
         <nav className="pj-crumb">
           <Link to="/work/projects">Projects</Link>
@@ -145,11 +181,19 @@ export default function WorkProjectShell({ productKey, id }) {
         </div>
       ) : null}
 
-      {failed ? (
+      {fullFailed ? (
         <div className="pj-note">
           <div>
-            <b>This project could not be loaded just now.</b> The tabs below are still the right
-            ones for {toolName(productKey)}; the figures are what is missing.
+            <b>This project&rsquo;s bill could not be read just now.</b> Every figure below is
+            computed from it, so they are missing rather than zero. Reload, or open the full
+            workspace, which reads it a different way.
+          </div>
+        </div>
+      ) : failed ? (
+        <div className="pj-note">
+          <div>
+            <b>Your project list could not be loaded just now.</b> The tabs are still the right
+            ones for {toolName(productKey)}; the name and client are what is missing.
           </div>
         </div>
       ) : null}
@@ -176,21 +220,30 @@ export default function WorkProjectShell({ productKey, id }) {
       </div>
 
       <div className="pj-body">
-        <div className="pj-empty">
-          <p>
-            <b>{tabs.find((t) => t.key === tab)?.label}</b> is not built here yet.
-          </p>
-          <p className="ds-sub">
-            This is where {TAB_BODIES[tab]} will go. Until then it lives in the full workspace,
-            which is still the one to use.
-          </p>
-          <Link
-            className="ds-btn btn-p ds-btn-sm"
-            to={`/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}`}
-          >
-            Open the full workspace
-          </Link>
-        </div>
+        {tab === "overview" && !fullFailed ? (
+          <WorkProjectOverview
+            project={project}
+            toolName={toolName(productKey)}
+            canEdit={!viewOnly}
+            onGo={go}
+          />
+        ) : tab === "overview" ? null : (
+          <div className="pj-empty">
+            <p>
+              <b>{tabs.find((t) => t.key === tab)?.label}</b> is not built here yet.
+            </p>
+            <p className="ds-sub">
+              This is where {TAB_BODIES[tab]} will go. Until then it lives in the full workspace,
+              which is still the one to use.
+            </p>
+            <Link
+              className="ds-btn btn-p ds-btn-sm"
+              to={`/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}`}
+            >
+              Open the full workspace
+            </Link>
+          </div>
+        )}
       </div>
 
       {panel ? (
@@ -200,6 +253,6 @@ export default function WorkProjectShell({ productKey, id }) {
           </button>
         </div>
       ) : null}
-    </div>
+    </DsAppShell>
   );
 }
