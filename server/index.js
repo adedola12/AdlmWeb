@@ -13,6 +13,11 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath, pathToFileURL } from "url";
 import { connectDB } from "./db.js";
+import {
+  apiMongoOptions,
+  DB_UNAVAILABLE,
+  isMongoUnavailableError,
+} from "./util/mongoTimeouts.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
@@ -565,6 +570,16 @@ app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
 app.use((err, _req, res, _next) => {
   console.error(err);
+  // The database did not answer (a stall or failover, cut short by the
+  // socket timeout). Say so and invite a retry, rather than a bare 500: the
+  // request itself was fine.
+  if (isMongoUnavailableError(err)) {
+    res.set("Retry-After", "5");
+    return res.status(503).json({
+      error: "The service is briefly unavailable. Please try again in a moment.",
+      code: DB_UNAVAILABLE,
+    });
+  }
   res.status(500).json({ error: "Server error" });
 });
 
@@ -621,7 +636,9 @@ export function bootstrap() {
     // model would serve REAL rows to a demo session, silently — better to
     // refuse to boot than to leak. Deliberately NOT caught below.
     assertTenancyApplied();
-    await connectDB(process.env.MONGO_URI);
+    // Fail-fast timeouts: a stalled Atlas errors in seconds instead of holding
+    // every request to Lambda's 60s kill (util/mongoTimeouts.js).
+    await connectDB(process.env.MONGO_URI, apiMongoOptions());
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission
     // cache before serving. Non-fatal: a seed failure logs but doesn't block boot.
