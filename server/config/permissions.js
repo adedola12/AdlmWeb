@@ -26,6 +26,10 @@ export const ADMIN_AREAS = [
   // person making the calls needs a phone number and a notepad, not the user
   // directory, and nothing on that screen can change an entitlement.
   { key: "followups", label: "Follow-Up Calls", group: "People", staffGrantable: true },
+  // Outbound prospecting review: read the drafted cold emails and approve,
+  // edit, reject or mark a firm a bad fit. The "reviewer" role. Nothing here
+  // sends mail, and it cannot delete anyone's data.
+  { key: "prospecting", label: "Prospecting review", group: "People", staffGrantable: true },
   // The rotating "Latest from ADLM" band on the marketing pages.
   { key: "latest", label: "Latest from ADLM", group: "Content", staffGrantable: true },
   // Videos recorded for one organisation (a demo walked through on a call,
@@ -45,6 +49,10 @@ export const ADMIN_AREAS = [
 
   // ── Admin-exclusive (never grantable — always require the admin superuser) ──
   { key: "audit", label: "Audit Log & Break-glass", group: "Core", staffGrantable: false },
+  // Outbound prospecting administration: edit the ideal customer profiles,
+  // manage the permanent suppression list, and the NDPA delete-on-request
+  // that erases a prospect's data. Admin-only: it deletes personal data.
+  { key: "prospecting_admin", label: "Prospecting admin (profiles, suppression, deletion)", group: "People", staffGrantable: false },
   { key: "products", label: "Products", group: "Store", staffGrantable: false },
   { key: "courses", label: "Courses", group: "Store", staffGrantable: false },
   { key: "grading", label: "Course Grading", group: "Store", staffGrantable: false },

@@ -208,7 +208,7 @@ test("deleting a prospect that is not there reports deleted:false", async () => 
 test("the suppression is written before anything is deleted", async () => {
   const { models, store } = setup();
   const p = await seededFirm(store, models);
-  models.Suppression.bulkWrite = async () => { throw new Error("Atlas down"); };
+  models.Suppression.updateOne = async () => { throw new Error("Atlas down"); };
   await assert.rejects(store.deleteProspectData(p._id), /Atlas down/);
   assert.equal(models.Prospect.rows.length, 1, "nothing was deleted without its suppression");
   assert.equal(models.ProspectContact.rows.length, 2);

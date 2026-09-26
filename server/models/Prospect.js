@@ -59,6 +59,11 @@ const ProspectSchema = new mongoose.Schema(
     status: { type: String, enum: PROSPECT_STATUSES, default: "new", index: true },
     statusNote: { type: String, trim: true, default: "", maxlength: 2000 },
 
+    // When each outcome happened, for the dashboard stats by date. Set by a
+    // reviewer today; by the phase 3 ReplyHandler later.
+    repliedAt: { type: Date, default: null },
+    bookedAt: { type: Date, default: null },
+
     // The Lagos calendar day it was found on, "YYYY-MM-DD". The daily cap
     // counts rows by this, not by createdAt, so a run that crosses UTC
     // midnight still counts against the right working day.

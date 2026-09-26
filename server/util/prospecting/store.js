@@ -226,24 +226,16 @@ export function createStore(models) {
     if (!prospect) return { deleted: false };
 
     const contacts = await ProspectContact.find({ prospectId: prospect._id }).select("email").lean();
-    const ops = contacts
-      .map((c) => hashEmail(c.email))
-      .filter(Boolean)
-      .map((emailHash) => ({
-        updateOne: {
-          filter: { kind: "email", emailHash },
-          update: { $setOnInsert: { kind: "email", emailHash, reason: "deletion_request", note, addedBy: by } },
-          upsert: true,
-        },
-      }));
-    ops.push({
-      updateOne: {
-        filter: { kind: "domain", domain: prospect.domain },
-        update: { $setOnInsert: { kind: "domain", domain: prospect.domain, reason: "deletion_request", note, addedBy: by } },
-        upsert: true,
-      },
-    });
-    await Suppression.bulkWrite(ops, { ordered: true });
+    const rows = [
+      ...contacts.map((c) => hashEmail(c.email)).filter(Boolean).map((emailHash) => ({ kind: "email", emailHash })),
+      { kind: "domain", domain: prospect.domain },
+    ];
+    // One updateOne per row, deliberately not bulkWrite: the demo tenancy
+    // plugin (models/demoTenancy.js) scopes updateOne but not bulkWrite, so a
+    // bulk write from a demo session would create REAL suppression rows.
+    for (const key of rows) {
+      await Suppression.updateOne(key, { $setOnInsert: { ...key, reason: "deletion_request", note, addedBy: by } }, { upsert: true });
+    }
 
     const drafts = await OutreachDraft.deleteMany({ prospectId: prospect._id });
     const removedContacts = await ProspectContact.deleteMany({ prospectId: prospect._id });
@@ -254,7 +246,7 @@ export function createStore(models) {
       domain: prospect.domain,
       contacts: removedContacts.deletedCount ?? 0,
       drafts: drafts.deletedCount ?? 0,
-      suppressed: ops.length,
+      suppressed: rows.length,
     };
   }
 
