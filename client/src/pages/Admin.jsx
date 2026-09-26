@@ -217,7 +217,10 @@ function getDaysLeft(expiresAt) {
 
   const now = dayjs();
   if (end.isBefore(now)) {
-    const daysAgo = Math.ceil(now.diff(end, "hour") / 24);
+    // Calendar days, as daysOverdue in server/util/followUps.js counts them.
+    // ceil(diff-in-hours / 24) truncated the partial hour and read one day
+    // short ("Expired 0d") for the first hour after midnight.
+    const daysAgo = now.startOf("day").diff(dayjs(expiresAt).startOf("day"), "day");
     return -Math.max(daysAgo, 0);
   }
 
