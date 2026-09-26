@@ -1512,10 +1512,11 @@
 .ds .dsh-main [id]{scroll-margin-top:calc(var(--dash-bar) + 16px)}
 
 /* R14 — the certificate's name face (his cert.css). The porter drops every
-   @font-face, so it lives here. TODO(adlm): confirm the BALLW web-embedding
-   licence (Richard supplied the file); until then it falls back to the
-   script faces listed in ds-cert.css. */
-@font-face{font-family:"ADLM Signature";src:url("/ds/fonts/ballw.ttf") format("truetype");font-display:swap}
+   @font-face, so it lives here. His design used BALLW, which has no web
+   licence we hold; Norican (SIL Open Font License 1.1, free for web use,
+   licence in /ds/fonts/norican-OFL.txt) is the closest free brush script and
+   keeps the family name, so ds-cert.css needs no change (owner, 2026-09-26). */
+@font-face{font-family:"ADLM Signature";src:url("/ds/fonts/norican.ttf") format("truetype");font-display:swap}
 /* His print wrapper sits directly under <body> so his print rule can hide
    everything else; it carries .ds itself for the sheet's own rules. */
 .cx-print.ds{display:none}
