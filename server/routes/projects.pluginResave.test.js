@@ -158,3 +158,31 @@ test("the QS's own bill rate is still left alone, fix or no fix", () => {
 
   assert.equal(project.items[0].rate, 41000);
 });
+
+// ── the second instance ────────────────────────────────────────────────────
+// The same wipe lived on updateProject's materialItems branch, which is the
+// route QUIV actually PUTs to. The /full fix did not cover it, and the
+// preserveMaskedMoney guard there does not either: it only runs for a
+// rate-masked collaborator, and it restores money, not procurement — so the
+// owner of the project got nothing back at all.
+
+test("QUIV's materialItems PUT keeps the QS's edits too, not just /full", () => {
+  const project = { items: [billLine()], budgetItems: qsBudget() };
+  deriveBillRatesFromBudget(project);
+  const rateBefore = project.items[0].rate;
+
+  // updateProject's branch: budget is derived from materialItems, a DIFFERENT
+  // array from the stored budget, then coverage, then preserve.
+  const previousBudget = project.budgetItems;
+  const budget = pluginMaterials();
+  backfillBudgetLinks(project.items, budget);
+  const fresh = ensureBillItemCoverage(project.items, budget);
+  preserveBudgetUserEdits(previousBudget, fresh);
+  project.budgetItems = fresh;
+  deriveBillRatesFromBudget(project);
+
+  const cement = project.budgetItems.find((b) => b.materialName === "Cement");
+  assert.equal(cement.procured, true, "the purchase record survives the PUT");
+  assert.equal(cement.supplier, "Dangote");
+  assert.equal(project.items[0].rate, rateBefore, "and the bill does not revert");
+});

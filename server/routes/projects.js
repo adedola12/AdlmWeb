@@ -4073,6 +4073,15 @@ async function updateProject(req, res) {
       // to its bill line so material + labour bundle together. Guarded so a
       // mapping issue can never break the save.
       try {
+        // Read before anything replaces it. The same QS-owned fields that
+        // saveProjectFull was dropping are dropped here too — procurement
+        // marks, the buy-schedule slot, a rate typed on the website — and this
+        // is QUIV's primary save route, so it is the path most projects take.
+        // preserveMaskedMoney below does NOT cover it: that guard only runs
+        // for a rate-masked collaborator, and it restores money, not
+        // procurement, so the owner of the project got nothing back at all.
+        const previousBudget = project.budgetItems || [];
+
         let budget = sanitizeBudgetItems(materialItems);
         // This REPLACES budgetItems from a different array, so a rate-masked
         // viewer whose materialItems were blank (nothing stored to restore
@@ -4103,7 +4112,18 @@ async function updateProject(req, res) {
           budget = kept.rows.map((b) => ({ ...b, lineId: keepLineId(b.lineId) }));
         }
         backfillBudgetLinks(project.items, budget);
-        project.budgetItems = ensureBillItemCoverage(project.items, budget);
+        const freshBudget = ensureBillItemCoverage(project.items, budget);
+        // After coverage, so the synthesised rows get their edits back too.
+        // For a masked viewer this runs on top of preserveMaskedMoney and
+        // agrees with it — both restore the rate from the same stored budget —
+        // and it adds back the procurement that guard was never about.
+        const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+        if (restored.procurement || restored.pricing) {
+          console.log(
+            `[update] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+          );
+        }
+        project.budgetItems = freshBudget;
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
       }
