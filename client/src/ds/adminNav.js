@@ -41,6 +41,9 @@ export const NAV = [
       { to: "/admin/ptrainings", label: "Enrolments", icon: "hi-calendar", area: "trainings", badge: "enrolments" },
       { to: "/admin/course-grading", label: "Submissions", icon: "hi-check", area: "learn", badge: "submissions" },
       { to: "/admin/follow-ups", label: "Follow-ups", icon: "hi-phone", area: "adminhub", badge: "followups" },
+      // Not in his rail: built after his handover. Cold-email drafts waiting
+      // for a person. No badge until /admin/today counts this queue.
+      { to: "/admin/prospecting", label: "Prospecting", icon: "hi-search", area: "prospecting" },
     ],
   },
   {

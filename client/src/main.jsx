@@ -35,6 +35,7 @@ import AdminPeople from "./pages/AdminPeople.jsx";
 import AdminEnrolments from "./pages/AdminEnrolments.jsx";
 import AdminSubmissions from "./pages/AdminSubmissions.jsx";
 import AdminFollowUpsDesk from "./pages/AdminFollowUpsDesk.jsx";
+import DsAdminProspecting from "./ds/DsAdminProspecting.jsx";
 import AdminDsOrganisations from "./pages/AdminDsOrganisations.jsx";
 import AdminDsRoles from "./pages/AdminDsRoles.jsx";
 import AdminDsSupport from "./pages/AdminDsSupport.jsx";
@@ -1114,6 +1115,17 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="followups">
             <AdminFollowUpsDesk />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Outbound prospecting review — staff-grantable ("prospecting" area);
+      // the admin-only parts inside check "prospecting_admin" themselves
+      {
+        path: "admin/prospecting",
+        element: (
+          <AdminRoute permission="prospecting">
+            <DsAdminProspecting />
           </AdminRoute>
         ),
       },
