@@ -44,6 +44,7 @@ import { reconcileBill } from "../features/projects/rateReconcile.js";
 // The same product/host table the gallery names its tools from (P0.4), so the
 // two screens say "Measure in QUIV, inside Revit" in exactly the same words.
 import { SOURCES } from "../lib/projectGallery.js";
+import { isFolderMarker } from "../lib/folderMarker.js";
 import {
   budgetDrivenCodes as budgetDrivenCodesFor,
   nextRateStamp,
@@ -4478,8 +4479,11 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // compute all rows
+  // compute all rows. HERON's folder markers ("--- GF ---") are dropped here, after
+  // the map, so every row keeps its index into items[] (row.i and the rate/status maps
+  // are keyed by it) while the Bill, its counts and its exports never see a marker.
   const computedAll = items.map((it, i) => {
+    if (isFolderMarker(it)) return null;
     const k = itemKey(it, i);
     const qty = safeNum(it?.qty);
     const rate =
@@ -4561,7 +4565,7 @@ export default function ProjectsGeneric() {
       markedAt:
         statusField === "purchased" ? it?.purchasedAt || null : it?.completedAt || null,
     };
-  });
+  }).filter(Boolean);
   const grossAmount = computedAll.reduce(
     (acc, row) => acc + safeNum(row.fullAmount),
     0,
