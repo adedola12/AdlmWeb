@@ -46,7 +46,9 @@ export default function ArchiCADBoQ() {
   const [copied, setCopied] = React.useState(false);
   const [reapplying, setReapplying] = React.useState(false);
 
-  const readOnly = viewingVersionId != null;
+  const isSample = !!boq?.isSample;
+  // An old version, or a read-only learning sample, cannot be edited.
+  const readOnly = viewingVersionId != null || isSample;
 
 
   // An old link carries the database id; once the project is known, show its
@@ -241,10 +243,11 @@ export default function ArchiCADBoQ() {
             currentVersionId={viewingVersionId ? null : boq?.versionId}
             selectedVersionId={viewingVersionId}
             onSelect={selectVersion}
-            onReapply={reapplyRates}
+            onReapply={isSample ? null : reapplyRates}
             reapplying={reapplying}
             currency={boq?.currency}
           />
+          {isSample ? null : (
           <div className="wk-acts" style={{ alignItems: "center" }}>
             <button
               type="button"
@@ -276,10 +279,21 @@ export default function ArchiCADBoQ() {
               </span>
             ) : null}
           </div>
+          )}
         </div>
 
         {/* Notes */}
-        {readOnly ? (
+        {isSample ? (
+          <div className="mk-note" style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" }}>
+            <b style={{ fontWeight: 500 }}>Sample project · Read-only learning material</b>
+            {boq?.sample?.stage ? ` · ${boq.sample.stage}` : ""}
+            {boq?.sample?.summary ? <p style={{ margin: "6px 0 0" }}>{boq.sample.summary}</p> : null}
+            <p style={{ margin: "6px 0 0" }}>
+              Every line, element and version can be opened and exported, but nothing can be
+              changed. Extract your own model from the connector to start a project of your own.
+            </p>
+          </div>
+        ) : readOnly ? (
           <p className="mk-note" style={{ margin: 0, background: "var(--pal-light-wash)", color: "var(--pal-light-key)", borderColor: "var(--pal-light-line)" }}>
             Viewing old version{viewedVersion ? ` v${viewedVersion.versionNumber}` : ""},
             read-only.{" "}

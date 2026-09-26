@@ -665,6 +665,7 @@ import {
   cascadeBillQtyToMaterials,
 } from "../util/billBudgetCascade.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
+import { rejectSampleWrites, sampleSummary } from "../util/sampleProjects.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
 import {
@@ -792,6 +793,8 @@ const boqImportUpload = multer({
 const router = express.Router();
 
 router.use(requireAuth);
+// Sample projects are read-only for everyone (util/sampleProjects.js).
+router.param("id", rejectSampleWrites);
 
 function normalizeProductKey(v) {
   return String(v || "")
@@ -865,11 +868,16 @@ async function userHasActiveEntitlement(userId, key) {
 // Mongo filter matching a project the requester may READ: they own it OR are a
 // collaborator on it. Write/export/manage powers are refined by
 // resolveProjectAccess() once the document is loaded.
+//
+// Sample projects are readable by anyone who reached this far: every route that
+// uses this filter sits behind requireEntitlementParam, so "anyone" here means
+// an active subscriber of the product. resolveProjectAccess() makes them
+// read-only and rejectSampleWrites() refuses every write before a handler runs.
 function accessFilter(id, userId, productKey) {
   return {
     _id: id,
     productKey,
-    $or: [{ userId }, { "collaborators.userId": userId }],
+    $or: [{ userId }, { "collaborators.userId": userId }, { isSample: true }],
   };
 }
 
@@ -890,6 +898,15 @@ async function resolveProjectAccess(req, project) {
     canSeeRates: false,
   };
   if (!project || !uid) return out;
+
+  // Samples: look at everything, including rates, but change nothing.
+  if (project.isSample) {
+    out.role = "sample";
+    out.accessLevel = "view";
+    out.canExport = true;
+    out.canSeeRates = true;
+    return out;
+  }
 
   if (project.userId && uid.equals(project.userId)) {
     out.role = "owner";
@@ -3036,6 +3053,36 @@ async function listProjects(req, res) {
   }
 }
 
+async function listSampleProjects(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const samples = await TakeoffProject.find(
+      { productKey, isSample: true },
+      {
+        name: 1,
+        slug: 1,
+        clientName: 1,
+        productKey: 1,
+        sample: 1,
+        "items.qty": 1,
+        "items.rate": 1,
+        "contract.contractSum": 1,
+        "certificates.number": 1,
+        "models.architectural.key": 1,
+        "models.structural.key": 1,
+        "models.mep.key": 1,
+        updatedAt: 1,
+      },
+    )
+      .sort({ "sample.order": 1 })
+      .lean();
+    res.json(samples.map(sampleSummary));
+  } catch (err) {
+    console.error("GET sample projects error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 async function getProject(req, res) {
   try {
     const productKey = requestedProductKey(req);
@@ -3071,6 +3118,16 @@ async function getProject(req, res) {
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+      return res.json(out);
+    }
+
+    // Samples are seeded complete and never written on read: the lazy heals
+    // below all save, and a read-only document shared by every subscriber
+    // must not change because one of them opened it.
+    if (project.isSample) {
+      const access = await resolveProjectAccess(req, project);
+      const out = projectForClient(project, access);
+      out.linkedSummaries = [];
       return res.json(out);
     }
 
@@ -4290,11 +4347,14 @@ async function getProjectBySlug(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({
-      slug,
-      productKey,
-      $or: [{ userId }, { "collaborators.userId": userId }],
-    });
+    // The requester's own project wins over a sample with the same slug.
+    const project =
+      (await TakeoffProject.findOne({
+        slug,
+        productKey,
+        $or: [{ userId }, { "collaborators.userId": userId }],
+      })) ||
+      (await TakeoffProject.findOne({ slug, productKey, isSample: true }));
     if (!project) return res.status(404).json({ error: "Not found" });
 
     const access = await resolveProjectAccess(req, project);
@@ -7976,6 +8036,17 @@ router.get(
   mapEntitlementParam,
   requireEntitlementParam,
   streamProjectModel,
+);
+
+// Sample projects for a product (learning material, read-only). Separate from
+// the main list on purpose: the desktop plugins parse GET /:productKey as a
+// bare array and must never be offered a sample to open or save over. Must be
+// before /:productKey/:id so "samples" is not captured as an :id.
+router.get(
+  "/:productKey/samples",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  listSampleProjects,
 );
 
 // Storage info for a product — must be before /:productKey/:id so "storage"

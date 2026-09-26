@@ -35,9 +35,18 @@ User.findById = (id) => ({
   then: (ok, ko) => Promise.resolve(String(id) === String(USER_ID) ? me : null).then(ok, ko),
 });
 
+// The route runs two reads: the project list, and the merged contracts'
+// own certificates. The stub tells them apart by the container flag.
 let seenPipeline = null;
+let seenMergedPipeline = null;
 let rows = [];
+let mergedRows = [];
+const isMergedRead = (pipeline) => pipeline.find((s) => s.$match)?.$match?.mergeContainer === true;
 TakeoffProject.aggregate = async (pipeline) => {
+  if (isMergedRead(pipeline)) {
+    seenMergedPipeline = pipeline;
+    return mergedRows;
+  }
   seenPipeline = pipeline;
   return rows;
 };
@@ -195,6 +204,69 @@ test("a merged container is left out, exactly as the per-product list leaves it 
   assert.deepEqual(match.mergeContainer, { $ne: true });
   // The rule the per-product list route applies by default.
   assert.deepEqual(match.pmTrackerOnly, { $ne: true });
+});
+
+// ── A merged contract's own certificates (R7) ───────────────────────────────
+
+const container = (extra) => ({
+  id: new mongoose.Types.ObjectId(),
+  name: "MOREMI ESTATE (MERGED)",
+  slug: "moremi-estate-merged",
+  productKey: "revit",
+  shared: false,
+  certificateCount: 2,
+  certifiedToDate: 7_500_000,
+  approvedVariationsTotal: 1_200_000,
+  ...extra,
+});
+
+test("a merged contract's certificates come back beside the projects, not among them", async () => {
+  me = { _id: USER_ID, email: "qs@example.com", entitlements: [] };
+  rows = [project()];
+  mergedRows = [container()];
+  const res = await get("/me/projects-rollup");
+  // Not a project row: the container is still not listed as work.
+  assert.equal(res.body.projects.length, 1);
+  assert.equal(res.body.mergedContracts.length, 1);
+  assert.equal(res.body.mergedContracts[0].certifiedToDate, 7_500_000);
+  assert.equal(res.body.mergedContracts[0].approvedVariationsTotal, 1_200_000);
+});
+
+test("the merged read asks for the container's own money only, on the same certified rule", async () => {
+  rows = [];
+  mergedRows = [];
+  await get("/me/projects-rollup");
+  const match = seenMergedPipeline.find((s) => s.$match).$match;
+  assert.equal(match.mergeContainer, true);
+  assert.deepEqual(match.pmTrackerOnly, { $ne: true });
+  // Owner or collaborator — the same reach as the project list.
+  assert.equal(match.$or.length, 2);
+  const p = seenMergedPipeline.find((s) => s.$project).$project;
+  assert.deepEqual(p.certifiedToDate, certifiedToDateExpr());
+  // The container's bill is its sources' bills, and every source is already a
+  // project row. Measured work from the container would count the job twice.
+  for (const k of ["totalCost", "valuedAmount", "provisionalTotal", "preliminaryTotal", "workValue"]) {
+    assert.equal(p[k], undefined, `${k} must not be read off a container`);
+  }
+});
+
+test("a collaborator without RateGen is not told what a merged contract has certified", async () => {
+  me = { _id: USER_ID, email: "qs@example.com", entitlements: [] };
+  rows = [];
+  mergedRows = [container({ shared: true }), container()];
+  const res = await get("/me/projects-rollup");
+  const [theirs, mine] = res.body.mergedContracts;
+  assert.equal(theirs.certifiedToDate, 0);
+  assert.equal(theirs.approvedVariationsTotal, 0);
+  assert.equal(theirs.moneyHidden, true);
+  assert.equal(mine.certifiedToDate, 7_500_000);
+  assert.equal(mine.moneyHidden, undefined);
+
+  me = { _id: USER_ID, email: "qs@example.com", entitlements: rategen() };
+  mergedRows = [container({ shared: true })];
+  const shown = await get("/me/projects-rollup");
+  assert.equal(shown.body.mergedContracts[0].certifiedToDate, 7_500_000);
+  mergedRows = [];
 });
 
 // ── The estimate ────────────────────────────────────────────────────────────
