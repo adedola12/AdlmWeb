@@ -64,6 +64,7 @@ import { User } from "../models/User.js";
 import { ChangelogProduct } from "../models/Changelog.js";
 import { EmailSend, hashRecipient } from "../models/EmailSend.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
+import { ROLLOUT_ORGANIZATIONS, earlyRingUserIds, newestOffered } from "./releaseRollout.js";
 import {
   ReleaseNotice,
   ReleaseNoticeRecipient,
@@ -552,11 +553,14 @@ export async function recordDeploymentRelease({
   body = {},
   demoMode = false,
   actor = "",
+  // "organizations" while the build is only with firms (util/releaseRollout.js).
+  audience = "everyone",
   store = mongoStore,
   log = console,
   now = () => new Date(),
 }) {
   if (demoMode) return { created: false, reason: "demo-mode" };
+  const forFirms = audience === ROLLOUT_ORGANIZATIONS;
 
   const productKey = String(item?.productKey || "").trim().toLowerCase();
   const version = normalizeVersion(item?.version);
@@ -577,7 +581,10 @@ export async function recordDeploymentRelease({
     });
   }
 
-  const lastAnnounced = await store.lastAnnouncedVersion(productKey);
+  // A release for everyone is measured against what everyone has been told,
+  // not against a newer build only firms have heard about: a hotfix to 3.1.12
+  // while 4.0.0 is with firms must still reach single users.
+  const lastAnnounced = await store.lastAnnouncedVersion(productKey, { everyoneOnly: !forFirms });
   const decision = decideReleaseNotice({ previous, next: item, body, demoMode, lastAnnounced });
   out.reason = decision.reason;
   if (!decision.notify) return out;
@@ -595,6 +602,7 @@ export async function recordDeploymentRelease({
     notes,
     status: "pending",
     source: "deployment",
+    audience: forFirms ? ROLLOUT_ORGANIZATIONS : "everyone",
     createdBy: actor,
     openedAt: now(),
   });
@@ -606,7 +614,9 @@ export async function recordDeploymentRelease({
 
   out.superseded = await store.closeOpenNotices(productKey, {
     exceptKey: key,
-    match: (v) => compareVersions(v, version) < 0,
+    // A firms-only notice replaces only older firms-only notices: an email to
+    // everyone about a hotfix still has to go.
+    match: (v, n) => compareVersions(v, version) < 0 && (!forFirms || n?.audience === ROLLOUT_ORGANIZATIONS),
     set: { status: "superseded", supersededBy: key },
   });
 
@@ -623,6 +633,41 @@ export async function recordDeploymentRelease({
     status: current?.status || "pending",
     notesSource: notes.source,
   };
+}
+
+/**
+ * The firms' build has gone to everyone (util/releaseGateFlow.js,
+ * releaseToEveryone): its email is widened to every licence holder. The
+ * audience is enrolled again on the next run; the ledger's unique
+ * (noticeKey, emailHash) index keeps everyone the firms' run already reached
+ * from hearing about it twice. A notice that was cancelled or superseded stays
+ * as it is. Never sends.
+ */
+export async function widenReleaseNotice({ productKey, version, actor = "", store = mongoStore, now = () => new Date(), log = console }) {
+  const key = noticeKeyFor(productKey, version);
+  const notice = await store.findNotice(key);
+  if (!notice) return { widened: false, key, reason: "no-notice" };
+  if (notice.audience !== ROLLOUT_ORGANIZATIONS) return { widened: false, key, reason: "already-everyone" };
+  if (notice.status === "cancelled" || notice.status === "superseded") {
+    return { widened: false, key, reason: `notice-${notice.status}` };
+  }
+  const set = { audience: "everyone", enrolledAt: null, widenedBy: actor, widenedAt: now() };
+  let where = OPEN_STATUSES;
+  if (notice.status === "done") {
+    Object.assign(set, { status: "pending", openedAt: now(), finishedAt: null });
+    where = "done";
+  }
+  const updated = await store.setNotice(key, set, where);
+  log.log?.(`[release-mail] ${key}: widened to everyone (${updated?.status || notice.status})`);
+  return { widened: !!updated, key, status: updated?.status || notice.status };
+}
+
+/** A build taken back from firms: its unfinished firms-only email stops. */
+export async function cancelEarlyNotices({ productKey, reason = "Taken back from firms", store = mongoStore }) {
+  return store.closeOpenNotices(String(productKey || "").trim().toLowerCase(), {
+    match: (_v, n) => n?.audience === ROLLOUT_ORGANIZATIONS,
+    set: { status: "cancelled", cancelledReason: reason },
+  });
 }
 
 const conflict = (message, details = {}) => Object.assign(new Error(message), { status: 409, details });
@@ -793,7 +838,9 @@ const TERMINAL = new Set(["done", "cancelled", "superseded"]);
  * missed hook, the admin UI or a direct edit could get round. "" when it is.
  */
 async function withdrawnNow(store, notice) {
-  return withdrawnReason(await store.deploymentFor(notice.productKey), notice.version);
+  // A build still with firms is downloadable (by them): read the deployment
+  // at the top of its rollout (util/releaseRollout.js).
+  return withdrawnReason(newestOffered(await store.deploymentFor(notice.productKey)), notice.version);
 }
 
 /**
@@ -945,7 +992,13 @@ export async function sendReleaseNotice(
 
   /* ── write the audience down, once ── */
   if (!working.enrolledAt) {
-    const users = await store.audience(productKeys, now());
+    let users = await store.audience(productKeys, now());
+    // While the build is only with firms, only their accounts are enrolled;
+    // the rest are enrolled when the notice is widened to everyone.
+    if (working.audience === ROLLOUT_ORGANIZATIONS) {
+      const ring = new Set((await store.earlyRingUserIds(now())).map(String));
+      users = users.filter((u) => ring.has(String(u._id)));
+    }
     const seen = new Set();
     const rows = [];
     for (const u of users) {
@@ -1282,8 +1335,10 @@ export const mongoStore = {
     }
   },
 
-  async lastAnnouncedVersion(productKey) {
-    const rows = await ReleaseNotice.find({ productKey, status: { $ne: "cancelled" } })
+  async lastAnnouncedVersion(productKey, { everyoneOnly = false } = {}) {
+    const filter = { productKey, status: { $ne: "cancelled" } };
+    if (everyoneOnly) filter.audience = { $ne: ROLLOUT_ORGANIZATIONS };
+    const rows = await ReleaseNotice.find(filter)
       .select("version")
       .lean();
     return maxVersion(rows.map((r) => r.version));
@@ -1298,9 +1353,9 @@ export const mongoStore = {
 
   async closeOpenNotices(productKey, { exceptKey = "", match, set }) {
     const open = await ReleaseNotice.find({ productKey, status: { $in: OPEN_STATUSES } })
-      .select("key version")
+      .select("key version audience")
       .lean();
-    const hit = open.filter((n) => n.key !== exceptKey && match(n.version));
+    const hit = open.filter((n) => n.key !== exceptKey && match(n.version, n));
     for (const n of hit) {
       await ReleaseNotice.updateOne({ key: n.key, status: { $in: OPEN_STATUSES } }, { $set: set });
     }
@@ -1320,8 +1375,12 @@ export const mongoStore = {
   /** The deployment as customers see it now; null once it is deleted. */
   deploymentFor(productKey) {
     return ProductDeployment.findOne({ productKey: String(productKey || "").trim().toLowerCase() })
-      .select("productKey version enabled packageUri")
+      .select("productKey version enabled packageUri earlyAccess.version earlyAccess.payload.version earlyAccess.payload.packageUri earlyAccess.payload.enabled")
       .lean();
+  },
+
+  earlyRingUserIds(now) {
+    return earlyRingUserIds(User, now);
   },
 
   audience(productKeys, now) {

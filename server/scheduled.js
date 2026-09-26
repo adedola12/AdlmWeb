@@ -233,6 +233,16 @@ export async function runJob(job, jobs, context) {
       console.error("[scheduled] unconfirmed sweep failed:", err?.message || err);
       out.unconfirmedSweep = { ok: false, error: String(err?.message || err) };
     }
+    // Tell the release approver when a build that went to firms first can go
+    // to everyone (util/releaseRollout.js). Same daily slot, own try/catch.
+    try {
+      const runRolloutUnlockReminders =
+        jobs.runRolloutUnlockReminders ?? (await import("./util/releaseRollout.js")).runRolloutUnlockReminders;
+      out.rolloutReminders = await runRolloutUnlockReminders();
+    } catch (err) {
+      console.error("[scheduled] rollout reminders failed:", err?.message || err);
+      out.rolloutReminders = { ok: false, error: String(err?.message || err) };
+    }
   }
 
   console.log(
