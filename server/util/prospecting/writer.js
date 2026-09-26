@@ -27,7 +27,12 @@ export const OPT_OUT = "Reply 'stop' and I won't email again.";
 export const FOOTER = `\n\n${SIGN_OFF}\n\n${OPT_OUT}`;
 const MAX_ATTEMPTS = 2;
 
-export const BRIEFS_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "config", "products.md");
+// PROSPECT_BRIEFS_PATH wins: inside the Lambda bundle this file is no longer
+// two folders below config/, so the stack copies products.md next to the
+// bundle and points here (infra/lib/adlm-prospecting-stack.ts).
+export const BRIEFS_PATH =
+  process.env.PROSPECT_BRIEFS_PATH ||
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "config", "products.md");
 
 /* ───────────────────────────── product briefs ───────────────────────────── */
 
