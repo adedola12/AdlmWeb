@@ -76,11 +76,12 @@ const ADLM = {
      particular — and on anything contractual the registration number is what
      identifies which company actually signed.
 
-     `reg` is deliberately empty. ADLM's RC number has not been given, and a
-     registration number invented to fill a gap would be a false record on
-     every document the studio sends. It prints nothing until it is set. */
+     RC 7440343 is ADLM Studio's registration with the CAC, confirmed by the
+     CEO on 26 Sep 2026 and the number the proposal pages already print. It
+     was left empty until then rather than invented. The "Reg No. 3612322" on
+     the retired Drive letterhead is not the number ADLM documents carry. */
   address: ["1 Alhaji Abiola Street, Olowora,", "Ikosi, Lagos, Nigeria"],
-  reg: "",
+  reg: "RC 7440343",
   bank: { account: "1634998770", name: "ADLM Studio", bank: "Access Bank" },
   ink: "#091E39",
   accent: "#239CFF",
@@ -607,6 +608,33 @@ function paginate(host, ctx) {
   const pages = [[]];
   let used = 0;
 
+  const outer = (el) => el.offsetHeight + (parseFloat(getComputedStyle(el).marginBottom) || 0);
+
+  /* A heading is never the last thing on a sheet.
+   *
+   * paginate() placed blocks one at a time with no idea that a heading belongs
+   * to what follows it, so a section title that happened to fit at the foot of
+   * a page stayed there and its first clause started the next sheet. The policy
+   * reissued on 26 Sep 2026 ended page 1 on "3 Access to the CEO" with the
+   * section itself on page 2.
+   *
+   * When the next block has to start a new sheet, the headings sitting at the
+   * foot of the current one go with it — but only if they and at least the
+   * start of that block fit on a sheet together, so a carried heading can never
+   * push anything past the floor. A sheet made only of headings keeps them.
+   */
+  const takeHeadings = (need) => {
+    const cur = pages[pages.length - 1];
+    let n = 0;
+    let h = 0;
+    while (n < cur.length - 1 && cur[cur.length - 1 - n].classList.contains("doc-h")) {
+      h += outer(cur[cur.length - 1 - n]);
+      n += 1;
+    }
+    if (!n || h + need > limit) return { els: [], height: 0 };
+    return { els: cur.splice(cur.length - n, n), height: h };
+  };
+
   [...box.children].forEach((el) => {
     const h = el.offsetHeight;
     const margin = parseFloat(getComputedStyle(el).marginBottom) || 0;
@@ -617,9 +645,24 @@ function paginate(host, ctx) {
     }
     const tbl = el.querySelector ? el.querySelector(".doc-table") : null;
     if (tbl) {
-      const split = splitTable(el, tbl, limit - used, limit);
+      let split = splitTable(el, tbl, limit - used, limit);
+      let carried = { els: [], height: 0 };
+      if (split && split.newPage) {
+        // The table starts a fresh sheet, so any heading above it comes too.
+        // Measured against the header row and first body row: that is the
+        // least of the table a sheet may start with.
+        const head = tbl.querySelector("tr.doc-hrow");
+        const first = tbl.querySelector("tbody > tr:not(.doc-hrow)");
+        const start = (head ? head.offsetHeight : 0) + (first ? first.offsetHeight : 0);
+        carried = takeHeadings(start + 2);
+        // Re-divide with the heading's height taken off the first sheet, so the
+        // first chunk cannot run past the floor underneath it.
+        if (carried.els.length) split = splitTable(el, tbl, limit - carried.height, limit) || split;
+      }
       if (split) {
-        if (split.newPage && pages[pages.length - 1].length) pages.push([]);
+        if ((split.newPage || carried.els.length) && pages[pages.length - 1].length) {
+          pages.push(carried.els);
+        }
         split.chunks.forEach((c, n) => {
           if (n > 0) pages.push([]);
           pages[pages.length - 1].push(c.el);
@@ -628,12 +671,16 @@ function paginate(host, ctx) {
         // read off them — it is carried out of the split instead. Measuring a
         // detached node returns 0, which told every following block the page
         // was empty.
-        used = split.chunks[split.chunks.length - 1].height + margin;
+        used =
+          split.chunks[split.chunks.length - 1].height +
+          margin +
+          (split.chunks.length === 1 ? carried.height : 0);
         return;
       }
     }
-    pages.push([el]);
-    used = h + margin;
+    const carried = takeHeadings(h);
+    pages.push([...carried.els, el]);
+    used = carried.height + h + margin;
   });
 
   // A trailing page with nothing on it is a sheet of letterhead somebody has
