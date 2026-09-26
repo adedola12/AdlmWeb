@@ -1,0 +1,231 @@
+{
+ "_note": "RECORDED-SHAPE SAMPLE DATA. Hunter.io domain-search responses; every person and domain is invented. A domain not listed returns no emails.",
+ "responses": {
+  "adeyemi-qs.example": {
+   "data": {
+    "domain": "adeyemi-qs.example",
+    "emails": [
+     {
+      "value": "t.adeyemi@adeyemi-qs.example",
+      "type": "personal",
+      "confidence": 94,
+      "first_name": "Tunde",
+      "last_name": "Adeyemi",
+      "position": "Managing Partner",
+      "sources": [
+       {
+        "domain": "adeyemi-qs.example",
+        "uri": "https://adeyemi-qs.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     },
+     {
+      "value": "info@adeyemi-qs.example",
+      "type": "generic",
+      "confidence": 99,
+      "first_name": null,
+      "last_name": null,
+      "position": null,
+      "sources": [
+       {
+        "domain": "adeyemi-qs.example",
+        "uri": "https://adeyemi-qs.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     },
+     {
+      "value": "ife.okoro@adeyemi-qs.example",
+      "type": "personal",
+      "confidence": 88,
+      "first_name": "Ife",
+      "last_name": "Okoro",
+      "position": "Graduate Quantity Surveyor",
+      "sources": [
+       {
+        "domain": "adeyemi-qs.example",
+        "uri": "https://adeyemi-qs.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     },
+     {
+      "value": "s.eze@adeyemi-qs.example",
+      "type": "personal",
+      "confidence": 40,
+      "first_name": "Sam",
+      "last_name": "Eze",
+      "position": "Director",
+      "sources": [
+       {
+        "domain": "adeyemi-qs.example",
+        "uri": "https://adeyemi-qs.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     }
+    ]
+   },
+   "meta": {
+    "results": 4
+   }
+  },
+  "kaduna-cost.example": {
+   "data": {
+    "domain": "kaduna-cost.example",
+    "emails": [
+     {
+      "value": "amina@kaduna-cost.example",
+      "type": "personal",
+      "confidence": 82,
+      "first_name": "Amina",
+      "last_name": "Bello",
+      "position": "Director",
+      "sources": [
+       {
+        "domain": "kaduna-cost.example",
+        "uri": "https://kaduna-cost.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     },
+     {
+      "value": "chidi@kaduna-cost.example",
+      "type": "personal",
+      "confidence": 91,
+      "first_name": "Chidi",
+      "last_name": "Nwosu",
+      "position": "Senior Partner",
+      "sources": [
+       {
+        "domain": "kaduna-cost.example",
+        "uri": "https://kaduna-cost.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     }
+    ]
+   },
+   "meta": {
+    "results": 2
+   }
+  },
+  "harbourbuild.example": {
+   "data": {
+    "domain": "harbourbuild.example",
+    "emails": [
+     {
+      "value": "grace.ibe@harbourbuild.example",
+      "type": "personal",
+      "confidence": 87,
+      "first_name": "Grace",
+      "last_name": "Ibe",
+      "position": "Head of Estimating",
+      "sources": [
+       {
+        "domain": "harbourbuild.example",
+        "uri": "https://harbourbuild.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     },
+     {
+      "value": "musa.ali@harbourbuild.example",
+      "type": "personal",
+      "confidence": 90,
+      "first_name": "Musa",
+      "last_name": "Ali",
+      "position": "Site Engineer",
+      "sources": [
+       {
+        "domain": "harbourbuild.example",
+        "uri": "https://harbourbuild.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     }
+    ]
+   },
+   "meta": {
+    "results": 2
+   }
+  },
+  "savannah-structures.example": {
+   "data": {
+    "domain": "savannah-structures.example",
+    "emails": [
+     {
+      "value": "bola@savannah-structures.example",
+      "type": "personal",
+      "confidence": 72,
+      "first_name": "Bola",
+      "last_name": "Ade",
+      "position": "Commercial Manager",
+      "sources": [
+       {
+        "domain": "savannah-structures.example",
+        "uri": "https://savannah-structures.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     }
+    ]
+   },
+   "meta": {
+    "results": 1
+   }
+  },
+  "qs.samplefed-uni.example": {
+   "data": {
+    "domain": "qs.samplefed-uni.example",
+    "emails": [
+     {
+      "value": "hod@qs.samplefed-uni.example",
+      "type": "personal",
+      "confidence": 85,
+      "first_name": "Halima",
+      "last_name": "Sani",
+      "position": "Head of Department",
+      "sources": [
+       {
+        "domain": "qs.samplefed-uni.example",
+        "uri": "https://qs.samplefed-uni.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     },
+     {
+      "value": "y.garba@qs.samplefed-uni.example",
+      "type": "personal",
+      "confidence": 80,
+      "first_name": "Yusuf",
+      "last_name": "Garba",
+      "position": "Lecturer",
+      "sources": [
+       {
+        "domain": "qs.samplefed-uni.example",
+        "uri": "https://qs.samplefed-uni.example/team",
+        "extracted_on": "2026-08-14",
+        "still_on_page": true
+       }
+      ]
+     }
+    ]
+   },
+   "meta": {
+    "results": 2
+   }
+  }
+ }
+}

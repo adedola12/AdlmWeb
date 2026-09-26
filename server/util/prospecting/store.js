@@ -107,6 +107,33 @@ export function createStore(models) {
     return { inserted, skipped };
   }
 
+  /** Prospects already added on this Lagos day, across every profile. */
+  function foundTodayCount(day) {
+    return Prospect.countDocuments({ foundDay: day });
+  }
+
+  /**
+   * The most recent domains found for a profile. Handed to the research
+   * prompt as "already known, skip these", so the model spends its searches on
+   * new firms instead of rediscovering last week's. Dedupe does not depend on
+   * this; it is only about not wasting searches.
+   */
+  async function knownDomains(profileId, limit = 150) {
+    const rows = await Prospect.find({ profileId }).sort({ createdAt: -1 }).limit(limit).select("domain").lean();
+    return rows.map((r) => r.domain);
+  }
+
+  /** Marks the one contact the drafts will be addressed to. */
+  async function setPrimaryContact(prospectId, contactId) {
+    await ProspectContact.updateMany({ prospectId, _id: { $ne: contactId } }, { $set: { primary: false } });
+    await ProspectContact.updateOne({ _id: contactId }, { $set: { primary: true } });
+  }
+
+  /** Records why a prospect is stuck, e.g. "No contact found". */
+  async function noteProspect(prospectId, note) {
+    await Prospect.updateOne({ _id: prospectId }, { $set: { statusNote: String(note || "").slice(0, 2000) } });
+  }
+
   /** Is this address, or its domain, on the suppression list? */
   async function isSuppressed(email) {
     const hash = hashEmail(email);
@@ -192,7 +219,17 @@ export function createStore(models) {
     };
   }
 
-  return { addProspects, addContacts, isSuppressed, optOut, deleteProspectData };
+  return {
+    addProspects,
+    addContacts,
+    foundTodayCount,
+    knownDomains,
+    setPrimaryContact,
+    noteProspect,
+    isSuppressed,
+    optOut,
+    deleteProspectData,
+  };
 }
 
 export default createStore({ Prospect, ProspectContact, OutreachDraft, Suppression });

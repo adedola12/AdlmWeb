@@ -1,81 +1,22 @@
 // server/util/prospecting/store.test.js
 //
 // The database side of dedupe, opt-out, deletion and the daily cap, run
-// against a small in-memory stand-in for the Mongoose models so the tests
-// never touch Atlas (local dev shares the production cluster).
+// against the in-memory models (memoryModels.js) so the tests never touch
+// Atlas (local dev shares the production cluster).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createStore } from "./store.js";
 import { hashEmail } from "./normalise.js";
-
-/* ── a tiny fake model: just the query shapes store.js uses ─────────── */
-
-let nextId = 1;
-const matches = (doc, q) =>
-  Object.entries(q).every(([k, v]) => {
-    if (k === "$or") return v.some((sub) => matches(doc, sub));
-    if (v && typeof v === "object" && "$in" in v) return v.$in.map(String).includes(String(doc[k]));
-    return String(doc[k]) === String(v);
-  });
-const chain = (value) => ({ select: () => chain(value), lean: async () => value });
-
-function fakeModel(uniqueKey) {
-  const rows = [];
-  const dupe = (d) => uniqueKey && rows.some((r) => uniqueKey(r) !== undefined && uniqueKey(r) === uniqueKey(d));
-  const upsert = (filter, update) => {
-    const hit = rows.find((r) => matches(r, filter));
-    if (hit) { Object.assign(hit, update.$set || {}); return; }
-    rows.push({ _id: `id${nextId++}`, ...filter, ...(update.$setOnInsert || {}), ...(update.$set || {}) });
-  };
-  return {
-    rows,
-    find: (q) => chain(rows.filter((r) => matches(r, q))),
-    findOne: (q) => chain(rows.find((r) => matches(r, q)) || null),
-    findById: (id) => chain(rows.find((r) => String(r._id) === String(id)) || null),
-    countDocuments: async (q) => rows.filter((r) => matches(r, q)).length,
-    async insertMany(docs) {
-      const inserted = [];
-      const writeErrors = [];
-      for (const d of docs) {
-        if (dupe(d)) { writeErrors.push({ code: 11000 }); continue; }
-        const row = { _id: `id${nextId++}`, ...d };
-        rows.push(row);
-        inserted.push(row);
-      }
-      if (writeErrors.length) throw Object.assign(new Error("E11000"), { writeErrors, insertedDocs: inserted });
-      return inserted;
-    },
-    updateOne: async (filter, update, opts = {}) => {
-      if (opts.upsert) return upsert(filter, update);
-      const hit = rows.find((r) => matches(r, filter));
-      if (hit) Object.assign(hit, update.$set || {});
-    },
-    updateMany: async (filter, update) => {
-      for (const r of rows.filter((x) => matches(x, filter))) Object.assign(r, update.$set || {});
-    },
-    bulkWrite: async (ops) => { for (const op of ops) upsert(op.updateOne.filter, op.updateOne.update); },
-    deleteMany: async (q) => {
-      const gone = rows.filter((r) => matches(r, q));
-      for (const g of gone) rows.splice(rows.indexOf(g), 1);
-      return { deletedCount: gone.length };
-    },
-    deleteOne: async (q) => {
-      const i = rows.findIndex((r) => matches(r, q));
-      if (i >= 0) rows.splice(i, 1);
-      return { deletedCount: i >= 0 ? 1 : 0 };
-    },
-  };
-}
+import { memoryModels } from "./memoryModels.js";
 
 function setup() {
-  const models = {
-    Prospect: fakeModel((r) => r.domain),
-    ProspectContact: fakeModel((r) => r.email),
-    OutreachDraft: fakeModel(),
-    Suppression: fakeModel((r) => (r.kind === "email" ? `e:${r.emailHash}` : `d:${r.domain}`)),
-  };
+  const models = memoryModels();
   return { models, store: createStore(models) };
 }
+
+// For the race test: a query that returns nothing, like a read that ran
+// before the other writer committed.
+const emptyQuery = () => ({ select() { return this; }, lean: async () => [] });
 
 const profile = { _id: "profile1", targetProduct: "heron" };
 const firm = (d) => ({ companyName: d, website: `https://www.${d}`, sources: [{ url: `https://${d}` }] });
@@ -139,7 +80,7 @@ test("losing an insert race to another writer is a skip, not a crash", async () 
   models.Prospect.find = (q) => {
     models.Prospect.rows.push({ _id: "raced", domain: "a.com", foundDay: "2026-09-25" });
     models.Prospect.find = realFind;
-    return chain([]);
+    return emptyQuery();
   };
   const res = await store.addProspects({ profile, candidates: [firm("a.com"), firm("b.com")], now: NOON_LAGOS });
   assert.deepEqual(res.inserted.map((p) => p.domain), ["b.com"]);
