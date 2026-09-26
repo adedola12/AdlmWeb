@@ -352,6 +352,47 @@ describe("headline figures", () => {
     expect(h.unpricedProjects).toBe(1);
   });
 
+  it("adds a merged contract's certificates without counting its work twice", () => {
+    // The two source models are project rows with their own money; the merged
+    // contract carries only its certificates and contract-level variations.
+    const h = headline(
+      [p(10_000_000, 0, 0, "owner", { workValue: 12_000_000 }), p(8_000_000, 0, 0, "owner", { workValue: 8_000_000 })],
+      [{ certifiedToDate: 5_000_000, approvedVariationsTotal: 0 }],
+    );
+    expect(h.measured).toBe(18_000_000);
+    expect(h.value).toBe(20_000_000);
+    expect(h.certified).toBe(5_000_000);
+    expect(h.certifiedPct).toBe(25);
+    // A merged contract is not a project.
+    expect(h.count).toBe(2);
+    expect(h.counted).toBe(2);
+    expect(h.hidden).toBe(0);
+  });
+
+  it("counts a merged contract's own variations in the work's value", () => {
+    const h = headline(
+      [p(10_000_000, 0, 0, "owner", { workValue: 10_000_000 })],
+      [{ certifiedToDate: 2_750_000, approvedVariationsTotal: 1_000_000 }],
+    );
+    expect(h.value).toBe(11_000_000);
+    expect(h.certified).toBe(2_750_000);
+    expect(h.certifiedPct).toBe(25);
+  });
+
+  it("leaves a merged contract whose money is hidden out of the sum", () => {
+    const h = headline(
+      [p(10_000_000, 1_000_000, 0)],
+      [{ certifiedToDate: 0, approvedVariationsTotal: 0, moneyHidden: true, shared: true }],
+    );
+    expect(h.certified).toBe(1_000_000);
+    expect(h.hidden).toBe(0);
+  });
+
+  it("reads the same as before when the API sends no merged contracts", () => {
+    const rows = [p(10_000_000, 4_000_000, 2), p(30_000_000, 0, 0)];
+    expect(headline(rows, undefined)).toEqual(headline(rows));
+  });
+
   it("compares certified value with the whole of the work, not with measured work", () => {
     // A certificate certifies prelims, provisional sums and approved
     // variations too, so 5m certified on a 10m bill that is really worth 20m

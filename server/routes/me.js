@@ -1,6 +1,7 @@
 // server/routes/me.js
 import express from "express";
 import { resolveDownload } from "../util/downloadLinks.js";
+import { canDownloadInstallerHub, HUB_REQUIRES_PAID } from "../util/installerHubAccess.js";
 import { alertCount } from "../util/assignmentAlerts.js";
 import { myAssignments } from "../util/myAssignments.js";
 import cloudinary from "../cloudinary.js";
@@ -51,6 +52,7 @@ import {
 } from "../util/workOverview.js";
 import {
   maskSharedMoney,
+  MERGED_CONTRACT_MONEY_FIELDS,
   readerMaySeeRates,
 } from "../util/sharedMoney.js";
 import {
@@ -396,6 +398,10 @@ router.get(
       email: 1,
       refreshVersion: 1,
       createdAt: 1,
+      // R3: who may have the Installer Hub link (util/installerHubAccess.js).
+      role: 1,
+      isGod: 1,
+      disabled: 1,
     });
     if (!user) return res.status(404).json({ error: "User missing" });
 
@@ -615,7 +621,14 @@ router.get(
     // R15: from our own storage when the file is there, the Admin setting
     // otherwise. An hour, because this sits on a page until it is clicked; the
     // new Downloads screen asks /me/downloads/installer-hub for a fresh one.
-    const hubDownload = await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600 });
+    // R3: an unpaid account gets no link at all, only the reason, so the page
+    // can point it at the products instead of at a file it may not have.
+    const hubAllowed = canDownloadInstallerHub(
+      typeof user.toObject === "function" ? user.toObject() : user,
+    );
+    const hubDownload = hubAllowed
+      ? await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600 })
+      : { url: "" };
 
     return res.json({
       email: user.email,
@@ -629,6 +642,8 @@ router.get(
       // Installer Hub settings (global, admin-configured)
       installerHub: {
         downloadUrl: hubDownload.url,
+        allowed: hubAllowed,
+        lockedCode: hubAllowed ? null : HUB_REQUIRES_PAID,
         videoUrl: globalSettings?.installerHubVideoUrl || "",
         // Always present — falls back to the copy bundled with the site.
         guideUrl: resolveUserGuideUrl(globalSettings?.installerHubGuideUrl),
@@ -1524,7 +1539,7 @@ router.get(
       ],
     };
 
-    const list = await TakeoffProject.aggregate([
+    const listQuery = TakeoffProject.aggregate([
       {
         $match: {
           pmTrackerOnly: { $ne: true },
@@ -1543,8 +1558,12 @@ router.get(
           // screen that manages merges opts in there with ?includeMerged=1 and
           // is the only place with a design for them; nothing on the Work
           // screens does. A merged project is still opened, split and exported
-          // from that screen, and its certificates still reach the dashboard
-          // through GET /me/work-overview.
+          // from that screen.
+          //
+          // What a container DOES hold of its own is the merged contract's
+          // certificates and its contract-level variations — money no source
+          // carries — so those come back separately as `mergedContracts`
+          // below, and the dashboard's "Certified to date" adds them in.
           mergeContainer: { $ne: true },
           $or: [{ userId }, { "collaborators.userId": userId }],
         },
@@ -1820,7 +1839,52 @@ router.get(
       { $sort: { updatedAt: -1 } },
     ]);
 
-    return res.json({ projects: maskSharedMoney(list, canSeeRates) });
+    // The merged contracts this user is on, with ONLY the money a container
+    // holds in its own right: its certificates (one certificate series governs
+    // the merged job — services/projectMerge.js resolveMergedProject) and the
+    // variations raised against the merged contract (CONTAINER_OWNED_FIELDS).
+    //
+    // Its measured work is deliberately not here. A container's bill is its
+    // sources' bills, and every source is already a row in `projects` with its
+    // own money, so carrying measured work, provisional sums or preliminaries
+    // from the container would count the same job twice. A certificate on the
+    // container, by contrast, is on no source, and leaving it out made a
+    // merged job's certified value vanish from "Certified to date" (R7).
+    //
+    // Kept out of `projects` on purpose: every Work screen that lists projects
+    // reads that array, and a container there is the ₦0 "Takeoff" row the
+    // exclusion above exists to prevent.
+    const mergedQuery = TakeoffProject.aggregate([
+      {
+        $match: {
+          mergeContainer: true,
+          pmTrackerOnly: { $ne: true },
+          $or: [{ userId }, { "collaborators.userId": userId }],
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          id: "$_id",
+          name: 1,
+          slug: 1,
+          productKey: 1,
+          shared: { $ne: ["$userId", userId] },
+          certificateCount: { $size: { $ifNull: ["$certificates", []] } },
+          certifiedToDate: certifiedToDateExpr(),
+          approvedVariationsTotal: contractValueExprs().approvedVariationsTotal,
+        },
+      },
+    ]);
+
+    const [list, merged] = await Promise.all([listQuery, mergedQuery]);
+
+    return res.json({
+      projects: maskSharedMoney(list, canSeeRates),
+      // Same rule as a project row: a collaborator who may not see rates gets
+      // zeros and `moneyHidden`, never the merged contract's figures.
+      mergedContracts: maskSharedMoney(merged, canSeeRates, MERGED_CONTRACT_MONEY_FIELDS),
+    });
   }),
 );
 

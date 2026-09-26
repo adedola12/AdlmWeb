@@ -19,11 +19,22 @@
 // active:false, so the call history that explains WHY they renewed is still
 // there next quarter.
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
 import { FollowUp } from "../models/FollowUp.js";
 import { collectSilentCustomers } from "./silentCustomers.js";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// ADLM's business day is a Lagos day. The API runs in UTC on AWS and in WAT on
+// a dev machine, so "the expiry day" must be pinned to a zone, not left to
+// whatever the process happens to be in.
+export const BUSINESS_TZ = "Africa/Lagos";
+const lagosDay = (d) => dayjs(d).tz(BUSINESS_TZ).startOf("day");
 
 /**
  * Effective status of one entitlement, resolving `status` against `expiresAt`.
@@ -48,7 +59,9 @@ export function effectiveStatus(ent, now = dayjs()) {
 
   // endOf("day") to match the admin screens: an entitlement is not overdue
   // until its expiry DAY is over, so both surfaces agree on the day count.
-  const exp = ent?.expiresAt ? dayjs(ent.expiresAt).endOf("day") : null;
+  const exp = ent?.expiresAt && dayjs(ent.expiresAt).isValid()
+    ? lagosDay(ent.expiresAt).endOf("day")
+    : null;
   if (exp && exp.isValid() && exp.isBefore(now)) return "expired";
 
   // Still in date. A stored "expired" that has not actually lapsed is live —
@@ -62,10 +75,11 @@ export function effectiveStatus(ent, now = dayjs()) {
  * means the same number on both screens.
  */
 export function daysOverdue(expiresAt, now = dayjs()) {
-  if (!expiresAt) return 0;
-  const end = dayjs(expiresAt).endOf("day");
-  if (!end.isValid() || !end.isBefore(now)) return 0;
-  return Math.max(Math.ceil(now.diff(end, "hour") / 24), 0);
+  if (!expiresAt || !dayjs(expiresAt).isValid()) return 0;
+  // Calendar days between the two Lagos dates. The old form,
+  // ceil(diff-in-hours / 24) from the end of the expiry day, truncated the
+  // partial hour and so read one day short for the first hour after midnight.
+  return Math.max(lagosDay(now).diff(lagosDay(expiresAt), "day"), 0);
 }
 
 const fullNameOf = (u) =>

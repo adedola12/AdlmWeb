@@ -10,6 +10,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
+import { requireEntitlement } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { ArchicadBoqVersion } from "../models/ArchicadBoqVersion.js";
 import { User } from "../models/User.js";
@@ -97,6 +98,9 @@ function buildBoqDocument(project, version) {
     changedLineRefs: version.changedLineRefs || [],
     targetBudget: toNum(project.projectManagement?.budgetOverride),
     share: shareInfo(project),
+    // Read-only learning sample: the page shows the banner and no edit controls.
+    isSample: !!project.isSample,
+    sample: project.isSample ? project.sample || {} : null,
   };
 }
 
@@ -166,10 +170,13 @@ function generatePublicToken() {
 // the database id never has to sit in an address bar). A slug is unique per
 // owner, so for a slug the caller's own project wins over one shared with
 // them, then the most recently updated.
-async function findAccessibleProject(idOrSlug, userId, { ownerOnly = false } = {}) {
+async function findAccessibleProject(idOrSlug, userId, { ownerOnly = false, withSamples = false } = {}) {
   const key = String(idOrSlug || "").trim();
   if (!key) return null;
-  const who = ownerOnly ? { userId } : { $or: [{ userId }, { "collaborators.userId": userId }] };
+  const mine = [{ userId }, { "collaborators.userId": userId }];
+  // Read-only learning samples are owner-less; only reads may see them.
+  if (withSamples) mine.push({ isSample: true });
+  const who = ownerOnly ? { userId } : { $or: mine };
   if (isValidObjectId(key)) {
     return TakeoffProject.findOne({ _id: key, productKey: PRODUCT_KEY, ...who });
   }
@@ -177,6 +184,25 @@ async function findAccessibleProject(idOrSlug, userId, { ownerOnly = false } = {
     .sort({ updatedAt: -1 })
     .limit(10);
   return matches.find((p) => String(p.userId) === String(userId)) || matches[0] || null;
+}
+
+// A sample is opened only by an active ArchiCAD subscriber (the same gate
+// GET /projects/archicad/samples lists them behind). Sends the 403 itself.
+const archicadEntitled = requireEntitlement(PRODUCT_KEY);
+function checkSampleEntitlement(req, res) {
+  return new Promise((resolve, reject) => {
+    let passed = false;
+    Promise.resolve(
+      archicadEntitled(req, res, () => {
+        passed = true;
+        resolve(true);
+      }),
+    )
+      .then(() => {
+        if (!passed) resolve(false);
+      })
+      .catch(reject);
+  });
 }
 
 async function findProjectForUser(req, res) {
@@ -190,11 +216,24 @@ async function findProjectForUser(req, res) {
     res.status(400).json({ error: "Invalid project id" });
     return null;
   }
-  const project = await findAccessibleProject(id, userId);
+  const isRead = req.method === "GET" || req.method === "HEAD";
+  const project = await findAccessibleProject(id, userId, { withSamples: isRead });
   if (!project) {
+    if (!isRead) {
+      const sampleFilter = isValidObjectId(id) ? { _id: id } : { slug: id };
+      const sample = await TakeoffProject.exists({ ...sampleFilter, productKey: PRODUCT_KEY, isSample: true });
+      if (sample) {
+        res.status(403).json({
+          error: "Sample projects are read-only learning material.",
+          code: "SAMPLE_READ_ONLY",
+        });
+        return null;
+      }
+    }
     res.status(404).json({ error: "Project not found" });
     return null;
   }
+  if (project.isSample && !(await checkSampleEntitlement(req, res))) return null;
   return project;
 }
 

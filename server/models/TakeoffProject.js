@@ -849,9 +849,32 @@ const LinkedProjectSchema = new mongoose.Schema(
   { _id: true },
 );
 
+// Learning material shown to every subscriber of the product: a fully worked
+// project (bill, budget, valuations, PM, model) they can open and study but
+// never change. Samples have no owner (userId null), so no account's quota,
+// roll-up or plugin project list ever counts them. See
+// scripts/seed-sample-projects.mjs.
+const SampleInfoSchema = new mongoose.Schema(
+  {
+    // Stable seed key, e.g. "duplex-raft". The seed upserts on (productKey, key).
+    key: { type: String, default: "" },
+    order: { type: Number, default: 0 },
+    foundation: { type: String, default: "" },
+    location: { type: String, default: "" },
+    // Where the job stands, e.g. "Certificate 2 of 4 issued".
+    stage: { type: String, default: "" },
+    summary: { type: String, default: "" },
+    // Short "what to look at" pointers, one per tab worth opening.
+    highlights: { type: [String], default: [] },
+  },
+  { _id: false },
+);
+
 const TakeoffProjectSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+    isSample: { type: Boolean, default: false },
+    sample: { type: SampleInfoSchema, default: undefined },
     productKey: { type: String, default: "revit", index: true },
     clientProjectKey: { type: String, default: "", index: true },
     modelFingerprint: { type: String, default: "" },
@@ -977,6 +1000,11 @@ TakeoffProjectSchema.index({ userId: 1, productKey: 1, slug: 1 }, { sparse: true
 TakeoffProjectSchema.index({ "shareCodes.codeHash": 1 });
 // "Projects shared with me" listing + per-request owner-or-collaborator resolve.
 TakeoffProjectSchema.index({ "collaborators.userId": 1, productKey: 1, updatedAt: -1 });
+// Sample listing per product. Partial, so ordinary projects carry no entry.
+TakeoffProjectSchema.index(
+  { productKey: 1, "sample.order": 1 },
+  { partialFilterExpression: { isSample: true } },
+);
 
 export const TakeoffProject = mongoose.model(
   "TakeoffProject",
