@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { registerTakeoffErasure } from "../services/takeoffErasure.js";
 
 const DeviceBindingSchema = new mongoose.Schema(
   {
@@ -359,5 +360,9 @@ const UserSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+// Deleting a user deletes their Takeoff Time Log records too (privacy policy,
+// "Take-off timing"). Registered before the model is compiled.
+registerTakeoffErasure(UserSchema);
 
 export const User = mongoose.models.User || mongoose.model("User", UserSchema);
