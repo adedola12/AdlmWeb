@@ -22,6 +22,15 @@ import "./styles/ds-local.css";
 // don't see a brief flash of light UI on reload.
 initThemeBeforeRender();
 
+// Almost every screen below is behind a sign-in, and until now all of them
+// were in the first bundle the browser downloads — so someone reading the
+// homepage paid for the whole admin section and, through the two project
+// screens, for the Excel library as well. `lazyScreen` and `React.lazy`
+// move a screen into its own file, fetched when a route that can actually
+// reach it renders. See lib/lazyScreen.jsx for which of the two to use.
+import LazyScreen from "./components/LazyScreen.jsx";
+import lazyScreen from "./lib/lazyScreen.jsx";
+
 import AppError from "./pages/AppError.jsx";
 import Home from "./pages/Home.jsx";
 import Products from "./pages/Products.jsx";
@@ -29,106 +38,108 @@ import Quote from "./pages/Quote.jsx";
 import ProductDetail from "./pages/ProductDetail.jsx";
 import Login from "./pages/Login.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
-import AdminToday from "./pages/AdminToday.jsx";
-import AdminPurchases from "./pages/AdminPurchases.jsx";
-import AdminInstallationsQueue from "./pages/AdminInstallationsQueue.jsx";
-import AdminPeople from "./pages/AdminPeople.jsx";
-import AdminEnrolments from "./pages/AdminEnrolments.jsx";
-import AdminSubmissions from "./pages/AdminSubmissions.jsx";
-import AdminFollowUpsDesk from "./pages/AdminFollowUpsDesk.jsx";
-import AdminDsOrganisations from "./pages/AdminDsOrganisations.jsx";
-import AdminDsRoles from "./pages/AdminDsRoles.jsx";
-import AdminDsSupport from "./pages/AdminDsSupport.jsx";
-import AdminDsSubscriptions from "./pages/AdminDsSubscriptions.jsx";
-import AdminDsEntitlements from "./pages/AdminDsEntitlements.jsx";
-import AdminDsQuotations from "./pages/AdminDsQuotations.jsx";
-import AdminDsInvoices from "./pages/AdminDsInvoices.jsx";
-import AdminDsCoupons from "./pages/AdminDsCoupons.jsx";
-import AdminCatProducts from "./pages/AdminCatProducts.jsx";
-import AdminCatPricing from "./pages/AdminCatPricing.jsx";
-import AdminCatRates from "./pages/AdminCatRates.jsx";
-import AdminCatSaved from "./pages/AdminCatSaved.jsx";
-import AdminRateBuilder from "./pages/AdminRateBuilder.jsx";
-import AdminDocAi from "./pages/AdminDocAi.jsx";
-import AdminDsCertificates from "./pages/AdminDsCertificates.jsx";
-import AdminTimeSaved from "./pages/AdminTimeSaved.jsx";
-import AdminDocAudit from "./pages/AdminDocAudit.jsx";
-import AdminDocTemplates from "./pages/AdminDocTemplates.jsx";
-import AdminDocSaved from "./pages/AdminDocSaved.jsx";
-import AdminDocIssued from "./pages/AdminDocIssued.jsx";
-import AdminDocProduced from "./pages/AdminDocProduced.jsx";
-import AdminDocSystem from "./pages/AdminDocSystem.jsx";
-import AdminStorage from "./pages/AdminStorage.jsx";
-import AdminEmails from "./pages/AdminEmails.jsx";
-import AdminCampaigns from "./pages/AdminCampaigns.jsx";
-import AdminVideos from "./pages/AdminVideos.jsx";
-import AdminBillboard from "./pages/AdminBillboard.jsx";
-import AdminDsWaitlist from "./pages/AdminDsWaitlist.jsx";
-import AdminDsOrgVideos from "./pages/AdminDsOrgVideos.jsx";
-import AdminLcCourses from "./pages/AdminLcCourses.jsx";
-import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
-import AdminLcLessons from "./pages/AdminLcLessons.jsx";
-import AdminLcEvents from "./pages/AdminLcEvents.jsx";
-import AdminLcChangelogs from "./pages/AdminLcChangelogs.jsx";
-import AdminLcShowcase from "./pages/AdminLcShowcase.jsx";
-import AdminLcFreebies from "./pages/AdminLcFreebies.jsx";
+const AdminToday = lazyScreen(() => import("./pages/AdminToday.jsx"));
+const AdminPurchases = lazyScreen(() => import("./pages/AdminPurchases.jsx"));
+const AdminInstallationsQueue = lazyScreen(() => import("./pages/AdminInstallationsQueue.jsx"));
+const AdminPeople = lazyScreen(() => import("./pages/AdminPeople.jsx"));
+const AdminEnrolments = lazyScreen(() => import("./pages/AdminEnrolments.jsx"));
+const AdminSubmissions = lazyScreen(() => import("./pages/AdminSubmissions.jsx"));
+const AdminFollowUpsDesk = lazyScreen(() => import("./pages/AdminFollowUpsDesk.jsx"));
+const AdminDsOrganisations = lazyScreen(() => import("./pages/AdminDsOrganisations.jsx"));
+const AdminDsRoles = lazyScreen(() => import("./pages/AdminDsRoles.jsx"));
+const AdminDsSupport = lazyScreen(() => import("./pages/AdminDsSupport.jsx"));
+const AdminDsSubscriptions = lazyScreen(() => import("./pages/AdminDsSubscriptions.jsx"));
+const AdminDsEntitlements = lazyScreen(() => import("./pages/AdminDsEntitlements.jsx"));
+const AdminDsQuotations = lazyScreen(() => import("./pages/AdminDsQuotations.jsx"));
+const AdminDsInvoices = lazyScreen(() => import("./pages/AdminDsInvoices.jsx"));
+const AdminDsCoupons = lazyScreen(() => import("./pages/AdminDsCoupons.jsx"));
+const AdminCatProducts = lazyScreen(() => import("./pages/AdminCatProducts.jsx"));
+const AdminCatPricing = lazyScreen(() => import("./pages/AdminCatPricing.jsx"));
+const AdminCatRates = lazyScreen(() => import("./pages/AdminCatRates.jsx"));
+const AdminCatSaved = lazyScreen(() => import("./pages/AdminCatSaved.jsx"));
+const AdminRateBuilder = lazyScreen(() => import("./pages/AdminRateBuilder.jsx"));
+const AdminDocAi = lazyScreen(() => import("./pages/AdminDocAi.jsx"));
+const AdminDsCertificates = lazyScreen(() => import("./pages/AdminDsCertificates.jsx"));
+const AdminTimeSaved = lazyScreen(() => import("./pages/AdminTimeSaved.jsx"));
+const AdminDocAudit = lazyScreen(() => import("./pages/AdminDocAudit.jsx"));
+const AdminDocTemplates = lazyScreen(() => import("./pages/AdminDocTemplates.jsx"));
+const AdminDocSaved = lazyScreen(() => import("./pages/AdminDocSaved.jsx"));
+const AdminDocIssued = lazyScreen(() => import("./pages/AdminDocIssued.jsx"));
+const AdminDocProduced = lazyScreen(() => import("./pages/AdminDocProduced.jsx"));
+const AdminDocSystem = lazyScreen(() => import("./pages/AdminDocSystem.jsx"));
+const AdminStorage = lazyScreen(() => import("./pages/AdminStorage.jsx"));
+const AdminEmails = lazyScreen(() => import("./pages/AdminEmails.jsx"));
+const AdminCampaigns = lazyScreen(() => import("./pages/AdminCampaigns.jsx"));
+const AdminVideos = lazyScreen(() => import("./pages/AdminVideos.jsx"));
+const AdminBillboard = lazyScreen(() => import("./pages/AdminBillboard.jsx"));
+const AdminDsWaitlist = lazyScreen(() => import("./pages/AdminDsWaitlist.jsx"));
+const AdminDsOrgVideos = lazyScreen(() => import("./pages/AdminDsOrgVideos.jsx"));
+const AdminLcCourses = lazyScreen(() => import("./pages/AdminLcCourses.jsx"));
+const AdminLcQuizzes = lazyScreen(() => import("./pages/AdminLcQuizzes.jsx"));
+const AdminLcLessons = lazyScreen(() => import("./pages/AdminLcLessons.jsx"));
+const AdminLcEvents = lazyScreen(() => import("./pages/AdminLcEvents.jsx"));
+const AdminLcChangelogs = lazyScreen(() => import("./pages/AdminLcChangelogs.jsx"));
+const AdminLcShowcase = lazyScreen(() => import("./pages/AdminLcShowcase.jsx"));
+const AdminLcFreebies = lazyScreen(() => import("./pages/AdminLcFreebies.jsx"));
 import Signup from "./pages/Signup.jsx";
-import Purchase from "./pages/Purchase.jsx";
-import ChangePassword from "./pages/ChangePassword.jsx";
-import Profile from "./pages/Profile.jsx";
-// The classic dashboard, still the one customers use until 1 October. The
-// launch build stopped importing it when /dashboard became a redirect.
-import Dashboard from "./pages/Dashboard.jsx";
+const Purchase = lazyScreen(() => import("./pages/Purchase.jsx"));
+const ChangePassword = lazyScreen(() => import("./pages/ChangePassword.jsx"));
+const Profile = lazyScreen(() => import("./pages/Profile.jsx"));
+// The classic dashboard, still the one customers use until 1 October (#30).
+// It reached main as an eager import; this branch loads every screen behind a
+// sign-in lazily, and the dashboard is one of those. Same screen, same route,
+// just not in the first bundle a visitor downloads.
+const Dashboard = lazyScreen(() => import("./pages/Dashboard.jsx"));
 import Learn from "./pages/Learn.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
-import Admin from "./pages/Admin.jsx";
-import AdminLearn from "./pages/AdminLearn.jsx";
-import AdminYoutube from "./pages/AdminYoutube.jsx";
-import AdminYoutubeStatus from "./pages/AdminYoutubeStatus.jsx";
-import AdminCourses from "./pages/AdminCourses.jsx";
-import AdminProducts from "./pages/AdminProducts.jsx";
-import AdminProductEdit from "./pages/AdminProductEdit.jsx";
-import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
-import AdminCourseCockpit from "./pages/AdminCourseCockpit.jsx";
-import AdminQuizzes from "./pages/AdminQuizzes.jsx";
+const Admin = lazyScreen(() => import("./pages/Admin.jsx"));
+const AdminLearn = lazyScreen(() => import("./pages/AdminLearn.jsx"));
+const AdminYoutube = lazyScreen(() => import("./pages/AdminYoutube.jsx"));
+const AdminYoutubeStatus = lazyScreen(() => import("./pages/AdminYoutubeStatus.jsx"));
+const AdminCourses = lazyScreen(() => import("./pages/AdminCourses.jsx"));
+const AdminProducts = lazyScreen(() => import("./pages/AdminProducts.jsx"));
+const AdminProductEdit = lazyScreen(() => import("./pages/AdminProductEdit.jsx"));
+const AdminCourseGrading = lazyScreen(() => import("./pages/AdminCourseGrading.jsx"));
+const AdminCourseCockpit = lazyScreen(() => import("./pages/AdminCourseCockpit.jsx"));
+const AdminQuizzes = lazyScreen(() => import("./pages/AdminQuizzes.jsx"));
 import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 import AboutADLM from "./pages/About.jsx";
 import WhatsNew from "./pages/WhatsNew.jsx";
 import WhatsNewProduct from "./pages/WhatsNewProduct.jsx";
 import Trainings from "./pages/Trainings.jsx";
-import AdminTrainings from "./pages/AdminTrainings.jsx";
+const AdminTrainings = lazyScreen(() => import("./pages/AdminTrainings.jsx"));
 import NotFound from "./pages/NotFound.jsx";
 import Testimonials from "./pages/Testimonials.jsx";
-import AdminShowcase from "./pages/AdminShowcase.jsx";
-import AdminChangelogs from "./pages/AdminChangelogs.jsx";
+const AdminShowcase = lazyScreen(() => import("./pages/AdminShowcase.jsx"));
+const AdminChangelogs = lazyScreen(() => import("./pages/AdminChangelogs.jsx"));
 import TrainingDetail from "./pages/TrainingDetail.jsx";
-import AdminCoupons from "./pages/AdminCoupons.jsx";
-import AdminInvoices from "./pages/AdminInvoices.jsx";
+const AdminCoupons = lazyScreen(() => import("./pages/AdminCoupons.jsx"));
+const AdminInvoices = lazyScreen(() => import("./pages/AdminInvoices.jsx"));
 // Lazy: it pulls in the document engine and two stylesheets that no other
 // admin screen needs.
 const AdminDocuments = React.lazy(() => import("./pages/AdminDocuments.jsx"));
-import AdminProposals from "./pages/AdminProposals.jsx";
-import AdminRoles from "./pages/AdminRoles.jsx";
+const AdminProposals = lazyScreen(() => import("./pages/AdminProposals.jsx"));
+const AdminRoles = lazyScreen(() => import("./pages/AdminRoles.jsx"));
 import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
-import RequestTechnicalHelp from "./pages/RequestTechnicalHelp.jsx";
-import AdminWaitlist from "./pages/AdminWaitlist.jsx";
-import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
-import AdminAuditLog from "./pages/AdminAuditLog.jsx";
-import RevitProjects from "./pages/RevitProjects.jsx";
-import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
-import Portfolio from "./pages/Portfolio.jsx";
-import PmTracker from "./pages/PmTracker.jsx";
-import PortfolioDashboard from "./pages/PortfolioDashboard.jsx";
-import JoinProject from "./pages/JoinProject.jsx";
-import RateGenLibrary from "./pages/RateGenLibrary.jsx";
-import AdminRateLibrary from "./pages/AdminRateLibrary.jsx";
-import AdminAddRate from "./pages/AdminAddRate.jsx";
-import RateGenUpdates from "./pages/RateGenUpdates.jsx";
-import ServiceConstants from "./pages/ServiceConstants.jsx";
-import MaterialConstants from "./pages/MaterialConstants.jsx";
-import Receipt from "./pages/Receipt.jsx";
-import OrderDetail from "./pages/OrderDetail.jsx";
+const RequestTechnicalHelp = lazyScreen(() => import("./pages/RequestTechnicalHelp.jsx"));
+const AdminWaitlist = lazyScreen(() => import("./pages/AdminWaitlist.jsx"));
+const AdminSupportTickets = lazyScreen(() => import("./pages/AdminSupportTickets.jsx"));
+const AdminAuditLog = lazyScreen(() => import("./pages/AdminAuditLog.jsx"));
+const RevitProjects = React.lazy(() => import("./pages/RevitProjects.jsx"));
+const ProjectsGeneric = React.lazy(() => import("./pages/ProjectsGeneric.jsx"));
+const Portfolio = React.lazy(() => import("./pages/Portfolio.jsx"));
+const PmTracker = React.lazy(() => import("./pages/PmTracker.jsx"));
+const PortfolioDashboard = React.lazy(() => import("./pages/PortfolioDashboard.jsx"));
+const JoinProject = React.lazy(() => import("./pages/JoinProject.jsx"));
+const RateGenLibrary = lazyScreen(() => import("./pages/RateGenLibrary.jsx"));
+const AdminRateLibrary = lazyScreen(() => import("./pages/AdminRateLibrary.jsx"));
+const AdminAddRate = lazyScreen(() => import("./pages/AdminAddRate.jsx"));
+const RateGenUpdates = lazyScreen(() => import("./pages/RateGenUpdates.jsx"));
+const ServiceConstants = lazyScreen(() => import("./pages/ServiceConstants.jsx"));
+const MaterialConstants = lazyScreen(() => import("./pages/MaterialConstants.jsx"));
+const Receipt = lazyScreen(() => import("./pages/Receipt.jsx"));
+const OrderDetail = lazyScreen(() => import("./pages/OrderDetail.jsx"));
 import AuthCallback from "./pages/AuthCallback.jsx";
 // His Manage overview. Lazy because it pulls in the app shell and ~91KB of his
 // dashboard CSS, which no marketing visitor should pay for.
@@ -153,32 +164,31 @@ const Assignments = React.lazy(() => import("./pages/Assignments.jsx"));
 const LearningCourse = React.lazy(() => import("./pages/LearningCourse.jsx"));
 const LearnCourseRedirect = React.lazy(() => import("./pages/LearnCourseRedirect.jsx"));
 const WorkShellRoute = React.lazy(() => import("./pages/WorkShellRoute.jsx"));
-import UserInvoice from "./pages/UserInvoice.jsx";
+const UserInvoice = lazyScreen(() => import("./pages/UserInvoice.jsx"));
 
 // ✅ QUIV for ArchiCAD
-import ArchiCADLanding from "./pages/ArchiCADLanding.jsx";
-import ArchiCADBoQ from "./pages/ArchiCADBoQ.jsx";
-import ArchiCADDashboard from "./pages/ArchiCADDashboard.jsx";
-import ArchiCADElement from "./pages/ArchiCADElement.jsx";
+const ArchiCADLanding = React.lazy(() => import("./pages/ArchiCADLanding.jsx"));
+const ArchiCADBoQ = React.lazy(() => import("./pages/ArchiCADBoQ.jsx"));
+const ArchiCADDashboard = React.lazy(() => import("./pages/ArchiCADDashboard.jsx"));
+const ArchiCADElement = React.lazy(() => import("./pages/ArchiCADElement.jsx"));
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
-import LazyScreen from "./components/LazyScreen.jsx";
 
-import TrainingEnrollment from "./pages/TrainingEnrollment.jsx";
-import AdminPTrainings from "./pages/AdminPTrainings.jsx";
+const TrainingEnrollment = lazyScreen(() => import("./pages/TrainingEnrollment.jsx"));
+const AdminPTrainings = lazyScreen(() => import("./pages/AdminPTrainings.jsx"));
 
-import Freebies from "./pages/Freebies.jsx";
+const Freebies = lazyScreen(() => import("./pages/Freebies.jsx"));
 import NetworkCheck from "./pages/NetworkCheck.jsx";
-import AdminFreebies from "./pages/AdminFreebies.jsx";
-import AdminUsersLite from "./pages/AdminUsersLite.jsx";
-import AdminAiUsage from "./pages/AdminAiUsage.jsx";
+const AdminFreebies = lazyScreen(() => import("./pages/AdminFreebies.jsx"));
+const AdminUsersLite = lazyScreen(() => import("./pages/AdminUsersLite.jsx"));
+const AdminAiUsage = lazyScreen(() => import("./pages/AdminAiUsage.jsx"));
 
 // ✅ Physical trainings pages
 import PTrainingDetail from "./pages/PTrainingDetail.jsx";
-import PTrainingEnrollment from "./pages/PTrainingEnrollment.jsx";
+const PTrainingEnrollment = lazyScreen(() => import("./pages/PTrainingEnrollment.jsx"));
 
-import TimeManagement from "./pages/TimeManagement.jsx";
+const TimeManagement = React.lazy(() => import("./pages/TimeManagement.jsx"));
 
 // Search landing pages. Shared with the server route tree in
 // routes.marketing.jsx so both render the same components for these paths,
@@ -193,7 +203,7 @@ import DsPreview from "./ds/DsPreview.jsx";
 import DsPreviewGate from "./ds/DsPreviewGate.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import PreviewHostGate from "./components/PreviewHostGate.jsx";
-import AdminReleases from "./pages/AdminReleases.jsx";
+const AdminReleases = lazyScreen(() => import("./pages/AdminReleases.jsx"));
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));

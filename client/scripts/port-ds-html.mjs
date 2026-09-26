@@ -495,12 +495,51 @@ const PAGE_EDITS = {
   // summary panel is what assets/js/quote.js drives; DsQuoteBuilder reproduces
   // that markup and its arithmetic, priced from the catalogue instead of the
   // literal in his script — which had install at 0 for Revit MEP and CIVIQ.
-  // The two real courses on the Learn page. The third card — "Rates & 2D
-  // Takeoff" at ₦85,000 — is deliberately NOT wired: it has no catalogue row
-  // because the course does not exist. Richard's own notes flag its name,
-  // price and syllabus as provisional. Leaving the figure hardcoded keeps it
-  // visible as the placeholder it is; see docs/richard-snag-list.md.
+  // The two real courses on the Learn page read their price from the
+  // catalogue. The fourth card does not, because there is no fourth course.
   "src/learn.html": [
+    {
+      // "Rates & 2D Takeoff", ₦85,000 a year, four weeks, a four-line
+      // syllabus and a "View course" button — for a course that does not
+      // exist. GET /learn/courses returns exactly two, and neither is this;
+      // his own notes flag the name, price and syllabus as provisional, and
+      // the button pointed at learn#courses, the section it already sits in.
+      //
+      // It was left in as a visible placeholder while it was only staged at
+      // /preview/learn. Pulled now (owner's call, 26 Sep) rather than carried
+      // to launch: a price on a public page is an offer, and this one could
+      // not have been honoured.
+      //
+      // If it is ever built, this whole edit comes out and the card gets a
+      // courseEdit() beside the other two.
+      label: 'the "Rates & 2D Takeoff" card — a course that does not exist',
+      findRe: /\s*<article class="pcard2 pc-ico pal-light tilt rise" id="course-4">[\s\S]*?<\/article>/,
+      replace: "",
+    },
+    {
+      // Which leaves three cards in a four-column grid: above 1180px they
+      // would keep their width and leave the fourth column empty, in a row
+      // that is centred by transform, so the gap lands off to one side. His
+      // own .pgrid is the three-column version of the same thing, and it
+      // steps down to two and then one at the same breakpoints.
+      label: "three cards, so the course row uses his three-column grid",
+      find: '<div class="pgrid pgrid-4">',
+      replace: '<div class="pgrid">',
+    },
+    {
+      // Google Classroom was retired (ed5d55f), and ce5c229 already took this
+      // same sentence off the classic Learn and course pages in September.
+      // His static build predates both, so the port brings it back every time
+      // it runs — which is how a fixed thing un-fixes itself.
+      label: "courses are delivered on our own platform, not Google Classroom",
+      find: "100% online · Google Classroom · self-paced",
+      replace: "100% online · self-paced",
+    },
+    {
+      label: "the same, in the FAQ answer",
+      find: "Self-paced, delivered through Google Classroom, with weekly assessments",
+      replace: "Self-paced, delivered on the ADLM Studio platform, with weekly assessments",
+    },
     courseEdit("BIM for Building Works", "bimbld"),
     courseEdit("BIM for MEP &amp; HVAC", "bimmep"),
     {
@@ -511,6 +550,18 @@ const PAGE_EDITS = {
       label: "his free-lesson filters, tiles and Show more, on the real library",
       findRe: /<div class="filters rise" id="lesson-filters">[\s\S]*?<div class="lmore">[\s\S]*?<\/div>/,
       replace: "@@d.lessons@@",
+    },
+  ],
+
+  // The same retired platform, in the Beyond BIM FAQ. ce5c229 fixed this exact
+  // sentence in the classic app in September; his static build predates it.
+  "src/beyondbim.html": [
+    {
+      label: "certificated courses are self-paced on our platform, not Google Classroom",
+      // The sentence wraps mid-phrase in his source, so this matches across
+      // the break rather than depending on where the line happens to end.
+      findRe: /are self-paced\s+through Google Classroom and go deep/,
+      replace: "are self-paced on the ADLM Studio platform and go deep",
     },
   ],
 
