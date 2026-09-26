@@ -12,6 +12,7 @@ import {
   userOwnsDoc,
 } from "../util/exportAccess.js";
 import { isApprovedVariation } from "../util/variationStatus.js";
+import { isFolderMarker } from "../util/folderMarker.js";
 
 const router = express.Router();
 
@@ -237,6 +238,9 @@ async function loadProjectForExport(req, res) {
     });
     return null;
   }
+  // HERON's "--- GF ---" folder markers are not bill lines: left in, the elemental
+  // export files them under "Other items" and the bill-budget export lists them.
+  if (Array.isArray(project.items)) project.items = project.items.filter((it) => !isFolderMarker(it));
   return { project, tool };
 }
 
