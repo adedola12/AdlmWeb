@@ -501,3 +501,56 @@ test("a generated Plant row is replaceable, and keeps the QS's edits", () => {
   assert.equal(after[0].rate, 1750, "their price survived the regenerate");
   assert.equal(after[0].procured, true);
 });
+
+// ── the bill must not move when nothing changed ────────────────────────────
+// Regeneration used to restore a QS's typed price AFTER the overhead and
+// profit had been solved against the constants-priced net, so the markup
+// belonged to one build-up and was stored against a bigger one.
+// deriveBillRatesFromBudget then pushed the difference into the bill, and did
+// it again every rebuild because each solve started from the constants again.
+// Measured before the fix: ₦223,208 -> ₦269,309 -> ₦324,931 -> ₦392,040 on
+// three clicks of a button whose toast says only "schedule rebuilt".
+test("rebuilding the schedule does not move a bill the QS has priced", async () => {
+  const { deriveBillRatesFromBudget } = await import("./deriveBillRates.js");
+  const priceFor = (name) => {
+    const n = String(name || "").toLowerCase();
+    if (n.includes("cement")) return 9500;
+    if (n.includes("sand")) return 4000;
+    if (n.includes("granite") || n.includes("chipping")) return 6000;
+    return 0;
+  };
+  const items = [
+    {
+      code: "A1",
+      description: "Concrete 1:2:4 in foundation",
+      takeoffLine: "Concrete 1:2:4 in foundation",
+      unit: "m3",
+      qty: 100,
+      rate: 185000,
+      sn: 1,
+    },
+  ];
+
+  let budget = generateMlSchedule(items, [], K, { priceFor }).budgetItems;
+  deriveBillRatesFromBudget({ items, budgetItems: budget });
+  assert.ok(Math.abs(items[0].rate - 185000) < 1, "generation reconciles to the bill");
+
+  // The QS reprices cement on the Budget tab. The bill is meant to move once.
+  const cement = budget.find((b) => /cement/i.test(b.materialName || ""));
+  assert.ok(cement, "the build-up has a cement row");
+  cement.rate = 12000;
+  deriveBillRatesFromBudget({ items, budgetItems: budget });
+  const intended = items[0].rate;
+  assert.ok(intended > 185000, "repricing a material raises the line, as it should");
+
+  // Three rebuilds, nothing else touched. The bill must not budge.
+  for (let i = 0; i < 3; i += 1) {
+    budget = generateMlSchedule(items, budget, K, { priceFor }).budgetItems;
+    deriveBillRatesFromBudget({ items, budgetItems: budget });
+    assert.equal(items[0].rate, intended, `bill moved on rebuild ${i + 1}`);
+  }
+
+  // And the QS's price is still there afterwards.
+  const after = budget.find((b) => /cement/i.test(b.materialName || ""));
+  assert.equal(Number(after.rate), 12000, "the typed rate survives the rebuild");
+});

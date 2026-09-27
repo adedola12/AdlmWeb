@@ -845,6 +845,30 @@ export function generateMlSchedule(items, budgetItems, K, opts = {}) {
 
     if (!rows.length) continue;
 
+    // A price the QS typed on a generated row is PART OF THE BUILD-UP, so it
+    // has to be here before the markup is solved against it.
+    //
+    // It used to be restored further down, after the solve, which quietly
+    // broke this module's own invariant: the overhead and profit were solved
+    // for one net and then stored against a bigger one, so
+    // deriveBillRatesFromBudget pushed the difference into the bill — and did
+    // it again on every rebuild, because each rebuild solved against the
+    // constants-priced net while the bill kept climbing. Measured on a 100 m³
+    // line at ₦185,000 with cement repriced 9,500 -> 12,000: ₦223,208 after
+    // the edit (right), then ₦269,309, ₦324,931, ₦392,040 on three clicks of
+    // "Rebuild schedule" with nothing else touched. ₦18.5m of work became
+    // ₦39.2m.
+    //
+    // rateToBudget.js:304-312 already restores in this order.
+    for (const r of rows) {
+      const prior = priorEdits.get(
+        [code, r.name, r.unit, r.kind]
+          .map((v) => String(v || "").trim().toLowerCase())
+          .join("|"),
+      );
+      if (prior && num(prior.rate) > 0) r.rate = num(prior.rate);
+    }
+
     // ── reconcile to the bill ──
     // net = what the build-up costs. The bill rate is the sell price. The gap
     // between them IS the overhead and profit, so back-solving it keeps the
@@ -913,7 +937,11 @@ export function generateMlSchedule(items, budgetItems, K, opts = {}) {
       // regenerating the schedule must never wipe their work.
       const prior = priorEdits.get(editKey(row));
       if (prior) {
-        if (num(prior.rate) > 0) row.rate = num(prior.rate);
+        // The rate is NOT restored here. It was put back before the markup
+        // was solved (see above), and restoring it a second time after the
+        // solve is what inflated the bill on every rebuild. It would also
+        // resurrect rates the underpriced branch above deliberately took off,
+        // which is the same mistake wearing a different hat.
         row.procured = Boolean(prior.procured);
         row.procuredAt = prior.procuredAt ?? null;
         row.procuredPercent = num(prior.procuredPercent);
