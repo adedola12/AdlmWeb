@@ -212,6 +212,26 @@ function checkSampleEntitlement(req, res) {
   });
 }
 
+// May this user change the project? The owner, or a collaborator the owner
+// gave "full" access — the same line projects.js resolveProjectAccess draws
+// (canEdit). A "view" collaborator reads, and nothing more.
+function canEditProject(project, userId) {
+  if (!project || !userId) return false;
+  const uid = String(userId);
+  if (project.userId != null && String(project.userId) === uid) return true;
+  const collab = (project.collaborators || []).find(
+    (c) => c?.userId != null && String(c.userId) === uid,
+  );
+  return collab?.accessLevel === "full";
+}
+
+function refuseViewOnly(res) {
+  res.status(403).json({
+    error: "View-only access cannot edit this project.",
+    code: "VIEW_ONLY",
+  });
+}
+
 async function findProjectForUser(req, res) {
   const userId = getUserObjectId(req);
   if (!userId) {
@@ -241,6 +261,11 @@ async function findProjectForUser(req, res) {
     return null;
   }
   if (project.isSample && !(await checkSampleEntitlement(req, res))) return null;
+  // Every non-GET route here changes the bill (re-price, margin, budget).
+  if (!isRead && !canEditProject(project, userId)) {
+    refuseViewOnly(res);
+    return null;
+  }
   return project;
 }
 
@@ -282,8 +307,14 @@ async function findCurrentVersion(projectId, res) {
 }
 
 // Costs raw lines and writes a new current version snapshot.
+//
+// The bill is priced from the OWNER's RateGen library, whoever sends the
+// quantities: a full-access collaborator updating the model must not reprice
+// the owner's bill with their own rates (or wipe it to unpriced when they have
+// none). `userId` is only who made the version (createdBy). A new project has
+// no owner yet — the sender becomes it — so their library is the owner's.
 async function createVersion({ project, rawLines, modelVersion, extractedAt, issues, userId }) {
-  const priced = await loadRateCandidates(userId);
+  const priced = await loadRateCandidates(project.userId || userId);
   const { lines, categories, totals } = costBoqLines(rawLines, priced);
 
   const prevCurrent = await ArchicadBoqVersion.findOne({
@@ -346,6 +377,7 @@ router.post("/boq/extract", async (req, res) => {
       }
       project = await TakeoffProject.findOne(accessFilter(projectId, userId));
       if (!project) return res.status(404).json({ error: "Project not found" });
+      if (!canEditProject(project, userId)) return refuseViewOnly(res);
     } else {
       const name = String(projectName || "").trim();
       if (!name) {

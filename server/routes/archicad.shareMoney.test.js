@@ -27,11 +27,21 @@ import express from "express";
 import mongoose from "mongoose";
 
 process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "test-access-secret";
+// The costing engine's master labour list opens its OWN MongoClient from these
+// (util/rategenMaster.js). Without them it throws and falls back to [] — which
+// is exactly what these tests need: no connection to anything, ever.
+delete process.env.RATEGEN_MONGO_URI;
+delete process.env.MONGO_URI;
 
 const { signAccess } = await import("../middleware/auth.js");
 const { TakeoffProject } = await import("../models/TakeoffProject.js");
 const { ArchicadBoqVersion } = await import("../models/ArchicadBoqVersion.js");
 const { User } = await import("../models/User.js");
+const { RateGenRate } = await import("../models/RateGenRate.js");
+const { RateGenComputeItem } = await import("../models/RateGenComputeItem.js");
+const { RateGenMaterial } = await import("../models/RateGenMaterial.js");
+const { RateGenLabour } = await import("../models/RateGenLabour.js");
+const { RateGenLibrary } = await import("../models/RateGenLibrary.js");
 const { default: archicadRouter } = await import("./archicad.routes.js");
 const {
   archicadMoneyAccess,
@@ -46,6 +56,7 @@ const HIDDEN = new mongoose.Types.ObjectId(); // HAS RateGen, owner said off
 const SHOWN = new mongoose.Types.ObjectId(); // has RateGen, owner said on
 const LEGACY = new mongoose.Types.ObjectId(); // has RateGen, record predates the switch
 const NORATE = new mongoose.Types.ObjectId(); // no RateGen, owner said on
+const VIEWER = new mongoose.Types.ObjectId(); // VIEW access, has RateGen, owner said on
 const PROJECT_ID = new mongoose.Types.ObjectId();
 const SAMPLE_ID = new mongoose.Types.ObjectId();
 const VERSION_ID = new mongoose.Types.ObjectId();
@@ -58,6 +69,7 @@ const ENTITLEMENTS = new Map([
   [String(SHOWN), [ARCHICAD, RATEGEN]],
   [String(LEGACY), [ARCHICAD, RATEGEN]],
   [String(NORATE), [ARCHICAD]],
+  [String(VIEWER), [ARCHICAD, RATEGEN]],
 ]);
 
 const GUID = "6F1C2A3B-0000-4000-8000-000000000001";
@@ -148,6 +160,7 @@ function projectDoc({ sample = false } = {}) {
           { userId: SHOWN, email: "qs@firm.example", accessLevel: "full", showMoney: true },
           { userId: LEGACY, email: "old@firm.example", accessLevel: "full" },
           { userId: NORATE, email: "site@firm.example", accessLevel: "full", showMoney: true },
+          { userId: VIEWER, email: "client@firm.example", accessLevel: "view", showMoney: true },
         ],
     projectManagement: { budgetOverride: 2_500_000 },
     async save() {
@@ -161,11 +174,17 @@ function projectDoc({ sample = false } = {}) {
 let project = null;
 let sample = null;
 let saves = { project: 0, version: 0 };
+// Whose RateGen library the costing engine asked for, and who each new
+// version says made it.
+let libraryAskedFor = [];
+let createdVersions = [];
 
 function reset() {
   project = projectDoc();
   sample = projectDoc({ sample: true });
   saves = { project: 0, version: 0 };
+  libraryAskedFor = [];
+  createdVersions = [];
 }
 
 // Serves `await q`, `q.lean()`, `q.select().lean()`, `q.sort().limit()`.
@@ -206,6 +225,11 @@ Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurabl
 TakeoffProject.findOne = (filter) => query([project, sample].find((d) => reaches(d, filter)) || null);
 TakeoffProject.find = (filter) => query([project, sample].filter((d) => reaches(d, filter)));
 TakeoffProject.exists = async (filter) => [project, sample].some((d) => reaches(d, filter));
+// extract with projectId:null builds a real document; its save stays in memory.
+TakeoffProject.prototype.save = async function save() {
+  saves.project += 1;
+  return this;
+};
 
 ArchicadBoqVersion.findOne = (filter) => {
   const v = versionDoc();
@@ -223,6 +247,22 @@ ArchicadBoqVersion.aggregate = async () => [
   { _id: PROJECT_ID, versionCount: 3 },
   { _id: SAMPLE_ID, versionCount: 1 },
 ];
+ArchicadBoqVersion.updateMany = async () => ({ modifiedCount: 1 });
+ArchicadBoqVersion.create = async (doc) => {
+  createdVersions.push(doc);
+  return { _id: new mongoose.Types.ObjectId(), ...doc };
+};
+
+// The costing engine's catalogue reads: empty, except for recording whose
+// personal library was asked for.
+for (const M of [RateGenRate, RateGenComputeItem, RateGenMaterial, RateGenLabour]) {
+  M.find = () => query([]);
+}
+RateGenLibrary.findOne = (filter) => {
+  libraryAskedFor.push(String(filter?.userId));
+  return query(null);
+};
+
 User.findById = (id) =>
   query({ _id: id, email: "user@example.com", entitlements: ENTITLEMENTS.get(String(id)) || [] });
 
@@ -470,5 +510,92 @@ test("a sample project shows its money to any ArchiCAD subscriber, RateGen or no
     assert.equal(r.status, 200);
     assert.equal(r.body.moneyHidden, undefined);
     assert.equal(r.body.totals.grandTotal, 2_080_000);
+  });
+});
+
+// ── View vs full access, and whose rates price the bill ─────────────────────
+
+const EXTRACT_BODY = {
+  projectId: String(PROJECT_ID),
+  modelVersion: "28",
+  boqLines: [
+    { itemRef: "A1", category: "frame", description: "Concrete in columns", unit: "m3", quantity: 40, quivType: "column" },
+  ],
+};
+
+test("a view-only collaborator reads the bill but every write answers 403 VIEW_ONLY", async () => {
+  reset();
+  await withServer(async (base) => {
+    const read = await call(base, `/boq/${PROJECT_ID}`, { as: VIEWER });
+    assert.equal(read.status, 200, "view access still reads");
+    assertBoqPriced(read.body);
+
+    const writes = [
+      ["/boq/extract", "POST", EXTRACT_BODY],
+      [`/boq/${PROJECT_ID}/reapply-rates`, "POST", {}],
+      [`/boq/${PROJECT_ID}/margin`, "PATCH", { global: 20 }],
+      [`/boq/${PROJECT_ID}/budget`, "PATCH", { targetBudget: 1 }],
+    ];
+    for (const [path, method, body] of writes) {
+      const r = await call(base, path, { as: VIEWER, method, body });
+      assert.equal(r.status, 403, `${method} ${path}`);
+      assert.equal(r.body.code, "VIEW_ONLY", `${method} ${path}`);
+    }
+    assert.deepEqual(saves, { project: 0, version: 0 }, "nothing was written");
+    assert.equal(createdVersions.length, 0, "no version was made");
+    assert.equal(libraryAskedFor.length, 0, "nothing was priced");
+  });
+});
+
+test("a full collaborator's extract is priced from the OWNER's library, and recorded as theirs", async () => {
+  reset();
+  await withServer(async (base) => {
+    const r = await call(base, "/boq/extract", { as: SHOWN, method: "POST", body: EXTRACT_BODY });
+    assert.equal(r.status, 200);
+    assert.deepEqual(libraryAskedFor, [String(OWNER)], "owner's rates, not the collaborator's");
+    assert.equal(createdVersions.length, 1);
+    assert.equal(String(createdVersions[0].createdBy), String(SHOWN), "who sent the quantities");
+    assert.equal(createdVersions[0].lines[0].quantity, 40);
+    assert.equal(saves.project, 1);
+  });
+});
+
+test("a full collaborator's re-price also uses the owner's library", async () => {
+  reset();
+  await withServer(async (base) => {
+    const r = await call(base, `/boq/${PROJECT_ID}/reapply-rates`, { as: SHOWN, method: "POST", body: {} });
+    assert.equal(r.status, 200);
+    assert.deepEqual(libraryAskedFor, [String(OWNER)]);
+    assert.equal(String(createdVersions[0].createdBy), String(SHOWN));
+  });
+});
+
+test("a masked full collaborator can still update quantities; the answer comes back masked", async () => {
+  reset();
+  await withServer(async (base) => {
+    const r = await call(base, "/boq/extract", { as: HIDDEN, method: "POST", body: EXTRACT_BODY });
+    assert.equal(r.status, 200);
+    assert.deepEqual(libraryAskedFor, [String(OWNER)]);
+    assert.equal(r.body.moneyHidden, true);
+    assert.equal(r.body.moneyHiddenBy, "owner");
+    assert.equal(r.body.lines[0].quantity, 40);
+  });
+});
+
+test("the owner's own extract and a brand-new project are priced from the sender's library", async () => {
+  reset();
+  await withServer(async (base) => {
+    const own = await call(base, "/boq/extract", { as: OWNER, method: "POST", body: EXTRACT_BODY });
+    assert.equal(own.status, 200);
+    assert.deepEqual(libraryAskedFor, [String(OWNER)]);
+
+    libraryAskedFor = [];
+    const fresh = await call(base, "/boq/extract", {
+      as: SHOWN,
+      method: "POST",
+      body: { ...EXTRACT_BODY, projectId: null, projectName: "My own job" },
+    });
+    assert.equal(fresh.status, 200);
+    assert.deepEqual(libraryAskedFor, [String(SHOWN)], "a new project's owner is whoever created it");
   });
 });
