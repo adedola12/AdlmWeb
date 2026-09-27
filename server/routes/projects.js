@@ -685,6 +685,7 @@ import {
   preserveBudgetUserEdits,
 } from "../util/budgetUserEdits.js";
 import { preliminaryPercentOf } from "../util/contractDefaults.js";
+import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
 import {
   sanitizeResourceItems,
   applyResourceRows,
@@ -893,43 +894,13 @@ function accessFilter(id, userId, productKey) {
 //   canExport:   owner or full  (xlsx / model download)
 //   canManage:   owner only     (codes, collaborators, delete project)
 //   canSeeRates: owner always; collaborator only with active rategen
+// The rule itself moved to util/projectAccess.js so the ArchiCAD routes can
+// ask the same question — they were not asking it at all. Behaviour here is
+// unchanged; this is the same function with its body shared.
 async function resolveProjectAccess(req, project) {
-  const uid = getUserObjectId(req);
-  const out = {
-    role: "none",
-    accessLevel: null,
-    canEdit: false,
-    canExport: false,
-    canManage: false,
-    canSeeRates: false,
-  };
-  if (!project || !uid) return out;
-
-  // Samples: look at everything, including rates, but change nothing.
-  if (project.isSample) {
-    out.role = "sample";
-    out.accessLevel = "view";
-    out.canExport = true;
-    out.canSeeRates = true;
-    return out;
-  }
-
-  if (project.userId && uid.equals(project.userId)) {
-    out.role = "owner";
-    out.canEdit = out.canExport = out.canManage = out.canSeeRates = true;
-    return out;
-  }
-
-  const collab = (project.collaborators || []).find(
-    (c) => c.userId && uid.equals(c.userId),
-  );
-  if (!collab) return out; // not owner, not collaborator → no access
-
-  out.role = collab.accessLevel === "full" ? "full" : "view";
-  out.accessLevel = out.role;
-  out.canEdit = out.canExport = out.role === "full";
-  out.canSeeRates = await userHasActiveEntitlement(uid, "rategen");
-  return out;
+  return resolveSharedProjectAccess(getUserObjectId(req), project, {
+    hasRateGen: (uid) => userHasActiveEntitlement(uid, "rategen"),
+  });
 }
 
 // ── Cross-project linking (e.g. MEP services → architectural bill) ─────────
