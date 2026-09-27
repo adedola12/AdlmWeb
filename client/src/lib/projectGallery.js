@@ -52,7 +52,9 @@ export function stageOf(p) {
  * GET /me/projects-rollup (and the per-product list) sets `moneyHidden` on a
  * project somebody else owns when the reader may not see rates, and zeroes
  * its money, including totalCost, valuedAmount and remainingAmount (masked
- * since 27 Sep 2026; before that those three leaked).
+ * since 27 Sep 2026; before that those three leaked). `moneyHiddenBy` says
+ * why: "rategen" (the reader has none) or "owner" (the sharer switched money
+ * off for them, R4b).
  *
  * So the screens draw the line themselves: wherever a row says its money is
  * hidden, the figure is an en dash and the row is left out of the totals. A

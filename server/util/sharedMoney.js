@@ -72,12 +72,27 @@ export const MERGED_CONTRACT_MONEY_FIELDS = Object.freeze([
   "approvedVariationsTotal",
 ]);
 
+// ── The owner's switch (R4b) ────────────────────────────────────────────────
+// The primitives live in util/ownerMoney.js (no imports, so workOverview.js can
+// use them without a cycle through this file); they are re-exported here so the
+// routes have one place to import the money rules from.
+export {
+  SHOW_MONEY_DEFAULT,
+  collaboratorShowsMoney,
+  ownerAllowsMoney,
+  ownerHidesMoneyExpr,
+} from "./ownerMoney.js";
+
 /**
- * Hide the money on rows the reader does not own, when they may not see rates.
- * The row stays — a collaborator is meant to see the project, its quantities
- * and its progress — but every figure the project API would have masked reads
- * zero here too, and `moneyHidden` says so rather than letting a zero be
- * mistaken for "nothing certified".
+ * Hide the money on rows the reader does not own.
+ *
+ * A shared row is masked when the reader may not see rates (no RateGen) OR the
+ * owner switched money off for them (`ownerHidesMoney` on the row, from
+ * ownerHidesMoneyExpr). The row stays — a collaborator is meant to see the
+ * project, its quantities and its progress — but every hidden figure reads
+ * zero, `moneyHidden` says so rather than letting a zero be mistaken for
+ * "nothing certified", and `moneyHiddenBy` says why ("owner" | "rategen") so
+ * the screen can say who to ask.
  *
  * `priced` survives the masking as a plain yes/no (does the bill carry any
  * value at all?), because the gallery reads a project's stage from it and a
@@ -85,16 +100,23 @@ export const MERGED_CONTRACT_MONEY_FIELDS = Object.freeze([
  * says nothing about how much.
  *
  * `rows` must already carry the `shared` flag (true when the row belongs to
- * someone else): an owner's own row is never masked.
+ * someone else): an owner's own row is never masked. The internal
+ * `ownerHidesMoney` flag is always stripped, so it never reaches a client.
  */
 export function maskSharedMoney(rows, canSeeRates, fields = ROLLUP_MONEY_FIELDS) {
-  if (canSeeRates) return rows;
   return rows.map((p) => {
-    if (!p?.shared) return p;
+    if (!p || typeof p !== "object") return p;
+    const hasFlag = Object.prototype.hasOwnProperty.call(p, "ownerHidesMoney");
+    const byOwner = p.shared === true && p.ownerHidesMoney === true;
+    const hide = p.shared === true && (byOwner || !canSeeRates);
+    if (!hide && !hasFlag) return p;
     const out = { ...p };
+    delete out.ownerHidesMoney;
+    if (!hide) return out;
     if ("totalCost" in p) out.priced = Number(p.totalCost) > 0;
     for (const f of fields) out[f] = 0;
     out.moneyHidden = true;
+    out.moneyHiddenBy = byOwner ? "owner" : "rategen";
     return out;
   });
 }

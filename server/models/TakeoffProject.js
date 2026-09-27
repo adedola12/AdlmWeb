@@ -770,6 +770,12 @@ const CollaboratorSchema = new mongoose.Schema(
     addedAt: { type: Date, default: Date.now },
     // The shareCodes._id this person joined through (audit / level origin).
     addedViaCode: { type: mongoose.Schema.Types.ObjectId, default: null },
+    // The owner's choice (R4b): may this person see the project's money? Copied
+    // from the code they claimed, changeable per person afterwards. It narrows
+    // the RateGen rule and never widens it (util/sharedMoney.js). A record
+    // saved before the switch existed has no field and reads as true, so every
+    // existing collaborator keeps what they saw before.
+    showMoney: { type: Boolean, default: true },
   },
   { _id: true },
 );
@@ -789,6 +795,9 @@ const ShareCodeSchema = new mongoose.Schema(
     // 0 ⇒ unlimited uses.
     maxUses: { type: Number, default: 0, min: 0 },
     uses: { type: Number, default: 0, min: 0 },
+    // Whether whoever claims this code sees the project's money (R4b). Carried
+    // onto the collaborator record on claim; see CollaboratorSchema.showMoney.
+    showMoney: { type: Boolean, default: true },
     revoked: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

@@ -85,7 +85,20 @@ const Bar = ({ pct }) => (
 function Flags({ p }) {
   const f = [];
   if (p.shared) f.push(<span key="s" className="pj-flag mute">Shared with you</span>);
-  if (isMoneyHidden(p)) f.push(<span key="h" className="pj-flag mute">Money hidden</span>);
+  if (isMoneyHidden(p))
+    f.push(
+      <span
+        key="h"
+        className="pj-flag mute"
+        title={
+          p.moneyHiddenBy === "owner"
+            ? "The project owner has hidden its money from you"
+            : "Money on shared projects needs a RateGen subscription"
+        }
+      >
+        {p.moneyHiddenBy === "owner" ? "Money hidden by owner" : "Money hidden"}
+      </span>,
+    );
   if (p.publicShareEnabled) f.push(<span key="l" className="pj-flag mute">Share link on</span>);
   if (p.isMaterials) f.push(<span key="m" className="pj-flag">Material schedule</span>);
   return f.length ? f : null;

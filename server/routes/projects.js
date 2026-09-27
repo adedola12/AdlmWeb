@@ -612,6 +612,10 @@ function projectForClient(project, access) {
         canExport: !!access.canExport,
         canManage: !!access.canManage,
         canSeeRates: !!access.canSeeRates,
+        // True when the OWNER switched money off for this collaborator (R4b),
+        // as opposed to the reader lacking RateGen, so the screen can say who
+        // to ask. Never true for the owner.
+        moneyHiddenByOwner: !!access.moneyHiddenByOwner,
       }
     : {
         role: "owner",
@@ -620,6 +624,7 @@ function projectForClient(project, access) {
         canExport: true,
         canManage: true,
         canSeeRates: true,
+        moneyHiddenByOwner: false,
       };
   return obj;
 }
@@ -638,9 +643,12 @@ import {
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
 import {
+  collaboratorShowsMoney,
   maskSharedMoney,
+  ownerHidesMoneyExpr,
   readerMaySeeRates,
   PROJECT_LIST_MONEY_FIELDS,
+  SHOW_MONEY_DEFAULT,
 } from "../util/sharedMoney.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
@@ -886,12 +894,29 @@ function accessFilter(id, userId, productKey) {
   };
 }
 
+// The 403 body for a route that needs money the reader may not see. Says WHY,
+// because the fix differs: RateGen is something the reader can buy, while the
+// owner's switch is something only the owner can change.
+function moneyBlocked(access, what) {
+  return access?.moneyHiddenByOwner
+    ? {
+        error: `The project owner has hidden this project's money from you, so you cannot ${what}.`,
+        code: "MONEY_HIDDEN_BY_OWNER",
+      }
+    : {
+        error: `A RateGen subscription is required to ${what}.`,
+        code: "RATEGEN_REQUIRED",
+      };
+}
+
 // Resolve what the requester may do with an already-loaded project document.
 //   role:        owner | full | view | none
 //   canEdit:     owner or full  (mutations)
 //   canExport:   owner or full  (xlsx / model download)
 //   canManage:   owner only     (codes, collaborators, delete project)
-//   canSeeRates: owner always; collaborator only with active rategen
+//   canSeeRates: owner always; collaborator only when the owner left money on
+//                for them (showMoney, R4b) AND they hold an active rategen
+//   moneyHiddenByOwner: the owner's switch is what hid it (not RateGen)
 async function resolveProjectAccess(req, project) {
   const uid = getUserObjectId(req);
   const out = {
@@ -901,6 +926,7 @@ async function resolveProjectAccess(req, project) {
     canExport: false,
     canManage: false,
     canSeeRates: false,
+    moneyHiddenByOwner: false,
   };
   if (!project || !uid) return out;
 
@@ -927,6 +953,16 @@ async function resolveProjectAccess(req, project) {
   out.role = collab.accessLevel === "full" ? "full" : "view";
   out.accessLevel = out.role;
   out.canEdit = out.canExport = out.role === "full";
+  // The owner's choice first: when they switched money off for this person,
+  // no subscription of the reader's can turn it back on, and the entitlement
+  // lookup is not worth making. Everything downstream that reads canSeeRates
+  // (maskRates, guardMaskedWrite, the priced exports, certificates, variations,
+  // the final account) therefore honours the switch with no change of its own.
+  if (!collaboratorShowsMoney(collab)) {
+    out.moneyHiddenByOwner = true;
+    out.canSeeRates = false;
+    return out;
+  }
   out.canSeeRates = await userHasActiveEntitlement(uid, "rategen");
   return out;
 }
@@ -2897,6 +2933,9 @@ async function listProjects(req, res) {
           taxPercent: { $ifNull: ["$contract.taxPercent", 7.5] },
           // Ownership badge: true when this row was shared with the requester.
           shared: { $ne: ["$userId", userId] },
+          // The owner switched money off for this reader (R4b). Internal:
+          // maskSharedMoney() reads it and strips it before the response.
+          ownerHidesMoney: ownerHidesMoneyExpr(userId),
           accessLevel: {
             $let: {
               vars: {
@@ -3065,10 +3104,18 @@ async function listProjects(req, res) {
     //
     // Own rows are never masked, so a user's own list is untouched, and the
     // lookup is skipped entirely unless a shared row is actually present.
+    //
+    // R4b: a row whose owner switched money off for this reader is masked
+    // whatever the reader subscribes to (maskSharedMoney).
+    // The row keeps its shape: the fields stay, as numbers, so the plugins
+    // that parse this bare array read a zero exactly as they already do for a
+    // masked project GET.
     const shared = list.some((p) => p?.shared);
-    const out = shared
-      ? maskSharedMoney(list, await readerMaySeeRates(userId), PROJECT_LIST_MONEY_FIELDS)
-      : list;
+    const out = maskSharedMoney(
+      list,
+      shared ? await readerMaySeeRates(userId) : true,
+      PROJECT_LIST_MONEY_FIELDS,
+    );
 
     res.json(out);
   } catch (err) {
@@ -5365,12 +5412,10 @@ async function exportCertificateXlsx(req, res) {
       });
     }
     // Priced documents (certificate / final-account workbooks) carry rates —
-    // a collaborator without an active RateGen subscription may not export them.
+    // a collaborator without an active RateGen subscription may not export
+    // them, and nor may one the owner has hidden the money from (R4b).
     if (!access.canSeeRates) {
-      return res.status(403).json({
-        error: "A RateGen subscription is required to export priced documents.",
-        code: "RATEGEN_REQUIRED",
-      });
+      return res.status(403).json(moneyBlocked(access, "export priced documents"));
     }
 
     const certs = project.certificates || [];
@@ -5422,12 +5467,10 @@ async function exportFinalAccountXlsx(req, res) {
       });
     }
     // Priced documents (certificate / final-account workbooks) carry rates —
-    // a collaborator without an active RateGen subscription may not export them.
+    // a collaborator without an active RateGen subscription may not export
+    // them, and nor may one the owner has hidden the money from (R4b).
     if (!access.canSeeRates) {
-      return res.status(403).json({
-        error: "A RateGen subscription is required to export priced documents.",
-        code: "RATEGEN_REQUIRED",
-      });
+      return res.status(403).json(moneyBlocked(access, "export priced documents"));
     }
 
     if (!project.finalAccount?.finalized) {
@@ -6928,6 +6971,17 @@ function normalizeShareCode(s) {
   return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+// The owner's money switch (R4b) as sent by a form: a real boolean, or the
+// strings a form field can carry. Anything unrecognised keeps the fallback, so
+// a malformed request can never flip a share's money on by accident.
+function parseShowMoney(input, fallback) {
+  if (input === true || input === false) return input;
+  const v = String(input ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(v)) return true;
+  if (["false", "0", "no", "off"].includes(v)) return false;
+  return fallback;
+}
+
 function parseAllowedEmails(input) {
   const arr = Array.isArray(input)
     ? input
@@ -6982,6 +7036,7 @@ async function createShareCode(req, res) {
     const label = String(req.body?.label || "").trim().slice(0, 80);
     const maxUses = Math.max(parseInt(req.body?.maxUses, 10) || 0, 0);
     const allowedEmails = parseAllowedEmails(req.body?.allowedEmails);
+    const showMoney = parseShowMoney(req.body?.showMoney, SHOW_MONEY_DEFAULT);
 
     const code = generateShareCode();
     const norm = normalizeShareCode(code);
@@ -6994,15 +7049,19 @@ async function createShareCode(req, res) {
       allowedEmails,
       maxUses,
       uses: 0,
+      showMoney,
       revoked: false,
       createdBy: userId,
     });
     await project.save();
 
-    recordActivity(req, project, ACT.SHARE_TOGGLED, `Created a ${accessLevel} share code`, {
-      accessLevel,
-      label,
-    });
+    recordActivity(
+      req,
+      project,
+      ACT.SHARE_TOGGLED,
+      `Created a ${accessLevel} share code${showMoney ? "" : " (money hidden)"}`,
+      { accessLevel, label, showMoney },
+    );
     const created = project.shareCodes[project.shareCodes.length - 1];
     return res.json({
       ok: true,
@@ -7012,6 +7071,7 @@ async function createShareCode(req, res) {
       label,
       allowedEmails,
       maxUses,
+      showMoney,
     });
   } catch (err) {
     console.error("create share code error:", err);
@@ -7030,6 +7090,7 @@ async function listCollab(req, res) {
       userId: String(c.userId),
       email: c.email || "",
       accessLevel: c.accessLevel,
+      showMoney: collaboratorShowsMoney(c),
       addedAt: c.addedAt,
     }));
     const codes = (project.shareCodes || [])
@@ -7043,6 +7104,7 @@ async function listCollab(req, res) {
         allowedEmails: c.allowedEmails || [],
         maxUses: c.maxUses || 0,
         uses: c.uses || 0,
+        showMoney: collaboratorShowsMoney(c),
         createdAt: c.createdAt,
       }));
     return res.json({ ok: true, collaborators, codes });
@@ -7052,35 +7114,67 @@ async function listCollab(req, res) {
   }
 }
 
-// PATCH /:productKey/:id/collab/:userId — owner changes a collaborator's level.
+// PATCH /:productKey/:id/collab/:userId — owner changes a collaborator's level
+// and/or whether they see money (R4b). Body: { accessLevel?, showMoney? }; a
+// field left out is left as it is, so the money switch can be flipped without
+// touching the level and vice versa.
 async function updateCollabLevel(req, res) {
   try {
     const targetUserId = String(req.params.userId || "").trim();
     if (!isValidObjectId(targetUserId)) {
       return res.status(400).json({ error: "Invalid user id" });
     }
+    const body = req.body || {};
+    const hasLevel = body.accessLevel !== undefined && body.accessLevel !== null;
+    const hasMoney = body.showMoney !== undefined && body.showMoney !== null;
+    if (!hasLevel && !hasMoney) {
+      return res.status(400).json({ error: "Nothing to change: send accessLevel or showMoney." });
+    }
     const owned = await loadOwnedProject(req, res);
     if (!owned) return;
     const { project } = owned;
 
-    const accessLevel =
-      String(req.body?.accessLevel || "").toLowerCase() === "full"
-        ? "full"
-        : "view";
     const collab = (project.collaborators || []).find(
       (c) => String(c.userId) === targetUserId,
     );
     if (!collab) return res.status(404).json({ error: "Collaborator not found" });
-    collab.accessLevel = accessLevel;
+
+    const who = collab.email || "a collaborator";
+    if (hasLevel) {
+      const accessLevel =
+        String(body.accessLevel).toLowerCase() === "full" ? "full" : "view";
+      collab.accessLevel = accessLevel;
+    }
+    if (hasMoney) {
+      collab.showMoney = parseShowMoney(body.showMoney, collaboratorShowsMoney(collab));
+    }
     await project.save();
-    recordActivity(
-      req,
-      project,
-      ACT.COLLABORATOR_ADDED,
-      `Changed ${collab.email || "a collaborator"}'s access to ${accessLevel}`,
-      { email: collab.email || "", accessLevel },
-    );
-    return res.json({ ok: true, userId: targetUserId, accessLevel });
+
+    const showMoney = collaboratorShowsMoney(collab);
+    if (hasLevel) {
+      recordActivity(
+        req,
+        project,
+        ACT.COLLABORATOR_ADDED,
+        `Changed ${who}'s access to ${collab.accessLevel}`,
+        { email: collab.email || "", accessLevel: collab.accessLevel },
+      );
+    }
+    if (hasMoney) {
+      recordActivity(
+        req,
+        project,
+        ACT.SHARE_TOGGLED,
+        showMoney ? `Showed the project's money to ${who}` : `Hid the project's money from ${who}`,
+        { email: collab.email || "", showMoney },
+      );
+    }
+    return res.json({
+      ok: true,
+      userId: targetUserId,
+      accessLevel: collab.accessLevel,
+      showMoney,
+    });
   } catch (err) {
     console.error("update collab level error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -7234,6 +7328,9 @@ async function claimProject(req, res) {
       userId,
       email: myEmail,
       accessLevel: level,
+      // The owner's money choice travels with the code (R4b). A code made
+      // before the switch has no field and reads as on, as it always did.
+      showMoney: collaboratorShowsMoney(sc),
       addedViaCode: sc._id,
     });
     sc.uses = (sc.uses || 0) + 1;
