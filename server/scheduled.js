@@ -77,7 +77,8 @@ function ready() {
       import("./models/Setting.js"),
     ]);
     // R02/R10: new uploads onto the free lesson shelves, from the channel's
-    // public feed (no API key), skipping videos staff have deleted.
+    // public feed (or the Data API, with YOUTUBE_API_KEY, when the feed is
+    // down), skipping videos staff have deleted.
     const runFreeLibrary = () =>
       runFreeLibraryAuto({
         FreeVideo,
