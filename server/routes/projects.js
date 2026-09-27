@@ -3403,6 +3403,12 @@ async function applyMergedLineWrite({ req, container, body, canSeeRates = true }
     const source = byId.get(sourceId);
     const pk = source.productKey;
 
+    // Variations diverted by a source's own contract lock. Collected here
+    // rather than applied inside the items branch, so the payload's own
+    // variations can be laid down FIRST and these appended on top — the same
+    // composition the container does below.
+    let lockVariations = [];
+
     if (Array.isArray(bucket.items)) {
       const sanitizedNext = sanitizeItems(bucket.items, pk);
       // When the CONTAINER is locked, enforcement already happened above
@@ -3422,20 +3428,33 @@ async function applyMergedLineWrite({ req, container, body, canSeeRates = true }
       });
       source.items = tracked.items;
       source.valuationEvents = tracked.valuationEvents;
-      if (extraVariations.length) {
-        source.variations = sanitizeVariations([
-          ...(Array.isArray(source.variations) ? source.variations : []),
-          ...extraVariations,
-        ]);
-      }
+      lockVariations = extraVariations;
       source.markModified("items");
     }
 
     if (Array.isArray(bucket.provisionalSums)) {
       source.provisionalSums = sanitizeProvisionalSums(bucket.provisionalSums);
     }
-    if (Array.isArray(bucket.variations) && !Array.isArray(bucket.items)) {
+    // A save from the project screen sends the whole bill AND the whole
+    // variations list together, which is every ordinary save. Guarding this on
+    // "no items in the payload" therefore threw the QS's variation edits away
+    // on a merged project every single time: approve a variation, save, and the
+    // approval was gone on the next load.
+    //
+    // The guard existed because the items branch above appended the lock's own
+    // diverted variations, and assigning the payload afterwards would have
+    // wiped them. So they compose instead, in the order the container already
+    // uses: the QS's edits set the list, the lock's diversions land on top.
+    if (Array.isArray(bucket.variations)) {
       source.variations = sanitizeVariations(bucket.variations);
+      source.markModified("variations");
+    }
+    if (lockVariations.length) {
+      source.variations = sanitizeVariations([
+        ...(Array.isArray(source.variations) ? source.variations : []),
+        ...lockVariations,
+      ]);
+      source.markModified("variations");
     }
     if (Array.isArray(bucket.materialItems)) {
       source.materialItems = sanitizeItems(bucket.materialItems, pk);
