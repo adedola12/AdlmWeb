@@ -499,4 +499,20 @@ export const SEED = [
     refs: "AdlmWeb PR #22 (feat/work-board, fix 6085fa0) · docs/WORK_BOARD.md",
     design: { status: "needed", surfaces: "This board: summary tiles, the proposal form, the decision buttons, the design track" },
   },
+  {
+    key: "r2-open-in-quiv-heron",
+    title: "\"Open in QUIV / HERON\" from a web project",
+    products: ["website", "installer-hub", "quiv", "heron"],
+    kind: "button",
+    stage: "proposed",
+    summary: "A button on a QUIV or HERON project in ADLM Cloud that opens the same project in the desktop product, through an adlm:// link the Installer Hub registers.",
+    progress: "Built locally on 27 Sep while approval is pending, on feat/r2-open-in-desktop in four repos, all tests passing. Website: signed single-use 10-minute ticket (POST /projects/open-intent/issue, /redeem), button in the project header and on project cards. Hub: ADLMOpen.exe (asInvoker, strict link check) + adlm:// registry entries. QUIV and HERON: pick up the request, redeem with their own session, open the project. Nothing pushed.",
+    pending: "Richard's approval. Then push once per repo, PRs, API deploy before the client, and desktop releases through the release gate.",
+    blockedOn: "Richard: approve the proposal on the work board.",
+    refs: "docs/OPEN_IN_DESKTOP.md (contract) · AdlmWeb feat/r2-open-in-desktop · ADLMInstaller feat/r2-open-in-desktop · RevitPluginArch feat/r2-open-in-desktop · ADLMPlanswiftApp feat/r2-open-in-desktop",
+    design: {
+      status: "needed",
+      surfaces: "Web: 'Open in QUIV/HERON' button in the project header and on project cards, its 'Sent to QUIV' note and the not-installed fallback (features/projects/OpenInDesktopButton.jsx, placeholder). QUIV (WPF/TaskDialog) and HERON (WPF): the 'Opening <project> from ADLM Cloud' panel with 'open the model' guidance, and the error messages. Hub: none beyond the browser's first-use prompt.",
+    },
+  },
 ];

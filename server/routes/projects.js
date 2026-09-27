@@ -873,7 +873,7 @@ async function userHasActiveEntitlement(userId, key) {
 // uses this filter sits behind requireEntitlementParam, so "anyone" here means
 // an active subscriber of the product. resolveProjectAccess() makes them
 // read-only and rejectSampleWrites() refuses every write before a handler runs.
-function accessFilter(id, userId, productKey) {
+export function accessFilter(id, userId, productKey) {
   return {
     _id: id,
     productKey,
@@ -887,7 +887,7 @@ function accessFilter(id, userId, productKey) {
 //   canExport:   owner or full  (xlsx / model download)
 //   canManage:   owner only     (codes, collaborators, delete project)
 //   canSeeRates: owner always; collaborator only with active rategen
-async function resolveProjectAccess(req, project) {
+export async function resolveProjectAccess(req, project) {
   const uid = getUserObjectId(req);
   const out = {
     role: "none",
