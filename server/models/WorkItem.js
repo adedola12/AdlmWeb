@@ -75,6 +75,14 @@ const WorkItemSchema = new mongoose.Schema(
     blockedOn: text(1000),   // who or what it waits on
     refs: text(1000),        // repos, branches, PRs
 
+    // The approver's email about a new proposal (util/workBoardNotice.js):
+    // "held" while the board page is not live yet, "sent" once it went out.
+    notice: {
+      status: { type: String, enum: ["", "held", "sent"], default: "" },
+      heldAt: { type: Date, default: null },
+      sentAt: { type: Date, default: null },
+    },
+
     submittedBy: { type: String, trim: true, lowercase: true, default: "" },
     submittedAt: { type: Date, default: Date.now },
     sortOrder: { type: Number, default: 0 },

@@ -9,6 +9,7 @@
 //   node scripts/work-board.mjs seed [--apply]
 //   node scripts/work-board.mjs propose --file proposal.json [--apply] [--by you@adlm]
 //   node scripts/work-board.mjs check --key <key>      exit 0 only if it may be built
+//   node scripts/work-board.mjs notify-held [--apply]  send held approver emails once /admin/work is live
 //
 // Without --apply every write is a dry run that prints what it would do.
 // Local dev and production share one Atlas cluster, so --apply is production.
@@ -17,7 +18,7 @@ import "dotenv/config";
 import fs from "node:fs";
 import mongoose from "mongoose";
 import { WorkItem } from "../models/WorkItem.js";
-import { esc, gateMail, getGateConfig } from "../util/releaseGate.js";
+import { boardPageIsLive, boardUrl, notifyApprover } from "../util/workBoardNotice.js";
 import { initialDecision, missingBusinessCase, needsApproval, stageBlock } from "../util/workBoard.js";
 import { AS_OF, SEED } from "./work-board.seed.mjs";
 
@@ -95,16 +96,7 @@ async function propose() {
   say(`Proposal: ${doc.title} [${doc.kind}] -> stage ${doc.stage}, decision ${doc.decision.status}${APPLY ? "" : " (dry run)"}`);
   if (!APPLY) return say("Dry run. Re-run with --apply to file it and email the approver.");
   const item = await WorkItem.create(doc);
-  const cfg = await getGateConfig();
-  if (needsApproval(kind)) {
-    await gateMail({
-      to: [cfg.approverEmail],
-      subject: `New proposal for your approval: ${item.title}`,
-      title: "A new feature is waiting for your approval",
-      lines: [`<strong>${esc(item.title)}</strong>`, `Proposed by ${esc(by)}.`, `<em>${esc(item.businessCase.problem)}</em>`],
-      cta: { label: "Open the work board", href: `${String(process.env.PUBLIC_SITE_URL || "https://www.adlmstudio.net").replace(/\/+$/, "")}/admin/work` },
-    });
-  }
+  if (needsApproval(kind)) await notifyApprover(item.toObject(), { log: say });
   say(`Filed ${item._id}. Nothing may be built until the approver approves it.`);
 }
 
@@ -128,9 +120,20 @@ async function status() {
   say(`${items.length} items.`);
 }
 
-const COMMANDS = { seed, propose, check, status };
+// Held approver emails (the board page was not live when they were filed).
+async function notifyHeld() {
+  const held = await WorkItem.find({ "notice.status": "held", "decision.status": "pending" }).sort({ createdAt: 1 }).lean();
+  const live = await boardPageIsLive();
+  say(`${held.length} held; ${boardUrl()} is ${live ? "live" : "NOT live yet"}.`);
+  for (const i of held) say(`  held since ${i.notice?.heldAt?.toISOString?.() || "?"}  ${i.title}`);
+  if (!held.length || !live) return;
+  if (!APPLY) return say("Dry run. Re-run with --apply to email the approver.");
+  await notifyApprover(null, { log: say });
+}
+
+const COMMANDS = { seed, propose, check, status, "notify-held": notifyHeld };
 if (!COMMANDS[cmd]) {
-  say("usage: node scripts/work-board.mjs status | seed [--apply] | propose --file f.json [--apply] | check --key k");
+  say("usage: node scripts/work-board.mjs status | seed [--apply] | propose --file f.json [--apply] | check --key k | notify-held [--apply]");
   process.exit(1);
 }
 try {

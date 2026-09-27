@@ -33,6 +33,7 @@ import {
   resubmitIfNeeded,
   stageBlock,
 } from "../util/workBoard.js";
+import { boardUrl, notifyApprover } from "../util/workBoardNotice.js";
 
 const router = express.Router();
 router.use(requireAuth, requirePermission("releases"));
@@ -41,10 +42,6 @@ const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, ne
 const me = (req) => String(req.user?.email || "").trim().toLowerCase();
 const clip = (v, n = 4000) => String(v ?? "").trim().slice(0, n);
 
-function siteBase() {
-  return String(process.env.PUBLIC_SITE_URL || "https://www.adlmstudio.net").replace(/\/+$/, "");
-}
-const boardUrl = () => `${siteBase()}/admin/work`;
 
 function refuseViewOnly(req, res) {
   if (req.designMode || req.demoMode) {
@@ -117,7 +114,7 @@ router.post(
   "/",
   asyncHandler(async (req, res) => {
     if (refuseViewOnly(req, res)) return;
-    const { cfg, email } = await context(req);
+    const { email } = await context(req);
     const set = pickEditable(req.body);
     if (!set.title) return res.status(400).json({ error: "Give it a title." });
     const kind = set.kind || "feature";
@@ -138,17 +135,8 @@ router.post(
     const item = await WorkItem.create(doc);
 
     if (needsApproval(kind)) {
-      await gateMail({
-        to: [cfg.approverEmail],
-        subject: `New proposal for your approval: ${item.title}`,
-        title: "A new feature is waiting for your approval",
-        lines: [
-          title(item),
-          `Proposed by ${esc(email)}.`,
-          `<em>${esc(item.businessCase.problem)}</em>`,
-          "Nothing is designed or built until you approve it. Read the business case, then approve, ask for changes or decline.",
-        ],
-        cta: { label: "Open the work board", href: boardUrl() },
+      await notifyApprover(item.toObject(), {
+        lines: ["Nothing is designed or built until you approve it. Read the business case, then approve, ask for changes or decline."],
       });
     }
     res.status(201).json({ ok: true, item });

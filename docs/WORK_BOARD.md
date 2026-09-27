@@ -61,6 +61,11 @@ link, and notes. When he marks a design **ready**, the owner and the proposer ar
   An approved item keeps its approval when it is edited.
 - Each decision is emailed (through SES only) and written to the locked release-gate audit log
   as `release-gate.work.decision`.
+- The approver's "new proposal" email waits for the board page. The API can go live before
+  the website does, and on 26 Sep 2026 that email opened a 404. So a proposal is only emailed
+  once `/admin/work` is in the live site's bundle; until then it is filed with
+  `notice.status = "held"`, and the held ones go out together in one email on the next
+  proposal after the page is live, or with `node scripts/work-board.mjs notify-held --apply`.
 - Richard holds Design Access. Like the release desk, this board is unmasked for him and only
   for him (`server/middleware/designMode.js`, `RELEASE_DESK`). Every other Design Access user
   sees placeholder data.
