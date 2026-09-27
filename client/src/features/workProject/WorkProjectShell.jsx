@@ -23,6 +23,7 @@ import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectT
 import { linePanelTitle } from "./billModel.js";
 import WorkProjectOverview from "./WorkProjectOverview.jsx";
 import WorkProjectBill from "./WorkProjectBill.jsx";
+import WorkProjectRates from "./WorkProjectRates.jsx";
 import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
 import WorkProjectPanel from "./WorkProjectPanel.jsx";
 import { useProjectPanel } from "./useProjectPanel.js";
@@ -113,6 +114,19 @@ export default function WorkProjectShell({ productKey, id }) {
 
   const tabs = tabsFor(productKey);
   const tab = resolveTab(params.get("tab"), productKey);
+  // His Rates tab has three views behind a segmented control. The chosen one
+  // rides in the URL like the tab does, so a link to a view is shareable and
+  // Back walks them.
+  const rateView = params.get("view") || "rates";
+  const setRateView = React.useCallback(
+    (next) => {
+      const q = new URLSearchParams(params);
+      if (next === "rates") q.delete("view");
+      else q.set("view", next);
+      setParams(q);
+    },
+    [params, setParams],
+  );
 
   // His layer L5: a line, a rate build-up or the model changes open OVER the
   // tab, never as a new page (WORK.md §13). WorkProjectPanel owns the DOM, the
@@ -124,6 +138,8 @@ export default function WorkProjectShell({ productKey, id }) {
     (next) => {
       panel.close();
       const p = new URLSearchParams(params);
+      // A view belongs to the tab that owns it.
+      p.delete("view");
       if (next === "overview") p.delete("tab");
       else p.set("tab", next);
       // push, not replace: the back button should walk the tabs, which is the
@@ -232,7 +248,16 @@ export default function WorkProjectShell({ productKey, id }) {
             onOpenLine={(index) => panel.show({ kind: "line", index })}
             onGo={go}
           />
-        ) : tab === "overview" || tab === "bill" ? null : (
+        ) : tab === "rates" && !fullFailed ? (
+          <WorkProjectRates
+            project={project}
+            canEdit={!viewOnly}
+            view={rateView}
+            onView={setRateView}
+            onOpenLine={(index) => panel.show({ kind: "line", index })}
+            onGo={go}
+          />
+        ) : tab === "overview" || tab === "bill" || tab === "rates" ? null : (
           <div className="pj-empty">
             <p>
               <b>{tabs.find((t) => t.key === tab)?.label}</b> is not built here yet.
