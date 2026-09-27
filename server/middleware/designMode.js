@@ -299,10 +299,11 @@ function tokenFrom(req) {
 // the defaults; the tests swap them so the whole request path can be driven
 // over real HTTP without a Mongo connection.
 // The release approver may hold Design Access for their design work. The
-// sign-off desk (docs/RELEASE_GATE.md) must show them REAL releases and let
-// them really approve, so for that one path, and only for the named approver,
-// the mask steps aside. Every other admin path stays masked for them.
-const RELEASE_DESK = /^\/admin\/releases(\/|$)/;
+// sign-off desk (docs/RELEASE_GATE.md) and the work board (docs/WORK_BOARD.md)
+// must show them REAL items and let them really decide, so for those two
+// paths, and only for the named approver, the mask steps aside. Every other
+// admin path stays masked for them.
+const RELEASE_DESK = /^\/admin\/(releases|work)(\/|$)/;
 async function defaultIsReleaseApprover(email) {
   return isApprover(await getGateConfig(), email);
 }
