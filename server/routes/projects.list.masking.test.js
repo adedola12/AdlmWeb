@@ -127,17 +127,27 @@ test("the same collaborator WITH RateGen sees the shared figures", async () => {
   assert.equal(res.body[0].moneyHidden, undefined);
 });
 
-test("the figures that were always on this route are left exactly as they were", async () => {
+test("measured work, valued and remaining are withheld on a shared row too", async () => {
   me = { _id: USER_ID, email: "qs@example.com", entitlements: [planswift()] };
   rows = [row({ shared: true })];
   const res = await list();
-  // Measured work, what has been valued and what is left have been on this
-  // list since long before any of this masking, and the plugins read them.
-  // Masking is limited to the contract/estimate figures, exactly as
-  // /me/projects-rollup limits itself. Changing these is a separate decision.
-  assert.equal(res.body[0].totalCost, 40_000_000);
-  assert.equal(res.body[0].valuedAmount, 13_000_000);
-  assert.equal(res.body[0].remainingAmount, 27_000_000);
+  // These three were left unmasked here because "the plugins read them".
+  // They do — and every one of the three bindings in ADLMPlanswiftApp
+  // (MainWindow.xaml 442, 505, 762) is a OneWay display of
+  // CloudProjectListItem.TotalCost in a "Total (NGN): …" badge. No plugin
+  // branches on the value, so withholding it shows 0.00 on a project the
+  // reader is not entitled to price, and breaks nothing.
+  assert.equal(res.body[0].totalCost, 0);
+  assert.equal(res.body[0].valuedAmount, 0);
+  assert.equal(res.body[0].remainingAmount, 0);
+  assert.equal(res.body[0].moneyHidden, true);
+});
+
+test("a shared row still reports whether it is priced", async () => {
+  me = { _id: USER_ID, email: "qs@example.com", entitlements: [planswift()] };
+  rows = [row({ shared: true })];
+  const res = await list();
+  assert.equal(res.body[0].priced, true);
 });
 
 test("the shape a plugin reads is unchanged — a bare array, same rows, same order", async () => {

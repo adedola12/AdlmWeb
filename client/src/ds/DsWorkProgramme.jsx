@@ -53,6 +53,11 @@ import { useAuth } from "../store.jsx";
 import WkDropdown from "./WkDropdown.jsx";
 import WkPrefs from "./WkPrefs.jsx";
 import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { isMoneyHidden } from "../lib/projectGallery.js";
+
+// Placeholder for a figure this reader may not see. En dash, like everywhere
+// else a value is absent.
+const DASH = "–";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -407,7 +412,11 @@ export default function DsWorkProgramme() {
       }
       f.count += 1;
       f.items += Number(p.itemCount) || 0;
-      f.value += Number(p.totalCost) || 0;
+      // A row whose money is withheld contributes nothing to the value: it now
+      // reads 0 from the API anyway, and adding it would let this total claim
+      // to cover work whose figures the reader is not entitled to.
+      if (!isMoneyHidden(p)) f.value += Number(p.totalCost) || 0;
+      else f.valueHidden = true;
       if (!f.touched || new Date(p.updatedAt) > new Date(f.touched)) f.touched = p.updatedAt;
     }
     return [...by.values()]
@@ -789,7 +798,9 @@ export default function DsWorkProgramme() {
                 </div>
                 <div>
                   <b>{money(f.value)}</b>
-                  <span>value</span>
+                  {/* Say so when the figure covers fewer projects than the
+                      count beside it, rather than letting it read as the whole. */}
+                  <span>{f.valueHidden ? "value (some hidden)" : "value"}</span>
                 </div>
               </div>
             </button>
@@ -830,7 +841,7 @@ export default function DsWorkProgramme() {
               </p>
               <div className="f">
                 <div>
-                  <b>{money(p.totalCost)}</b>
+                  <b>{isMoneyHidden(p) ? DASH : money(p.totalCost)}</b>
                   <span>bill value</span>
                 </div>
                 <div>
