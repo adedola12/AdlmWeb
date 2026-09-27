@@ -779,7 +779,7 @@ const CollaboratorSchema = new mongoose.Schema(
 // (same posture as the existing plaintext publicToken bearer secret).
 const ShareCodeSchema = new mongoose.Schema(
   {
-    codeHash: { type: String, required: true, index: true },
+    codeHash: { type: String, required: true }, // indexed below as shareCodes.codeHash
     codeLast4: { type: String, default: "" },
     codePlain: { type: String, default: "" },
     accessLevel: { type: String, enum: ["view", "full"], default: "view" },
