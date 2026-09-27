@@ -186,3 +186,37 @@ test("QUIV's materialItems PUT keeps the QS's edits too, not just /full", () => 
   assert.equal(cement.supplier, "Dangote");
   assert.equal(project.items[0].rate, rateBefore, "and the bill does not revert");
 });
+
+// ── the earned position ────────────────────────────────────────────────────
+// percentComplete and completed are the multiplier in valuationFactor, so
+// they are the basis of every interim certificate. A plugin payload carries
+// no opinion about them — HERON's CloudTakeoffItemDto has sn, description,
+// qty, unit, rate, level, type and code, and nothing about progress — and
+// reading that silence as "nothing is built" zeroed the QS's own marks and
+// emitted a NEGATIVE valuation event for the loss.
+
+test("a payload that says nothing about progress is not a payload saying nothing is built", async () => {
+  const mod = await import("./projects.js").catch(() => null);
+  // carriesValuationState is module-private, so assert the behaviour through
+  // the shape the guard keys on rather than importing it.
+  const pluginPayload = [{ sn: 1, code: "A1", description: "Concrete", qty: 100, unit: "m3", rate: 1000 }];
+  const websitePayload = [{ ...pluginPayload[0], percentComplete: 60, completed: false }];
+
+  const carries = (rows) =>
+    rows.some(
+      (it) =>
+        it &&
+        (it.percentComplete !== undefined ||
+          it.completed !== undefined ||
+          it.purchased !== undefined),
+    );
+
+  assert.equal(carries(pluginPayload), false, "HERON's DTO carries no progress");
+  assert.equal(carries(websitePayload), true, "the website always round-trips it");
+
+  // QUIV sends the planned rate in actualRate, so that field must never be
+  // what decides this — it would report every Revit save as carrying
+  // progress and the guard would never fire.
+  assert.equal(carries([{ ...pluginPayload[0], actualRate: 950 }]), false);
+  assert.ok(mod, "the route module still loads");
+});

@@ -1761,7 +1761,36 @@ function bucketPreviousItems(items) {
   return buckets;
 }
 
-function applyValuationTracking({ productKey, previousItems = [], nextItems = [], previousEvents = [] }) {
+/**
+ * Does this payload have an opinion about what has been built?
+ *
+ * The website round-trips a line's earned position — completed / purchased /
+ * percentComplete — so an absent field there means "no". A desktop plugin
+ * never sends them at all: HERON's CloudTakeoffItemDto carries sn,
+ * description, qty, unit, rate, level, type and code, and nothing about
+ * progress. Treating that silence as "nothing is built" resets the line.
+ *
+ * actualRate is deliberately NOT in this list. QUIV's takeoff sends the
+ * planned rate in it (see sanitizeItems), so it would report every Revit
+ * payload as carrying progress and the guard would never fire.
+ */
+function carriesValuationState(rawItems) {
+  return (Array.isArray(rawItems) ? rawItems : []).some(
+    (it) =>
+      it &&
+      (it.percentComplete !== undefined ||
+        it.completed !== undefined ||
+        it.purchased !== undefined),
+  );
+}
+
+function applyValuationTracking({
+  productKey,
+  previousItems = [],
+  nextItems = [],
+  previousEvents = [],
+  keepEarnedPosition = false,
+}) {
   const statusField = statusFieldForProductKey(productKey);
   const statusDateField = statusDateFieldForProductKey(productKey);
   const otherStatusField = statusField === "purchased" ? "completed" : "purchased";
@@ -1778,6 +1807,19 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
     else previousBuckets.delete(key);
 
     const previousItem = previousMatch?.item || {};
+    // A payload with no opinion about progress must not be read as "nothing
+    // is built". percentComplete and completed are the multiplier in
+    // valuationFactor and therefore the basis of every interim certificate,
+    // so a plugin re-save used to zero the earned position of a line the QS
+    // had marked 60% done — and emit a NEGATIVE valuation event for it.
+    if (keepEarnedPosition && previousMatch) {
+      item = {
+        ...item,
+        completed: previousItem.completed,
+        purchased: previousItem.purchased,
+        percentComplete: previousItem.percentComplete,
+      };
+    }
     const previousStatus = Boolean(previousItem?.[statusField]);
     const nextStatus = Boolean(item?.[statusField]);
     const previousStatusAt = parseOptionalDate(previousItem?.[statusDateField]);
@@ -2387,6 +2429,9 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
       created || !Array.isArray(project.valuationEvents)
         ? []
         : project.valuationEvents,
+    // A plugin payload says nothing about progress. That is not the same as
+    // saying nothing has been built.
+    keepEarnedPosition: !carriesValuationState(items),
   });
   project.items = tracked.items;
   project.valuationEvents = tracked.valuationEvents;
@@ -3982,6 +4027,7 @@ async function updateProject(req, res) {
         previousEvents: Array.isArray(project.valuationEvents)
           ? project.valuationEvents
           : [],
+        keepEarnedPosition: !carriesValuationState(items),
       });
       project.items = tracked.items;
       project.valuationEvents = tracked.valuationEvents;
@@ -7359,7 +7405,25 @@ async function priceServicesProject(req, res) {
       }
     });
 
-    project.budgetItems = budgetItems;
+    // Third instance of the same replace-without-preserve defect, on the
+    // button a services QS presses most. The pricing pass builds a brand-new
+    // array and this used to assign it straight over the stored rows, so
+    // every procurement mark, supplier, target date and typed rate went —
+    // and because the pass returns early for a bill line whose build-up is
+    // empty, those lines' rows were not rebuilt either, they simply vanished.
+    //
+    // Coverage puts the skipped lines back, then the QS's own fields go back
+    // on top. Same helper and same order as the plugin paths.
+    const previousBudget = project.budgetItems || [];
+    backfillBudgetLinks(project.items, budgetItems);
+    const freshBudget = ensureBillItemCoverage(project.items, budgetItems);
+    const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+    if (restored.procurement || restored.pricing) {
+      console.log(
+        `[services] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+      );
+    }
+    project.budgetItems = freshBudget;
     const { updated } = deriveBillRatesFromBudget(project);
     reconcileItemsFromBudget(project);
     project.markModified("budgetItems");
