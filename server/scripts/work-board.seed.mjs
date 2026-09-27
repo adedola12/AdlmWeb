@@ -223,10 +223,22 @@ export const SEED = [
     kind: "feature",
     stage: "building",
     decision: "grandfathered",
-    progress: "It squares the outline and measures its own error. The public build hides it; beta machines see it.",
-    pending: "Decide when it leaves beta. The version numbers disagree: the csproj says 3.0.0, the zips are 2.9.x and Installer.iss says 2.9.1.",
-    refs: "ADLMPlanswiftApp claude/sleepy-ritchie-rwshbh",
+    progress: "Merged into HERON master (PR #4, 823b160); beta channel only. It finds the building outline locally from the drawing's ink and squares it. Its error % is against a figure the estimator types in, not self-measured. The optional 'checked by the ADLM AI Service' source calls /ai/plan-detect and /ai/plan-refine, which exist nowhere, so in the field it has only ever run locally. HERON 3 (feat/heron-3, c1ab5e9) switches it off for everyone.",
+    pending: "Superseded by the decision in r2-ai-auto-takeoff (docs/AI-AUTO-TAKEOFF-SCOPE.md): recommended to retire the drawing-reading AI in favour of HERON 3's template take-off, and to take the dead service sources out of beta builds. Versions now agree at 2.9.6 (csproj, Installer.iss); 3.0.0 was reverted in bebfa7f.",
+    refs: "ADLMPlanswiftApp master (from claude/sleepy-ritchie-rwshbh) · local branch feat/r2-heron-autotakeoff-local-only · docs/auto-takeoff-mode.md",
     design: { status: "needed", surfaces: "Auto take-off panel: pick items, show confidence, accept or reject" },
+  },
+
+  {
+    key: "r2-ai-auto-takeoff",
+    title: "AI auto take-off: one agreed scope for QUIV, and a decision on HERON",
+    products: ["quiv", "heron", "ai-service"],
+    kind: "feature",
+    stage: "proposed",
+    progress: "Scope written (docs/AI-AUTO-TAKEOFF-SCOPE.md). Built locally ahead of approval at the owner's request, nothing pushed. QUIV: per-step reject after an auto take-off run, Beta Programme only, no confidence figures because the engine computes none. Website: POST /ai/quiv/handover-review and the kept/rejected share on /admin/ai-usage. HERON: beta builds offer only the local outline source.",
+    pending: "Richard's approval of the QUIV scope and the HERON choice (a: retire, recommended; b: keep as an optional drawing assist). Then one push per repo and a PR each. QUIV's review list design is his; his plugin-quiv panel replaces it in QUIV 4.0.",
+    refs: "AdlmWeb feat/r2-ai-auto-takeoff · RevitPluginArch feat/r2-auto-takeoff-review · ADLMPlanswiftApp feat/r2-heron-autotakeoff-local-only (all local)",
+    design: { status: "needed", surfaces: "QUIV: review list in the auto take-off panel (keep or reject each step, lines per step, no confidence). HERON: none if option a." },
   },
 
   // ── Across every product ─────────────────────────────────────────────────
