@@ -13,45 +13,35 @@
 // already staff-only on adlmstudio.net, so the new one can be built in the
 // open without a flag and without putting the working one at risk.
 //
-// Promote it by removing the isStaff branch, once the tabs are real.
+// The isStaff branch is gone: components/NewBuildGate.jsx owns that decision
+// for the whole /work/* family now.
 
 import React from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { isStaff, canViewPreview } from "../utils/roles.js";
-import { isGatedHost } from "../lib/previewHost.js";
 import WorkProjectShell from "../features/workProject/WorkProjectShell.jsx";
 
 /**
- * Who sees the new workspace.
+ * Who sees the new workspace — answered by the route, not here any more.
  *
- * On a preview host, PreviewHostGate has already turned away everybody who is
- * not staff or Tech Support before this route renders, so asking isStaff a
- * second time here only locks out the people the preview exists for — which
- * is what happened: the owner's own account holds the "preview" area and
- * nothing else, and got the redirect on the very site built for reviewing.
+ * This screen used to decide for itself: canViewPreview on a preview host, and
+ * isStaff on adlmstudio.net, on the reasoning that "on adlmstudio.net nothing
+ * has gated the request". That is no longer true. components/NewBuildGate.jsx
+ * now gates every /work/* and /manage/* route until launch, using canViewPreview
+ * — so a second rule here could only disagree with it, and did: it bounced Tech
+ * Support, whose whole role is the "preview" area and who is deliberately not
+ * isStaff (utils/roles.js). One rule, in one place.
  *
- * On adlmstudio.net nothing has gated the request, so isStaff stands: /work
- * is staff-only there and Tech Support is the preview site and nothing else.
+ * The hydration guard stays: the shell fetches on mount, and it has no business
+ * doing that before there is a session to fetch with.
  */
-function maySeeNewWorkspace(user) {
-  const onPreview = typeof window !== "undefined" && isGatedHost(window.location.hostname);
-  return onPreview ? canViewPreview(user) : isStaff(user);
-}
-
 export default function WorkProject() {
   const { productKey = "", id = "" } = useParams();
   const { user, accessToken } = useAuth();
   const key = String(productKey).toLowerCase();
 
-  // AuthProvider withholds `user` for a frame while it hydrates. Redirecting
-  // in that frame would bounce a staff member out of the page they asked for.
   if (accessToken && !user) return null;
+  if (!user) return null;
 
-  if (maySeeNewWorkspace(user)) return <WorkProjectShell productKey={key} id={id} />;
-
-  const to = key
-    ? `/projects/${encodeURIComponent(key)}${id ? `?project=${encodeURIComponent(id)}` : ""}`
-    : "/work/projects";
-  return <Navigate to={to} replace />;
+  return <WorkProjectShell productKey={key} id={id} />;
 }
