@@ -630,7 +630,10 @@ export default function Products() {
         </div>
       </div>
 
-      {/* ✅ NEW: Physical Trainings section */}
+      {/* ✅ NEW: Physical Trainings section. Only when there is something to
+          show (or the read failed and says so): with nothing published the
+          section was an empty shelf on the catalogue page (owner, 27 Sep). */}
+      {trainings.length > 0 || trainingsErr ? (
       <Reveal
         as="section"
         className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth"
@@ -674,6 +677,7 @@ export default function Products() {
           ) : null}
         </div>
       </Reveal>
+      ) : null}
 
       {msg && <div className="text-sm">{msg}</div>}
 
