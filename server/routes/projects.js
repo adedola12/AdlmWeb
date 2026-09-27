@@ -684,6 +684,7 @@ import {
   reapplyBudgetEdits,
   preserveBudgetUserEdits,
 } from "../util/budgetUserEdits.js";
+import { preliminaryPercentOf } from "../util/contractDefaults.js";
 import {
   sanitizeResourceItems,
   applyResourceRows,
@@ -4189,7 +4190,7 @@ async function updateProject(req, res) {
         if (!project.contract) project.contract = {};
         project.contract.preliminaryPercent = clampPercentage(
           n,
-          safeNum(project.contract?.preliminaryPercent) || 7.5,
+          preliminaryPercentOf(project.contract),
         );
       }
     }
@@ -4512,12 +4513,14 @@ async function lockContract(req, res) {
     const approvedAt = req.body?.approvedAt
       ? new Date(req.body.approvedAt)
       : new Date();
+    // Locking freezes this into the contract sum, so a 0% job must lock at 0%
+    // and not quietly acquire a 7.5% preliminary pool it never had.
     const preliminaryPercent = Number.isFinite(Number(req.body?.preliminaryPercent))
       ? clampPercentage(
           Number(req.body.preliminaryPercent),
-          safeNum(project.contract?.preliminaryPercent) || 7.5,
+          preliminaryPercentOf(project.contract),
         )
-      : safeNum(project.contract?.preliminaryPercent) || 7.5;
+      : preliminaryPercentOf(project.contract);
     const notes = String(req.body?.notes || "").trim().slice(0, 1000);
 
     // 4-digit lock PIN. Required for new locks (this version onwards).

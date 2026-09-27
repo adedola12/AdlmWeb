@@ -41,6 +41,7 @@ import {
   variationRow,
 } from "../features/projects/lib/projectRows.js";
 import { reconcileBill } from "../features/projects/rateReconcile.js";
+import { preliminaryPercentOf } from "../features/projects/lib/projectTotals.js";
 // The same product/host table the gallery names its tools from (P0.4), so the
 // two screens say "Measure in QUIV, inside Revit" in exactly the same words.
 import { SOURCES } from "../lib/projectGallery.js";
@@ -4601,7 +4602,7 @@ export default function ProjectsGeneric() {
   const variationsTotalForOverview = approvedVariationsTotal(variations);
   const variationsDoneAmount = approvedVariationsEarned(variations);
 
-  const preliminaryPctForOverview = safeNum(contract?.preliminaryPercent) || 7.5;
+  const preliminaryPctForOverview = preliminaryPercentOf(contract);
   const preliminaryPoolForOverview =
     ((grossAmount + provTotalForOverview) * preliminaryPctForOverview) / 100;
   // Pro-rate the preliminary pool by the allocation of each completed item.

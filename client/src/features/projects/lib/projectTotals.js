@@ -176,3 +176,23 @@ export function projectTotals(input = {}) {
 }
 
 export default projectTotals;
+
+export const DEFAULT_PRELIMINARY_PERCENT = 7.5;
+
+/**
+ * The preliminary percentage for a contract, honouring a deliberate 0.
+ *
+ * `safeNum(x) || 7.5` cannot tell "no preliminaries on this job" from "never
+ * set", because 0 is falsy — so a QS who typed 0% got a 7.5% pool on the
+ * Overview and the project card while the Bill and the certificates said
+ * zero. Mirrors server/util/contractDefaults.js; the two must agree.
+ *
+ * null, undefined and "" are all absent, and all three come back from Number()
+ * as 0, so they are checked before the numeric test rather than through it.
+ */
+export function preliminaryPercentOf(contract, fallback = DEFAULT_PRELIMINARY_PERCENT) {
+  const value = contract?.preliminaryPercent;
+  if (value === null || value === undefined || value === "") return fallback;
+  const raw = Number(value);
+  return Number.isFinite(raw) ? raw : fallback;
+}
