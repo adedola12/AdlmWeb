@@ -178,7 +178,7 @@ function ReleaseEditor({ release, index, total, onChange, onRemove, onMove }) {
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-adlm-navy px-2.5 py-1 text-xs font-semibold text-white dark:bg-adlm-dark-raised">
-            v{release.version || "—"}
+            v{release.version || "–"}
           </span>
           {index === 0 ? (
             <span className="rounded-full bg-adlm-orange px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
@@ -386,7 +386,7 @@ function MetaForm({ draft, onField }) {
               )}
             </div>
             <div className="truncate text-xs text-slate-500 dark:text-adlm-dark-muted">
-              {draft.summary || draft.tagline || "—"}
+              {draft.summary || draft.tagline || "–"}
             </div>
           </div>
         </div>

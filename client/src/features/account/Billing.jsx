@@ -8,11 +8,11 @@ import { useAuth } from "../../store.jsx";
 import { apiAuthed } from "../../http.js";
 
 function fmtDate(d) {
-  if (!d) return "—";
+  if (!d) return "–";
   try {
     return new Date(d).toLocaleDateString();
   } catch {
-    return "—";
+    return "–";
   }
 }
 

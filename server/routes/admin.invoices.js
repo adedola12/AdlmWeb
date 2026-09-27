@@ -457,7 +457,7 @@ router.get(
       const clr = isGray ? "#091E39" : "#262626";
       doc.fontSize(9).font("Helvetica").fillColor(clr);
       doc.text(`${i + 1}.`,           colSN + 2, y + 9, { width: 34, align: "center" });
-      doc.text(item.description || "—", colDesc,  y + 9, { width: colQty - colDesc - 4 });
+      doc.text(item.description || "–", colDesc,  y + 9, { width: colQty - colDesc - 4 });
       doc.text(String(item.qty || 1),  colQty,    y + 9, { width: 36, align: "center" });
       doc.text("Nr",                   colUnit,   y + 9, { width: 38, align: "center" });
       doc.text(fmtN(item.unitPrice),   colRate,   y + 9, { width: 55, align: "right" });
@@ -610,7 +610,7 @@ router.post(
     const curr = inv.currency === "USD" ? "$" : "N";
     const clientGreeting = inv.clientName || inv.clientOrganization || "Client";
     const amountPaid = Number(inv.amountPaid || inv.total || 0);
-    const payDate = inv.paidAt ? dayjs(inv.paidAt).format("MMMM D, YYYY") : "—";
+    const payDate = inv.paidAt ? dayjs(inv.paidAt).format("MMMM D, YYYY") : "–";
 
     const pdfBuffer = await receiptToBuffer(inv.toObject());
 
@@ -734,7 +734,7 @@ router.post(
         (it, i) =>
           `<tr style="border-bottom:1px solid #eee">
             <td style="padding:6px 8px;font-size:13px">${i + 1}.</td>
-            <td style="padding:6px 8px;font-size:13px">${it.description || "—"}</td>
+            <td style="padding:6px 8px;font-size:13px">${it.description || "–"}</td>
             <td style="padding:6px 8px;font-size:13px;text-align:center">${it.qty || 1}</td>
             <td style="padding:6px 8px;font-size:13px;text-align:right">${curr}${Number(it.unitPrice || 0).toLocaleString()}</td>
             <td style="padding:6px 8px;font-size:13px;text-align:right;font-weight:600">${curr}${Number(it.total || 0).toLocaleString()}</td>

@@ -1017,7 +1017,7 @@ export default function DsWorkProgramme() {
                       />
                       <i>{g.unit}/day</i>
                     </span>
-                    <span className="ds-a">{g.out > 0 ? num(g.gangDays) : "—"}</span>
+                    <span className="ds-a">{g.out > 0 ? num(g.gangDays) : "–"}</span>
                     <span className="v">{money(g.amount)}</span>
                   </div>
                 )),

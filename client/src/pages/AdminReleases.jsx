@@ -10,7 +10,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
 function fmt(d) {
-  return d ? new Date(d).toLocaleString() : "—";
+  return d ? new Date(d).toLocaleString() : "–";
 }
 
 const STATUS_STYLE = {
@@ -168,7 +168,7 @@ export default function AdminReleases() {
                 <Version c={c} /> <Badge status="pending" />
               </div>
               <div className="text-xs text-slate-500 break-all">
-                Submitted by {c.submittedBy || "—"} on {fmt(c.submittedAt)}
+                Submitted by {c.submittedBy || "–"} on {fmt(c.submittedAt)}
                 {c.payload?.sha256 ? ` · sha256 ${c.payload.sha256}` : ""}
               </div>
               {c.notifyBody?.releaseNotes && (
@@ -268,7 +268,7 @@ export default function AdminReleases() {
                       <Badge status={c.status} />
                       {c.reviewVerdict ? <span className="ml-1 text-xs text-slate-500">({c.reviewVerdict})</span> : null}
                     </td>
-                    <td className="py-2 pr-3">{c.decidedBy || "—"}</td>
+                    <td className="py-2 pr-3">{c.decidedBy || "–"}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{fmt(c.decidedAt)}</td>
                     <td className="py-2 pr-3 text-slate-600">{c.emergencyReason || c.decisionNote || ""}</td>
                   </tr>

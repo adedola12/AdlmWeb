@@ -268,7 +268,7 @@ function BurnDown({ credit, onEdit }) {
         <Facts
           items={[
             [usd(spent), "billed to the pool so far"],
-            [rate ? usd(rate) : "—", "a day, month to date"],
+            [rate ? usd(rate) : "–", "a day, month to date"],
             [credit?.label || "AWS credit", "the pool this is billed to"],
           ]}
         />
@@ -317,8 +317,8 @@ function BurnDown({ credit, onEdit }) {
       <Facts
         items={[
           [usd(left), "credit remaining"],
-          [rate ? usd(rate) : "—", "a day, month to date"],
-          [toExpiry === null ? "—" : `${num(toExpiry)} days`, "until the credit expires"],
+          [rate ? usd(rate) : "–", "a day, month to date"],
+          [toExpiry === null ? "–" : `${num(toExpiry)} days`, "until the credit expires"],
           [usd(unused), "would expire unused", unused > 0],
         ]}
       />
@@ -396,7 +396,7 @@ function Breakdown({ rows, head, empty, onRow }) {
             r.errors ? <AdmTwo top={num(r.calls)} under={`${num(r.errors)} failed`} /> : num(r.calls),
         },
         { h: "Tokens", num: true, cell: (r) => compact(r.tokens) },
-        { h: "Cost", num: true, cell: (r) => (r.cost ? usd(r.cost) : <AdmDim>—</AdmDim>) },
+        { h: "Cost", num: true, cell: (r) => (r.cost ? usd(r.cost) : <AdmDim>–</AdmDim>) },
         {
           h: "Share",
           cell: (r) => (
@@ -614,15 +614,15 @@ function AccountPeek({ row, days, token, label, busy, onClose, onLimits, onTopUp
                     num(f.calls)
                   ),
               },
-              { h: "Cost", num: true, cell: (f) => (f.costUsd ? usd(f.costUsd) : <AdmDim>—</AdmDim>) },
-              { h: "Last", num: true, cell: (f) => day(f.lastAt) || <AdmDim>—</AdmDim> },
+              { h: "Cost", num: true, cell: (f) => (f.costUsd ? usd(f.costUsd) : <AdmDim>–</AdmDim>) },
+              { h: "Last", num: true, cell: (f) => day(f.lastAt) || <AdmDim>–</AdmDim> },
               {
                 // A cap is invisible until it bites, which is how somebody ends
                 // up debugging "the AI stopped working for this customer".
                 h: "Capped at",
                 cell: (f) => {
                   const said = capSays(caps[f.feature]);
-                  return said ? <AdmChip tone="due">{said}</AdmChip> : <AdmDim>—</AdmDim>;
+                  return said ? <AdmChip tone="due">{said}</AdmChip> : <AdmDim>–</AdmDim>;
                 },
               },
             ]}
@@ -1126,7 +1126,7 @@ export default function DsAdminAiUsage() {
     {
       h: "Cost",
       num: true,
-      cell: (r) => (r.usage.costUsd ? usd(r.usage.costUsd) : <AdmDim>—</AdmDim>),
+      cell: (r) => (r.usage.costUsd ? usd(r.usage.costUsd) : <AdmDim>–</AdmDim>),
     },
     { h: "Last used", num: true, cell: (r) => day(r.usage.lastAt) || <AdmDim>never</AdmDim> },
     {
@@ -1242,7 +1242,7 @@ export default function DsAdminAiUsage() {
                   ? `${Math.round(
                       (t.cacheReadTokens / (t.cacheReadTokens + t.cacheWriteTokens)) * 100,
                     )}%`
-                  : "—",
+                  : "–",
                 t.cacheReadTokens + t.cacheWriteTokens
                   ? `of cache tokens were reads · ${compact(t.cacheReadTokens)} read, ${compact(
                       t.cacheWriteTokens,
@@ -1420,15 +1420,15 @@ export default function DsAdminAiUsage() {
                       c.totalTokens ? (
                         <AdmTwo top={num(c.totalTokens)} under={`${num(c.inputTokens)} in`} />
                       ) : (
-                        <AdmDim>—</AdmDim>
+                        <AdmDim>–</AdmDim>
                       ),
                   },
-                  { h: "Took", num: true, cell: (c) => (c.ms ? `${num(c.ms)}ms` : <AdmDim>—</AdmDim>) },
+                  { h: "Took", num: true, cell: (c) => (c.ms ? `${num(c.ms)}ms` : <AdmDim>–</AdmDim>) },
                   {
                     h: "Cost",
                     num: true,
                     cell: (c) =>
-                      c.ok === false || !c.costUsd ? <AdmDim>—</AdmDim> : usd(c.costUsd),
+                      c.ok === false || !c.costUsd ? <AdmDim>–</AdmDim> : usd(c.costUsd),
                   },
                   {
                     h: "",
