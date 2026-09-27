@@ -25,6 +25,7 @@ import WorkProjectOverview from "./WorkProjectOverview.jsx";
 import WorkProjectBill from "./WorkProjectBill.jsx";
 import WorkProjectRates from "./WorkProjectRates.jsx";
 import WorkProjectPm from "./WorkProjectPm.jsx";
+import WorkProjectValuations from "./WorkProjectValuations.jsx";
 import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
 import WorkProjectPanel from "./WorkProjectPanel.jsx";
 import { useProjectPanel } from "./useProjectPanel.js";
@@ -266,7 +267,15 @@ export default function WorkProjectShell({ productKey, id }) {
             onView={setRateView}
             onGo={go}
           />
-        ) : tab === "overview" || tab === "bill" || tab === "rates" || tab === "pm" ? null : (
+        ) : tab === "valuations" && !fullFailed ? (
+          <WorkProjectValuations
+            project={project}
+            canEdit={!viewOnly}
+            view={rateView}
+            onView={setRateView}
+            onGo={go}
+          />
+        ) : ["overview", "bill", "rates", "pm", "valuations"].includes(tab) ? null : (
           <div className="pj-empty">
             <p>
               <b>{tabs.find((t) => t.key === tab)?.label}</b> is not built here yet.

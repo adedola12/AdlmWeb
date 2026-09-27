@@ -285,7 +285,7 @@ function BillSummary({ project, totals, canEdit, onGo }) {
       </div>
 
       <SumGroup label="PC sums" rows={pcSums} total={totals.pc} />
-      <SumGroup label="Provisional sums" rows={provSums} total={totals.sums - totals.pc} />
+      <SumGroup label="Provisional sums" rows={provSums} total={totals.provisional} />
 
       <div className="r">
         <span className="l">

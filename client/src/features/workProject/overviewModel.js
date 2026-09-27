@@ -12,6 +12,11 @@
 // RICHARD-SEP18.md decision 1 was written about.
 
 import { projectTotals, safeNum } from "../projects/lib/projectTotals.js";
+// His fixture calls a line's progress `done`; ours is `percentComplete`, and
+// doneOf is the one place that difference lives. Reading `it.done` here meant
+// the Complete donut and the value-by-section bars were 0 on every real
+// project, because no line has ever had that field.
+import { doneOf } from "./billModel.js";
 
 /** His six, in order (work.js:323-330). */
 export const STAGES = [
@@ -68,7 +73,7 @@ export function completePercent(project) {
   for (const it of items) {
     const v = safeNum(it?.qty) * safeNum(it?.rate);
     value += v;
-    done += (v * Math.min(100, Math.max(0, safeNum(it?.done)))) / 100;
+    done += (v * doneOf(it)) / 100;
   }
   return value > 0 ? Math.round((done / value) * 100) : 0;
 }
@@ -101,7 +106,7 @@ export function valueBySection(items) {
     const row = byName.get(name) || { name, value: 0, done: 0, count: 0 };
     const v = safeNum(it?.qty) * safeNum(it?.rate);
     row.value += v;
-    row.done += (v * Math.min(100, Math.max(0, safeNum(it?.done)))) / 100;
+    row.done += (v * doneOf(it)) / 100;
     row.count += 1;
     byName.set(name, row);
   }
