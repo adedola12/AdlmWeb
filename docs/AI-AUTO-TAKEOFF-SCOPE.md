@@ -19,8 +19,8 @@ This page settles what "auto take-off" means in each product. It does not replac
 ## QUIV: what auto take-off does
 
 1. **It stays the handover.** You pick modules and levels, see the step plan, then watch progress with the time so far and an estimate, and can stop, keep or undo. The speed work (`quiv-takeoff-speed`) lands first and is not touched here.
-2. **New: review each step before keeping it (Beta Programme users first).** When a run finishes, every step that saved shows how many Bill lines it added or replaced. You can **reject a single step** (for example "Walls, First Floor") and keep the rest. Rejecting a step replays the kept steps over the saved state from before the run, so the Bill and the Budget always agree. If a step changed lines in place and cannot be separated, it says so and offers only the whole-run undo.
-3. **New: the run reports how many steps were kept and how many rejected** to the website (`POST /ai/quiv/handover-review`). This number is the success metric, and it appears on `/admin/ai-usage`.
+2. **New: review each step before keeping it (Beta Programme users first).** When a run finishes, every step that saved shows how many Bill lines it added or replaced. You can **reject a single step** (for example "Walls, First Floor") and keep the rest. Rejecting a step replays the kept steps over the saved state from before the run, so the Bill and the Budget always agree. A step whose lines cannot be told apart is not offered for rejection; the whole-run undo still covers it. Values written onto Revit elements stay, as with today's undo.
+3. **New: the run reports how many steps were kept and how many rejected** to the website (`POST /ai/quiv/handover-review`), only for runs where the review was offered, so the figure is not flattered. This number is the success metric, and it appears on `/admin/ai-usage`.
 4. **Metering is unchanged.** One `quiv-handover` run is charged at the start. The review adds no charge and no model call.
 
 ## QUIV: what auto take-off does not do
