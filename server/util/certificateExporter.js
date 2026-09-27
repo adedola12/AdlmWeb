@@ -39,7 +39,7 @@ function addTitleBlock(ws, { title, projectName, clientName = "", date }) {
   ws.mergeCells(t.number, 1, t.number, 4);
 
   ws.addRow([]);
-  const p = ws.addRow(["Project", projectName || "—"]);
+  const p = ws.addRow(["Project", projectName || "–"]);
   p.font = { bold: true };
   ws.mergeCells(p.number, 2, p.number, 4);
 
@@ -117,7 +117,7 @@ export async function exportCertificate({
       [
         certificate.periodStart
           ? dayjs(certificate.periodStart).format("YYYY-MM-DD")
-          : "—",
+          : "–",
         "to",
         certificate.periodEnd
           ? dayjs(certificate.periodEnd).format("YYYY-MM-DD")
@@ -290,7 +290,7 @@ export async function exportCertificate({
     for (const c of previousCerts) {
       const r = ws.addRow([
         String(c.number).padStart(2, "0"),
-        c.date ? dayjs(c.date).format("YYYY-MM-DD") : "—",
+        c.date ? dayjs(c.date).format("YYYY-MM-DD") : "–",
         safeNum(c.thisCertificate),
         safeNum(c.cumulativeValue),
       ]);
@@ -415,7 +415,7 @@ export async function exportFinalAccount({ projectName = "Project", clientName =
     for (const c of certificates) {
       const r = ws.addRow([
         String(c.number).padStart(2, "0"),
-        c.date ? dayjs(c.date).format("YYYY-MM-DD") : "—",
+        c.date ? dayjs(c.date).format("YYYY-MM-DD") : "–",
         safeNum(c.thisCertificate),
         c.status || "draft",
       ]);

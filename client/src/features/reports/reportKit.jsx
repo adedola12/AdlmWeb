@@ -34,7 +34,7 @@ export const NAIRA = "₦";
 
 export function fmtMoney(v, { compact = false } = {}) {
   const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "–";
   if (compact) {
     const abs = Math.abs(n);
     if (abs >= 1e9) return `${NAIRA}${(n / 1e9).toFixed(2)}B`;
@@ -47,14 +47,14 @@ export function fmtMoney(v, { compact = false } = {}) {
 
 export function fmtPct(v, digits = 1) {
   const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "–";
   return `${n.toFixed(digits)}%`;
 }
 
 export function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "–";
   const d = dayjs(v);
-  return d.isValid() ? d.format("DD MMM YYYY") : "—";
+  return d.isValid() ? d.format("DD MMM YYYY") : "–";
 }
 
 // Split table rows across pages: `first` rows on the section's opening page,
@@ -238,7 +238,7 @@ export function CoverPage({ kicker, title, accent, lede, metaPairs = [], footLef
           {metaPairs.map((m) => (
             <div key={m.label}>
               <div className="lbl">{m.label}</div>
-              <div className="val">{m.value || "—"}</div>
+              <div className="val">{m.value || "–"}</div>
             </div>
           ))}
         </div>
@@ -498,5 +498,5 @@ export function StatusPill({ value }) {
   else if (["in-progress", "inprogress", "mitigating", "sent", "at-risk", "atrisk"].includes(v)) cls = "blue";
   else if (["blocked", "overdue", "behind", "critical", "high"].includes(v)) cls = "red";
   else if (["open", "draft", "medium", "not-started"].includes(v)) cls = "amber";
-  return <span className={`pill ${cls}`}>{String(value || "—").replace(/-/g, " ")}</span>;
+  return <span className={`pill ${cls}`}>{String(value || "–").replace(/-/g, " ")}</span>;
 }

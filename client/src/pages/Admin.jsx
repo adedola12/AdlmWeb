@@ -307,7 +307,7 @@ function formatGrants(p) {
     ? p.installation.entitlementGrants
     : [];
 
-  if (!grants.length) return { text: "—", count: 0 };
+  if (!grants.length) return { text: "–", count: 0 };
 
   const agg = new Map();
   for (const g of grants) {
@@ -479,16 +479,16 @@ function DevicesModal({
                           <td className="py-2 pr-3 font-mono text-xs break-all">
                             {d.fingerprint}
                           </td>
-                          <td className="py-2 pr-3">{d.name || "—"}</td>
+                          <td className="py-2 pr-3">{d.name || "–"}</td>
                           <td className="py-2 pr-3">
                             {d.boundAt
                               ? dayjs(d.boundAt).format("YYYY-MM-DD HH:mm")
-                              : "—"}
+                              : "–"}
                           </td>
                           <td className="py-2 pr-3">
                             {d.lastSeenAt
                               ? dayjs(d.lastSeenAt).format("YYYY-MM-DD HH:mm")
-                              : "—"}
+                              : "–"}
                           </td>
                           <td className="py-2 pr-3">
                             {revoked ? (
@@ -1919,7 +1919,7 @@ export default function Admin({ section = null }) {
                             <div className="text-slate-700">
                               {last
                                 ? dayjs(last).format("YYYY-MM-DD HH:mm")
-                                : "—"}
+                                : "–"}
                             </div>
                             <div className="text-slate-500">
                               {uRow
@@ -2208,7 +2208,7 @@ export default function Admin({ section = null }) {
     // Fallback display if no manual seatsLeft
     if (cap > 0) return <Badge label={`${cap} slots`} tone="blue" />;
 
-    return <Badge label="—" tone="slate" />;
+    return <Badge label="–" tone="slate" />;
   }
 
   function pTrainingStatusBadge(st) {
@@ -2217,7 +2217,7 @@ export default function Admin({ section = null }) {
     if (s === "rejected") return <Badge label="Rejected" tone="red" />;
     if (s === "pending") return <Badge label="Pending" tone="yellow" />;
     if (s === "submitted") return <Badge label="Submitted" tone="blue" />;
-    return <Badge label={s || "—"} tone="slate" />;
+    return <Badge label={s || "–"} tone="slate" />;
   }
 
   // Open a beta tester's diagnostic log in the viewer. The list rows carry no
@@ -2596,7 +2596,7 @@ export default function Admin({ section = null }) {
                     pTrainingsSorted.map((t) => {
                       const when = t?.startAt
                         ? dayjs(t.startAt).format("YYYY-MM-DD")
-                        : "—";
+                        : "–";
                       const status = String(t?.status || "open").toLowerCase();
                       const selected =
                         String(ptTrainingFilter) === String(t._id);
@@ -2724,10 +2724,10 @@ export default function Admin({ section = null }) {
                         ? dayjs(e.training.startAt).format("YYYY-MM-DD")
                         : e?.training?.date
                           ? dayjs(e.training.date).format("YYYY-MM-DD")
-                          : "—";
+                          : "–";
 
                       const userEmail =
-                        e?.user?.email || e?.email || e?.userEmail || "—";
+                        e?.user?.email || e?.email || e?.userEmail || "–";
 
                       const firstName =
                         e?.user?.firstName || e?.firstName || "";
@@ -2735,7 +2735,7 @@ export default function Admin({ section = null }) {
                       const payer =
                         `${e?.payerName || e?.payment?.payerName || ""}`.trim() ||
                         `${e?.firstName || ""} ${e?.lastName || ""}`.trim() ||
-                        "—";
+                        "–";
 
                       const receipt =
                         e?.receiptUrl ||
@@ -3288,7 +3288,7 @@ export default function Admin({ section = null }) {
                                   ? "Active"
                                   : expired
                                     ? "Expired"
-                                    : g.status || "—"
+                                    : g.status || "–"
                               }
                               tone={active ? "green" : expired ? "yellow" : "red"}
                             />
@@ -3296,7 +3296,7 @@ export default function Admin({ section = null }) {
                           <td className="py-2 pr-3">
                             {g.expiresAt
                               ? dayjs(g.expiresAt).format("YYYY-MM-DD")
-                              : "—"}
+                              : "–"}
                           </td>
                           <td className="py-2 pr-3">
                             <div className="flex gap-2">
@@ -3472,7 +3472,7 @@ export default function Admin({ section = null }) {
                               const c = (org.contacts || []).find(
                                 (x) => x.phone,
                               );
-                              if (!c) return "—";
+                              if (!c) return "–";
                               const intl = normalizePhone(c.phone);
                               return (
                                 <span className="inline-flex items-center gap-1.5">
@@ -3517,11 +3517,11 @@ export default function Admin({ section = null }) {
                             </span>
                           </td>
                           <td className="py-3 pr-3">
-                            {soonest ? soonest.format("YYYY-MM-DD") : "—"}
+                            {soonest ? soonest.format("YYYY-MM-DD") : "–"}
                           </td>
                           <td className="py-3 pr-3">
                             {soonestDays == null ? (
-                              "—"
+                              "–"
                             ) : (
                               <span
                                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -3628,7 +3628,7 @@ export default function Admin({ section = null }) {
                                                   ? "Active"
                                                   : expired
                                                     ? "Expired"
-                                                    : p.status || "—"
+                                                    : p.status || "–"
                                               }
                                               tone={
                                                 active
@@ -3646,18 +3646,18 @@ export default function Admin({ section = null }) {
                                           <td className="py-2 pr-3">
                                             {p.durationMonths
                                               ? `${p.durationMonths} month${p.durationMonths === 1 ? "" : "s"}`
-                                              : "—"}
+                                              : "–"}
                                           </td>
                                           <td className="py-2 pr-3">
                                             {p.expiresAt
                                               ? dayjs(p.expiresAt).format(
                                                   "YYYY-MM-DD",
                                                 )
-                                              : "—"}
+                                              : "–"}
                                           </td>
                                           <td className="py-2 pr-3">
                                             {p.daysLeft == null ? (
-                                              "—"
+                                              "–"
                                             ) : (
                                               <span
                                                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -3764,7 +3764,7 @@ export default function Admin({ section = null }) {
                         <td className="py-3 pr-3">
                           {r.expiresAt
                             ? dayjs(r.expiresAt).format("YYYY-MM-DD")
-                            : "—"}
+                            : "–"}
                         </td>
 
                         <td className="py-3 pr-3">
@@ -4215,7 +4215,7 @@ export default function Admin({ section = null }) {
                           Approved:{" "}
                           {p.decidedAt
                             ? dayjs(p.decidedAt).format("YYYY-MM-DD HH:mm")
-                            : "—"}
+                            : "–"}
                         </div>
 
                         <div className="mt-2">
@@ -4603,10 +4603,10 @@ export default function Admin({ section = null }) {
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <span className="font-medium">
-                          {p.email || p.organization?.name || "—"}
+                          {p.email || p.organization?.name || "–"}
                         </span>
                         <span className="text-slate-500 ml-2">
-                          {p.physicalTraining.locationName || "—"}
+                          {p.physicalTraining.locationName || "–"}
                         </span>
                       </div>
                       <span

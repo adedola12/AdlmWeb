@@ -34,7 +34,7 @@ const PRODUCT = {
   "qs-takeoff": "Time Pro",
   archicad: "ArchiCAD",
 };
-const productName = (k) => PRODUCT[k] || k || "—";
+const productName = (k) => PRODUCT[k] || k || "–";
 
 const money = (n, cur = "NGN") =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: cur || "NGN", maximumFractionDigits: 0 })
@@ -192,7 +192,7 @@ const SCREENS = {
       {
         h: "Less",
         num: true,
-        cell: (i) => (i.discount ? `−${money(i.discount, i.currency)}` : <AdmDim>—</AdmDim>),
+        cell: (i) => (i.discount ? `−${money(i.discount, i.currency)}` : <AdmDim>–</AdmDim>),
       },
       {
         h: "VAT",

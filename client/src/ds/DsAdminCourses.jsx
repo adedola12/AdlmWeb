@@ -339,12 +339,12 @@ export default function DsAdminCourses() {
         c.enrolled ? (
           <AdmTwo top={num(c.finished)} under={`${Math.round((c.finished / c.enrolled) * 100)}%`} />
         ) : (
-          <AdmDim>—</AdmDim>
+          <AdmDim>–</AdmDim>
         ),
     },
     {
       h: "Where they stall",
-      cell: (c) => (c.stall ? <span className="adm-warn">{c.stall}</span> : <AdmDim>—</AdmDim>),
+      cell: (c) => (c.stall ? <span className="adm-warn">{c.stall}</span> : <AdmDim>–</AdmDim>),
     },
     {
       h: "State",

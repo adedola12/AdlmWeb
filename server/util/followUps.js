@@ -102,7 +102,7 @@ function purchaseItems(p) {
     .filter(Boolean);
 
   if (names.length) return names.join(" · ");
-  return String(p?.productKey || "").trim() || "—";
+  return String(p?.productKey || "").trim() || "–";
 }
 
 /** productKey → display name, so the caller sees "QUIV", not "revit". */
@@ -192,7 +192,7 @@ export async function collectCandidates({
       const key = String(e.productKey || "").trim().toLowerCase();
       expired.push({
         productKey: key,
-        productName: names.get(key) || key || "—",
+        productName: names.get(key) || key || "–",
         expiresAt: e.expiresAt || null,
         daysOverdue: overdue,
         seats: Number(e.seats || 1),
