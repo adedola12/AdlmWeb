@@ -86,3 +86,4 @@ import "../models/UsageSession.js";
 import "../models/User.js";
 import "../models/Video.js";
 import "../models/WaitlistEntry.js";
+import "../models/WorkItem.js";
