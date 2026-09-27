@@ -87,7 +87,11 @@ export function totalsFor(project) {
     contingencyPercent: project?.contingencyPercent ?? project?.contingency,
     taxPercent: project?.taxPercent ?? project?.vat,
     variations: project?.variations,
-    linkedSummaries: project?.linkedProjects,
+    // linkedSummaries, NOT linkedProjects. The raw array carries ObjectIds and
+    // snapshot money, and routes/projects.js deletes it from every payload, so
+    // reading it here made a project with linked services total LESS than the
+    // Services tab on the same page said it did.
+    linkedSummaries: project?.linkedSummaries,
   });
 }
 

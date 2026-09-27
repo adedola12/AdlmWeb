@@ -66,14 +66,15 @@ describe("his three views", () => {
     expect(onView).toHaveBeenCalledWith("budget");
   });
 
-  it("says where Budget and Buy schedule live rather than showing an empty panel", () => {
-    const c = draw({ view: "budget" });
-    // "Budget" is both the segmented button and the heading of the empty state,
-    // which is right — so this asks the empty state, not the page.
-    const empty = c.querySelector(".pj-empty");
-    expect(within(empty).getByText("Budget")).toBeTruthy();
-    expect(within(empty).getByText(/not built here yet/)).toBeTruthy();
-    expect(within(empty).getByText(/full workspace/)).toBeTruthy();
+  it("hands Budget and Buy schedule to their own views", () => {
+    // WorkProjectBudget.test.jsx pins what each of those shows; this only
+    // checks the switch reaches them rather than an empty panel.
+    const budget = draw({ view: "budget" });
+    expect(budget.querySelector(".pj-bud, .pj-empty b")).toBeTruthy();
+    expect(budget.textContent).not.toContain("not built here yet");
+    cleanup();
+    const buy = draw({ view: "buy" });
+    expect(buy.textContent).not.toContain("not built here yet");
   });
 
   it("falls back to Rates for a view that does not exist", () => {

@@ -17,7 +17,7 @@ import { Link } from "react-router-dom";
 import WkDropdown from "./WkDropdown.jsx";
 // His work-proj.css (ported in P0.3), which nothing loaded until now.
 import "../styles/ds-work-proj.css";
-import { projectWorkspaceHref } from "../lib/projectLinks.js";
+import { useProjectHref } from "../lib/useProjectHref.js";
 import {
   SOURCES,
   STAGES,
@@ -101,6 +101,7 @@ const VIEW_KEY = "adlm-pj-view";
  * @param {string} [p.fixedTool]      a source key; the tool page shows only its own
  */
 export default function DsProjectGallery({ projects, fixedTool = "" }) {
+  const projectHref = useProjectHref();
   const [q, setQ] = React.useState("");
   const [tool, setTool] = React.useState(fixedTool || "all");
   const [stage, setStage] = React.useState("all");
@@ -289,7 +290,7 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
               const s = SOURCES[sourceOf(p)];
               const pct = Math.round(Number(p.progressPercent) || 0);
               return (
-                <Link className="pj-card" key={p.id} to={projectWorkspaceHref(p)}>
+                <Link className="pj-card" key={p.id} to={projectHref(p)}>
                   <div className="top">
                     {s?.icon ? <img className="ti" src={s.icon} alt="" /> : null}
                     <span className="src">{s?.name || "Imported"}</span>
@@ -335,7 +336,7 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
               const s = SOURCES[sourceOf(p)];
               const pct = Math.round(Number(p.progressPercent) || 0);
               return (
-                <Link className="rw" role="row" key={p.id} to={projectWorkspaceHref(p)}>
+                <Link className="rw" role="row" key={p.id} to={projectHref(p)}>
                   <span className="p">
                     <b>{p.name}</b>
                     <em>{whose(p)}</em>

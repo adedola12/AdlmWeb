@@ -52,7 +52,8 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkDropdown from "./WkDropdown.jsx";
 import WkPrefs from "./WkPrefs.jsx";
-import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { normaliseRollup } from "../lib/projectLinks.js";
+import { useProjectHref } from "../lib/useProjectHref.js";
 import { isMoneyHidden } from "../lib/projectGallery.js";
 
 // Placeholder for a figure this reader may not see. En dash, like everywhere
@@ -343,6 +344,7 @@ const writeStore = (key, value) => {
 };
 
 export default function DsWorkProgramme() {
+  const projectHref = useProjectHref();
   const { accessToken } = useAuth();
   const [params, setParams] = useSearchParams();
   const [projects, setProjects] = React.useState(null);
@@ -995,7 +997,7 @@ export default function DsWorkProgramme() {
                 r.items.map((g, i) => (
                   <div className="wk-qr" key={`${r.trade}-${i}`}>
                     <span className="d">
-                      <Link to={projectWorkspaceHref(current)}>
+                      <Link to={projectHref(current)}>
                         {g.name}
                       </Link>
                       <em>

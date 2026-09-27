@@ -4,16 +4,12 @@
 // / Next. It is the page's main interaction: WORK.md §13 says progress is
 // recorded "on bill lines only", and this is the only place that happens.
 //
-// WHAT IS WIRED AND WHAT IS NOT
+// THE TWO EDITS
 //
-// Reading is complete. Writing progress and moving a line to another element are
-// his two edits here, and they are not wired yet: our save is a PUT that
-// REPLACES items, provisionalSums, variations and preliminaryItems outright, so
-// a partial payload from this panel would delete whichever array it left out —
-// the note in ProjectsGeneric.jsx's saveRatesToCloud is explicit about it, and
-// it has bitten this codebase before. That save wants its own helper and its own
-// tests, which is the next step rather than something to half-do underneath a
-// working bill.
+// Recording progress and moving a line to another section are his two edits here,
+// and both write through saveProject.js. Neither can send just the line it
+// changed: sending `items` REPLACES the array, so every other line has to go
+// back with it, whole. That rule and its tests live in saveProject.js.
 
 import React from "react";
 import {
@@ -25,8 +21,9 @@ import {
   tradeOf,
   unitOf,
 } from "./billModel.js";
-import { money, num } from "./workProjectFormat.js";
+import { EN_DASH, money, num } from "./workProjectFormat.js";
 import { Bar } from "./workProjectBits.jsx";
+import { withLineElement, withLineProgress } from "./saveProject.js";
 
 /** His progress steps (work-proj.js:920). */
 const STEPS = [0, 25, 50, 75, 100];
@@ -37,11 +34,26 @@ export default function WorkProjectLinePanel({
   canEdit = false,
   drift = null,
   contractLocked = false,
+  saving = false,
+  onSave,
   onGoToLine,
   onGo,
 }) {
-  const items = Array.isArray(project?.items) ? project.items : [];
+  // Both memos sit above the "no such line" return: a hook after an early
+  // return runs in a different order on the render that takes it.
+  const items = React.useMemo(
+    () => (Array.isArray(project?.items) ? project.items : []),
+    [project],
+  );
   const it = items[index];
+  // Every section on this bill, plus this line's own in case it is the only
+  // line in it — otherwise changing it would be a one-way trip.
+  const sections = React.useMemo(() => {
+    const seen = new Set(items.map(elementOf).filter(Boolean));
+    if (it) seen.add(elementOf(it));
+    return [...seen].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [items, it]);
+
   if (!it) return null;
 
   const priced = isPriced(it);
@@ -77,7 +89,25 @@ export default function WorkProjectLinePanel({
 
       <div className="pn-sec">
         <span className="k">Element</span>
-        <p>{elementOf(it)}</p>
+        {canEdit ? (
+          // His <select> of ELEMENTS (work-proj.js:909). His list is a fixed
+          // table; ours is the sections this bill actually uses, because a real
+          // bill states its own and offering a line a section no other line has
+          // would make a group of one.
+          <select
+            className="pn-sel"
+            aria-label="Element"
+            value={elementOf(it)}
+            disabled={saving}
+            onChange={(e) => onSave?.(withLineElement(project, index, e.target.value))}
+          >
+            {sections.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        ) : (
+          <p>{elementOf(it)}</p>
+        )}
         <p className="hint">Trade: {tradeOf(it)}</p>
       </div>
 
@@ -116,7 +146,13 @@ export default function WorkProjectLinePanel({
         {canEdit ? (
           <div className="pn-steps" role="group" aria-label="Set progress">
             {STEPS.map((v) => (
-              <button key={v} type="button" aria-pressed={done === v} disabled>
+              <button
+                key={v}
+                type="button"
+                aria-pressed={done === v}
+                disabled={saving}
+                onClick={() => onSave?.(withLineProgress(project, index, v))}
+              >
                 {v}%
               </button>
             ))}
@@ -128,12 +164,6 @@ export default function WorkProjectLinePanel({
             ? "Feeds the next valuation and the PM dashboard."
             : "Progress counts once the contract is locked."}
         </p>
-        {canEdit ? (
-          <p className="hint">
-            Recording progress from here is not wired yet — use the full workspace. It is the
-            next step.
-          </p>
-        ) : null}
       </div>
 
       <div className="pn-nav">

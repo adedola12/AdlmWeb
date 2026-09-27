@@ -195,3 +195,46 @@ describe("the field a line's progress actually lives in", () => {
     expect(rows[0].donePercent).toBe(50);
   });
 });
+
+describe("linked services in the project's total", () => {
+  // The raw linkedProjects array is DELETED from every payload by
+  // routes/projects.js; linkedSummaries is the client-facing shape, and is what
+  // the Services tab reads. Reading the wrong one made the Overview's total
+  // smaller than the Services tab's figure on the same page.
+  const linked = (over = {}) => ({
+    items: [{ qty: 10, rate: 1_000 }],
+    linkedSummaries: [{ projectId: "s1", live: { total: 5_000_000 } }],
+    ...over,
+  });
+
+  it("reports what the linked services add", () => {
+    // Before this was read from the right field it was always 0, so the
+    // Overview breakdown's "Linked services" row never appeared.
+    expect(totalsFor(linked()).linked).toBe(5_000_000);
+  });
+
+  it("keeps them out of the total, as projectTotals requires", () => {
+    // A linked project carries its own preliminaries, contingency and VAT and
+    // is valued on its own certificates, so it is reported beside the total,
+    // "never folded into total".
+    expect(totalsFor(linked()).total).toBe(10_000);
+  });
+
+  it("does not read linkedProjects — the server never sends it", () => {
+    const wrong = totalsFor({
+      items: [{ qty: 10, rate: 1_000 }],
+      linkedProjects: [{ projectId: "s1", live: { total: 5_000_000 } }],
+    });
+    expect(wrong.linked).toBe(0);
+  });
+
+  it("falls back to a snapshot total when there is no live figure", () => {
+    expect(totalsFor(linked({
+      linkedSummaries: [{ projectId: "s1", snapshot: { total: 2_000_000 } }],
+    })).linked).toBe(2_000_000);
+  });
+
+  it("is 0 on a project with nothing linked", () => {
+    expect(totalsFor({ items: [] }).linked).toBe(0);
+  });
+});

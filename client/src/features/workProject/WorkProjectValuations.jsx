@@ -19,6 +19,10 @@ import {
   valuationKpis,
 } from "./valuationsModel.js";
 import { EN_DASH, compact, money } from "./workProjectFormat.js";
+import {
+  WorkProjectFinalView,
+  WorkProjectVariationsView,
+} from "./WorkProjectVariations.jsx";
 import { Bar } from "./workProjectBits.jsx";
 import { completePercent, totalsFor } from "./overviewModel.js";
 
@@ -178,18 +182,15 @@ function Unlocked({ project, canEdit, view, onView }) {
 
       {mode === "certs" ? (
         <Certificates bars={bars} certs={certs} contractSum={contractSum} canEdit={canEdit} />
+      ) : mode === "variations" ? (
+        <WorkProjectVariationsView project={project} />
       ) : (
-        <div className="pj-empty">
-          <p>
-            <b>{VALUATION_VIEWS.find((v) => v.key === mode)?.label}</b> is not built here yet.
-          </p>
-          <p className="ds-sub">
-            {mode === "variations"
-              ? "Raising, approving and executing a variation, and what each one does to the contract sum."
-              : "The closing settlement: what was measured, what was certified, and what is owed."}{" "}
-            Both work in the full workspace.
-          </p>
-        </div>
+        <WorkProjectFinalView
+          project={project}
+          totals={totals}
+          contractSum={contractSum}
+          certified={k.certified}
+        />
       )}
     </>
   );

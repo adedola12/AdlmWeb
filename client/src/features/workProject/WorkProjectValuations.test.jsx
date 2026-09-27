@@ -211,10 +211,14 @@ describe("once it is locked", () => {
     expect(within(c).getByText("No valuations yet")).toBeTruthy();
   });
 
-  it("says where variations and the final account live", () => {
-    const c = draw({ view: "variations" });
-    expect(within(c).getByText(/not built here yet/)).toBeTruthy();
-    expect(within(c).getByText(/full workspace/)).toBeTruthy();
+  it("hands Variations and the final account to their own views", () => {
+    // WorkProjectVariations.test.jsx pins what each of those shows.
+    const vars = draw({ view: "variations" });
+    expect(vars.textContent).not.toContain("not built here yet");
+    cleanup();
+    const fin = draw({ view: "final" });
+    expect(fin.querySelector(".pj-final")).toBeTruthy();
+    expect(fin.textContent).toContain("Final account");
   });
 });
 

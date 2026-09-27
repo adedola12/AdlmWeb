@@ -19,6 +19,7 @@ import {
 import { descOf, measuredAt, unitOf } from "./billModel.js";
 import { EN_DASH, money, num } from "./workProjectFormat.js";
 import { totalsFor } from "./overviewModel.js";
+import { WorkProjectBudgetView, WorkProjectBuyView } from "./WorkProjectBudget.jsx";
 
 export default function WorkProjectRates({
   project,
@@ -27,6 +28,8 @@ export default function WorkProjectRates({
   onView,
   onOpenLine,
   onGo,
+  onSave,
+  saving = false,
 }) {
   const items = React.useMemo(
     () => (Array.isArray(project?.items) ? project.items : []),
@@ -73,8 +76,22 @@ export default function WorkProjectRates({
           canEdit={canEdit}
           onOpenLine={onOpenLine}
         />
+      ) : mode === "budget" ? (
+        <WorkProjectBudgetView
+          project={project}
+          canEdit={canEdit}
+          saving={saving}
+          onSave={onSave}
+          onGo={onGo}
+        />
       ) : (
-        <NotHereYet mode={mode} onGo={onGo} />
+        <WorkProjectBuyView
+          project={project}
+          canEdit={canEdit}
+          saving={saving}
+          onSave={onSave}
+          onGo={onGo}
+        />
       )}
     </>
   );
@@ -196,34 +213,5 @@ function RatesView({ items, unpriced, priced, notes, total, canEdit, onOpenLine 
         )}
       </section>
     </>
-  );
-}
-
-/**
- * Budget and Buy schedule.
- *
- * These two are a whole feature of their own — the material, labour and plant
- * breakdown, procurement marking, the valuation-basis switch and the WBS buy
- * schedule — and all of it already works in the full workspace. Rebuilding it
- * into his chrome is its own step; pretending otherwise with an empty panel
- * would be worse than saying where it is.
- */
-function NotHereYet({ mode, onGo }) {
-  const label = RATE_VIEWS.find((v) => v.key === mode)?.label || "This view";
-  return (
-    <div className="pj-empty">
-      <p>
-        <b>{label}</b> is not built here yet.
-      </p>
-      <p className="ds-sub">
-        {mode === "budget"
-          ? "The material, labour and plant build-up behind each line, with what has been procured."
-          : "What to buy and when, ordered by the work breakdown."}{" "}
-        It works in the full workspace, which is still the one to use for it.
-      </p>
-      <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => onGo?.("bill")}>
-        Back to the bill
-      </button>
-    </div>
   );
 }
