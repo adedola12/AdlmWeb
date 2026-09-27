@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../store.jsx";
 import { apiAuthed } from "../../http.js";
 
+// eslint-disable-next-line react-refresh/only-export-components -- a hook shared by the board and the in-flight strip; only affects dev hot reload
 export function useWorkBoard() {
   const { accessToken } = useAuth();
   const [data, setData] = React.useState(null);
