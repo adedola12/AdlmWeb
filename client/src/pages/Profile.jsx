@@ -1,9 +1,9 @@
 // src/pages/Profile.jsx
 import React from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import { isAdmin, isStaff } from "../utils/roles.js";
+import { isStaff } from "../utils/roles.js";
 import AccountActivity from "../features/account/AccountActivity.jsx";
 import Billing from "../features/account/Billing.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
@@ -16,11 +16,9 @@ export default function Profile() {
   const [searchParams] = useSearchParams();
   const askingForPassword = searchParams.get("setPassword") === "1";
 
-  const navigate = useNavigate();
   const { user, setAuth, accessToken } = useAuth();
 
   const staff = isStaff(user); // admin + mini_admin
-  const admin = isAdmin(user); // admin only
 
   const [username, setUsername] = React.useState(user?.username || "");
   const [avatarUrl, setAvatarUrl] = React.useState(user?.avatarUrl || "");

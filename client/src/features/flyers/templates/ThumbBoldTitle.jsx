@@ -2,7 +2,7 @@ import React from "react";
 import { FONT, FONT_DISPLAY, LOGO_SRC } from "../lib/brand.js";
 import { Badge, Headline, Subtitle } from "./parts.jsx";
 
-export default function ThumbBoldTitle({ flyer, accent, days, palette }) {
+export default function ThumbBoldTitle({ flyer, accent, palette }) {
   const PAD = 48;
   const RIGHT_W = Math.round(1280 * 0.38);
 
