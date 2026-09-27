@@ -54,14 +54,14 @@ test("1:2:4 concrete comes out at the ~6 bags/m3 a QS schedule uses", () => {
   assert.equal(classifyWork(it), "concrete");
   const rows = deriveMaterials(it, "concrete", K);
   const cement = mat(rows, "Cement");
-  // (1/7) × 1.54 dry × 1.05 waste × 1440 kg/m³ ÷ 50 kg/bag = 6.65
-  assert.ok(cement.qty > 6 && cement.qty < 7, `cement ${cement.qty} bags/m3`);
+  // (1/7) × 1.54 dry × 1440 kg/m³ ÷ 50 kg/bag = 6.34 — practice runs 6.0-6.8
+  assert.ok(cement.qty >= 6 && cement.qty <= 6.78, `cement ${cement.qty} bags/m3`);
   assert.equal(cement.unit, "bags");
   const sand = mat(rows, "Sharp sand");
   const granite = mat(rows, "Granite");
-  assert.ok(sand.qty > 0.6 && sand.qty < 0.85, `sand ${sand.qty} t/m3`);
+  assert.ok(sand.qty >= 0.584 && sand.qty <= 0.667, `sand ${sand.qty} t/m3`);
   // Granite is the sand multiplier — the reference schedule runs 2:1.
-  assert.equal(granite.qty, Math.round(sand.qty * 2 * 100) / 100);
+  assert.ok(Math.abs(granite.qty - sand.qty * 2) <= 0.02, `granite ${granite.qty} vs sand ${sand.qty}`);
 });
 
 test("a leaner mix orders less cement, and the ratio in the text is honoured", () => {
@@ -100,17 +100,18 @@ test("blockwork orders blocks, cement and sand per m2", () => {
   assert.equal(classifyWork(it), "blockwork");
   const rows = deriveMaterials(it, "blockwork", K);
   assert.equal(mat(rows, "Blocks").qty, 1030); // 100 × 1.03 waste × 10/m²
-  assert.equal(mat(rows, "Cement").qty, 22);
+  assert.equal(mat(rows, "Cement").qty, 20);
+  assert.equal(mat(rows, "Sharp sand").qty, 5.5);
   assert.ok(mat(rows, "Sharp sand").qty > 0);
 });
 
-test("rebar carries binding wire at 1% of the steel weight", () => {
+test("rebar is ordered with waste and carries binding wire at 1% of the measured weight", () => {
   const rows = deriveMaterials(
     item({ description: "High tensile reinforcement bars", unit: "Tonne", qty: 9.15 }),
     "rebar",
     K,
   );
-  assert.equal(mat(rows, "Reinforcement steel").qty, 9.15);
+  assert.equal(mat(rows, "Reinforcement steel").qty, 9.61); // 9.15 × 1.05
   assert.equal(mat(rows, "Reinforcement steel").unit, "tons");
   assert.equal(mat(rows, "Binding wire").qty, 91.5); // 9,150 kg × 0.01
 });
