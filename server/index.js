@@ -109,6 +109,7 @@ import adminReleases from "./routes/admin.releases.js";
 import adminWork from "./routes/admin.work.js";
 
 import freebiesPublic from "./routes/freebies.js";
+import templateKeysRoutes from "./routes/templateKeys.js";
 import adminFreebies from "./routes/admin.freebies.js";
 import adminFlyers from "./routes/admin.flyers.js";
 import entitlementsRouter from "./routes/entitlements.js";
@@ -444,6 +445,8 @@ app.use("/api/telemetry", telemetryTakeoff);
 app.use("/admin/takeoff", adminTakeoff);
 
 app.use("/freebies", freebiesPublic);
+// Content keys for encrypted desktop templates; licence-gated (util/templateKeys.js).
+app.use("/templates", templateKeysRoutes);
 app.use("/admin/freebies", adminFreebies);
 app.use("/admin/flyers", adminFlyers);
 app.use("/admin/training-locations", adminTrainingLocations);
