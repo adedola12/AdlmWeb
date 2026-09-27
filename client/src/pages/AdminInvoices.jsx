@@ -4,7 +4,6 @@ import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { API_BASE } from "../config";
-import invoiceLogo from "../assets/logo/invoiceLogo.png";
 import InvoicePreviewPage from "../components/InvoicePreview.jsx";
 
 const fmt = (n, currency = "NGN") =>

@@ -20,7 +20,7 @@ function safeJsonParse(s, fallback) {
   }
 }
 
-function syncLegacyTokenKeys(_accessToken) {
+function syncLegacyTokenKeys() {
   // Legacy token keys removed — tokens should not be duplicated across
   // multiple localStorage keys as each copy increases XSS exposure surface.
   // The auth object in "auth" key is the single source of truth.

@@ -319,34 +319,6 @@ export default function Purchase() {
     return p?.billingInterval === "yearly" ? 1 : v;
   }
 
-  function updateItem(key, patch) {
-    setCart((c) => {
-      const cur = c[key] || { periods: 1, seats: 1, firstTime: false };
-      const next = { ...cur, ...patch };
-
-      next.periods = clampPeriodsFor(productByKey(key), next.periods);
-      next.seats = Math.max(
-        parseInt(next.seats || 1, 10),
-        minSeatsFor(licenseType, key),
-      );
-
-      if (licenseType !== "organization") next.seats = 1;
-
-      return { ...c, [key]: next };
-    });
-  }
-
-  function toggleInCart(key) {
-    setCart((c) =>
-      c[key]
-        ? (() => {
-            const { [key]: _, ...rest } = c;
-            return rest;
-          })()
-        : { ...c, [key]: { periods: 1, seats: 1, firstTime: false } },
-    );
-  }
-
   function removeFromCart(key) {
     setCart((c) => {
       const { [key]: _omit, ...rest } = c;

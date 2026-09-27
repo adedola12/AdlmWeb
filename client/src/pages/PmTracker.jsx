@@ -293,7 +293,7 @@ export default function PmTracker() {
   const [pmSaving, setPmSaving] = React.useState(false);
   const [pmImporting, setPmImporting] = React.useState(false);
   const [pmImportError, setPmImportError] = React.useState("");
-  const [pmImportErrorCode, setPmImportErrorCode] = React.useState("");
+  const [, setPmImportErrorCode] = React.useState("");
   const [pmImportProgress, setPmImportProgress] = React.useState(0);
   const [pmImportStatus, setPmImportStatus] = React.useState("");
   const pmImportTimerRef = React.useRef(null);
@@ -485,10 +485,8 @@ export default function PmTracker() {
       const increment = (target - current) / steps;
 
       setPmImportStatus(label);
-      let step = 0;
 
       function advance() {
-        step++;
         current = Math.min(target, current + increment);
         setPmImportProgress(Math.round(current));
         if (current < target) {
