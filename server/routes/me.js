@@ -627,7 +627,7 @@ router.get(
       typeof user.toObject === "function" ? user.toObject() : user,
     );
     const hubDownload = hubAllowed
-      ? await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600 })
+      ? await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600, allowed: true })
       : { url: "" };
 
     return res.json({

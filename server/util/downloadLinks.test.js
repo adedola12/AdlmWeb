@@ -24,7 +24,7 @@ test("until a file is uploaded, the Admin setting is the fail-safe; Drive goes d
   const a = await resolveDownload("android", { settings, store });
   assert.equal(a.source, "drive");
   assert.equal(a.url, "https://drive.google.com/uc?export=download&id=1Pr16vXqTRAOgQrB2Fk3GzZnyMBPiHPRO");
-  const h = await resolveDownload("installer-hub", { settings, store });
+  const h = await resolveDownload("installer-hub", { settings, store, allowed: true });
   assert.equal(h.source, "setting");
   assert.equal(h.url, settings.installerHubUrl);
 });
@@ -37,7 +37,7 @@ test("storage that is down or unconfigured never takes the button with it", asyn
     },
     presignDownload: async () => assert.fail("never reached"),
   };
-  const r = await resolveDownload("installer-hub", { settings, store });
+  const r = await resolveDownload("installer-hub", { settings, store, allowed: true });
   assert.equal(r.source, "setting");
   assert.equal((await resolveDownload("android", { settings: {}, store })).source, "none");
 });
@@ -46,4 +46,26 @@ test("Drive links are recognised in their usual shapes", () => {
   assert.equal(driveFileId("https://drive.google.com/open?id=1ZTS1-T2MVot0QoQSl-lyDXaDtbvmUTpg"), "1ZTS1-T2MVot0QoQSl-lyDXaDtbvmUTpg");
   assert.equal(driveFileId("https://example.com/file/d/1ZTS1-T2MVot0QoQSl"), "");
   assert.equal(directLink("https://cdn.adlmstudio.net/x.apk"), "https://cdn.adlmstudio.net/x.apk");
+});
+
+test("R3: the Installer Hub link, stored or fail-safe, needs allowed: true", async () => {
+  _resetDownloadCache();
+  const none = { headFile: async () => null, presignDownload: async () => assert.fail("not stored") };
+  const fallback = await resolveDownload("installer-hub", { settings, store: none });
+  assert.equal(fallback.url, "");
+  assert.equal(fallback.source, "setting");
+  assert.equal((await resolveDownload("installer-hub", { settings, store: none, allowed: "yes" })).url, "");
+
+  _resetDownloadCache();
+  const stored = {
+    headFile: async () => ({ size: 5 }),
+    presignDownload: async () => assert.fail("a locked caller must not be signed a link"),
+  };
+  const s = await resolveDownload("installer-hub", { settings, store: stored });
+  assert.equal(s.url, "");
+  assert.equal(s.source, "store");
+
+  // The Android app is not gated: it signs in by itself.
+  _resetDownloadCache();
+  assert.notEqual((await resolveDownload("android", { settings, store: none })).url, "");
 });
