@@ -24,6 +24,7 @@ import { linePanelTitle } from "./billModel.js";
 import WorkProjectOverview from "./WorkProjectOverview.jsx";
 import WorkProjectBill from "./WorkProjectBill.jsx";
 import WorkProjectRates from "./WorkProjectRates.jsx";
+import WorkProjectPm from "./WorkProjectPm.jsx";
 import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
 import WorkProjectPanel from "./WorkProjectPanel.jsx";
 import { useProjectPanel } from "./useProjectPanel.js";
@@ -257,7 +258,15 @@ export default function WorkProjectShell({ productKey, id }) {
             onOpenLine={(index) => panel.show({ kind: "line", index })}
             onGo={go}
           />
-        ) : tab === "overview" || tab === "bill" || tab === "rates" ? null : (
+        ) : tab === "pm" && !fullFailed ? (
+          <WorkProjectPm
+            project={project}
+            canEdit={!viewOnly}
+            view={rateView}
+            onView={setRateView}
+            onGo={go}
+          />
+        ) : tab === "overview" || tab === "bill" || tab === "rates" || tab === "pm" ? null : (
           <div className="pj-empty">
             <p>
               <b>{tabs.find((t) => t.key === tab)?.label}</b> is not built here yet.
