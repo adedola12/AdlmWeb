@@ -493,9 +493,10 @@ export const SEED = [
     kind: "infra",
     stage: "testing",
     summary: "From 22 Sep 2026, every new feature or button starts here as a proposal with its business case. Richard approves it before it is designed or built. He designs while it is coded.",
-    progress: "Built on its own branch, with tests.",
-    pending: "Review the PR on preview.adlmstudio.net, merge it, then seed this list into production.",
-    refs: "feat/work-board · docs/WORK_BOARD.md",
+    progress: "Built on its own branch, with tests. The API side is live, so proposals are already filed and emailed. Fix 27 Sep: the approver's proposal email is held until /admin/work is in the live site (on 26 Sep Richard's \"Open the work board\" button opened a 404, because the page is not merged yet). Held proposals go out in one email once it is.",
+    pending: "Review and merge PR #22; that puts the page live. Then run `work-board.mjs notify-held --apply` for anything held, and redeploy the API (after `cdk diff`) so the board's own propose route holds too.",
+    blockedOn: "Richard: approve PR #22.",
+    refs: "AdlmWeb PR #22 (feat/work-board, fix 6085fa0) · docs/WORK_BOARD.md",
     design: { status: "needed", surfaces: "This board: summary tiles, the proposal form, the decision buttons, the design track" },
   },
 ];
