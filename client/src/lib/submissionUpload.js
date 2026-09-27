@@ -35,7 +35,8 @@ export function submissionFileProblem(file) {
   return null;
 }
 
-function put(url, file, contentType, onProgress) {
+// Also used by Admin → Site Settings for the Android app (apk upload).
+export function put(url, file, contentType, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);

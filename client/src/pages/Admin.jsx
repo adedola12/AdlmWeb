@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { put as putPresigned } from "../lib/submissionUpload.js";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
@@ -1091,32 +1092,44 @@ export default function Admin({ section = null }) {
     })();
   }
 
+  // The Android app goes straight from this browser into ADLM's private file
+  // store, at the one place the site serves it from. The API only signs the
+  // upload and then checks it arrived: sending a 70 MB file through the API
+  // failed, because Lambda stops request bodies at 6 MB. Once it is there,
+  // every "Download the app" button serves this file and the link in the box
+  // is only a fail-safe, so clearing the box drops Google Drive entirely.
   function handleApkUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    if (!/\.apk$/i.test(file.name)) {
+      setSettingsMsg("Failed: choose an .apk file (an .aab cannot be installed from the website).");
+      return;
+    }
     setSettingsBusy(true);
-    setSettingsMsg("Uploading APK…");
+    setSettingsMsg("Uploading the app… 0%");
 
     (async () => {
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await apiAuthed("/admin/media/upload-apk", {
+        const slot = await apiAuthed("/admin/media/apk-upload-url", {
           token: accessToken,
           method: "POST",
-          body: fd,
+          body: { filename: file.name, size: file.size },
         });
-        if (res?.secure_url) {
-          setSettingsMobileAppDraft(res.secure_url);
-          setSettingsMsg(
-            `APK uploaded (SHA-256 ${(res.sha256 || "").slice(0, 12)}…). Click Save to apply.`,
-          );
-        } else {
-          setSettingsMsg("Upload failed, no URL returned");
-        }
+        await putPresigned(slot.uploadUrl, file, slot.contentType, (pct) =>
+          setSettingsMsg(`Uploading the app… ${pct}%`),
+        );
+        const done = await apiAuthed("/admin/media/apk-uploaded", {
+          token: accessToken,
+          method: "POST",
+          body: {},
+        });
+        const mb = ((done?.bytes ?? file.size) / (1024 * 1024)).toFixed(1);
+        setSettingsMsg(
+          `App uploaded (${mb} MB) to ADLM storage. Every "Download the app" button now serves it; the link below is only a fail-safe. To drop it, clear the box and click Save.`,
+        );
       } catch (err) {
-        setSettingsMsg(err?.message || "APK upload failed");
+        setSettingsMsg(`Failed: ${err?.message || "the app upload did not finish"}`);
       } finally {
         setSettingsBusy(false);
       }
@@ -4745,7 +4758,7 @@ export default function Admin({ section = null }) {
                 Mobile App Download URL (APK)
               </label>
               <p className="text-xs text-slate-500 mb-2">
-                Upload an APK directly (stored on Cloudflare R2) or paste a Google Drive / Play Store link. This is what the home page and footer "Download Mobile App" button uses.
+                Upload the APK here and the site serves it from ADLM's own storage. The link in the box is only used if no app has been uploaded; clear it and Save to stop using Google Drive.
               </p>
               <div className="flex gap-2 flex-wrap">
                 <input
@@ -4759,7 +4772,7 @@ export default function Admin({ section = null }) {
                   Upload APK
                   <input
                     type="file"
-                    accept=".apk,.aab,application/vnd.android.package-archive"
+                    accept=".apk,application/vnd.android.package-archive"
                     className="hidden"
                     onChange={handleApkUpload}
                   />
