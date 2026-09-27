@@ -8,10 +8,34 @@
 import { percentProblem, totalsFrom, toNum } from "./rateMath.js";
 
 // What normalizeCustomRate() falls back to when a custom rate arrives without
-// percentages (server/util/rategenUserRates.js). Shown as the placeholder so
-// the figure on screen is the figure that will be stored.
+// percentages and the customer has set no default for its trade
+// (server/util/tradeMargins.js BUILTIN_MARGINS.custom). Shown as the
+// placeholder so the figure on screen is the figure that will be stored.
 export const CUSTOM_DEFAULT_OVERHEAD = 10;
 export const CUSTOM_DEFAULT_PROFIT = 10;
+
+/**
+ * What a blank overhead or profit box means for a rate in this trade: the
+ * customer's own trade default where they set one, else 10 / 10. Mirrors the
+ * server's resolveMargins() for a new custom rate, half by half.
+ *
+ * `trades` is the `trades` array GET /rategen-v2/library/trade-margins sends.
+ * Returns the figures and where each came from ("your-trade" | "default").
+ */
+export function blankDefaults(trades, sectionKey) {
+  const row = (Array.isArray(trades) ? trades : []).find(
+    (t) => t.sectionKey === String(sectionKey || "").trim().toLowerCase(),
+  );
+  const yours = row?.yours || {};
+  const half = (v, builtin) =>
+    v !== null && v !== undefined && Number.isFinite(Number(v))
+      ? { value: Number(v), source: "your-trade" }
+      : { value: builtin, source: "default" };
+  return {
+    overhead: half(yours.overheadPercent, CUSTOM_DEFAULT_OVERHEAD),
+    profit: half(yours.profitPercent, CUSTOM_DEFAULT_PROFIT),
+  };
+}
 
 export function slugify(s) {
   return String(s || "")
@@ -49,11 +73,17 @@ export function draftComponents(draft) {
   }));
 }
 
-export function draftTotals(draft) {
+/**
+ * @param {object} draft
+ * @param {object} [defaults] blankDefaults() for the draft's trade; omitted,
+ *   a blank box is the built-in 10 / 10.
+ */
+export function draftTotals(draft, defaults = null) {
+  const d = defaults || blankDefaults([], "");
   return totalsFrom(
     draftComponents(draft),
-    draft.overhead === "" ? CUSTOM_DEFAULT_OVERHEAD : toNum(draft.overhead),
-    draft.profit === "" ? CUSTOM_DEFAULT_PROFIT : toNum(draft.profit),
+    draft.overhead === "" ? d.overhead.value : toNum(draft.overhead),
+    draft.profit === "" ? d.profit.value : toNum(draft.profit),
   );
 }
 
@@ -65,6 +95,12 @@ export function draftProblem(draft) {
     return "Add at least one material, labour or plant line";
   if ((draft.lines || []).some((l) => !String(l.name || "").trim()))
     return "Every line needs something on it";
+  // A plant line with no hourly price would enter the rate at ₦0 and read as
+  // free plant. It is refused, never priced at zero.
+  const unpriced = (draft.lines || []).find(
+    (l) => l.kind === "plant" && toNum(l.quantity) > 0 && !(toNum(l.unitPrice) > 0),
+  );
+  if (unpriced) return `Give ${unpriced.name} an hourly price, or take it off`;
   // The same rule the build-up screen applies, so a rate cannot be built at a
   // percentage that screen would refuse — or, as it used to, silently rewrite.
   const percent =
@@ -74,9 +110,9 @@ export function draftProblem(draft) {
 }
 
 /** The payload PUT /rategen-v2/library/custom-rates/:id expects. */
-export function draftToPayload(draft, customRateId, customRatesBaseVersion) {
+export function draftToPayload(draft, customRateId, customRatesBaseVersion, defaults = null) {
   const comps = draftComponents(draft);
-  const totals = draftTotals(draft);
+  const totals = draftTotals(draft, defaults);
   const line = (l) => ({
     description: l.name,
     quantity: Math.max(0, toNum(l.quantity)),
@@ -97,11 +133,18 @@ export function draftToPayload(draft, customRateId, customRatesBaseVersion) {
     unit: draft.unit.trim(),
     // materials[] and labour[] are what the desktop and the plugins read for a
     // custom rate's composition, so they are sent as well as the breakdown.
-    materials: comps.filter((l) => l.kind === "material").map((l) => ({ ...line(l), rateType: "material" })),
+    //
+    // Plant rides in materials[] with rateType "plant", the convention the
+    // server's schema documents. That is what lets a Rate Gen desktop push,
+    // which rebuilds this rate from its own material and labour lists and
+    // knows no plant, be caught by preservePlantLines() instead of silently
+    // dropping the plant line and its money. It also reaches QUIV, which reads
+    // a custom rate's materials[] + labour[] and classifies each line by
+    // rateType. The breakdown carries it too, with refKind "plant".
+    materials: comps
+      .filter((l) => l.kind === "material" || l.kind === "plant")
+      .map((l) => ({ ...line(l), rateType: l.kind })),
     labour: comps.filter((l) => l.kind === "labour").map((l) => ({ ...line(l), rateType: "labour" })),
-    // Plant has no master library of its own (deferred), so a plant line lives
-    // in the breakdown with refKind "plant" — the same shape the classifier
-    // already reads on master rates.
     breakdown: comps.map((l) => ({
       componentName: l.name,
       quantity: Math.max(0, toNum(l.quantity)),

@@ -10,6 +10,11 @@ import { User } from "../models/User.js";
 import { resolveConstants } from "./materialConstants.js";
 import { getMergedConstants, buildRateMaps, lookup, norm } from "./serviceResolve.js";
 import { fetchMasterMaterials, fetchMasterLabour } from "./rategenMaster.js";
+import { RateGenRate } from "../models/RateGenRate.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { mergeRatesWithUserData } from "./rategenUserRates.js";
+import { makePlantFor } from "./plantAllowance.js";
+import { hasActiveEntitlement } from "../middleware/requireEntitlement.js";
 
 // The master price list is ~130 priced rows and identical for everyone in a
 // zone, so one import does not deserve a round trip per material. Short TTL:
@@ -54,7 +59,7 @@ const UNIT_ALIASES = {
   lm: "m",
 };
 
-function unitKey(u) {
+export function unitKey(u) {
   const s = String(u || "").trim().toLowerCase().replace(/[³3]/g, "3").replace(/[²2]/g, "2").replace(/\./g, "");
   return UNIT_ALIASES[s] || s;
 }
@@ -144,8 +149,15 @@ export async function buildMlScheduleContext(userId, opts = {}) {
     return scale === null ? 0 : hit.price * scale;
   };
 
+  // opts.ratePlant: false for a caller that never generates a schedule.
+  const plantFor = opts.ratePlant === false ? null : await ratePlantFor(userId);
+
   return {
     K: resolveConstants(profile?.values),
+    // Plant per bill unit from the Rate Gen rate that priced the line, for a
+    // customer who holds Rate Gen (rates need a Rate Gen licence). Absent,
+    // the engine falls back to the Plant constants exactly as before.
+    ...(plantFor ? { plantFor } : {}),
     zone,
     state,
     serviceConstants: services?.types || {},
@@ -158,4 +170,31 @@ export async function buildMlScheduleContext(userId, opts = {}) {
     // bare lookup hits. A miss returns 0, which reads as "unpriced", not free.
     priceFor: (name, unit) => priceIn(material, name, unit),
   };
+}
+
+// The plantFor hook for generateMlSchedule, or null. Only for a customer with
+// a live Rate Gen licence, and never allowed to fail an import: a library that
+// will not load means "no rate figure", and the constants decide.
+async function ratePlantFor(userId) {
+  if (!userId) return null;
+  try {
+    const user = await User.findById(userId, { entitlements: 1, isGod: 1, email: 1 }).lean();
+    if (!hasActiveEntitlement(user, "rategen")) return null;
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }, { rateOverrides: 1, customRates: 1 }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      lib?.rateOverrides || [],
+      lib?.customRates || [],
+    );
+    return makePlantFor(merged, (a, b) => {
+      const x = unitKey(a);
+      return Boolean(x) && x === unitKey(b);
+    });
+  } catch (e) {
+    console.warn("mlScheduleContext: rate plant lookup unavailable -", e?.message || e);
+    return null;
+  }
 }

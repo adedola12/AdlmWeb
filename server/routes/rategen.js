@@ -10,8 +10,8 @@ import {
 import {
   buildUserRateKey,
   getUserId,
-  normalizeCustomRate,
-  normalizeRateOverride,
+  normalizeCustomRateFor,
+  normalizeRateOverrideFor,
   toUserRateDefinition,
 } from "../util/rategenUserRates.js";
 import {
@@ -46,6 +46,14 @@ function mapUserCustomRate(item) {
 
 function toLibraryResponse(lib) {
   const plain = lib?.toObject ? lib.toObject() : { ...(lib || {}) };
+  // Rate Gen desktop reads this response. The trade-margin table and the plant
+  // library have their own routes (/rategen-v2/library/trade-margins, /plant),
+  // so they are kept out of it and its shape stays what the desktop was built
+  // against.
+  delete plain.tradeMargins;
+  delete plain.tradeMarginsVersion;
+  delete plain.plant;
+  delete plain.plantVersion;
   return {
     ...plain,
     rateOverrides: (plain.rateOverrides || []).map(mapUserRateOverride),
@@ -406,11 +414,11 @@ router.put("/library", async (req, res) => {
     touchedLibrary = true;
   }
   if (Array.isArray(rateOverrides)) {
-    lib.rateOverrides = rateOverrides.map((item) => normalizeRateOverride(item));
+    lib.rateOverrides = rateOverrides.map((item) => normalizeRateOverrideFor(lib, item));
     lib.ratesVersion += 1;
   }
   if (Array.isArray(customRates)) {
-    lib.customRates = customRates.map((item) => normalizeCustomRate(item));
+    lib.customRates = customRates.map((item) => normalizeCustomRateFor(lib, item));
     lib.customRatesVersion += 1;
   }
 

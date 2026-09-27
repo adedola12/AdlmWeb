@@ -33,7 +33,12 @@ import { useAuth } from "../store.jsx";
 import { useFeedback } from "./feedback/feedbackContext.js";
 import WkDropdown from "./WkDropdown.jsx";
 import CustomRateBuilder from "./rategen/CustomRateBuilder.jsx";
+import TradeMarginsEditor from "./rategen/TradeMarginsEditor.jsx";
+import PlantEditor from "./rategen/PlantEditor.jsx";
+import { marginRowsPayload } from "./rategen/tradeMargins.js";
+import { plantDraftProblem } from "./rategen/plantMath.js";
 import {
+  blankDefaults,
   draftProblem,
   draftToPayload,
   draftTotals,
@@ -85,6 +90,12 @@ export default function DsWorkLibrary() {
   const [master, setMaster] = React.useState(null); // materials + labour
   const [masterFailed, setMasterFailed] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  // The plant library (machines per day from their parts, used by the hour)
+  // and the customer's default overhead / profit per trade. Both are read
+  // when something first needs them.
+  const [plantLib, setPlantLib] = React.useState(null); // { items, version }
+  const [plantFailed, setPlantFailed] = React.useState(false);
+  const [trades, setTrades] = React.useState(null); // { trades, version }
 
   const [tab, setTab] = React.useState("rates");
   const [q, setQ] = React.useState("");
@@ -138,6 +149,38 @@ export default function DsWorkLibrary() {
       .catch(() => setMasterFailed(true));
   }, [accessToken]);
 
+  const loadPlant = React.useCallback(() => {
+    if (!accessToken) return Promise.resolve(null);
+    return apiAuthed("/rategen-v2/library/plant", { token: accessToken })
+      .then((d) => {
+        const v = { items: Array.isArray(d.items) ? d.items : [], version: d.version ?? 1 };
+        setPlantLib(v);
+        setPlantFailed(false);
+        return v;
+      })
+      .catch(() => {
+        setPlantFailed(true);
+        return null;
+      });
+  }, [accessToken]);
+
+  const loadTrades = React.useCallback(() => {
+    if (!accessToken) return Promise.resolve(null);
+    return apiAuthed("/rategen-v2/library/trade-margins", { token: accessToken })
+      .then((d) => {
+        const v = { trades: Array.isArray(d.trades) ? d.trades : [], version: d.version ?? 1 };
+        setTrades(v);
+        return v;
+      })
+      // No table is the normal state: a blank box is then 10 / 10, as before.
+      .catch(() => null);
+  }, [accessToken]);
+
+  React.useEffect(() => {
+    if (!accessToken || tab !== "plant" || plantLib || plantFailed) return;
+    loadPlant();
+  }, [accessToken, tab, plantLib, plantFailed, loadPlant]);
+
   React.useEffect(() => {
     if (!accessToken) return undefined;
     let alive = true;
@@ -174,38 +217,28 @@ export default function DsWorkLibrary() {
     return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [rows]);
 
-  /* ── plant, honestly ─────────────────────────────────────────────────────
-     There is no plant library. Plant exists only as lines inside rates, so
-     that is exactly what the tab shows: the distinct machines found in the
-     build-ups, at the price captured on them, and how many rates use each.
-     Nothing here is invented, and nothing here is editable, because a machine
-     costed by the day from its hire, fuel, oil and operator is a store we do
-     not have yet. */
+  /* ── plant: the library (R2) ─────────────────────────────────────────────
+     Each machine is costed per day from its parts (hire or ownership, fuel,
+     operator, maintenance, transport) and priced per hour at its stated
+     working day. "Used in" counts the rates whose build-up names it. A machine
+     that cannot be priced says so and is never shown at ₦0. */
   const plantRows = React.useMemo(() => {
-    if (!rows) return [];
-    const seen = new Map();
-    for (const r of rows) {
-      for (const c of componentsOf(r)) {
-        if (c.kind !== "plant" && c.kind !== "equipment") continue;
-        const name = (c.name || "").trim();
-        if (!name) continue;
-        const key = `${name.toLowerCase()}|${(c.unit || "").toLowerCase()}`;
-        const cur = seen.get(key) || {
-          key,
-          name,
-          unit: c.unit || "",
-          unitPrice: c.unitPrice,
-          used: 0,
-        };
-        cur.used += 1;
-        // The dearest captured price, so the row never understates what the
-        // library is actually carrying for this machine.
-        if (toNum(c.unitPrice) > toNum(cur.unitPrice)) cur.unitPrice = c.unitPrice;
-        seen.set(key, cur);
-      }
+    const used = new Map();
+    for (const r of rows || []) {
+      const names = new Set(
+        componentsOf(r)
+          .filter((c) => c.kind === "plant" || c.kind === "equipment")
+          .map((c) => (c.name || "").trim().toLowerCase())
+          .filter(Boolean),
+      );
+      for (const n of names) used.set(n, (used.get(n) || 0) + 1);
     }
-    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows]);
+    return (plantLib?.items || []).map((p) => ({
+      ...p,
+      rowKey: p.sn != null ? `sn-${p.sn}` : `own-${p.key}`,
+      used: used.get(String(p.name || "").trim().toLowerCase()) || 0,
+    }));
+  }, [rows, plantLib]);
 
   const itemRows = React.useMemo(() => {
     if (tab !== "materials" && tab !== "labour") return [];
@@ -235,7 +268,17 @@ export default function DsWorkLibrary() {
       ];
     }
     if (tab === "plant") {
-      return [{ value: "all", label: "All plant", note: `${plantRows.length}` }];
+      const counts = new Map();
+      for (const p of plantRows) {
+        const c = (p.category || "").trim();
+        if (c) counts.set(c, (counts.get(c) || 0) + 1);
+      }
+      return [
+        { value: "all", label: "All plant", note: `${plantRows.length}` },
+        ...[...counts.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([c, n]) => ({ value: c, label: c, note: `${n}` })),
+      ];
     }
     const counts = new Map();
     for (const m of itemRows) {
@@ -298,8 +341,13 @@ export default function DsWorkLibrary() {
   }, [itemRows, cat, term, sort]);
 
   const shownPlant = React.useMemo(
-    () => (term ? plantRows.filter((p) => p.name.toLowerCase().includes(term)) : plantRows),
-    [plantRows, term],
+    () =>
+      plantRows.filter(
+        (p) =>
+          (cat === "all" || (p.category || "") === cat) &&
+          (!term || p.name.toLowerCase().includes(term)),
+      ),
+    [plantRows, term, cat],
   );
 
   const pickTab = (id) => {
@@ -486,10 +534,157 @@ export default function DsWorkLibrary() {
     }
   }
 
+  /* ── default overhead and profit by trade (R2) ─────────────────────────── */
+
+  async function openTradeMargins() {
+    const t = trades || (await loadTrades());
+    if (!t) {
+      fb.toast({ tone: "error", title: "Your trade margins could not be read", msg: "Please try again." });
+      return;
+    }
+    const draftRef = { current: null };
+    const answer = await fb.card({
+      tone: "info",
+      noIcon: true,
+      title: "Default margins by trade",
+      msg: "The overhead and profit a new rate of yours gets when you leave its boxes blank. Rates already in your library keep their own figures: nothing here re-prices them.",
+      body: <TradeMarginsEditor draftRef={draftRef} trades={t.trades} scope="custom" />,
+      secondary: "Cancel",
+      primary: "Save margins",
+      validate: () => {
+        const { problem } = marginRowsPayload(draftRef.current || []);
+        if (problem) {
+          fb.toast({ tone: "error", title: problem });
+          return false;
+        }
+        return true;
+      },
+    });
+    if (answer !== "primary") return;
+    try {
+      const d = await apiAuthed("/rategen-v2/library/trade-margins", {
+        method: "PUT",
+        token: accessToken,
+        body: { rows: marginRowsPayload(draftRef.current).rows, baseVersion: t.version },
+      });
+      setTrades({ trades: d.trades || [], version: d.version ?? t.version + 1 });
+      fb.toast({
+        title: "Margins saved",
+        msg: "New rates of yours in these trades start from them. No rate you already have was changed.",
+      });
+    } catch (e) {
+      fb.toast({ tone: "error", title: "Margins were not saved", msg: String(e?.message || "Nothing was written.") });
+    }
+  }
+
+  /* ── a machine: what its day costs, and your own version (R2) ──────────── */
+
+  async function openPlant(p) {
+    const rowsCard = [
+      ...(p.parts || []).map((x) => [
+        `${x.description || x.kind} · ${qty(x.quantity)} ${x.unit || ""} × ${money(x.unitPrice)}`.replace(/\s+/g, " "),
+        money(x.amount),
+      ]),
+      ["Day cost", money(p.dayCost)],
+      ["Working day", p.hoursPerDay ? `${qty(p.hoursPerDay)} hours` : DASH],
+      ["Per hour", p.hourlyRate === null ? `Not priced · ${p.problems?.[0] || ""}` : money(p.hourlyRate)],
+      ...(p.source === "your-copy" && p.adlm?.hourlyRate != null
+        ? [["ADLM's figure", `${money(p.adlm.hourlyRate)} per hr`]]
+        : []),
+    ];
+    const mine = p.source === "yours" || p.source === "your-copy";
+    const v = await fb.card({
+      tone: "info",
+      noIcon: true,
+      title: p.name,
+      msg:
+        p.source === "adlm"
+          ? "ADLM's machine. Make your own version to use your own hire, diesel or operator prices; ADLM's stays as it is."
+          : p.source === "your-copy"
+            ? "Your version of ADLM's machine. Rates you build from now on use it."
+            : "A machine of your own.",
+      rows: rowsCard,
+      secondary: p.source === "your-copy" ? "Go back to ADLM's" : "Close",
+      primary: mine ? "Edit" : "Make my own version",
+    });
+    if (v === "primary") return editPlant(p);
+    if (v === "secondary" && p.source === "your-copy") {
+      const sure = await fb.card({
+        tone: "warn",
+        title: "Go back to ADLM's figures?",
+        msg: "Your version of this machine is removed. Rates already built keep the price they were built at.",
+        secondary: "Keep mine",
+        primary: "Go back",
+      });
+      if (sure !== "primary") return undefined;
+      try {
+        const d = await apiAuthed(`/rategen-v2/library/plant/${encodeURIComponent(p.key)}`, {
+          method: "DELETE",
+          token: accessToken,
+        });
+        setPlantLib({ items: d.items || [], version: d.version ?? 1 });
+        fb.toast({ title: "Back to ADLM's figures" });
+      } catch (e) {
+        fb.toast({ tone: "error", title: "That did not change", msg: String(e?.message || "") });
+      }
+    }
+    return undefined;
+  }
+
+  async function editPlant(p = null) {
+    const draftRef = { current: null };
+    const answer = await fb.card({
+      tone: "info",
+      noIcon: true,
+      title: p ? `Your ${p.name}` : "A machine of your own",
+      msg: "Cost a working day from its parts. The hourly rate is the day cost over the working hours, and a rate uses it by the hour.",
+      body: <PlantEditor draftRef={draftRef} initial={p} />,
+      secondary: "Cancel",
+      primary: "Save machine",
+      validate: () => {
+        const problem = plantDraftProblem(draftRef.current || {});
+        if (problem) {
+          fb.toast({ tone: "error", title: problem });
+          return false;
+        }
+        return true;
+      },
+    });
+    if (answer !== "primary") return;
+    const d = draftRef.current;
+    // An ADLM machine's version is filed under its serial, so there is only
+    // ever one of it; a machine of the customer's own keeps the key it has.
+    const key = p?.source === "adlm" || p?.source === "your-copy" ? p.key || `copy-${p.sn}` : p?.key || newCustomRateId(d.name);
+    try {
+      const res = await apiAuthed(`/rategen-v2/library/plant/${encodeURIComponent(key)}`, {
+        method: "PUT",
+        token: accessToken,
+        body: {
+          ...d,
+          baseSn: p && p.sn != null ? p.sn : null,
+          plantBaseVersion: plantLib?.version ?? 1,
+        },
+      });
+      setPlantLib({ items: res.items || [], version: res.version ?? 1 });
+      fb.toast({
+        title: "Machine saved",
+        msg: "Rates you build from now on use it. Rates already built keep the price they were built at.",
+      });
+    } catch (e) {
+      fb.toast({ tone: "error", title: "That did not save", msg: String(e?.message || "Nothing was written.") });
+    }
+  }
+
   /* ── build a custom rate (RG-09) ───────────────────────────────────────── */
 
   async function buildRate() {
-    if (!master && !masterFailed) await loadMaster();
+    const [, plantNow, tradesNow] = await Promise.all([
+      !master && !masterFailed ? loadMaster() : null,
+      plantLib || (plantFailed ? null : loadPlant()),
+      trades || loadTrades(),
+    ]);
+    const plantItems = (plantNow || plantLib)?.items || [];
+    const tradeRows = (tradesNow || trades)?.trades || [];
     const draftRef = { current: null };
 
     const answer = await fb.card({
@@ -502,6 +697,8 @@ export default function DsWorkLibrary() {
           draftRef={draftRef}
           materials={master?.materials || []}
           labour={master?.labour || []}
+          plant={plantItems}
+          trades={tradeRows}
           sections={sections}
           initial={emptyDraft(
             cat !== "all"
@@ -529,10 +726,17 @@ export default function DsWorkLibrary() {
       await apiAuthed(`/rategen-v2/library/custom-rates/${encodeURIComponent(id)}`, {
         method: "PUT",
         token: accessToken,
-        body: draftToPayload(draft, id, mine?.customRatesVersion ?? 1),
+        // A blank box is saved at the figure the card showed for it: the
+        // customer's trade default, else 10 / 10.
+        body: draftToPayload(
+          draft,
+          id,
+          mine?.customRatesVersion ?? 1,
+          blankDefaults(tradeRows, draft.sectionKey),
+        ),
       });
       await loadRates();
-      const t = draftTotals(draft);
+      const t = draftTotals(draft, blankDefaults(tradeRows, draft.sectionKey));
       const opened = await fb.card({
         tone: "success",
         title: "New rate saved",
@@ -584,7 +788,11 @@ export default function DsWorkLibrary() {
             : ""
         }`
       : tab === "plant"
-        ? `${shownPlant.length} machine${shownPlant.length === 1 ? "" : "s"} · plant is priced inside rates, so this is what the build-ups carry`
+        ? plantLib
+          ? `${shownPlant.length} machine${shownPlant.length === 1 ? "" : "s"} · priced per day from their parts, used by the hour`
+          : plantFailed
+            ? "The plant library could not be read."
+            : "Reading the plant library…"
         : master
           ? `${shownItems.length} ${tab === "materials" ? "material" : "labour"} row${
               shownItems.length === 1 ? "" : "s"
@@ -662,6 +870,37 @@ export default function DsWorkLibrary() {
       </div>
 
       <p className="wk-count">{count}</p>
+
+      {tab === "rates" ? (
+        <div className="rg-op">
+          <b>Margins</b>
+          <em>
+            Set your own overhead and profit per trade. A new rate you build starts from them;
+            rates already in your library keep their own figures.
+          </em>
+          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={openTradeMargins}>
+            Default margins by trade
+          </button>
+        </div>
+      ) : null}
+
+      {tab === "plant" ? (
+        <div className="rg-op">
+          <b>Plant</b>
+          <em>
+            Each machine is costed for a working day from its hire, fuel, operator, maintenance
+            and transport, then priced per hour. Rates use it by the hour.
+          </em>
+          <button
+            type="button"
+            className="ds-btn btn-o ds-btn-sm"
+            onClick={() => editPlant(null)}
+            disabled={!plantLib}
+          >
+            Add a machine of your own
+          </button>
+        </div>
+      ) : null}
 
       {tab === "materials" ? (
         <div className="rg-op">
@@ -749,36 +988,62 @@ export default function DsWorkLibrary() {
           </div>
         )
       ) : tab === "plant" ? (
-        shownPlant.length ? (
+        plantFailed ? (
+          <div className="wk-empty">
+            The plant library could not be read just now. Your rates are unaffected; please
+            refresh.
+          </div>
+        ) : !plantLib ? (
+          <p className="ds-sub">Reading the plant library…</p>
+        ) : shownPlant.length ? (
           <div className="wk-tbl wk-tbl-mat" role="table">
             <div className="wk-hd" role="row">
-              <span>Plant</span>
+              <span>Machine</span>
               <span>Unit</span>
-              <span>Price</span>
+              <span>Per hour</span>
               <span>Used in</span>
             </div>
             {shownPlant.map((p) => (
-              <div className="wk-row" role="row" key={p.key}>
+              <a
+                className="wk-row"
+                role="row"
+                key={p.rowKey}
+                href={`#plant-${p.rowKey}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  openPlant(p);
+                }}
+              >
                 <span className="wk-nm">
                   <b>{p.name}</b>
-                  <span>read from the rates that use it</span>
+                  <span>
+                    {money(p.dayCost)} a day
+                    {p.hoursPerDay ? ` · ${qty(p.hoursPerDay)}-hour day` : ""}
+                    {p.category ? ` · ${p.category}` : ""}
+                    {p.source !== "adlm" ? (
+                      <>
+                        {" · "}
+                        <em className="wk-own">{p.source === "yours" ? "yours" : "your version"}</em>
+                      </>
+                    ) : null}
+                  </span>
                 </span>
-                <span className="wk-u">{p.unit || DASH}</span>
+                <span className="wk-u">hr</span>
                 <span className="wk-r">
-                  {money(p.unitPrice)}
-                  <i>per {p.unit || "unit"}</i>
+                  {p.hourlyRate === null ? DASH : money(p.hourlyRate)}
+                  <i>{p.hourlyRate === null ? p.problems?.[0] || "not priced" : "per hr"}</i>
                 </span>
                 <span className="wk-w">
-                  {p.used} rate{p.used === 1 ? "" : "s"}
+                  {p.used ? `${p.used} rate${p.used === 1 ? "" : "s"}` : <em>not used yet</em>}
                 </span>
-              </div>
+              </a>
             ))}
           </div>
         ) : (
           <div className="wk-empty">
-            No plant in the library yet. Plant is priced inside a rate — a machine costed by the
-            day from its hire, fuel, oil and operator, and used by the hour, is a library we have
-            not built yet. Until then, a plant line is added on the rate itself.
+            {term || cat !== "all"
+              ? "Nothing here matches."
+              : "No machines in the plant library yet. Add one of your own: cost a working day from its parts and it is priced per hour for your rates."}
           </div>
         )
       ) : masterFailed ? (

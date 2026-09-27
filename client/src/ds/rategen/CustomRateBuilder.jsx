@@ -17,10 +17,21 @@
 // control would have nowhere to write. A select that silently discards its
 // value is worse than no select, so it waits for the field.
 //
-// Trade-default overhead and profit: his placeholders read "Trade: 12" from a
-// per-trade default that does not exist on our server (RG-06, deferred — it
-// changes figures the desktop plugins read). Ours shows the real default the
-// server will apply if the box is left blank, which is 10% and 10%.
+// TRADE-DEFAULT OVERHEAD AND PROFIT (R2, r2-overhead-profit-per-trade)
+//
+// His placeholders read "Trade: 12". They now do, from the customer's own
+// default for the trade the rate is filed under (GET
+// /rategen-v2/library/trade-margins), and "Default: 10" where they have set
+// none. Either way the placeholder is the figure a blank box is saved at, and
+// the total strip below is worked out at it (blankDefaults()).
+//
+// PLANT FROM THE PLANT LIBRARY (R2, r2-plant-library-per-hour)
+//
+// A plant line is picked from the plant library — a machine costed per day
+// from its parts and priced per hour at a stated working day — and consumed
+// by the hour: "0.25 hr per m³". A machine the library cannot price is listed
+// but cannot be picked, so no plant line enters a rate at ₦0. With no library
+// to hand, a machine is typed by hand with an hourly price, as before.
 //
 // A LINE POINTS AT A NAME, NOT AT A ROW NUMBER (S18 review, finding 7)
 //
@@ -49,12 +60,7 @@
 import React from "react";
 import { FaTimes } from "../../components/icons.jsx";
 import { toNum } from "./rateMath.js";
-import {
-  CUSTOM_DEFAULT_OVERHEAD,
-  CUSTOM_DEFAULT_PROFIT,
-  draftTotals,
-  emptyDraft,
-} from "./customRateDraft.js";
+import { blankDefaults, draftTotals, emptyDraft } from "./customRateDraft.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -78,6 +84,27 @@ const GROUPS = [
   { kind: "plant", label: "Plant", qtyNote: "hours per" },
 ];
 
+const PLANT_UNIT = "hr";
+
+/** A machine's line identity in the picker: its library key, else its name. */
+const plantKey = (p) => String(p?.sn ?? p?.key ?? p?.name ?? "");
+
+/** A draft line for a library machine, at `hours` hours per unit of the rate. */
+function plantDraftLine(m, hours) {
+  return {
+    kind: "plant",
+    name: m.name,
+    unit: PLANT_UNIT,
+    unitPrice: toNum(m.hourlyRate),
+    quantity: hours ?? 0.25,
+    category: m.category || "",
+    // An ADLM machine's serial is a real catalogue id (it is allocated, not a
+    // row position), so it is kept. A machine of the customer's own has none.
+    refSn: m.sn ?? null,
+    plantKey: plantKey(m),
+  };
+}
+
 /**
  * The card body. State lives here; the caller reads the current draft through
  * `draftRef`, which is what the card's validate() and its resolve handler use.
@@ -86,6 +113,8 @@ export default function CustomRateBuilder({
   draftRef,
   materials = [],
   labour = [],
+  plant = [],
+  trades = [],
   sections = [],
   initial,
 }) {
@@ -96,7 +125,17 @@ export default function CustomRateBuilder({
 
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
 
+  const pricedPlant = plant.filter((p) => p.priced && p.hourlyRate > 0);
+
   const addLine = (kind) => {
+    if (kind === "plant" && pricedPlant.length) {
+      const m = pricedPlant[0];
+      setDraft((d) => ({
+        ...d,
+        lines: [...d.lines, plantDraftLine(m, 0.25)],
+      }));
+      return;
+    }
     const src = kind === "material" ? materials : kind === "labour" ? labour : [];
     const first = src[0];
     setDraft((d) => ({
@@ -118,7 +157,7 @@ export default function CustomRateBuilder({
             {
               kind,
               name: "",
-              unit: kind === "plant" ? "h" : "",
+              unit: kind === "plant" ? PLANT_UNIT : "",
               unitPrice: 0,
               quantity: kind === "plant" ? 1 : 1,
               category: "",
@@ -138,6 +177,17 @@ export default function CustomRateBuilder({
     setDraft((d) => ({ ...d, lines: d.lines.filter((_, i) => i !== index) }));
 
   const pick = (index, kind, value) => {
+    if (kind === "plant") {
+      const m = pricedPlant.find((p) => plantKey(p) === value);
+      if (!m) return;
+      setDraft((d) => ({
+        ...d,
+        lines: d.lines.map((l, i) =>
+          i === index ? plantDraftLine(m, l.quantity) : l,
+        ),
+      }));
+      return;
+    }
     const src = kind === "material" ? materials : labour;
     const row = src.find((r) => rowKey(r) === value);
     if (!row) return;
@@ -150,7 +200,10 @@ export default function CustomRateBuilder({
     });
   };
 
-  const t = draftTotals(draft);
+  const defaults = blankDefaults(trades, draft.sectionKey);
+  const t = draftTotals(draft, defaults);
+  const placeholder = (half) =>
+    `${half.source === "your-trade" ? "Trade" : "Default"}: ${half.value}`;
 
   const options = (src) =>
     src.map((r, i) => (
@@ -207,7 +260,7 @@ export default function CustomRateBuilder({
           step="0.5"
           value={draft.overhead}
           onChange={(e) => set({ overhead: e.target.value })}
-          placeholder={`Default: ${CUSTOM_DEFAULT_OVERHEAD}`}
+          placeholder={placeholder(defaults.overhead)}
         />
       </label>
 
@@ -221,7 +274,7 @@ export default function CustomRateBuilder({
           step="0.5"
           value={draft.profit}
           onChange={(e) => set({ profit: e.target.value })}
-          placeholder={`Default: ${CUSTOM_DEFAULT_PROFIT}`}
+          placeholder={placeholder(defaults.profit)}
         />
       </label>
 
@@ -240,6 +293,8 @@ export default function CustomRateBuilder({
           .map((l, i) => ({ ...l, index: i }))
           .filter((l) => l.kind === g.kind);
         const src = g.kind === "material" ? materials : g.kind === "labour" ? labour : [];
+        const fromLibrary = (l) =>
+          g.kind === "plant" && pricedPlant.some((p) => plantKey(p) === l.plantKey);
         return (
           <div className="w grp" key={g.kind}>
             <b>{g.label}</b>
@@ -249,7 +304,26 @@ export default function CustomRateBuilder({
 
             {rows.map((l) => (
               <div className="rg-ln" key={l.index}>
-                {src.length ? (
+                {g.kind === "plant" && fromLibrary(l) ? (
+                  <select
+                    value={l.plantKey}
+                    onChange={(e) => pick(l.index, "plant", e.target.value)}
+                    aria-label="Plant line"
+                  >
+                    {plant.map((p) => (
+                      <option
+                        key={plantKey(p)}
+                        value={plantKey(p)}
+                        disabled={!(p.priced && p.hourlyRate > 0)}
+                      >
+                        {p.name}
+                        {p.priced && p.hourlyRate > 0
+                          ? ` · ${money(p.hourlyRate)} per hr`
+                          : " · not priced"}
+                      </option>
+                    ))}
+                  </select>
+                ) : src.length ? (
                   <select
                     value={rowKey({ description: l.name, unit: l.unit })}
                     onChange={(e) => pick(l.index, g.kind, e.target.value)}
@@ -275,7 +349,7 @@ export default function CustomRateBuilder({
                   onChange={(e) => setLine(l.index, { quantity: e.target.value })}
                   aria-label="Quantity"
                 />
-                <em>{l.unit || (g.kind === "plant" ? "h" : "")}</em>
+                <em>{l.unit || (g.kind === "plant" ? PLANT_UNIT : "")}</em>
                 <button
                   type="button"
                   className="x"
@@ -287,10 +361,11 @@ export default function CustomRateBuilder({
               </div>
             ))}
 
-            {/* Plant has no catalogue behind it yet, so a plant line carries a
-                typed name and an hourly price of the user's own. */}
+            {/* A machine typed by hand (no library to pick from) carries an
+                hourly price of the user's own. A library machine's price
+                comes from its day cost and is not typed here. */}
             {g.kind === "plant"
-              ? rows.map((l) => (
+              ? rows.filter((l) => !fromLibrary(l)).map((l) => (
                   <div className="rg-ln" key={`price-${l.index}`}>
                     <em>Price per hour for {l.name || "this machine"}</em>
                     <input

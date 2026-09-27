@@ -90,6 +90,75 @@ describe("a line in the custom-rate builder", () => {
     const line = draftRef.current.lines[0];
     expect(line.kind).toBe("plant");
     expect(line.refSn).toBe(null);
-    expect(line.unit).toBe("h");
+    expect(line.unit).toBe("hr");
+  });
+});
+
+
+// ── R2: the plant library and trade defaults in the builder ────────────────
+const plant = [
+  { sn: 1, key: "mixer", name: "Concrete mixer (1-bag)", category: "Concrete plant", hourlyRate: 6750, priced: true },
+  { sn: 2, key: "tipper", name: "Tipper", category: "Haulage", hourlyRate: null, priced: false },
+];
+
+function mountR2(initial = emptyDraft(), trades = []) {
+  const draftRef = { current: null };
+  const r = render(
+    <CustomRateBuilder
+      draftRef={draftRef}
+      materials={materials}
+      labour={labour}
+      plant={plant}
+      trades={trades}
+      sections={[{ key: "concrete", label: "Concrete Works" }]}
+      initial={initial}
+    />,
+  );
+  return { ...r, draftRef };
+}
+
+describe("plant from the plant library", () => {
+  it("adds a priced machine by the hour, at its hourly rate, filed by its serial", () => {
+    const { getByText, draftRef } = mountR2();
+    fireEvent.click(getByText("+ Add plant"));
+    const line = draftRef.current.lines[0];
+    expect(line).toMatchObject({
+      kind: "plant",
+      name: "Concrete mixer (1-bag)",
+      unit: "hr",
+      unitPrice: 6750,
+      quantity: 0.25,
+      refSn: 1,
+    });
+  });
+
+  it("lists a machine that cannot be priced, but will not let it be picked", () => {
+    const { getByText, getByLabelText } = mountR2();
+    fireEvent.click(getByText("+ Add plant"));
+    const tipper = [...getByLabelText("Plant line").options].find((o) => o.textContent.includes("Tipper"));
+    expect(tipper.disabled).toBe(true);
+    expect(tipper.textContent).toContain("not priced");
+  });
+
+  it("keeps the hours when the machine is changed", () => {
+    const d = emptyDraft();
+    d.lines = [{ kind: "plant", name: "Concrete mixer (1-bag)", unit: "hr", unitPrice: 6750, quantity: 0.5, refSn: 1, plantKey: "1" }];
+    const { draftRef, getByLabelText } = mountR2(d);
+    fireEvent.change(getByLabelText("Plant line"), { target: { value: "1" } });
+    expect(draftRef.current.lines[0].quantity).toBe(0.5);
+  });
+});
+
+describe("overhead and profit placeholders", () => {
+  it("say 'Trade: 12' where the customer set a default for the trade", () => {
+    const trades = [{ sectionKey: "concrete", yours: { overheadPercent: 12, profitPercent: null } }];
+    const { getByPlaceholderText } = mountR2({ ...emptyDraft(), sectionKey: "concrete" }, trades);
+    expect(getByPlaceholderText("Trade: 12")).toBeTruthy();
+    expect(getByPlaceholderText("Default: 10")).toBeTruthy(); // profit: none set
+  });
+
+  it("say 'Default: 10' with no trade default", () => {
+    const { getAllByPlaceholderText } = mountR2();
+    expect(getAllByPlaceholderText("Default: 10")).toHaveLength(2);
   });
 });

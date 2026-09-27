@@ -5,6 +5,7 @@ import {
   draftProblem,
   draftToPayload,
   draftTotals,
+  blankDefaults,
   emptyDraft,
   newCustomRateId,
   slugify,
@@ -100,10 +101,14 @@ describe("draftToPayload", () => {
     expect(p.description).toBe("Ceramic floor tiling");
   });
 
-  it("sends materials and labour as their own arrays, for the plugins", () => {
-    expect(p.materials).toHaveLength(1);
+  it("sends materials (plant riding with them) and labour as their own arrays, for the plugins", () => {
+    // Plant rides in materials[] with rateType "plant", so a Rate Gen desktop
+    // push that knows no plant is caught by the server's preservePlantLines().
+    expect(p.materials).toHaveLength(2);
     expect(p.materials[0].rateType).toBe("material");
     expect(p.materials[0].refSn).toBe(12);
+    expect(p.materials[1].rateType).toBe("plant");
+    expect(p.materials[1].totalCost).toBeCloseTo(200, 6);
     expect(p.labour).toHaveLength(1);
     expect(p.labour[0].rateType).toBe("labour");
   });
@@ -159,5 +164,60 @@ describe("overhead and profit in a custom rate", () => {
 
   it("still accepts a blank, which takes the documented default", () => {
     expect(draftProblem({ ...draft(), overhead: "", profit: "" })).toBe(null);
+  });
+});
+
+// ── R2: overhead and profit defaults per trade ─────────────────────────────
+describe("a blank box takes the customer's trade default", () => {
+  const trades = [
+    { sectionKey: "finishes", yours: { overheadPercent: null, profitPercent: 18 } },
+    { sectionKey: "mep", yours: { overheadPercent: 12, profitPercent: 15 } },
+  ];
+
+  it("resolves each half on its own, and says where it came from", () => {
+    const d = blankDefaults(trades, "finishes");
+    expect(d.overhead).toEqual({ value: 10, source: "default" });
+    expect(d.profit).toEqual({ value: 18, source: "your-trade" });
+  });
+
+  it("prices a blank Finishes rate at 10% + 18%: net ₦8,000 → ₦10,240", () => {
+    const blank = { ...draft(), overhead: "", profit: "" };
+    const t = draftTotals(blank, blankDefaults(trades, "finishes"));
+    expect(t.overheadValue).toBeCloseTo(800, 6);
+    expect(t.profitValue).toBeCloseTo(1440, 6);
+    expect(t.totalCost).toBeCloseTo(10240, 6);
+    // and the payload stores exactly the figures the strip showed
+    const pay = draftToPayload(blank, "x", 1, blankDefaults(trades, "finishes"));
+    expect(pay.overheadPercent).toBe(10);
+    expect(pay.profitPercent).toBe(18);
+  });
+
+  it("never overrides a figure the customer typed", () => {
+    const t = draftTotals(draft(), blankDefaults(trades, "finishes"));
+    expect(t.overheadPercent).toBe(12);
+    expect(t.profitPercent).toBe(8);
+  });
+
+  it("with no trade default, a blank is still 10 / 10", () => {
+    const d = blankDefaults(trades, "roofing");
+    expect([d.overhead.value, d.profit.value]).toEqual([10, 10]);
+  });
+});
+
+describe("a plant line is priced by the hour, never at ₦0", () => {
+  it("refuses a plant line with hours but no hourly price", () => {
+    const d = draft();
+    d.lines[2] = { kind: "plant", name: "Mixer", unit: "hr", unitPrice: 0, quantity: 0.25 };
+    expect(draftProblem(d)).toBe("Give Mixer an hourly price, or take it off");
+  });
+
+  it("0.25 hr of a ₦6,750/hr mixer adds ₦1,687.50 to the net", () => {
+    const d = { ...emptyDraft(), name: "Concrete", unit: "m3", lines: [
+      { kind: "plant", name: "Concrete mixer (1-bag)", unit: "hr", unitPrice: 6750, quantity: 0.25, refSn: 1 },
+    ] };
+    expect(draftTotals(d).netCost).toBeCloseTo(1687.5, 6);
+    const pay = draftToPayload(d, "x", 1);
+    expect(pay.breakdown[0]).toMatchObject({ refKind: "plant", unit: "hr", quantity: 0.25, unitPrice: 6750, refSn: 1 });
+    expect(pay.breakdown[0].lineTotal).toBeCloseTo(1687.5, 6);
   });
 });

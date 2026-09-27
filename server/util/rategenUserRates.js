@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { canonicalKind, classifyResourceKind, KIND } from "./resourceKind.js";
+import { resolveMargins } from "./tradeMargins.js";
 
 export const SECTION_LABELS = {
   ground: "Groundwork",
@@ -184,7 +185,17 @@ function toBreakdownFromCustomLines(lines) {
   }));
 }
 
-export function normalizeRateOverride(raw = {}) {
+/**
+ * @param {object} raw
+ * @param {object} [opts]
+ * @param {{overheadPercent?:number, profitPercent?:number}} [opts.defaults]
+ *   What an ABSENT percentage becomes (util/tradeMargins.js resolveMargins:
+ *   the stored rate's own figure, else a trade default, else the built-in
+ *   pair). A percentage the payload carries always wins. Omitted, the
+ *   built-in 10 / 25 applies exactly as it always has.
+ */
+export function normalizeRateOverride(raw = {}, opts = {}) {
+  const d = opts.defaults || {};
   const breakdown = normalizeBreakdownLines(raw.breakdown || raw.Breakdown);
   const netFromBreakdown = breakdown.reduce((sum, line) => sum + line.lineTotal, 0);
   const netCost =
@@ -195,8 +206,8 @@ export function normalizeRateOverride(raw = {}) {
         : netFromBreakdown;
   const totals = computeTotals(
     netCost,
-    raw.overheadPercent ?? raw.OverheadPercent ?? 10,
-    raw.profitPercent ?? raw.ProfitPercent ?? 25
+    raw.overheadPercent ?? raw.OverheadPercent ?? d.overheadPercent ?? 10,
+    raw.profitPercent ?? raw.ProfitPercent ?? d.profitPercent ?? 25
   );
 
   return {
@@ -287,7 +298,15 @@ export function preservePlantLines(incoming, stored, opts = {}) {
   };
 }
 
-export function normalizeCustomRate(raw = {}) {
+/**
+ * @param {object} raw
+ * @param {object} [opts]
+ * @param {{overheadPercent?:number, profitPercent?:number}} [opts.defaults]
+ *   What an ABSENT percentage becomes; see normalizeRateOverride. Omitted, the
+ *   built-in 10 / 10 applies exactly as it always has.
+ */
+export function normalizeCustomRate(raw = {}, opts = {}) {
+  const d = opts.defaults || {};
   const customRateId = String(
     raw.customRateId || raw.id || raw.Id || new mongoose.Types.ObjectId()
   ).trim();
@@ -318,8 +337,8 @@ export function normalizeCustomRate(raw = {}) {
 
   const totals = computeTotals(
     netCostRaw,
-    raw.overheadPercent ?? raw.OverheadPercent ?? 10,
-    raw.profitPercent ?? raw.ProfitPercent ?? 10
+    raw.overheadPercent ?? raw.OverheadPercent ?? d.overheadPercent ?? 10,
+    raw.profitPercent ?? raw.ProfitPercent ?? d.profitPercent ?? 10
   );
 
   const createdAt = normalizeDate(
@@ -345,6 +364,54 @@ export function normalizeCustomRate(raw = {}) {
     createdAt,
     updatedAt,
   };
+}
+
+// ── Trade-default margins on the way in ───────────────────────────────────
+// Every write path for a customer's rates goes through these two, single and
+// bulk, website and desktop, so a percentage that arrives missing is filled
+// the same way everywhere: the stored rate's own figure first, then the
+// customer's trade default, then the built-in pair. A percentage the payload
+// carries is never touched (see util/tradeMargins.js).
+
+function storedCustomRate(lib, raw) {
+  const id = String(raw?.customRateId || raw?.id || raw?.Id || "").trim();
+  if (!id) return null;
+  return (lib?.customRates || []).find((c) => String(c?.customRateId || "") === id) || null;
+}
+
+function storedOverride(lib, raw) {
+  const id = String(raw?.rateId || raw?.RateId || "").trim();
+  const list = lib?.rateOverrides || [];
+  if (id) {
+    const hit = list.find((o) => String(o?.rateId || "") === id);
+    if (hit) return hit;
+  }
+  const key = buildUserRateKey({
+    sectionKey: raw?.sectionKey || raw?.SectionKey,
+    itemNo: raw?.itemNo ?? raw?.ItemNo,
+    description: raw?.description ?? raw?.Description,
+    unit: raw?.unit ?? raw?.Unit,
+  });
+  return list.find((o) => buildUserRateKey(o) === key) || null;
+}
+
+/** The figures an ABSENT percentage becomes on this customer's rate. */
+export function marginDefaultsFor(scope, raw, stored, lib) {
+  const m = resolveMargins({
+    scope,
+    sectionKey: normalizeSectionKey(raw?.sectionKey || raw?.SectionKey),
+    stored,
+    yourTrades: lib?.tradeMargins,
+  });
+  return { overheadPercent: m.overheadPercent, profitPercent: m.profitPercent };
+}
+
+export function normalizeCustomRateFor(lib, raw, stored = storedCustomRate(lib, raw)) {
+  return normalizeCustomRate(raw, { defaults: marginDefaultsFor("custom", raw, stored, lib) });
+}
+
+export function normalizeRateOverrideFor(lib, raw, stored = storedOverride(lib, raw)) {
+  return normalizeRateOverride(raw, { defaults: marginDefaultsFor("override", raw, stored, lib) });
 }
 
 // ── Rate composition (build-up) ───────────────────────────────────────────
