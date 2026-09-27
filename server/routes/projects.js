@@ -685,6 +685,10 @@ import {
   preserveBudgetUserEdits,
 } from "../util/budgetUserEdits.js";
 import { preliminaryPercentOf } from "../util/contractDefaults.js";
+import {
+  certifiableContractSum,
+  finalAccountSavings,
+} from "../util/finalAccountMath.js";
 import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
 import {
   sanitizeResourceItems,
@@ -5329,7 +5333,14 @@ async function finalizeAccount(req, res) {
     const finalContractValue =
       measuredWorkFinal + provisionalFinal + preliminaryFinal + variationsFinal;
     const agreedContractSum = safeNum(project.contract?.contractSum);
-    const savings = agreedContractSum - finalContractValue;
+    // Compared against the CERTIFIABLE part of the agreed sum, not the grand
+    // total. contractSum carries contingency and VAT; finalContractValue
+    // deliberately does not, because neither is ever certified. Subtracting one
+    // from the other reported the contingency plus the VAT as money the job
+    // saved — ₦12.875m on a ₦100m subtotal at the defaults, on a job that came
+    // in exactly as measured. See util/finalAccountMath.js.
+    const agreedCertifiableSum = certifiableContractSum(project.contract);
+    const savings = finalAccountSavings(project.contract, finalContractValue);
 
     project.finalAccount = {
       finalized: true,
@@ -5342,6 +5353,11 @@ async function finalizeAccount(req, res) {
       retentionReleased,
       totalCertifiedToDate,
       agreedContractSum,
+      // The baseline the saving was actually measured against, so the report
+      // can show the comparison rather than asking the reader to trust it.
+      agreedCertifiableSum: safeNum(agreedCertifiableSum),
+      contingencyAtLock: safeNum(project.contract?.contingencyAtLock),
+      taxAtLock: safeNum(project.contract?.taxAtLock),
       finalContractValue,
       savings,
       notes: String(req.body?.notes || "").trim().slice(0, 2000),

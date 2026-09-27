@@ -1,5 +1,6 @@
 import React from "react";
 import * as XLSX from "xlsx";
+import { buildCertificate } from "./lib/interimCertificate.js";
 
 function safeNum(value) {
   const num = Number(value);
@@ -64,79 +65,6 @@ function alphaIndex(index) {
   return label;
 }
 
-function buildCertificate(selectedValuation, valuations, valuationSettings, progressTotal) {
-  if (!selectedValuation) return null;
-
-  const sorted = [...(valuations || [])].sort((a, b) =>
-    String(a?.date || "").localeCompare(String(b?.date || "")),
-  );
-  const selectedDate = String(selectedValuation.date || "");
-  const selectedIndex = sorted.findIndex((entry) => String(entry?.date || "") === selectedDate);
-  const valuationNumber = selectedIndex >= 0 ? selectedIndex + 1 : 1;
-  const toDateEntries = selectedIndex >= 0 ? sorted.slice(0, selectedIndex + 1) : [selectedValuation];
-  const previousEntries = selectedIndex > 0 ? sorted.slice(0, selectedIndex) : [];
-
-  const currentValuationAmount = safeNum(selectedValuation.totalAmount);
-  const grossToDate = toDateEntries.reduce(
-    (sum, entry) => sum + safeNum(entry?.totalAmount),
-    0,
-  );
-  const previousPayments = previousEntries.reduce(
-    (sum, entry) => sum + safeNum(entry?.totalAmount),
-    0,
-  );
-
-  const retentionPct = safeNum(valuationSettings?.retentionPct);
-  const vatPct = safeNum(valuationSettings?.vatPct);
-  const withholdingPct = safeNum(valuationSettings?.withholdingPct);
-
-  const retentionAmount = grossToDate * retentionPct / 100;
-  const netValuationToDate = grossToDate - retentionAmount;
-  const amountBeforeTax = netValuationToDate - previousPayments;
-  const vatAmount = amountBeforeTax * vatPct / 100;
-  const withholdingAmount = amountBeforeTax * withholdingPct / 100;
-  const amountDue = amountBeforeTax + vatAmount - withholdingAmount;
-
-  const progressKeys = new Set();
-  toDateEntries.forEach((entry) => {
-    (entry?.items || []).forEach((item, index) => {
-      const key =
-        item?.itemKey ||
-        `${entry?.date || "valuation"}::${item?.itemSn || item?.sn || index}::${item?.description || ""}`;
-      progressKeys.add(String(key));
-    });
-  });
-  const fallbackProgressCount = toDateEntries.reduce(
-    (sum, entry) => sum + safeNum(entry?.itemCount),
-    0,
-  );
-  const progressCountToDate = progressTotal > 0
-    ? Math.min(progressTotal, progressKeys.size || fallbackProgressCount)
-    : progressKeys.size || fallbackProgressCount;
-  const progressPercentToDate = progressTotal > 0
-    ? (progressCountToDate / progressTotal) * 100
-    : 0;
-
-  return {
-    valuationNumber,
-    currentValuationAmount,
-    grossToDate,
-    previousPayments,
-    previousEntries,
-    retentionPct,
-    retentionAmount,
-    netValuationToDate,
-    amountBeforeTax,
-    vatPct,
-    vatAmount,
-    withholdingPct,
-    withholdingAmount,
-    amountDue,
-    progressCountToDate,
-    progressPercentToDate,
-    progressTotal: safeNum(progressTotal),
-  };
-}
 
 function buildPrintHtml({
   certificate,
@@ -168,7 +96,7 @@ function buildPrintHtml({
   const previousPaymentsDetailRows = certificate.previousEntries.length
     ? certificate.previousEntries
         .map((entry, index) => {
-          return `<tr class="subrow"><td>Valuation No. ${index + 1} (${escapeHtml(formatDate(entry?.date))})</td><td>${escapeHtml(money(entry?.totalAmount))}</td></tr>`;
+          return `<tr class="subrow"><td>Valuation No. ${index + 1} (${escapeHtml(formatDate(entry?.date))})</td><td>${escapeHtml(money(entry?.netAmount))}</td></tr>`;
         })
         .join("")
     : "";

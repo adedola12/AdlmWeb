@@ -3,6 +3,7 @@ import { FaCube, FaDownload, FaFileInvoiceDollar, FaPlus, FaTrashAlt, FaUpload }
 import { deriveItemDiscipline } from "../../lib/boqCategory.js";
 import WkModal from "../../ds/WkModal.jsx";
 import { useFeedback } from "../../ds/feedback/feedbackContext.js";
+import { certifiableSumOf } from "./lib/certifiableSum.js";
 import {
   variationKpis,
   variationRowsNewestFirst,
@@ -666,9 +667,27 @@ function FinalAccountSection({
   // the over-run asks "is the SPEND ahead of the plan?". Neither changes a
   // figure: they read the same totals the rest of the tab uses.
   const finalTotal = safeNum(view.currentValue ?? view.finalContractValue);
-  const movement = contractLocked || isFinalized ? finalTotal - safeNum(contractSum) : 0;
-  const movementPct =
-    safeNum(contractSum) > 0 ? (movement / safeNum(contractSum)) * 100 : 0;
+  // Which agreed sum to measure against depends on what finalTotal IS.
+  //
+  // Live, finalTotal is view.currentValue — plannedTotal + variations — and
+  // plannedTotal already carries the contingency and VAT props, so comparing it
+  // to the whole contractSum is like for like and the movement is the real
+  // scope drift.
+  //
+  // Once finalized, finalTotal is the server's finalContractValue, which is
+  // measured + provisional + preliminaries + variations and deliberately
+  // carries NEITHER contingency nor VAT, because neither is ever certified.
+  // Held against the full contractSum it reported the contingency plus the VAT
+  // as a "Saving" — ₦12.875m on a ₦100m subtotal at the defaults, on a job that
+  // came in exactly as measured. So a finalized account is measured against the
+  // certifiable part of the sum instead.
+  const certifiableSum = isFinalized
+    ? certifiableSumOf(finalAccount, { contingencyPercent, taxPercent })
+    : null;
+  const movementBase =
+    certifiableSum === null ? safeNum(contractSum) : certifiableSum;
+  const movement = contractLocked || isFinalized ? finalTotal - movementBase : 0;
+  const movementPct = movementBase > 0 ? (movement / movementBase) * 100 : 0;
   const certifiedPct = finalTotal > 0 ? (certifiedToDate / finalTotal) * 100 : 0;
 
   return (

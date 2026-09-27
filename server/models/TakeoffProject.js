@@ -369,6 +369,13 @@ const FinalAccountSchema = new mongoose.Schema(
     retentionReleased: { type: Number, default: 0 },
     totalCertifiedToDate: { type: Number, default: 0 },
     agreedContractSum: { type: Number, default: 0 },
+    // The certifiable part of the agreed sum — measured + provisional +
+    // preliminaries, before contingency and VAT. `savings` is measured against
+    // THIS, not against agreedContractSum: neither contingency nor VAT is ever
+    // certified, so their difference is not a saving. util/finalAccountMath.js.
+    agreedCertifiableSum: { type: Number, default: 0 },
+    contingencyAtLock: { type: Number, default: 0 },
+    taxAtLock: { type: Number, default: 0 },
     finalContractValue: { type: Number, default: 0 },
     savings: { type: Number, default: 0 }, // positive = under-run, negative = over-run
     notes: { type: String, default: "" },
