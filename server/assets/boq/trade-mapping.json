@@ -69,7 +69,7 @@
                 "preamble": "Reinforced in-situ concrete for all structural members, fully cured.",
                 "items": [
                   { "description": "Strip footing concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["strip", "concrete", "footing"], ["strip", "concrete", "in", "footing"]] },
-                  { "description": "Pad / column base concrete", "unit": "m3", "lookups": [["pad", "concrete"]] },
+                  { "description": "Pad / column base concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["pad", "concrete"], ["column", "base", "concrete"]] },
                   { "description": "Oversite / ground floor slab concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["oversite", "concrete"]] },
                   { "description": "Lintel concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["blockwork", "lintel", "concrete"], ["lintel", "concrete"]] }
                 ]
@@ -140,11 +140,11 @@
                 "heading": "ROOF CARPENTRY — HARDWOOD MEMBERS",
                 "preamble": "Hardwood roof members fixed with proprietary fixings as specification.",
                 "items": [
-                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "structs"], ["roof", "strut"], ["roof", "tie"], ["tie", "beam"], ["tiebeam"]] },
+                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "structs"], ["roof", "strut"], ["roof", "tie"], ["tie", "beam"], ["tiebeam"]], "exclude": ["concrete", "formwork", "reinforcement", "rebar"] },
                   { "description": "50 x 150mm Hardwood King Post", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "king", "post"], ["roof", "kingpost"]] },
                   { "description": "50 x 150mm Hardwood Wall Plate", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "wall", "plate"], ["roof", "wallplate"]] },
                   { "description": "50 x 50mm Hardwood Ceiling Noggins", "unit": "m", "lookupCombine": "sum", "lookups": [["ceiling", "nogging"], ["ceiling", "noggin"]] },
-                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "purlin"], ["purlin"]] },
+                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "purlin"], ["purlin"]], "exclude": ["bolt", "z"] },
                   { "description": "50 x 150mm Hardwood Rafters", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "rafter"], ["rafter"]] }
                 ]
               },
@@ -303,7 +303,7 @@
                 "heading": "PILING (ALLOWANCE)",
                 "preamble": "Bored / driven piles as specification. Priced separately per pile.",
                 "items": [
-                  { "description": "Piling", "unit": "No", "lookupCombine": "sum", "lookups": [["pile"]] }
+                  { "description": "Piling", "unit": "No", "lookupCombine": "sum", "lookups": [["pile"]], "exclude": ["cap"] }
                 ]
               }
             ]
@@ -323,15 +323,15 @@
                 "heading": "REINFORCED CONCRETE — 25MPa / 19mm AGGREGATE",
                 "preamble": "Reinforced in-situ concrete to all structural members, fully cured.",
                 "items": [
-                  { "description": "Pad / column base concrete", "unit": "m3", "lookups": [["pad", "concrete"]] },
+                  { "description": "Pad / column base concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["pad", "concrete"], ["column", "base", "concrete"]] },
                   { "description": "Strip footing concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["strip", "concrete", "footing"], ["strip", "concrete"]] },
                   { "description": "Ground beam concrete (incl. raft beams)", "unit": "m3", "lookupCombine": "sum", "lookups": [["ground", "beam", "concrete"], ["raft", "concrete"], ["thickened", "beam"]] },
                   { "description": "Pile cap concrete", "unit": "m3", "lookups": [["pile", "cap", "concrete"]] },
                   { "description": "Ground floor / slab concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["oversite", "concrete"], ["raft", "slab", "concrete"], ["pile", "slab", "concrete"]] },
                   { "description": "Column starter concrete", "unit": "m3", "lookups": [["column", "starter", "concrete"]] },
-                  { "description": "Column concrete", "unit": "m3", "lookups": [["column", "concrete"]] },
-                  { "description": "Beam concrete", "unit": "m3", "lookups": [["beam", "concrete"]] },
-                  { "description": "Suspended slab concrete", "unit": "m3", "lookups": [["slab", "concrete"]] },
+                  { "description": "Column concrete", "unit": "m3", "lookups": [["column", "concrete"]], "exclude": ["base"] },
+                  { "description": "Beam concrete", "unit": "m3", "lookups": [["beam", "concrete"]], "exclude": ["ground", "raft", "thickened"] },
+                  { "description": "Suspended slab concrete", "unit": "m3", "lookups": [["slab", "concrete"]], "exclude": ["pool", "ground", "oversite", "bed", "raft", "pile"] },
                   { "description": "Staircase concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["staircase", "concrete"], ["stair", "concrete"]] },
                   { "description": "Lintel concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["blockwork", "lintel", "concrete"], ["lintel", "concrete"]] }
                 ]
@@ -352,8 +352,8 @@
                   { "description": "Pile cap formwork", "unit": "m2", "lookups": [["pile", "cap", "formwork"]] },
                   { "description": "Column starter formwork", "unit": "m2", "lookups": [["column", "starter", "formwork"]] },
                   { "description": "Column formwork", "unit": "m2", "lookups": [["column", "formwork"]] },
-                  { "description": "Beam formwork", "unit": "m2", "lookups": [["beam", "formwork"]] },
-                  { "description": "Slab soffit formwork", "unit": "m2", "lookups": [["slab", "formwork"]] },
+                  { "description": "Beam formwork", "unit": "m2", "lookups": [["beam", "formwork"]], "exclude": ["ground", "raft", "thickened"] },
+                  { "description": "Slab soffit formwork", "unit": "m2", "lookups": [["slab", "formwork"]], "exclude": ["edge", "pool", "ground", "oversite", "bed", "raft", "pile"] },
                   { "description": "Staircase formwork", "unit": "m2", "lookupCombine": "sum", "lookups": [["staircase", "formwork"], ["stair", "formwork"]] },
                   { "description": "Lintel formwork", "unit": "m2", "lookupCombine": "sum", "lookups": [["blockwork", "lintel", "formwork"], ["lintel", "formwork"]] },
                   { "description": "Edges of beds, risers and ends not exceeding 300mm high", "unit": "m", "lookupCombine": "sum", "lookups": [["pad", "formwork", "edges"], ["strip", "formwork", "edges"], ["raft", "formwork", "edges"], ["oversite", "formwork", "edges"], ["pile", "formwork", "edges"]] }
@@ -373,10 +373,10 @@
                   { "description": "Strip footing reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["strip", "reinforcement"], ["strip", "rebar"]] },
                   { "description": "Ground beam reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["ground", "beam", "reinforcement"], ["ground", "beam", "rebar"]] },
                   { "description": "Pile cap reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["pile", "cap", "reinforcement"], ["pile", "cap", "rebar"]] },
-                  { "description": "Slab reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["slab", "reinforcement"], ["slab", "rebar"], ["oversite", "reinforcement"]] },
+                  { "description": "Slab reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["slab", "reinforcement"], ["slab", "rebar"], ["oversite", "reinforcement"]], "exclude": ["mesh", "ribbed", "suspended"] },
                   { "description": "Column reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["column", "reinforcement"], ["column", "rebar"], ["column", "starter", "reinforcement"], ["column", "starter", "rebar"]] },
-                  { "description": "Beam reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["beam", "reinforcement"], ["beam", "rebar"]] },
-                  { "description": "Suspended slab reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["suspended", "slab", "reinforcement"], ["suspended", "slab", "rebar"]] },
+                  { "description": "Beam reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["beam", "reinforcement"], ["beam", "rebar"]], "exclude": ["ground", "raft", "thickened"] },
+                  { "description": "Suspended slab reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["suspended", "slab", "reinforcement"], ["suspended", "slab", "rebar"]], "exclude": ["pool", "ground", "oversite", "bed", "raft", "pile", "mesh"] },
                   { "description": "Staircase reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["staircase", "reinforcement"], ["staircase", "rebar"], ["stair", "reinforcement"], ["stair", "rebar"]] },
                   { "description": "Lintel reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["blockwork", "lintel", "reinforcement"], ["lintel", "reinforcement"], ["lintel", "rebar"]] },
                   { "description": "BRC mesh / fabric reinforcement", "unit": "m2", "lookupCombine": "sum", "lookups": [["brc"], ["mesh"], ["bottom", "mesh"], ["reinforcement", "bottom"], ["reinforcement", "mesh"]] }
@@ -434,11 +434,11 @@
                 "heading": "ROOF CARPENTRY — HARDWOOD MEMBERS",
                 "preamble": "Hardwood roof members fixed with proprietary fixings.",
                 "items": [
-                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "structs"], ["roof", "strut"], ["roof", "tie"], ["tie", "beam"], ["tiebeam"]] },
+                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "structs"], ["roof", "strut"], ["roof", "tie"], ["tie", "beam"], ["tiebeam"]], "exclude": ["concrete", "formwork", "reinforcement", "rebar"] },
                   { "description": "50 x 150mm Hardwood King Post", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "king", "post"], ["roof", "kingpost"]] },
                   { "description": "50 x 150mm Hardwood Wall Plate", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "wall", "plate"], ["roof", "wallplate"]] },
                   { "description": "50 x 50mm Hardwood Ceiling Noggins", "unit": "m", "lookupCombine": "sum", "lookups": [["ceiling", "nogging"], ["ceiling", "noggin"]] },
-                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "purlin"], ["purlin"]] },
+                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "purlin"], ["purlin"]], "exclude": ["bolt", "z"] },
                   { "description": "50 x 150mm Hardwood Rafters", "unit": "m", "lookupCombine": "sum", "lookups": [["roof", "rafter"], ["rafter"]] }
                 ]
               },
@@ -562,9 +562,9 @@
                 "heading": "PIPING, FITTINGS & VALVES",
                 "preamble": "Water supply / drainage pipes and fittings.",
                 "items": [
-                  { "description": "Water supply pipes and fittings", "unit": "m", "lookups": [["pipe"], ["fitting"]], "expandMatches": true },
+                  { "description": "Water supply pipes and fittings", "unit": "m", "lookups": [["pipe"], ["pipe", "fitting"]], "exclude": ["waste", "refrigerant"], "expandMatches": true },
                   { "description": "Valves and isolators", "unit": "No", "lookups": [["valve"]], "expandMatches": true },
-                  { "description": "Drainage / sewer pipes", "unit": "m", "lookups": [["drain"], ["sewer"]], "expandMatches": true }
+                  { "description": "Drainage / sewer pipes", "unit": "m", "lookups": [["drain"], ["sewer"], ["waste", "pipe"]], "exclude": ["concrete", "reinforcement", "formwork"], "expandMatches": true }
                 ]
               },
               {
@@ -572,7 +572,7 @@
                 "preamble": "Sanitary fixtures, tanks and pumps complete with all accessories.",
                 "items": [
                   { "description": "Sanitary fixtures (WCs, basins, showers)", "unit": "No", "lookups": [["wc"], ["water", "closet"], ["toilet"], ["basin"], ["lavatory"], ["shower"]], "expandMatches": true },
-                  { "description": "Tanks, pumps and accessories", "unit": "No", "lookups": [["tank"], ["pump"], ["cistern"]], "expandMatches": true }
+                  { "description": "Tanks, pumps and accessories", "unit": "No", "lookups": [["tank"], ["pump"], ["cistern"]], "exclude": ["blockwork"], "expandMatches": true }
                 ]
               }
             ]
@@ -584,7 +584,7 @@
                 "heading": "CABLING & CONTAINMENT",
                 "preamble": "Cables, wires, conduits and cable tray to specification.",
                 "items": [
-                  { "description": "Cables, wires and conductors", "unit": "m", "lookups": [["cable"], ["wire"]], "expandMatches": true },
+                  { "description": "Cables, wires and conductors", "unit": "m", "lookups": [["cable"], ["wire"]], "exclude": ["mesh", "tray"], "expandMatches": true },
                   { "description": "Conduit and cable tray", "unit": "m", "lookups": [["conduit"], ["tray"], ["raceway"]], "expandMatches": true }
                 ]
               },
@@ -593,7 +593,7 @@
                 "preamble": "Lighting fixtures, accessories and distribution equipment.",
                 "items": [
                   { "description": "Lighting fixtures and luminaires", "unit": "No", "lookups": [["light"], ["luminaire"], ["lamp"]], "expandMatches": true },
-                  { "description": "Switches, sockets and outlets", "unit": "No", "lookups": [["switch"], ["socket"], ["outlet"], ["receptacle"]], "expandMatches": true },
+                  { "description": "Switches, sockets and outlets", "unit": "No", "lookups": [["switch"], ["socket"], ["outlet"], ["receptacle"]], "exclude": ["pipe"], "expandMatches": true },
                   { "description": "Distribution boards and panels", "unit": "No", "lookups": [["panel"], ["distribution"], ["breaker"], ["busbar"]], "expandMatches": true }
                 ]
               }
