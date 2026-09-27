@@ -64,7 +64,18 @@ const MPXJ_DIR = path.resolve(__dirname, "..", "..", "tools", "mpxj-converter");
  * the ApiFn bundle (see commandHooks). Prefer an import for JSON (it travels
  * inside the bundle); this list is for files that cannot be imported.
  */
-const LAMBDA_DISK_ASSETS = ["assets/ADLM-Installer-Hub-User-Guide.pdf"];
+const LAMBDA_DISK_ASSETS: { from: string; to: string }[] = [
+  {
+    from: "assets/ADLM-Installer-Hub-User-Guide.pdf",
+    to: "assets/ADLM-Installer-Hub-User-Guide.pdf",
+  },
+  // pdfkit's built-in fonts (Helvetica, Times, Courier...). pdfkit is bundled,
+  // and it reads these from `${__dirname}/data/*.afm`; in the bundle __dirname
+  // is the bundle's own folder, so without them every PDF using a built-in
+  // font (invoices, receipts, proposals, grading, ArchiCAD BoQ) fails with
+  // ENOENT on /var/task/data/Helvetica.afm (seen 4 and 12 Sep 2026).
+  { from: "node_modules/pdfkit/js/data", to: "data" },
+];
 
 export interface AdlmApiStackProps extends StackProps {
   config: AdlmConfig;
@@ -227,10 +238,10 @@ export class AdlmApiStack extends Stack {
           beforeInstall: () => [],
           afterBundling: (inputDir: string, outputDir: string) =>
             LAMBDA_DISK_ASSETS.map(
-              (rel) =>
-                `node -e "require('fs').cpSync(process.argv[1],process.argv[2])" ` +
-                `"${path.posix.join(inputDir.replace(/\\/g, "/"), rel)}" ` +
-                `"${path.posix.join(outputDir.replace(/\\/g, "/"), rel)}"`,
+              ({ from, to }) =>
+                `node -e "require('fs').cpSync(process.argv[1],process.argv[2],{recursive:true})" ` +
+                `"${path.posix.join(inputDir.replace(/\\/g, "/"), from)}" ` +
+                `"${path.posix.join(outputDir.replace(/\\/g, "/"), to)}"`,
             ),
         },
       },
