@@ -163,3 +163,14 @@ export function foldLabel(groups, openMap = {}) {
   const allShut = names.length > 0 && names.every((n) => openMap?.[n] === false);
   return allShut ? "Expand all" : "Collapse all";
 }
+
+/**
+ * The title his side panel gives a line — its description (work-proj.js:899).
+ *
+ * Here rather than beside the panel component, because a file that exports a
+ * component may export nothing else.
+ */
+export function linePanelTitle(items, index) {
+  const it = (Array.isArray(items) ? items : [])[index];
+  return it ? descOf(it) || "Bill line" : "Bill line";
+}

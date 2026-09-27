@@ -20,7 +20,12 @@ import { useProjects } from "../../ds/useProjects.js";
 import { apiAuthed } from "../../api.js";
 import { useAuth } from "../../store.jsx";
 import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectTabs.js";
+import { linePanelTitle } from "./billModel.js";
 import WorkProjectOverview from "./WorkProjectOverview.jsx";
+import WorkProjectBill from "./WorkProjectBill.jsx";
+import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
+import WorkProjectPanel from "./WorkProjectPanel.jsx";
+import { useProjectPanel } from "./useProjectPanel.js";
 import DsAppShell from "../../ds/DsAppShell.jsx";
 // His project-view rules. Imported here because this route is the first thing
 // outside DsProjectGallery/DsWorkHome to use them — without it the whole view
@@ -109,22 +114,15 @@ export default function WorkProjectShell({ productKey, id }) {
   const tabs = tabsFor(productKey);
   const tab = resolveTab(params.get("tab"), productKey);
 
-  // A panel opens over the tab body. Escape closes it, which is his behaviour
-  // and also the thing a keyboard user will try first.
-  const [panel, setPanel] = React.useState(null);
-  React.useEffect(() => {
-    if (!panel) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape") setPanel(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [panel]);
+  // His layer L5: a line, a rate build-up or the model changes open OVER the
+  // tab, never as a new page (WORK.md §13). WorkProjectPanel owns the DOM, the
+  // slide, the Escape guard and the focus return.
+  const panel = useProjectPanel();
 
   // Changing tab closes whatever was open over the old one.
   const go = React.useCallback(
     (next) => {
-      setPanel(null);
+      panel.close();
       const p = new URLSearchParams(params);
       if (next === "overview") p.delete("tab");
       else p.set("tab", next);
@@ -133,7 +131,7 @@ export default function WorkProjectShell({ productKey, id }) {
       // deletes it, so back leaves the workspace entirely.
       setParams(p);
     },
-    [params, setParams],
+    [params, setParams, panel],
   );
 
   const viewOnly = project?.access === "view" || project?.readOnly === true;
@@ -227,7 +225,14 @@ export default function WorkProjectShell({ productKey, id }) {
             canEdit={!viewOnly}
             onGo={go}
           />
-        ) : tab === "overview" ? null : (
+        ) : tab === "bill" && !fullFailed ? (
+          <WorkProjectBill
+            project={project}
+            canEdit={!viewOnly}
+            onOpenLine={(index) => panel.show({ kind: "line", index })}
+            onGo={go}
+          />
+        ) : tab === "overview" || tab === "bill" ? null : (
           <div className="pj-empty">
             <p>
               <b>{tabs.find((t) => t.key === tab)?.label}</b> is not built here yet.
@@ -246,12 +251,21 @@ export default function WorkProjectShell({ productKey, id }) {
         )}
       </div>
 
-      {panel ? (
-        <div className="pj-panel" role="dialog" aria-modal="true">
-          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => setPanel(null)}>
-            Close
-          </button>
-        </div>
+      {panel.content?.kind === "line" ? (
+        <WorkProjectPanel
+          title={linePanelTitle(project?.items, panel.content.index)}
+          visible={panel.visible}
+          onClose={panel.close}
+        >
+          <WorkProjectLinePanel
+            project={project}
+            index={panel.content.index}
+            canEdit={!viewOnly}
+            contractLocked={Boolean(project?.contract?.locked)}
+            onGoToLine={(i) => panel.show({ kind: "line", index: i })}
+            onGo={go}
+          />
+        </WorkProjectPanel>
       ) : null}
     </DsAppShell>
   );
