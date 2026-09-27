@@ -21,6 +21,7 @@ import React from "react";
 import { FaFolder, FaObjectGroup, FaTrash } from "../../components/icons.jsx";
 import ProjectSectionSummary from "./ProjectSectionSummary.jsx";
 import StorageBar from "../../components/StorageBar.jsx";
+import OpenInDesktopButton from "./OpenInDesktopButton.jsx";
 
 function rowId(row) {
   return row?._id || row?.id || null;
@@ -71,6 +72,10 @@ export default function ProjectExplorerGrid({
   sourceName = "",
   hostName = "",
   isMaterials = false,
+  // "Open in QUIV / HERON" on each card. The button renders nothing for
+  // products without a desktop entry point.
+  productKey = "",
+  accessToken = "",
 }) {
   return (
     <div style={{ marginTop: 20 }}>
@@ -286,6 +291,21 @@ export default function ProjectExplorerGrid({
                   >
                     {checked ? "✓ Selected" : "Select"}
                   </button>
+                  {/* A combined project has no single model to open. The wrapper
+                      keeps clicks in the button and its note off the card. */}
+                  {id && !row?.mergeContainer && !isMaterials ? (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <OpenInDesktopButton
+                        productKey={productKey}
+                        projectId={id}
+                        accessToken={accessToken}
+                        disabled={bulkBusy}
+                      />
+                    </div>
+                  ) : null}
                   {/* Only the owner can delete; shared projects hide this. */}
                   {!row?.shared ? (
                     <button

@@ -14,6 +14,8 @@ import { ActivityLog } from "../models/ActivityLog.js";
 export const ACT = {
   PROJECT_CREATED: "project.created",
   PROJECT_DELETED: "project.deleted",
+  // "Open in QUIV / HERON": a desktop product redeemed a web link.
+  PROJECT_OPENED_DESKTOP: "project.opened-desktop",
   BOQ_REIMPORTED: "project.boq-reimported",
   CONTRACT_LOCKED: "contract.locked",
   CONTRACT_UNLOCKED: "contract.unlocked",

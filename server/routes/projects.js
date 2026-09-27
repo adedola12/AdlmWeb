@@ -884,7 +884,7 @@ async function userHasActiveEntitlement(userId, key) {
 // uses this filter sits behind requireEntitlementParam, so "anyone" here means
 // an active subscriber of the product. resolveProjectAccess() makes them
 // read-only and rejectSampleWrites() refuses every write before a handler runs.
-function accessFilter(id, userId, productKey) {
+export function accessFilter(id, userId, productKey) {
   return {
     _id: id,
     productKey,
@@ -901,7 +901,7 @@ function accessFilter(id, userId, productKey) {
 // The rule itself moved to util/projectAccess.js so the ArchiCAD routes can
 // ask the same question — they were not asking it at all. Behaviour here is
 // unchanged; this is the same function with its body shared.
-async function resolveProjectAccess(req, project) {
+export async function resolveProjectAccess(req, project) {
   return resolveSharedProjectAccess(getUserObjectId(req), project, {
     hasRateGen: (uid) => userHasActiveEntitlement(uid, "rategen"),
   });
