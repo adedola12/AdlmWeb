@@ -58,6 +58,7 @@ import AdminDocSaved from "./pages/AdminDocSaved.jsx";
 import AdminDocIssued from "./pages/AdminDocIssued.jsx";
 import AdminDocProduced from "./pages/AdminDocProduced.jsx";
 import AdminDocSystem from "./pages/AdminDocSystem.jsx";
+import AdminWork from "./pages/AdminWork.jsx";
 import AdminStorage from "./pages/AdminStorage.jsx";
 import AdminEmails from "./pages/AdminEmails.jsx";
 import AdminCampaigns from "./pages/AdminCampaigns.jsx";
