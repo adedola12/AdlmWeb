@@ -58,6 +58,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.resolve(__dirname, "..", "..", "server");
 const MPXJ_DIR = path.resolve(__dirname, "..", "..", "tools", "mpxj-converter");
 
+/**
+ * Files the API reads from disk at runtime, relative to server/. esbuild
+ * bundles only imports, so each is copied to the same relative path beside
+ * the ApiFn bundle (see commandHooks). Prefer an import for JSON (it travels
+ * inside the bundle); this list is for files that cannot be imported.
+ */
+const LAMBDA_DISK_ASSETS = ["assets/ADLM-Installer-Hub-User-Guide.pdf"];
+
 export interface AdlmApiStackProps extends StackProps {
   config: AdlmConfig;
   /**
@@ -206,6 +214,25 @@ export class AdlmApiStack extends Stack {
           "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);" +
           "import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';" +
           "const __filename=__f(import.meta.url);const __dirname=__d(__filename);",
+        // esbuild only carries what is imported. Files the app reads from disk
+        // at runtime have to be copied beside the bundle by hand, or they are
+        // missing on Lambda while working locally. The Installer Hub user
+        // guide is attached to every purchase-approval email; before this it
+        // failed with ENOENT on /var/assets/... (server/util/userGuide.js
+        // resolves the bundle location, assets/<file> beside index.mjs).
+        // node, not cp/copy: the same command must run in Windows cmd, a
+        // Linux shell and the Docker bundling image.
+        commandHooks: {
+          beforeBundling: () => [],
+          beforeInstall: () => [],
+          afterBundling: (inputDir: string, outputDir: string) =>
+            LAMBDA_DISK_ASSETS.map(
+              (rel) =>
+                `node -e "require('fs').cpSync(process.argv[1],process.argv[2])" ` +
+                `"${path.posix.join(inputDir.replace(/\\/g, "/"), rel)}" ` +
+                `"${path.posix.join(outputDir.replace(/\\/g, "/"), rel)}"`,
+            ),
+        },
       },
     });
     // Source maps are useless in CloudWatch without this.
