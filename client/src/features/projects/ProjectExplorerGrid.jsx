@@ -303,6 +303,7 @@ export default function ProjectExplorerGrid({
                         projectId={id}
                         accessToken={accessToken}
                         disabled={bulkBusy}
+                        align="left"
                       />
                     </div>
                   ) : null}

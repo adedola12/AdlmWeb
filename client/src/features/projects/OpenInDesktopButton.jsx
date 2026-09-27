@@ -34,9 +34,21 @@ function launch(url) {
   a.remove();
 }
 
-const MENU = { left: "auto", right: 0, width: 320, maxHeight: "none", padding: 14 };
+// Header buttons sit at the right of the bar, so the note opens leftwards;
+// card buttons sit at the left of the card, so it opens rightwards.
+const MENU_BASE = { width: 320, maxWidth: "calc(100vw - 32px)", maxHeight: "none", padding: 14 };
+const MENU = {
+  right: { ...MENU_BASE, left: "auto", right: 0 },
+  left: { ...MENU_BASE, left: 0, right: "auto" },
+};
 
-export default function OpenInDesktopButton({ productKey, projectId, accessToken, disabled = false }) {
+export default function OpenInDesktopButton({
+  productKey,
+  projectId,
+  accessToken,
+  disabled = false,
+  align = "right",
+}) {
   const product = desktopProductFor(productKey);
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -92,7 +104,7 @@ export default function OpenInDesktopButton({ productKey, projectId, accessToken
       </button>
 
       {open && !busy ? (
-        <div className="wk-dd-m" style={MENU} role="status">
+        <div className="wk-dd-m" style={MENU[align] || MENU.right} role="status">
           {error ? (
             <>
               <b style={{ display: "block", fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
