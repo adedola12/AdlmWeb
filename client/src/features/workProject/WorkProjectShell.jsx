@@ -26,6 +26,11 @@ import WorkProjectBill from "./WorkProjectBill.jsx";
 import WorkProjectRates from "./WorkProjectRates.jsx";
 import WorkProjectPm from "./WorkProjectPm.jsx";
 import WorkProjectValuations from "./WorkProjectValuations.jsx";
+import {
+  WorkProjectDrawings,
+  WorkProjectModel,
+  WorkProjectServices,
+} from "./WorkProjectSources.jsx";
 import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
 import WorkProjectPanel from "./WorkProjectPanel.jsx";
 import { useProjectPanel } from "./useProjectPanel.js";
@@ -152,6 +157,20 @@ export default function WorkProjectShell({ productKey, id }) {
     [params, setParams, panel],
   );
 
+  // His [data-sheet] sets the Bill's search box to that sheet and jumps
+  // (work-proj.js:1824). Ours carries it in the URL instead, so the jump is
+  // shareable and Back comes back here.
+  const openPlace = React.useCallback(
+    (place) => {
+      const q = new URLSearchParams(params);
+      q.delete("view");
+      q.set("tab", "bill");
+      q.set("q", place);
+      setParams(q);
+    },
+    [params, setParams],
+  );
+
   const viewOnly = project?.access === "view" || project?.readOnly === true;
 
   return (
@@ -247,6 +266,7 @@ export default function WorkProjectShell({ productKey, id }) {
           <WorkProjectBill
             project={project}
             canEdit={!viewOnly}
+            initialQuery={params.get("q") || ""}
             onOpenLine={(index) => panel.show({ kind: "line", index })}
             onGo={go}
           />
@@ -275,7 +295,15 @@ export default function WorkProjectShell({ productKey, id }) {
             onView={setRateView}
             onGo={go}
           />
-        ) : ["overview", "bill", "rates", "pm", "valuations"].includes(tab) ? null : (
+        ) : tab === "model" && !fullFailed ? (
+          <WorkProjectModel project={project} canEdit={!viewOnly} onGo={go} />
+        ) : tab === "drawings" && !fullFailed ? (
+          <WorkProjectDrawings project={project} onOpenPlace={openPlace} />
+        ) : tab === "services" && !fullFailed ? (
+          <WorkProjectServices project={project} canEdit={!viewOnly} />
+        ) : ["overview", "bill", "rates", "pm", "valuations", "model", "drawings", "services"].includes(
+            tab,
+          ) ? null : (
           <div className="pj-empty">
             <p>
               <b>{tabs.find((t) => t.key === tab)?.label}</b> is not built here yet.

@@ -33,6 +33,7 @@ export default function WorkProjectBill({
   project,
   canEdit = false,
   driftByIndex = null,
+  initialQuery = "",
   onOpenLine,
   onGo,
 }) {
@@ -41,7 +42,11 @@ export default function WorkProjectBill({
     [project],
   );
 
-  const [query, setQuery] = React.useState("");
+  // The Drawings tab jumps here with ?q=<where it was measured>, which is his
+  // [data-sheet] behaviour. Re-seeded when it changes so a second jump moves
+  // the box, but typed edits after that are the reader's own.
+  const [query, setQuery] = React.useState(initialQuery);
+  React.useEffect(() => setQuery(initialQuery), [initialQuery]);
   const [filter, setFilter] = React.useState("all");
   const [by, setBy] = React.useState("element");
   // Only the sections the reader has opened or shut by hand. Everything else
