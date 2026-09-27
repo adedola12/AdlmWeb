@@ -273,7 +273,7 @@ test("the counts say how many there really are, not how many were returned", asy
   me = { _id: USER_ID, email: "qs@example.com", entitlements: [] };
   facet = {
     draftCertificates: [row({ number: 1, status: "draft" })],
-    counts: [{ draftCertificates: 31, pendingVariations: 4, overdueTasks: 9 }],
+    counts: [{ draftCertificates: 31, pendingVariations: 4, overdueTasks: 9, modelDrift: 2 }],
   };
   const res = await get("/me/work-overview");
   assert.equal(res.body.draftCertificates.length, 1);
@@ -281,6 +281,7 @@ test("the counts say how many there really are, not how many were returned", asy
     draftCertificates: 31,
     pendingVariations: 4,
     overdueTasks: 9,
+    modelDrift: 2,
   });
 });
 
@@ -289,6 +290,7 @@ test("a response with no counts branch still answers with zeros, never undefined
     draftCertificates: 0,
     pendingVariations: 0,
     overdueTasks: 0,
+    modelDrift: 0,
   });
 });
 
@@ -438,4 +440,29 @@ test("certified to date is what the approved certificates add up to", () => {
   assert.equal(evalExpr(expr, {}), 0);
   // The old reading is gone, not merely unused.
   assert.ok(!JSON.stringify(expr).includes("cumulativeValue"));
+});
+
+// ── Model drift (r2-model-drift-alerts) ────────────────────────────────────
+
+test("open model drift is a 'needs a decision' row, counts only", () => {
+  const shaped = shapeWorkOverview([
+    {
+      modelDrift: [
+        row({ detectedAt: new Date("2026-09-27T10:00:00Z"), linesAffected: 3, added: 4, removed: -1, changed: 2.7 }),
+      ],
+      counts: [{ modelDrift: 5 }],
+    },
+  ]);
+  assert.equal(shaped.modelDrift.length, 1);
+  const d = shaped.modelDrift[0];
+  assert.equal(d.detectedAt, "2026-09-27T10:00:00.000Z");
+  assert.deepEqual([d.linesAffected, d.added, d.removed, d.changed], [3, 4, 0, 2]);
+  assert.equal(shaped.counts.modelDrift, 5);
+});
+
+test("the drift facet only reads open drift", () => {
+  const stages = buildWorkOverviewPipeline(USER_ID, { now: new Date("2026-09-27T12:00:00Z") });
+  const flat = JSON.stringify(stages);
+  assert.ok(flat.includes('"open"'));
+  assert.ok(Array.isArray(stages.at(-1).$facet.modelDrift));
 });

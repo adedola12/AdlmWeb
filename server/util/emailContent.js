@@ -217,6 +217,34 @@ export function projectInvite({ firstName, invitedBy, projectName, href }) {
   };
 }
 
+export function modelDriftAlert({ firstName, projectName, productName, counts, href }) {
+  const c = counts || {};
+  const n = (v, one, many) => `${v} ${v === 1 ? one : many}`;
+  const parts = [];
+  if (c.added) parts.push(`${n(c.added, "element", "elements")} added`);
+  if (c.removed) parts.push(`${c.removed} removed`);
+  if (c.changed) parts.push(`${c.changed} changed in size`);
+  const lines = Number(c.linesAffected) || 0;
+  return {
+    subject: `The model behind "${projectName}" has changed since its last take-off`,
+    html: wrapEmail({
+      title: "Model changed since last take-off",
+      preheader: `${n(lines, "bill line", "bill lines")} may no longer match the model.`,
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p(
+          `${productName || "The plugin"} opened the model for <b>${projectName}</b> and found it has changed ` +
+            `since the take-off saved on ADLM Cloud${parts.length ? `: ${parts.join(", ")}` : ""}.`,
+        ) +
+        p(
+          `${n(lines, "bill line", "bill lines")} may no longer match the model. Before you price, value or ` +
+            "certify from this bill, re-take the affected lines and save to the cloud again. That clears this alert.",
+        ),
+      cta: href ? { label: "Open the project", href } : null,
+    }),
+  };
+}
+
 export function entitlementGranted({ firstName, productName, href }) {
   return {
     subject: `${productName} is now active on your ADLM account`,
@@ -515,6 +543,14 @@ export const PREVIEW = {
     quotation({ firstName: "Adaeze", total: 1250000, currency: "NGN", href: `${SITE}/quote/sample`, validUntil: "30 September 2026" }),
   "project.invite": () =>
     projectInvite({ firstName: "Adaeze", invitedBy: "Babajide Gbajumo", projectName: "Lekki Phase 2 Tower", href: `${SITE}/work` }),
+  "project.model-drift": () =>
+    modelDriftAlert({
+      firstName: "Adaeze",
+      projectName: "Lekki Phase 2 Tower",
+      productName: "QUIV",
+      counts: { added: 12, removed: 3, changed: 5, linesAffected: 4 },
+      href: `${SITE}/work`,
+    }),
   "entitlement.boq-import": () =>
     entitlementGranted({ firstName: "Adaeze", productName: "BoQ Import" }),
   "support.received": () =>
