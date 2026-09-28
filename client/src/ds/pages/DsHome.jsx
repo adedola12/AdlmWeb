@@ -113,70 +113,70 @@ export default function DsHome() {
         {" "}
         <div className="marq-track">
           {" "}
-          <span>
-            NIQS
+          <span className="clogo">
+            <img src="/ds/logos/niqs.png" alt="Nigerian Institute of Quantity Surveyors (NIQS)" loading="lazy" decoding="async" />
           </span>
-          <span>
-            The Big 5 Construct
+          <span className="clogo">
+            <img src="/ds/logos/the-big-5-construct-nigeria.png" alt="The Big 5 Construct Nigeria" loading="lazy" decoding="async" />
           </span>
-          <span>
-            NIOB
+          <span className="clogo">
+            <img src="/ds/logos/niob.png" alt="Nigerian Institute of Building (NIOB)" loading="lazy" decoding="async" />
           </span>
-          <span>
-            Federal Airport Authority
-          </span>
-          {" "}
-          <span>
-            Construworth
-          </span>
-          <span>
-            ITB Nigeria
-          </span>
-          <span>
-            BEC Associates
-          </span>
-          <span>
-            JABU
+          <span className="clogo">
+            <img src="/ds/logos/faan.png" alt="Federal Airports Authority of Nigeria (FAAN)" loading="lazy" decoding="async" />
           </span>
           {" "}
-          <span>
-            Godaret Consultant
+          <span className="clogo">
+            <img src="/ds/logos/construworth.png" alt="ConstruWorth" loading="lazy" decoding="async" />
           </span>
-          <span>
-            Rivers State University
+          <span className="clogo">
+            <img src="/ds/logos/itb-nigeria.png" alt="ITB Nigeria" loading="lazy" decoding="async" />
           </span>
-          {" "}
-          <span>
-            NIQS
+          <span className="clogo">
+            <img src="/ds/logos/bec-consultants.png" alt="BEC Consultants" loading="lazy" decoding="async" />
           </span>
-          <span>
-            The Big 5 Construct
-          </span>
-          <span>
-            NIOB
-          </span>
-          <span>
-            Federal Airport Authority
-          </span>
-          {" "}
-          <span>
-            Construworth
-          </span>
-          <span>
-            ITB Nigeria
-          </span>
-          <span>
-            BEC Associates
-          </span>
-          <span>
-            JABU
+          <span className="clogo">
+            <img src="/ds/logos/jabu.png" alt="Joseph Ayo Babalola University (JABU)" loading="lazy" decoding="async" />
           </span>
           {" "}
           <span>
             Godaret Consultant
           </span>
+          <span className="clogo">
+            <img src="/ds/logos/rivers-state-university.png" alt="Rivers State University" loading="lazy" decoding="async" />
+          </span>
+          {" "}
+          <span className="clogo">
+            <img src="/ds/logos/niqs.png" alt="Nigerian Institute of Quantity Surveyors (NIQS)" loading="lazy" decoding="async" />
+          </span>
+          <span className="clogo">
+            <img src="/ds/logos/the-big-5-construct-nigeria.png" alt="The Big 5 Construct Nigeria" loading="lazy" decoding="async" />
+          </span>
+          <span className="clogo">
+            <img src="/ds/logos/niob.png" alt="Nigerian Institute of Building (NIOB)" loading="lazy" decoding="async" />
+          </span>
+          <span className="clogo">
+            <img src="/ds/logos/faan.png" alt="Federal Airports Authority of Nigeria (FAAN)" loading="lazy" decoding="async" />
+          </span>
+          {" "}
+          <span className="clogo">
+            <img src="/ds/logos/construworth.png" alt="ConstruWorth" loading="lazy" decoding="async" />
+          </span>
+          <span className="clogo">
+            <img src="/ds/logos/itb-nigeria.png" alt="ITB Nigeria" loading="lazy" decoding="async" />
+          </span>
+          <span className="clogo">
+            <img src="/ds/logos/bec-consultants.png" alt="BEC Consultants" loading="lazy" decoding="async" />
+          </span>
+          <span className="clogo">
+            <img src="/ds/logos/jabu.png" alt="Joseph Ayo Babalola University (JABU)" loading="lazy" decoding="async" />
+          </span>
+          {" "}
           <span>
-            Rivers State University
+            Godaret Consultant
+          </span>
+          <span className="clogo">
+            <img src="/ds/logos/rivers-state-university.png" alt="Rivers State University" loading="lazy" decoding="async" />
           </span>
           {" "}
         </div>
