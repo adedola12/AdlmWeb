@@ -25,8 +25,17 @@ export function signAccess(payload) {
   return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
 }
 
+// The step-up proof and the God-login challenge are signed with this same
+// secret (util/jwt.js) and carry a `scope`. An access token never does. Without
+// this check a God-login challenge, minted after the password but BEFORE the
+// email OTP, passed as an access token, and requireAdmin (which accepts `sub`)
+// let it through.
 export function verifyAccess(token) {
-  return jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  if (decoded && typeof decoded === "object" && decoded.scope) {
+    throw new jwt.JsonWebTokenError("Not an access token");
+  }
+  return decoded;
 }
 
 export function requireAuth(req, res, next) {
