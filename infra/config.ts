@@ -175,6 +175,36 @@ export interface AdlmConfig {
   warmIntervalMinutes: number;
 
   /**
+   * Provisioned concurrency on the API: this many execution environments are
+   * kept initialised at all times, on the `live` alias that CloudFront calls.
+   * 0 turns it off (no alias, no provisioned environments; the Function URL
+   * then sits on the function itself, as before).
+   *
+   * APPROVED by the founder 2026-09-27 ("yes, do the keep-warm").
+   *
+   * WHY: a cold first request takes 7-9s (investigation 2026-09-26: SSM
+   * ~0.8s, app import ~2s, Mongo connect + first queries on a fresh pool).
+   * On a provisioned environment all of that runs during INIT, before any
+   * request arrives (lambda.js, AWS_LAMBDA_INITIALIZATION_TYPE), so the
+   * first request it serves is a warm one.
+   *
+   * LIMIT, STATED PLAINLY: concurrency peaks at 6-13 on a normal day, so
+   * traffic above this number still spills over to on-demand environments
+   * and cold-starts (CloudWatch ProvisionedConcurrencySpilloverInvocations
+   * shows how often). The count covers the common case, not the peak.
+   *
+   * COST (AWS Price List API, eu-west-1, effective 2026-09-01, arm64):
+   * $0.0000037168 per GB-second provisioned. At 2GB that is ~$19.27 per
+   * environment per 30-day month, so 2 = ~$38.50/month. Requests served on a
+   * provisioned environment bill duration at $0.0000086726/GB-s instead of
+   * the on-demand rate, which offsets a little of it.
+   *
+   * Counts against reserved concurrency (the Atlas-derived ceiling), which is
+   * far above this.
+   */
+  apiProvisionedConcurrency: number;
+
+  /**
    * Alarm destination. CONFIRMED by the founder.
    *
    * A subscription confirmation email is sent on first deploy and MUST be
@@ -339,6 +369,10 @@ export const config: AdlmConfig = {
   // that is usually well over 5 minutes, so this is comfortably inside it
   // without being wasteful. Set to 0 to disable.
   warmIntervalMinutes: 5,
+
+  // Two environments always initialised (~$38.50/month; see the interface).
+  // Founder approved keep-warm 2026-09-27. 0 switches it off.
+  apiProvisionedConcurrency: 2,
 
   // This subscription had LAPSED by September 2026: the topic had no
   // subscribers, so no alarm reached anyone. dolapo836@gmail.com was

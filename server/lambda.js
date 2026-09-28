@@ -219,3 +219,30 @@ export async function handler(event, context) {
 }
 
 export default handler;
+
+// ── Provisioned concurrency: do the cold-start work during INIT ──────────────
+// On an on-demand environment the expensive work (SSM, app import, Mongo
+// connect, role seed) runs inside the first request, as above: that keeps the
+// on-demand INIT phase short, which is capped at 10s. A PROVISIONED
+// environment is initialised before any request reaches it, and its INIT may
+// run for up to 130s, so there the same work is done now and the first request
+// it serves is a warm one. That is the whole point of paying for it
+// (infra/config.ts apiProvisionedConcurrency).
+//
+// Never fails INIT: if anything goes wrong (a Mongo stall, a missing secret),
+// it is logged and the environment falls back to the lazy path, which retries
+// on the first request exactly as an on-demand environment would.
+export async function prepareForProvisionedConcurrency(env = process.env, prepare = ensureHandler) {
+  if (env.AWS_LAMBDA_INITIALIZATION_TYPE !== "provisioned-concurrency") return false;
+  const t0 = Date.now();
+  try {
+    await prepare();
+    console.log(`[lambda] provisioned environment ready in INIT (${Date.now() - t0}ms)`);
+    return true;
+  } catch (err) {
+    console.warn("[lambda] provisioned INIT prep failed, the first request will retry:", err?.message || err);
+    return false;
+  }
+}
+
+await prepareForProvisionedConcurrency();

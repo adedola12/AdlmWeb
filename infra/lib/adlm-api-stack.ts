@@ -508,7 +508,27 @@ export class AdlmApiStack extends Stack {
      * The plan requires verifying the API here BEFORE any DNS change, and it
      * leaves a known-good fallback hostname if CloudFront misbehaves mid-outage.
      */
-    const fnUrl = fn.addFunctionUrl({
+    // Provisioned concurrency lives on a published version, so traffic has to
+    // reach the function through an alias. With it on, the Function URL (and
+    // therefore CloudFront) and the warmer target the `live` alias; with it
+    // off, they target the function exactly as before. See
+    // config.apiProvisionedConcurrency for the cost and the reasoning.
+    //
+    // fn.currentVersion publishes a new version whenever the code or config
+    // changes, and CloudFormation moves the alias and waits for the new
+    // version's environments to finish INIT before the deploy completes, so a
+    // deploy never leaves the alias pointing at uninitialised environments.
+    const apiTarget: lambda.IFunction =
+      cfg.apiProvisionedConcurrency > 0
+        ? new lambda.Alias(this, "ApiLiveAlias", {
+            aliasName: "live",
+            version: fn.currentVersion,
+            provisionedConcurrentExecutions: cfg.apiProvisionedConcurrency,
+            description: "What CloudFront calls - kept initialised by provisioned concurrency",
+          })
+        : fn;
+
+    const fnUrl = (apiTarget as lambda.Function | lambda.Alias).addFunctionUrl({
       authType:
         cfg.functionUrlAuth === "AWS_IAM"
           ? lambda.FunctionUrlAuthType.AWS_IAM
@@ -989,7 +1009,9 @@ export class AdlmApiStack extends Stack {
         schedule: scheduler.ScheduleExpression.rate(
           Duration.minutes(cfg.warmIntervalMinutes),
         ),
-        target: new schedulerTargets.LambdaInvoke(fn, {
+        // The alias when provisioned concurrency is on, so the ping reaches the
+        // environments that serve traffic and keeps their Mongo socket fresh.
+        target: new schedulerTargets.LambdaInvoke(apiTarget, {
           input: scheduler.ScheduleTargetInput.fromObject({ __warm: true }),
           retryAttempts: 0,
           maxEventAge: Duration.minutes(cfg.warmIntervalMinutes),
