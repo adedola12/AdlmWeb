@@ -9,7 +9,6 @@ import {
   KpiRow,
   Table,
   StatusPill,
-  fmtDate,
   paginateRows,
   RPT,
 } from "./reportKit.jsx";
@@ -53,7 +52,7 @@ export default function ActivityReport({ report }) {
         lede={`A record of every logged action across your projects: creations, contract locks, variations, rate changes, collaborator activity, models and schedule: as at ${dayjs(report.generatedAt).format("DD MMMM YYYY")}.`}
         metaPairs={[
           { label: "Account", value: report.user?.name || report.user?.email },
-          { label: "Organization", value: report.user?.firm || "—" },
+          { label: "Organization", value: report.user?.firm || "–" },
           { label: "Total Events", value: String(report.total ?? items.length) },
           { label: "Shown", value: String(items.length) },
           { label: "Categories", value: String(byCategory.length) },
@@ -97,7 +96,7 @@ export default function ActivityReport({ report }) {
                 },
                 { key: "category", label: "Type", render: (r) => <StatusPill value={r.category} /> },
                 { key: "summary", label: "Activity", render: (r) => r.summary },
-                { key: "projectName", label: "Project", render: (r) => r.projectName || "—" },
+                { key: "projectName", label: "Project", render: (r) => r.projectName || "–" },
                 { key: "actor", label: "By", render: (r) => actorLabel(r) },
               ]}
               rows={chunk}

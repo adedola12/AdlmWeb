@@ -57,8 +57,8 @@ const SCREENS = {
     newLabel: "Open the product editor",
     cols: (A) => [
       { h: "Product", w: "28%", cell: (p) => <AdmTwo top={p.name} under={p.tag} /> },
-      { h: "Monthly", num: true, cell: (p) => (p.monthly ? money(p.monthly) : <AdmDim>—</AdmDim>) },
-      { h: "Yearly", num: true, cell: (p) => (p.yearly ? money(p.yearly) : <AdmDim>—</AdmDim>) },
+      { h: "Monthly", num: true, cell: (p) => (p.monthly ? money(p.monthly) : <AdmDim>–</AdmDim>) },
+      { h: "Yearly", num: true, cell: (p) => (p.yearly ? money(p.yearly) : <AdmDim>–</AdmDim>) },
       { h: "Install", num: true, cell: (p) => (p.install ? money(p.install) : <AdmDim>free</AdmDim>) },
       {
         h: "Latest installer",
@@ -212,7 +212,7 @@ SCREENS.saved = {
   cols: () => [
     { h: "Rate", w: "28%", cell: (r) => <AdmTwo top={r.name} under={r.note} /> },
     { h: "Whose", w: "20%", cell: (r) => <AdmTwo top={r.who} under={r.email} /> },
-    { h: "Unit", cell: (r) => r.unit || <AdmDim>—</AdmDim> },
+    { h: "Unit", cell: (r) => r.unit || <AdmDim>–</AdmDim> },
     {
       h: "Built from",
       cell: (r) => (

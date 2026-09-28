@@ -81,6 +81,50 @@ const AdminLcEvents = lazyScreen(() => import("./pages/AdminLcEvents.jsx"));
 const AdminLcChangelogs = lazyScreen(() => import("./pages/AdminLcChangelogs.jsx"));
 const AdminLcShowcase = lazyScreen(() => import("./pages/AdminLcShowcase.jsx"));
 const AdminLcFreebies = lazyScreen(() => import("./pages/AdminLcFreebies.jsx"));
+import AdminToday from "./pages/AdminToday.jsx";
+import AdminPurchases from "./pages/AdminPurchases.jsx";
+import AdminInstallationsQueue from "./pages/AdminInstallationsQueue.jsx";
+import AdminPeople from "./pages/AdminPeople.jsx";
+import AdminEnrolments from "./pages/AdminEnrolments.jsx";
+import AdminSubmissions from "./pages/AdminSubmissions.jsx";
+import AdminFollowUpsDesk from "./pages/AdminFollowUpsDesk.jsx";
+import AdminDsOrganisations from "./pages/AdminDsOrganisations.jsx";
+import AdminDsRoles from "./pages/AdminDsRoles.jsx";
+import AdminDsSupport from "./pages/AdminDsSupport.jsx";
+import AdminDsSubscriptions from "./pages/AdminDsSubscriptions.jsx";
+import AdminDsEntitlements from "./pages/AdminDsEntitlements.jsx";
+import AdminDsQuotations from "./pages/AdminDsQuotations.jsx";
+import AdminDsInvoices from "./pages/AdminDsInvoices.jsx";
+import AdminDsCoupons from "./pages/AdminDsCoupons.jsx";
+import AdminCatProducts from "./pages/AdminCatProducts.jsx";
+import AdminCatPricing from "./pages/AdminCatPricing.jsx";
+import AdminCatRates from "./pages/AdminCatRates.jsx";
+import AdminCatSaved from "./pages/AdminCatSaved.jsx";
+import AdminRateBuilder from "./pages/AdminRateBuilder.jsx";
+import AdminDocAi from "./pages/AdminDocAi.jsx";
+import AdminDsCertificates from "./pages/AdminDsCertificates.jsx";
+import AdminTimeSaved from "./pages/AdminTimeSaved.jsx";
+import AdminDocAudit from "./pages/AdminDocAudit.jsx";
+import AdminDocTemplates from "./pages/AdminDocTemplates.jsx";
+import AdminDocSaved from "./pages/AdminDocSaved.jsx";
+import AdminDocIssued from "./pages/AdminDocIssued.jsx";
+import AdminDocProduced from "./pages/AdminDocProduced.jsx";
+import AdminDocSystem from "./pages/AdminDocSystem.jsx";
+import AdminWork from "./pages/AdminWork.jsx";
+import AdminStorage from "./pages/AdminStorage.jsx";
+import AdminEmails from "./pages/AdminEmails.jsx";
+import AdminCampaigns from "./pages/AdminCampaigns.jsx";
+import AdminVideos from "./pages/AdminVideos.jsx";
+import AdminBillboard from "./pages/AdminBillboard.jsx";
+import AdminDsWaitlist from "./pages/AdminDsWaitlist.jsx";
+import AdminDsOrgVideos from "./pages/AdminDsOrgVideos.jsx";
+import AdminLcCourses from "./pages/AdminLcCourses.jsx";
+import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
+import AdminLcLessons from "./pages/AdminLcLessons.jsx";
+import AdminLcEvents from "./pages/AdminLcEvents.jsx";
+import AdminLcChangelogs from "./pages/AdminLcChangelogs.jsx";
+import AdminLcShowcase from "./pages/AdminLcShowcase.jsx";
+import AdminLcFreebies from "./pages/AdminLcFreebies.jsx";
 import Signup from "./pages/Signup.jsx";
 const Purchase = lazyScreen(() => import("./pages/Purchase.jsx"));
 const ChangePassword = lazyScreen(() => import("./pages/ChangePassword.jsx"));
@@ -204,6 +248,8 @@ import DsPreviewGate from "./ds/DsPreviewGate.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import PreviewHostGate from "./components/PreviewHostGate.jsx";
 const AdminReleases = lazyScreen(() => import("./pages/AdminReleases.jsx"));
+import AdminReleases from "./pages/AdminReleases.jsx";
+import AdminWork from "./pages/AdminWork.jsx";
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
@@ -1096,6 +1142,16 @@ const router = createBrowserRouter([
         ),
       },
 
+      // ✅ Work board (docs/WORK_BOARD.md): same audience as the release desk
+      {
+        path: "admin/work",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminWork />
+          </AdminRoute>
+        ),
+      },
+
       // ✅ AI spend, per-user allocations & AWS credit burn-down (admin-only)
       {
         path: "admin/ai-usage",
@@ -1248,6 +1304,22 @@ const router = createBrowserRouter([
     ),
     errorElement: <AppError />,
   },
+
+  // The legal pages, public now rather than at launch. Every footer and the
+  // sign-up form link /privacy, /terms and /licensing, and the live site had no
+  // route for any of them, so all three were "Page not found". Only his redesign
+  // has these pages, so they render in its shell, like /certificate: not through
+  // DsPreview, which would turn every link on them into a staff-only /preview
+  // one. Nothing else of the redesign is exposed by this.
+  ...["privacy", "terms", "licensing"].map((slug) => ({
+    path: `/${slug}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
 
   // R21: Beyond BIM and the training calendar, real public routes behind
   // launch flags (config/flags.js). Off: "Coming soon" for the public, the

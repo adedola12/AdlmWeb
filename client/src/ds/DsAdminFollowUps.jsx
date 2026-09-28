@@ -107,7 +107,7 @@ export default function DsAdminFollowUps() {
       h: "Why",
       cell: (f) => (
         <span className="adm-two">
-          <b>{(f.reasons || []).map((r) => REASON[r] || r).join(" · ") || "—"}</b>
+          <b>{(f.reasons || []).map((r) => REASON[r] || r).join(" · ") || "–"}</b>
           <span>
             {(f.products || []).join(" · ") || "no product recorded"}
             {/* Somebody who let one licence lapse but still holds another is
@@ -131,7 +131,7 @@ export default function DsAdminFollowUps() {
             {f.overdue}d
           </AdmChip>
         ) : (
-          <AdmDim>—</AdmDim>
+          <AdmDim>–</AdmDim>
         ),
     },
     {

@@ -12,7 +12,7 @@ function safeDate(d) {
 function fmtDateRange(startAt, endAt) {
   const s = safeDate(startAt);
   const e = safeDate(endAt);
-  if (!s) return "—";
+  if (!s) return "–";
 
   const datePart = s.toLocaleDateString(undefined, {
     weekday: "short",
@@ -176,7 +176,7 @@ export default function FeaturedTrainingBanner() {
 
             <div className="break-words">
               <span className="font-semibold">Location:</span>{" "}
-              {locationLine || "—"}
+              {locationLine || "–"}
             </div>
 
             {countdown ? (

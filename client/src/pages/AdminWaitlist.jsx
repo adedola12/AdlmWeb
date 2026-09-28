@@ -20,7 +20,7 @@ const statusTone = {
 };
 
 function fmtDate(d) {
-  return d ? new Date(d).toLocaleString() : "—";
+  return d ? new Date(d).toLocaleString() : "–";
 }
 
 export default function AdminWaitlist() {
@@ -216,7 +216,7 @@ export default function AdminWaitlist() {
                         <span className="ml-2 text-xs text-slate-500">×{it.submissions}</span>
                       )}
                     </td>
-                    <td className="py-2 pr-3">{it.org || "—"}</td>
+                    <td className="py-2 pr-3">{it.org || "–"}</td>
                     <td className="py-2 pr-3">
                       <select
                         className={`text-xs rounded px-2 py-1 ${statusTone[it.status] || ""}`}
@@ -261,10 +261,10 @@ export default function AdminWaitlist() {
                             <p className="mb-2">
                               <strong>What they measure:</strong>
                               <br />
-                              {it.message || "—"}
+                              {it.message || "–"}
                             </p>
                             <p className="text-xs text-slate-500">
-                              Submitted from {it.sourcePath || "—"}
+                              Submitted from {it.sourcePath || "–"}
                             </p>
                           </div>
                           <div>

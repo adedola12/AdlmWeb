@@ -40,17 +40,19 @@ export function stageOf(p) {
   if ((Number(p?.certificateCount) || 0) > 0) return "valuing";
   if (p?.contractLocked) return "locked";
   if (p?.tenderedAt) return "tendered";
+  // A row whose money is withheld arrives with totalCost zeroed; the server
+  // keeps a plain yes/no `priced` so it still reads at the right stage.
+  if (isMoneyHidden(p) && typeof p?.priced === "boolean") return p.priced ? "priced" : "takeoff";
   return Number(p?.totalCost) > 0 ? "priced" : "takeoff";
 }
 
 /**
  * Is this row's money being withheld from this reader?
  *
- * GET /me/projects-rollup sets `moneyHidden` on a project somebody else owns
- * when the reader may not see rates, and zeroes the money it added. It does
- * NOT zero totalCost, valuedAmount or remainingAmount — those predate the
- * flag, other screens read them, and whether to mask them API-wide is a
- * product decision nobody has taken.
+ * GET /me/projects-rollup (and the per-product list) sets `moneyHidden` on a
+ * project somebody else owns when the reader may not see rates, and zeroes
+ * its money, including totalCost, valuedAmount and remainingAmount (masked
+ * since 27 Sep 2026; before that those three leaked).
  *
  * So the screens draw the line themselves: wherever a row says its money is
  * hidden, the figure is an en dash and the row is left out of the totals. A

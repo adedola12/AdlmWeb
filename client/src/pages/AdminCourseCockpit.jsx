@@ -12,7 +12,7 @@ import { useAuth } from "../store.jsx";
 
 function hours(sec) {
   const s = Number(sec || 0);
-  if (!s) return "—";
+  if (!s) return "–";
   if (s < 3600) return `${Math.round(s / 60)}m`;
   return `${(s / 3600).toFixed(1)}h`;
 }
@@ -195,7 +195,7 @@ export default function AdminCourseCockpit() {
                         ) : null}
                       </td>
                       <td className="py-2 pr-3 tabular-nums">
-                        {s.quizAvgScore === null ? "—" : `${s.quizAvgScore}%`}
+                        {s.quizAvgScore === null ? "–" : `${s.quizAvgScore}%`}
                       </td>
                       <td className="py-2 pr-3 text-slate-600">{ago(s.lastSeenAt)}</td>
                       <td className="py-2 text-right">
@@ -222,7 +222,7 @@ export default function AdminCourseCockpit() {
                                     {m.code}
                                   </span>
                                   <span className="shrink-0 tabular-nums text-slate-600">
-                                    {m.watchedSec ? hours(m.watchedSec) : "—"}
+                                    {m.watchedSec ? hours(m.watchedSec) : "–"}
                                     {m.completed ? " ✓" : ""}
                                   </span>
                                 </div>

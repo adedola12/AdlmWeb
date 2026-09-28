@@ -168,9 +168,9 @@ export default function DsAdminYoutube() {
       h: "Recommended",
       cell: (r) =>
         r.recommended ? (
-          <span>{PRODUCT_NAMES[r.productKey] || (r.productKey === "*" ? "every product" : r.productKey || "—")}</span>
+          <span>{PRODUCT_NAMES[r.productKey] || (r.productKey === "*" ? "every product" : r.productKey || "–")}</span>
         ) : (
-          <AdmDim>—</AdmDim>
+          <AdmDim>–</AdmDim>
         ),
     },
     { h: "Length", num: true, cell: (r) => formatDuration(r.durationSec) || <AdmDim>unknown</AdmDim> },
@@ -182,7 +182,7 @@ export default function DsAdminYoutube() {
       h: "On YouTube",
       cell: (r) => {
         const st = stateOf(r);
-        if (!st) return <AdmDim>{avail ? "—" : "not checked"}</AdmDim>;
+        if (!st) return <AdmDim>{avail ? "–" : "not checked"}</AdmDim>;
         const [tone, label] = AVAIL[st] || ["", st];
         return <AdmChip tone={tone}>{label}</AdmChip>;
       },
@@ -229,7 +229,7 @@ export default function DsAdminYoutube() {
       <div className="adm-kpis">
         <div className="adm-kpi">
           <span className="k">On the channel catalogue</span>
-          <b>{d ? s.catalogue : "—"}</b>
+          <b>{d ? s.catalogue : "–"}</b>
           <span className="ds-sub">
             {s.pulledOn ? `Pulled ${when(s.pulledOn)}` : "No pull date recorded"}
           </span>
@@ -237,19 +237,19 @@ export default function DsAdminYoutube() {
         <div className="adm-kpi">
           <span className="k">In the library</span>
           <b>
-            {d ? s.published : "—"}
+            {d ? s.published : "–"}
             <span className="u">published</span>
           </b>
           <span className="ds-sub">{d ? `${s.library} rows · ${s.recommended} recommended` : ""}</span>
         </div>
         <div className={`adm-kpi${s.held || s.missing ? " warn" : ""}`}>
           <span className="k">Not yet showing</span>
-          <b>{d ? s.held + s.missing : "—"}</b>
+          <b>{d ? s.held + s.missing : "–"}</b>
           <span className="ds-sub">{d ? `${s.held} held · ${s.missing} not added yet` : ""}</span>
         </div>
         <div className={`adm-kpi${s.unfiled || s.orphans || s.shelfDiffers ? " warn" : ""}`}>
           <span className="k">Needs a look</span>
-          <b>{d ? s.unfiled + s.orphans + s.shelfDiffers : "—"}</b>
+          <b>{d ? s.unfiled + s.orphans + s.shelfDiffers : "–"}</b>
           <span className="ds-sub">
             {d ? `${s.unfiled} unfiled · ${s.orphans} not in catalogue · ${s.shelfDiffers} shelf differs` : ""}
           </span>
@@ -269,7 +269,7 @@ export default function DsAdminYoutube() {
                   { h: "Shelf", cell: (x) => <AdmTwo top={x.label} under={x.productKey === "*" ? "every product page" : PRODUCT_NAMES[x.productKey] ? `${PRODUCT_NAMES[x.productKey]} page` : ""} /> },
                   { h: "Videos", num: true, cell: (x) => x.total },
                   { h: "Published", num: true, cell: (x) => (x.published === x.total ? x.published : <AdmChip tone="due">{x.published}</AdmChip>) },
-                  { h: "Recommended", num: true, cell: (x) => x.recommended || <AdmDim>—</AdmDim> },
+                  { h: "Recommended", num: true, cell: (x) => x.recommended || <AdmDim>–</AdmDim> },
                 ]}
                 rows={d.shelves}
                 rowKey={(x) => x.slug || "unfiled"}
