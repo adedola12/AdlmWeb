@@ -22,7 +22,7 @@ import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
 import { runVideoPoll } from "./util/videoNotifier.js";
-import { ensureRolesSeeded } from "./util/rbac.js";
+import { ensureRolesSeededOnce } from "./util/rbac.js";
 import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
@@ -645,8 +645,10 @@ export function bootstrap() {
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission
     // cache before serving. Non-fatal: a seed failure logs but doesn't block boot.
+    // On Lambda both the connect above and this seed are usually already in
+    // flight (lambda.js startDatabaseEarly), so these awaits reuse that work.
     try {
-      await ensureRolesSeeded();
+      await ensureRolesSeededOnce();
     } catch (e) {
       console.error("[rbac] role seed failed:", e?.message || e);
     }

@@ -10,7 +10,11 @@ import { STAFF_GRANTABLE_KEYS } from "../config/permissions.js";
 let roleCache = new Map();
 
 export async function loadRoleCache() {
-  const roles = await Role.find({}).lean();
+  return setRoleCache(await Role.find({}).lean());
+}
+
+// Build the cache from role rows already in hand (lean or hydrated).
+function setRoleCache(roles) {
   const next = new Map();
   for (const r of roles) {
     next.set(r.key, {
@@ -71,6 +75,21 @@ export function rolePermissionList(roleKey, allAreaKeys) {
   return [...a.perms];
 }
 
+// ensureRolesSeeded() once per process. On Lambda the seed starts while the
+// app is still importing (lambda.js startDatabaseEarly) and bootstrap() then
+// awaits the same run instead of repeating its two Atlas round trips. A failed
+// run is forgotten, so the next caller tries again.
+let _seedOnce = null;
+export function ensureRolesSeededOnce() {
+  if (!_seedOnce) {
+    _seedOnce = ensureRolesSeeded().catch((err) => {
+      _seedOnce = null;
+      throw err;
+    });
+  }
+  return _seedOnce;
+}
+
 // Idempotent seed of the built-in roles. Creates missing rows; for existing
 // rows only repairs the system/superadmin flags — never clobbers an admin's
 // edits to mini_admin's (or any) permissions.
@@ -128,18 +147,22 @@ export async function ensureRolesSeeded() {
     },
   ];
 
-  // One query for all three, not one each. This runs on every Lambda cold
-  // start, where each round trip to Atlas costs ~400-600ms — measured at ~1.9s
-  // for the whole function against a ~4s cold request. The seeding is
-  // idempotent and almost always finds everything already present, so the
-  // sequential findOne()s were pure latency on all but the first-ever run.
-  const existingRoles = await Role.find({ key: { $in: defaults.map((d) => d.key) } });
-  const byKey = new Map(existingRoles.map((r) => [r.key, r]));
+  // ONE query for everything. This runs on every Lambda cold start, where
+  // each round trip to Atlas costs ~400-600ms. It used to be two: the built-in
+  // roles (to repair them) and then every role again (for the cache). Reading
+  // every role once serves both, since the built-ins are a subset and the
+  // collection is a handful of rows. The seed is idempotent and almost always
+  // finds everything present, so on all but the first-ever run this is the
+  // only database work it does.
+  const allRoles = await Role.find({});
+  const byKey = new Map(allRoles.map((r) => [r.key, r]));
+  let created = false;
 
   for (const d of defaults) {
     const existing = byKey.get(d.key);
     if (!existing) {
       await Role.create(d);
+      created = true;
       continue;
     }
     let changed = false;
@@ -172,5 +195,9 @@ export async function ensureRolesSeeded() {
     if (changed) await existing.save();
   }
 
-  await loadRoleCache();
+  // Repairs were made on these same documents, so they are already current.
+  // Only a newly created role is missing from them; re-read in that case
+  // (the first-ever boot, or a new built-in role being added).
+  if (created) await loadRoleCache();
+  else setRoleCache(allRoles);
 }
