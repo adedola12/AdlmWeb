@@ -1251,6 +1251,22 @@ const router = createBrowserRouter([
     errorElement: <AppError />,
   },
 
+  // The legal pages, public now rather than at launch. Every footer and the
+  // sign-up form link /privacy, /terms and /licensing, and the live site had no
+  // route for any of them, so all three were "Page not found". Only his redesign
+  // has these pages, so they render in its shell, like /certificate: not through
+  // DsPreview, which would turn every link on them into a staff-only /preview
+  // one. Nothing else of the redesign is exposed by this.
+  ...["privacy", "terms", "licensing"].map((slug) => ({
+    path: `/${slug}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
+
   // R21: Beyond BIM and the training calendar, real public routes behind
   // launch flags (config/flags.js). Off: "Coming soon" for the public, the
   // real page for staff.
