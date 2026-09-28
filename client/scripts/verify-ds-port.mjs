@@ -24,7 +24,9 @@ import { resolveHref } from "../src/lib/dsRoutes.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT = path.resolve(here, "..");
-const SITE = path.resolve(CLIENT, "../../ADLMWebNewUI/site");
+const SITE = process.env.DS_SITE
+  ? path.resolve(process.env.DS_SITE)
+  : path.resolve(CLIENT, "../../ADLMWebNewUI/site");
 
 let failures = 0;
 const fail = (msg) => {

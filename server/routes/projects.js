@@ -680,6 +680,11 @@ import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
 import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
 import {
+  collectBudgetEdits,
+  reapplyBudgetEdits,
+  preserveBudgetUserEdits,
+} from "../util/budgetUserEdits.js";
+import {
   sanitizeResourceItems,
   applyResourceRows,
   buildResourcesFromRate,
@@ -2634,6 +2639,16 @@ async function saveProjectFull(req, res) {
     // transition; budgetItems[] is the canonical source for the Budget tab.
     if (mats.length) {
       try {
+        // What the QS owns on these rows, read BEFORE the plugin's list
+        // replaces them. Procurement marks, the buy-schedule slot and any
+        // rate typed on the website exist nowhere else: this assignment used
+        // to drop them outright, and because the GET heal rebuilds its own
+        // edit map FROM budgetItems, by the next open there was nothing left
+        // to recover them from. deriveBillRatesFromBudget runs three lines
+        // below, so a lost budget rate moved the BILL too — the QS's pricing
+        // reverted to the plugin's without anyone being told.
+        const previousBudget = takeoffRes.project.budgetItems || [];
+
         const budget = sanitizeBudgetItems(
           materialsRes ? materialsRes.project.items : mats,
         );
@@ -2641,10 +2656,19 @@ async function saveProjectFull(req, res) {
         // so material + labour bundle under the right line, then derive the
         // bill rates from the priced build-up before reconciling progress.
         backfillBudgetLinks(takeoffRes.project.items, budget);
-        takeoffRes.project.budgetItems = ensureBillItemCoverage(
+        const freshBudget = ensureBillItemCoverage(
           takeoffRes.project.items,
           budget,
         );
+        // After coverage, so the synthesised Labour/Material placeholders get
+        // their edits back too — the same order the GET heal uses.
+        const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+        if (restored.procurement || restored.pricing) {
+          console.log(
+            `[full] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+          );
+        }
+        takeoffRes.project.budgetItems = freshBudget;
         deriveBillRatesFromBudget(takeoffRes.project);
         reconcileItemsFromBudget(takeoffRes.project);
         await takeoffRes.project.save();
@@ -3191,13 +3215,9 @@ async function getProject(req, res) {
       const hasMaterials =
         Array.isArray(project.materialItems) && project.materialItems.length;
 
-      const editKey = (b) =>
-        [
-          Number(b?.sn) || 0,
-          String(b?.materialName || b?.description || "").trim().toLowerCase(),
-          String(b?.unit || "").trim().toLowerCase(),
-          String(b?.componentKind || "").trim().toLowerCase(),
-        ].join("|");
+      // The key this used to build inline now lives in util/budgetUserEdits.js
+      // with the rest of the preservation, so the plugin save path and this
+      // one cannot drift apart again.
       const linkSig = (list) =>
         (list || [])
           .map(
@@ -3211,8 +3231,7 @@ async function getProject(req, res) {
           .join("|");
 
       if (hasMaterials) {
-        const edits = new Map();
-        for (const b of currentBudget) edits.set(editKey(b), b);
+        const edits = collectBudgetEdits(currentBudget);
 
         let fresh = sanitizeBudgetItems(project.materialItems);
         backfillBudgetLinks(project.items, fresh);
@@ -3220,19 +3239,13 @@ async function getProject(req, res) {
         // Material line — synthesise the gaps so each card is complete.
         fresh = ensureBillItemCoverage(project.items, fresh);
         // Re-apply user edits (procurement + pricing) onto the rebuilt list,
-        // including the synthetic placeholders.
-        for (const b of fresh) {
-          const prev = edits.get(editKey(b));
-          if (!prev) continue;
-          if (prev.procured) {
-            b.procured = true;
-            b.procuredAt = prev.procuredAt || b.procuredAt;
-          }
-          if (Number(prev.procuredPercent)) b.procuredPercent = prev.procuredPercent;
-          if (Number(prev.rate)) b.rate = prev.rate;
-          if (Number(prev.overheadPercent)) b.overheadPercent = prev.overheadPercent;
-          if (Number(prev.profitPercent)) b.profitPercent = prev.profitPercent;
-        }
+        // including the synthetic placeholders. Shared with the plugin save
+        // path, which used to do none of this — see util/budgetUserEdits.js.
+        // Matching is unchanged apart from being tried on billIdentity first,
+        // so this can only restore more than the sn key did alone; it also
+        // now carries targetDate, supplier and notes, which this path was
+        // dropping on every rebuild.
+        reapplyBudgetEdits(fresh, edits);
 
         const changed =
           currentBudget.length !== fresh.length ||

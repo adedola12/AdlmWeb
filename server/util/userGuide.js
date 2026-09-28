@@ -27,21 +27,39 @@ export function resolveUserGuideUrl(configuredUrl) {
 // guide can be attached without reaching across to the separately-deployed
 // frontend. Cached after the first read (~2.4 MB) and never fatal: if the file
 // is missing the email still goes out with the download link.
-const GUIDE_FILE = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "assets",
-  USER_GUIDE_FILENAME,
-);
+//
+// Two layouts. In the source tree this module is server/util/userGuide.js and
+// the PDF is server/assets/<file>, one level up. On Lambda the whole API is
+// ONE bundled file, /var/task/index.mjs, so import.meta.url is the bundle and
+// "one level up" is /var/assets, which does not exist. The CDK stack
+// (infra/lib/adlm-api-stack.ts, commandHooks.afterBundling) copies the PDF to
+// assets/<file> beside the bundle, so the bundle looks in its own directory.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+export const USER_GUIDE_CANDIDATES = [
+  path.join(HERE, "..", "assets", USER_GUIDE_FILENAME), // source tree
+  path.join(HERE, "assets", USER_GUIDE_FILENAME), // Lambda bundle
+];
+
+export function resolveUserGuideFile(
+  candidates = USER_GUIDE_CANDIDATES,
+  exists = fs.existsSync,
+) {
+  return candidates.find((p) => exists(p)) || null;
+}
 
 let cachedAttachment;
 
 export function getUserGuideAttachment() {
   if (cachedAttachment !== undefined) return cachedAttachment;
   try {
+    const file = resolveUserGuideFile();
+    if (!file) {
+      throw new Error(`not found at ${USER_GUIDE_CANDIDATES.join(" or ")}`);
+    }
     cachedAttachment = {
       filename: USER_GUIDE_FILENAME,
-      content: fs.readFileSync(GUIDE_FILE).toString("base64"),
+      content: fs.readFileSync(file).toString("base64"),
     };
   } catch (e) {
     console.warn("[userGuide] guide PDF not attachable:", e?.message || e);

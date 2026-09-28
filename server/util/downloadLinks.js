@@ -50,6 +50,11 @@ export function directLink(url) {
 const present = new Map();
 const PRESENT_TTL_MS = 5 * 60 * 1000;
 
+/** Drop the cached answer for `key`, so a fresh upload is served at once. */
+export function forgetStored(key) {
+  present.delete(key);
+}
+
 async function storedAt(key, store, now) {
   const hit = present.get(key);
   if (hit && now - hit.at < PRESENT_TTL_MS) return hit.ok;

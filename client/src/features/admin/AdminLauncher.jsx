@@ -40,6 +40,7 @@ const TOOLS = [
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },
   { area: "aiusage", to: "/admin/ai-usage", label: "AI Usage", desc: "AI spend, quotas & AWS credit", icon: FiCpu },
   { area: "releases", to: "/admin/releases", label: "Release sign-off", desc: "Approve updates before customers get them", icon: FiShield },
+  { area: "releases", to: "/admin/work", label: "Work board", desc: "What is being built, and approval before a new feature starts", icon: FiShield },
 ];
 
 export default function AdminLauncher({ title = "Admin tools", compact = false }) {

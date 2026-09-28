@@ -71,6 +71,7 @@ import {
 } from "../models/ReleaseNotice.js";
 import { sendViaSesOnce, getSesAccount, isRetryableSesError } from "./sesTransport.js";
 import { mapWithPool } from "./sendPool.js";
+import { indexesReady } from "./indexSync.js";
 import { productUpdatesUnsubscribeUrl, assertUnsubscribeLinksWork } from "./campaigns.js";
 import {
   canonicalVersion,
@@ -1271,8 +1272,9 @@ export const mongoStore = {
   /** Insert once; a second insert of the same key returns the first. */
   async insertNotice(doc) {
     // The unique index is the guarantee, so it must exist before the first
-    // insert on a new collection, not whenever autoIndex gets round to it.
-    await ReleaseNotice.init();
+    // insert on a new collection. The API connects with autoIndex off
+    // (util/mongoTimeouts.js), so Model.init() alone would not build it.
+    await indexesReady(ReleaseNotice);
     try {
       const created = await ReleaseNotice.create(doc);
       return { notice: created.toObject(), created: true };
@@ -1339,7 +1341,7 @@ export const mongoStore = {
     const ordered = [...rows].sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1));
     // Same reason as insertNotice: two enrolments racing on a brand-new
     // collection must meet the unique (noticeKey, emailHash) index.
-    await ReleaseNoticeRecipient.init();
+    await indexesReady(ReleaseNoticeRecipient);
     for (let i = 0; i < ordered.length; i += 500) {
       try {
         await ReleaseNoticeRecipient.insertMany(ordered.slice(i, i + 500), { ordered: false });

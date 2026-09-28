@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveDownload, directLink, driveFileId, _resetDownloadCache } from "./downloadLinks.js";
+import { resolveDownload, directLink, driveFileId, _resetDownloadCache, forgetStored } from "./downloadLinks.js";
 
 const settings = {
   mobileAppUrl: "https://drive.google.com/file/d/1Pr16vXqTRAOgQrB2Fk3GzZnyMBPiHPRO/view?usp=sharing",
@@ -48,24 +48,21 @@ test("Drive links are recognised in their usual shapes", () => {
   assert.equal(directLink("https://cdn.adlmstudio.net/x.apk"), "https://cdn.adlmstudio.net/x.apk");
 });
 
-test("R3: the Installer Hub link, stored or fail-safe, needs allowed: true", async () => {
+test("an app uploaded from Site Settings is served at once, not after the cache runs out", async () => {
   _resetDownloadCache();
-  const none = { headFile: async () => null, presignDownload: async () => assert.fail("not stored") };
-  const fallback = await resolveDownload("installer-hub", { settings, store: none });
-  assert.equal(fallback.url, "");
-  assert.equal(fallback.source, "setting");
-  assert.equal((await resolveDownload("installer-hub", { settings, store: none, allowed: "yes" })).url, "");
-
-  _resetDownloadCache();
-  const stored = {
-    headFile: async () => ({ size: 5 }),
-    presignDownload: async () => assert.fail("a locked caller must not be signed a link"),
+  let stored = false;
+  const store = {
+    headFile: async () => (stored ? { size: 70739646 } : null),
+    presignDownload: async ({ key }) => `https://signed/${key}`,
   };
-  const s = await resolveDownload("installer-hub", { settings, store: stored });
-  assert.equal(s.url, "");
-  assert.equal(s.source, "store");
-
-  // The Android app is not gated: it signs in by itself.
-  _resetDownloadCache();
-  assert.notEqual((await resolveDownload("android", { settings, store: none })).url, "");
+  const t = 1_000_000;
+  assert.equal((await resolveDownload("android", { settings, store, now: t })).source, "drive");
+  stored = true;
+  // Still cached as absent a minute later...
+  assert.equal((await resolveDownload("android", { settings, store, now: t + 60_000 })).source, "drive");
+  // ...until /admin/media/apk-uploaded forgets it.
+  forgetStored("apps/adlm-android.apk");
+  const r = await resolveDownload("android", { settings, store, now: t + 60_000 });
+  assert.equal(r.source, "store");
+  assert.equal(r.url, "https://signed/apps/adlm-android.apk");
 });

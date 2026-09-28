@@ -327,7 +327,7 @@ export default function AdminUsersLite() {
                         <td className="px-4 py-3">{r.email || "-"}</td>
                         <td className="px-4 py-3">
                           <div className="max-w-[520px] break-words">
-                            {r.attemptedItem || "—"}
+                            {r.attemptedItem || "–"}
                           </div>
                         </td>
                       </tr>

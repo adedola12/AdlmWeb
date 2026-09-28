@@ -308,10 +308,10 @@ export default function ArchiCADBoQTable({
                                   to={`/archicad/${projectId}/element/${encodeURIComponent(singleGuid)}`}
                                   className="text-adlm-blue-700 hover:underline dark:text-adlm-blue-300"
                                 >
-                                  {line?.description || "—"}
+                                  {line?.description || "–"}
                                 </Link>
                               ) : (
-                                <span>{line?.description || "—"}</span>
+                                <span>{line?.description || "–"}</span>
                               )}
                               {guids.length > 1 ? (
                                 <button

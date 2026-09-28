@@ -152,10 +152,10 @@ export default function AdminYoutubeStatus() {
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="On the channel catalogue" value={d ? s.catalogue : "—"} sub={s.pulledOn ? `Pulled ${when(s.pulledOn)}` : ""} />
-        <Kpi label="Published in the library" value={d ? s.published : "—"} sub={d ? `${s.library} rows · ${s.recommended} recommended` : ""} />
-        <Kpi label="Not yet showing" value={d ? s.held + s.missing : "—"} sub={d ? `${s.held} held · ${s.missing} not added yet` : ""} warn={!!(s.held || s.missing)} />
-        <Kpi label="Needs a look" value={d ? s.unfiled + s.orphans + s.shelfDiffers : "—"} sub={d ? `${s.unfiled} unfiled · ${s.orphans} not in catalogue · ${s.shelfDiffers} shelf differs` : ""} warn={!!(s.unfiled || s.orphans || s.shelfDiffers)} />
+        <Kpi label="On the channel catalogue" value={d ? s.catalogue : "–"} sub={s.pulledOn ? `Pulled ${when(s.pulledOn)}` : ""} />
+        <Kpi label="Published in the library" value={d ? s.published : "–"} sub={d ? `${s.library} rows · ${s.recommended} recommended` : ""} />
+        <Kpi label="Not yet showing" value={d ? s.held + s.missing : "–"} sub={d ? `${s.held} held · ${s.missing} not added yet` : ""} warn={!!(s.held || s.missing)} />
+        <Kpi label="Needs a look" value={d ? s.unfiled + s.orphans + s.shelfDiffers : "–"} sub={d ? `${s.unfiled} unfiled · ${s.orphans} not in catalogue · ${s.shelfDiffers} shelf differs` : ""} warn={!!(s.unfiled || s.orphans || s.shelfDiffers)} />
       </div>
 
       {d && (
@@ -172,7 +172,7 @@ export default function AdminYoutubeStatus() {
                     <td className="py-1.5">{x.label}<span className="ml-2 text-xs text-slate-500">{x.productKey === "*" ? "every product page" : PRODUCT_NAMES[x.productKey] ? `${PRODUCT_NAMES[x.productKey]} page` : ""}</span></td>
                     <td className="py-1.5 text-right tabular-nums">{x.total}</td>
                     <td className="py-1.5 text-right tabular-nums">{x.published === x.total ? x.published : <Chip tone="due">{x.published}</Chip>}</td>
-                    <td className="py-1.5 text-right tabular-nums">{x.recommended || "—"}</td>
+                    <td className="py-1.5 text-right tabular-nums">{x.recommended || "–"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -235,10 +235,10 @@ export default function AdminYoutubeStatus() {
                       </td>
                       <td className="py-2 pr-3">{r.filed ? <>{r.sectionLabel}{r.shelfDiffers && <div className="text-xs text-amber-600">catalogue says {r.catalogueSection}</div>}</> : <Chip tone="due">unfiled</Chip>}</td>
                       <td className="py-2 pr-3">{!r.inLibrary ? <Chip tone="bad">not added</Chip> : !r.published ? <Chip tone="due">held</Chip> : <Chip tone="good">published</Chip>}</td>
-                      <td className="py-2 pr-3">{r.recommended ? PRODUCT_NAMES[r.productKey] || (r.productKey === "*" ? "every product" : r.productKey || "—") : <span className="text-slate-400">—</span>}</td>
+                      <td className="py-2 pr-3">{r.recommended ? PRODUCT_NAMES[r.productKey] || (r.productKey === "*" ? "every product" : r.productKey || "–") : <span className="text-slate-400">–</span>}</td>
                       <td className="py-2 pr-3 text-right tabular-nums">{formatDuration(r.durationSec) || <span className="text-slate-400">unknown</span>}</td>
                       <td className="py-2 pr-3">{r.inCatalogue ? when(r.publishedAt) || "listed" : <Chip tone="due">not in catalogue</Chip>}</td>
-                      <td className="py-2">{st ? <Chip tone={tone}>{label}</Chip> : <span className="text-slate-400">{avail ? "—" : "not checked"}</span>}</td>
+                      <td className="py-2">{st ? <Chip tone={tone}>{label}</Chip> : <span className="text-slate-400">{avail ? "–" : "not checked"}</span>}</td>
                     </tr>
                   );
                 })}

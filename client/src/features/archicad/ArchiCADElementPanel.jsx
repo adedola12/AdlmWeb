@@ -50,7 +50,7 @@ function KV({ label, value, mono = false }) {
           mono ? "break-all font-mono text-xs" : "tabular-nums"
         }`}
       >
-        {value ?? "—"}
+        {value ?? "–"}
       </span>
     </div>
   );
@@ -159,16 +159,16 @@ export default function ArchiCADElementPanel({ element, units = "metric", projec
           title="Rate provenance"
           icon={<FaTag className="text-adlm-orange" />}
         >
-          <KV label="Rate" value={rate.name || "—"} />
+          <KV label="Rate" value={rate.name || "–"} />
           <KV
             label="Source"
-            value={RATE_SOURCE_LABELS[rate.rateSource] || rate.rateSource || "—"}
+            value={RATE_SOURCE_LABELS[rate.rateSource] || rate.rateSource || "–"}
           />
-          <KV label="Section" value={rate.section || "—"} />
+          <KV label="Section" value={rate.section || "–"} />
           {rate.matchScore != null ? (
             <KV label="Match score" value={formatQty(rate.matchScore, 2)} />
           ) : null}
-          <KV label="Rate id" value={rate.rateId || "—"} mono />
+          <KV label="Rate id" value={rate.rateId || "–"} mono />
         </SectionCard>
 
         {/* Labour provenance */}
@@ -178,7 +178,7 @@ export default function ArchiCADElementPanel({ element, units = "metric", projec
         >
           <KV
             label="Method"
-            value={LABOUR_METHOD_LABELS[labour.method] || labour.method || "—"}
+            value={LABOUR_METHOD_LABELS[labour.method] || labour.method || "–"}
           />
           <KV
             label="Labour unit rate"
@@ -211,10 +211,10 @@ export default function ArchiCADElementPanel({ element, units = "metric", projec
                         className="border-b border-slate-100 last:border-0 dark:border-adlm-dark-border/60"
                       >
                         <td className="py-1.5 pr-2 text-slate-900 dark:text-adlm-dark-text">
-                          {g?.name || "—"}
+                          {g?.name || "–"}
                         </td>
                         <td className="py-1.5 pr-2 text-slate-500 dark:text-adlm-dark-muted">
-                          {g?.unit || "—"}
+                          {g?.unit || "–"}
                         </td>
                         <td className="py-1.5 pr-2 text-right tabular-nums text-slate-900 dark:text-adlm-dark-text">
                           {formatQty(g?.qtyPerUnit)}

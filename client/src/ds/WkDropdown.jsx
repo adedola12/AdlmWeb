@@ -30,7 +30,7 @@ export default function WkDropdown({ label, value, options, onPick }) {
         onClick={() => setOpen((v) => !v)}
       >
         <span className="l">{label}</span>
-        <span className="v">{current?.label || "—"}</span>
+        <span className="v">{current?.label || "–"}</span>
         <i />
       </button>
       {open ? (

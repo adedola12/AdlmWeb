@@ -8,7 +8,7 @@
 // HIS TWO RULES, BOTH KEPT
 //
 // A dash is not a zero. `n: null` means we do not record the thing at all and
-// prints "—"; `n: 0` means we do record it and it is empty. The row for a
+// prints "–"; `n: 0` means we do record it and it is empty. The row for a
 // queue that does not exist is dimmed and says "not built" rather than
 // borrowing a zero, which would read as calm.
 //
@@ -72,7 +72,7 @@ function Bars({ rows, max, fmt }) {
               style={{ width: r.v == null ? 0 : `${Math.max(1.5, (r.v / max) * 100)}%` }}
             />
           </span>
-          <span className="adm-bar-v">{r.v == null ? "—" : fmt(r.v)}</span>
+          <span className="adm-bar-v">{r.v == null ? "–" : fmt(r.v)}</span>
         </div>
       ))}
     </div>
@@ -83,7 +83,7 @@ function Bars({ rows, max, fmt }) {
 function Job({ q }) {
   const inner = (
     <>
-      <span className={`adm-job-n${q.n ? "" : " zero"}`}>{q.n == null ? "—" : q.n}</span>
+      <span className={`adm-job-n${q.n ? "" : " zero"}`}>{q.n == null ? "–" : q.n}</span>
       <span className="adm-job-t">
         <b>{q.title}</b>
         <span>{q.note}</span>

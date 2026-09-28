@@ -22,16 +22,40 @@ test("the API fails a stalled operation well inside Lambda's 60s kill", () => {
 test("either limit can be tuned or switched off from SSM without a code change", () => {
   assert.deepEqual(
     apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "15000", MONGO_WAIT_QUEUE_TIMEOUT_MS: "5000" }),
-    { socketTimeoutMS: 15000, waitQueueTimeoutMS: 5000 },
+    { socketTimeoutMS: 15000, waitQueueTimeoutMS: 5000, autoIndex: false, autoCreate: false },
   );
   // 0 means "no limit", i.e. the driver default, so the option is left out.
-  assert.deepEqual(apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "0", MONGO_WAIT_QUEUE_TIMEOUT_MS: "0" }), {});
+  assert.deepEqual(apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "0", MONGO_WAIT_QUEUE_TIMEOUT_MS: "0" }), {
+    autoIndex: false,
+    autoCreate: false,
+  });
 });
 
 test("a nonsense value falls back to the default rather than disabling the limit", () => {
   const o = apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "soon", MONGO_WAIT_QUEUE_TIMEOUT_MS: "-1" });
   assert.equal(o.socketTimeoutMS, 25000);
   assert.equal(o.waitQueueTimeoutMS, 10000);
+});
+
+// ── No index building from API containers ──────────────────────────────────
+
+test("the API connects without building indexes or collections", () => {
+  // Each cold container used to queue ~324 createCollection/createIndex
+  // commands ahead of real queries; a deploy's wave of them caused the 503s.
+  const o = apiMongoOptions({});
+  assert.equal(o.autoIndex, false);
+  assert.equal(o.autoCreate, false);
+});
+
+test("MONGO_AUTO_INDEX=true restores mongoose's default from SSM", () => {
+  for (const v of ["true", "1", "yes", " TRUE "]) {
+    const o = apiMongoOptions({ MONGO_AUTO_INDEX: v });
+    assert.equal("autoIndex" in o, false, v);
+    assert.equal("autoCreate" in o, false, v);
+  }
+  for (const v of ["false", "0", "", undefined]) {
+    assert.equal(apiMongoOptions({ MONGO_AUTO_INDEX: v }).autoIndex, false, String(v));
+  }
 });
 
 // ── Which errors mean "the database did not answer" ────────────────────────
@@ -82,6 +106,10 @@ test("connectDB hands the API's options to mongoose, and nothing extra otherwise
   assert.equal(seen[0].waitQueueTimeoutMS, 10000);
   // The existing options are untouched.
   assert.equal(seen[0].serverSelectionTimeoutMS, 10000);
+  assert.equal(seen[0].autoIndex, false);
   assert.equal(seen[1].socketTimeoutMS, undefined);
   assert.equal(seen[1].waitQueueTimeoutMS, undefined);
+  // Jobs and scripts keep mongoose's index building.
+  assert.equal(seen[1].autoIndex, undefined);
+  assert.equal(seen[1].autoCreate, undefined);
 });

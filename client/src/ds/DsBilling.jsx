@@ -86,7 +86,7 @@ const linkBtn = {
 function periodOf(inv) {
   const a = inv.invoiceDate || inv.createdAt;
   const b = inv.dueDate;
-  if (!a) return "—";
+  if (!a) return "–";
   const m = (d) => new Date(d).toLocaleDateString("en-GB", { month: "short" });
   return b ? `${m(a)} to ${m(b)}` : m(a);
 }
@@ -501,7 +501,7 @@ export default function DsBilling() {
                       };
                       return (
                         <tr key={inv._id}>
-                          <td className="num">{inv.invoiceNumber || "—"}</td>
+                          <td className="num">{inv.invoiceNumber || "–"}</td>
                           <td className="num">{shortDate(inv.invoiceDate || inv.createdAt)}</td>
                           <td>{periodOf(inv)}</td>
                           <td className="num">{money(inv.total, inv.currency || "NGN")}</td>
@@ -655,20 +655,20 @@ export default function DsBilling() {
                     {profile.firmName ||
                       [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
                       user?.email ||
-                      "—"}
+                      "–"}
                   </b>
                 </div>
                 <div>
                   <span>Contact</span>
-                  <b>{profile.email || user?.email || "—"}</b>
+                  <b>{profile.email || user?.email || "–"}</b>
                 </div>
                 <div>
                   <span>Phone</span>
-                  <b>{profile.whatsapp || "—"}</b>
+                  <b>{profile.whatsapp || "–"}</b>
                 </div>
                 <div>
                   <span>Address</span>
-                  <b>{profile.location || profile.state || "—"}</b>
+                  <b>{profile.location || profile.state || "–"}</b>
                 </div>
               </div>
               <Link

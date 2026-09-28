@@ -759,7 +759,7 @@ function renderProposalPdf(doc, p, qrs = {}) {
       .fillColor("#ffffff")
       .font("Helvetica-Bold")
       .fontSize(11.5)
-      .text(pdfSafe(value || "—"), cx, cy + 13, { width: colW });
+      .text(pdfSafe(value || "–"), cx, cy + 13, { width: colW });
   };
   cell("Prepared For", firm, M + 24, cardY + 22);
   cell(
@@ -899,19 +899,19 @@ function renderProposalPdf(doc, p, qrs = {}) {
       .fillColor(NAVY)
       .font("Helvetica-Bold")
       .fontSize(9.5)
-      .text(pdfSafe(row.name || "—"), cx + 8, y + 7, { width: cols[0].w - 12 });
+      .text(pdfSafe(row.name || "–"), cx + 8, y + 7, { width: cols[0].w - 12 });
     cx += cols[0].w;
     doc
       .fillColor(INK)
       .font("Helvetica")
       .fontSize(9)
-      .text(rowText || "—", cx + 8, y + 7, { width: cols[1].w - 12 });
+      .text(rowText || "–", cx + 8, y + 7, { width: cols[1].w - 12 });
     cx += cols[1].w;
     doc
       .fillColor(MUTED)
       .font("Helvetica")
       .fontSize(9)
-      .text(pdfSafe(row.platform || "—"), cx + 8, y + 7, {
+      .text(pdfSafe(row.platform || "–"), cx + 8, y + 7, {
         width: cols[2].w - 12,
       });
     cx += cols[2].w;
@@ -919,7 +919,7 @@ function renderProposalPdf(doc, p, qrs = {}) {
       .fillColor(NAVY)
       .font("Helvetica-Bold")
       .fontSize(9)
-      .text(pdfSafe(row.listPrice || "—"), cx + 8, y + 7, {
+      .text(pdfSafe(row.listPrice || "–"), cx + 8, y + 7, {
         width: cols[3].w - 12,
         align: "right",
       });
@@ -1064,11 +1064,11 @@ function renderProposalPdf(doc, p, qrs = {}) {
   // meta
   const meta = [
     ["BILLED TO", firm],
-    ["PROPOSAL NO.", p.proposalNumber || "—"],
+    ["PROPOSAL NO.", p.proposalNumber || "–"],
     ["DATE ISSUED", dayjs(p.proposalDate || new Date()).format("MMMM D, YYYY")],
     [
       "VALID UNTIL",
-      p.validUntil ? dayjs(p.validUntil).format("MMMM D, YYYY") : "—",
+      p.validUntil ? dayjs(p.validUntil).format("MMMM D, YYYY") : "–",
     ],
   ];
   meta.forEach(([label, value], i) => {
@@ -1108,7 +1108,7 @@ function renderProposalPdf(doc, p, qrs = {}) {
     const descH = doc
       .font("Helvetica")
       .fontSize(9)
-      .heightOfString(pdfSafe(it.description || "—"), { width: qc[0].w - 12 });
+      .heightOfString(pdfSafe(it.description || "–"), { width: qc[0].w - 12 });
     const rowH = Math.max(descH + 14, 28);
     if (y + rowH > PAGE_H - 290) {
       doc.addPage();
@@ -1121,7 +1121,7 @@ function renderProposalPdf(doc, p, qrs = {}) {
       .fillColor(NAVY)
       .font("Helvetica")
       .fontSize(9)
-      .text(pdfSafe(it.description || "—"), cx + 8, y + 7, {
+      .text(pdfSafe(it.description || "–"), cx + 8, y + 7, {
         width: qc[0].w - 12,
       });
     cx += qc[0].w;
@@ -1129,7 +1129,7 @@ function renderProposalPdf(doc, p, qrs = {}) {
       .fillColor(MUTED)
       .font("Helvetica")
       .fontSize(9)
-      .text(pdfSafe(it.term || "—"), cx + 8, y + 7, { width: qc[1].w - 12 });
+      .text(pdfSafe(it.term || "–"), cx + 8, y + 7, { width: qc[1].w - 12 });
     cx += qc[1].w;
     doc
       .fillColor(INK)

@@ -318,7 +318,7 @@ function buildCredit(settings, awsAllTime, monthAws) {
     limitedBy = "burn";
   }
   // Otherwise no expiry is configured and burn is too slow to project. Left
-  // null, which the dashboard already renders as "—" — an honest "we cannot
+  // null, which the dashboard already renders as "–" — an honest "we cannot
   // say" beats a number nobody can act on.
 
   return {

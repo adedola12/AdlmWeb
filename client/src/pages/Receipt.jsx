@@ -128,7 +128,7 @@ export default function Receipt() {
   const customerName =
     [order?.firstName, order?.lastName].filter(Boolean).join(" ") ||
     order?.email ||
-    "—";
+    "–";
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
@@ -217,7 +217,7 @@ export default function Receipt() {
                 {customerName}
               </div>
               <div className="text-sm text-slate-600">
-                {order?.email || "—"}
+                {order?.email || "–"}
               </div>
               {order?.organization?.name ? (
                 <div className="text-sm text-slate-600 mt-1">
@@ -261,7 +261,7 @@ export default function Receipt() {
                   <tr key={idx} className="border-b">
                     <td className="py-2 pr-3">
                       <div className="font-medium text-slate-900">
-                        {ln?.name || ln?.productKey || "—"}
+                        {ln?.name || ln?.productKey || "–"}
                       </div>
                       <div className="text-xs text-slate-500">
                         {ln?.productKey || ""}
@@ -300,7 +300,7 @@ export default function Receipt() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                 <div>
                   <span className="text-slate-500">Location:</span>{" "}
-                  {order.physicalTraining.locationName || "—"}
+                  {order.physicalTraining.locationName || "–"}
                 </div>
                 {order.physicalTraining.locationAddress && (
                   <div>

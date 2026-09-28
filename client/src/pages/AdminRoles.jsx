@@ -409,7 +409,7 @@ export default function AdminRoles() {
                           <ul className="divide-y divide-slate-100 dark:divide-adlm-dark-border">
                             {members.map((m) => {
                               const name =
-                                [m.firstName, m.lastName].filter(Boolean).join(" ") || m.username || "—";
+                                [m.firstName, m.lastName].filter(Boolean).join(" ") || m.username || "–";
                               const isSelf = String(m._id) === String(currentUserId);
                               const isLastAdmin = role.key === "admin" && total <= 1;
                               const blockRevoke = isSelf || isLastAdmin;
@@ -615,7 +615,7 @@ export default function AdminRoles() {
                     {users.map((u) => (
                       <tr key={u._id} className="border-t border-slate-100 dark:border-adlm-dark-border">
                         <td className="py-2 pr-3">
-                          {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || "—"}
+                          {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || "–"}
                         </td>
                         <td className="py-2 pr-3 text-slate-500 dark:text-adlm-dark-muted">{u.email}</td>
                         <td className="py-2 pr-3">
@@ -659,7 +659,7 @@ export default function AdminRoles() {
                       <span className="font-medium">{a.targetEmail || "user"}</span>
                       <span className="text-slate-500 dark:text-adlm-dark-muted">
                         {" "}
-                        · {a.fromRole || "—"} → {a.toRole || "—"}
+                        · {a.fromRole || "–"} → {a.toRole || "–"}
                       </span>
                     </div>
                     <div className="text-xs text-slate-400 whitespace-nowrap">

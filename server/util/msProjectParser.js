@@ -341,7 +341,7 @@ export async function parseMsProjectMpp(buffer, { filename = "" } = {}) {
         tasks: [],
         skipped: 0,
         errorCode: "MPP_SERVICE_UNREACHABLE",
-        error: `MPXJ_API_URL is not a valid URL (got: "${apiUrl.slice(0, 120)}"). Expected something like https://adlm-mpxj-converter.onrender.com/convert — no "MPXJ_API_URL =" prefix, no quotes. Fix it in Render → Environment → MPXJ_API_URL.`,
+        error: `MPXJ_API_URL is not a valid URL (got: "${apiUrl.slice(0, 120)}"). Expected the converter's full https URL ending in /convert, with no "MPXJ_API_URL =" prefix and no quotes. The API sets it from the AdlmApi CDK stack (the MPXJ converter Lambda); check the function's MPXJ_API_URL environment variable.`,
       };
     }
 

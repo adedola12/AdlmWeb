@@ -303,7 +303,7 @@ export default function TrainingEnrollment() {
               </div>
               <div className="mt-1">
                 <span className="font-semibold">Location:</span>{" "}
-                {address || "—"}
+                {address || "–"}
               </div>
             </div>
 

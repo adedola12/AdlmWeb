@@ -91,7 +91,7 @@ export function breakdownFieldLabel(key) {
  */
 export function formatBreakdownValue(key, value, units) {
   const v = Number(value);
-  if (!Number.isFinite(v)) return value == null || value === "" ? "—" : String(value);
+  if (!Number.isFinite(v)) return value == null || value === "" ? "–" : String(value);
   const k = String(key || "");
   if (RE_AREA.test(k)) {
     return `${formatQty(convertQuantity(v, "m2", units))} ${unitLabel("m2", units)}`;
