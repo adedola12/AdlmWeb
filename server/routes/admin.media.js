@@ -6,11 +6,14 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import cloudinary from "../cloudinary.js"; // configured v2 client
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { uploadAsset, deleteAsset } from "../utils/cloudinary.js";
+import { HUB_KEY, HUB_CONTENT_TYPE, hubUploadProblem, looksLikeHubInstaller } from "../util/hubStorage.js";
 import {
   uploadBufferToR2,
   isR2Configured,
   createPresignedPutUrl,
 } from "../utils/r2Upload.js";
+import { fileStoreBackend, presignUpload, headFile } from "../util/fileStore.js";
+import { DOWNLOADS, forgetStored } from "../util/downloadLinks.js";
 
 const router = express.Router();
 
@@ -260,12 +263,19 @@ router.post("/upload-video-r2", uploadLarge.single("file"), async (req, res) => 
 
 /**
  * POST /admin/media/upload-installer
- * Uploads the Installer Hub setup file (.exe/.msi/.zip) to R2 if large,
- * Cloudinary otherwise. Returns secure_url + sha256 (for integrity display).
+ * Uploads a course software installer (.exe/.msi/.zip, AdminCourses) to R2 if
+ * large, Cloudinary otherwise. Returns secure_url + sha256 (for integrity
+ * display). These are PUBLIC links.
  *
- * Used by Site Settings → Installer Hub section to replace the manual paste.
+ * Not for the Installer Hub. The Hub is for paid accounts only and lives in
+ * the private file store (see /installer-upload-url below); a Hub build sent
+ * here is refused. Course software used to share the Hub's public prefix
+ * (adlm/installer-hub); it now has its own, so nothing new lands there.
  */
 const INSTALLER_EXT_RE = /\.(exe|msi|zip|7z|appx|appxbundle|msix|msixbundle)$/;
+const COURSE_SOFTWARE_PREFIX = "adlm/course-software";
+const HUB_GOES_TO_SETTINGS =
+  "The Installer Hub is uploaded in Admin → Site Settings → Installer Hub, which keeps it in private storage behind the paid-licence check.";
 
 const uploadInstaller = multer({
   storage: multer.memoryStorage(),
@@ -280,54 +290,66 @@ const uploadInstaller = multer({
 });
 
 /**
- * POST /admin/media/installer-upload-url { filename, contentType?, size? }
+ * POST /admin/media/installer-upload-url { filename, size? }
  *
- * Returns a short-lived presigned PUT so the browser uploads the installer
- * straight to R2. Preferred over /upload-installer for anything non-trivial:
- * that route sends the whole file through the API, and the API runs on Lambda
- * behind API Gateway, which caps request bodies at 10MB. A 50MB installer
- * either fails outright there or crawls while Lambda buffers it in memory and
- * re-uploads. Here only this small JSON round-trip touches the API.
+ * Site Settings → Installer Hub → Upload installer. A presigned PUT straight
+ * into ADLM's PRIVATE file store (util/fileStore.js: S3 once FILES_BUCKET is
+ * set, else the private R2 installers bucket) at the one key the paid gate
+ * serves the Hub from (DOWNLOADS["installer-hub"], R3). The browser sends the
+ * bytes to storage directly, because the API runs on Lambda, whose request
+ * bodies stop at 6 MB. Uploading again replaces the Hub in place.
  *
- * /upload-installer is deliberately left in place — it still serves small
- * files and the Cloudinary path, and removing it would break older clients.
+ * It used to sign a PUT into the PUBLIC bucket under adlm/installer-hub and
+ * hand back that public URL for Setting.installerHubUrl, so anyone with the
+ * link skipped the gate. There is no public URL any more: the stored
+ * reference is the private key, and customers only ever get a short-lived
+ * signed link from /me/downloads/installer-hub. Same shape as the Android
+ * app's /apk-upload-url.
  */
 router.post("/installer-upload-url", async (req, res) => {
-  try {
-    const original = String(req.body?.filename || "").trim();
-    if (!original) return res.status(400).json({ error: "filename is required" });
-
-    if (!INSTALLER_EXT_RE.test(original.toLowerCase())) {
-      return res.status(400).json({
-        error: "Only installer files (.exe, .msi, .zip, .7z, .appx, .msix) are allowed",
-      });
-    }
-
-    if (!isR2Configured()) {
-      return res.status(503).json({
-        error: "Cloudflare R2 is not configured, so a direct upload cannot be signed.",
-      });
-    }
-
-    const safeName = original.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const contentType =
-      String(req.body?.contentType || "").trim() || "application/octet-stream";
-
-    const signed = await createPresignedPutUrl({
-      key: `adlm/installer-hub/${Date.now()}-${safeName}`,
-      contentType,
+  const problem = hubUploadProblem({ filename: req.body?.filename, size: req.body?.size });
+  if (problem) return res.status(400).json({ error: problem });
+  const backend = fileStoreBackend();
+  if (!backend) {
+    return res.status(503).json({
+      error: "Private file storage is not configured, so the Installer Hub cannot be uploaded here.",
     });
-
+  }
+  try {
+    const signed = await presignUpload({ key: HUB_KEY, contentType: HUB_CONTENT_TYPE, expiresIn: 3600 });
     return res.json({
       ok: true,
-      storageProvider: "r2",
-      originalName: original,
-      ...signed,
+      originalName: String(req.body.filename).trim(),
+      fileName: DOWNLOADS["installer-hub"].fileName,
+      uploadUrl: signed.uploadUrl,
+      key: HUB_KEY,
+      contentType: HUB_CONTENT_TYPE,
+      storage: signed.storage,
+      expiresIn: signed.expiresIn,
     });
   } catch (e) {
-    return res
-      .status(400)
-      .json({ error: e.message || "Could not create an upload URL" });
+    return res.status(500).json({ error: e.message || "Could not create an upload URL" });
+  }
+});
+
+/**
+ * POST /admin/media/installer-uploaded
+ *
+ * Confirms the Hub landed at its private key and serves it straight away on
+ * this container (other warm containers pick it up within their five-minute
+ * cache). Answers with the key, never a URL.
+ */
+router.post("/installer-uploaded", async (_req, res) => {
+  try {
+    const backend = fileStoreBackend();
+    const head = backend ? await headFile({ key: HUB_KEY }) : null;
+    if (!head) {
+      return res.status(404).json({ error: "The Installer Hub did not finish uploading. Please upload it again." });
+    }
+    forgetStored(HUB_KEY);
+    return res.json({ ok: true, key: HUB_KEY, bytes: head.size ?? null, storage: backend });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Could not check the upload" });
   }
 });
 
@@ -336,6 +358,9 @@ router.post("/upload-installer", uploadInstaller.single("file"), async (req, res
     if (!req.file) return res.status(400).json({ error: "file is required" });
 
     const original = req.file.originalname || "installer.bin";
+    if (looksLikeHubInstaller(original)) {
+      return res.status(400).json({ error: HUB_GOES_TO_SETTINGS });
+    }
     const safeName = original.replace(/[^a-zA-Z0-9._-]/g, "_");
     const sha256 = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
 
@@ -353,7 +378,7 @@ router.post("/upload-installer", uploadInstaller.single("file"), async (req, res
     let out;
     let storageProvider;
     if (useR2) {
-      const key = `adlm/installer-hub/${Date.now()}-${safeName}`;
+      const key = `${COURSE_SOFTWARE_PREFIX}/${Date.now()}-${safeName}`;
       out = await uploadBufferToR2(req.file.buffer, {
         key,
         contentType: req.file.mimetype || "application/octet-stream",
@@ -361,7 +386,7 @@ router.post("/upload-installer", uploadInstaller.single("file"), async (req, res
       storageProvider = "r2";
     } else {
       out = await uploadBufferToCloudinary(req.file.buffer, {
-        folder: "adlm/installer-hub",
+        folder: COURSE_SOFTWARE_PREFIX,
         publicId: safeName.replace(/\.[^.]+$/, ""),
         resourceType: "raw",
       });

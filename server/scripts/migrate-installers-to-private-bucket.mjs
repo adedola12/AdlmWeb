@@ -11,11 +11,13 @@
  *   bucket that is not publicly readable.
  *
  * SCOPE — adlm/installers ONLY
- *   adlm/installer-hub is deliberately left alone. That prefix holds the
- *   Installer Hub download itself, which has to stay reachable by someone who
- *   does not have an account yet. Making it private would break the front
- *   door. Same for adlm/previews, videos, certificates and mobile-app, which
- *   is also why R2_BUCKET cannot simply be closed.
+ *   adlm/installer-hub is not moved by this script. Since R3 (2026-09-26) the
+ *   Hub is paid-only and served from the private file store at
+ *   DOWNLOADS["installer-hub"].key (upload-hub-release.mjs and Site Settings
+ *   write there now), so the old public objects under that prefix are
+ *   leftovers to delete by hand once the private copy is live, not to copy.
+ *   adlm/previews, videos, certificates and mobile-app stay public, which is
+ *   why R2_BUCKET cannot simply be closed.
  *
  * ORDER — copy first, delete LAST
  *   The steps are separate commands on purpose. Deleting the public originals
@@ -151,8 +153,8 @@ async function cmdPlan(client, cfg) {
     );
   }
   console.log(
-    "\nadlm/installer-hub is NOT in scope: that is the Installer Hub download" +
-      "\nitself, which must stay reachable without an account.\n",
+    "\nadlm/installer-hub is NOT in scope: the Hub is now served from the private" +
+      "\nfile store (upload-hub-release.mjs); public copies there are leftovers to delete.\n",
   );
 }
 

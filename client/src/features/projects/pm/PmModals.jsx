@@ -7,10 +7,6 @@ function safeNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function fmtMoney(v) {
-  return safeNum(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
-
 function fmtDateInput(v) {
   if (!v) return "";
   const d = v instanceof Date ? v : new Date(v);

@@ -30,6 +30,7 @@ function fakeJobs(over = {}) {
       runOpsDigest: job("ops-digest"),
       runReleaseNoticeDrain: job("release-notices", { ok: true, open: 0, results: [] }),
       runUnconfirmedSweep: job("unconfirmed-sweep"),
+      runIndexSync: job("sync-indexes", { ok: true, models: 82, built: 82, failed: [] }),
       ...over,
     },
   };
@@ -100,7 +101,12 @@ test("the daily jobs never run the drain, and their errors are thrown as before"
 
   const { jobs, calls } = fakeJobs();
   await quietly(() => runJob("expiry-notifier", jobs, context));
-  assert.deepEqual(calls.map((c) => c.name), ["expiry-notifier", "ops-digest", "unconfirmed-sweep"]);
+  assert.deepEqual(calls.map((c) => c.name), [
+    "expiry-notifier",
+    "ops-digest",
+    "unconfirmed-sweep",
+    "sync-indexes",
+  ]);
 
   const renewError = new Error("card declined storm");
   const failing = fakeJobs({
@@ -132,6 +138,30 @@ test("video-poll: new uploads are filed on the free shelves first, then the poll
   const out = await quietly(() => runJob("video-poll", jobs, context));
   assert.deepEqual(calls.map((c) => c.name), ["free-library", "video-poll", "release-notices"]);
   assert.deepEqual(out.freeLibrary, { ok: true, added: 2 });
+});
+
+// Indexes are built here, not by every API container at cold start
+// (util/indexSync.js): a deploy's wave of cold containers each queueing ~324
+// createIndex/createCollection commands was the post-deploy 503 burst.
+test("the daily expiry job builds indexes last, and a failure there fails nothing", async () => {
+  const { jobs } = fakeJobs();
+  const out = await quietly(() => runJob("expiry-notifier", jobs, context));
+  assert.deepEqual(out.indexes, { ok: true, models: 82, built: 82, failed: [] });
+
+  const failing = fakeJobs({
+    runIndexSync: async () => {
+      throw new Error("Atlas said no");
+    },
+  });
+  const out2 = await quietly(() => runJob("expiry-notifier", failing.jobs, context));
+  assert.equal(out2.ok, true);
+  assert.deepEqual(out2.indexes, { ok: false, error: "Atlas said no" });
+});
+
+test("sync-indexes by hand runs the index build alone", async () => {
+  const { jobs, calls } = fakeJobs();
+  await quietly(() => runJob("sync-indexes", jobs, context));
+  assert.deepEqual(calls.map((c) => c.name), ["sync-indexes"]);
 });
 
 test("a failing channel feed never stops the poll or the drain", async () => {

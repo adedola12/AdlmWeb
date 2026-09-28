@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { Setting } from "../models/Setting.js";
 import { User } from "../models/User.js";
 import { MAX_PLAUSIBLE_NGN_USD } from "../util/fx.js";
+import { isPublicHubCopy, PUBLIC_HUB_COPY_REFUSED } from "../util/hubStorage.js";
 
 function requireAdminOrMiniAdmin(req, res, next) {
   // See server/middleware/demoMode.js — read-only, masked demo sessions view only.
@@ -94,6 +95,18 @@ router.post("/installer-hub", async (req, res) => {
       error:
         "Provide installerHubUrl, installerHubVideoUrl or installerHubGuideUrl",
     });
+  }
+
+  // R3: a public copy under the old adlm/installer-hub prefix skips the
+  // paid-licence check, so it cannot become the Hub's link. The Upload
+  // installer button puts the Hub in private storage instead. A value already
+  // saved is let through unchanged, so saving the video or guide link does not
+  // take away the fail-safe before a private copy has been uploaded.
+  if (update.installerHubUrl && isPublicHubCopy(update.installerHubUrl)) {
+    const current = await Setting.findOne({ key: "global" }).select("installerHubUrl").lean();
+    if (String(current?.installerHubUrl || "").trim() !== update.installerHubUrl) {
+      return res.status(400).json({ error: PUBLIC_HUB_COPY_REFUSED });
+    }
   }
 
   const s = await Setting.findOneAndUpdate(

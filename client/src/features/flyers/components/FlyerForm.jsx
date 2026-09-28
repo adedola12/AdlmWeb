@@ -5,7 +5,7 @@
 // upload through /admin/media/upload-file (Cloudinary) and we store the URL.
 import React, { useRef, useState } from "react";
 import { apiAuthed } from "../../../http.js";
-import { TEMPLATES, PLATFORM_OPTIONS, templatesForFormat, defaultFlyer } from "../lib/defaults.js";
+import { TEMPLATES, PLATFORM_OPTIONS, templatesForFormat } from "../lib/defaults.js";
 import { STYLES, applyStyle } from "../lib/styles.js";
 
 const NAVY = "#05111f";
@@ -198,7 +198,6 @@ export default function FlyerForm({ flyer, onChange, accessToken }) {
 
   const t = flyer.template;
   const fmt = flyer.format || "portrait";
-  const isThumbnail = fmt === "thumbnail";
   const isEvent = t === "event";
   const isCountdown = t === "countdown";
   const isLaunch = t === "launch" || t === "thumbTutorial";

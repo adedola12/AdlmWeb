@@ -1054,34 +1054,42 @@ export default function Admin({ section = null }) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    if (!/\.exe$/i.test(file.name)) {
+      setIhMsg("Failed: choose the Installer Hub setup .exe (customers save it as ADLM-Installer-Hub-Setup.exe).");
+      return;
+    }
     setIhUploadProg(1);
 
     (async () => {
       try {
-        const contentType = file.type || "application/octet-stream";
-
-        // 1) Only this small JSON round-trip goes through the API. The API runs
-        //    on Lambda behind API Gateway, which caps request bodies at 10MB —
-        //    posting a 50MB installer through it is what made this slow.
+        // R3: the Hub is for paid accounts only, so it goes into ADLM's PRIVATE
+        // file store at the one key /me/downloads/installer-hub signs links
+        // for, never to a public URL. Only these small JSON calls touch the
+        // API (Lambda stops request bodies at 6 MB); the bytes go straight
+        // from this browser to storage.
         const signed = await apiAuthed("/admin/media/installer-upload-url", {
           token: accessToken,
           method: "POST",
-          body: { filename: file.name, contentType, size: file.size },
+          body: { filename: file.name, size: file.size },
         });
         if (!signed?.uploadUrl) throw new Error("No upload URL returned");
 
-        // 2) The server never sees the bytes now, so it can't hash them for us.
+        // The server never sees the bytes, so it can't hash them for us.
         const sha256 = await sha256HexOfFile(file);
 
-        // 3) Straight to R2 at the browser's own line speed. Content-Type must
-        //    match what was signed or R2 answers 403.
-        await putFileWithProgress(signed.uploadUrl, file, contentType, (pct) =>
+        // Content-Type must match what was signed or storage answers 403.
+        await putFileWithProgress(signed.uploadUrl, file, signed.contentType, (pct) =>
           setIhUploadProg(Math.max(1, pct)),
         );
 
-        setIhUrlDraft(signed.publicUrl);
+        const done = await apiAuthed("/admin/media/installer-uploaded", {
+          token: accessToken,
+          method: "POST",
+          body: {},
+        });
+        const mb = ((done?.bytes ?? file.size) / (1024 * 1024)).toFixed(1);
         setIhMsg(
-          `Installer uploaded (r2${sha256 ? `, SHA-256 ${sha256.slice(0, 12)}…` : ""}). Click Save to apply.`,
+          `Installer Hub uploaded (${mb} MB${sha256 ? `, SHA-256 ${sha256.slice(0, 12)}…` : ""}) to ADLM's private storage. Paid accounts now download it through a signed link; the link in the box is only a fail-safe. To drop it, clear the box and click Save.`,
         );
       } catch (err) {
         setIhMsg(err?.message || "Installer upload failed");
@@ -4899,7 +4907,7 @@ export default function Admin({ section = null }) {
                     Installer Hub Download URL
                   </label>
                   <p className="text-xs text-slate-500 mb-2">
-                    Upload the Hub setup file (.exe / .msi / .zip / .msix) directly: small files go to Cloudinary, larger ones to Cloudflare R2, or paste a hosted URL.
+                    Upload the Hub setup .exe here and the site keeps it in ADLM's private storage, handed only to paid accounts through a short-lived signed link. The link in the box is only used if no Hub has been uploaded; clear it and Save once the upload is done.
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     <input
@@ -4913,7 +4921,7 @@ export default function Admin({ section = null }) {
                       Upload installer
                       <input
                         type="file"
-                        accept=".exe,.msi,.zip,.7z,.appx,.appxbundle,.msix,.msixbundle"
+                        accept=".exe"
                         className="hidden"
                         onChange={handleIhInstallerUpload}
                       />
