@@ -5,7 +5,7 @@ import React from "react";
 import { Badge, Headline, Subtitle, Rule } from "./parts.jsx";
 import { FONT_DISPLAY } from "../lib/brand.js";
 
-export default function AnnouncementTemplate({ flyer, accent, days, palette }) {
+export default function AnnouncementTemplate({ flyer, accent, palette }) {
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "flex-start", gap: 32 }}>
       {/* Top: eyebrow + headline + supporting line */}

@@ -229,7 +229,7 @@ export default function PmWbsScrollNav({
                             <span
                               className="font-mono text-[10px] font-semibold uppercase rounded px-1.5 py-0.5 bg-slate-100 text-slate-600 group-hover:bg-adlm-blue-700 group-hover:text-white transition"
                             >
-                              {s.wbs || "—"}
+                              {s.wbs || "–"}
                             </span>
                             <span className="text-xs font-medium text-slate-900 truncate flex-1">
                               {s.name || "(no name)"}

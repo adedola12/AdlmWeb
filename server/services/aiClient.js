@@ -31,7 +31,104 @@ import { recordAiUsage, normalizeUsage } from "./aiUsage.js";
 const PROVIDER = (process.env.AGENT_PROVIDER || "bedrock").toLowerCase();
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
+// The whole budget for ONE createMessage() call, retries included: every
+// attempt's abort timer is cut to whatever is left of it. Retrying therefore
+// never makes a single round-trip slower than it could already be before
+// retries existed. The ceilings above this are the Lambda timeout and the
+// CloudFront origin read timeout, both 60s (infra/config.ts).
 const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MS || 30000);
+
+/* ------------------------- transient-error retry ------------------------- */
+// A Bedrock 503 ("Bedrock is unable to process your request") or a throttle
+// is usually gone a second later, but without a retry it reaches the visitor
+// as "Sorry, I hit a snag". So a failed round-trip is retried when, and only
+// when, the error says the provider was briefly unable rather than that the
+// request was wrong:
+//
+//   - at most AGENT_MAX_RETRIES retries (default 2, so 3 attempts in all);
+//   - exponential backoff with jitter: 500ms, then 1s, each scaled into
+//     50-100% so two containers that failed together do not retry together;
+//   - never past the TIMEOUT_MS budget: a retry only starts if, after its
+//     backoff, at least MIN_ATTEMPT_MS of the budget is left for it;
+//   - never a 4xx other than 429/408: a validation, auth or billing refusal
+//     fails identically the second time and only doubles the wait.
+//
+// Nothing here streams: each provider call returns the whole response or
+// throws, and the agent loop only runs tools AFTER a round-trip succeeds. So a
+// retry can never repeat output the visitor has already seen, nor re-run a
+// save_lead.
+//
+// The Bedrock SDK's own retry is switched OFF (maxAttempts: 1, below) so this
+// is the only policy. Left at its default of 3 attempts, it retried with a
+// 100ms base (too short to outlast a Bedrock 503 blip), knew nothing of this
+// budget, and would have stacked under this loop into 9 attempts. It also
+// never covered the direct Anthropic path, which had no retry at all. OpenAI's
+// SDK keeps its own retries, so this loop does not wrap that provider.
+const MAX_RETRIES = Math.max(0, Math.min(3, Number(process.env.AGENT_MAX_RETRIES ?? 2) || 0));
+const RETRY_BASE_MS = 500;
+const RETRY_MAX_DELAY_MS = 4000;
+const MIN_ATTEMPT_MS = 5000;
+
+const TRANSIENT_NAMES = new Set([
+  "ThrottlingException",
+  "TooManyRequestsException",
+  "ServiceUnavailableException",
+  "ServiceUnavailable",
+  "InternalServerException",
+  "InternalServerError",
+  "InternalFailure",
+  "ModelNotReadyException",
+  "overloaded_error",
+  "api_error",
+  "rate_limit_error",
+]);
+
+const TRANSIENT_NET_CODES = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+  "EAI_AGAIN",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
+
+/**
+ * Is this failure worth one more try? Exported for tests.
+ *
+ * Reads structure, not wording: the provider adapters below attach `status`
+ * and `type` (and the SDK error as `cause`) to what they throw. Our own
+ * timeout (AbortError) is deliberately NOT transient: by the time it fires the
+ * budget is spent, and the model may already have billed the call.
+ */
+export function isTransientModelError(err) {
+  for (let e = err, depth = 0; e && depth < 3; e = e.cause, depth++) {
+    if (e.name === "AbortError" || e.name === "TimeoutError") return false;
+    const status = Number(e.status ?? e.statusCode ?? e.$metadata?.httpStatusCode);
+    if (status >= 400 && status < 500 && status !== 408 && status !== 429) return false;
+    if (status === 408 || status === 429 || status >= 500) return true;
+    if (e.$retryable) return true;
+    if (TRANSIENT_NAMES.has(e.name) || TRANSIENT_NAMES.has(e.code) || TRANSIENT_NAMES.has(e.type)) return true;
+    if (TRANSIENT_NET_CODES.has(e.code) || TRANSIENT_NET_CODES.has(e.errno)) return true;
+    if (/socket hang up/i.test(String(e.message || ""))) return true;
+  }
+  return false;
+}
+
+// Test seams. Production never touches these; tests swap in a fake Bedrock
+// client, a meter that counts instead of writing to Mongo, and a sleep that
+// does not actually wait.
+let meterFn = recordAiUsage;
+let sleepFn = (ms) => new Promise((r) => setTimeout(r, ms));
+let randomFn = Math.random;
+
+/** Backoff before retry number `n` (1-based): exponential, 50-100% jitter. */
+export function retryDelayMs(n, random = randomFn) {
+  const ceiling = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_MS * 2 ** (n - 1));
+  return Math.round(ceiling * (0.5 + 0.5 * random()));
+}
 
 // Bedrock pins the Messages API contract in the body rather than a header.
 const BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31";
@@ -181,8 +278,9 @@ function anthropicSystem(system, { extendedTtl = false } = {}) {
 /* ------------------------- Anthropic ------------------------- */
 async function anthropicCreate({ system, messages, tools, maxTokens, temperature }, opts = {}) {
   const extendedTtl = opts.extendedTtl ?? useExtendedTtl();
+  const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(ANTHROPIC_URL, {
       method: "POST",
@@ -231,9 +329,17 @@ async function anthropicCreate({ system, messages, tools, maxTokens, temperature
           );
         }
         clearTimeout(timer);
-        return anthropicCreate({ system, messages, tools, maxTokens, temperature }, { extendedTtl: false });
+        return anthropicCreate(
+          { system, messages, tools, maxTokens, temperature },
+          { extendedTtl: false, timeoutMs },
+        );
       }
-      throw new Error(msg);
+      // Status and error type ride along so the retry policy can tell an
+      // overloaded 529 from a malformed 400 without parsing the wording.
+      const e = new Error(msg);
+      e.status = res.status;
+      if (data?.error?.type) e.type = data.error.type;
+      throw e;
     }
 
     const content = Array.isArray(data.content) ? data.content : [];
@@ -275,7 +381,9 @@ async function anthropicCreate({ system, messages, tools, maxTokens, temperature
 
 let _bedrock = null;
 function bedrock() {
-  if (!_bedrock) _bedrock = new BedrockRuntimeClient({ region: BEDROCK_REGION });
+  // maxAttempts: 1 — retries belong to createMessage(); see the note on
+  // MAX_RETRIES for why the SDK's own are switched off.
+  if (!_bedrock) _bedrock = new BedrockRuntimeClient({ region: BEDROCK_REGION, maxAttempts: 1 });
   return _bedrock;
 }
 
@@ -322,8 +430,9 @@ export function bedrockRequestBody({
 
 async function bedrockCreate({ system, messages, tools, maxTokens, temperature }, opts = {}) {
   const useCache = opts.useCache ?? (CACHE_ENABLED && !bedrockCacheUnavailable);
+  const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
   try {
     const body = bedrockRequestBody({ system, messages, tools, maxTokens, temperature, useCache });
@@ -347,13 +456,19 @@ async function bedrockCreate({ system, messages, tools, maxTokens, temperature }
           `[aiClient] Bedrock rejected prompt caching (${msg}) — retrying without it.`,
         );
         clearTimeout(timer);
-        return bedrockCreate({ system, messages, tools, maxTokens, temperature }, { useCache: false });
+        return bedrockCreate(
+          { system, messages, tools, maxTokens, temperature },
+          { useCache: false, timeoutMs },
+        );
       }
       // Keep the SDK's error NAME in the message. It is the difference between
       // "the role cannot invoke this model" (AccessDeniedException) and "this
       // model id does not exist in this region" (ValidationException), and the
-      // health endpoint classifies on this text.
-      throw new Error(`Bedrock ${err?.name || "error"}: ${msg}`);
+      // health endpoint classifies on this text. The SDK error itself rides
+      // along as `cause`, which is what the retry policy reads.
+      const e = new Error(`Bedrock ${err?.name || "error"}: ${msg}`, { cause: err });
+      e.status = err?.$metadata?.httpStatusCode;
+      throw e;
     }
 
     const data = JSON.parse(new TextDecoder().decode(res.body));
@@ -510,47 +625,80 @@ async function openaiCreate({ system, messages, tools, maxTokens, temperature })
  * caller — a new agent feature is metered the moment it calls createMessage().
  */
 export async function createMessage({ system, messages, tools, maxTokens, temperature, meta }) {
+  const args = { system, messages, tools, maxTokens, temperature };
   const started = Date.now();
-  try {
-    const out =
-      PROVIDER === "openai"
-        ? await openaiCreate({ system, messages, tools, maxTokens, temperature })
-        : PROVIDER === "bedrock"
-          ? await bedrockCreate({ system, messages, tools, maxTokens, temperature })
-          : await anthropicCreate({ system, messages, tools, maxTokens, temperature });
+  const deadline = started + TIMEOUT_MS;
+  const maxRetries = PROVIDER === "openai" ? 0 : MAX_RETRIES;
 
-    recordAiUsage({
-      feature: meta?.feature || "ada-chat",
-      user: meta?.user || null,
-      provider: PROVIDER,
-      model: out.model || DEFAULT_MODEL,
-      usage: out.usage || undefined,
-      tokenSource: out.usage ? "reported" : "none",
-      ms: Date.now() - started,
-      ok: true,
-      sessionId: meta?.sessionId,
-      ip: meta?.ip,
-      product: meta?.product,
-    });
+  for (let attempt = 1; ; attempt++) {
+    const timeoutMs = Math.max(1, deadline - Date.now());
+    try {
+      const out =
+        PROVIDER === "openai"
+          ? await openaiCreate(args)
+          : PROVIDER === "bedrock"
+            ? await bedrockCreate(args, { timeoutMs })
+            : await anthropicCreate(args, { timeoutMs });
 
-    return out;
-  } catch (err) {
-    // Failed calls still cost input tokens on most providers and, more
-    // usefully, a spike of them is the signal that something is wrong.
-    recordAiUsage({
-      feature: meta?.feature || "ada-chat",
-      user: meta?.user || null,
-      provider: PROVIDER,
-      model: DEFAULT_MODEL,
-      ms: Date.now() - started,
-      ok: false,
-      errorCode: String(err?.message || "error").slice(0, 120),
-      sessionId: meta?.sessionId,
-      ip: meta?.ip,
-      product: meta?.product,
-    });
-    throw err;
+      // Metered once, for the attempt that succeeded: that is the call the
+      // provider billed tokens for. Attempts that failed before it are not
+      // rows of their own. A 503 or a throttle is refused before inference,
+      // so there is nothing to bill, and counting them would make one visitor
+      // message look like three calls on the dashboard.
+      meterFn({
+        feature: meta?.feature || "ada-chat",
+        user: meta?.user || null,
+        provider: PROVIDER,
+        model: out.model || DEFAULT_MODEL,
+        usage: out.usage || undefined,
+        tokenSource: out.usage ? "reported" : "none",
+        ms: Date.now() - started,
+        ok: true,
+        sessionId: meta?.sessionId,
+        ip: meta?.ip,
+        product: meta?.product,
+      });
+
+      return out;
+    } catch (err) {
+      const delay = retryDelayMs(attempt);
+      const leftAfterWait = deadline - Date.now() - delay;
+      if (attempt <= maxRetries && leftAfterWait >= MIN_ATTEMPT_MS && isTransientModelError(err)) {
+        console.warn(
+          `[aiClient] transient model error on attempt ${attempt} (${String(err?.message || err).slice(0, 160)}) - retrying in ${delay}ms.`,
+        );
+        await sleepFn(delay);
+        continue;
+      }
+
+      // One failure row per call that finally failed, as before retries
+      // existed: a spike of them is the signal that something is wrong.
+      meterFn({
+        feature: meta?.feature || "ada-chat",
+        user: meta?.user || null,
+        provider: PROVIDER,
+        model: DEFAULT_MODEL,
+        ms: Date.now() - started,
+        ok: false,
+        errorCode: String(err?.message || "error").slice(0, 120),
+        sessionId: meta?.sessionId,
+        ip: meta?.ip,
+        product: meta?.product,
+      });
+      throw err;
+    }
   }
+}
+
+/**
+ * Tests only: swap in a fake Bedrock client, a counting meter, and a sleep
+ * that does not wait. Call with no argument to restore the real ones.
+ */
+export function __setAiClientTestHooks({ bedrockClient, meter, sleep, random } = {}) {
+  _bedrock = bedrockClient ?? null;
+  meterFn = meter ?? recordAiUsage;
+  sleepFn = sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  randomFn = random ?? Math.random;
 }
 
 export function supportsTools() {

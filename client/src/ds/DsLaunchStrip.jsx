@@ -15,6 +15,11 @@ import { useHydrated } from "../lib/useHydrated.js";
 
 const KEY = "adlm-launch-strip-closed";
 
+// Fixed, not configurable: the strip is part of the new site, so if it is on
+// screen the new site is live. A countdown that said "opens in" read false
+// from the day the new build went live (24 Sep) until the date passed.
+export const LIVE_LEAD = "The new ADLM Studio is live.";
+
 function left(at, now) {
   const ms = new Date(at).getTime() - now;
   if (!Number.isFinite(ms) || ms <= 0) return null;
@@ -71,7 +76,9 @@ export default function DsLaunchStrip({ launch = LAUNCH }) {
   return (
     <div className="ds" style={{ display: "contents" }}>
       <div className="launch-strip" ref={ref} role="region" aria-label="Launch countdown">
-        <span className="lab">{launch.label}</span>
+        <span className="lab">
+          {LIVE_LEAD} {launch.event}
+        </span>
         <span className="launch-count" aria-live="off">
           {[
             [t.d, "Days"],

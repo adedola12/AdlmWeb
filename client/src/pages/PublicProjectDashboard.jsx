@@ -242,7 +242,7 @@ function UpcomingSpend({ rows = [], total = 0 }) {
         {rows.map((r, i) => (
           <div key={i} className="flex items-center justify-between py-2 text-xs">
             <div className="min-w-0 pr-3">
-              <div className="truncate font-medium text-slate-800">{r.description || "—"}</div>
+              <div className="truncate font-medium text-slate-800">{r.description || "–"}</div>
               <div className="text-[10px] text-slate-500">
                 {Number(r.qty || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit} × {money(r.rate)}
               </div>
@@ -581,7 +581,7 @@ export default function PublicProjectDashboard() {
                 >
                   {data.evm.CPI > 0
                     ? Number(data.evm.CPI || 0).toFixed(2)
-                    : "—"}
+                    : "–"}
                 </div>
                 <div className="text-[10px] text-slate-400">
                   {data.evm.CPI >= 1
@@ -717,7 +717,7 @@ export default function PublicProjectDashboard() {
 
         {/* Footer */}
         <div className="text-center text-xs text-slate-400 pt-4">
-          Last updated: {data.updatedAt ? new Date(data.updatedAt).toLocaleString() : "—"}
+          Last updated: {data.updatedAt ? new Date(data.updatedAt).toLocaleString() : "–"}
           <span className="mx-2">·</span>
           <a href="https://www.adlmstudio.net" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">
             ADLM Studio

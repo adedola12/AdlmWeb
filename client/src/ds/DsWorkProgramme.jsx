@@ -53,6 +53,7 @@ import { useAuth } from "../store.jsx";
 import WkDropdown from "./WkDropdown.jsx";
 import WkPrefs from "./WkPrefs.jsx";
 import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { isMoneyHidden } from "../lib/projectGallery.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -830,7 +831,8 @@ export default function DsWorkProgramme() {
               </p>
               <div className="f">
                 <div>
-                  <b>{money(p.totalCost)}</b>
+                  {/* Withheld money arrives as zero; show the en dash, never ₦0. */}
+                  <b>{isMoneyHidden(p) ? "–" : money(p.totalCost)}</b>
                   <span>bill value</span>
                 </div>
                 <div>
@@ -1017,7 +1019,7 @@ export default function DsWorkProgramme() {
                       />
                       <i>{g.unit}/day</i>
                     </span>
-                    <span className="ds-a">{g.out > 0 ? num(g.gangDays) : "—"}</span>
+                    <span className="ds-a">{g.out > 0 ? num(g.gangDays) : "–"}</span>
                     <span className="v">{money(g.amount)}</span>
                   </div>
                 )),

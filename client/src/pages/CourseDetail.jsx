@@ -68,7 +68,14 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
       current = null;
     };
 
-    (async () => {
+    // Claims a seat and keeps it alive. Called again when the server says the
+    // session is gone (404) or the page comes back from the back/forward cache:
+    // pagehide ends the session, and without a fresh claim the timer resumed on
+    // a dead one, so every ping 404'd and watch time stopped recording (1,546
+    // failed pings from two students, 21-26 Sep 2026).
+    const claim = async () => {
+      clearInterval(timer);
+      timer = null;
       try {
         const res = await apiAuthed(
           `/me/courses/${encodeURIComponent(sku)}/playback/start`,
@@ -88,6 +95,7 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
           return;
         }
         current = res.sessionId;
+        lastPingAt = Date.now();
         setSession(res);
         setBlocked(null);
 
@@ -104,7 +112,12 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
               watchedDeltaSec: deltaSec,
               positionSec: Math.round((now - startedAt) / 1000),
             }),
-          }).catch(() => {});
+          }).catch((e) => {
+            if (e?.status === 404 && !cancelled) {
+              current = null;
+              claim();
+            }
+          });
         }, (res.heartbeatSec || 30) * 1000);
       } catch (e) {
         if (cancelled) return;
@@ -113,13 +126,24 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
           setBlocked(e.data || { error: "Too many active streams" });
         }
       }
-    })();
+    };
+    claim();
 
-    window.addEventListener("pagehide", stop);
+    const onHide = () => {
+      clearInterval(timer);
+      timer = null;
+      stop();
+    };
+    const onShow = (e) => {
+      if (e.persisted && !cancelled) claim();
+    };
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("pageshow", onShow);
     return () => {
       cancelled = true;
       clearInterval(timer);
-      window.removeEventListener("pagehide", stop);
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("pageshow", onShow);
       stop();
     };
   }, [sku, moduleCode, token, track]);

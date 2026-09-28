@@ -58,6 +58,7 @@ import AdminDocSaved from "./pages/AdminDocSaved.jsx";
 import AdminDocIssued from "./pages/AdminDocIssued.jsx";
 import AdminDocProduced from "./pages/AdminDocProduced.jsx";
 import AdminDocSystem from "./pages/AdminDocSystem.jsx";
+import AdminWork from "./pages/AdminWork.jsx";
 import AdminStorage from "./pages/AdminStorage.jsx";
 import AdminEmails from "./pages/AdminEmails.jsx";
 import AdminCampaigns from "./pages/AdminCampaigns.jsx";
@@ -194,6 +195,7 @@ import DsPreviewGate from "./ds/DsPreviewGate.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import PreviewHostGate from "./components/PreviewHostGate.jsx";
 import AdminReleases from "./pages/AdminReleases.jsx";
+import AdminWork from "./pages/AdminWork.jsx";
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
@@ -1086,6 +1088,16 @@ const router = createBrowserRouter([
         ),
       },
 
+      // ✅ Work board (docs/WORK_BOARD.md): same audience as the release desk
+      {
+        path: "admin/work",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminWork />
+          </AdminRoute>
+        ),
+      },
+
       // ✅ AI spend, per-user allocations & AWS credit burn-down (admin-only)
       {
         path: "admin/ai-usage",
@@ -1238,6 +1250,22 @@ const router = createBrowserRouter([
     ),
     errorElement: <AppError />,
   },
+
+  // The legal pages, public now rather than at launch. Every footer and the
+  // sign-up form link /privacy, /terms and /licensing, and the live site had no
+  // route for any of them, so all three were "Page not found". Only his redesign
+  // has these pages, so they render in its shell, like /certificate: not through
+  // DsPreview, which would turn every link on them into a staff-only /preview
+  // one. Nothing else of the redesign is exposed by this.
+  ...["privacy", "terms", "licensing"].map((slug) => ({
+    path: `/${slug}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
 
   // R21: Beyond BIM and the training calendar, real public routes behind
   // launch flags (config/flags.js). Off: "Coming soon" for the public, the

@@ -13,43 +13,6 @@ import {
   variationStatusLabel,
 } from "../../lib/variations.js";
 
-/**
- * Draggable column-resize handle.
- * Attach to a <th> — it tracks horizontal mouse movement and adjusts
- * the column width via the nearest <col> in the table's <colgroup>.
- */
-function useColResize() {
-  const colRef = useRef(null);
-
-  const onMouseDown = useCallback((e) => {
-    const th = e.currentTarget.closest("th");
-    if (!th) return;
-    const table = th.closest("table");
-    if (!table) return;
-    const thIndex = Array.from(th.parentElement.children).indexOf(th);
-    const col = table.querySelector("colgroup")?.children[thIndex];
-    if (!col) return;
-    colRef.current = col;
-
-    const startX = e.clientX;
-    const startW = th.getBoundingClientRect().width;
-
-    const onMove = (ev) => {
-      const newW = Math.max(40, startW + ev.clientX - startX);
-      col.style.width = newW + "px";
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-    e.preventDefault();
-  }, []);
-
-  return onMouseDown;
-}
-
 function safeNum(value) {
   const num = Number(value);
   return Number.isFinite(num) ? num : 0;
@@ -1142,10 +1105,8 @@ export default function ProjectBillTable({
   onActualQtyChange,
   onActualRateChange,
   onClearItemQuery,
-  onCloseBoqPickKey,
   onClosePickKey,
   onItemQueryChange,
-  onPickBoqCandidate,
   onPickCandidate,
   onRateChange,
   onSearchRateGen,
@@ -1179,7 +1140,6 @@ export default function ProjectBillTable({
   canSeeRates = true,
   contractLocked = false,
   contractLockedAt = null,
-  contractApprovedAt = null,
   contractSum = 0,
   // S18 bill: the measured work on its own. `grossAmount` reaches this table
   // already carrying the project's whole scope (the Overview needs it that
@@ -1236,11 +1196,9 @@ export default function ProjectBillTable({
   onToggleAutoFillBoq,
   onToggleGroupLink,
   onToggleOnlyFillEmpty,
-  onToggleOpenBoqPickKey,
   onToggleOpenPickKey,
   onToggleShowActualColumns,
   onlyFillEmpty = true,
-  openBoqPickKey = null,
   openPickKey = null,
   rateInfoText = "",
   rateGenPoolCount = 0,
@@ -1266,8 +1224,6 @@ export default function ProjectBillTable({
   // The site-wide toast (his feedback.js). Declared before the callbacks that
   // close over it, so its dependency arrays can name it.
   const fb = useFeedback();
-
-  const handleColResize = useColResize();
 
   // Column sorting state
   const [sortCol, setSortCol] = useState(null); // "sn" | "description" | "qty" | "unit" | "rate" | "grossAmt" | "balance" | null

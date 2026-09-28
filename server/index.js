@@ -22,7 +22,7 @@ import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
 import { runVideoPoll } from "./util/videoNotifier.js";
-import { ensureRolesSeeded } from "./util/rbac.js";
+import { ensureRolesSeededOnce } from "./util/rbac.js";
 import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
@@ -106,6 +106,7 @@ import unsubscribeRouter, {
 import adminVideos from "./routes/admin.videos.js";
 import adminReleaseNotifications from "./routes/admin.releaseNotifications.js";
 import adminReleases from "./routes/admin.releases.js";
+import adminWork from "./routes/admin.work.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -404,6 +405,8 @@ app.use("/admin/broadcast", adminBroadcast);
 // util/releaseNotifier.js.
 app.use("/admin/release-notifications", adminReleaseNotifications);
 app.use("/admin/releases", adminReleases);
+// The work board: what is in flight, and approval before a new feature is built.
+app.use("/admin/work", adminWork);
 app.use("/admin/campaigns", adminCampaigns);
 app.use("/admin/billboard", adminBillboard);
 // Public and unauthenticated: it is what every page of the site reads to draw
@@ -642,8 +645,10 @@ export function bootstrap() {
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission
     // cache before serving. Non-fatal: a seed failure logs but doesn't block boot.
+    // On Lambda both the connect above and this seed are usually already in
+    // flight (lambda.js startDatabaseEarly), so these awaits reuse that work.
     try {
-      await ensureRolesSeeded();
+      await ensureRolesSeededOnce();
     } catch (e) {
       console.error("[rbac] role seed failed:", e?.message || e);
     }

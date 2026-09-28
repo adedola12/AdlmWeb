@@ -98,7 +98,7 @@ export default function DsAdminOrganisations() {
           <AdmDim>nothing</AdmDim>
         ),
     },
-    { h: "Seats", num: true, cell: (f) => (f.seats ? f.seats : <AdmDim>—</AdmDim>) },
+    { h: "Seats", num: true, cell: (f) => (f.seats ? f.seats : <AdmDim>–</AdmDim>) },
     {
       h: "Licences",
       cell: (f) => (
