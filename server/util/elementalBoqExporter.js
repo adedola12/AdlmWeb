@@ -200,7 +200,25 @@ function itemMatchesGroup(haystack, words) {
   return true;
 }
 
-function findMatchingItems(boqItem, projectItems, matchedSet) {
+// An item's "exclude" list vetoes a match when any of its words appears in the
+// haystack. Lookups match on substrings, so "slab"+"concrete" also catches
+// "Concrete in Pool Slab" and "Oversite Slab Concrete"; the veto keeps those
+// ground-bearing slabs out of the suspended-slab lines. Excludes match whole
+// words (with an optional plural "s"), so "bed" does not veto "embedded".
+function itemExcluded(haystack, excludeWords) {
+  if (!Array.isArray(excludeWords) || !excludeWords.length) return false;
+  for (const w of excludeWords) {
+    const needle = normalizeText(w);
+    if (!needle) continue;
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(^|[^a-z0-9])${escaped}s?($|[^a-z0-9])`).test(haystack)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function findMatchingItems(boqItem, projectItems, matchedSet) {
   const lookups = Array.isArray(boqItem?.lookups) ? boqItem.lookups : [];
   const combineMode = String(boqItem?.lookupCombine || "first");
   if (!lookups.length) return [];
@@ -215,6 +233,7 @@ function findMatchingItems(boqItem, projectItems, matchedSet) {
       const it = projectItems[i];
       const haystack = itemHaystack(it);
       if (!itemMatchesGroup(haystack, group)) continue;
+      if (itemExcluded(haystack, boqItem.exclude)) continue;
       groupHits.push({ idx: i, item: it });
     }
     if (groupHits.length) {

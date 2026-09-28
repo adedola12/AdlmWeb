@@ -89,7 +89,7 @@ const SCREENS = {
               {c.progress}% through
             </AdmChip>
           ) : (
-            <AdmDim>—</AdmDim>
+            <AdmDim>–</AdmDim>
           ),
       },
       { h: "State", cell: (c) => <AdmChip tone={toneFor(c.state)}>{c.state}</AdmChip> },
@@ -110,7 +110,7 @@ const SCREENS = {
     empty: ["No quizzes", "No lecture carries a check."],
     cols: () => [
       { h: "Check", w: "26%", cell: (q) => <AdmTwo top={q.name} under={q.module} /> },
-      { h: "Course", cell: (q) => q.course || <AdmDim>—</AdmDim> },
+      { h: "Course", cell: (q) => q.course || <AdmDim>–</AdmDim> },
       { h: "Questions", num: true, cell: (q) => q.questions },
       { h: "Pass mark", num: true, cell: (q) => `${q.passMark}%` },
       {
@@ -136,7 +136,7 @@ const SCREENS = {
     cols: () => [
       { h: "Lesson", w: "36%", cell: (l) => <AdmTwo top={l.name} under={l.youtubeId} /> },
       { h: "Shelf", cell: (l) => l.section || <AdmDim>unfiled</AdmDim> },
-      { h: "Recommended", cell: (l) => (l.recommended ? "On the product page" : <AdmDim>—</AdmDim>) },
+      { h: "Recommended", cell: (l) => (l.recommended ? "On the product page" : <AdmDim>–</AdmDim>) },
       { h: "Order", num: true, cell: (l) => l.sort },
       { h: "Added", cell: (l) => when(l.createdAt) },
       { h: "State", cell: (l) => <AdmChip tone={toneFor(l.state)}>{l.state}</AdmChip> },
@@ -272,7 +272,7 @@ const SCREENS = {
     empty: ["No flyers", "None has been made."],
     cols: () => [
       { h: "Flyer", w: "34%", cell: (f) => <AdmTwo top={f.name} under={f.template} /> },
-      { h: "Made by", cell: (f) => f.by || <AdmDim>—</AdmDim> },
+      { h: "Made by", cell: (f) => f.by || <AdmDim>–</AdmDim> },
       { h: "Made", cell: (f) => when(f.createdAt) },
       { h: "State", cell: (f) => <AdmChip tone={toneFor(f.state)}>{f.state}</AdmChip> },
     ],

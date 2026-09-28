@@ -119,7 +119,7 @@ export function buildPurchaseAlert(purchase, { reason = "new" } = {}) {
         <p style="margin:0 0 16px;color:#555">${esc(LABEL[method] || method)}</p>
         <table style="border-collapse:collapse;width:100%;font-size:14px">
           <tr><td style="padding:4px 0;color:#666">Order</td><td style="padding:4px 0"><b>${esc(id)}</b></td></tr>
-          <tr><td style="padding:4px 0;color:#666">Buyer</td><td style="padding:4px 0">${esc(purchase.email || "—")}</td></tr>
+          <tr><td style="padding:4px 0;color:#666">Buyer</td><td style="padding:4px 0">${esc(purchase.email || "–")}</td></tr>
           ${
             purchase.organization?.name
               ? `<tr><td style="padding:4px 0;color:#666">Organisation</td><td style="padding:4px 0">${esc(
@@ -149,7 +149,7 @@ export function buildPurchaseAlert(purchase, { reason = "new" } = {}) {
       html,
       text:
         `${heading}\n${LABEL[method] || method}\n` +
-        `Order ${id}\nBuyer ${purchase.email || "—"}\n` +
+        `Order ${id}\nBuyer ${purchase.email || "–"}\n` +
         `Total ${fmt(purchase.totalAmount, currency)}\n` +
         (purchase.paymentProof?.url ? `Receipt: ${purchase.paymentProof.url}\n` : "No receipt yet\n") +
         `${WEB()}/admin/pending`,

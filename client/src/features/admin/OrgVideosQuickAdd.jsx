@@ -330,11 +330,11 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
                           ? "adaptive stream"
                           : p.master
                             ? "as recorded"
-                            : "—"
+                            : "–"
                         : v.source === "link"
                           ? "external"
                           : v.source === "none"
-                            ? "—"
+                            ? "–"
                             : "older storage"}
                     </td>
                     <td className="py-2 pr-3 text-xs text-slate-600">

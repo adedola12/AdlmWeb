@@ -89,7 +89,14 @@ export function AuthProvider({ children }) {
     };
   }, [auth.accessToken]);
 
+  // Background refresh only while signed in. It used to run for every visitor,
+  // so each signed-out tab posted a doomed /auth/refresh every 10 minutes
+  // (~6,500 401s a week, most of the API's 4xx rate, burying real failures).
+  // A signed-out visitor with a live refresh cookie is still picked up by the
+  // hydrate call above on page load.
+  const signedIn = !!auth.accessToken;
   React.useEffect(() => {
+    if (!signedIn) return undefined;
     const id = setInterval(async () => {
       try {
         if (!API_BASE) return;
@@ -107,7 +114,7 @@ export function AuthProvider({ children }) {
     }, 10 * 60 * 1000);
 
     return () => clearInterval(id);
-  }, []);
+  }, [signedIn]);
 
   const clear = React.useCallback(() => {
     const empty = { user: null, accessToken: null, licenseToken: null };

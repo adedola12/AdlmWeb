@@ -60,8 +60,11 @@ test("an unparseable expiry falls back to the stored status", () => {
 });
 
 test("daysOverdue counts whole days since the expiry day ended", () => {
-  assert.equal(daysOverdue(null), 0);
-  assert.equal(daysOverdue(future), 0);
+  // A fixed clock: reading dayjs() here made the result depend on when the
+  // suite ran, which is how the first-hour-after-midnight bug surfaced.
+  const fixed = dayjs("2026-09-26T12:00:00Z"); // 13:00 WAT
+  assert.equal(daysOverdue(null, fixed), 0);
+  assert.equal(daysOverdue(fixed.add(30, "day").toDate(), fixed), 0);
 
   // Pinned, because this read the wall clock and so failed for one hour a
   // night: the hour-based count truncated the minutes past midnight and

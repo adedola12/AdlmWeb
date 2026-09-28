@@ -385,7 +385,7 @@ function followUpSummary(followUp) {
       ? `${q.currency === "USD" ? "$" : "₦"}${Number(q.total).toLocaleString()}`
       : "";
     bits.push(
-      `Unpaid order: ${q?.items || "—"}${amount ? ` — ${amount}` : ""}` +
+      `Unpaid order: ${q?.items || "–"}${amount ? ` — ${amount}` : ""}` +
         (q?.ageDays ? `, ${q.ageDays} days old` : "") +
         (q?.hasReceipt ? ", receipt uploaded" : ""),
     );

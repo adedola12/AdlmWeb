@@ -1624,7 +1624,7 @@ router.post(
         html: `
           <p>Hi ${user.firstName || "there"},</p>
           <p>Great news! We have proposed a date for your physical training:</p>
-          <p><b>Location:</b> ${purchase.physicalTraining.locationName || "—"}</p>
+          <p><b>Location:</b> ${purchase.physicalTraining.locationName || "–"}</p>
           <p><b>Date:</b> ${startStr}${endStr}</p>
           <p><b>Duration:</b> ${purchase.physicalTraining.durationDays || 1} day(s)</p>
           ${purchase.physicalTraining.bimInstallRequested ? "<p>BIM software installation is also included.</p>" : ""}

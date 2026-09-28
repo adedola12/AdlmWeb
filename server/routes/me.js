@@ -1213,7 +1213,7 @@ router.get(
         doc.rect(leftCol, y, pageWidth, rowH).fill(bg);
         doc.fontSize(9).font("Helvetica").fillColor(clr);
         doc.text(`${i + 1}.`, colSN + 4, y + 8, { width: 30, align: "center" });
-        doc.text(item.description || "—", colDesc, y + 8, { width: colQty - colDesc - 5 });
+        doc.text(item.description || "–", colDesc, y + 8, { width: colQty - colDesc - 5 });
         doc.text(String(item.qty || 1), colQty, y + 8, { width: 35, align: "center" });
         doc.text("Nr", colUnit, y + 8, { width: 40, align: "center" });
         doc.text(fmtN(item.unitPrice), colRate, y + 8, { width: 55, align: "right" });

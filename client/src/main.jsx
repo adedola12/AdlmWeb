@@ -67,6 +67,7 @@ const AdminDocSaved = lazyScreen(() => import("./pages/AdminDocSaved.jsx"));
 const AdminDocIssued = lazyScreen(() => import("./pages/AdminDocIssued.jsx"));
 const AdminDocProduced = lazyScreen(() => import("./pages/AdminDocProduced.jsx"));
 const AdminDocSystem = lazyScreen(() => import("./pages/AdminDocSystem.jsx"));
+const AdminWork = lazyScreen(() => import("./pages/AdminWork.jsx"));
 const AdminStorage = lazyScreen(() => import("./pages/AdminStorage.jsx"));
 const AdminEmails = lazyScreen(() => import("./pages/AdminEmails.jsx"));
 const AdminCampaigns = lazyScreen(() => import("./pages/AdminCampaigns.jsx"));
@@ -1092,6 +1093,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="releases">
             <AdminReleases />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Work board (docs/WORK_BOARD.md): same audience as the release desk
+      {
+        path: "admin/work",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminWork />
           </AdminRoute>
         ),
       },
