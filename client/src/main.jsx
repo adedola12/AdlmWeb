@@ -1,7 +1,8 @@
 // src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
+// `Navigate` went with the /dashboard redirect — that was its only use here.
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./store.jsx";
 import { StepUpProvider } from "./features/security/useStepUp.jsx";
 import { ThemeProvider, initThemeBeforeRender } from "./theme.jsx";
@@ -57,6 +58,7 @@ import AdminDocSaved from "./pages/AdminDocSaved.jsx";
 import AdminDocIssued from "./pages/AdminDocIssued.jsx";
 import AdminDocProduced from "./pages/AdminDocProduced.jsx";
 import AdminDocSystem from "./pages/AdminDocSystem.jsx";
+import AdminWork from "./pages/AdminWork.jsx";
 import AdminStorage from "./pages/AdminStorage.jsx";
 import AdminEmails from "./pages/AdminEmails.jsx";
 import AdminCampaigns from "./pages/AdminCampaigns.jsx";
@@ -75,6 +77,9 @@ import Signup from "./pages/Signup.jsx";
 import Purchase from "./pages/Purchase.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import Profile from "./pages/Profile.jsx";
+// The classic dashboard, still the one customers use until 1 October. The
+// launch build stopped importing it when /dashboard became a redirect.
+import Dashboard from "./pages/Dashboard.jsx";
 import Learn from "./pages/Learn.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
 import Admin from "./pages/Admin.jsx";
@@ -190,6 +195,7 @@ import DsPreviewGate from "./ds/DsPreviewGate.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import PreviewHostGate from "./components/PreviewHostGate.jsx";
 import AdminReleases from "./pages/AdminReleases.jsx";
+import AdminWork from "./pages/AdminWork.jsx";
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
@@ -320,14 +326,26 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      // Retired. /manage is the account overview now — his screen, on real
-      // data — and two dashboards competing for the same job is how one of
-      // them quietly goes stale.
+      // The dashboard customers actually use. /manage is his Manage overview
+      // and it is the one that replaces this — but only once the new build is
+      // the build, and that is 1 October. PR #24 merged on 24 September, six
+      // days early, and this route was a redirect to /manage from that moment:
+      // everybody who opened their dashboard landed on a screen they had never
+      // seen. Restored here rather than reverting the merge, because the rest
+      // of the new site is fine to be early and this is the one screen people
+      // are working in today.
       //
-      // A redirect rather than a deletion, and permanently so: this path is in
-      // receipts, in enrolment emails and in people's history, and the same
-      // reasoning already keeps /learn/course/:sku alive a few lines below.
-      { path: "dashboard", element: <Navigate to="/manage" replace /> },
+      // /manage keeps its own routes and is still reachable. Nothing about the
+      // new overview is removed; it simply stops being where customers are
+      // sent. Swap the two back on 1 October.
+      {
+        path: "dashboard",
+        element: (
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "freebies",
         element: (
@@ -1046,6 +1064,19 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
+      {
+        // The editor behind the Roles register: create a role, change the
+        // areas it reaches, move people between roles. His register reads
+        // only; until an editor is drawn in his grammar, the older build's
+        // screen does the writing (with its confirmations, the role-move audit
+        // trail, and the server's last-admin and self-demotion guards).
+        path: "admin/roles/edit",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <AdminRoles />
+          </AdminRoute>
+        ),
+      },
 
       // ✅ Release sign-off (docs/RELEASE_GATE.md): super-admins + the release approver
       {
@@ -1053,6 +1084,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="releases">
             <AdminReleases />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Work board (docs/WORK_BOARD.md): same audience as the release desk
+      {
+        path: "admin/work",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminWork />
           </AdminRoute>
         ),
       },
@@ -1209,6 +1250,22 @@ const router = createBrowserRouter([
     ),
     errorElement: <AppError />,
   },
+
+  // The legal pages, public now rather than at launch. Every footer and the
+  // sign-up form link /privacy, /terms and /licensing, and the live site had no
+  // route for any of them, so all three were "Page not found". Only his redesign
+  // has these pages, so they render in its shell, like /certificate: not through
+  // DsPreview, which would turn every link on them into a staff-only /preview
+  // one. Nothing else of the redesign is exposed by this.
+  ...["privacy", "terms", "licensing"].map((slug) => ({
+    path: `/${slug}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
 
   // R21: Beyond BIM and the training calendar, real public routes behind
   // launch flags (config/flags.js). Off: "Coming soon" for the public, the

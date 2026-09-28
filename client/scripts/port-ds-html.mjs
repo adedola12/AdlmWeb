@@ -17,7 +17,11 @@ import { htmlToJsx } from "./lib/html-to-jsx.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT = path.resolve(here, "..");
-const SITE = path.resolve(CLIENT, "../../ADLMWebNewUI/site");
+// His repo sits beside ADLMWebsite. From a git worktree that relative path
+// does not reach it, so DS_SITE can name the folder directly.
+const SITE = process.env.DS_SITE
+  ? path.resolve(process.env.DS_SITE)
+  : path.resolve(CLIENT, "../../ADLMWebNewUI/site");
 const OUT_CHROME = path.join(CLIENT, "src/ds/chrome");
 const OUT_PAGES = path.join(CLIENT, "src/ds/pages");
 
@@ -416,7 +420,57 @@ const SLOTS = {
   },
 };
 
+// R09: the home "trusted by" strip shows each client's logo instead of its
+// name (owner approved the logos, 27 Sep 2026). Files are in
+// client/public/ds/logos/, cut to 96px tall from the owner-approved set in
+// Documents/adlm-client-logos-R09 (sources in its README). Godaret Consultant
+// has no logo anywhere, so it stays as text (owner). "BEC Associates" is BEC
+// Consultants' Nigeria Ltd (owner). FAAN carries its official name. Styles:
+// .clogo in src/styles/ds-local.css.
+const CLIENT_LOGOS = [
+  ["NIQS", "niqs", "Nigerian Institute of Quantity Surveyors (NIQS)"],
+  ["The Big 5 Construct", "the-big-5-construct-nigeria", "The Big 5 Construct Nigeria"],
+  ["NIOB", "niob", "Nigerian Institute of Building (NIOB)"],
+  ["Federal Airport Authority", "faan", "Federal Airports Authority of Nigeria (FAAN)"],
+  ["Construworth", "construworth", "ConstruWorth"],
+  ["ITB Nigeria", "itb-nigeria", "ITB Nigeria"],
+  ["BEC Associates", "bec-consultants", "BEC Consultants"],
+  ["JABU", "jabu", "Joseph Ayo Babalola University (JABU)"],
+  ["Rivers State University", "rivers-state-university", "Rivers State University"],
+];
+const clientLogoEdits = CLIENT_LOGOS.map(([name, file, alt]) => ({
+  label: `client logo: ${name}`,
+  find: `<span>${name}</span>`,
+  replace: `<span class="clogo"><img src="assets/img/logos/${file}.png" alt="${alt}" loading="lazy" decoding="async"></span>`,
+}));
+
 const PAGE_EDITS = {
+  "index.html": clientLogoEdits,
+
+  // PR #43 (f3eeed8) added the take-off timing section by editing the
+  // GENERATED DsPrivacy.jsx, so the next port run wiped it. It lives here now,
+  // so every run puts it back after the retention paragraph, before his
+  // "Analytics" section.
+  "src/privacy.html": [
+    {
+      label: "privacy: last-updated date for the take-off timing section",
+      find: '<p class="updated">Last updated 7 August 2026</p>',
+      replace: '<p class="updated">Last updated 26 September 2026</p>',
+    },
+    {
+      label: "privacy: take-off timing section",
+      find: "Support conversations are kept for two years.</p>",
+      replace:
+        "Support conversations are kept for two years.</p>\n" +
+        "<h3>Take-off timing</h3>\n" +
+        "<p>" +
+        "When you finish a take-off in HERON or QUIV, or run an auto take-off in QUIV, the plugin sends us a short record of it: when it started and ended, how long you actively worked on it, and counts of what was measured (drawings or levels, elements, element types and bill lines). It carries no drawing or model content, no file, project, element or client names, and no quantities, rates or prices. A model is identified only by a one-way code, so repeat take-offs of the same model can be grouped without revealing which model it is. The record is linked to your account and, if you hold an organisation licence, to your organisation." +
+        "</p>\n<p>" +
+        "We use these records to measure how much time the tools save, to find and fix the slow parts of the products, and to publish combined figures, for example the typical time an auto take-off takes. Anything we publish is a total or an average across many take-offs; it never identifies you, your organisation or a project. The records are kept until you ask us to delete them, which you can do at any time by writing to admin@adlmstudio.net." +
+        "</p>",
+    },
+  ],
+
   // R19: Etti's card on About is his initials placeholder until a photo is
   // supplied. TODO(adlm): Etti's photo. Save it as
   // client/public/ds/team-etti.jpg (portrait, 960x1200 like the other three)

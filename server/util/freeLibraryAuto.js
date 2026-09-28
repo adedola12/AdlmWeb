@@ -8,8 +8,12 @@
 // Additive only, like the catalogue sync: nothing is changed or unpublished,
 // and a video somebody has already filed or hidden is left alone (matched on
 // youtubeId, whatever its state). FREE_LIBRARY_AUTO=off stops it.
+//
+// The channel is read from its public feed, or from the Data API when the feed
+// is down (youtubeRss.js fetchChannelUploads). When neither answers, the run
+// files nothing and says so once, not every fifteen minutes.
 
-import { fetchChannelFeed } from "./youtubeRss.js";
+import { fetchChannelUploads } from "./youtubeRss.js";
 import { fileVideo, sectionOf } from "./freeVideoSections.js";
 import { loadCatalogue } from "./youtubeLibrary.js";
 
@@ -39,18 +43,51 @@ export function planNewUploads(feed, knownIds) {
     });
 }
 
+// How the last run's read of the channel went, so a feed that stays down is
+// reported ONCE when it goes down (and once when it comes back), not every
+// fifteen minutes. Per warm Lambda container; a cold start may say it again.
+const feedHealth = { state: "ok" };
+
+function noteFeedState(health, next, log, message) {
+  if (health.state === next) return;
+  health.state = next;
+  if (next === "ok") log.log?.(`[free-library] ${message}`);
+  else log.warn?.(`[free-library] ${message}`);
+}
+
 export async function runFreeLibraryAuto({
   FreeVideo,
-  fetchFeed = fetchChannelFeed,
+  // Resolves to an array of uploads, or to { videos, source }.
+  fetchFeed = (channelId) => fetchChannelUploads(channelId, { env }),
   // YouTube ids an admin deleted from the library: never re-filed.
   ignoredIds = async () => [],
   env = process.env,
   log = console,
+  health = feedHealth,
 } = {}) {
   if (/^(off|0|false|no)$/i.test(String(env.FREE_LIBRARY_AUTO || "").trim())) {
     return { ok: true, skipped: true, reason: "off" };
   }
-  const feed = await fetchFeed(channelIdNow(env));
+
+  // A failed read changes nothing: the job is additive, so every video already
+  // on the shelves stays exactly as it was until a read succeeds again.
+  let got;
+  try {
+    got = await fetchFeed(channelIdNow(env));
+  } catch (err) {
+    const code = err?.code || "error";
+    const error = String(err?.message || err);
+    noteFeedState(health, code, log, `${error}. Nothing changes in the library; checking again every run.`);
+    return { ok: false, skipped: true, reason: "feed-unavailable", code, error };
+  }
+  const feed = Array.isArray(got) ? got : got?.videos || [];
+  const source = Array.isArray(got) ? undefined : got?.source;
+  if (source === "api") {
+    noteFeedState(health, "api", log, `YouTube feed failed (${got.rssError}); reading uploads from the Data API instead.`);
+  } else {
+    noteFeedState(health, "ok", log, "YouTube feed is answering again.");
+  }
+
   const ids = feed.map((v) => v.youtubeId);
   const known = await FreeVideo.find({ youtubeId: { $in: ids } }).select("youtubeId").lean();
   const ignored = (await ignoredIds()) || [];
@@ -59,5 +96,11 @@ export async function runFreeLibraryAuto({
     await FreeVideo.updateOne({ youtubeId: row.youtubeId }, { $setOnInsert: row }, { upsert: true });
     log.log?.(`[free-library] filed ${row.youtubeId} on "${row.section || "More lessons"}": ${row.title}`);
   }
-  return { ok: true, checked: feed.length, shorts: feed.filter((v) => v.isShort).length, added: rows.length };
+  return {
+    ok: true,
+    ...(source ? { source } : {}),
+    checked: feed.length,
+    shorts: feed.filter((v) => v.isShort).length,
+    added: rows.length,
+  };
 }

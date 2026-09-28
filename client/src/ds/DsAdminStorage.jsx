@@ -47,7 +47,7 @@ const BAND_WORD = { full: "nearly full", filling: "filling up", fine: "comfortab
 
 /** His fill bar. Colour carries the same meaning as the chip, not a new one. */
 function Fill({ pct }) {
-  if (pct == null) return <AdmDim>—</AdmDim>;
+  if (pct == null) return <AdmDim>–</AdmDim>;
   return (
     <span className={`adm-fill is-${bandOf(pct)}`}>
       <i style={{ width: `${Math.min(pct, 100)}%` }} />

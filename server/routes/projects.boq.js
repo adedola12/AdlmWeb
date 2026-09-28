@@ -8,9 +8,11 @@ import { resolveMergedProject } from "../services/projectMerge.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import {
   canExportProject,
+  normalizeId,
   requestUserId,
   userOwnsDoc,
 } from "../util/exportAccess.js";
+import { readerMaySeeRates } from "../util/sharedMoney.js";
 import { isApprovedVariation } from "../util/variationStatus.js";
 
 const router = express.Router();
@@ -180,6 +182,19 @@ async function findProjectDoc({ tool, id, userId }) {
       const err = new Error("View-only access cannot export this project.");
       err.statusCode = 403;
       err.code = "VIEW_ONLY";
+      throw err;
+    }
+    // Both exports are priced workbooks: every rate and total on the bill.
+    // A collaborator sees those on the project page only with an active
+    // RateGen subscription (routes/projects.js resolveProjectAccess), and the
+    // certificate / final-account exports already refuse without it. These
+    // two did not, so a "full" collaborator without RateGen could download
+    // the very rates the page hides from them.
+    const isOwner = direct.userId != null && normalizeId(direct.userId) === normalizeId(userId);
+    if (!isOwner && !(await readerMaySeeRates(userId))) {
+      const err = new Error("A RateGen subscription is required to export priced documents.");
+      err.statusCode = 403;
+      err.code = "RATEGEN_REQUIRED";
       throw err;
     }
     return normalizeProjectDoc(direct);

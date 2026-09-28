@@ -62,9 +62,9 @@ function addBrandingHeader(ws, { title, projectName, preparedBy, date, currency 
   ws.mergeCells(brand.number, 1, brand.number, COLUMNS.length);
 
   const meta = [
-    ["Project", projectName || "—"],
+    ["Project", projectName || "–"],
     ["Date", dayjs(date || new Date()).format("YYYY-MM-DD")],
-    ["Prepared by", preparedBy || "—"],
+    ["Prepared by", preparedBy || "–"],
     ["Currency", currency || "NGN"],
   ];
   for (const [k, v] of meta) {
@@ -247,7 +247,7 @@ export function streamArchicadBoqPdf(res, { projectName, clientName = "", prepar
 
   let y = 100;
   doc.fontSize(10).font("Helvetica-Bold").fillColor("#3e3e3e").text("PROJECT:", L, y);
-  doc.font("Helvetica").text(projectName || "—", L + 90, y);
+  doc.font("Helvetica").text(projectName || "–", L + 90, y);
   y += 16;
   if (clientName) {
     doc.font("Helvetica-Bold").text("CLIENT:", L, y);
@@ -258,7 +258,7 @@ export function streamArchicadBoqPdf(res, { projectName, clientName = "", prepar
   doc.font("Helvetica").text(dayjs(boq?.extractedAt || new Date()).format("MMMM D, YYYY"), L + 90, y);
   y += 16;
   doc.font("Helvetica-Bold").text("PREPARED BY:", L, y);
-  doc.font("Helvetica").text(preparedBy || "—", L + 90, y);
+  doc.font("Helvetica").text(preparedBy || "–", L + 90, y);
   y += 30;
 
   // Table header band.

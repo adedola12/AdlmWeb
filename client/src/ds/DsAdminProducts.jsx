@@ -205,8 +205,8 @@ export default function DsAdminProducts() {
 
   const cols = [
     { h: "Product", w: "24%", cell: (p) => <AdmTwo top={p.name} under={p.tag} /> },
-    { h: "Monthly", num: true, cell: (p) => (p.monthly ? money(p.monthly) : <AdmDim>—</AdmDim>) },
-    { h: "Yearly", num: true, cell: (p) => (p.yearly ? money(p.yearly) : <AdmDim>—</AdmDim>) },
+    { h: "Monthly", num: true, cell: (p) => (p.monthly ? money(p.monthly) : <AdmDim>–</AdmDim>) },
+    { h: "Yearly", num: true, cell: (p) => (p.yearly ? money(p.yearly) : <AdmDim>–</AdmDim>) },
     {
       h: "Storage",
       num: true,

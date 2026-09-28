@@ -15,7 +15,11 @@
 // ----------------------------------------------------------------------------
 
 import serverless from "serverless-http";
-import { SSMClient, GetParametersByPathCommand } from "@aws-sdk/client-ssm";
+import {
+  SSMClient,
+  GetParametersByPathCommand,
+  GetParametersCommand,
+} from "@aws-sdk/client-ssm";
 
 // IMPORTANT: secrets must be in process.env BEFORE index.js is imported,
 // because index.js reads several of them at module scope (helmet's HSTS flag,
@@ -93,6 +97,83 @@ async function loadOriginVerifySecret() {
     console.error(
       `[origin-verify] could not read the secret, check is OFF for this container: ${err?.name || err}`,
     );
+ * Open the Mongo connection and seed the roles while the secrets load.
+ *
+ * A cold first request used to run these one after another: SSM (~0.8s over
+ * nine sequential pages), the import (~2s), then connect (~0.4s) and the role
+ * seed. Connecting and seeding need only the database's own parameters, so
+ * they now start as soon as those arrive and overlap the rest of the SSM
+ * paging (investigation of 26-27 Sep 2026; profiling showed the import is
+ * spread over hundreds of modules with no single library worth lazy-loading,
+ * and it cannot be overlapped because it blocks the event loop).
+ *
+ * Nothing here changes what is served:
+ *   - demoTenancy is imported first, exactly as index.js does, so the Role
+ *     model is compiled after the plugin registers and bootstrap()'s
+ *     assertTenancyApplied() still holds;
+ *   - connectDB() gets the API's options (apiMongoOptions) — the first
+ *     caller's options win, so passing anything else here would silently drop
+ *     the fail-fast timeouts;
+ *   - bootstrap() still awaits connect and seed before the first request is
+ *     handled, through connectDB's cached promise and ensureRolesSeededOnce.
+ *
+ * Never rejects: a failure is logged and bootstrap() retries it the normal way.
+ */
+export function startDatabaseEarly() {
+  return (async () => {
+    await import("./models/demoTenancy.js");
+    const [{ connectDB }, { apiMongoOptions }, { ensureRolesSeededOnce }] = await Promise.all([
+      import("./db.js"),
+      import("./util/mongoTimeouts.js"),
+      import("./util/rbac.js"),
+    ]);
+    await connectDB(process.env.MONGO_URI, apiMongoOptions());
+    await ensureRolesSeededOnce();
+  })().catch((err) => {
+    console.warn("[lambda] early database start failed, bootstrap will retry:", err?.message || err);
+  });
+}
+
+// Every parameter connectDB() and apiMongoOptions() read. AUTH_DB matters
+// most: it lives in SSM, and connecting before it loaded would silently use
+// the default database name. Names absent from SSM are simply not returned.
+export const DB_PARAM_NAMES = Object.freeze([
+  "MONGO_URI",
+  "AUTH_DB",
+  "MONGO_MAX_POOL",
+  "MONGO_MIN_POOL",
+  "MONGO_SOCKET_TIMEOUT_MS",
+  "MONGO_WAIT_QUEUE_TIMEOUT_MS",
+]);
+
+/**
+ * Load DB_PARAM_NAMES into process.env with one GetParameters call (allowed
+ * by the function's existing policy). Same rule as loadSecretsIntoEnv: an
+ * explicitly set env var is never overwritten, so the full load later agrees
+ * with whatever the early connection used.
+ *
+ * Returns true only when it is safe to connect early: the call succeeded and
+ * MONGO_URI is known. On any failure it returns false and the connection is
+ * made by bootstrap() after the full load, exactly as before.
+ */
+export async function loadDbParamsIntoEnv(client = ssm, prefix = SSM_PREFIX) {
+  if (!client || !prefix) return Boolean(process.env.MONGO_URI);
+  const path = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
+  try {
+    const out = await client.send(
+      new GetParametersCommand({
+        Names: DB_PARAM_NAMES.map((n) => `${path}/${n}`),
+        WithDecryption: true,
+      }),
+    );
+    for (const p of out.Parameters || []) {
+      const key = p.Name.slice(p.Name.lastIndexOf("/") + 1);
+      if (process.env[key] === undefined) process.env[key] = p.Value;
+    }
+    return Boolean(process.env.MONGO_URI);
+  } catch (err) {
+    console.warn("[lambda] early database parameters failed, connecting after the full load:", err?.message || err);
+    return false;
   }
 }
 
@@ -108,6 +189,21 @@ function loadApp() {
     // In parallel: a cold start already waits on SSM, so the second read
     // adds no latency of its own.
     await Promise.all([loadSecretsIntoEnv(), loadOriginVerifySecret()]);
+    // The database's own parameters first, by name, in one call. When they
+    // arrive, the connection and the role seed start while the rest of the
+    // secrets are still paging in: both are network waits, so they genuinely
+    // run side by side. (Starting them beside the app import does not work:
+    // the import is synchronous CPU work that blocks the event loop.)
+    // Deliberately not awaited: bootstrap() awaits the same connection and
+    // the same seed run, so this only moves the work earlier.
+    // Side by side with the first page, not before it, so the paging is not
+    // held up by one extra round trip. Both only fill unset env vars, from
+    // the same SSM values, so the order they land in does not matter.
+    const early = loadDbParamsIntoEnv().then((ok) => {
+      if (ok) startDatabaseEarly();
+    });
+    await loadSecretsIntoEnv();
+    await early;
     // Deferred on purpose — see the note at the top of this file.
     return import("./index.js");
   })().catch((err) => {
@@ -224,10 +320,9 @@ export async function handler(event, context) {
   // cold start. Traffic is low enough that almost every user was hitting a
   // cold container, which is most of what "signing in is slow" actually was.
   //
-  // The Mongo ping is deliberate. db.js sets minPoolSize: 0, so an idle
-  // container drops its pool and the next real query pays a reconnect on top
-  // of everything else — that is why /health can report "disconnected" on a
-  // container with minutes of uptime. Pinging keeps a live socket in the pool.
+  // The Mongo ping is deliberate: it proves the pooled socket still works
+  // after the container was frozen, so a dead one is replaced here rather
+  // than on the next real request.
   if (event?.__warm === true) {
     await ensureHandler();
     try {
@@ -246,3 +341,30 @@ export async function handler(event, context) {
 }
 
 export default handler;
+
+// ── Provisioned concurrency: do the cold-start work during INIT ──────────────
+// On an on-demand environment the expensive work (SSM, app import, Mongo
+// connect, role seed) runs inside the first request, as above: that keeps the
+// on-demand INIT phase short, which is capped at 10s. A PROVISIONED
+// environment is initialised before any request reaches it, and its INIT may
+// run for up to 130s, so there the same work is done now and the first request
+// it serves is a warm one. That is the whole point of paying for it
+// (infra/config.ts apiProvisionedConcurrency).
+//
+// Never fails INIT: if anything goes wrong (a Mongo stall, a missing secret),
+// it is logged and the environment falls back to the lazy path, which retries
+// on the first request exactly as an on-demand environment would.
+export async function prepareForProvisionedConcurrency(env = process.env, prepare = ensureHandler) {
+  if (env.AWS_LAMBDA_INITIALIZATION_TYPE !== "provisioned-concurrency") return false;
+  const t0 = Date.now();
+  try {
+    await prepare();
+    console.log(`[lambda] provisioned environment ready in INIT (${Date.now() - t0}ms)`);
+    return true;
+  } catch (err) {
+    console.warn("[lambda] provisioned INIT prep failed, the first request will retry:", err?.message || err);
+    return false;
+  }
+}
+
+await prepareForProvisionedConcurrency();

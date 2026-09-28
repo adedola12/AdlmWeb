@@ -49,7 +49,7 @@ export default function DsPrivacy() {
           <div className="prose rise">
             {" "}
             <p className="updated">
-              Last updated 7 August 2026
+              Last updated 26 September 2026
             </p>
             {" "}
             <h3>
@@ -110,6 +110,18 @@ export default function DsPrivacy() {
             {" "}
             <p>
               Account and project data is kept while the account is open. Invoices are retained for as long as Nigerian tax law requires. Support conversations are kept for two years.
+            </p>
+            {" "}
+            <h3>
+              Take-off timing
+            </h3>
+            {" "}
+            <p>
+              When you finish a take-off in HERON or QUIV, or run an auto take-off in QUIV, the plugin sends us a short record of it: when it started and ended, how long you actively worked on it, and counts of what was measured (drawings or levels, elements, element types and bill lines). It carries no drawing or model content, no file, project, element or client names, and no quantities, rates or prices. A model is identified only by a one-way code, so repeat take-offs of the same model can be grouped without revealing which model it is. The record is linked to your account and, if you hold an organisation licence, to your organisation.
+            </p>
+            {" "}
+            <p>
+              We use these records to measure how much time the tools save, to find and fix the slow parts of the products, and to publish combined figures, for example the typical time an auto take-off takes. Anything we publish is a total or an average across many take-offs; it never identifies you, your organisation or a project. The records are kept until you ask us to delete them, which you can do at any time by writing to admin@adlmstudio.net.
             </p>
             {" "}
             <h3>

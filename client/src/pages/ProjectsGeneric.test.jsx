@@ -74,6 +74,10 @@ describe("the tool page's empty project grid", () => {
       const p = String(path);
       if (p.startsWith("/projects/revit/storage")) return Promise.resolve(null);
       if (p.includes("entitlements")) return Promise.resolve({ items: [] });
+      // The page also asks for this product's read-only samples. Without this
+      // the catch-all below answered with the project list, and both projects
+      // showed up a second time in the samples row.
+      if (p.endsWith("/samples")) return Promise.resolve([]);
       if (opts.method === "DELETE") return Promise.reject(new Error("Could not delete"));
       return Promise.resolve([project("p1", "Ikoyi tower"), project("p2", "Lekki annexe")]);
     });

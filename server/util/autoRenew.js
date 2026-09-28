@@ -54,7 +54,7 @@ const WEB_URL =
   ).trim() || "http://localhost:5173";
 
 const fmtNaira = (n) => `₦${Number(n || 0).toLocaleString("en-NG")}`;
-const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
+const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "–");
 
 /* ---------------- job lock (same pattern as expiryNotifier) ---------------- */
 

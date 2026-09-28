@@ -46,7 +46,7 @@ export default function ArchiCADVersionSelector({
       </select>
       </label>
 
-      {viewingCurrent ? (
+      {viewingCurrent && onReapply ? (
         <button
           type="button"
           disabled={reapplying}

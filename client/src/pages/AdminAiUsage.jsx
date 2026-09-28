@@ -17,12 +17,12 @@ import { useAuth } from "../store.jsx";
 const usd = (n) =>
   Number.isFinite(Number(n))
     ? `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : "—";
+    : "–";
 const usd4 = (n) =>
   Number.isFinite(Number(n)) && Number(n) > 0 && Number(n) < 0.01
     ? `$${Number(n).toFixed(4)}`
     : usd(n);
-const num = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : "—");
+const num = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : "–");
 const compact = (n) => {
   const v = Number(n) || 0;
   if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
@@ -30,9 +30,9 @@ const compact = (n) => {
   if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
   return String(v);
 };
-const dt = (d) => (d ? new Date(d).toLocaleString() : "—");
-const day = (d) => (d ? new Date(d).toLocaleDateString() : "—");
-const pct = (n) => (n === null || n === undefined ? "—" : `${Number(n).toFixed(0)}%`);
+const dt = (d) => (d ? new Date(d).toLocaleString() : "–");
+const day = (d) => (d ? new Date(d).toLocaleDateString() : "–");
+const pct = (n) => (n === null || n === undefined ? "–" : `${Number(n).toFixed(0)}%`);
 
 function downloadCsv(filename, headers, rows) {
   const esc = (v) => {
@@ -219,7 +219,7 @@ function CreditPanel({ credit, onSave, saving }) {
               </div>
               <div className="font-semibold tabular-nums">
                 {credit.daysRemaining === null
-                  ? "—"
+                  ? "–"
                   : `${num(credit.daysRemaining)} days · ${day(credit.exhaustsOn)}`}
               </div>
             </div>
@@ -871,7 +871,7 @@ export default function AdminAiUsage() {
         <Kpi label="Tokens" value={compact(t?.tokens)} sub={`${compact(t?.inputTokens)} in · ${compact(t?.outputTokens)} out`} />
         <Kpi
           label="Avg cost / call"
-          value={t?.calls ? usd4(t.costUsd / t.calls) : "—"}
+          value={t?.calls ? usd4(t.costUsd / t.calls) : "–"}
           sub={`${num(t?.avgMs)} ms avg`}
         />
         <Kpi
@@ -887,7 +887,7 @@ export default function AdminAiUsage() {
           label="Prompt cache"
           value={
             (t?.cacheReadTokens || 0) + (t?.cacheWriteTokens || 0) === 0
-              ? "—"
+              ? "–"
               : pct(
                   (t.cacheReadTokens / (t.cacheReadTokens + t.cacheWriteTokens)) * 100,
                 )
@@ -1234,7 +1234,7 @@ export default function AdminAiUsage() {
                   label: "Per-feature",
                   render: (a) => {
                     const entries = Object.entries(a.features || {});
-                    if (!entries.length) return "—";
+                    if (!entries.length) return "–";
                     return entries.map(([k, lim], i) => (
                       <span key={k}>
                         {i ? ", " : ""}
@@ -1324,7 +1324,7 @@ export default function AdminAiUsage() {
                 render: (e) => features.find((f) => f.key === e.feature)?.label || e.feature,
               },
               { key: "email", label: "User", render: (e) => e.email || "(guest)" },
-              { key: "model", label: "Model", render: (e) => e.model || "—" },
+              { key: "model", label: "Model", render: (e) => e.model || "–" },
               {
                 key: "tokens",
                 label: "Tokens",

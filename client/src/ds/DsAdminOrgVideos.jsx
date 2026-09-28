@@ -339,7 +339,7 @@ export default function DsAdminOrgVideos() {
         }
         if (v.source === "bunny" || v.source === "r2") return <AdmDim>older storage</AdmDim>;
         if (v.source === "link") return <AdmDim>external</AdmDim>;
-        return <AdmDim>—</AdmDim>;
+        return <AdmDim>–</AdmDim>;
       },
     },
     {

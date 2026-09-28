@@ -200,6 +200,8 @@ export default function DsWorkHome() {
   const [courses, setCourses] = React.useState(null);
   const [coursesFailed, setCoursesFailed] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  // Merged contracts' own certificates, which no project row carries.
+  const [mergedContracts, setMergedContracts] = React.useState([]);
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
@@ -208,7 +210,11 @@ export default function DsWorkHome() {
     // Five independent reads, in parallel. Only the rollup can take the page
     // down; every other panel carries its own failure.
     apiAuthed("/me/projects-rollup", { token: accessToken })
-      .then((d) => alive && setProjects(foldMaterials(normaliseRollup(d.projects))))
+      .then((d) => {
+        if (!alive) return;
+        setMergedContracts(Array.isArray(d.mergedContracts) ? d.mergedContracts : []);
+        setProjects(foldMaterials(normaliseRollup(d.projects)));
+      })
       .catch(() => alive && setFailed(true));
 
     apiAuthed("/me/work-overview", { token: accessToken })
@@ -241,7 +247,10 @@ export default function DsWorkHome() {
     };
   }, [accessToken]);
 
-  const kpi = React.useMemo(() => (projects ? headline(projects) : null), [projects]);
+  const kpi = React.useMemo(
+    () => (projects ? headline(projects, mergedContracts) : null),
+    [projects, mergedContracts],
+  );
 
   const decisions = React.useMemo(
     () =>

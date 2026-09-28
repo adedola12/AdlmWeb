@@ -392,19 +392,19 @@ export default function PortfolioDashboard() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 flex-1 w-full">
-                  <StatTile label="Total projects"    value={loading ? "—" : totals.projectCount} helper="Across all ADLM products" />
-                  <StatTile label="Completed items"   value={loading ? "—" : totals.markedCount.toLocaleString()} helper="Items marked done" tone="success" />
-                  <StatTile label="Remaining items"   value={loading ? "—" : (totals.itemCount - totals.markedCount).toLocaleString()} helper="Items outstanding" />
-                  <StatTile label="Total work items"  value={loading ? "—" : totals.itemCount.toLocaleString()} helper="All items combined" />
-                  <StatTile label="Planned total"     value={loading ? "—" : `₦${money(totals.totalCost)}`} helper="Combined BoQ value" />
-                  <StatTile label="Completed to date" value={loading ? "—" : `₦${money(totals.valuedAmount)}`} helper="Value of work done" tone="success" />
+                  <StatTile label="Total projects"    value={loading ? "–" : totals.projectCount} helper="Across all ADLM products" />
+                  <StatTile label="Completed items"   value={loading ? "–" : totals.markedCount.toLocaleString()} helper="Items marked done" tone="success" />
+                  <StatTile label="Remaining items"   value={loading ? "–" : (totals.itemCount - totals.markedCount).toLocaleString()} helper="Items outstanding" />
+                  <StatTile label="Total work items"  value={loading ? "–" : totals.itemCount.toLocaleString()} helper="All items combined" />
+                  <StatTile label="Planned total"     value={loading ? "–" : `₦${money(totals.totalCost)}`} helper="Combined BoQ value" />
+                  <StatTile label="Completed to date" value={loading ? "–" : `₦${money(totals.valuedAmount)}`} helper="Value of work done" tone="success" />
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <StatTile label="Outstanding balance" value={loading ? "—" : `₦${money(totals.remainingAmount)}`} helper="Project value yet to claim" tone="warning" />
-              <StatTile label="Overall progress"    value={loading ? "—" : `${pct.toFixed(1)}%`} helper={`${totals.markedCount.toLocaleString()} of ${totals.itemCount.toLocaleString()} work items`} />
+              <StatTile label="Outstanding balance" value={loading ? "–" : `₦${money(totals.remainingAmount)}`} helper="Project value yet to claim" tone="warning" />
+              <StatTile label="Overall progress"    value={loading ? "–" : `${pct.toFixed(1)}%`} helper={`${totals.markedCount.toLocaleString()} of ${totals.itemCount.toLocaleString()} work items`} />
             </div>
 
             {/* Project table */}
@@ -451,8 +451,9 @@ export default function PortfolioDashboard() {
                                   <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.color}`}>{st.label}</span>
                                 </td>
                                 <td className="px-4 py-3 text-right text-slate-600 dark:text-adlm-dark-text">{safeNum(row.itemCount).toLocaleString()}</td>
-                                <td className="px-4 py-3 text-right text-slate-600 dark:text-adlm-dark-text">₦{money(row.totalCost)}</td>
-                                <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">₦{money(row.valuedAmount)}</td>
+                                {/* Withheld money reads as the en dash, never ₦0. */}
+                                <td className="px-4 py-3 text-right text-slate-600 dark:text-adlm-dark-text">{row.moneyHidden ? "–" : `₦${money(row.totalCost)}`}</td>
+                                <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">{row.moneyHidden ? "–" : `₦${money(row.valuedAmount)}`}</td>
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2 justify-end">
                                     <div className="w-16 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
@@ -579,13 +580,13 @@ export default function PortfolioDashboard() {
                 <table className="w-full text-sm">
                   <tbody className="divide-y divide-slate-100 dark:divide-adlm-dark-border">
                     {[
-                      ["Total Projects",      loading ? "—" : totals.projectCount],
-                      ["Total Work Items",    loading ? "—" : totals.itemCount.toLocaleString()],
-                      ["Completed Items",     loading ? "—" : totals.markedCount.toLocaleString()],
-                      ["Overall Progress",    loading ? "—" : `${pct.toFixed(1)}%`],
-                      ["Combined BoQ Total",  loading ? "—" : `₦${money(totals.totalCost)}`],
-                      ["Completed to Date",   loading ? "—" : `₦${money(totals.valuedAmount)}`],
-                      ["Outstanding Balance", loading ? "—" : `₦${money(totals.remainingAmount)}`],
+                      ["Total Projects",      loading ? "–" : totals.projectCount],
+                      ["Total Work Items",    loading ? "–" : totals.itemCount.toLocaleString()],
+                      ["Completed Items",     loading ? "–" : totals.markedCount.toLocaleString()],
+                      ["Overall Progress",    loading ? "–" : `${pct.toFixed(1)}%`],
+                      ["Combined BoQ Total",  loading ? "–" : `₦${money(totals.totalCost)}`],
+                      ["Completed to Date",   loading ? "–" : `₦${money(totals.valuedAmount)}`],
+                      ["Outstanding Balance", loading ? "–" : `₦${money(totals.remainingAmount)}`],
                     ].map(([label, value]) => (
                       <tr key={label} className="hover:bg-slate-50 dark:hover:bg-white/5">
                         <td className="px-4 py-2.5 text-slate-500 dark:text-adlm-dark-muted font-medium w-56">{label}</td>

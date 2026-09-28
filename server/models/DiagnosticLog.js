@@ -49,7 +49,10 @@ const DiagnosticLogSchema = new mongoose.Schema(
 
     content: { type: String, default: "" },
 
-    createdAt: { type: Date, default: Date.now, index: true },
+    // No field-level index: the TTL index below is the createdAt index. Having
+    // both meant the plain one was built first and the TTL one never took, so
+    // logs were never expiring (live index createdAt_1 had no expireAfterSeconds).
+    createdAt: { type: Date, default: Date.now },
   },
   { timestamps: false },
 );

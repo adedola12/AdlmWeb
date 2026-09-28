@@ -34,7 +34,11 @@ router.use(requireAuth, requirePermission("adminhub"));
 
 /* ────────────────────────────── helpers ────────────────────────────── */
 
-const GROUP_BYS = ["day", "week", "month", "user", "firm", "product"];
+const GROUP_BYS = ["day", "week", "month", "user", "firm", "product", "mode"];
+
+// ADLM's own accounts test on sample models; their sessions would flatter (or
+// sink) every public figure, so they are left out unless asked for.
+const STAFF_EMAIL = /@adlmstudio\.net$/i;
 
 function parseDate(v) {
   if (!v) return null;
@@ -68,6 +72,10 @@ export function baseMatch(query, { from, to }) {
   if (userId && mongoose.isValidObjectId(userId)) match.userId = new mongoose.Types.ObjectId(userId);
   const email = String(query.email || "").trim().toLowerCase();
   if (email) match.email = email;
+  else if (String(query.includeStaff || "") !== "1") match.email = { $not: STAFF_EMAIL };
+  // auto = an auto take-off run; assisted = measured item by item (QUIV 4.0 sends both).
+  const mode = String(query.mode || "").trim().toLowerCase();
+  if (mode === "auto" || mode === "assisted") match.mode = mode;
   if (String(query.includeSeeded || "") !== "1") match.seeded = { $ne: true };
   if (String(query.includeCancelled || "") !== "1") match.cancelled = { $ne: true };
   return match;
@@ -91,6 +99,7 @@ const SUM = {
   boqLines: { $sum: "$counts.boqLines" },
   activeList: { $push: "$activeSeconds" },
   manualList: { $push: "$baseline.estimatedManualSeconds" },
+  itemsList: { $push: "$counts.items" },
   users: { $addToSet: "$userId" },
   firstAt: { $min: "$startedAt" },
   lastAt: { $max: "$startedAt" },
@@ -108,6 +117,8 @@ function shape(r = {}) {
     boqLines: r.boqLines || 0,
     medianActiveSeconds: median(r.activeList),
     medianEstimatedManualSeconds: median(r.manualList),
+    // "a typical auto take-off measures N elements" needs the typical N, not the total.
+    medianItems: median(r.itemsList),
     users: Array.isArray(r.users) ? r.users.length : 0,
     firstAt: r.firstAt || null,
     lastAt: r.lastAt || null,
@@ -140,6 +151,8 @@ function groupIdFor(groupBy) {
       return "$firmId";
     case "product":
       return "$product";
+    case "mode":
+      return "$mode";
     default:
       return null;
   }
@@ -147,7 +160,7 @@ function groupIdFor(groupBy) {
 
 /* ────────────────────────────── summary ────────────────────────────── */
 
-// GET /admin/takeoff/summary?from&to&days&product&firmId&userId&groupBy&includeSeeded
+// GET /admin/takeoff/summary?from&to&days&product&mode&firmId&userId&groupBy&includeSeeded&includeStaff
 export async function summaryHandler(req, res) {
   try {
     const win = windowFrom(req.query);
