@@ -40,6 +40,11 @@ export function stageOf(p) {
   if ((Number(p?.certificateCount) || 0) > 0) return "valuing";
   if (p?.contractLocked) return "locked";
   if (p?.tenderedAt) return "tendered";
+  // A row whose money is withheld carries `priced` instead of a figure: the
+  // stage is a state, not an amount, and reading the withheld totalCost here
+  // would label a shared, fully priced job "takeoff". Rows that are not
+  // masked have no `priced` field and answer from the figure, as before.
+  if (typeof p?.priced === "boolean") return p.priced ? "priced" : "takeoff";
   return Number(p?.totalCost) > 0 ? "priced" : "takeoff";
 }
 
@@ -47,14 +52,15 @@ export function stageOf(p) {
  * Is this row's money being withheld from this reader?
  *
  * GET /me/projects-rollup sets `moneyHidden` on a project somebody else owns
- * when the reader may not see rates, and zeroes the money it added. It does
- * NOT zero totalCost, valuedAmount or remainingAmount — those predate the
- * flag, other screens read them, and whether to mask them API-wide is a
- * product decision nobody has taken.
+ * when the reader may not see rates, and zeroes every money field on the row —
+ * totalCost, valuedAmount and remainingAmount included. They were left out
+ * once, on the reasoning that the screens would draw the line themselves;
+ * three screens did not, and one of them defeated the mask entirely by
+ * falling back to totalCost when the masked workValue read 0.
  *
- * So the screens draw the line themselves: wherever a row says its money is
- * hidden, the figure is an en dash and the row is left out of the totals. A
- * screen must never print money it is telling the reader it is withholding.
+ * A screen must still never print money it is telling the reader it is
+ * withholding: show an en dash and leave the row out of the totals, so a zero
+ * is never mistaken for "nothing certified".
  */
 export const isMoneyHidden = (p) => p?.moneyHidden === true;
 

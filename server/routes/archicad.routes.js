@@ -14,6 +14,8 @@ import { requireEntitlement } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { ArchicadBoqVersion } from "../models/ArchicadBoqVersion.js";
 import { User } from "../models/User.js";
+import { resolveProjectAccess, entitlementIsActive } from "../util/projectAccess.js";
+import { maskArchicadMoney } from "../util/archicadMask.js";
 import {
   loadRateCandidates,
   costBoqLines,
@@ -234,7 +236,31 @@ async function findProjectForUser(req, res) {
     return null;
   }
   if (project.isSample && !(await checkSampleEntitlement(req, res))) return null;
+
+  // Reaching the document is not permission to change it. Every route below
+  // goes through here, so this is where the question gets asked — it was not
+  // being asked anywhere on this surface, and the queries above match
+  // collaborators, so a view-only reader could re-price the owner's bill.
+  req.projectAccess = await resolveProjectAccess(userId, project, {
+    hasRateGen: async (uid) => {
+      const u = await User.findById(uid, { entitlements: 1 }).lean();
+      return entitlementIsActive(u?.entitlements, "rategen");
+    },
+  });
   return project;
+}
+
+/** 403 unless the requester holds `power` on the project just loaded. */
+function requireProjectPower(req, res, power, what) {
+  if (req.projectAccess?.[power]) return true;
+  res.status(403).json({
+    error:
+      req.projectAccess?.role === "sample"
+        ? "Sample projects are read-only learning material."
+        : `You have view-only access to this project, so you cannot ${what}.`,
+    code: "PROJECT_ACCESS_DENIED",
+  });
+  return false;
 }
 
 async function findCurrentVersion(projectId, res) {
@@ -339,6 +365,11 @@ router.post("/boq/extract", async (req, res) => {
       userId,
     });
 
+    // Not masked: this is the extract the caller just pushed from their own
+    // ArchiCAD model, on a project they own. It never goes through
+    // findProjectForUser, so req.projectAccess is undefined here — and
+    // `undefined` is falsy, so masking on it would hand the owner back their
+    // own BoQ with every figure zeroed.
     res.json(buildBoqDocument(project, version));
   } catch (err) {
     console.error("[archicad] extract error:", err);
@@ -356,7 +387,7 @@ router.get("/projects", async (req, res) => {
       productKey: PRODUCT_KEY,
       $or: [{ userId }, { "collaborators.userId": userId }],
     })
-      .select("name slug updatedAt")
+      .select("name slug updatedAt userId isSample")
       .sort({ updatedAt: -1 })
       .lean();
 
@@ -375,15 +406,34 @@ router.get("/projects", async (req, res) => {
       currents.map((v) => [String(v.projectId), toNum(v.totals?.grandTotal)]),
     );
 
+    // The list matches collaborators too, so a reader without RateGen was
+    // being handed every project's grand total here — the one figure the
+    // mask exists to hide. One entitlement lookup for the whole list.
+    // Skipped entirely when every project here is the caller's own, which
+    // is the ordinary case.
+    const shared = projects.some(
+      (p) => !p.isSample && String(p.userId || "") !== String(userId),
+    );
+    let rateGen = false;
+    if (shared) {
+      const u = await User.findById(userId, { entitlements: 1 }).lean();
+      rateGen = entitlementIsActive(u?.entitlements, "rategen");
+    }
+
     res.json(
-      projects.map((p) => ({
-        id: String(p._id),
-        slug: p.slug || "",
-        name: p.name,
-        updatedAt: p.updatedAt,
-        versionCount: countById.get(String(p._id)) || 0,
-        grandTotal: totalById.get(String(p._id)) || 0,
-      })),
+      projects.map((p) => {
+        const owns = String(p.userId || "") === String(userId);
+        const canSeeRates = owns || p.isSample || rateGen;
+        return {
+          id: String(p._id),
+          slug: p.slug || "",
+          name: p.name,
+          updatedAt: p.updatedAt,
+          versionCount: countById.get(String(p._id)) || 0,
+          grandTotal: canSeeRates ? totalById.get(String(p._id)) || 0 : 0,
+          ratesMasked: !canSeeRates,
+        };
+      }),
     );
   } catch (err) {
     console.error("[archicad] list projects error:", err);
@@ -431,7 +481,7 @@ router.get("/boq/:projectId", async (req, res) => {
     if (!project) return;
     const version = await findCurrentVersion(project._id, res);
     if (!version) return;
-    res.json(buildBoqDocument(project, version));
+    res.json(maskArchicadMoney(buildBoqDocument(project, version), req.projectAccess?.canSeeRates));
   } catch (err) {
     console.error("[archicad] get boq error:", err);
     res.status(500).json({ error: "Server error" });
@@ -452,7 +502,9 @@ router.get("/boq/:projectId/versions", async (req, res) => {
         versionId: String(v._id),
         versionNumber: v.versionNumber,
         extractedAt: v.extractedAt,
-        grandTotal: toNum(v.totals?.grandTotal),
+        // Zeroed for a reader who may not see rates, like every other
+        // money figure on this surface.
+        grandTotal: req.projectAccess?.canSeeRates ? toNum(v.totals?.grandTotal) : 0,
         lineCount: Array.isArray(v.lines) ? v.lines.length : 0,
       })),
     );
@@ -476,7 +528,7 @@ router.get("/boq/:projectId/versions/:versionId", async (req, res) => {
       projectId: project._id,
     }).lean();
     if (!version) return res.status(404).json({ error: "Version not found" });
-    res.json(buildBoqDocument(project, version));
+    res.json(maskArchicadMoney(buildBoqDocument(project, version), req.projectAccess?.canSeeRates));
   } catch (err) {
     console.error("[archicad] get version error:", err);
     res.status(500).json({ error: "Server error" });
@@ -489,6 +541,7 @@ router.post("/boq/:projectId/reapply-rates", async (req, res) => {
   try {
     const project = await findProjectForUser(req, res);
     if (!project) return;
+    if (!requireProjectPower(req, res, "canEdit", "re-price this bill")) return;
     const current = await findCurrentVersion(project._id, res);
     if (!current) return;
 
@@ -518,7 +571,7 @@ router.post("/boq/:projectId/reapply-rates", async (req, res) => {
       userId: getUserObjectId(req),
     });
 
-    res.json(buildBoqDocument(project, version));
+    res.json(maskArchicadMoney(buildBoqDocument(project, version), req.projectAccess?.canSeeRates));
   } catch (err) {
     console.error("[archicad] reapply-rates error:", err);
     res.status(500).json({ error: "Server error" });
@@ -531,6 +584,7 @@ router.patch("/boq/:projectId/margin", async (req, res) => {
   try {
     const project = await findProjectForUser(req, res);
     if (!project) return;
+    if (!requireProjectPower(req, res, "canEdit", "change its margin")) return;
     const version = await findCurrentVersion(project._id, res);
     if (!version) return;
 
@@ -571,7 +625,7 @@ router.patch("/boq/:projectId/margin", async (req, res) => {
     embedLinesOnProject(project, lines);
     await project.save();
 
-    res.json(buildBoqDocument(project, version));
+    res.json(maskArchicadMoney(buildBoqDocument(project, version), req.projectAccess?.canSeeRates));
   } catch (err) {
     console.error("[archicad] margin error:", err);
     res.status(500).json({ error: "Server error" });
@@ -584,6 +638,7 @@ router.patch("/boq/:projectId/budget", async (req, res) => {
   try {
     const project = await findProjectForUser(req, res);
     if (!project) return;
+    if (!requireProjectPower(req, res, "canEdit", "change its budget")) return;
     const version = await findCurrentVersion(project._id, res);
     if (!version) return;
 
@@ -595,7 +650,7 @@ router.patch("/boq/:projectId/budget", async (req, res) => {
     project.projectManagement.budgetOverride = target;
     await project.save();
 
-    res.json(buildBoqDocument(project, version));
+    res.json(maskArchicadMoney(buildBoqDocument(project, version), req.projectAccess?.canSeeRates));
   } catch (err) {
     console.error("[archicad] budget error:", err);
     res.status(500).json({ error: "Server error" });
@@ -607,13 +662,16 @@ router.get("/boq/:projectId/export/excel", async (req, res) => {
   try {
     const project = await findProjectForUser(req, res);
     if (!project) return;
+    if (!requireProjectPower(req, res, "canExport", "export it")) return;
     const version = await findCurrentVersion(project._id, res);
     if (!version) return;
 
     const { buffer, filename } = await exportArchicadBoqXlsx({
       projectName: project.name,
       preparedBy: preparedByName(req),
-      boq: buildBoqDocument(project, version),
+      // A full collaborator may export, but a collaborator without RateGen
+      // may not see the money — so the file they get is zeroed like the screen.
+      boq: maskArchicadMoney(buildBoqDocument(project, version), req.projectAccess?.canSeeRates),
     });
 
     res.setHeader("Cache-Control", "no-store");
@@ -635,6 +693,7 @@ router.get("/boq/:projectId/export/pdf", async (req, res) => {
   try {
     const project = await findProjectForUser(req, res);
     if (!project) return;
+    if (!requireProjectPower(req, res, "canExport", "export it")) return;
     const version = await findCurrentVersion(project._id, res);
     if (!version) return;
 
@@ -642,7 +701,9 @@ router.get("/boq/:projectId/export/pdf", async (req, res) => {
       projectName: project.name,
       clientName: "", // TakeoffProject carries no client-name field
       preparedBy: preparedByName(req),
-      boq: buildBoqDocument(project, version),
+      // A full collaborator may export, but a collaborator without RateGen
+      // may not see the money — so the file they get is zeroed like the screen.
+      boq: maskArchicadMoney(buildBoqDocument(project, version), req.projectAccess?.canSeeRates),
     });
   } catch (err) {
     console.error("[archicad] export pdf error:", err);
@@ -701,7 +762,9 @@ router.get("/element/:projectId/:guid", async (req, res) => {
     const fraction = toNum(line.quantity) > 0 ? elementQty / toNum(line.quantity) : 0;
     const r2 = (v) => Math.round(toNum(v) * 100) / 100;
 
-    res.json({
+    // Same mask as the BoQ reads: a reader without rates gets the
+    // element quantities and where its rate came from, not the money.
+    const payload = {
       guid,
       quivType: line.quivType || "",
       description: line.description || "",
@@ -727,7 +790,8 @@ router.get("/element/:projectId/:guid", async (req, res) => {
       lineQuantityShare: fraction,
       rateProvenance: line.rateProvenance || null,
       labourProvenance: line.labourProvenance || null,
-    });
+    };
+    res.json(maskArchicadMoney(payload, req.projectAccess?.canSeeRates));
   } catch (err) {
     console.error("[archicad] element error:", err);
     res.status(500).json({ error: "Server error" });

@@ -21,67 +21,10 @@ import {
   totalsFor,
 } from "./overviewModel.js";
 import { EN_DASH, safeNum } from "../projects/lib/projectTotals.js";
-
-const NGN = new Intl.NumberFormat("en-NG", {
-  style: "currency",
-  currency: "NGN",
-  maximumFractionDigits: 0,
-});
-const money = (n) => NGN.format(safeNum(n));
-
-/** His compact figure for the section bars. */
-function compact(n) {
-  const v = safeNum(n);
-  if (v >= 1e9) return `₦${(v / 1e9).toFixed(1)}b`;
-  if (v >= 1e6) return `₦${(v / 1e6).toFixed(1)}m`;
-  if (v >= 1e3) return `₦${Math.round(v / 1e3)}k`;
-  return money(v);
-}
-
-const R = 42;
-const C = 2 * Math.PI * R;
-
-function Donut({ percent, label, tone = "", sub }) {
-  const v = Math.max(0, Math.min(100, safeNum(percent)));
-  return (
-    <div className={`pj-donut ${tone}`.trim()}>
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <circle cx="50" cy="50" r={R} className="tr" />
-        {v > 0 ? (
-          <circle
-            cx="50"
-            cy="50"
-            r={R}
-            className="fg"
-            strokeDasharray={`${((C * v) / 100).toFixed(1)} ${C.toFixed(1)}`}
-          />
-        ) : null}
-      </svg>
-      <div className="lb">
-        <b>{Math.round(v)}%</b>
-        <span>{label}</span>
-      </div>
-      {sub ? <p>{sub}</p> : null}
-    </div>
-  );
-}
-
-function Bar({ percent, tone = "" }) {
-  return (
-    <span className={`pj-bar ${tone}`.trim()}>
-      <i style={{ width: `${Math.max(0, Math.min(100, safeNum(percent)))}%` }} />
-    </span>
-  );
-}
-
-const initials = (name) =>
-  String(name || "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0] || "")
-    .join("")
-    .toUpperCase() || "?";
+// Shared with the Bill tab. Two copies of a money formatter is how two tabs
+// print the same figure differently, which on a bill is not cosmetic.
+import { compact, initials, money } from "./workProjectFormat.js";
+import { Bar, Donut } from "./workProjectBits.jsx";
 
 export default function WorkProjectOverview({ project, toolName, canEdit = false, onGo }) {
   const p = project || {};

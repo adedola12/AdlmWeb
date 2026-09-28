@@ -13,6 +13,7 @@ import {
   requestUserId,
   normalizeId,
   canExportProject,
+  mayExportRates,
   userOwnsDoc,
 } from "./exportAccess.js";
 
@@ -72,4 +73,48 @@ test("ids compare the same whether they arrive as ObjectId or string", () => {
   assert.equal(normalizeId(null), "");
   assert.equal(canExportProject({ userId: String(id) }, id), true);
   assert.equal(canExportProject({ userId: id }, String(id)), true);
+});
+
+/* ── may the export carry the money? ──────────────────────────────────────── */
+
+// canExportProject kept a view-only collaborator out and stopped there. A FULL
+// collaborator without RateGen read the project with every rate masked to zero
+// and then downloaded a workbook containing all of them, because nothing on the
+// export path asked the rates question at all.
+const rateGen = { hasRateGen: async () => true };
+const noRateGen = { hasRateGen: async () => false };
+
+test("the owner is never gated on their own bill", async () => {
+  const uid = new mongoose.Types.ObjectId();
+  assert.equal(await mayExportRates({ userId: uid }, uid, noRateGen), true);
+});
+
+test("a full collaborator needs an active RateGen subscription", async () => {
+  const uid = new mongoose.Types.ObjectId();
+  const doc = {
+    userId: new mongoose.Types.ObjectId(),
+    collaborators: [{ userId: uid, accessLevel: "full" }],
+  };
+  assert.equal(await mayExportRates(doc, uid, rateGen), true);
+  assert.equal(await mayExportRates(doc, uid, noRateGen), false);
+});
+
+test("a sample is published teaching material and exports freely", async () => {
+  const uid = new mongoose.Types.ObjectId();
+  const doc = { isSample: true, userId: new mongoose.Types.ObjectId() };
+  assert.equal(await mayExportRates(doc, uid, noRateGen), true);
+});
+
+test("a caller that forgets the entitlement check denies rather than grants", async () => {
+  const uid = new mongoose.Types.ObjectId();
+  const doc = {
+    userId: new mongoose.Types.ObjectId(),
+    collaborators: [{ userId: uid, accessLevel: "full" }],
+  };
+  assert.equal(await mayExportRates(doc, uid), false);
+});
+
+test("no document and no user mean no export", async () => {
+  assert.equal(await mayExportRates(null, new mongoose.Types.ObjectId(), rateGen), false);
+  assert.equal(await mayExportRates({ userId: "x" }, null, rateGen), false);
 });

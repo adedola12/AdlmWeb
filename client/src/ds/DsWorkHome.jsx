@@ -53,7 +53,8 @@ import WkPrefs from "./WkPrefs.jsx";
 // project gallery imported it, so a cold load of /work had no dashboard styles.
 import "../styles/ds-work-proj.css";
 import { FaChevronRight } from "../components/icons.jsx";
-import { foldMaterials, normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { foldMaterials, normaliseRollup } from "../lib/projectLinks.js";
+import { useProjectHref } from "../lib/useProjectHref.js";
 import { placeHref, readPlaces } from "../lib/lastPlace.js";
 import {
   SOURCES,
@@ -187,6 +188,7 @@ const stageName = (p) => STAGES.find((s) => s.id === stageOf(p))?.name || "";
 const measurable = (p) => (Number(p.pricedCount) || 0) + (Number(p.unpricedCount) || 0);
 
 export default function DsWorkHome() {
+  const projectHref = useProjectHref();
   const { accessToken } = useAuth();
   const [projects, setProjects] = React.useState(null);
   const [summary, setSummary] = React.useState(null);
@@ -294,13 +296,13 @@ export default function DsWorkHome() {
       used.add(String(p.id));
       rows.push({
         project: p,
-        href: projectWorkspaceHref(p),
+        href: projectHref(p),
         eyebrow: "Recently updated",
         tab: "",
       });
     }
     return rows;
-  }, [projects]);
+  }, [projects, projectHref]);
 
   const lesson = React.useMemo(() => (courses ? pickNextLesson(courses) : null), [courses]);
 

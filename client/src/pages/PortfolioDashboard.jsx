@@ -100,17 +100,33 @@ function projectStatus(row) {
 }
 
 function aggregateRows(rows) {
-  const totals = { projectCount: 0, itemCount: 0, markedCount: 0, totalCost: 0, valuedAmount: 0 };
+  const totals = {
+    projectCount: 0, itemCount: 0, markedCount: 0,
+    totalCost: 0, valuedAmount: 0, hiddenCount: 0,
+  };
   for (const r of rows) {
     totals.projectCount  += 1;
     totals.itemCount     += safeNum(r.itemCount);
     totals.markedCount   += safeNum(r.markedCount);
+    // A project shared with this reader who may not see rates comes back with
+    // its money zeroed. Counting it keeps the item and progress figures
+    // honest; its money is simply not part of any total, and hiddenCount is
+    // what lets the page say the total covers fewer jobs than it counted.
+    if (r.moneyHidden) { totals.hiddenCount += 1; continue; }
     totals.totalCost     += safeNum(r.totalCost);
     totals.valuedAmount  += safeNum(r.valuedAmount);
   }
   totals.remainingAmount  = totals.totalCost - totals.valuedAmount;
   totals.progressPercent  = totals.itemCount ? (totals.markedCount / totals.itemCount) * 100 : 0;
   return totals;
+}
+
+// Every money tile carries the same caveat when a shared project's figures
+// were withheld, so a total is never read as covering more than it does.
+function moneyHelper(base, totals) {
+  const n = Number(totals?.hiddenCount) || 0;
+  if (!n) return base;
+  return `${base} · ${n} project${n === 1 ? "" : "s"} hidden (rates not visible to you)`;
 }
 
 // ── SVG chart components ─────────────────────────────────────────────────────
@@ -137,8 +153,9 @@ function ProductBarChart({ grouped, products }) {
   const W = 440, H_ROW = 44, PAD = 100, INNER = W - PAD - 12;
   const entries = products.map((p) => {
     const rows = grouped[p.key] || [];
-    const total  = rows.reduce((s, r) => s + safeNum(r.totalCost), 0);
-    const valued = rows.reduce((s, r) => s + safeNum(r.valuedAmount), 0);
+    const shown  = rows.filter((r) => !r.moneyHidden);
+    const total  = shown.reduce((s, r) => s + safeNum(r.totalCost), 0);
+    const valued = shown.reduce((s, r) => s + safeNum(r.valuedAmount), 0);
     return { ...p, total, valued };
   }).filter((e) => e.total > 0 || (grouped[e.key] || []).length > 0);
 
@@ -218,6 +235,9 @@ function exportExcel(rows, totals) {
     ["Combined BoQ Total",   totals.totalCost],
     ["Completed to Date",    totals.valuedAmount],
     ["Outstanding Balance",  totals.remainingAmount],
+    ...(totals.hiddenCount
+      ? [["Projects excluded from money totals (rates not visible)", totals.hiddenCount]]
+      : []),
   ]);
   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
@@ -227,8 +247,15 @@ function exportExcel(rows, totals) {
     return [
       r.name, r.productLabel, projectStatus(r).label,
       safeNum(r.itemCount), safeNum(r.markedCount), +pct.toFixed(2),
-      safeNum(r.totalCost), safeNum(r.valuedAmount),
-      safeNum(r.totalCost) - safeNum(r.valuedAmount),
+      // "Hidden", not 0: a zero in a spreadsheet cell is a claim about the
+      // job, and this reader was never shown the figure.
+      ...(r.moneyHidden
+        ? ["Hidden", "Hidden", "Hidden"]
+        : [
+            safeNum(r.totalCost),
+            safeNum(r.valuedAmount),
+            safeNum(r.totalCost) - safeNum(r.valuedAmount),
+          ]),
       r.updatedAt ? dayjs(r.updatedAt).format("DD MMM YYYY") : "",
     ];
   });
@@ -396,14 +423,14 @@ export default function PortfolioDashboard() {
                   <StatTile label="Completed items"   value={loading ? "–" : totals.markedCount.toLocaleString()} helper="Items marked done" tone="success" />
                   <StatTile label="Remaining items"   value={loading ? "–" : (totals.itemCount - totals.markedCount).toLocaleString()} helper="Items outstanding" />
                   <StatTile label="Total work items"  value={loading ? "–" : totals.itemCount.toLocaleString()} helper="All items combined" />
-                  <StatTile label="Planned total"     value={loading ? "–" : `₦${money(totals.totalCost)}`} helper="Combined BoQ value" />
-                  <StatTile label="Completed to date" value={loading ? "–" : `₦${money(totals.valuedAmount)}`} helper="Value of work done" tone="success" />
+                  <StatTile label="Planned total"     value={loading ? "–" : `₦${money(totals.totalCost)}`} helper={moneyHelper("Combined BoQ value", totals)} />
+                  <StatTile label="Completed to date" value={loading ? "–" : `₦${money(totals.valuedAmount)}`} helper={moneyHelper("Value of work done", totals)} tone="success" />
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <StatTile label="Outstanding balance" value={loading ? "–" : `₦${money(totals.remainingAmount)}`} helper="Project value yet to claim" tone="warning" />
+              <StatTile label="Outstanding balance" value={loading ? "–" : `₦${money(totals.remainingAmount)}`} helper={moneyHelper("Project value yet to claim", totals)} tone="warning" />
               <StatTile label="Overall progress"    value={loading ? "–" : `${pct.toFixed(1)}%`} helper={`${totals.markedCount.toLocaleString()} of ${totals.itemCount.toLocaleString()} work items`} />
             </div>
 

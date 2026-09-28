@@ -1,10 +1,16 @@
-// Who gets the new project workspace and who keeps the old redirect.
+// What the /work/project screen does, now that the ROUTE decides who may open it.
 //
-// /work/project/:productKey/:id was a bare redirect to /projects/:tool. It
-// still is for everyone who is not staff — that path is in links and
-// bookmarks and must not change while Richard's view is being adopted behind
-// it. Getting this wrong in either direction is bad: a customer dropped into a
-// half-built workspace, or staff bounced out of the one they are building.
+// This screen used to decide for itself — canViewPreview on a preview host,
+// isStaff on adlmstudio.net — and redirected everyone else to /projects/:tool.
+// components/NewBuildGate.jsx now gates every /work/* and /manage/* route until
+// launch, so a second rule here could only disagree with it, and did: it bounced
+// Tech Support, whose whole role is the "preview" area and who is deliberately
+// not isStaff (utils/roles.js).
+//
+// So the screen no longer asks. That a CUSTOMER never lands in the new workspace
+// is still pinned, in components/NewBuildGate.test.jsx, which drives this exact
+// route and asserts the redirect to /projects/planswift?project=ikoyi-tower.
+// What is left to test here is the screen's own behaviour.
 
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -19,7 +25,7 @@ vi.mock("../store.jsx", async (orig) => ({
   useAuth: () => ({ user: currentUser, accessToken: currentToken }),
 }));
 
-// The shell fetches the account's projects; this test is about the gate.
+// The shell fetches the account's projects; this test is about the screen.
 vi.mock("../ds/useProjects.js", () => ({
   useProjects: () => ({ projects: [], failed: false }),
 }));
@@ -42,20 +48,8 @@ afterEach(() => {
   currentToken = "";
 });
 
-describe("the /work/project route", () => {
-  it("sends a customer to the workspace they have always used", () => {
-    currentUser = { email: "qs@example.com", role: "user" };
-    currentToken = "t";
-    mount();
-    expect(screen.getByText("THE FULL WORKSPACE")).toBeTruthy();
-  });
-
-  it("sends a signed-out visitor there too, rather than showing a building site", () => {
-    mount();
-    expect(screen.getByText("THE FULL WORKSPACE")).toBeTruthy();
-  });
-
-  it("gives staff the new workspace", () => {
+describe("the /work/project screen", () => {
+  it("renders the new workspace for staff", () => {
     currentUser = { email: "admin@adlmstudio.net", role: "admin" };
     currentToken = "t";
     mount();
@@ -63,44 +57,40 @@ describe("the /work/project route", () => {
     expect(screen.queryByText("THE FULL WORKSPACE")).toBeNull();
   });
 
-  it("does NOT give tech_support the new workspace on the LIVE host", () => {
-    // jsdom serves these tests from localhost, which isGatedHost treats as a
-    // live host — so this is the adlmstudio.net rule. There /work is
-    // staff-only, and Tech Support is the preview site and nothing else.
-    // On a preview host the answer flips; see the next test.
+  it("renders it for Tech Support too, on any host", () => {
+    // The bug this replaces: isStaff on the live host locked out the role whose
+    // entire purpose is looking at what customers are asking about. One rule now,
+    // canViewPreview, and it lives on the route.
     currentUser = { email: "help@adlmstudio.net", role: "tech_support", permissions: ["preview"] };
     currentToken = "t";
     mount();
-    expect(screen.getByText("THE FULL WORKSPACE")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Overview/ })).toBeTruthy();
   });
 
-  it("waits rather than redirecting while the session is still hydrating", () => {
-    // AuthProvider withholds `user` for a frame. Redirecting in that frame
-    // would bounce a staff member out of the page they asked for.
+  it("does not decide for itself who may be here", () => {
+    // A customer reaching this component has already been let through by the
+    // route, so the screen renders. Keeping a second opinion here is what made
+    // the two disagree. The route is tested in NewBuildGate.test.jsx.
+    currentUser = { email: "qs@example.com", role: "user" };
+    currentToken = "t";
+    mount();
+    expect(screen.queryByText("THE FULL WORKSPACE")).toBeNull();
+  });
+
+  it("waits rather than rendering while the session is still hydrating", () => {
+    // AuthProvider withholds `user` for a frame. The shell fetches on mount and
+    // has no business doing that before there is a session to fetch with.
     currentToken = "t";
     currentUser = null;
     const { container } = mount();
-    expect(screen.queryByText("THE FULL WORKSPACE")).toBeNull();
     expect(container.textContent).toBe("");
   });
 
-  it("DOES give tech_support the new workspace on a preview host", () => {
-    // PreviewHostGate has already turned away everyone who is not staff or
-    // Tech Support by the time this route renders, so re-checking isStaff
-    // there only locks out the people the preview exists for — which is
-    // exactly what happened to the owner's own account.
-    const original = window.location;
-    delete window.location;
-    window.location = { ...original, hostname: "preview.adlmstudio.net" };
-    currentUser = { email: "help@adlmstudio.net", role: "tech_support", permissions: ["preview"] };
-    currentToken = "t";
-    try {
-      mount();
-      expect(screen.getByRole("tab", { name: /Overview/ })).toBeTruthy();
-      expect(screen.queryByText("THE FULL WORKSPACE")).toBeNull();
-    } finally {
-      window.location = original;
-    }
+  it("renders nothing signed out, rather than fetching with no session", () => {
+    currentToken = "";
+    currentUser = null;
+    const { container } = mount();
+    expect(container.textContent).toBe("");
   });
 
   it("shows a HERON project its own tabs, not a Revit project's", () => {

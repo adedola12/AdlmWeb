@@ -1,9 +1,9 @@
 // Richard's project workspace, as a route shell.
 //
-// This is step one of adopting his design (work-proj.js, which builds the
-// whole view into <div id="pj-app"> from fixture data). His chrome is real
-// here and wired to the account's own projects; the tab bodies are not built
-// yet and say so rather than pretending.
+// His design (work-proj.js builds the whole view into <div id="pj-app"> from
+// fixture data) against the account's own projects: his chrome, his eight tab
+// bodies, his side panel and his header controls. Where his fixture holds a
+// field our projects do not, each tab's model file says so and what stands in.
 //
 // It lives at /work/project/:productKey/:id, which was a bare redirect, so
 // nothing that exists today changes while this is built. /projects/:tool
@@ -20,8 +20,30 @@ import { useProjects } from "../../ds/useProjects.js";
 import { apiAuthed } from "../../api.js";
 import { useAuth } from "../../store.jsx";
 import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectTabs.js";
+import { linePanelTitle } from "./billModel.js";
+import { saveProjectPatch } from "./saveProject.js";
+import WorkProjectHead from "./WorkProjectHead.jsx";
+import { projectIdLabel } from "./headModel.js";
+import WorkProjectPeople from "./WorkProjectPeople.jsx";
 import WorkProjectOverview from "./WorkProjectOverview.jsx";
+import WorkProjectBill from "./WorkProjectBill.jsx";
+import WorkProjectRates from "./WorkProjectRates.jsx";
+import WorkProjectPm from "./WorkProjectPm.jsx";
+import WorkProjectValuations from "./WorkProjectValuations.jsx";
+import {
+  WorkProjectDrawings,
+  WorkProjectModel,
+  WorkProjectServices,
+} from "./WorkProjectSources.jsx";
+import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
+import WorkProjectPanel from "./WorkProjectPanel.jsx";
+import { useProjectPanel } from "./useProjectPanel.js";
 import DsAppShell from "../../ds/DsAppShell.jsx";
+import { useFeedback } from "../../ds/feedback/feedbackContext.js";
+// His Project report and Project management report (work-proj.js:483). The
+// documents already exist and are already what the classic workspace prints, so
+// the menu opens those rather than a second kind of report.
+const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
 // His project-view rules. Imported here because this route is the first thing
 // outside DsProjectGallery/DsWorkHome to use them — without it the whole view
 // renders as an unstyled stack of divs.
@@ -57,17 +79,6 @@ function findProject(projects, productKey, id) {
   );
 }
 
-/** What each tab will hold, named honestly until it does. */
-const TAB_BODIES = {
-  overview: "the headline figures, the two donuts and the stage rail",
-  bill: "the bill lines, with their rates and the build-up behind each one",
-  rates: "the budget: material, labour and plant per line, against the rate library",
-  pm: "tasks, risks and issues, and the programme they drive",
-  valuations: "valuations, certificates and the approved variations",
-  model: "the model versions this bill was measured from, and what changed between them",
-  drawings: "the PlanSwift sheets this takeoff came from",
-  services: "the services projects linked into this bill",
-};
 
 export default function WorkProjectShell({ productKey, id }) {
   const { projects, failed } = useProjects();
@@ -108,24 +119,32 @@ export default function WorkProjectShell({ productKey, id }) {
 
   const tabs = tabsFor(productKey);
   const tab = resolveTab(params.get("tab"), productKey);
+  // His Rates tab has three views behind a segmented control. The chosen one
+  // rides in the URL like the tab does, so a link to a view is shareable and
+  // Back walks them.
+  const rateView = params.get("view") || "rates";
+  const setRateView = React.useCallback(
+    (next) => {
+      const q = new URLSearchParams(params);
+      if (next === "rates") q.delete("view");
+      else q.set("view", next);
+      setParams(q);
+    },
+    [params, setParams],
+  );
 
-  // A panel opens over the tab body. Escape closes it, which is his behaviour
-  // and also the thing a keyboard user will try first.
-  const [panel, setPanel] = React.useState(null);
-  React.useEffect(() => {
-    if (!panel) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape") setPanel(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [panel]);
+  // His layer L5: a line, a rate build-up or the model changes open OVER the
+  // tab, never as a new page (WORK.md §13). WorkProjectPanel owns the DOM, the
+  // slide, the Escape guard and the focus return.
+  const panel = useProjectPanel();
 
   // Changing tab closes whatever was open over the old one.
   const go = React.useCallback(
     (next) => {
-      setPanel(null);
+      panel.close();
       const p = new URLSearchParams(params);
+      // A view belongs to the tab that owns it.
+      p.delete("view");
       if (next === "overview") p.delete("tab");
       else p.set("tab", next);
       // push, not replace: the back button should walk the tabs, which is the
@@ -133,10 +152,93 @@ export default function WorkProjectShell({ productKey, id }) {
       // deletes it, so back leaves the workspace entirely.
       setParams(p);
     },
+    [params, setParams, panel],
+  );
+
+  // His [data-sheet] sets the Bill's search box to that sheet and jumps
+  // (work-proj.js:1824). Ours carries it in the URL instead, so the jump is
+  // shareable and Back comes back here.
+  const openPlace = React.useCallback(
+    (place) => {
+      const q = new URLSearchParams(params);
+      q.delete("view");
+      q.set("tab", "bill");
+      q.set("q", place);
+      setParams(q);
+    },
     [params, setParams],
   );
 
   const viewOnly = project?.access === "view" || project?.readOnly === true;
+
+  // His .pj-sync (work-proj.js:355): "Saved" at rest, "Saving…" while a write
+  // is in flight, "Saved just now" after one lands. A failure says so rather
+  // than going quiet, because a silent failure on a bill is how somebody
+  // believes a figure was recorded when it was not.
+  const [saveState, setSaveState] = React.useState("idle");
+  // The last patch attempted, so "Try again" on a failure can re-send the same
+  // change rather than asking somebody to find the line and set it twice.
+  const lastPatch = React.useRef(null);
+  const save = React.useCallback(
+    async (patch) => {
+      if (!patch || viewOnly || !full) return;
+      lastPatch.current = patch;
+      setSaveState("saving");
+      try {
+        const updated = await saveProjectPatch({
+          project: full,
+          productKey,
+          id,
+          token: accessToken,
+          patch,
+        });
+        // The server's copy, not ours patched — otherwise the two drift and
+        // the next save is built on a project that never existed.
+        setFull(updated?.project || updated || null);
+        setSaveState("saved");
+      } catch {
+        setSaveState("failed");
+      }
+    },
+    [full, viewOnly, productKey, id, accessToken],
+  );
+
+  // His … overflow (work-proj.js:457). The menu itself is in WorkProjectHead;
+  // what each entry DOES is here, because three of the five open something this
+  // shell already owns.
+  const fb = useFeedback();
+  const [report, setReport] = React.useState("");
+  const fullWorkspaceHref = `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}`;
+  // canManage is owner-only on the server (routes/projects.js:899), which is
+  // exactly who his Collaborators entry is for.
+  const isOwner = project?._access?.canManage === true;
+  const onAction = React.useCallback(
+    (action) => {
+      if (action === "people") {
+        panel.show({ kind: "people" });
+        return;
+      }
+      if (action === "id") {
+        const label = projectIdLabel(project);
+        if (!label) {
+          fb.toast({ tone: "error", title: "This project has no id yet" });
+          return;
+        }
+        // His fallback (work-proj.js:479) says copied either way. Ours does not:
+        // over plain http, and in a browser that refuses the permission,
+        // clipboard.writeText rejects and nothing is on the clipboard.
+        const ok = () => fb.toast({ title: "Project ID copied", msg: label });
+        const no = () => fb.toast({ tone: "error", title: "Could not copy it", msg: label });
+        if (navigator.clipboard?.writeText) navigator.clipboard.writeText(label).then(ok, no);
+        else no();
+        return;
+      }
+      if (action === "report") setReport("project");
+      if (action === "pm-report") setReport("pm");
+      if (action === "retry" && lastPatch.current) save(lastPatch.current);
+    },
+    [panel, project, fb, save],
+  );
 
   return (
     <DsAppShell title={project?.name || "Project"} page="work-projects">
@@ -162,14 +264,17 @@ export default function WorkProjectShell({ productKey, id }) {
           {project?.client ? <span>{project.client}</span> : null}
         </p>
 
-        <div className="pj-hacts">
-          <Link
-            className="ds-btn btn-o ds-btn-sm"
-            to={`/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}`}
-          >
-            Open the full workspace
-          </Link>
-        </div>
+        <WorkProjectHead
+          projects={projects}
+          projectId={id}
+          tab={tab}
+          saveState={saveState}
+          canEdit={!viewOnly}
+          isOwner={isOwner}
+          canSeePm={tabs.some((t) => t.key === "pm")}
+          fullWorkspaceHref={fullWorkspaceHref}
+          onAction={onAction}
+        />
       </div>
 
       {viewOnly ? (
@@ -227,31 +332,85 @@ export default function WorkProjectShell({ productKey, id }) {
             canEdit={!viewOnly}
             onGo={go}
           />
-        ) : tab === "overview" ? null : (
-          <div className="pj-empty">
-            <p>
-              <b>{tabs.find((t) => t.key === tab)?.label}</b> is not built here yet.
-            </p>
-            <p className="ds-sub">
-              This is where {TAB_BODIES[tab]} will go. Until then it lives in the full workspace,
-              which is still the one to use.
-            </p>
-            <Link
-              className="ds-btn btn-p ds-btn-sm"
-              to={`/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}`}
-            >
-              Open the full workspace
-            </Link>
-          </div>
-        )}
+        ) : tab === "bill" && !fullFailed ? (
+          <WorkProjectBill
+            project={project}
+            canEdit={!viewOnly}
+            initialQuery={params.get("q") || ""}
+            onOpenLine={(index) => panel.show({ kind: "line", index })}
+            onGo={go}
+          />
+        ) : tab === "rates" && !fullFailed ? (
+          <WorkProjectRates
+            project={project}
+            canEdit={!viewOnly}
+            view={rateView}
+            onView={setRateView}
+            onOpenLine={(index) => panel.show({ kind: "line", index })}
+            onGo={go}
+            onSave={save}
+            saving={saveState === "saving"}
+          />
+        ) : tab === "pm" && !fullFailed ? (
+          <WorkProjectPm
+            project={project}
+            canEdit={!viewOnly}
+            view={rateView}
+            onView={setRateView}
+            onGo={go}
+          />
+        ) : tab === "valuations" && !fullFailed ? (
+          <WorkProjectValuations
+            project={project}
+            canEdit={!viewOnly}
+            view={rateView}
+            onView={setRateView}
+            onGo={go}
+          />
+        ) : tab === "model" && !fullFailed ? (
+          <WorkProjectModel project={project} canEdit={!viewOnly} onGo={go} />
+        ) : tab === "drawings" && !fullFailed ? (
+          <WorkProjectDrawings project={project} onOpenPlace={openPlace} />
+        ) : tab === "services" && !fullFailed ? (
+          <WorkProjectServices project={project} canEdit={!viewOnly} />
+        ) : null}
       </div>
 
-      {panel ? (
-        <div className="pj-panel" role="dialog" aria-modal="true">
-          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => setPanel(null)}>
-            Close
-          </button>
-        </div>
+      {panel.content?.kind === "people" ? (
+        <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>
+          <WorkProjectPeople project={project} fullWorkspaceHref={fullWorkspaceHref} />
+        </WorkProjectPanel>
+      ) : null}
+
+      {report ? (
+        <React.Suspense fallback={null}>
+          <ReportModal
+            open
+            onClose={() => setReport("")}
+            type={report}
+            productKey={String(productKey || "").toLowerCase()}
+            projectId={project?._id || project?.id || id}
+          />
+        </React.Suspense>
+      ) : null}
+
+      {panel.content?.kind === "line" ? (
+        <WorkProjectPanel
+          title={linePanelTitle(project?.items, panel.content.index)}
+          visible={panel.visible}
+          onClose={panel.close}
+        >
+          <WorkProjectLinePanel
+            project={project}
+            index={panel.content.index}
+            canEdit={!viewOnly}
+            contractLocked={Boolean(project?.contract?.locked)}
+            onSave={save}
+            saving={saveState === "saving"}
+            onGoToLine={(i) => panel.show({ kind: "line", index: i })}
+            onGo={go}
+          />
+        </WorkProjectPanel>
       ) : null}
     </DsAppShell>
   );

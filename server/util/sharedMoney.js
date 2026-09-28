@@ -21,14 +21,27 @@ export async function readerMaySeeRates(userId) {
   return hasActiveEntitlement(me, "rategen");
 }
 
-// The rollup fields /me/projects-rollup masks. Exactly the list that route
-// carried before the move.
+// The rollup fields /me/projects-rollup masks.
 //
-// totalCost / valuedAmount / remainingAmount are deliberately NOT here: they
-// have been on that route (and on the per-product list route) since long
-// before this masking existed, are read by screens that are not part of it,
-// and are left exactly as they were.
+// totalCost / valuedAmount / remainingAmount used to be left off this list,
+// on the reasoning that they predated the masking and the SCREENS could draw
+// the line themselves. They could not, and did not:
+//
+//   - DsWorkHome guarded one totalCost and printed another unguarded.
+//   - DsWorkProgramme summed totalCost into a portfolio value and printed it.
+//   - PortfolioDashboard summed and EXPORTED totalCost and valuedAmount.
+//   - workOverview's headline read `workValue > 0 ? workValue : totalCost`,
+//     so masking workValue to 0 fell straight through to the unmasked
+//     totalCost. The mask was doing nothing at all on that screen.
+//
+// totalCost IS the money: it is the sum of the bill's line amounts, and it is
+// the biggest input to workValue, which was already masked. Withholding a
+// derived figure while shipping its input is not withholding anything. The
+// rule belongs here, once, where forgetting fails closed.
 export const ROLLUP_MONEY_FIELDS = Object.freeze([
+  "totalCost",
+  "valuedAmount",
+  "remainingAmount",
   "certifiedToDate",
   "provisionalTotal",
   "approvedVariationsTotal",
@@ -41,9 +54,12 @@ export const ROLLUP_MONEY_FIELDS = Object.freeze([
 ]);
 
 // The equivalent fields on a per-product project list row: the contract sum
-// and the grand-summary cascade that builds the "Estimated" figure. Same
-// reasoning as above, so the three long-standing fields stay off this list too.
+// and the grand-summary cascade that builds the "Estimated" figure, plus the
+// same three, for the same reason.
 export const PROJECT_LIST_MONEY_FIELDS = Object.freeze([
+  "totalCost",
+  "valuedAmount",
+  "remainingAmount",
   "contractSum",
   "provisionalTotal",
   "approvedVariationsTotal",
@@ -76,6 +92,12 @@ export function maskSharedMoney(rows, canSeeRates, fields = ROLLUP_MONEY_FIELDS)
   return rows.map((p) => {
     if (!p?.shared) return p;
     const out = { ...p };
+    // Read before the zeroing, not after. The gallery decides "priced" vs
+    // "takeoff" from whether there is money on the bill, and that is a STATE,
+    // not an amount — so it is answered here as a boolean rather than left to
+    // a screen reading a figure we have just withheld. Without this, masking
+    // totalCost would relabel a shared, fully priced job as un-priced.
+    out.priced = Number(p.totalCost) > 0 || Number(p.contractSum) > 0;
     for (const f of fields) out[f] = 0;
     out.moneyHidden = true;
     return out;

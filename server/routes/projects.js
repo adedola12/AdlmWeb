@@ -686,6 +686,11 @@ import {
 } from "../util/budgetUserEdits.js";
 import { preliminaryPercentOf } from "../util/contractDefaults.js";
 import {
+  certifiableContractSum,
+  finalAccountSavings,
+} from "../util/finalAccountMath.js";
+import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
+import {
   sanitizeResourceItems,
   applyResourceRows,
   buildResourcesFromRate,
@@ -893,43 +898,13 @@ function accessFilter(id, userId, productKey) {
 //   canExport:   owner or full  (xlsx / model download)
 //   canManage:   owner only     (codes, collaborators, delete project)
 //   canSeeRates: owner always; collaborator only with active rategen
+// The rule itself moved to util/projectAccess.js so the ArchiCAD routes can
+// ask the same question — they were not asking it at all. Behaviour here is
+// unchanged; this is the same function with its body shared.
 async function resolveProjectAccess(req, project) {
-  const uid = getUserObjectId(req);
-  const out = {
-    role: "none",
-    accessLevel: null,
-    canEdit: false,
-    canExport: false,
-    canManage: false,
-    canSeeRates: false,
-  };
-  if (!project || !uid) return out;
-
-  // Samples: look at everything, including rates, but change nothing.
-  if (project.isSample) {
-    out.role = "sample";
-    out.accessLevel = "view";
-    out.canExport = true;
-    out.canSeeRates = true;
-    return out;
-  }
-
-  if (project.userId && uid.equals(project.userId)) {
-    out.role = "owner";
-    out.canEdit = out.canExport = out.canManage = out.canSeeRates = true;
-    return out;
-  }
-
-  const collab = (project.collaborators || []).find(
-    (c) => c.userId && uid.equals(c.userId),
-  );
-  if (!collab) return out; // not owner, not collaborator → no access
-
-  out.role = collab.accessLevel === "full" ? "full" : "view";
-  out.accessLevel = out.role;
-  out.canEdit = out.canExport = out.role === "full";
-  out.canSeeRates = await userHasActiveEntitlement(uid, "rategen");
-  return out;
+  return resolveSharedProjectAccess(getUserObjectId(req), project, {
+    hasRateGen: (uid) => userHasActiveEntitlement(uid, "rategen"),
+  });
 }
 
 // ── Cross-project linking (e.g. MEP services → architectural bill) ─────────
@@ -3428,6 +3403,12 @@ async function applyMergedLineWrite({ req, container, body, canSeeRates = true }
     const source = byId.get(sourceId);
     const pk = source.productKey;
 
+    // Variations diverted by a source's own contract lock. Collected here
+    // rather than applied inside the items branch, so the payload's own
+    // variations can be laid down FIRST and these appended on top — the same
+    // composition the container does below.
+    let lockVariations = [];
+
     if (Array.isArray(bucket.items)) {
       const sanitizedNext = sanitizeItems(bucket.items, pk);
       // When the CONTAINER is locked, enforcement already happened above
@@ -3447,20 +3428,33 @@ async function applyMergedLineWrite({ req, container, body, canSeeRates = true }
       });
       source.items = tracked.items;
       source.valuationEvents = tracked.valuationEvents;
-      if (extraVariations.length) {
-        source.variations = sanitizeVariations([
-          ...(Array.isArray(source.variations) ? source.variations : []),
-          ...extraVariations,
-        ]);
-      }
+      lockVariations = extraVariations;
       source.markModified("items");
     }
 
     if (Array.isArray(bucket.provisionalSums)) {
       source.provisionalSums = sanitizeProvisionalSums(bucket.provisionalSums);
     }
-    if (Array.isArray(bucket.variations) && !Array.isArray(bucket.items)) {
+    // A save from the project screen sends the whole bill AND the whole
+    // variations list together, which is every ordinary save. Guarding this on
+    // "no items in the payload" therefore threw the QS's variation edits away
+    // on a merged project every single time: approve a variation, save, and the
+    // approval was gone on the next load.
+    //
+    // The guard existed because the items branch above appended the lock's own
+    // diverted variations, and assigning the payload afterwards would have
+    // wiped them. So they compose instead, in the order the container already
+    // uses: the QS's edits set the list, the lock's diversions land on top.
+    if (Array.isArray(bucket.variations)) {
       source.variations = sanitizeVariations(bucket.variations);
+      source.markModified("variations");
+    }
+    if (lockVariations.length) {
+      source.variations = sanitizeVariations([
+        ...(Array.isArray(source.variations) ? source.variations : []),
+        ...lockVariations,
+      ]);
+      source.markModified("variations");
     }
     if (Array.isArray(bucket.materialItems)) {
       source.materialItems = sanitizeItems(bucket.materialItems, pk);
@@ -5358,7 +5352,14 @@ async function finalizeAccount(req, res) {
     const finalContractValue =
       measuredWorkFinal + provisionalFinal + preliminaryFinal + variationsFinal;
     const agreedContractSum = safeNum(project.contract?.contractSum);
-    const savings = agreedContractSum - finalContractValue;
+    // Compared against the CERTIFIABLE part of the agreed sum, not the grand
+    // total. contractSum carries contingency and VAT; finalContractValue
+    // deliberately does not, because neither is ever certified. Subtracting one
+    // from the other reported the contingency plus the VAT as money the job
+    // saved — ₦12.875m on a ₦100m subtotal at the defaults, on a job that came
+    // in exactly as measured. See util/finalAccountMath.js.
+    const agreedCertifiableSum = certifiableContractSum(project.contract);
+    const savings = finalAccountSavings(project.contract, finalContractValue);
 
     project.finalAccount = {
       finalized: true,
@@ -5371,6 +5372,11 @@ async function finalizeAccount(req, res) {
       retentionReleased,
       totalCertifiedToDate,
       agreedContractSum,
+      // The baseline the saving was actually measured against, so the report
+      // can show the comparison rather than asking the reader to trust it.
+      agreedCertifiableSum: safeNum(agreedCertifiableSum),
+      contingencyAtLock: safeNum(project.contract?.contingencyAtLock),
+      taxAtLock: safeNum(project.contract?.taxAtLock),
       finalContractValue,
       savings,
       notes: String(req.body?.notes || "").trim().slice(0, 2000),

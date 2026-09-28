@@ -174,6 +174,8 @@ const ArchiCADDashboard = React.lazy(() => import("./pages/ArchiCADDashboard.jsx
 const ArchiCADElement = React.lazy(() => import("./pages/ArchiCADElement.jsx"));
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import NewBuildGate from "./components/NewBuildGate.jsx";
+import { isGatedPath } from "./lib/classicPaths.js";
 import AdminRoute from "./components/AdminRoute.jsx";
 
 const TrainingEnrollment = lazyScreen(() => import("./pages/TrainingEnrollment.jsx"));
@@ -367,12 +369,17 @@ const router = createBrowserRouter([
         // His Manage overview — what /dashboard becomes when the makeover
         // lands. Added alongside rather than over it: /dashboard keeps working
         // and keeps its data until this one is proven on real accounts.
+        //
+        // NewBuildGate is what "alongside" means until 1 Oct: staff see this,
+        // a customer is sent to the classic screen that does the same job.
         path: "manage",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <ManageOverview />
-            </LazyScreen>
+            <NewBuildGate>
+              <LazyScreen>
+                <ManageOverview />
+              </LazyScreen>
+            </NewBuildGate>
           </ProtectedRoute>
         ),
       },
@@ -403,7 +410,23 @@ const router = createBrowserRouter([
         { path: "dash-course/:sku", el: <LearningCourse /> },
       ].map(({ path, el }) => ({
         path,
-        element: (
+        // The Manage and Work screens are the unfinished new build and are held
+        // back to staff until launch; a customer reaching one lands on the
+        // classic equivalent (lib/classicPaths.js).
+        //
+        // The four dash-* learning routes below are in this same list and are
+        // deliberately NOT gated: they are the only learning surface there is,
+        // classic /learn links straight into /dash-course/:sku, and
+        // /learn/course/:sku (in sent emails) redirects into it — gating that
+        // would loop the browser and take away paid-for courses. isGatedPath is
+        // the single place that decides, so the two lists cannot drift.
+        element: isGatedPath(`/${path}`) ? (
+          <ProtectedRoute>
+            <NewBuildGate>
+              <LazyScreen>{el}</LazyScreen>
+            </NewBuildGate>
+          </ProtectedRoute>
+        ) : (
           <ProtectedRoute>
             <LazyScreen>{el}</LazyScreen>
           </ProtectedRoute>

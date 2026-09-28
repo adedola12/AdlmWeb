@@ -20,7 +20,9 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import DsSurfaceSwitch from "./DsSurfaceSwitch.jsx";
 import { useAuth } from "../store.jsx";
-import { isStaff } from "../utils/roles.js";
+import { canViewPreview, isStaff } from "../utils/roles.js";
+import { railForViewer } from "../lib/railGate.js";
+import { classicFallbackFor } from "../lib/classicPaths.js";
 import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
@@ -69,6 +71,22 @@ function initialsOf(text, fallback) {
 export default function DsAppShell({ children, title = "", page = "" }) {
   const { user, accessToken, clear } = useAuth();
   const staff = isStaff(user);
+
+  // This shell wraps ELEVEN CLASSIC screens as well as the new build
+  // (WorkShellRoute, App.jsx:41), so for a customer the rail and the section
+  // tabs above them are full of destinations the route gate will bounce —
+  // fifteen of the seventeen leaf items. Each gated `to` is rewritten to the
+  // classic screen that does the same job, so the navigation still works
+  // instead of quietly throwing them onto /dashboard. See lib/railGate.js.
+  // Staff get the array untouched.
+  const mayUseNewBuild = canViewPreview(user);
+  const rail = React.useMemo(() => railForViewer(RAIL, mayUseNewBuild), [mayUseNewBuild]);
+  // A new-build destination for staff, its classic counterpart for everyone
+  // else. Used for the links that are not in the rail config.
+  const href = React.useCallback(
+    (to) => (mayUseNewBuild ? to : classicFallbackFor(to)),
+    [mayUseNewBuild],
+  );
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -253,6 +271,8 @@ export default function DsAppShell({ children, title = "", page = "" }) {
           }}
         >
           <DsRailNav
+            rail={rail}
+            homeHref={href("/work")}
             activeId={activeId}
             d={d}
             dots={alertN ? { assignments: { label: `${alertN} assignment${alertN === 1 ? "" : "s"} need${alertN === 1 ? "s" : ""} you` } } : null}
@@ -327,9 +347,13 @@ export default function DsAppShell({ children, title = "", page = "" }) {
                 {/* His switcher, shown only to somebody who holds both
                     surfaces — the same `both` test his dash.js makes. */}
                 {staff && <DsSurfaceSwitch at="account" />}
-                <Link to="/manage">Dashboard</Link>
-                <Link to="/manage/settings">Account settings</Link>
-                <Link to="/manage/billing">Billing &amp; invoices</Link>
+                {/* Same rule as the rail: a customer cannot open these yet, so
+                    they point at the classic screens that answer them. "Billing
+                    & invoices" in particular has to reach the invoices, which on
+                    classic are on the profile, not the dashboard. */}
+                <Link to={href("/manage")}>Dashboard</Link>
+                <Link to={href("/manage/settings")}>Account settings</Link>
+                <Link to={href("/manage/billing")}>Billing &amp; invoices</Link>
                 {/* His rule mutes it: .dsh-menu a.out { color: var(--ink-3) }.
                     Sign out is the one item nobody should hit by accident, so
                     it reads quieter than the things you came here to do. */}
@@ -341,7 +365,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
           </header>
 
           {/* R03: this section's destinations as tabs, from the rail config. */}
-          <DsSectionTabs activeId={activeId} owned={owned} />
+          <DsSectionTabs rail={rail} activeId={activeId} owned={owned} />
           {children}
         </div>
 

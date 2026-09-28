@@ -8,9 +8,11 @@ import { resolveMergedProject } from "../services/projectMerge.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import {
   canExportProject,
+  mayExportRates,
   requestUserId,
   userOwnsDoc,
 } from "../util/exportAccess.js";
+import { readerMaySeeRates } from "../util/sharedMoney.js";
 import { isApprovedVariation } from "../util/variationStatus.js";
 import { isFolderMarker } from "../util/folderMarker.js";
 
@@ -235,6 +237,18 @@ async function loadProjectForExport(req, res) {
     res.status(404).json({
       error: "Project not found, or you do not have access to it.",
       code: "PROJECT_NOT_FOUND",
+    });
+    return null;
+  }
+  // Reaching the project and being allowed its money are two questions. The
+  // second was never asked here, so a full collaborator without RateGen saw
+  // zeroed rates on screen and downloaded the real ones in the workbook.
+  if (!(await mayExportRates(project, userId, { hasRateGen: readerMaySeeRates }))) {
+    res.status(403).json({
+      error:
+        "This project's rates are not visible to you, so its bill cannot be " +
+        "exported. An active RateGen subscription lifts this.",
+      code: "RATES_NOT_VISIBLE",
     });
     return null;
   }

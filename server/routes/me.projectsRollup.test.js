@@ -167,13 +167,22 @@ test("the same collaborator WITH RateGen sees the shared figures", async () => {
   assert.equal(res.body.projects[0].moneyHidden, undefined);
 });
 
-test("the figures that were always on this route are left exactly as they were", async () => {
+test("measured work is withheld too, because it is the figure workValue falls back to", async () => {
   me = { _id: USER_ID, email: "qs@example.com", entitlements: [] };
   rows = [project({ shared: true })];
   const res = await get("/me/projects-rollup");
-  // Masking is limited to what this change added; measured work has been on
-  // this route (and on the per-product list) since long before it.
-  assert.equal(res.body.projects[0].totalCost, 40_000_000);
+  // This route used to send totalCost through unmasked, on the reasoning
+  // that it predated the masking and the screens would withhold it. They
+  // did not: the work overview's headline reads
+  // `workValue > 0 ? workValue : totalCost`, so masking workValue to 0 fell
+  // straight through to this figure and printed the owner's real total.
+  // DsWorkProgramme and PortfolioDashboard summed it as well.
+  assert.equal(res.body.projects[0].totalCost, 0);
+  assert.equal(res.body.projects[0].valuedAmount, 0);
+  assert.equal(res.body.projects[0].remainingAmount, 0);
+  // …and the row still says the job is priced, so the gallery does not send
+  // a fully priced project back to "Takeoff" for want of a figure.
+  assert.equal(res.body.projects[0].priced, true);
 });
 
 test("the estimate is withheld from a collaborator who may not see rates", async () => {

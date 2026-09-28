@@ -38,6 +38,22 @@ describe("stageOf", () => {
     expect(stageOf(row({ totalCost: 12_500 }))).toBe("priced");
   });
 
+  // A project shared with a reader who may not see rates comes back with its
+  // money zeroed, so the figure cannot answer this — the API sends a `priced`
+  // boolean instead. Reading the withheld totalCost here would send a fully
+  // priced job back to "Takeoff" on somebody else's gallery.
+  it("is still Priced when the money is withheld but the row says it is priced", () => {
+    expect(stageOf(row({ totalCost: 0, moneyHidden: true, priced: true }))).toBe("priced");
+  });
+
+  it("is Takeoff when a withheld row says it is not priced", () => {
+    expect(stageOf(row({ totalCost: 0, moneyHidden: true, priced: false }))).toBe("takeoff");
+  });
+
+  it("prefers the row's own answer over the figure, not the other way round", () => {
+    expect(stageOf(row({ totalCost: 0, priced: true }))).toBe("priced");
+  });
+
   it("is Tendered once the bill has gone out", () => {
     expect(stageOf(row({ totalCost: 12_500, tenderedAt: "2026-09-20T09:00:00Z" }))).toBe(
       "tendered",
