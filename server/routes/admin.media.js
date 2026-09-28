@@ -464,6 +464,60 @@ router.post("/upload-apk", uploadApk.single("file"), async (req, res) => {
 });
 
 /**
+ * POST /admin/media/apk-upload-url { filename, size? }
+ *
+ * A presigned PUT for the Android app, straight into ADLM's private file store
+ * at the one key the site serves it from (DOWNLOADS.android, R15). Once the
+ * file is there every "Download the app" button hands out a short-lived signed
+ * link to it, and the Site Settings link (often a Google Drive file) is only
+ * the fail-safe. The file goes from the browser to storage directly, because
+ * /upload-apk sends it through the API and the API runs on Lambda, whose
+ * request bodies stop at 6 MB: a 70 MB APK never arrived. Uploading again
+ * replaces the app in place; there is only ever one.
+ */
+const APK_TYPE = "application/vnd.android.package-archive";
+const APK_MAX_BYTES = 5 * 1024 * 1024 * 1024; // one PUT
+
+router.post("/apk-upload-url", async (req, res) => {
+  const name = String(req.body?.filename || "").trim();
+  if (!/\.apk$/i.test(name)) {
+    return res.status(400).json({ error: "Choose an .apk file (an .aab cannot be installed from the website)." });
+  }
+  const size = Number(req.body?.size || 0);
+  if (size && size > APK_MAX_BYTES) {
+    return res.status(400).json({ error: "That file is over the 5 GB upload limit." });
+  }
+  if (!fileStoreBackend()) {
+    return res.status(503).json({ error: "Private file storage is not configured, so the app cannot be uploaded here." });
+  }
+  try {
+    const { key } = DOWNLOADS.android;
+    const signed = await presignUpload({ key, contentType: APK_TYPE, expiresIn: 3600 });
+    return res.json({ ok: true, key, contentType: APK_TYPE, ...signed });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Could not create an upload URL" });
+  }
+});
+
+/**
+ * POST /admin/media/apk-uploaded
+ *
+ * Confirms the app landed and serves it straight away on this container
+ * (other warm containers pick it up within their five-minute cache).
+ */
+router.post("/apk-uploaded", async (_req, res) => {
+  const { key } = DOWNLOADS.android;
+  try {
+    const head = fileStoreBackend() ? await headFile({ key }) : null;
+    if (!head) return res.status(404).json({ error: "The app did not finish uploading. Please upload it again." });
+    forgetStored(key);
+    return res.json({ ok: true, key, bytes: head.size ?? null, storage: fileStoreBackend() });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Could not check the upload" });
+  }
+});
+
+/**
  * POST /admin/media/upload-certificate
  * Uploads a PDF certificate template to Cloudflare R2.
  * R2 serves files with correct Content-Type so PDFs open in-browser.
