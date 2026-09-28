@@ -217,8 +217,8 @@ export default function DsDownloads() {
         </p>
         {hubLocked ? (
           <p className="meta">
-            The Installer Hub comes with a paid licence. <Link to="/products">See the products</Link>{" "}
-            to buy or renew one, then download it here.
+            The Installer Hub comes with a licence for one of our desktop products.{" "}
+            <Link to="/products">See the products</Link> to buy or renew one, then download it here.
           </p>
         ) : hub.downloadUrl ? (
           <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl} onClick={freshHub}>

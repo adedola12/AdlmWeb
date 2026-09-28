@@ -272,7 +272,7 @@ export default function DsAdminSubmissions() {
             onClick={() => setView(key)}
           >
             <span>{label}</span>
-            <em className="adm-tab-n">{counts[key] ?? "—"}</em>
+            <em className="adm-tab-n">{counts[key] ?? "–"}</em>
           </button>
         ))}
       </div>

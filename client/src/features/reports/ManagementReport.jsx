@@ -119,7 +119,7 @@ export default function ManagementReport({ report }) {
             { key: "productLabel", label: "Product" },
             { key: "value", label: "Value", num: true, render: (r) => (r.moneyMasked ? "Masked" : fmtMoney(r.value, { compact: true })) },
             { key: "progressPercent", label: "Progress", num: true, render: (r) => fmtPct(r.progressPercent) },
-            { key: "spi", label: "SPI", num: true, render: (r) => (r.spi == null ? "—" : r.spi.toFixed(2)) },
+            { key: "spi", label: "SPI", num: true, render: (r) => (r.spi == null ? "–" : r.spi.toFixed(2)) },
             { key: "overdueCount", label: "Overdue", num: true },
             { key: "openRisks", label: "Risks", num: true },
             { key: "openIssues", label: "Issues", num: true },

@@ -4,7 +4,6 @@ import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { API_BASE } from "../config";
-import invoiceLogo from "../assets/logo/invoiceLogo.png";
 import InvoicePreviewPage from "../components/InvoicePreview.jsx";
 
 const fmt = (n, currency = "NGN") =>
@@ -499,7 +498,7 @@ export default function AdminInvoices() {
                     {inv.invoiceNumber}
                   </td>
                   <td className="py-2 pr-3">
-                    {inv.clientOrganization || inv.clientName || inv.clientEmail || "—"}
+                    {inv.clientOrganization || inv.clientName || inv.clientEmail || "–"}
                   </td>
                   <td className="py-2 pr-3 text-slate-500">
                     {dayjs(inv.invoiceDate).format("MMM D, YYYY")}

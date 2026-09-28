@@ -142,6 +142,9 @@ export const NAV = [
     items: [
       // Release sign-off (docs/RELEASE_GATE.md): the approver's desk.
       { to: "/admin/releases", label: "Release sign-off", icon: "hi-check", area: "releases" },
+      // The work board (docs/WORK_BOARD.md): what is in flight, and approval
+      // before a new feature or button is built.
+      { to: "/admin/work", label: "Work board", icon: "hi-check", area: "releases" },
       { to: "/admin/ai-usage", label: "AI usage", icon: "ai-ada", area: "adminhub" },
       // The Takeoff Time Log: hours saved per firm, user and product, with the
       // baseline it rests on written out. Same area as the hub: it is a report,

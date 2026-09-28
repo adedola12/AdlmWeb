@@ -66,7 +66,7 @@ function buildExpiryEmailHtml({
   expiresAt,
 }) {
   const name = String(firstName || "").trim() || "there";
-  const expiryDate = expiresAt ? dayjs(expiresAt).format("YYYY-MM-DD") : "—";
+  const expiryDate = expiresAt ? dayjs(expiresAt).format("YYYY-MM-DD") : "–";
 
   const dayWord = (n) => `${n} day${n === 1 ? "" : "s"}`;
 

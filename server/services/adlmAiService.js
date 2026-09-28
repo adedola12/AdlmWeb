@@ -198,12 +198,12 @@ function explainFailure({ status, code, reason }) {
 }
 
 function pct(n) {
-  return Number.isFinite(Number(n)) ? `${Number(n) > 0 ? "+" : ""}${Number(n).toFixed(0)}%` : "—";
+  return Number.isFinite(Number(n)) ? `${Number(n) > 0 ? "+" : ""}${Number(n).toFixed(0)}%` : "–";
 }
 
 function naira(v) {
   const n = Number(v);
-  return Number.isFinite(n) ? `₦${Math.round(n).toLocaleString("en-NG")}` : "—";
+  return Number.isFinite(n) ? `₦${Math.round(n).toLocaleString("en-NG")}` : "–";
 }
 
 /* ─────────────────────────── BoQ market check ─────────────────────────── */

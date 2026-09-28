@@ -52,7 +52,7 @@ export function renderReceipt(doc, inv, qrDataUrl) {
   doc.fontSize(30).font("Helvetica-Bold").fillColor("#091E39")
     .text("Receipt", 0, 36, { width: R, align: "right" });
   doc.fontSize(10).font("Helvetica").fillColor("#3e3e3e")
-    .text(`NO: ${inv.receiptNumber || "—"}`, 0, 70, { width: R, align: "right" });
+    .text(`NO: ${inv.receiptNumber || "–"}`, 0, 70, { width: R, align: "right" });
 
   // ── PAID badge ──
   const badgeW = 78, badgeH = 24, badgeX = R - badgeW, badgeY = 88;
@@ -75,11 +75,11 @@ export function renderReceipt(doc, inv, qrDataUrl) {
   // ── Payment meta rows ──
   y += 6;
   doc.fontSize(9).font("Helvetica").fillColor("#3e3e3e");
-  const payDate = inv.paidAt ? dayjs(inv.paidAt).format("MMMM D, YYYY") : "—";
+  const payDate = inv.paidAt ? dayjs(inv.paidAt).format("MMMM D, YYYY") : "–";
   doc.text(`Payment date: ${payDate}`, L, y);
-  doc.text(`Invoice: ${inv.invoiceNumber || "—"}`, L + 200, y);
+  doc.text(`Invoice: ${inv.invoiceNumber || "–"}`, L + 200, y);
   y += 14;
-  doc.text(`Method: ${inv.paymentMethod || "—"}`, L, y);
+  doc.text(`Method: ${inv.paymentMethod || "–"}`, L, y);
   if (inv.paymentReference) doc.text(`Ref: ${inv.paymentReference}`, L + 200, y);
   y += 14;
 
@@ -118,7 +118,7 @@ export function renderReceipt(doc, inv, qrDataUrl) {
     const clr = isGray ? "#091E39" : "#262626";
     doc.fontSize(9).font("Helvetica").fillColor(clr);
     doc.text(`${i + 1}.`,            colSN + 2, y + 9, { width: 34, align: "center" });
-    doc.text(item.description || "—", colDesc,  y + 9, { width: colQty - colDesc - 4 });
+    doc.text(item.description || "–", colDesc,  y + 9, { width: colQty - colDesc - 4 });
     doc.text(String(item.qty || 1),  colQty,    y + 9, { width: 36, align: "center" });
     doc.text("Nr",                   colUnit,   y + 9, { width: 38, align: "center" });
     doc.text(fmtN(item.unitPrice),   colRate,   y + 9, { width: 55, align: "right" });

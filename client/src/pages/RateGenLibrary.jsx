@@ -512,6 +512,16 @@ export default function RateGenLibrary() {
             apiAuthed("/rategen-v2/library/meta", { token: accessToken }),
           ]);
 
+        // A dead session: every call came back 401 even after the silent
+        // refresh. Stop polling instead of retrying every 10s for days (one
+        // stale tab sent ~900 401s to each of these endpoints, 20-25 Sep 2026).
+        const results = [masterRes, mineRes, mergedRes, metaRes];
+        if (results.every((r) => r.status === "rejected" && r.reason?.status === 401)) {
+          setAutoRefresh(false);
+          setErr("You are signed out. Please sign in again.");
+          return;
+        }
+
         const partialErrors = [];
         let nextMine = latestMineRef.current;
         let hadAnySuccess = false;
@@ -576,6 +586,7 @@ export default function RateGenLibrary() {
     if (!accessToken || !autoRefresh) return undefined;
 
     const interval = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       loadAll({ silent: true });
       loadUpdatesCount();
     }, 10000);

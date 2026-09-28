@@ -67,7 +67,7 @@
                 "preamble": "25MPa / 19mm aggregate reinforced concrete in foundations and oversite slab, fully cured.",
                 "items": [
                   { "description": "Strip footing concrete", "unit": "m3", "lookups": [["strip", "concrete", "footing"], ["strip", "concrete", "in", "footing"]] },
-                  { "description": "Pad / column base concrete", "unit": "m3", "lookups": [["pad", "concrete"]] },
+                  { "description": "Pad / column base concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["pad", "concrete"], ["column", "base", "concrete"]] },
                   { "description": "Oversite slab — surface slabs and steps cast on waterproofing", "unit": "m3", "lookups": [["oversite", "concrete"]] }
                 ]
               },
@@ -139,11 +139,11 @@
                 "preamble": "Pre-painted profiled steel roof sheets fixed to hardwood members with proprietary fixings as specification.",
                 "items": [
                   { "description": "Roof covering", "unit": "m2", "lookups": [["roof", "area"], ["roof", "covering"]] },
-                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookups": [["roof", "structs"], ["roof", "strut"], ["roof", "tie"], ["tie", "beam"], ["tiebeam"]] },
+                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookups": [["roof", "structs"], ["roof", "strut"], ["roof", "tie"], ["tie", "beam"], ["tiebeam"]], "exclude": ["concrete", "formwork", "reinforcement", "rebar"] },
                   { "description": "50 x 150mm Hardwood King Post", "unit": "m", "lookups": [["roof", "king", "post"], ["roof", "kingpost"]] },
                   { "description": "50 x 150mm Hardwood Wall Plate", "unit": "m", "lookups": [["roof", "wall", "plate"], ["roof", "wallplate"]] },
                   { "description": "50 x 50mm Hardwood Ceiling Noggins", "unit": "m", "lookups": [["ceiling", "nogging"], ["ceiling", "noggin"]] },
-                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookups": [["roof", "purlin"], ["purlin"]] },
+                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookups": [["roof", "purlin"], ["purlin"]], "exclude": ["bolt", "z"] },
                   { "description": "50 x 150mm Hardwood Rafters", "unit": "m", "lookups": [["roof", "rafter"], ["rafter"]] }
                 ]
               },
@@ -251,7 +251,7 @@
                 "heading": "REINFORCED CONCRETE",
                 "preamble": "25MPa / 19mm aggregate reinforced concrete in foundations, ground beams, slab and column starters; fully cured.",
                 "items": [
-                  { "description": "Pad / column base concrete", "unit": "m3", "lookups": [["pad", "concrete"]] },
+                  { "description": "Pad / column base concrete", "unit": "m3", "lookupCombine": "sum", "lookups": [["pad", "concrete"], ["column", "base", "concrete"]] },
                   { "description": "Strip footing concrete", "unit": "m3", "lookups": [["strip", "concrete", "footing"], ["strip", "concrete"]] },
                   { "description": "Ground beam concrete (incl. raft beams)", "unit": "m3", "lookupCombine": "sum", "lookups": [["ground", "beam", "concrete"], ["raft", "concrete"], ["thickened", "beam"]] },
                   { "description": "Pile cap concrete", "unit": "m3", "lookups": [["pile", "cap", "concrete"]] },
@@ -281,7 +281,7 @@
                   { "description": "Strip footing reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["strip", "reinforcement"], ["strip", "rebar"]] },
                   { "description": "Ground beam reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["ground", "beam", "reinforcement"], ["ground", "beam", "rebar"]] },
                   { "description": "Pile cap reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["pile", "cap", "reinforcement"], ["pile", "cap", "rebar"]] },
-                  { "description": "Slab reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["slab", "reinforcement"], ["slab", "rebar"], ["oversite", "reinforcement"]] },
+                  { "description": "Slab reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["slab", "reinforcement"], ["slab", "rebar"], ["oversite", "reinforcement"]], "exclude": ["mesh", "ribbed", "suspended"] },
                   { "description": "Column starter reinforcement", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["column", "starter", "reinforcement"], ["column", "starter", "rebar"]] },
                   { "description": "BRC mesh / fabric reinforcement", "unit": "m2", "lookupCombine": "sum", "lookups": [["brc"], ["mesh"], ["bottom", "mesh"], ["reinforcement", "bottom"], ["reinforcement", "mesh"]] }
                 ]
@@ -314,9 +314,9 @@
                 "heading": "E10: MIXING/CASTING/CURING IN-SITU CONCRETE",
                 "preamble": "25MPa / 19mm aggregate reinforced in-situ concrete to columns, beams and suspended slabs, fully cured.",
                 "items": [
-                  { "description": "Columns", "unit": "m3", "lookups": [["column", "concrete"]] },
-                  { "description": "Beams", "unit": "m3", "lookups": [["beam", "concrete"]] },
-                  { "description": "Suspended slabs", "unit": "m3", "lookups": [["slab", "concrete"]] }
+                  { "description": "Columns", "unit": "m3", "lookups": [["column", "concrete"]], "exclude": ["base"] },
+                  { "description": "Beams", "unit": "m3", "lookups": [["beam", "concrete"]], "exclude": ["ground", "raft", "thickened"] },
+                  { "description": "Suspended slabs", "unit": "m3", "lookups": [["slab", "concrete"]], "exclude": ["pool", "ground", "oversite", "bed", "raft", "pile"] }
                 ]
               },
               {
@@ -324,8 +324,8 @@
                 "preamble": "Formwork and fair face finish to columns, beams and slab soffits.",
                 "items": [
                   { "description": "Column formwork — regular shaped; rectangular", "unit": "m2", "lookups": [["column", "formwork"]] },
-                  { "description": "Beam formwork — regular shaped; rectangular", "unit": "m2", "lookups": [["beam", "formwork"]] },
-                  { "description": "Slab soffit formwork", "unit": "m2", "lookups": [["slab", "formwork"]] }
+                  { "description": "Beam formwork — regular shaped; rectangular", "unit": "m2", "lookups": [["beam", "formwork"]], "exclude": ["ground", "raft", "thickened"] },
+                  { "description": "Slab soffit formwork", "unit": "m2", "lookups": [["slab", "formwork"]], "exclude": ["edge", "pool", "ground", "oversite", "bed", "raft", "pile"] }
                 ]
               },
               {
@@ -333,8 +333,8 @@
                 "preamble": "Reinforcement bars; B.S. 4449, hot rolled high yield steel.",
                 "items": [
                   { "description": "10-25mm diameter bars in columns", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["column", "reinforcement"], ["column", "rebar"]] },
-                  { "description": "10-25mm diameter bars in beams", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["beam", "reinforcement"], ["beam", "rebar"]] },
-                  { "description": "10-16mm diameter bars in suspended slabs", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["suspended", "slab", "reinforcement"], ["suspended", "slab", "rebar"], ["slab", "reinforcement"], ["slab", "rebar"]] }
+                  { "description": "10-25mm diameter bars in beams", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["beam", "reinforcement"], ["beam", "rebar"]], "exclude": ["ground", "raft", "thickened"] },
+                  { "description": "10-16mm diameter bars in suspended slabs", "unit": "t", "qtyDivisor": 1000, "lookupCombine": "sum", "lookups": [["suspended", "slab", "reinforcement"], ["suspended", "slab", "rebar"], ["slab", "reinforcement"], ["slab", "rebar"]], "exclude": ["pool", "ground", "oversite", "bed", "raft", "pile", "mesh"] }
                 ]
               },
               {
@@ -408,9 +408,9 @@
                 "heading": "PIPING & FITTINGS",
                 "preamble": "Supply and installation of water supply pipes, drainage pipes and fittings.",
                 "items": [
-                  { "description": "Water supply pipes and fittings", "unit": "m", "lookups": [["pipe"], ["fitting"]], "expandMatches": true },
+                  { "description": "Water supply pipes and fittings", "unit": "m", "lookups": [["pipe"], ["pipe", "fitting"]], "exclude": ["waste", "refrigerant"], "expandMatches": true },
                   { "description": "Valves and isolators", "unit": "No", "lookups": [["valve"]], "expandMatches": true },
-                  { "description": "Drainage / sewer pipes", "unit": "m", "lookups": [["drain"], ["sewer"]], "expandMatches": true }
+                  { "description": "Drainage / sewer pipes", "unit": "m", "lookups": [["drain"], ["sewer"], ["waste", "pipe"]], "exclude": ["concrete", "reinforcement", "formwork"], "expandMatches": true }
                 ]
               },
               {
@@ -418,7 +418,7 @@
                 "preamble": "Sanitary fixtures, tanks and pumps complete with all accessories.",
                 "items": [
                   { "description": "Sanitary fixtures (WCs, basins, showers)", "unit": "No", "lookups": [["wc"], ["water", "closet"], ["toilet"], ["basin"], ["lavatory"], ["shower"]], "expandMatches": true },
-                  { "description": "Tanks, pumps and accessories", "unit": "No", "lookups": [["tank"], ["pump"], ["cistern"]], "expandMatches": true }
+                  { "description": "Tanks, pumps and accessories", "unit": "No", "lookups": [["tank"], ["pump"], ["cistern"]], "exclude": ["blockwork"], "expandMatches": true }
                 ]
               }
             ]
@@ -430,7 +430,7 @@
                 "heading": "CABLING & CONTAINMENT",
                 "preamble": "Cables, wires, conduits and cable tray to specification.",
                 "items": [
-                  { "description": "Cables, wires and conductors", "unit": "m", "lookups": [["cable"], ["wire"]], "expandMatches": true },
+                  { "description": "Cables, wires and conductors", "unit": "m", "lookups": [["cable"], ["wire"]], "exclude": ["mesh", "tray"], "expandMatches": true },
                   { "description": "Conduit and cable tray", "unit": "m", "lookups": [["conduit"], ["tray"], ["raceway"]], "expandMatches": true }
                 ]
               },
@@ -439,7 +439,7 @@
                 "preamble": "Lighting fixtures, accessories and distribution equipment.",
                 "items": [
                   { "description": "Lighting fixtures and luminaires", "unit": "No", "lookups": [["light"], ["luminaire"], ["lamp"]], "expandMatches": true },
-                  { "description": "Switches, sockets and outlets", "unit": "No", "lookups": [["switch"], ["socket"], ["outlet"], ["receptacle"]], "expandMatches": true },
+                  { "description": "Switches, sockets and outlets", "unit": "No", "lookups": [["switch"], ["socket"], ["outlet"], ["receptacle"]], "exclude": ["pipe"], "expandMatches": true },
                   { "description": "Distribution boards and panels", "unit": "No", "lookups": [["panel"], ["distribution"], ["breaker"], ["busbar"]], "expandMatches": true }
                 ]
               }

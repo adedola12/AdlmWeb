@@ -64,7 +64,21 @@ export function apiMongoOptions(env = process.env) {
   const maxPool = num(env.MONGO_MAX_POOL, 5);
   const minPool = Math.min(Math.floor(num(env.MONGO_MIN_POOL, 1)), maxPool);
   if (minPool > 0) out.minPoolSize = minPool;
+  // No index or collection building from API containers. With these on, every
+  // cold container queued ~324 createCollection/createIndex commands in its
+  // pool ahead of real queries, and a deploy's wave of cold containers made
+  // those queries wait past waitQueueTimeoutMS: the post-deploy 503 burst
+  // (util/indexSync.js has the numbers). The scheduled job builds indexes
+  // instead. MONGO_AUTO_INDEX=true in SSM restores mongoose's default.
+  if (!truthy(env.MONGO_AUTO_INDEX)) {
+    out.autoIndex = false;
+    out.autoCreate = false;
+  }
   return out;
+}
+
+function truthy(v) {
+  return /^(1|true|yes|on)$/i.test(String(v ?? "").trim());
 }
 
 // Errors that mean "the database did not answer", as opposed to "the database

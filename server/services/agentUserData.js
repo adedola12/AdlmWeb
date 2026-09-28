@@ -27,9 +27,9 @@ function naira(v) {
 }
 
 function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "–";
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? "—" : d.toISOString().slice(0, 10);
+  return Number.isNaN(d.getTime()) ? "–" : d.toISOString().slice(0, 10);
 }
 
 // ── Portfolio summary ──────────────────────────────────────────────────────

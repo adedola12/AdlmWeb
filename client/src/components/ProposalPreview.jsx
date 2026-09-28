@@ -167,7 +167,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
   const sym = currency === "USD" ? "$" : "₦";
   const fmt = (n) => `${sym}${Number(n || 0).toLocaleString()}`;
   const fmtDate = (d) =>
-    d && dayjs(d).isValid() ? dayjs(d).format("MMMM D, YYYY") : "—";
+    d && dayjs(d).isValid() ? dayjs(d).format("MMMM D, YYYY") : "–";
 
   const firm = proposal.clientFirm || "{ Client Firm }";
   const items = Array.isArray(proposal.items) ? proposal.items : [];
@@ -249,7 +249,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
               <div className="val">
                 {[proposal.clientContact, proposal.clientTitle]
                   .filter(Boolean)
-                  .join(" — ") || "—"}
+                  .join(" — ") || "–"}
               </div>
             </div>
             <div>
@@ -395,11 +395,11 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
                   suite.map((row, i) => (
                     <tr key={i}>
                       <td>
-                        <strong>{row.name || "—"}</strong>
+                        <strong>{row.name || "–"}</strong>
                       </td>
-                      <td>{row.whatItDoes || "—"}</td>
-                      <td>{row.platform || "—"}</td>
-                      <td>{row.listPrice || "—"}</td>
+                      <td>{row.whatItDoes || "–"}</td>
+                      <td>{row.platform || "–"}</td>
+                      <td>{row.listPrice || "–"}</td>
                     </tr>
                   ))
                 ) : (
@@ -470,11 +470,11 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
                       <div className="badge">RECOMMENDED</div>
                     )}
                     <div className="tname">
-                      {(t.name || "—").toUpperCase()}
+                      {(t.name || "–").toUpperCase()}
                     </div>
                     <div className="tfor">{t.audience || ""}</div>
                     <div className="tprice">
-                      {price ? price.trim() : "—"}
+                      {price ? price.trim() : "–"}
                       {per ? <small> / {per.trim()}</small> : null}
                     </div>
                     <ul>
@@ -540,9 +540,9 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
                   items.map((it, i) => (
                     <tr key={i}>
                       <td>
-                        <strong>{it.description || "—"}</strong>
+                        <strong>{it.description || "–"}</strong>
                       </td>
-                      <td>{it.term || "—"}</td>
+                      <td>{it.term || "–"}</td>
                       <td>{it.qty || 1}</td>
                       <td>{fmt(it.total)}</td>
                     </tr>
