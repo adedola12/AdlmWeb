@@ -227,7 +227,12 @@ test("a full collaborator WITHOUT RateGen cannot export the rates", async () => 
     );
     assert.equal(res.status, 403);
     const body = await res.json();
-    assert.equal(body.code, "RATES_NOT_VISIBLE");
+    // Two guards cover this now, added by two sessions: loadProject refuses a
+    // non-owner without RateGen before the project is even returned, and
+    // mayExportRates refuses later for projects reached by scan. The first one
+    // fires here, and it uses RATEGEN_REQUIRED, the code the rest of the
+    // platform already uses for exactly this refusal.
+    assert.equal(body.code, "RATEGEN_REQUIRED");
     assert.match(body.error, /RateGen/);
   });
 });

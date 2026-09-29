@@ -313,21 +313,6 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
   let reproducesRate = true;
 
   if (net > 0 && billAmount > 0) {
-    const markupPct = (billAmount / net - 1) * 100;
-    if (markupPct >= 0) {
-      // Report it the way the Budget tab does: overhead to its constant first,
-      // then whatever is left is profit.
-      oh = round(Math.min(markupPct, K.get(MC.MarkupOverheadPercent)), 4);
-      // Profit carries the remainder at full precision. Rounding it to 4dp as
-      // well dropped up to 0.0001% of the net, which on a big line is a kobo
-      // off the picked rate once deriveLineRate rebuilds it (12149.99 for a
-      // 12150 pick). The bill rate must come back exactly as picked.
-      pr = round(markupPct - oh, 10);
-    } else {
-      // The build-up costs more than the rate sells for. groupMarkup clamps a
-      // percentage at 0, so a negative markup cannot be carried there without
-      // the rate failing to reproduce and the bill rising on a GET. One named
-      // row absorbs the difference instead, and the QS is told.
     // The build-up costs more than the rate sells for. groupMarkup clamps a
     // percentage at 0, so a negative markup cannot be carried there without
     // the rate failing to reproduce and the bill rising on a GET. One named
