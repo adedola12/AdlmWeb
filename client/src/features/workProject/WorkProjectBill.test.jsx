@@ -261,3 +261,65 @@ describe("a bill with nothing in it", () => {
     expect(() => render(<WorkProjectBill project={null} />)).not.toThrow();
   });
 });
+
+describe("arranging the bill's sections", () => {
+  const arranged = {
+    productKey: "revit",
+    customCategories: ["Substructure", "Frames"],
+    items: [
+      { code: "BQ-1", category: "Frames", description: "Concrete column", qty: 1, rate: 100 },
+      { code: "BQ-2", category: "Substructure", description: "Excavate", qty: 1, rate: 100 },
+    ],
+  };
+
+  it("renders the sections in the project's own arrangement", () => {
+    const c = render(<WorkProjectBill project={arranged} />).container;
+    const names = [...c.querySelectorAll(".bsec .sh b")].map((b) => b.textContent);
+    expect(names[0]).toContain("Substructure");
+    expect(names[1]).toContain("Frames");
+  });
+
+  it("lets an editor drag a section, and saves the new order", () => {
+    const onSave = vi.fn();
+    const c = render(<WorkProjectBill project={arranged} canEdit onSave={onSave} />).container;
+    const secs = [...c.querySelectorAll(".bsec")];
+    expect(secs[0].getAttribute("draggable")).toBe("true");
+    fireEvent.dragStart(secs[1]);
+    fireEvent.drop(secs[0]);
+    expect(onSave.mock.calls[0][0].customCategories).toEqual(["Frames", "Substructure"]);
+  });
+
+  it("gives a view-only reader nothing to drag", () => {
+    const c = render(<WorkProjectBill project={arranged} />).container;
+    expect(c.querySelector(".bsec").getAttribute("draggable")).toBe("false");
+  });
+
+  it("offers to add a section", () => {
+    const c = render(<WorkProjectBill project={arranged} canEdit onSave={vi.fn()} />).container;
+    expect(within(c).getByText("Add a section")).toBeTruthy();
+  });
+
+  it("offers an arrangement only when it would change something", () => {
+    // Substructure then Frames is already the engine's order.
+    const tidy = render(<WorkProjectBill project={arranged} canEdit onSave={vi.fn()} />).container;
+    expect(within(tidy).queryByText("Suggest an arrangement")).toBe(null);
+    cleanup();
+    const messy = render(
+      <WorkProjectBill
+        project={{ ...arranged, customCategories: ["Frames", "Substructure"] }}
+        canEdit
+        onSave={vi.fn()}
+      />,
+    ).container;
+    expect(within(messy).getByText("Suggest an arrangement")).toBeTruthy();
+  });
+
+  it("hides the arranging controls on a filtered or searched view", () => {
+    // They would reorder a bill the reader cannot see all of.
+    const c = render(
+      <WorkProjectBill project={arranged} canEdit onSave={vi.fn()} initialQuery="column" />,
+    ).container;
+    expect(within(c).queryByText("Add a section")).toBe(null);
+    expect(c.querySelector(".bsec")?.getAttribute("draggable")).toBe("false");
+  });
+});

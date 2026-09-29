@@ -28,14 +28,23 @@ import { Bar } from "./workProjectBits.jsx";
 // Overview tab reads, and it is the only place that knows where a percentage
 // lives on the document.
 import { totalsFor } from "./overviewModel.js";
+import {
+  orderedSections,
+  suggestedArrangement,
+  withSectionAdded,
+  withSectionMoved,
+} from "./sectionsModel.js";
 
 export default function WorkProjectBill({
   project,
+  productKey = "",
   canEdit = false,
   driftByIndex = null,
   initialQuery = "",
   onOpenLine,
   onGo,
+  onSave,
+  saving = false,
 }) {
   const items = React.useMemo(
     () => (Array.isArray(project?.items) ? project.items : []),
@@ -46,6 +55,14 @@ export default function WorkProjectBill({
   // [data-sheet] behaviour. Re-seeded when it changes so a second jump moves
   // the box, but typed edits after that are the reader's own.
   const [query, setQuery] = React.useState(initialQuery);
+
+  // The project's own arrangement of its sections. sectionsModel keeps it in
+  // `customCategories`, which the project already had and the PUT already
+  // accepts as an ordered array — so reordering needs no server change.
+  const order = React.useMemo(() => orderedSections(project), [project]);
+  // Which section is being dragged. Index into `order`, not a name: two
+  // sections can read alike after trimming and the index cannot be ambiguous.
+  const [dragFrom, setDragFrom] = React.useState(null);
   React.useEffect(() => setQuery(initialQuery), [initialQuery]);
   const [filter, setFilter] = React.useState("all");
   const [by, setBy] = React.useState("element");
@@ -58,10 +75,17 @@ export default function WorkProjectBill({
     [items, driftByIndex],
   );
   const groups = React.useMemo(
-    () => groupBill(items, { by, query, filter, driftByIndex }),
-    [items, by, query, filter, driftByIndex],
+    () => groupBill(items, { by, query, filter, driftByIndex, order }),
+    [items, by, query, filter, driftByIndex, order],
   );
   const totals = React.useMemo(() => totalsFor(project), [project]);
+
+  // Null when the bill is already arranged the way the engine would, so the
+  // control is simply absent rather than offering a change that does nothing.
+  const suggestion = React.useMemo(
+    () => suggestedArrangement(project, productKey),
+    [project, productKey],
+  );
 
   const anyShown = groups.some((g) => g.indexes.length > 0);
 
@@ -118,6 +142,38 @@ export default function WorkProjectBill({
           {foldLabel(groups, openMap)}
         </button>
 
+        {/* Arranging the bill is only meaningful on the whole bill by element:
+            a filtered or searched view is a subset, and "by trade" is a
+            different question about the same lines. Offering the controls there
+            would let a QS reorder something they cannot see. */}
+        {canEdit && by === "element" && !query && filter === "all" ? (
+          <>
+            <button
+              type="button"
+              className="pj-lnk"
+              disabled={saving}
+              onClick={() => {
+                const name = window.prompt("Name the new section");
+                const patch = withSectionAdded(project, name || "");
+                if (patch) onSave?.(patch);
+              }}
+            >
+              Add a section
+            </button>
+            {suggestion ? (
+              <button
+                type="button"
+                className="pj-lnk"
+                disabled={saving}
+                onClick={() => onSave?.(suggestion)}
+                title="Puts the sections in the order the bill engine files them"
+              >
+                Suggest an arrangement
+              </button>
+            ) : null}
+          </>
+        ) : null}
+
         <span className="tot">
           Measured <b>{money(totals.measured)}</b>
         </span>
@@ -143,7 +199,24 @@ export default function WorkProjectBill({
             filter,
           });
           return (
-            <div key={g.name} className={open ? "bsec open" : "bsec"}>
+            <div
+              key={g.name}
+              className={open ? "bsec open" : "bsec"}
+              // Reordering is on the section, not on its lines: a bill is
+              // arranged by moving whole sections, and dragging a header is
+              // what a QS reaches for. Only an editor gets it — a drag that
+              // silently did nothing would be worse than no handle.
+              draggable={canEdit && !query && filter === "all" && by === "element"}
+              onDragStart={() => setDragFrom(order.findIndex((n) => n === g.name))}
+              onDragOver={(e) => (dragFrom == null ? null : e.preventDefault())}
+              onDrop={() => {
+                const to = order.findIndex((n) => n === g.name);
+                const patch = withSectionMoved(project, dragFrom, to);
+                setDragFrom(null);
+                if (patch) onSave?.(patch);
+              }}
+              onDragEnd={() => setDragFrom(null)}
+            >
               <button
                 type="button"
                 className="sh"

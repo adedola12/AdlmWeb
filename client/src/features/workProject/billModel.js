@@ -108,22 +108,49 @@ export function chipCounts(items, driftByIndex = null) {
  * `letter` is his A · B · C section prefix, and a row's ref is letter.position,
  * numbered within the FILTERED set exactly as his `letter + '.' + (k + 1)` does.
  */
-export function groupBill(items, { by = "element", query = "", filter = "all", driftByIndex = null } = {}) {
+
+/** Stable sort in place by a rank function — ties keep the order they had. */
+function order_stable(list, rankOf) {
+  list
+    .map((name, i) => ({ name, i, r: rankOf(name) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .forEach((x, i) => {
+      list[i] = x.name;
+    });
+}
+export function groupBill(
+  items,
+  { by = "element", query = "", filter = "all", driftByIndex = null, order = null } = {},
+) {
   const list = Array.isArray(items) ? items : [];
   const key = by === "trade" ? tradeOf : elementOf;
 
-  const order = [];
+  const orderList = [];
   const bucket = new Map();
   list.forEach((it, i) => {
     const name = key(it);
     if (!bucket.has(name)) {
       bucket.set(name, []);
-      order.push(name);
+      orderList.push(name);
     }
     bucket.get(name).push(i);
   });
 
-  return order.map((name, gi) => {
+  // The project's own arrangement, when it has one. A section it does not name
+  // keeps its place after the ones it does, in the order the bill uses it —
+  // dropping it would hide every line filed under it. Sections are only ever
+  // ordered by `element`: "by trade" is a different question about the same
+  // lines, and answering it in the bill's element order would be nonsense.
+  if (by === "element" && Array.isArray(order) && order.length) {
+    const rank = new Map(order.map((n, i) => [String(n).trim().toLowerCase(), i]));
+    const at = (n) => {
+      const r = rank.get(String(n).trim().toLowerCase());
+      return r == null ? Number.MAX_SAFE_INTEGER : r;
+    };
+    order_stable(orderList, at);
+  }
+
+  return orderList.map((name, gi) => {
     const all = bucket.get(name);
     const shown = all.filter((i) =>
       matches(list[i], { query, filter, changed: driftByIndex?.[i] || null }),

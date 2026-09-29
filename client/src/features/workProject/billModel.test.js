@@ -225,3 +225,41 @@ describe("the fold button", () => {
     expect(foldLabel([], {})).toBe("Collapse all");
   });
 });
+
+describe("the bill follows the project's arrangement", () => {
+  const items = [
+    { code: "BQ-1", category: "Roofing", qty: 1, rate: 1 },
+    { code: "BQ-2", category: "Substructure", qty: 1, rate: 1 },
+    { code: "BQ-3", category: "Frames", qty: 1, rate: 1 },
+  ];
+
+  it("orders the sections the way the project arranges them", () => {
+    const g = groupBill(items, { order: ["Substructure", "Frames", "Roofing"] });
+    expect(g.map((x) => x.name)).toEqual(["Substructure", "Frames", "Roofing"]);
+  });
+
+  it("keeps first-appearance order when the project has no arrangement", () => {
+    expect(groupBill(items, {}).map((x) => x.name)).toEqual([
+      "Roofing",
+      "Substructure",
+      "Frames",
+    ]);
+  });
+
+  it("never hides a section the arrangement does not name", () => {
+    // It goes after the named ones, in the order the bill uses it. Dropping it
+    // would hide every line filed under it.
+    const g = groupBill(items, { order: ["Frames"] });
+    expect(g.map((x) => x.name)).toEqual(["Frames", "Roofing", "Substructure"]);
+  });
+
+  it("ignores casing when matching a section to the arrangement", () => {
+    const g = groupBill(items, { order: ["substructure", "frames"] });
+    expect(g.map((x) => x.name).slice(0, 2)).toEqual(["Substructure", "Frames"]);
+  });
+
+  it("leaves 'by trade' alone — that is a different question", () => {
+    const g = groupBill(items, { by: "trade", order: ["Substructure", "Frames", "Roofing"] });
+    expect(g.length).toBeGreaterThan(0);
+  });
+});

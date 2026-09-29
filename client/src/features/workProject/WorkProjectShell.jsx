@@ -428,10 +428,13 @@ export default function WorkProjectShell({ productKey, id }) {
         ) : tab === "bill" && !fullFailed ? (
           <WorkProjectBill
             project={project}
+            productKey={productKey}
             canEdit={!viewOnly}
             initialQuery={params.get("q") || ""}
             onOpenLine={(index) => panel.show({ kind: "line", index })}
             onGo={go}
+            onSave={save}
+            saving={saveState === "saving"}
           />
         ) : tab === "rates" && !fullFailed ? (
           <WorkProjectRates
