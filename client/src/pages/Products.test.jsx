@@ -7,9 +7,12 @@
 // none of them. The button now opens the rest of the same list in place, on
 // the page the detail view's breadcrumb already names as the parent (417e40b).
 //
-// The rest of the file is about telling the truth when something is missing:
-// a session that has already run is not on offer, a read that failed is not an
-// empty shelf, and whatever the exception said is for the console.
+// The section also shows only when there is something in it, or when the read
+// failed and says so: with nothing published it was an empty shelf on the
+// catalogue page (owner, 27 Sep 2026). The rest is about telling the truth when
+// something is missing — a session that has already run is not on offer, a read
+// that failed is not an empty shelf, and whatever the exception said is for the
+// console.
 
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -19,17 +22,6 @@ import { MemoryRouter } from "react-router-dom";
 // framer-motion's whileInView (components/effects.jsx) needs an observer that
 // jsdom does not ship. Nothing here depends on scroll, so a no-op is enough.
 class NoopObserver {
-// /products shows the Physical Trainings section only when there is something
-// in it, or when the read failed and says so. With nothing published it was an
-// empty shelf on the catalogue page (owner, 27 Sep 2026).
-
-import React from "react";
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-
-// jsdom has no IntersectionObserver; the page's reveal animations use it.
-globalThis.IntersectionObserver ??= class {
   observe() {}
   unobserve() {}
   disconnect() {}
@@ -38,11 +30,6 @@ globalThis.IntersectionObserver ??= class {
   }
 }
 globalThis.IntersectionObserver = NoopObserver;
-
-vi.mock("../store.jsx", async (orig) => ({
-  ...(await orig()),
-  useAuth: () => ({ accessToken: "", user: null }),
-};
 
 vi.mock("../store.jsx", async (orig) => ({
   ...(await orig()),
@@ -88,6 +75,15 @@ const mount = (list, over = {}) => {
     }),
   );
   return render(
+    <MemoryRouter initialEntries={["/products"]}>
+      <Products />
+    </MemoryRouter>,
+  );
+};
+
+// The second suite below stubs fetch its own way and mounts with no arguments.
+// Both suites were written for this page by different hands and merged into one
+// file; they are kept apart by name rather than by one of them being dropped.
 function serve(events) {
   globalThis.fetch = vi.fn(async (url) => {
     const u = String(url);
@@ -99,13 +95,12 @@ function serve(events) {
   });
 }
 
-const mount = () =>
+const mountPlain = () =>
   render(
     <MemoryRouter initialEntries={["/products"]}>
       <Products />
     </MemoryRouter>,
   );
-};
 
 const cards = () => screen.queryAllByText(/^Physical training \d+$/);
 
@@ -142,8 +137,14 @@ describe("the Physical Trainings section on /products", () => {
   });
 
   it("offers no 'View all' when nothing is published", async () => {
+    // This used to expect "No trainings published yet." on the page. The owner
+    // changed that on 27 Sep 2026: with nothing published the section is not
+    // shown at all, because an empty shelf on the catalogue reads as a product
+    // we do not have. The suite below pins that; what is left here is the point
+    // this test was making — nothing to expand means no control to expand it.
     mount([]);
-    await screen.findByText("No trainings published yet.");
+    await waitFor(() => expect(cards()).toHaveLength(0));
+    expect(screen.queryByText(/No trainings published yet/)).toBeNull();
     expect(screen.queryByRole("button", { name: /View all/ })).toBeNull();
   });
 
@@ -236,6 +237,8 @@ describe("the product list on /products", () => {
       expect.stringContaining("catalogue"),
       expect.objectContaining({ message: "HTTP 500" }),
     );
+  });
+});
 
 const trainingsAsked = () =>
   globalThis.fetch.mock.calls.some(([u]) => String(u).includes("/ptrainings/events"));
@@ -248,7 +251,7 @@ afterEach(() => {
 describe("Products: Physical Trainings section", () => {
   it("is not on the page when nothing is published", async () => {
     serve([]);
-    mount();
+    mountPlain();
     await waitFor(() => expect(trainingsAsked()).toBe(true));
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByText("Physical Trainings")).toBeNull();
@@ -257,13 +260,13 @@ describe("Products: Physical Trainings section", () => {
 
   it("shows when there is an event", async () => {
     serve([{ _id: "e1", key: "lagos-oct", title: "Revit QS Bootcamp", priceNGN: 50000, startAt: "2099-10-01T09:00:00Z" }]);
-    mount();
+    mountPlain();
     expect(await screen.findByText("Physical Trainings")).toBeTruthy();
   });
 
   it("shows when the read failed, so a failure is not mistaken for an empty shelf", async () => {
     serve("fail");
-    mount();
+    mountPlain();
     expect(await screen.findByText("Physical Trainings")).toBeTruthy();
   });
 });

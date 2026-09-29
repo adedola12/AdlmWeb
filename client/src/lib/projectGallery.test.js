@@ -33,8 +33,12 @@ describe("stageOf", () => {
   it("reads a withheld row's stage from `priced`, not its zeroed totalCost", () => {
     expect(stageOf(row({ moneyHidden: true, totalCost: 0, priced: true }))).toBe("priced");
     expect(stageOf(row({ moneyHidden: true, totalCost: 0, priced: false }))).toBe("takeoff");
-    // `priced` means nothing on a row whose money is not hidden.
-    expect(stageOf(row({ totalCost: 0, priced: true }))).toBe("takeoff");
+    // A third assertion here used to read: `priced` means nothing on a row whose
+    // money is not hidden — stageOf({ totalCost: 0, priced: true }) === "takeoff".
+    // "prefers the row's own answer over the figure" below asserts the OPPOSITE
+    // for the identical input. Two sessions wrote contradictory tests for one
+    // case and a merge kept both. This one goes: the module reads the stage
+    // rather than inferring it, so an explicit `priced` outranks a zero figure.
   });
 
   it("is Takeoff while nothing is priced", () => {

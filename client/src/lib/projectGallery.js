@@ -45,9 +45,6 @@ export function stageOf(p) {
   // would label a shared, fully priced job "takeoff". Rows that are not
   // masked have no `priced` field and answer from the figure, as before.
   if (typeof p?.priced === "boolean") return p.priced ? "priced" : "takeoff";
-  // A row whose money is withheld arrives with totalCost zeroed; the server
-  // keeps a plain yes/no `priced` so it still reads at the right stage.
-  if (isMoneyHidden(p) && typeof p?.priced === "boolean") return p.priced ? "priced" : "takeoff";
   return Number(p?.totalCost) > 0 ? "priced" : "takeoff";
 }
 

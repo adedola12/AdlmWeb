@@ -52,7 +52,6 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkDropdown from "./WkDropdown.jsx";
 import WkPrefs from "./WkPrefs.jsx";
-import { normaliseRollup } from "../lib/projectLinks.js";
 import { useProjectHref } from "../lib/useProjectHref.js";
 import { isMoneyHidden } from "../lib/projectGallery.js";
 
@@ -60,7 +59,6 @@ import { isMoneyHidden } from "../lib/projectGallery.js";
 // else a value is absent.
 const DASH = "–";
 import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
-import { isMoneyHidden } from "../lib/projectGallery.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
