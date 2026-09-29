@@ -21,27 +21,6 @@ export async function readerMaySeeRates(userId) {
   return hasActiveEntitlement(me, "rategen");
 }
 
-// The rollup fields /me/projects-rollup masks.
-//
-// totalCost / valuedAmount / remainingAmount used to be left off this list,
-// on the reasoning that they predated the masking and the SCREENS could draw
-// the line themselves. They could not, and did not:
-//
-//   - DsWorkHome guarded one totalCost and printed another unguarded.
-//   - DsWorkProgramme summed totalCost into a portfolio value and printed it.
-//   - PortfolioDashboard summed and EXPORTED totalCost and valuedAmount.
-//   - workOverview's headline read `workValue > 0 ? workValue : totalCost`,
-//     so masking workValue to 0 fell straight through to the unmasked
-//     totalCost. The mask was doing nothing at all on that screen.
-//
-// totalCost IS the money: it is the sum of the bill's line amounts, and it is
-// the biggest input to workValue, which was already masked. Withholding a
-// derived figure while shipping its input is not withholding anything. The
-// rule belongs here, once, where forgetting fails closed.
-export const ROLLUP_MONEY_FIELDS = Object.freeze([
-  "totalCost",
-  "valuedAmount",
-  "remainingAmount",
 // The three totals every list row carries: measured work, what has been
 // valued and what is left. They were left unmasked when this masking was
 // first added, on the grounds that they predated it. That left a collaborator
@@ -71,13 +50,6 @@ export const ROLLUP_MONEY_FIELDS = Object.freeze([
   "estimatedTotal",
 ]);
 
-// The equivalent fields on a per-product project list row: the contract sum
-// and the grand-summary cascade that builds the "Estimated" figure, plus the
-// same three, for the same reason.
-export const PROJECT_LIST_MONEY_FIELDS = Object.freeze([
-  "totalCost",
-  "valuedAmount",
-  "remainingAmount",
 // The equivalent fields on a per-product project list row: the three totals,
 // the contract sum and the grand-summary cascade that builds the "Estimated"
 // figure.
