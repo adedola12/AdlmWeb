@@ -1,0 +1,67 @@
+# The release gate's required check (docs/RELEASE_GATE.md).
+#
+# From 29 Sep 2026 nobody reviews pull requests into main: the approver is a
+# designer, and he signs off a tested BATCH on the release desk instead. This
+# check is what makes GitHub honour that decision. It asks the website whether
+# the approver approved the exact commit being merged, and fails if not.
+#
+# It can only ever BLOCK a merge. It merges nothing and needs no credential:
+# the endpoint is read-only and answers yes or no about one commit hash.
+#
+# To make it binding:
+#   Settings > Branches > main > Require status checks to pass >
+#   add "approved batch", and keep "Include administrators" ticked.
+
+name: release gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  approved-batch:
+    name: approved batch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask the release desk about this commit
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+          echo "Commit under review: $SHA"
+
+          # A network problem must never read as approved, so a call that never
+          # succeeds fails the check. Three tries, in case the API is cold.
+          body=""
+          for i in 1 2 3; do
+            if body=$(curl -sS --max-time 20 "https://api.adlmstudio.net/release-gate/batch-status?sha=$SHA"); then
+              break
+            fi
+            echo "call failed, retrying in 10s"
+            sleep 10
+          done
+
+          if [ -z "$body" ]; then
+            echo "::error::Could not reach the release desk, so this build is treated as not approved."
+            exit 1
+          fi
+
+          echo "$body"
+          approved=$(printf '%s' "$body" | jq -r '.approved // false')
+          if [ "$approved" = "true" ]; then
+            who=$(printf '%s' "$body" | jq -r '.approvedBy // "the approver"')
+            title=$(printf '%s' "$body" | jq -r '.title // "this batch"')
+            echo "::notice::$title was approved by $who after testing this build."
+            exit 0
+          fi
+
+          reason=$(printf '%s' "$body" | jq -r '.reason // "not approved"')
+          echo "::error::$reason"
+          echo "Nothing reaches customers until the approver has tested and approved this build"
+          echo "on https://www.adlmstudio.net/admin/releases"
+          exit 1
