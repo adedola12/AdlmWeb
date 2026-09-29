@@ -266,6 +266,8 @@ router.get(
       // being made to sign out and back in to refresh a token.
       state: 1,
       zone: 1,
+      // The token only carries a plain avatar link (routes/auth.js accessTokenClaims).
+      avatarUrl: 1,
     });
 
     if (user) {
@@ -293,7 +295,7 @@ router.get(
       email,
       role: effectiveRole,
       username,
-      avatarUrl,
+      avatarUrl: user?.avatarUrl || avatarUrl,
       zone: user?.zone || zone,
       state: user?.state || null,
       entitlements: entitlementsLegacy, // legacy payload (but now accurate)
