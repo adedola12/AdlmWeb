@@ -8,6 +8,7 @@ import { FiShield } from "../components/icons.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import ReleaseBatchCard from "../components/ReleaseBatchCard.jsx";
 import { WorkInFlight } from "../features/work/WorkBoard.jsx";
 
 function fmt(d) {
@@ -112,6 +113,10 @@ export default function AdminReleases() {
       </div>
 
       {msg && <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 p-3 text-sm">{msg}</div>}
+
+      {/* The batch: what the approver actually tests and approves. Everything
+          below it is the detail behind that one decision. */}
+      <ReleaseBatchCard token={accessToken} onChanged={load} />
 
       {data?.awaitingReview?.length > 0 && (
         <div className="card space-y-3 border border-purple-200">
