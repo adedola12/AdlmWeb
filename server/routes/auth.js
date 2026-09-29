@@ -122,6 +122,28 @@ function buildAuthPayload(user) {
   };
 }
 
+// What goes INSIDE the access token: buildAuthPayload without the entitlements.
+//
+// The token rides on every request's Authorization header, and the API edge
+// refuses a request whose headers pass ~10 KB before it reaches Express: the
+// browser sees only "Failed to fetch" and nothing is logged. An organisation
+// with many seats carries a devices row per seat, which put Y.S. Associates'
+// token at 16,923 characters (network check Y8XQZV, 28 Sep 2026) and locked
+// them out of every signed-in page on web and Hub for two months.
+//
+// Nothing reads entitlements from the token: every gate loads them from the
+// database, the AI service fetches them from /api/entitlements, and clients
+// read them from the `user` body of the login / refresh reply, which still
+// carries them. An uploaded avatar can be a data: URL of any size, so only a
+// plain link is kept; /me reads the real one from the database.
+const MAX_TOKEN_AVATAR_URL = 512;
+export function accessTokenClaims(payload) {
+  const { entitlements, avatarUrl, ...claims } = payload;
+  const avatar = String(avatarUrl || "");
+  claims.avatarUrl = avatar.length <= MAX_TOKEN_AVATAR_URL && !avatar.startsWith("data:") ? avatar : "";
+  return claims;
+}
+
 function isPluginClient(req) {
   const header = (name) => (req.get(name) || "").toLowerCase();
   const kind = header("x-adlm-client");
@@ -383,7 +405,7 @@ router.post("/signup", async (req, res) => {
     }
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     const refreshToken = signRefresh({ sub: payload._id });
 
     await Refresh.create({
@@ -804,7 +826,7 @@ router.post("/login", async (req, res) => {
     }
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     const refreshToken = signRefresh({ sub: payload._id });
 
     await Refresh.create({
@@ -923,7 +945,7 @@ router.post("/login/otp", authLimiter, async (req, res) => {
     }
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     const refreshToken = signRefresh({ sub: payload._id });
     await Refresh.create({
       userId: user._id,
@@ -968,7 +990,7 @@ router.post("/refresh", async (req, res) => {
     if (!user) return res.status(401).json({ error: "User missing" });
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     res.json({ accessToken, user: payload });
   } catch (err) {
     console.error("[/auth/refresh] error:", err);
@@ -1397,7 +1419,7 @@ router.post("/social", authLimiter, async (req, res) => {
     }
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     const refreshToken = signRefresh({ sub: payload._id });
 
     await Refresh.create({
