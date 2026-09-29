@@ -5,7 +5,7 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 
 // Deliberately the SYNC shape: lineTotal, no totalPrice anywhere.
@@ -151,51 +151,6 @@ describe("a rate whose net cost is more than its lines explain", () => {
   });
 });
 
-// ── S18 review, findings 2 and 4 ────────────────────────────────────────────
-// A rate the customer built at 80% profit. Re-saving it from the build-up used
-// to store 60% without a word, which is 2,000 off this rate every time.
-const customRate = {
-  customRateId: "tiling-x1",
-  title: "Ceramic tiling 300x300",
-  description: "Ceramic tiling 300x300",
-  unit: "m2",
-  netCost: 10000,
-  overheadPercent: 10,
-  profitPercent: 80,
-  overheadValue: 1000,
-  profitValue: 8000,
-  totalCost: 19000,
-  materials: [
-    {
-      rateType: "material",
-      description: "Ceramic tile",
-      quantity: 1.05,
-      unit: "m2",
-      unitPrice: 6000,
-      totalCost: 6300,
-      category: "Tiling",
-      refSn: null,
-      refName: "Ceramic tile",
-    },
-  ],
-  labour: [
-    {
-      rateType: "labour",
-      description: "Tiling gang",
-      quantity: 0.1,
-      unit: "day",
-      unitPrice: 37000,
-      totalCost: 3700,
-      category: "Finishing",
-      refSn: null,
-      refName: "Tiling gang",
-    },
-  ],
-  breakdown: [
-    { componentName: "Ceramic tile", refKind: "material", quantity: 1.05, unit: "m2", unitPrice: 6000, lineTotal: 6300 },
-    { componentName: "Tiling gang", refKind: "labour", quantity: 0.1, unit: "day", unitPrice: 37000, lineTotal: 3700 },
-  ],
-};
 
 // ── S18 review, finding 3, the other half ───────────────────────────────────
 describe("a customer's own copy with no build-up of its own", () => {

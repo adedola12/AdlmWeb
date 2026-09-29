@@ -58,7 +58,7 @@ import { isMoneyHidden } from "../lib/projectGallery.js";
 // Placeholder for a figure this reader may not see. En dash, like everywhere
 // else a value is absent.
 const DASH = "–";
-import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { normaliseRollup } from "../lib/projectLinks.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
