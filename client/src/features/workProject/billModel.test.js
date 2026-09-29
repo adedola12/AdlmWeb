@@ -263,3 +263,54 @@ describe("the bill follows the project's arrangement", () => {
     expect(g.length).toBeGreaterThan(0);
   });
 });
+
+// THE BUG THIS PINS
+//
+// "Add a section" writes the name to customCategories and the bill never drew
+// it: groupBill built its buckets from the ITEMS alone, so a section with no
+// lines did not exist to render. The save worked; the button looked broken.
+describe("a section the project names but no line uses", () => {
+  const items = [
+    { code: "BQ-1", category: "Frames", description: "Column", qty: 1, rate: 100 },
+    { code: "BQ-2", category: "Substructure", description: "Excavate", qty: 1, rate: 50 },
+  ];
+  const order = ["Substructure", "Frames", "Finishes"];
+
+  it("is drawn, so adding one is visible", () => {
+    const names = groupBill(items, { order }).map((g) => g.name);
+    expect(names).toContain("Finishes");
+  });
+
+  it("is marked empty, so the bill can tell it from one a filter emptied", () => {
+    const g = groupBill(items, { order }).find((x) => x.name === "Finishes");
+    expect(g.empty).toBe(true);
+    expect(g.indexes).toEqual([]);
+    expect(g.total).toBe(0);
+  });
+
+  it("keeps its place in the arrangement", () => {
+    const p2 = groupBill(items, { order: ["Finishes", "Substructure", "Frames"] });
+    expect(p2.map((g) => g.name)).toEqual(["Finishes", "Substructure", "Frames"]);
+  });
+
+  it("does not appear inside a search — there, an empty section is noise", () => {
+    const names = groupBill(items, { order, query: "column" }).map((g) => g.name);
+    expect(names).not.toContain("Finishes");
+  });
+
+  it("does not appear under a filter either", () => {
+    const names = groupBill(items, { order, filter: "unpriced" }).map((g) => g.name);
+    expect(names).not.toContain("Finishes");
+  });
+
+  it("never duplicates a section the lines already use, whatever the casing", () => {
+    const names = groupBill(items, { order: ["frames", "SUBSTRUCTURE"] }).map((g) => g.name);
+    expect(names.filter((n) => n.toLowerCase() === "frames")).toHaveLength(1);
+    expect(names.filter((n) => n.toLowerCase() === "substructure")).toHaveLength(1);
+  });
+
+  it("a section a filter emptied is NOT marked empty", () => {
+    const g = groupBill(items, { order, filter: "unpriced" }).find((x) => x.name === "Frames");
+    expect(g?.empty).toBe(false);
+  });
+});

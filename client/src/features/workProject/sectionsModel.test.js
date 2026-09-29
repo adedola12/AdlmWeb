@@ -5,6 +5,7 @@ import {
   sectionCounts,
   sectionsOnBill,
   suggestSectionFor,
+  sectionIndex,
   suggestedArrangement,
   withLineSection,
   withSectionAdded,
@@ -206,5 +207,28 @@ describe("dropping a line into a section", () => {
   it("refuses a blank section or an index that is not a line", () => {
     expect(withLineSection(project(), 0, "  ")).toBe(null);
     expect(withLineSection(project(), 9, "Roofing")).toBe(null);
+  });
+});
+
+// THE BUG THIS PINS
+//
+// A bill group takes its name from the LINES ("frames"); the ordered list keeps
+// the project's own spelling ("Frames"). The drag handler looked the group up
+// with ===, got -1, and withSectionMoved answers -1 with null — so dragging a
+// section appeared to do nothing at all.
+describe("finding a section by name", () => {
+  it("ignores casing, because the two sources spell it differently", () => {
+    expect(sectionIndex(["Substructure", "Frames"], "frames")).toBe(1);
+    expect(sectionIndex(["Substructure", "Frames"], "FRAMES")).toBe(1);
+  });
+
+  it("ignores surrounding space", () => {
+    expect(sectionIndex(["Substructure", "Frames"], "  Frames ")).toBe(0 + 1);
+  });
+
+  it("answers -1 for a section that is not there, and for nothing", () => {
+    expect(sectionIndex(["Substructure"], "Roofing")).toBe(-1);
+    expect(sectionIndex(["Substructure"], "")).toBe(-1);
+    expect(sectionIndex(null, "Substructure")).toBe(-1);
   });
 });

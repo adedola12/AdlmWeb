@@ -77,6 +77,21 @@ export function sectionCounts(items) {
 }
 
 /**
+ * Where a section sits in the ordered list, by name, ignoring casing.
+ *
+ * The bill's groups take their name from the LINES ("frames"), while the
+ * ordered list keeps the project's own spelling ("Frames"). An exact === match
+ * between the two returns -1, and withSectionMoved answers -1 with null — so a
+ * drag looked like it worked and wrote nothing. Every lookup between a rendered
+ * group and this list goes through here.
+ */
+export function sectionIndex(order, name) {
+  const want = key(name);
+  if (!want) return -1;
+  return (Array.isArray(order) ? order : []).findIndex((s) => key(s) === want);
+}
+
+/**
  * Move a section, by index in the ordered list.
  *
  * Returns a patch for saveProject, or null when the move changes nothing —

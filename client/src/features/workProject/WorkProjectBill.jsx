@@ -30,6 +30,7 @@ import { Bar } from "./workProjectBits.jsx";
 import { totalsFor } from "./overviewModel.js";
 import {
   orderedSections,
+  sectionIndex,
   suggestedArrangement,
   withSectionAdded,
   withSectionMoved,
@@ -190,7 +191,10 @@ export default function WorkProjectBill({
         </div>
 
         {groups.map((g) => {
-          if (!g.indexes.length) return null;
+          // A section with no lines AT ALL is drawn — that is a section somebody
+          // just added, and skipping it is what made "Add a section" look
+          // broken. A section whose lines a filter hid is still skipped.
+          if (!g.indexes.length && !g.empty) return null;
           const open = sectionOpen({
             name: g.name,
             openMap,
@@ -207,10 +211,15 @@ export default function WorkProjectBill({
               // what a QS reaches for. Only an editor gets it — a drag that
               // silently did nothing would be worse than no handle.
               draggable={canEdit && !query && filter === "all" && by === "element"}
-              onDragStart={() => setDragFrom(order.findIndex((n) => n === g.name))}
+              // Case-insensitively: `order` keeps the project's spelling of a
+              // section ("Frames") while a group takes its name from the lines
+              // ("frames"), and an exact match returned -1 — which
+              // withSectionMoved answers with null, so the drag silently did
+              // nothing.
+              onDragStart={() => setDragFrom(sectionIndex(order, g.name))}
               onDragOver={(e) => (dragFrom == null ? null : e.preventDefault())}
               onDrop={() => {
-                const to = order.findIndex((n) => n === g.name);
+                const to = sectionIndex(order, g.name);
                 const patch = withSectionMoved(project, dragFrom, to);
                 setDragFrom(null);
                 if (patch) onSave?.(patch);
@@ -234,6 +243,20 @@ export default function WorkProjectBill({
                 </em>
                 <span>{money(g.total)}</span>
               </button>
+
+              {open && g.empty ? (
+                // Says what it is and what to do with it. An added section that
+                // drew as a bare header would read as half-broken, and a QS has
+                // no way to know a line gets here by being re-filed rather than
+                // typed.
+                <div className="pj-empty sm">
+                  <b>Nothing filed under {g.name} yet</b>
+                  <p>
+                    Open a line and change its section to move it here. The section is saved
+                    and keeps its place in the arrangement either way.
+                  </p>
+                </div>
+              ) : null}
 
               {open
                 ? g.rows.map(({ index, ref }) => {

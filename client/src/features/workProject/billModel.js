@@ -136,6 +136,25 @@ export function groupBill(
     bucket.get(name).push(i);
   });
 
+  // A section the project NAMES but no line uses yet.
+  //
+  // Without this, "Add a section" saves the name and nothing appears: the
+  // buckets above are built from the items alone, so a section with no lines
+  // never exists to be drawn, and the button reads as broken. It is drawn only
+  // on the unfiltered element view — inside a search, an empty section is noise,
+  // and it is the same condition under which the add/arrange controls are
+  // offered at all (WorkProjectBill.jsx:148).
+  if (by === "element" && Array.isArray(order) && !String(query || "").trim() && filter === "all") {
+    const have = new Set([...bucket.keys()].map((n) => String(n).trim().toLowerCase()));
+    for (const raw of order) {
+      const name = String(raw || "").trim();
+      if (!name || have.has(name.toLowerCase())) continue;
+      have.add(name.toLowerCase());
+      bucket.set(name, []);
+      orderList.push(name);
+    }
+  }
+
   // The project's own arrangement, when it has one. A section it does not name
   // keeps its place after the ones it does, in the order the bill uses it —
   // dropping it would hide every line filed under it. Sections are only ever
@@ -158,6 +177,9 @@ export function groupBill(
     return {
       name,
       letter: String.fromCharCode(65 + gi),
+      // No lines at all, as opposed to lines that a filter hid. The bill draws
+      // the first and skips the second.
+      empty: all.length === 0,
       // His sub total is over the WHOLE section, not the filtered rows: a
       // section's value does not change because you searched.
       total: all.reduce((a, i) => a + amountOf(list[i]), 0),
