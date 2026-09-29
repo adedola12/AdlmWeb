@@ -20,6 +20,8 @@ import { useProjects } from "../../ds/useProjects.js";
 import { apiAuthed } from "../../api.js";
 import { useAuth } from "../../store.jsx";
 import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectTabs.js";
+import { STAGES, stageIndex } from "./overviewModel.js";
+import { attachedModels } from "./sourcesModel.js";
 import { linePanelTitle } from "./billModel.js";
 import { saveProjectPatch } from "./saveProject.js";
 import WorkProjectHead from "./WorkProjectHead.jsx";
@@ -215,6 +217,9 @@ export default function WorkProjectShell({ productKey, id }) {
   // canManage is owner-only on the server (routes/projects.js:899), which is
   // exactly who his Collaborators entry is for.
   const isOwner = project?._access?.canManage === true;
+  const clientName = String(project?.clientName || project?.client || "").trim();
+  // The file his line names is the model the take-off came from.
+  const sourceFileName = attachedModels(project)[0]?.sourceFile || "";
   const onAction = React.useCallback(
     (action) => {
       if (action === "people") {
@@ -244,7 +249,9 @@ export default function WorkProjectShell({ productKey, id }) {
   );
 
   return (
-    <DsAppShell title={project?.name || "Project"} page="work-projects">
+    // sectionTabs={false}: his work-project.html carries no tab strip above
+    // the breadcrumb — the page's own .pj-tabs are its navigation.
+    <DsAppShell title={project?.name || "Project"} page="work-projects" sectionTabs={false}>
       <div className="pj-head">
         <nav className="pj-crumb">
           <Link to="/work/projects">Projects</Link>
@@ -256,15 +263,28 @@ export default function WorkProjectShell({ productKey, id }) {
 
         <div className="pj-title">
           <h1>{project?.name || (projects ? "Project" : "Loading…")}</h1>
-          {project?.stage ? <span className="pill">{project.stage}</span> : null}
+          {/* His stagePill is always there (work-proj.js:338). Ours used to
+              render only when project.stage was set, which meant the pill
+              vanished on a project whose stage has never been written — while
+              the rail below still read "Takeoff", because stageIndex falls back
+              to it. Two parts of one header disagreeing about the same fact.
+              Both now read the same resolved stage. */}
+          <span className="pill">{STAGES[stageIndex(project)].name}</span>
         </div>
 
+        {/* His three spans: tool · file, client, location (work-proj.js:339).
+            Two of them were reading fields that do not exist on a project —
+            `fileName` (the file lives on an attached model as sourceFile) and
+            `client` (the column is clientName), so a project WITH a client
+            never showed one. The client slot is always drawn, because "No
+            client yet" is a fact worth reading and an absent line is not. */}
         <p className="pj-meta">
           <span>
             {toolName(productKey)}
-            {project?.fileName ? ` · ${project.fileName}` : ""}
+            {sourceFileName ? ` · ${sourceFileName}` : ""}
           </span>
-          {project?.client ? <span>{project.client}</span> : null}
+          <span>{clientName || "No client yet"}</span>
+          {project?.location ? <span>{project.location}</span> : null}
         </p>
 
         <WorkProjectHead

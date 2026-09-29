@@ -67,8 +67,22 @@ function initialsOf(text, fallback) {
  * @param {string} [props.page]              his page name for the current
  *                                          screen, when the route it lives at
  *                                          is not the one the rail links to
+ * @param {boolean} [props.sectionTabs]      false on a screen that carries its
+ *                                          own tab strip. The project page is
+ *                                          the one: his work-project.html is a
+ *                                          bare <div id="pj-app"> in the shell,
+ *                                          and its .pj-tabs (Overview, Bill,
+ *                                          Rates & budget …) sit where these
+ *                                          would. Two tab rows stacked is not a
+ *                                          spacing problem, it is two different
+ *                                          navigations in the same place.
  */
-export default function DsAppShell({ children, title = "", page = "" }) {
+export default function DsAppShell({
+  children,
+  title = "",
+  page = "",
+  sectionTabs = true,
+}) {
   const { user, accessToken, clear } = useAuth();
   const staff = isStaff(user);
 
@@ -364,8 +378,12 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             </span>
           </header>
 
-          {/* R03: this section's destinations as tabs, from the rail config. */}
-          <DsSectionTabs rail={rail} activeId={activeId} owned={owned} />
+          {/* R03: this section's destinations as tabs, from the rail config.
+              Suppressed on a screen that has its own tab strip — see the
+              sectionTabs prop. The rail still carries every destination. */}
+          {sectionTabs ? (
+            <DsSectionTabs rail={rail} activeId={activeId} owned={owned} />
+          ) : null}
           {children}
         </div>
 
