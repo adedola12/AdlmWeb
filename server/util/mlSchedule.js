@@ -377,6 +377,7 @@ export function deriveMaterials(item, kind, K) {
       const waste = K.get(MC.BlindingWaste);
       add("Cement", qty * waste * K.get(MC.BlindingCementBagsPerM3), "bags");
       add("Sharp sand", qty * waste * K.get(MC.BlindingSandTonsPerM3), "tons");
+      add("Granite", qty * waste * K.get(MC.BlindingGraniteTonsPerM3), "tons");
       break;
     }
     case "blockwork": {
@@ -396,7 +397,8 @@ export function deriveMaterials(item, kind, K) {
     case "rebar": {
       const unit = basis.unit;
       const steelKg = unit === "ton" ? qty * 1000 : qty;
-      add("Reinforcement steel", qty, unit === "ton" ? "tons" : "kg");
+      // Ordered steel = measured × waste (laps, cutting); binding wire follows the measured weight.
+      add("Reinforcement steel", qty * K.get(MC.RebarWaste, 1), unit === "ton" ? "tons" : "kg");
       add("Binding wire", steelKg * K.get(MC.RebarBindingWireFactor), "kg");
       break;
     }

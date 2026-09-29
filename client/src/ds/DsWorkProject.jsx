@@ -294,7 +294,7 @@ export default function DsWorkProject() {
                   <span className="wk-r">
                     <em className="wk-none">no rate</em>
                   </span>
-                  <span className="wk-w">—</span>
+                  <span className="wk-w">–</span>
                 </div>
               ))}
             </div>

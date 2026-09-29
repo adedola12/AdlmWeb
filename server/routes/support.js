@@ -160,12 +160,12 @@ router.post(
       subject: `New support ticket: ${title}`,
       html: `<p><b>New support ticket</b></p>
              <p><b>From:</b> ${fullName} (${ticket.userEmail})</p>
-             <p><b>WhatsApp:</b> ${ticket.whatsapp || "—"}</p>
+             <p><b>WhatsApp:</b> ${ticket.whatsapp || "–"}</p>
              <p><b>Category:</b> ${ticket.category}${
                productKey ? ` · <b>Product:</b> ${productKey}` : ""
              }</p>
              <p><b>Raised from:</b> ${source}${appVersion ? ` v${appVersion}` : ""}</p>
-             <p><b>AnyDesk:</b> ${anyDeskAddress || "—"}</p>
+             <p><b>AnyDesk:</b> ${anyDeskAddress || "–"}</p>
              <p><b>Issue:</b> ${title}</p>
              <p style="white-space:pre-wrap">${description}</p>${
                images.length

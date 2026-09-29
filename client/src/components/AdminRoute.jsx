@@ -43,7 +43,7 @@ export default function AdminRoute({ roles = ["admin"], permission, children }) 
   // the admin door gets a reason to show.
   if (!allowed) {
     return isStaff(user) ? (
-      <Navigate to="/manage" replace />
+      <Navigate to="/dashboard" replace />
     ) : (
       <Navigate
         to={`/admin/login?next=${encodeURIComponent(loc.pathname + loc.search)}&denied=1`}

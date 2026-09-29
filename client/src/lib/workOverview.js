@@ -361,12 +361,26 @@ export const workValueOf = (p) =>
  *
  * The item counts are not money and are not masked, so they still cover every
  * project.
+ *
+ * `mergedContracts` is the rollup's list of merged (federated) contracts the
+ * reader is on. Only their certified value and contract-level variations are
+ * added; a hidden one is left out like a hidden project, and is not a project,
+ * so it changes none of the counts.
  */
-export function headline(projects = []) {
+export function headline(projects = [], mergedContracts = []) {
   const counted = projects.filter((p) => !isMoneyHidden(p));
+  // A merged contract's container is not a project row (its measured work is
+  // its sources', which are rows already), but its certificates and the
+  // variations raised against the merged contract are on no source. They add
+  // to certified value and to the work's value, and nothing else.
+  const merged = (mergedContracts || []).filter((m) => !isMoneyHidden(m));
   const measured = counted.reduce((a, p) => a + toNumber(p.totalCost), 0);
-  const value = counted.reduce((a, p) => a + workValueOf(p), 0);
-  const certified = counted.reduce((a, p) => a + toNumber(p.certifiedToDate), 0);
+  const value =
+    counted.reduce((a, p) => a + workValueOf(p), 0) +
+    merged.reduce((a, m) => a + toNumber(m.approvedVariationsTotal), 0);
+  const certified =
+    counted.reduce((a, p) => a + toNumber(p.certifiedToDate), 0) +
+    merged.reduce((a, m) => a + toNumber(m.certifiedToDate), 0);
   const priceable = projects.filter(
     (p) => p.accessLevel !== "view" && toNumber(p.unpricedCount) > 0,
   );

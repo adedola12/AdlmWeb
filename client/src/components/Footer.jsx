@@ -23,7 +23,7 @@ export default function Footer() {
         "/about",
         "/trainings",
         "/testimonials",
-        "/manage",
+        "/dashboard",
         "/profile",
       ]),
     []

@@ -9,6 +9,15 @@
 //   2. it was not force-pushed (history rewritten)
 //   3. every new commit on it belongs to a merged pull request that the
 //      release approver approved
+// (Actions settings, secrets, tokens) can silence it. Checks:
+//   1. main is still a protected branch
+//   2. main was not force-pushed (history rewritten)
+//   3. every change that LANDED on main (each step of main's first-parent
+//      line: a pull request's merge or squash commit, or a direct push)
+//      belongs to a merged pull request that the release approver approved.
+//      Commits carried in by a merge are covered by that merge's approval;
+//      checking each one on its own flagged old branch work arriving inside
+//      an approved merge (the 16-19 Sep alerts of 25-27 Sep 2026).
 // Findings go to the approver and the owner by SES, and to the locked bucket.
 //
 // State: the last commit vetted per repo, in SSM. AdlmWeb keeps the name it
@@ -19,6 +28,7 @@
 import { SSMClient, GetParameterCommand, PutParameterCommand } from "@aws-sdk/client-ssm";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import { newCommits, landedOnMain, approvedByApprover } from "./gate.mjs";
 
 const ssm = new SSMClient({});
 const s3 = new S3Client({});
@@ -135,6 +145,12 @@ async function approvedByApprover(repo, branch, sha, approverLogin) {
 async function watchRepo({ repo, branch }, approverLogin) {
   const stateKey = stateName(repo);
   const last = await param(stateKey);
+export async function handler() {
+  token = await param("github-token", true);
+  const approverEmail = await param("approver-email");
+  const approverLogin = await param("approver-github");
+  const last = await param("last-main-sha");
+  const to = [approverEmail, OWNER_EMAIL];
 
   let info;
   try {
@@ -161,6 +177,7 @@ async function watchRepo({ repo, branch }, approverLogin) {
     let cmp;
     try {
       cmp = await gh(`repos/${repo}/compare/${last}...${head}`);
+      cmp = await newCommits(REPO, last, head, gh);
     } catch (err) {
       console.warn(`[release-watch] ${repo}: compare failed, will retry:`, err.message);
       cmp = undefined;
@@ -174,6 +191,10 @@ async function watchRepo({ repo, branch }, approverLogin) {
       try {
         for (const c of (cmp.commits || []).slice(0, MAX_COMMITS_PER_REPO)) {
           const verdict = await approvedByApprover(repo, branch, c.sha, approverLogin);
+      const commits = landedOnMain(head, cmp.commits || []).slice(0, MAX_COMMITS);
+      try {
+        for (const c of commits) {
+          const verdict = await approvedByApprover(REPO, c.sha, approverLogin, gh);
           if (!verdict.ok) {
             const title = String(c.commit?.message || "").split("\n")[0];
             const who = c.author?.login || c.commit?.author?.email || "unknown";

@@ -57,10 +57,10 @@ const reasonTone = {
 const REASON_LABELS = { expired: "Expired", pending: "Unpaid order", silent: "Software silent" };
 
 function fmtDate(d) {
-  return d ? new Date(d).toLocaleDateString() : "—";
+  return d ? new Date(d).toLocaleDateString() : "–";
 }
 function fmtDateTime(d) {
-  return d ? new Date(d).toLocaleString() : "—";
+  return d ? new Date(d).toLocaleString() : "–";
 }
 function money(amount, currency) {
   const n = Number(amount || 0);

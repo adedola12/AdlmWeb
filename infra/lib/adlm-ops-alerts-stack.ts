@@ -57,7 +57,30 @@ export interface AdlmOpsAlertsStackProps extends StackProps {
    * a region with SES email receiving (eu-west-1 has it).
    */
   dmarcReportDomain?: string;
+  /**
+   * The API Lambda and the log group it writes to. When set, two alarms page
+   * the ops inbox when the API starts failing requests (see below).
+   */
+  api?: { functionName: string; logGroupName: string };
 }
+
+/**
+ * The access-log line for a response the API answered with a 5xx. morgan's
+ * "combined" format: ip - - [time] "request" status bytes "referrer" "agent".
+ * The two literal dashes keep the application's own log lines (which start
+ * with a timestamp and a request id) from ever matching. Checked against real
+ * lines with `aws logs test-metric-filter` on 2026-09-27.
+ */
+export const API_5XX_FILTER = '[ip, ident="-", user="-", timestamp, request, status=5*, ...]';
+
+/**
+ * Five failures in five minutes. In the 30 days to 27 Sep 2026 the API logged
+ * 40 5xx responses; only two five-minute windows reached 5 (17 in the
+ * 26 Sep 22:55 post-deploy burst, 7 on 4 Sep), and the Lambda Errors metric
+ * reached 5 only in the 18 Sep and 24 Sep database stalls. A lone error, which
+ * happens a few times a week, never pages.
+ */
+export const API_ALARM_THRESHOLD = 5;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -141,6 +164,65 @@ export class AdlmOpsAlertsStack extends Stack {
       });
       missing.addAlarmAction(new actions.SnsAction(topic));
       missing.addOkAction(new actions.SnsAction(topic));
+    }
+
+    if (props.api) {
+      // The API failing requests. Two views, because each misses what the
+      // other sees:
+      //   * Lambda Errors counts invocations that crashed or timed out (the
+      //     18 and 24 Sep Atlas stalls), but a request the app answers with a
+      //     clean 503 is a SUCCESSFUL invocation, so the 26 Sep post-deploy
+      //     burst (17 x 503/500 in five minutes) left that metric at zero.
+      //   * The 5xx count comes from the API's own access log, so it sees
+      //     every 500/502/503 Express sent, whatever the invocation did.
+      // AdlmApi has an Errors alarm of its own, but it lives in the shared
+      // stack, needs ten minutes of errors and notifies a different topic.
+      // These live here so a wrong-checkout AdlmApi deploy cannot remove them.
+      const notify = new actions.SnsAction(topic);
+
+      const apiErrors = new cloudwatch.Alarm(this, "ApiLambdaErrors", {
+        alarmName: "adlm-api-lambda-errors",
+        alarmDescription:
+          `The API Lambda failed ${API_ALARM_THRESHOLD}+ invocations in 5 minutes (crashes or timeouts). ` +
+          `Check the API log group ${props.api.logGroupName} in Logs Insights.`,
+        metric: new cloudwatch.Metric({
+          namespace: "AWS/Lambda",
+          metricName: "Errors",
+          dimensionsMap: { FunctionName: props.api.functionName },
+          statistic: "Sum",
+          period: Duration.minutes(5),
+        }),
+        threshold: API_ALARM_THRESHOLD,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+
+      const apiLogs = logs.LogGroup.fromLogGroupName(this, "ApiLogs", props.api.logGroupName);
+      const fiveXx = new logs.MetricFilter(this, "Api5xxFilter", {
+        logGroup: apiLogs,
+        filterPattern: logs.FilterPattern.literal(API_5XX_FILTER),
+        metricNamespace: "ADLM/Api",
+        metricName: "Http5xx",
+        metricValue: "1",
+      });
+      const api5xx = new cloudwatch.Alarm(this, "Api5xx", {
+        alarmName: "adlm-api-5xx",
+        alarmDescription:
+          `The API answered ${API_ALARM_THRESHOLD}+ requests with a 5xx in 5 minutes. ` +
+          "A 503 with DB_UNAVAILABLE means the database did not answer in time. " +
+          `Check the API log group ${props.api.logGroupName} in Logs Insights.`,
+        metric: fiveXx.metric({ statistic: "Sum", period: Duration.minutes(5) }),
+        threshold: API_ALARM_THRESHOLD,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+
+      for (const alarm of [apiErrors, api5xx]) {
+        alarm.addAlarmAction(notify);
+        alarm.addOkAction(notify);
+      }
     }
 
     if (props.dmarcReportDomain) {

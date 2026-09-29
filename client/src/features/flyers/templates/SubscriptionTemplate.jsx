@@ -122,7 +122,7 @@ function MinimalTiers({ tiers, accent, currency, palette, featuredIdx }) {
   );
 }
 
-export default function SubscriptionTemplate({ flyer, accent, days, palette }) {
+export default function SubscriptionTemplate({ flyer, accent, palette }) {
   const tiers = (flyer.tiers || []).filter((t) => t && (t.price || t.label)).slice(0, 3);
   const currency = flyer.currency || "NGN";
   const featuredIdx = tiers.length ? Math.floor(tiers.length / 2) : -1;

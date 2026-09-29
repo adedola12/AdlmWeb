@@ -8,9 +8,11 @@ import { FiShield } from "../components/icons.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import ReleaseBatchCard from "../components/ReleaseBatchCard.jsx";
+import { WorkInFlight } from "../features/work/WorkBoard.jsx";
 
 function fmt(d) {
-  return d ? new Date(d).toLocaleString() : "—";
+  return d ? new Date(d).toLocaleString() : "–";
 }
 
 const STATUS_STYLE = {
@@ -112,6 +114,10 @@ export default function AdminReleases() {
 
       {msg && <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 p-3 text-sm">{msg}</div>}
 
+      {/* The batch: what the approver actually tests and approves. Everything
+          below it is the detail behind that one decision. */}
+      <ReleaseBatchCard token={accessToken} onChanged={load} />
+
       {data?.awaitingReview?.length > 0 && (
         <div className="card space-y-3 border border-purple-200">
           <h2 className="text-base md:text-lg font-semibold leading-snug text-purple-800">Emergency releases waiting for review</h2>
@@ -168,7 +174,7 @@ export default function AdminReleases() {
                 <Version c={c} /> <Badge status="pending" />
               </div>
               <div className="text-xs text-slate-500 break-all">
-                Submitted by {c.submittedBy || "—"} on {fmt(c.submittedAt)}
+                Submitted by {c.submittedBy || "–"} on {fmt(c.submittedAt)}
                 {c.payload?.sha256 ? ` · sha256 ${c.payload.sha256}` : ""}
               </div>
               {c.notifyBody?.releaseNotes && (
@@ -210,6 +216,8 @@ export default function AdminReleases() {
         )}
       </div>
 
+      {/* Everything in flight, so a release arrives with its context. */}
+      <WorkInFlight />
       <div className="card space-y-3">
         <div className="flex items-center gap-3">
           <h2 className="text-base md:text-lg font-semibold leading-snug mr-auto">Website, API and service changes</h2>
@@ -268,7 +276,7 @@ export default function AdminReleases() {
                       <Badge status={c.status} />
                       {c.reviewVerdict ? <span className="ml-1 text-xs text-slate-500">({c.reviewVerdict})</span> : null}
                     </td>
-                    <td className="py-2 pr-3">{c.decidedBy || "—"}</td>
+                    <td className="py-2 pr-3">{c.decidedBy || "–"}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{fmt(c.decidedAt)}</td>
                     <td className="py-2 pr-3 text-slate-600">{c.emergencyReason || c.decisionNote || ""}</td>
                   </tr>

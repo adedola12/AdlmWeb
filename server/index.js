@@ -13,11 +13,16 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath, pathToFileURL } from "url";
 import { connectDB } from "./db.js";
+import {
+  apiMongoOptions,
+  DB_UNAVAILABLE,
+  isMongoUnavailableError,
+} from "./util/mongoTimeouts.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
 import { runVideoPoll } from "./util/videoNotifier.js";
-import { ensureRolesSeeded } from "./util/rbac.js";
+import { ensureRolesSeededOnce } from "./util/rbac.js";
 import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
@@ -101,6 +106,9 @@ import unsubscribeRouter, {
 import adminVideos from "./routes/admin.videos.js";
 import adminReleaseNotifications from "./routes/admin.releaseNotifications.js";
 import adminReleases from "./routes/admin.releases.js";
+import adminBatch from "./routes/admin.batch.js";
+import releaseGatePublic from "./routes/releaseGatePublic.js";
+import adminWork from "./routes/admin.work.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -398,7 +406,15 @@ app.use("/admin/broadcast", adminBroadcast);
 // "QUIV 3.1.11 is ready" emails, recorded by the deployment PUT. See
 // util/releaseNotifier.js.
 app.use("/admin/release-notifications", adminReleaseNotifications);
+// The batch router first: /admin/releases/batch would otherwise be caught by
+// the candidate router's /:id routes.
+app.use("/admin/releases/batch", adminBatch);
 app.use("/admin/releases", adminReleases);
+// Read-only, no credential: GitHub's required status check asks this whether
+// the approver signed off a given commit (docs/RELEASE_GATE.md).
+app.use("/release-gate", releaseGatePublic);
+// The work board: what is in flight, and approval before a new feature is built.
+app.use("/admin/work", adminWork);
 app.use("/admin/campaigns", adminCampaigns);
 app.use("/admin/billboard", adminBillboard);
 // Public and unauthenticated: it is what every page of the site reads to draw
@@ -565,6 +581,16 @@ app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
 app.use((err, _req, res, _next) => {
   console.error(err);
+  // The database did not answer (a stall or failover, cut short by the
+  // socket timeout). Say so and invite a retry, rather than a bare 500: the
+  // request itself was fine.
+  if (isMongoUnavailableError(err)) {
+    res.set("Retry-After", "5");
+    return res.status(503).json({
+      error: "The service is briefly unavailable. Please try again in a moment.",
+      code: DB_UNAVAILABLE,
+    });
+  }
   res.status(500).json({ error: "Server error" });
 });
 
@@ -621,12 +647,16 @@ export function bootstrap() {
     // model would serve REAL rows to a demo session, silently — better to
     // refuse to boot than to leak. Deliberately NOT caught below.
     assertTenancyApplied();
-    await connectDB(process.env.MONGO_URI);
+    // Fail-fast timeouts: a stalled Atlas errors in seconds instead of holding
+    // every request to Lambda's 60s kill (util/mongoTimeouts.js).
+    await connectDB(process.env.MONGO_URI, apiMongoOptions());
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission
     // cache before serving. Non-fatal: a seed failure logs but doesn't block boot.
+    // On Lambda both the connect above and this seed are usually already in
+    // flight (lambda.js startDatabaseEarly), so these awaits reuse that work.
     try {
-      await ensureRolesSeeded();
+      await ensureRolesSeededOnce();
     } catch (e) {
       console.error("[rbac] role seed failed:", e?.message || e);
     }

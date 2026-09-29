@@ -163,7 +163,7 @@ export default function InvoicePreviewPage({
         />
         <div>
           <div style={S.invoiceTitle}>Invoice</div>
-          <div style={S.invoiceNo}>NO: {form?.invoiceNumber || "—"}</div>
+          <div style={S.invoiceNo}>NO: {form?.invoiceNumber || "–"}</div>
         </div>
       </div>
 
@@ -220,7 +220,7 @@ export default function InvoicePreviewPage({
                 }}
               >
                 <td style={{ ...S.td, textAlign: "center" }}>{idx + 1}.</td>
-                <td style={S.td}>{item.description || "—"}</td>
+                <td style={S.td}>{item.description || "–"}</td>
                 <td style={{ ...S.td, textAlign: "center" }}>{item.qty || 1}</td>
                 <td style={{ ...S.td, textAlign: "center" }}>Nr</td>
                 <td style={{ ...S.td, textAlign: "right" }}>{fmtN(item.unitPrice)}</td>

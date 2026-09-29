@@ -665,6 +665,7 @@ import {
   cascadeBillQtyToMaterials,
 } from "../util/billBudgetCascade.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
+import { rejectSampleWrites, sampleSummary } from "../util/sampleProjects.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
 import {
@@ -678,6 +679,11 @@ import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
 import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
+import {
+  collectBudgetEdits,
+  reapplyBudgetEdits,
+  preserveBudgetUserEdits,
+} from "../util/budgetUserEdits.js";
 import {
   sanitizeResourceItems,
   applyResourceRows,
@@ -792,6 +798,8 @@ const boqImportUpload = multer({
 const router = express.Router();
 
 router.use(requireAuth);
+// Sample projects are read-only for everyone (util/sampleProjects.js).
+router.param("id", rejectSampleWrites);
 
 function normalizeProductKey(v) {
   return String(v || "")
@@ -865,11 +873,16 @@ async function userHasActiveEntitlement(userId, key) {
 // Mongo filter matching a project the requester may READ: they own it OR are a
 // collaborator on it. Write/export/manage powers are refined by
 // resolveProjectAccess() once the document is loaded.
+//
+// Sample projects are readable by anyone who reached this far: every route that
+// uses this filter sits behind requireEntitlementParam, so "anyone" here means
+// an active subscriber of the product. resolveProjectAccess() makes them
+// read-only and rejectSampleWrites() refuses every write before a handler runs.
 function accessFilter(id, userId, productKey) {
   return {
     _id: id,
     productKey,
-    $or: [{ userId }, { "collaborators.userId": userId }],
+    $or: [{ userId }, { "collaborators.userId": userId }, { isSample: true }],
   };
 }
 
@@ -890,6 +903,15 @@ async function resolveProjectAccess(req, project) {
     canSeeRates: false,
   };
   if (!project || !uid) return out;
+
+  // Samples: look at everything, including rates, but change nothing.
+  if (project.isSample) {
+    out.role = "sample";
+    out.accessLevel = "view";
+    out.canExport = true;
+    out.canSeeRates = true;
+    return out;
+  }
 
   if (project.userId && uid.equals(project.userId)) {
     out.role = "owner";
@@ -2617,6 +2639,16 @@ async function saveProjectFull(req, res) {
     // transition; budgetItems[] is the canonical source for the Budget tab.
     if (mats.length) {
       try {
+        // What the QS owns on these rows, read BEFORE the plugin's list
+        // replaces them. Procurement marks, the buy-schedule slot and any
+        // rate typed on the website exist nowhere else: this assignment used
+        // to drop them outright, and because the GET heal rebuilds its own
+        // edit map FROM budgetItems, by the next open there was nothing left
+        // to recover them from. deriveBillRatesFromBudget runs three lines
+        // below, so a lost budget rate moved the BILL too — the QS's pricing
+        // reverted to the plugin's without anyone being told.
+        const previousBudget = takeoffRes.project.budgetItems || [];
+
         const budget = sanitizeBudgetItems(
           materialsRes ? materialsRes.project.items : mats,
         );
@@ -2624,10 +2656,19 @@ async function saveProjectFull(req, res) {
         // so material + labour bundle under the right line, then derive the
         // bill rates from the priced build-up before reconciling progress.
         backfillBudgetLinks(takeoffRes.project.items, budget);
-        takeoffRes.project.budgetItems = ensureBillItemCoverage(
+        const freshBudget = ensureBillItemCoverage(
           takeoffRes.project.items,
           budget,
         );
+        // After coverage, so the synthesised Labour/Material placeholders get
+        // their edits back too — the same order the GET heal uses.
+        const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+        if (restored.procurement || restored.pricing) {
+          console.log(
+            `[full] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+          );
+        }
+        takeoffRes.project.budgetItems = freshBudget;
         deriveBillRatesFromBudget(takeoffRes.project);
         reconcileItemsFromBudget(takeoffRes.project);
         await takeoffRes.project.save();
@@ -3036,6 +3077,36 @@ async function listProjects(req, res) {
   }
 }
 
+async function listSampleProjects(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const samples = await TakeoffProject.find(
+      { productKey, isSample: true },
+      {
+        name: 1,
+        slug: 1,
+        clientName: 1,
+        productKey: 1,
+        sample: 1,
+        "items.qty": 1,
+        "items.rate": 1,
+        "contract.contractSum": 1,
+        "certificates.number": 1,
+        "models.architectural.key": 1,
+        "models.structural.key": 1,
+        "models.mep.key": 1,
+        updatedAt: 1,
+      },
+    )
+      .sort({ "sample.order": 1 })
+      .lean();
+    res.json(samples.map(sampleSummary));
+  } catch (err) {
+    console.error("GET sample projects error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 async function getProject(req, res) {
   try {
     const productKey = requestedProductKey(req);
@@ -3071,6 +3142,16 @@ async function getProject(req, res) {
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+      return res.json(out);
+    }
+
+    // Samples are seeded complete and never written on read: the lazy heals
+    // below all save, and a read-only document shared by every subscriber
+    // must not change because one of them opened it.
+    if (project.isSample) {
+      const access = await resolveProjectAccess(req, project);
+      const out = projectForClient(project, access);
+      out.linkedSummaries = [];
       return res.json(out);
     }
 
@@ -3134,13 +3215,9 @@ async function getProject(req, res) {
       const hasMaterials =
         Array.isArray(project.materialItems) && project.materialItems.length;
 
-      const editKey = (b) =>
-        [
-          Number(b?.sn) || 0,
-          String(b?.materialName || b?.description || "").trim().toLowerCase(),
-          String(b?.unit || "").trim().toLowerCase(),
-          String(b?.componentKind || "").trim().toLowerCase(),
-        ].join("|");
+      // The key this used to build inline now lives in util/budgetUserEdits.js
+      // with the rest of the preservation, so the plugin save path and this
+      // one cannot drift apart again.
       const linkSig = (list) =>
         (list || [])
           .map(
@@ -3154,8 +3231,7 @@ async function getProject(req, res) {
           .join("|");
 
       if (hasMaterials) {
-        const edits = new Map();
-        for (const b of currentBudget) edits.set(editKey(b), b);
+        const edits = collectBudgetEdits(currentBudget);
 
         let fresh = sanitizeBudgetItems(project.materialItems);
         backfillBudgetLinks(project.items, fresh);
@@ -3163,19 +3239,13 @@ async function getProject(req, res) {
         // Material line — synthesise the gaps so each card is complete.
         fresh = ensureBillItemCoverage(project.items, fresh);
         // Re-apply user edits (procurement + pricing) onto the rebuilt list,
-        // including the synthetic placeholders.
-        for (const b of fresh) {
-          const prev = edits.get(editKey(b));
-          if (!prev) continue;
-          if (prev.procured) {
-            b.procured = true;
-            b.procuredAt = prev.procuredAt || b.procuredAt;
-          }
-          if (Number(prev.procuredPercent)) b.procuredPercent = prev.procuredPercent;
-          if (Number(prev.rate)) b.rate = prev.rate;
-          if (Number(prev.overheadPercent)) b.overheadPercent = prev.overheadPercent;
-          if (Number(prev.profitPercent)) b.profitPercent = prev.profitPercent;
-        }
+        // including the synthetic placeholders. Shared with the plugin save
+        // path, which used to do none of this — see util/budgetUserEdits.js.
+        // Matching is unchanged apart from being tried on billIdentity first,
+        // so this can only restore more than the sn key did alone; it also
+        // now carries targetDate, supplier and notes, which this path was
+        // dropping on every rebuild.
+        reapplyBudgetEdits(fresh, edits);
 
         const changed =
           currentBudget.length !== fresh.length ||
@@ -4290,11 +4360,14 @@ async function getProjectBySlug(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({
-      slug,
-      productKey,
-      $or: [{ userId }, { "collaborators.userId": userId }],
-    });
+    // The requester's own project wins over a sample with the same slug.
+    const project =
+      (await TakeoffProject.findOne({
+        slug,
+        productKey,
+        $or: [{ userId }, { "collaborators.userId": userId }],
+      })) ||
+      (await TakeoffProject.findOne({ slug, productKey, isSample: true }));
     if (!project) return res.status(404).json({ error: "Not found" });
 
     const access = await resolveProjectAccess(req, project);
@@ -7976,6 +8049,17 @@ router.get(
   mapEntitlementParam,
   requireEntitlementParam,
   streamProjectModel,
+);
+
+// Sample projects for a product (learning material, read-only). Separate from
+// the main list on purpose: the desktop plugins parse GET /:productKey as a
+// bare array and must never be offered a sample to open or save over. Must be
+// before /:productKey/:id so "samples" is not captured as an :id.
+router.get(
+  "/:productKey/samples",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  listSampleProjects,
 );
 
 // Storage info for a product — must be before /:productKey/:id so "storage"
