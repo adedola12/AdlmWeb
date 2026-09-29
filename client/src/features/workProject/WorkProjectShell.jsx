@@ -182,6 +182,7 @@ export default function WorkProjectShell({ productKey, id }) {
   // than going quiet, because a silent failure on a bill is how somebody
   // believes a figure was recorded when it was not.
   const [saveState, setSaveState] = React.useState("idle");
+  const [saveError, setSaveError] = React.useState("");
   // The last patch attempted, so "Try again" on a failure can re-send the same
   // change rather than asking somebody to find the line and set it twice.
   const lastPatch = React.useRef(null);
@@ -189,6 +190,7 @@ export default function WorkProjectShell({ productKey, id }) {
     async (patch) => {
       if (!patch || viewOnly || !full) return;
       lastPatch.current = patch;
+      setSaveError("");
       setSaveState("saving");
       try {
         const updated = await saveProjectPatch({
@@ -202,7 +204,15 @@ export default function WorkProjectShell({ productKey, id }) {
         // the next save is built on a project that never existed.
         setFull(updated?.project || updated || null);
         setSaveState("saved");
-      } catch {
+      } catch (e) {
+        // Say WHY. "Not saved" on its own sent a real failure back as a
+        // shrug: the indicator was right and useless at the same time, and
+        // the reason (a version conflict, a refused field) was sitting in the
+        // response the whole time.
+        setSaveError(
+          String(e?.message || "").trim() ||
+            "The server refused the change and did not say why.",
+        );
         setSaveState("failed");
       }
     },
@@ -362,6 +372,7 @@ export default function WorkProjectShell({ productKey, id }) {
           projectId={id}
           tab={tab}
           saveState={saveState}
+          saveError={saveError}
           canEdit={!viewOnly}
           isOwner={isOwner}
           canSeePm={tabs.some((t) => t.key === "pm")}

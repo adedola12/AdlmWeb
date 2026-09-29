@@ -41,6 +41,7 @@ export default function WorkProjectHead({
   projectId,
   tab,
   saveState = "idle",
+  saveError = "",
   canEdit = false,
   isOwner = false,
   canSeePm = true,
@@ -86,9 +87,12 @@ export default function WorkProjectHead({
           </i>
           <span>{syncLabel(saveState)}</span>
           {syncFailed(saveState) ? (
-            <button type="button" className="pj-lnk" onClick={() => onAction?.("retry")}>
-              Try again
-            </button>
+            <>
+              <button type="button" className="pj-lnk" onClick={() => onAction?.("retry")}>
+                Try again
+              </button>
+              {saveError ? <em title={saveError}>{saveError}</em> : null}
+            </>
           ) : null}
         </span>
       ) : null}

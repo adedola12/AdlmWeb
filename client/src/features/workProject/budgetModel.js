@@ -272,6 +272,9 @@ export function budgetByBillLine(project) {
     if (!g) {
       g = {
         code: hit.item.code,
+        // The serial the bill prints. A QUIV code is a hash, so it is useless
+        // for matching a row against a printed bill; sn is what a QS reads.
+        sn: Number(hit.item.sn) || hit.index + 1,
         index: hit.index,
         description: String(hit.item.description || hit.item.takeoffLine || "").trim(),
         unit: String(hit.item.unit || "").trim(),

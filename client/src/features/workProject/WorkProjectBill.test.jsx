@@ -323,3 +323,35 @@ describe("arranging the bill's sections", () => {
     expect(c.querySelector(".bsec")?.getAttribute("draggable")).toBe("false");
   });
 });
+
+describe("the arranging controls actually do something (reported broken)", () => {
+  const messy = {
+    productKey: "revit",
+    customCategories: ["Frames", "Substructure"],
+    items: [
+      { code: "BQ-1", category: "Frames", description: "Concrete column", qty: 1, rate: 100 },
+      { code: "BQ-2", category: "Substructure", description: "Excavate", qty: 1, rate: 100 },
+    ],
+  };
+
+  it("saves an arrangement when the control is pressed", () => {
+    const onSave = vi.fn();
+    const c = render(<WorkProjectBill project={messy} canEdit onSave={onSave} />).container;
+    fireEvent.click(within(c).getByText("Suggest an arrangement"));
+    expect(onSave).toHaveBeenCalled();
+    expect(onSave.mock.calls[0][0].customCategories).toEqual(["Substructure", "Frames"]);
+  });
+
+  it("starts a drag from the section header a QS actually grabs", () => {
+    // The header is a <button> inside the draggable .bsec. A drag begun on the
+    // button is what a person does; if the gesture never reaches the container
+    // the feature is dead on a real page while passing a test that fires
+    // dragStart on the container directly.
+    const onSave = vi.fn();
+    const c = render(<WorkProjectBill project={messy} canEdit onSave={onSave} />).container;
+    const secs = [...c.querySelectorAll(".bsec")];
+    fireEvent.dragStart(secs[0].querySelector(".sh"));
+    fireEvent.drop(secs[1]);
+    expect(onSave).toHaveBeenCalled();
+  });
+});

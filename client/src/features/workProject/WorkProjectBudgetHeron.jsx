@@ -98,7 +98,10 @@ export default function WorkProjectBudgetHeron({
           <div className="vr" key={l.code} style={{ cursor: "default", display: "block" }}>
             {/* His item header band (MaterialView.xaml:306). */}
             <div className="pj-tb" style={{ margin: 0 }}>
-              <span className="no">{l.code}</span>
+              {/* The bill's serial number, which is what a QS matches on. It used
+                  to print `code`, and on a QUIV bill that is a hash
+                  (e48c57473c148a56) — unreadable and impossible to find on paper. */}
+              <span className="no">{l.sn}</span>
               <span className="ds" style={{ flex: 1, minWidth: 0 }}>
                 <b>{l.description || "Untitled line"}</b>
                 <em>

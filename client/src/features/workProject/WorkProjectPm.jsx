@@ -82,7 +82,7 @@ export default function WorkProjectPm({
         </p>
         {planFailed ? <p className="ds-sub">{planFailed}</p> : null}
         {canEdit ? (
-          <div className="pj-acts">
+          <div className="pj-acts" style={{ justifyContent: "center" }}>
             <button
               type="button"
               className="ds-btn btn-p ds-btn-sm"
