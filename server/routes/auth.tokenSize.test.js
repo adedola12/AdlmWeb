@@ -55,10 +55,15 @@ test("a many-seat account gets a token far under the header limit", () => {
   assert.ok(token.length < 2000, `token is ${token.length} characters`);
 });
 
-test("the token drops entitlements and a data: avatar, and keeps every claim the server reads", () => {
+test("the token keeps slim entitlements, drops a data: avatar, and keeps every claim the server reads", () => {
   const payload = bigPayload();
   const claims = accessTokenClaims(payload);
-  assert.equal(claims.entitlements, undefined);
+  // The desktop plugins decode the token and read these three fields.
+  assert.deepEqual(
+    claims.entitlements.map(({ productKey, status, expiresAt }) => ({ productKey, status, expiresAt })),
+    payload.entitlements.map(({ productKey, status, expiresAt }) => ({ productKey, status, expiresAt })),
+  );
+  for (const ent of claims.entitlements) assert.equal(ent.devices, undefined);
   assert.equal(claims.avatarUrl, "");
   for (const key of [
     "_id", "email", "role", "zone", "state", "firstName", "lastName", "whatsapp",
@@ -69,6 +74,12 @@ test("the token drops entitlements and a data: avatar, and keeps every claim the
   }
   // The login / refresh reply still hands the client the full payload.
   assert.equal(payload.entitlements.length, 3);
+});
+
+test("Date expiries become ISO strings the plugins can parse", () => {
+  const exp = new Date("2027-01-01T00:00:00.000Z");
+  const [ent] = accessTokenClaims({ ...bigPayload(), entitlements: [{ productKey: "quiv", status: "active", expiresAt: exp }] }).entitlements;
+  assert.equal(ent.expiresAt, "2027-01-01T00:00:00.000Z");
 });
 
 test("a plain avatar link stays in the token", () => {
