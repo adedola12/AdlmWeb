@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { put as putPresigned } from "../lib/submissionUpload.js";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
@@ -1054,34 +1055,42 @@ export default function Admin({ section = null }) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    if (!/\.exe$/i.test(file.name)) {
+      setIhMsg("Failed: choose the Installer Hub setup .exe (customers save it as ADLM-Installer-Hub-Setup.exe).");
+      return;
+    }
     setIhUploadProg(1);
 
     (async () => {
       try {
-        const contentType = file.type || "application/octet-stream";
-
-        // 1) Only this small JSON round-trip goes through the API. The API runs
-        //    on Lambda behind API Gateway, which caps request bodies at 10MB —
-        //    posting a 50MB installer through it is what made this slow.
+        // R3: the Hub is for paid accounts only, so it goes into ADLM's PRIVATE
+        // file store at the one key /me/downloads/installer-hub signs links
+        // for, never to a public URL. Only these small JSON calls touch the
+        // API (Lambda stops request bodies at 6 MB); the bytes go straight
+        // from this browser to storage.
         const signed = await apiAuthed("/admin/media/installer-upload-url", {
           token: accessToken,
           method: "POST",
-          body: { filename: file.name, contentType, size: file.size },
+          body: { filename: file.name, size: file.size },
         });
         if (!signed?.uploadUrl) throw new Error("No upload URL returned");
 
-        // 2) The server never sees the bytes now, so it can't hash them for us.
+        // The server never sees the bytes, so it can't hash them for us.
         const sha256 = await sha256HexOfFile(file);
 
-        // 3) Straight to R2 at the browser's own line speed. Content-Type must
-        //    match what was signed or R2 answers 403.
-        await putFileWithProgress(signed.uploadUrl, file, contentType, (pct) =>
+        // Content-Type must match what was signed or storage answers 403.
+        await putFileWithProgress(signed.uploadUrl, file, signed.contentType, (pct) =>
           setIhUploadProg(Math.max(1, pct)),
         );
 
-        setIhUrlDraft(signed.publicUrl);
+        const done = await apiAuthed("/admin/media/installer-uploaded", {
+          token: accessToken,
+          method: "POST",
+          body: {},
+        });
+        const mb = ((done?.bytes ?? file.size) / (1024 * 1024)).toFixed(1);
         setIhMsg(
-          `Installer uploaded (r2${sha256 ? `, SHA-256 ${sha256.slice(0, 12)}…` : ""}). Click Save to apply.`,
+          `Installer Hub uploaded (${mb} MB${sha256 ? `, SHA-256 ${sha256.slice(0, 12)}…` : ""}) to ADLM's private storage. Paid accounts now download it through a signed link; the link in the box is only a fail-safe. To drop it, clear the box and click Save.`,
         );
       } catch (err) {
         setIhMsg(err?.message || "Installer upload failed");
@@ -1091,32 +1100,44 @@ export default function Admin({ section = null }) {
     })();
   }
 
+  // The Android app goes straight from this browser into ADLM's private file
+  // store, at the one place the site serves it from. The API only signs the
+  // upload and then checks it arrived: sending a 70 MB file through the API
+  // failed, because Lambda stops request bodies at 6 MB. Once it is there,
+  // every "Download the app" button serves this file and the link in the box
+  // is only a fail-safe, so clearing the box drops Google Drive entirely.
   function handleApkUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    if (!/\.apk$/i.test(file.name)) {
+      setSettingsMsg("Failed: choose an .apk file (an .aab cannot be installed from the website).");
+      return;
+    }
     setSettingsBusy(true);
-    setSettingsMsg("Uploading APK…");
+    setSettingsMsg("Uploading the app… 0%");
 
     (async () => {
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await apiAuthed("/admin/media/upload-apk", {
+        const slot = await apiAuthed("/admin/media/apk-upload-url", {
           token: accessToken,
           method: "POST",
-          body: fd,
+          body: { filename: file.name, size: file.size },
         });
-        if (res?.secure_url) {
-          setSettingsMobileAppDraft(res.secure_url);
-          setSettingsMsg(
-            `APK uploaded (SHA-256 ${(res.sha256 || "").slice(0, 12)}…). Click Save to apply.`,
-          );
-        } else {
-          setSettingsMsg("Upload failed, no URL returned");
-        }
+        await putPresigned(slot.uploadUrl, file, slot.contentType, (pct) =>
+          setSettingsMsg(`Uploading the app… ${pct}%`),
+        );
+        const done = await apiAuthed("/admin/media/apk-uploaded", {
+          token: accessToken,
+          method: "POST",
+          body: {},
+        });
+        const mb = ((done?.bytes ?? file.size) / (1024 * 1024)).toFixed(1);
+        setSettingsMsg(
+          `App uploaded (${mb} MB) to ADLM storage. Every "Download the app" button now serves it; the link below is only a fail-safe. To drop it, clear the box and click Save.`,
+        );
       } catch (err) {
-        setSettingsMsg(err?.message || "APK upload failed");
+        setSettingsMsg(`Failed: ${err?.message || "the app upload did not finish"}`);
       } finally {
         setSettingsBusy(false);
       }
@@ -4745,7 +4766,7 @@ export default function Admin({ section = null }) {
                 Mobile App Download URL (APK)
               </label>
               <p className="text-xs text-slate-500 mb-2">
-                Upload an APK directly (stored on Cloudflare R2) or paste a Google Drive / Play Store link. This is what the home page and footer "Download Mobile App" button uses.
+                Upload the APK here and the site serves it from ADLM's own storage. The link in the box is only used if no app has been uploaded; clear it and Save to stop using Google Drive.
               </p>
               <div className="flex gap-2 flex-wrap">
                 <input
@@ -4759,7 +4780,7 @@ export default function Admin({ section = null }) {
                   Upload APK
                   <input
                     type="file"
-                    accept=".apk,.aab,application/vnd.android.package-archive"
+                    accept=".apk,application/vnd.android.package-archive"
                     className="hidden"
                     onChange={handleApkUpload}
                   />
@@ -4899,7 +4920,7 @@ export default function Admin({ section = null }) {
                     Installer Hub Download URL
                   </label>
                   <p className="text-xs text-slate-500 mb-2">
-                    Upload the Hub setup file (.exe / .msi / .zip / .msix) directly: small files go to Cloudinary, larger ones to Cloudflare R2, or paste a hosted URL.
+                    Upload the Hub setup .exe here and the site keeps it in ADLM's private storage, handed only to paid accounts through a short-lived signed link. The link in the box is only used if no Hub has been uploaded; clear it and Save once the upload is done.
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     <input
@@ -4913,7 +4934,7 @@ export default function Admin({ section = null }) {
                       Upload installer
                       <input
                         type="file"
-                        accept=".exe,.msi,.zip,.7z,.appx,.appxbundle,.msix,.msixbundle"
+                        accept=".exe"
                         className="hidden"
                         onChange={handleIhInstallerUpload}
                       />

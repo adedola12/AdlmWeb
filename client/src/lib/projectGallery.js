@@ -43,8 +43,9 @@ export function stageOf(p) {
   // A row whose money is withheld carries `priced` instead of a figure: the
   // stage is a state, not an amount, and reading the withheld totalCost here
   // would label a shared, fully priced job "takeoff". Rows that are not
-  // masked have no `priced` field and answer from the figure, as before.
-  if (typeof p?.priced === "boolean") return p.priced ? "priced" : "takeoff";
+  // masked have no `priced` field and answer from the figure, as before;
+  // a stray `priced` on an unmasked row is ignored for the same reason.
+  if (isMoneyHidden(p) && typeof p?.priced === "boolean") return p.priced ? "priced" : "takeoff";
   return Number(p?.totalCost) > 0 ? "priced" : "takeoff";
 }
 

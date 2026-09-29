@@ -84,6 +84,11 @@ export const MERGED_CONTRACT_MONEY_FIELDS = Object.freeze([
  * zero here too, and `moneyHidden` says so rather than letting a zero be
  * mistaken for "nothing certified".
  *
+ * `priced` survives the masking as a plain yes/no (does the bill carry any
+ * value at all?), because the gallery reads a project's stage from it and a
+ * hidden row would otherwise read as "Takeoff" whatever its real state. It
+ * says nothing about how much.
+ *
  * `rows` must already carry the `shared` flag (true when the row belongs to
  * someone else): an owner's own row is never masked.
  */

@@ -478,8 +478,9 @@ export default function PortfolioDashboard() {
                                   <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.color}`}>{st.label}</span>
                                 </td>
                                 <td className="px-4 py-3 text-right text-slate-600 dark:text-adlm-dark-text">{safeNum(row.itemCount).toLocaleString()}</td>
-                                <td className="px-4 py-3 text-right text-slate-600 dark:text-adlm-dark-text">₦{money(row.totalCost)}</td>
-                                <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">₦{money(row.valuedAmount)}</td>
+                                {/* Withheld money reads as the en dash, never ₦0. */}
+                                <td className="px-4 py-3 text-right text-slate-600 dark:text-adlm-dark-text">{row.moneyHidden ? "–" : `₦${money(row.totalCost)}`}</td>
+                                <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">{row.moneyHidden ? "–" : `₦${money(row.valuedAmount)}`}</td>
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2 justify-end">
                                     <div className="w-16 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">

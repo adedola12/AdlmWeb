@@ -17,6 +17,7 @@
 // preference (laptop dark, phone light, projector light). Keeping it
 // client-side means no auth round trip and no race on initial paint.
 
+/* eslint-disable react-refresh/only-export-components -- shares hooks/helpers with its components by design, same as store.jsx; the rule only affects dev fast-refresh */
 import React from "react";
 import ThemeMenu from "./ds/ThemeMenu.jsx";
 

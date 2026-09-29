@@ -2,7 +2,7 @@ import React from "react";
 import { FONT, FONT_DISPLAY, LOGO_SRC } from "../lib/brand.js";
 import { Badge, Subtitle } from "./parts.jsx";
 
-export default function ThumbHook({ flyer, accent, days, palette }) {
+export default function ThumbHook({ flyer, accent, palette }) {
   const PAD = 36;
 
   // Split title: first word(s) giant in accent, remaining words in palette.text.

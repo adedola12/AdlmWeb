@@ -112,9 +112,18 @@ describe("the Physical Trainings section on /products", () => {
     expect(screen.queryByRole("button", { name: /View all/ })).toBeNull();
   });
 
-  it("offers no 'View all' when nothing is published", async () => {
+  // With nothing published the section is not on the page at all, rather
+  // than an empty shelf reading "No trainings published yet." (T1, owner,
+  // 27 Sep 2026). A failed read still shows it, below, so the two are not
+  // mistaken for each other.
+  it("leaves the section off the page when nothing is published", async () => {
     mount([]);
-    await screen.findByText("No trainings published yet.");
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([u]) => String(u).includes("/ptrainings/events"))).toBe(true),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText("Physical Trainings")).toBeNull();
+    expect(screen.queryByText(/No trainings published yet/)).toBeNull();
     expect(screen.queryByRole("button", { name: /View all/ })).toBeNull();
   });
 

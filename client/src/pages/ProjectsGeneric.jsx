@@ -4584,10 +4584,6 @@ export default function ProjectsGeneric() {
     (acc, row) => acc + safeNum(row.valuedAmount),
     0,
   );
-  const totalAmount = computedAll.reduce(
-    (acc, row) => acc + safeNum(row.amount),
-    0,
-  );
 
   // ── Full-scope project totals (measured + PC + prelim + variations) ──
   // The Overview dashboard previously showed `grossAmount` (measured
@@ -4643,7 +4639,6 @@ export default function ProjectsGeneric() {
   // Full outstanding — what's still left to earn / claim.
   const fullRemainingAmount = Math.max(0, fullProjectTotal - fullValuedAmount);
   const progressCount = computedAll.filter((row) => row.isMarked).length;
-  const partialCount = computedAll.filter((row) => row.isPartial).length;
   // Partial-aware progress: full point for ratified items, fractional for
   // in-progress ones. Matches the server math so PM + BoQ tiles agree.
   const progressShare = computedAll.reduce(

@@ -167,22 +167,19 @@ test("the same collaborator WITH RateGen sees the shared figures", async () => {
   assert.equal(res.body.projects[0].moneyHidden, undefined);
 });
 
-test("measured work is withheld too, because it is the figure workValue falls back to", async () => {
+test("measured work, value to date and balance are withheld from a collaborator without RateGen", async () => {
   me = { _id: USER_ID, email: "qs@example.com", entitlements: [] };
-  rows = [project({ shared: true })];
+  rows = [project({ shared: true }), project()];
   const res = await get("/me/projects-rollup");
-  // This route used to send totalCost through unmasked, on the reasoning
-  // that it predated the masking and the screens would withhold it. They
-  // did not: the work overview's headline reads
-  // `workValue > 0 ? workValue : totalCost`, so masking workValue to 0 fell
-  // straight through to this figure and printed the owner's real total.
-  // DsWorkProgramme and PortfolioDashboard summed it as well.
-  assert.equal(res.body.projects[0].totalCost, 0);
-  assert.equal(res.body.projects[0].valuedAmount, 0);
-  assert.equal(res.body.projects[0].remainingAmount, 0);
-  // …and the row still says the job is priced, so the gallery does not send
-  // a fully priced project back to "Takeoff" for want of a figure.
-  assert.equal(res.body.projects[0].priced, true);
+  const [theirs, mine] = res.body.projects;
+  // These were left unmasked when the rollup's masking was added, so the
+  // dashboard leaked the value of a job whose rates the project page hides.
+  assert.equal(theirs.totalCost, 0);
+  assert.equal(theirs.valuedAmount, 0);
+  assert.equal(theirs.remainingAmount, 0);
+  assert.equal(theirs.priced, true, "the stage can still tell priced from takeoff");
+  // Their own project is untouched.
+  assert.equal(mine.totalCost, 40_000_000);
 });
 
 test("the estimate is withheld from a collaborator who may not see rates", async () => {

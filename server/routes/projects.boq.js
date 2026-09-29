@@ -243,12 +243,15 @@ async function loadProjectForExport(req, res) {
   // Reaching the project and being allowed its money are two questions. The
   // second was never asked here, so a full collaborator without RateGen saw
   // zeroed rates on screen and downloaded the real ones in the workbook.
+  // Asked once, here, after both lookups (the direct query and the legacy
+  // collection scan), so neither path can skip it. The code is the one every
+  // other money refusal uses (projects.js, the ArchiCAD routes).
   if (!(await mayExportRates(project, userId, { hasRateGen: readerMaySeeRates }))) {
     res.status(403).json({
       error:
         "This project's rates are not visible to you, so its bill cannot be " +
         "exported. An active RateGen subscription lifts this.",
-      code: "RATES_NOT_VISIBLE",
+      code: "RATEGEN_REQUIRED",
     });
     return null;
   }
