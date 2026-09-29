@@ -396,7 +396,13 @@ export const config: AdlmConfig = {
 
   // Two environments always initialised (~$38.50/month; see the interface).
   // Founder approved keep-warm 2026-09-27. 0 switches it off.
-  apiProvisionedConcurrency: 2,
+  // Parked at 0 on 29 Sep 2026. Turning this on moves the Function URL onto
+  // a new `live` alias, and CloudFormation does that by REPLACING the URL and
+  // its two permissions (plus the scheduler target role). The deploy guard
+  // refuses that - 5 live resources would go - so every API deploy from main
+  // fails and no server change can reach production.
+  // Turn warm environments back on as its own watched deploy.
+  apiProvisionedConcurrency: 0,
 
   // This subscription had LAPSED by September 2026: the topic had no
   // subscribers, so no alarm reached anyone. dolapo836@gmail.com was
