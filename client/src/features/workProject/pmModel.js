@@ -18,7 +18,7 @@
 // one, passed in so the figures are testable.
 
 import { safeNum } from "../projects/lib/projectTotals.js";
-import { amountOf, doneOf } from "./billModel.js";
+import { amountOf, doneOf, identityCode } from "./billModel.js";
 
 /** His three views (work-proj.js:1342). */
 export const PM_VIEWS = Object.freeze([
@@ -69,7 +69,10 @@ export function taskLines(task, items) {
   const list = Array.isArray(items) ? items : [];
   const out = [];
   ids.forEach((id, n) => {
-    const want = String(id || "").trim().toLowerCase();
+    // The stored value is a composite identity, not a bare code — see
+    // identityCode. Comparing the whole string to item.code matched nothing on
+    // every generated task, so a task covered no lines and its value was zero.
+    const want = identityCode(id);
     if (!want) return;
     const index = list.findIndex((it) => String(it?.code || "").trim().toLowerCase() === want);
     if (index < 0) return;

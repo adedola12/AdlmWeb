@@ -39,6 +39,9 @@ import {
 } from "./WorkProjectSources.jsx";
 import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
 import WorkProjectPanel from "./WorkProjectPanel.jsx";
+// The full workspace. Lazy: it pulls the 3D viewer, and the tabbed page must
+// not carry three.js for a screen most visits never open.
+const WorkProjectFourD = React.lazy(() => import("./WorkProjectFourD.jsx"));
 import { useProjectPanel } from "./useProjectPanel.js";
 import DsAppShell from "../../ds/DsAppShell.jsx";
 import { useFeedback } from "../../ds/feedback/feedbackContext.js";
@@ -393,6 +396,27 @@ export default function WorkProjectShell({ productKey, id }) {
           the title and the glass. Put it back and his three padding steps
           (36 / 20 / 16px) apply here as they do everywhere else. */}
       <div className="dsh-in">
+        {/* FULL SCREEN IS THE FULL WORKSPACE, NOT THE TABS MADE WIDER.
+            "Open the full workspace" was asked for three times and each time it
+            meant this: one screen showing the whole job on a chosen date — the
+            model, the programme, what is being built, what has to be bought and
+            what it should have cost — not the same tabs with the rail hidden.
+            The tabs answer "what is true now" one subject at a time; this
+            answers "what is true on the 14th of March" about all of them at
+            once. Leaving full screen returns to them. */}
+        {fullScreen ? (
+          <React.Suspense fallback={<div className="pj-empty sm"><b>Opening the workspace…</b></div>}>
+            <WorkProjectFourD
+              project={project}
+              productKey={productKey}
+              projectId={saveId}
+              accessToken={accessToken}
+              onExit={toggleFullScreen}
+              onOpenLine={(index) => panel.show({ kind: "line", index })}
+            />
+          </React.Suspense>
+        ) : (
+        <>
         <div className="pj-head">
           <nav className="pj-crumb">
             <Link to="/work/projects">Projects</Link>
@@ -549,6 +573,8 @@ export default function WorkProjectShell({ productKey, id }) {
             <WorkProjectServices project={project} canEdit={!viewOnly} />
           ) : null}
         </div>
+        </>
+        )}
 
         {panel.content?.kind === "people" ? (
           <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>

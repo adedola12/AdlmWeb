@@ -214,6 +214,32 @@ export function foldLabel(groups, openMap = {}) {
 }
 
 /**
+ * The code inside a bill identity.
+ *
+ * A bill identity is a composite — `sn::code::description::takeoffLine::
+ * materialName::unit` — and the code is the second field. A programme task
+ * stores whole identities in `linkedBoqIdentities`, so anything joining a task
+ * back to its bill lines has to take them apart the same way.
+ *
+ * Two places were doing it two ways: taskStartsByLine (budgetModel) split on
+ * `::` and took [1], which is right and is why the buy schedule worked, while
+ * taskLines (pmModel) compared the WHOLE identity against item.code, which can
+ * never match a generated task — so every task appeared to cover no bill lines,
+ * and everything derived from that read zero: task progress, task value,
+ * planned value, and the uncovered-lines figure on the PM dashboard.
+ *
+ * A bare code is still accepted, because a task written before identities were
+ * composite stores exactly that.
+ */
+export function identityCode(identity) {
+  const raw = String(identity || "").trim();
+  if (!raw) return "";
+  const parts = raw.split("::");
+  // A composite always has the six fields; anything else is a bare code.
+  return (parts.length > 1 ? parts[1] : parts[0]).trim().toLowerCase();
+}
+
+/**
  * The title his side panel gives a line — its description (work-proj.js:899).
  *
  * Here rather than beside the panel component, because a file that exports a

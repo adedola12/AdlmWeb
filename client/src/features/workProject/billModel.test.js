@@ -6,6 +6,7 @@ import {
   elementOf,
   foldLabel,
   groupBill,
+  identityCode,
   isPriced,
   matches,
   measuredAt,
@@ -312,5 +313,43 @@ describe("a section the project names but no line uses", () => {
   it("a section a filter emptied is NOT marked empty", () => {
     const g = groupBill(items, { order, filter: "unpriced" }).find((x) => x.name === "Frames");
     expect(g?.empty).toBe(false);
+  });
+});
+
+// THE BUG THIS PINS
+//
+// A programme task stores WHOLE bill identities in linkedBoqIdentities —
+// `sn::code::description::takeoffLine::materialName::unit`. Two places joined a
+// task back to its lines and they disagreed: the buy schedule split on `::` and
+// took [1] (right), while pmModel.taskLines compared the whole string to
+// item.code (never matches). Every generated task therefore appeared to cover
+// no bill lines, so task progress, task value, planned value and the PM
+// dashboard's uncovered-lines figure all read zero on a real programme.
+describe("the code inside a bill identity", () => {
+  const REAL =
+    "2::gf:vibrated hollow sancrete blocks in cement mortar (1:6)|guid:01a861ac::vibrated hollow::::::sq m";
+
+  it("takes the second field of a composite", () => {
+    expect(identityCode(REAL)).toBe(
+      "gf:vibrated hollow sancrete blocks in cement mortar (1:6)|guid:01a861ac",
+    );
+  });
+
+  it("keeps a bare code, which is what older tasks store", () => {
+    expect(identityCode("BQ-1")).toBe("bq-1");
+  });
+
+  it("lower-cases, because the join is case-insensitive either side", () => {
+    expect(identityCode("1::BQ-1::Excavate::::::m3")).toBe("bq-1");
+  });
+
+  it("answers empty for nothing, rather than matching the first line", () => {
+    expect(identityCode("")).toBe("");
+    expect(identityCode(null)).toBe("");
+    expect(identityCode(undefined)).toBe("");
+  });
+
+  it("copes with an identity whose code field is empty", () => {
+    expect(identityCode("1::::--- gf ---::::::")).toBe("");
   });
 });

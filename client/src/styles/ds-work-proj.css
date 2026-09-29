@@ -818,3 +818,82 @@
 @media (max-width:1280px){
 .ds .oh-grid{grid-template-columns:1fr}
 }
+
+/* ------------------------------------------------- the full workspace (4D)
+   One screen, one date. The viewport and the rail across the top, the scrubber
+   between, the three panels below. It only ever renders inside full screen, so
+   it may assume the whole viewport and does not compete with the rail. */
+.ds .fd{display:flex;flex-direction:column;gap:12px;min-height:0}
+.ds .fd-top{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;align-items:start}
+.ds .fd-view{min-width:0;border:1px solid var(--line);border-radius:16px;background:var(--bg-alt);overflow:hidden;min-height:420px}
+.ds .fd-load{display:grid;place-items:center;height:420px;font-size:13px;color:var(--ink-3)}
+.ds .fd-nomodel{display:flex;flex-direction:column;justify-content:center;gap:8px;height:420px;padding:0 28px;text-align:center}
+.ds .fd-nomodel b{font-size:15px;font-weight:500;color:var(--ink)}
+.ds .fd-nomodel p{margin:0;font-size:13px;color:var(--ink-3);max-width:46ch;margin-inline:auto}
+.ds .fd-nomodel span{font-size:12px;color:var(--ink-2)}
+
+.ds .fd-rail{display:grid;gap:8px;align-content:start}
+.ds .fd-stat{border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:9px 12px}
+.ds .fd-stat span{display:block;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.ds .fd-stat b{display:block;font-size:17px;font-weight:500;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .fd-stat em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.ds .fd-stat.warn{border-color:color-mix(in srgb,var(--fb-err) 40%,var(--line))}
+.ds .fd-stat.warn b{color:var(--fb-err)}
+.ds .fd-stat.ok b{color:var(--fb-ok)}
+
+/* The scrubber. Deliberately a real <input type=range>: it is keyboard
+   operable, it announces its value, and a QS can drag it with a trackpad. */
+.ds .fd-bar{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:8px 12px}
+.ds .fd-play{flex:none;width:34px;height:34px;border-radius:10px;border:1px solid var(--line-2);background:var(--bg-alt);color:var(--ink);cursor:pointer;font-size:12px;line-height:1}
+.ds .fd-play:hover{border-color:var(--action)}
+.ds .fd-date{flex:none;min-width:130px;font-size:13px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .fd-scrub{flex:1 1 auto;min-width:0;accent-color:var(--action)}
+.ds .fd-speed{flex:none;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:12px;padding:0 6px}
+
+.ds .fd-bottom{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr);gap:12px;align-items:start}
+.ds .fd-panel{border:1px solid var(--line);border-radius:16px;background:var(--bg);overflow:hidden;min-width:0}
+.ds .fd-hd{display:flex;align-items:baseline;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ds .fd-hd b{font-size:13px;font-weight:500;color:var(--ink)}
+.ds .fd-hd em{font-style:normal;font-size:11.5px;color:var(--ink-3);margin-left:auto}
+
+.ds .fd-curve{padding:12px 14px 10px}
+.ds .fd-curve svg{width:100%;height:150px;display:block;overflow:visible}
+.ds .fd-curve polyline{fill:none;stroke-width:1.6;vector-effect:non-scaling-stroke}
+.ds .fd-curve polyline.pl{stroke:var(--action)}
+.ds .fd-curve polyline.sp{stroke:var(--fb-ok);stroke-dasharray:4 3}
+.ds .fd-curve line.nw{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.ds .fd-curve .lg{display:flex;gap:14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
+.ds .fd-curve .lg span::before{content:"";display:inline-block;width:12px;height:2px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.ds .fd-curve .lg .pl::before{background:var(--action)}
+.ds .fd-curve .lg .sp::before{background:var(--fb-ok)}
+
+.ds .fd-gantt{max-height:210px;overflow-y:auto;padding:8px 14px 12px}
+.ds .fd-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:10px;align-items:center;padding:3px 0}
+.ds .fd-row .nm{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .fd-row .tr{position:relative;height:14px;border-radius:7px;background:var(--bg-alt)}
+.ds .fd-row .br{position:absolute;top:2px;height:10px;border-radius:5px;background:var(--line-2);overflow:hidden}
+.ds .fd-row .br.on{background:color-mix(in srgb,var(--action) 45%,var(--line-2))}
+.ds .fd-row .br u{display:block;height:100%;background:var(--fb-ok);text-decoration:none}
+.ds .fd-row .nw{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--ink-3);text-decoration:none}
+
+.ds .fd-lines{max-height:210px;overflow-y:auto}
+.ds .fd-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;
+  padding:8px 14px;border:0;border-top:1px solid var(--line);background:none;text-align:left;cursor:pointer;font:inherit}
+.ds .fd-line:first-child{border-top:0}
+.ds .fd-line:hover{background:var(--bg-alt)}
+.ds .fd-line .ds{min-width:0}
+.ds .fd-line .ds b{display:block;font-size:12.5px;font-weight:400;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .fd-line .ds em{display:block;font-style:normal;font-size:11px;color:var(--ink-3)}
+.ds .fd-line .n{font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ds .fd-none{margin:0;padding:16px 14px;font-size:12.5px;color:var(--ink-3)}
+
+@media (max-width:1100px){
+  .ds .fd-top{grid-template-columns:1fr}
+  .ds .fd-rail{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .ds .fd-bottom{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .ds .fd-bar{flex-wrap:wrap}
+  .ds .fd-date{min-width:0;order:-1}
+  .ds .fd-scrub{flex-basis:100%;order:1}
+}

@@ -28,6 +28,7 @@
 // lead time, and a row whose bill line is in no task has no date at all rather
 // than a guessed one.
 
+import { identityCode } from "./billModel.js";
 import { buyByDate, buyScheduleGroups } from "../../lib/buySchedule.js";
 
 const n = (v) => {
@@ -157,7 +158,8 @@ export function taskStartsByLine(tasks) {
     const start = t?.startDate ? new Date(t.startDate) : null;
     if (!start || Number.isNaN(start.getTime())) continue;
     for (const ident of t?.linkedBoqIdentities || []) {
-      const code = String(String(ident).split("::")[1] || "").trim().toLowerCase();
+      // Same parse as taskLines, from one place — the two used to disagree.
+      const code = identityCode(ident);
       if (!code) continue;
       const cur = map.get(code);
       if (!cur || start < cur.start) {
