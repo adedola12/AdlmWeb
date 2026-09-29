@@ -20,6 +20,7 @@ import { descOf, measuredAt, unitOf } from "./billModel.js";
 import { EN_DASH, money, num } from "./workProjectFormat.js";
 import { totalsFor } from "./overviewModel.js";
 import { WorkProjectBudgetView, WorkProjectBuyView } from "./WorkProjectBudget.jsx";
+import WorkProjectBudgetHeron from "./WorkProjectBudgetHeron.jsx";
 
 export default function WorkProjectRates({
   project,
@@ -77,7 +78,11 @@ export default function WorkProjectRates({
           onOpenLine={onOpenLine}
         />
       ) : mode === "budget" ? (
-        <WorkProjectBudgetView
+        // HERON 3.0's shape: cost against value per bill line, with the margin
+        // on each. The resource columns it replaced answered a procurement
+        // question; this one answers the question a QS opens a budget for.
+        // Both read budgetModel.js, so they cannot disagree about a total.
+        <WorkProjectBudgetHeron
           project={project}
           canEdit={canEdit}
           saving={saving}

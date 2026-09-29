@@ -219,3 +219,121 @@ export function withRowProcured(project, index, procured) {
     ),
   };
 }
+
+/* ───────────────────── HERON 3.0's shape: per bill line ─────────────────────
+ *
+ * The columns above answer "what do I have to buy". HERON's Budget answers the
+ * question a QS actually opens a budget for — is this line making money — and
+ * it does it per BILL ITEM, not per resource class (View/MaterialView.xaml).
+ *
+ * Its three figures are project cost (material + labour), take-off value (the
+ * BoQ), and the difference, which it calls overhead + profit and colours by
+ * sign. Then one card per bill item with its own margin chip:
+ *
+ *     margin = (BoQ rate − material − labour) ÷ BoQ rate
+ *
+ * Both views read this same model, so the two can never disagree about a total.
+ */
+
+/** A bill line's own value: what it is billed at. */
+const billValue = (item) => n(item?.qty) * n(item?.rate);
+
+/**
+ * Budget rows joined to the bill line they were measured from.
+ *
+ * The join is billIdentity → the bill line's `code`, which is what
+ * backfillBudgetLinks writes (server/util/budgetBillLink.js) and what the
+ * programme's task links use too.
+ *
+ * Rows that match no bill line are NOT dropped. They are real cost, and a
+ * budget that silently omits some of it is worse than one that admits it does
+ * not know where it belongs.
+ */
+export function budgetByBillLine(project) {
+  const items = Array.isArray(project?.items) ? project.items : [];
+  const byCode = new Map();
+  items.forEach((it, index) => {
+    const code = String(it?.code || "").trim().toLowerCase();
+    if (code && !byCode.has(code)) byCode.set(code, { item: it, index });
+  });
+
+  const cols = budgetColumns(project);
+  const all = [...cols.material, ...cols.labour, ...cols.plant];
+  const groups = new Map();
+  const orphans = [];
+
+  for (const row of all) {
+    const hit = row.billIdentity ? byCode.get(row.billIdentity) : null;
+    if (!hit) {
+      orphans.push(row);
+      continue;
+    }
+    let g = groups.get(row.billIdentity);
+    if (!g) {
+      g = {
+        code: hit.item.code,
+        index: hit.index,
+        description: String(hit.item.description || hit.item.takeoffLine || "").trim(),
+        unit: String(hit.item.unit || "").trim(),
+        qty: n(hit.item.qty),
+        rate: n(hit.item.rate),
+        value: billValue(hit.item),
+        material: 0,
+        labour: 0,
+        plant: 0,
+        rows: [],
+      };
+      groups.set(row.billIdentity, g);
+    }
+    g.rows.push(row);
+  }
+
+  // Sum by class from the columns we already classified, rather than
+  // re-deciding it here and risking two answers to one question.
+  // Sum by class, and tag each row with the class it came from: only a
+  // material is BOUGHT, so only a material row can carry a procurement tick.
+  for (const [key, list] of [["material", cols.material], ["labour", cols.labour], ["plant", cols.plant]]) {
+    for (const row of list) {
+      row.kind = key;
+      const g = row.billIdentity ? groups.get(row.billIdentity) : null;
+      if (g) g[key] += row.amount;
+    }
+  }
+
+  const out = [...groups.values()].map((g) => {
+    const cost = g.material + g.labour + g.plant;
+    return {
+      ...g,
+      cost,
+      margin: g.value - cost,
+      // Only meaningful when the line is billed AND costed. An unpriced bill
+      // would otherwise read as a 100% loss on every line, which is a lie.
+      marginPercent: g.value > 0 ? ((g.value - cost) / g.value) * 100 : null,
+      priced: g.value > 0 && cost > 0,
+    };
+  });
+  out.sort((a, b) => a.index - b.index);
+  return { lines: out, orphans };
+}
+
+/** HERON's three figures across the top of its Budget. */
+export function heronTotals(project) {
+  const t = budgetTotals(project);
+  const cost = t.all;
+  const boq = (Array.isArray(project?.items) ? project.items : []).reduce(
+    (a, it) => a + billValue(it),
+    0,
+  );
+  return {
+    cost,
+    boq,
+    // HERON calls it overhead + profit: what is left of the bill after what it
+    // costs to build. Negative means the job loses money at these rates.
+    overheadProfit: boq - cost,
+    isProfit: boq - cost >= 0,
+    marginPercent: boq > 0 ? ((boq - cost) / boq) * 100 : null,
+    material: t.material,
+    labour: t.labour,
+    plant: t.plant,
+  };
+}

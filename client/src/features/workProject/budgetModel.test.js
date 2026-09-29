@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
+  budgetByBillLine,
   budgetColumns,
   budgetTotals,
   buyKpis,
   buyRows,
   classOf,
+  heronTotals,
   costRateOf,
   rowAmount,
   taskStartsByLine,
@@ -327,5 +329,91 @@ describe("marking a row bought", () => {
   it("refuses an index that is not a row", () => {
     expect(withRowProcured(project(), 9, true)).toBe(null);
     expect(withRowProcured({}, 0, true)).toBe(null);
+  });
+});
+
+/* ───────────── HERON 3.0's shape: cost against value, per bill line ───────── */
+
+describe("the budget read the way HERON reads it", () => {
+  // Its question is not "what must I buy" but "is this line making money".
+  const job = () => ({
+    items: [
+      { code: "BQ-1", description: "Excavate foundations", unit: "m3", qty: 100, rate: 5_000 },
+      { code: "BQ-2", description: "Reinforced columns", unit: "m3", qty: 10, rate: 20_000 },
+    ],
+    budgetItems: [
+      { componentKind: "Material", materialName: "Cement", qty: 100, rate: 2_000, billIdentity: "BQ-1" },
+      { componentKind: "Labour", description: "Gang", qty: 50, rate: 2_000, billIdentity: "BQ-1" },
+      { componentKind: "Material", materialName: "Rebar", qty: 100, rate: 2_500, billIdentity: "BQ-2" },
+    ],
+  });
+
+  it("groups the budget by bill line, in bill order", () => {
+    const { lines } = budgetByBillLine(job());
+    expect(lines.map((l) => l.code)).toEqual(["BQ-1", "BQ-2"]);
+    expect(lines[0].description).toBe("Excavate foundations");
+  });
+
+  it("sets each line's cost against what it is billed at", () => {
+    const [one] = budgetByBillLine(job()).lines;
+    expect(one.value).toBe(100 * 5_000);
+    expect(one.material).toBe(100 * 2_000);
+    expect(one.labour).toBe(50 * 2_000);
+    expect(one.cost).toBe(300_000);
+    expect(one.margin).toBe(200_000);
+  });
+
+  it("gives the margin HERON's tooltip describes", () => {
+    // (BoQ rate − material − labour) ÷ BoQ rate, as a percentage of value.
+    const [one] = budgetByBillLine(job()).lines;
+    expect(one.marginPercent).toBeCloseTo(40, 6);
+  });
+
+  it("marks a line that loses money", () => {
+    const bad = job();
+    bad.budgetItems.push({ componentKind: "Material", materialName: "Extra", qty: 1, rate: 400_000, billIdentity: "BQ-2" });
+    const two = budgetByBillLine(bad).lines.find((l) => l.code === "BQ-2");
+    expect(two.cost).toBeGreaterThan(two.value);
+    expect(two.margin).toBeLessThan(0);
+    expect(two.marginPercent).toBeLessThan(0);
+  });
+
+  it("refuses to state a margin on a line that is not billed", () => {
+    // An unpriced bill would otherwise read as a 100% loss on every line.
+    const unpriced = job();
+    unpriced.items = unpriced.items.map((i) => ({ ...i, rate: 0 }));
+    for (const l of budgetByBillLine(unpriced).lines) {
+      expect(l.marginPercent).toBe(null);
+      expect(l.priced).toBe(false);
+    }
+  });
+
+  it("keeps cost that belongs to no bill line rather than dropping it", () => {
+    // Silently omitting real cost is worse than admitting it is unplaced.
+    const stray = job();
+    stray.budgetItems.push({ componentKind: "Material", materialName: "Site hut", qty: 1, rate: 90_000 });
+    const { lines, orphans } = budgetByBillLine(stray);
+    expect(orphans).toHaveLength(1);
+    expect(lines.reduce((a, l) => a + l.cost, 0)).toBe(300_000 + 250_000);
+  });
+
+  it("gives HERON's three figures across the top", () => {
+    const t = heronTotals(job());
+    expect(t.cost).toBe(300_000 + 250_000);
+    expect(t.boq).toBe(100 * 5_000 + 10 * 20_000);
+    expect(t.overheadProfit).toBe(t.boq - t.cost);
+    expect(t.isProfit).toBe(true);
+  });
+
+  it("says the job loses money when it does", () => {
+    const bad = job();
+    bad.budgetItems.push({ componentKind: "Material", materialName: "Extra", qty: 1, rate: 5_000_000 });
+    const t = heronTotals(bad);
+    expect(t.isProfit).toBe(false);
+    expect(t.overheadProfit).toBeLessThan(0);
+  });
+
+  it("states no project margin when nothing is billed yet", () => {
+    expect(heronTotals({ items: [], budgetItems: [] }).marginPercent).toBe(null);
   });
 });
