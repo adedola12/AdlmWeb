@@ -141,9 +141,14 @@ export default function WorkProjectBudgetHeron({
                   ) : (
                     <span />
                   )}
+                  {/* Three cells, not a name with the quantity tucked under it:
+                      name, how much, what it costs, so the figures line up down
+                      the card and two materials can be compared at a glance. */}
                   <span className="ds">
                     <b>{r.name}</b>
-                    <em>{r.qty ? `${num(Math.ceil(r.qty))} ${r.unit}`.trim() : EN_DASH}</em>
+                  </span>
+                  <span className="q">
+                    {r.qty ? `${num(Math.ceil(r.qty))} ${r.unit}`.trim() : EN_DASH}
                   </span>
                   <span className="n">{r.amount ? money(r.amount) : "Not priced"}</span>
                 </label>
