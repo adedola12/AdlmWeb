@@ -23,7 +23,7 @@ import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectT
 import { STAGES, stageIndex } from "./overviewModel.js";
 import { attachedModels } from "./sourcesModel.js";
 import { linePanelTitle } from "./billModel.js";
-import { saveProjectPatch } from "./saveProject.js";
+import { saveProjectPatch, writeIdFor } from "./saveProject.js";
 import WorkProjectHead from "./WorkProjectHead.jsx";
 import { projectIdLabel } from "./headModel.js";
 import WorkProjectPeople from "./WorkProjectPeople.jsx";
@@ -201,6 +201,19 @@ export default function WorkProjectShell({ productKey, id }) {
   // The last patch attempted, so "Try again" on a failure can re-send the same
   // change rather than asking somebody to find the line and set it twice.
   const lastPatch = React.useRef(null);
+  // WRITES GO TO THE ObjectId, NOT THE SLUG IN THE ADDRESS BAR
+  //
+  // This route's :id is a slug (planswift-takeoff). Reading is fine — the load
+  // above asks /projects/:key/by-slug/:slug, which exists for exactly this.
+  // Saving is not: PUT /projects/:key/:id runs isValidObjectId on the param
+  // (routes/projects.js:3732) and answers 400 "Invalid id" to anything else.
+  //
+  // So EVERY save from this page failed — progress, a rate, a section moved,
+  // a line dragged, the procurement ticks — and the only sign of it was the
+  // indicator reading "Not saved". The document we already hold carries the
+  // real _id, so the fix is here rather than a new server route: no API
+  // deploy, and nothing for the plugins to learn.
+  const saveId = writeIdFor(full || summary, id);
   const save = React.useCallback(
     async (patch) => {
       if (!patch || viewOnly || !full) return;
@@ -211,7 +224,7 @@ export default function WorkProjectShell({ productKey, id }) {
         const updated = await saveProjectPatch({
           project: full,
           productKey,
-          id,
+          id: saveId,
           token: accessToken,
           patch,
         });
@@ -231,7 +244,7 @@ export default function WorkProjectShell({ productKey, id }) {
         setSaveState("failed");
       }
     },
-    [full, viewOnly, productKey, id, accessToken],
+    [full, viewOnly, productKey, saveId, accessToken],
   );
 
   // His … overflow (work-proj.js:457). The menu itself is in WorkProjectHead;
@@ -239,11 +252,10 @@ export default function WorkProjectShell({ productKey, id }) {
   // shell already owns.
   const fb = useFeedback();
   const [report, setReport] = React.useState("");
-  // classic=1 is the "I meant it" marker ClassicProjectRedirect looks for.
-  // Without it the redirect would send this link straight back here, and the
-  // two screens would bounce a reader between them.
-  // The OLDER screen, not this one full screen. `classic=1` is what stops
-  // ClassicProjectRedirect bouncing straight back here.
+  // The OLDER screen, not this one full screen. classic=1 is the "I meant it"
+  // marker ClassicProjectRedirect looks for; without it the redirect would send
+  // this link straight back here and the two screens would bounce a reader
+  // between them.
   const classicWorkspaceHref = `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}&classic=1`;
   // canManage is owner-only on the server (routes/projects.js:899), which is
   // exactly who his Collaborators entry is for.
@@ -268,7 +280,9 @@ export default function WorkProjectShell({ productKey, id }) {
     setPlanFailed("");
     try {
       await apiAuthed(
-        `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(id)}/pm/generate-from-boq`,
+        // Same reason as `save` above: loadProject runs isValidObjectId on
+        // this param (routes/projects.pm.js:280), so the slug 400s here too.
+        `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/pm/generate-from-boq`,
         { token: accessToken, method: "POST", body: { onlyUnlinked: true } },
       );
       // Re-read rather than patch our copy: the server dates the tasks, and
@@ -287,7 +301,7 @@ export default function WorkProjectShell({ productKey, id }) {
     } finally {
       setPlanning(false);
     }
-  }, [viewOnly, planning, productKey, id, accessToken]);
+  }, [viewOnly, planning, productKey, saveId, id, accessToken]);
   const clientName = String(project?.clientName || project?.client || "").trim();
   // The file his line names is the model the take-off came from.
   const sourceFileName = attachedModels(project)[0]?.sourceFile || "";
@@ -348,15 +362,17 @@ export default function WorkProjectShell({ productKey, id }) {
   if (fullFailed && !full && !summary) {
     return (
       <DsAppShell title="Project" page="work-projects" sectionTabs={false}>
-        <div className="pj-empty">
-          <b>That project is not on this account</b>
-          <p>
-            It may have been deleted, or it belongs to someone who has not shared it with
-            you.
-          </p>
-          <Link className="ds-btn btn-p ds-btn-sm" to="/work/projects">
-            All projects
-          </Link>
+        <div className="dsh-in">
+          <div className="pj-empty">
+            <b>That project is not on this account</b>
+            <p>
+              It may have been deleted, or it belongs to someone who has not shared it
+              with you.
+            </p>
+            <Link className="ds-btn btn-p ds-btn-sm" to="/work/projects">
+              All projects
+            </Link>
+          </div>
         </div>
       </DsAppShell>
     );
@@ -370,199 +386,207 @@ export default function WorkProjectShell({ productKey, id }) {
       sectionTabs={false}
       full={fullScreen}
     >
-      <div className="pj-head">
-        <nav className="pj-crumb">
-          <Link to="/work/projects">Projects</Link>
-          <span aria-hidden="true">›</span>
-          <Link to={`/work/tool/${encodeURIComponent(String(productKey || "").toLowerCase())}`}>
-            {toolName(productKey)}
-          </Link>
-        </nav>
+      {/* His own work-project.html:347 is <main class="dsh-main"><div class=
+          "dsh-in"><div id="pj-app">. The port dropped the middle one, so this
+          page was the only screen in the shell with no gutter: its content sat
+          at x=0 of the scroller and the rail's edge was all that stood between
+          the title and the glass. Put it back and his three padding steps
+          (36 / 20 / 16px) apply here as they do everywhere else. */}
+      <div className="dsh-in">
+        <div className="pj-head">
+          <nav className="pj-crumb">
+            <Link to="/work/projects">Projects</Link>
+            <span aria-hidden="true">›</span>
+            <Link to={`/work/tool/${encodeURIComponent(String(productKey || "").toLowerCase())}`}>
+              {toolName(productKey)}
+            </Link>
+          </nav>
 
-        <div className="pj-title">
-          <h1>{project?.name || (projects ? "Project" : "Loading…")}</h1>
-          {/* His stagePill is always there (work-proj.js:338). Ours used to
-              render only when project.stage was set, which meant the pill
-              vanished on a project whose stage has never been written — while
-              the rail below still read "Takeoff", because stageIndex falls back
-              to it. Two parts of one header disagreeing about the same fact.
-              Both now read the same resolved stage. */}
-          <span className={`pj-stage s-${STAGES[stageIndex(project)].id}`}>
-            {STAGES[stageIndex(project)].name}
-          </span>
-        </div>
-
-        {/* His three spans: tool · file, client, location (work-proj.js:339).
-            Two of them were reading fields that do not exist on a project —
-            `fileName` (the file lives on an attached model as sourceFile) and
-            `client` (the column is clientName), so a project WITH a client
-            never showed one. The client slot is always drawn, because "No
-            client yet" is a fact worth reading and an absent line is not. */}
-        <p className="pj-meta">
-          <span>
-            {toolName(productKey)}
-            {sourceFileName ? ` · ${sourceFileName}` : ""}
-          </span>
-          <span>{clientName || "No client yet"}</span>
-          {project?.location ? <span>{project.location}</span> : null}
-        </p>
-
-        <WorkProjectHead
-          projects={projects}
-          projectId={id}
-          tab={tab}
-          saveState={saveState}
-          saveError={saveError}
-          canEdit={!viewOnly}
-          isOwner={isOwner}
-          canSeePm={tabs.some((t) => t.key === "pm")}
-          classicWorkspaceHref={classicWorkspaceHref}
-          fullScreen={fullScreen}
-          onAction={onAction}
-        />
-      </div>
-
-      {viewOnly ? (
-        <div className="pj-note">
-          <div>
-            <b>Shared with you.</b> You can see everything and follow progress. Editing needs a
-            seat on the owner&rsquo;s account.
+          <div className="pj-title">
+            <h1>{project?.name || (projects ? "Project" : "Loading…")}</h1>
+            {/* His stagePill is always there (work-proj.js:338). Ours used to
+                render only when project.stage was set, which meant the pill
+                vanished on a project whose stage has never been written — while
+                the rail below still read "Takeoff", because stageIndex falls back
+                to it. Two parts of one header disagreeing about the same fact.
+                Both now read the same resolved stage. */}
+            <span className={`pj-stage s-${STAGES[stageIndex(project)].id}`}>
+              {STAGES[stageIndex(project)].name}
+            </span>
           </div>
-        </div>
-      ) : null}
 
-      {fullFailed ? (
-        <div className="pj-note">
-          <div>
-            <b>This project&rsquo;s bill could not be read just now.</b> Every figure below is
-            computed from it, so they are missing rather than zero. Reload, or open the
-            classic workspace, which reads it a different way.
+          {/* His three spans: tool · file, client, location (work-proj.js:339).
+              Two of them were reading fields that do not exist on a project —
+              `fileName` (the file lives on an attached model as sourceFile) and
+              `client` (the column is clientName), so a project WITH a client
+              never showed one. The client slot is always drawn, because "No
+              client yet" is a fact worth reading and an absent line is not. */}
+          <p className="pj-meta">
+            <span>
+              {toolName(productKey)}
+              {sourceFileName ? ` · ${sourceFileName}` : ""}
+            </span>
+            <span>{clientName || "No client yet"}</span>
+            {project?.location ? <span>{project.location}</span> : null}
+          </p>
+
+          <WorkProjectHead
+            projects={projects}
+            projectId={id}
+            tab={tab}
+            saveState={saveState}
+            saveError={saveError}
+            canEdit={!viewOnly}
+            isOwner={isOwner}
+            canSeePm={tabs.some((t) => t.key === "pm")}
+            classicWorkspaceHref={classicWorkspaceHref}
+            fullScreen={fullScreen}
+            onAction={onAction}
+          />
+        </div>
+
+        {viewOnly ? (
+          <div className="pj-note">
+            <div>
+              <b>Shared with you.</b> You can see everything and follow progress. Editing needs a
+              seat on the owner&rsquo;s account.
+            </div>
           </div>
-        </div>
-      ) : failed ? (
-        <div className="pj-note">
-          <div>
-            <b>Your project list could not be loaded just now.</b> The tabs are still the right
-            ones for {toolName(productKey)}; the name and client are what is missing.
+        ) : null}
+
+        {fullFailed ? (
+          <div className="pj-note">
+            <div>
+              <b>This project&rsquo;s bill could not be read just now.</b> Every figure below is
+              computed from it, so they are missing rather than zero. Reload, or open the
+              classic workspace, which reads it a different way.
+            </div>
           </div>
+        ) : failed ? (
+          <div className="pj-note">
+            <div>
+              <b>Your project list could not be loaded just now.</b> The tabs are still the right
+              ones for {toolName(productKey)}; the name and client are what is missing.
+            </div>
+          </div>
+        ) : null}
+
+        <div className="pj-tabs" role="tablist">
+          {tabs.map((t) => {
+            const count = tabCount(t.key, project);
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                onClick={() => go(t.key)}
+              >
+                {t.label}
+                {count != null ? <em>{count}</em> : null}
+                {tabNeedsAttention(t.key, project) ? (
+                  <i className="adlm-dot" aria-label="Needs attention" />
+                ) : null}
+              </button>
+            );
+          })}
         </div>
-      ) : null}
 
-      <div className="pj-tabs" role="tablist">
-        {tabs.map((t) => {
-          const count = tabCount(t.key, project);
-          return (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.key}
-              onClick={() => go(t.key)}
-            >
-              {t.label}
-              {count != null ? <em>{count}</em> : null}
-              {tabNeedsAttention(t.key, project) ? (
-                <i className="adlm-dot" aria-label="Needs attention" />
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+        <div className="pj-body">
+          {tab === "overview" && !fullFailed ? (
+            <WorkProjectOverview
+              project={project}
+              toolName={toolName(productKey)}
+              canEdit={!viewOnly}
+              onGo={go}
+            />
+          ) : tab === "bill" && !fullFailed ? (
+            <WorkProjectBill
+              project={project}
+              productKey={productKey}
+              canEdit={!viewOnly}
+              initialQuery={params.get("q") || ""}
+              onOpenLine={(index) => panel.show({ kind: "line", index })}
+              onGo={go}
+              onSave={save}
+              saving={saveState === "saving"}
+            />
+          ) : tab === "rates" && !fullFailed ? (
+            <WorkProjectRates
+              project={project}
+              canEdit={!viewOnly}
+              view={rateView}
+              onView={setRateView}
+              onOpenLine={(index) => panel.show({ kind: "line", index })}
+              onGo={go}
+              onSave={save}
+              saving={saveState === "saving"}
+            />
+          ) : tab === "pm" && !fullFailed ? (
+            <WorkProjectPm
+              project={project}
+              canEdit={!viewOnly}
+              view={rateView}
+              onView={setRateView}
+              onGo={go}
+              onPlan={planFromBill}
+              planning={planning}
+              planFailed={planFailed}
+            />
+          ) : tab === "valuations" && !fullFailed ? (
+            <WorkProjectValuations
+              project={project}
+              canEdit={!viewOnly}
+              view={rateView}
+              onView={setRateView}
+              onGo={go}
+            />
+          ) : tab === "model" && !fullFailed ? (
+            <WorkProjectModel project={project} canEdit={!viewOnly} onGo={go} />
+          ) : tab === "drawings" && !fullFailed ? (
+            <WorkProjectDrawings project={project} onOpenPlace={openPlace} />
+          ) : tab === "services" && !fullFailed ? (
+            <WorkProjectServices project={project} canEdit={!viewOnly} />
+          ) : null}
+        </div>
 
-      <div className="pj-body">
-        {tab === "overview" && !fullFailed ? (
-          <WorkProjectOverview
-            project={project}
-            toolName={toolName(productKey)}
-            canEdit={!viewOnly}
-            onGo={go}
-          />
-        ) : tab === "bill" && !fullFailed ? (
-          <WorkProjectBill
-            project={project}
-            productKey={productKey}
-            canEdit={!viewOnly}
-            initialQuery={params.get("q") || ""}
-            onOpenLine={(index) => panel.show({ kind: "line", index })}
-            onGo={go}
-            onSave={save}
-            saving={saveState === "saving"}
-          />
-        ) : tab === "rates" && !fullFailed ? (
-          <WorkProjectRates
-            project={project}
-            canEdit={!viewOnly}
-            view={rateView}
-            onView={setRateView}
-            onOpenLine={(index) => panel.show({ kind: "line", index })}
-            onGo={go}
-            onSave={save}
-            saving={saveState === "saving"}
-          />
-        ) : tab === "pm" && !fullFailed ? (
-          <WorkProjectPm
-            project={project}
-            canEdit={!viewOnly}
-            view={rateView}
-            onView={setRateView}
-            onGo={go}
-            onPlan={planFromBill}
-            planning={planning}
-            planFailed={planFailed}
-          />
-        ) : tab === "valuations" && !fullFailed ? (
-          <WorkProjectValuations
-            project={project}
-            canEdit={!viewOnly}
-            view={rateView}
-            onView={setRateView}
-            onGo={go}
-          />
-        ) : tab === "model" && !fullFailed ? (
-          <WorkProjectModel project={project} canEdit={!viewOnly} onGo={go} />
-        ) : tab === "drawings" && !fullFailed ? (
-          <WorkProjectDrawings project={project} onOpenPlace={openPlace} />
-        ) : tab === "services" && !fullFailed ? (
-          <WorkProjectServices project={project} canEdit={!viewOnly} />
+        {panel.content?.kind === "people" ? (
+          <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>
+            <WorkProjectPeople project={project} classicWorkspaceHref={classicWorkspaceHref} />
+          </WorkProjectPanel>
+        ) : null}
+
+        {report ? (
+          <React.Suspense fallback={null}>
+            <ReportModal
+              open
+              onClose={() => setReport("")}
+              type={report}
+              productKey={String(productKey || "").toLowerCase()}
+              projectId={project?._id || project?.id || id}
+            />
+          </React.Suspense>
+        ) : null}
+
+        {panel.content?.kind === "line" ? (
+          <WorkProjectPanel
+            title={linePanelTitle(project?.items, panel.content.index)}
+            visible={panel.visible}
+            onClose={panel.close}
+          >
+            <WorkProjectLinePanel
+              project={project}
+              index={panel.content.index}
+              canEdit={!viewOnly}
+              contractLocked={Boolean(project?.contract?.locked)}
+              onSave={save}
+              saving={saveState === "saving"}
+              onGoToLine={(i) => panel.show({ kind: "line", index: i })}
+              onGo={go}
+            />
+          </WorkProjectPanel>
         ) : null}
       </div>
-
-      {panel.content?.kind === "people" ? (
-        <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>
-          <WorkProjectPeople project={project} classicWorkspaceHref={classicWorkspaceHref} />
-        </WorkProjectPanel>
-      ) : null}
-
-      {report ? (
-        <React.Suspense fallback={null}>
-          <ReportModal
-            open
-            onClose={() => setReport("")}
-            type={report}
-            productKey={String(productKey || "").toLowerCase()}
-            projectId={project?._id || project?.id || id}
-          />
-        </React.Suspense>
-      ) : null}
-
-      {panel.content?.kind === "line" ? (
-        <WorkProjectPanel
-          title={linePanelTitle(project?.items, panel.content.index)}
-          visible={panel.visible}
-          onClose={panel.close}
-        >
-          <WorkProjectLinePanel
-            project={project}
-            index={panel.content.index}
-            canEdit={!viewOnly}
-            contractLocked={Boolean(project?.contract?.locked)}
-            onSave={save}
-            saving={saveState === "saving"}
-            onGoToLine={(i) => panel.show({ kind: "line", index: i })}
-            onGo={go}
-          />
-        </WorkProjectPanel>
-      ) : null}
     </DsAppShell>
   );
 }

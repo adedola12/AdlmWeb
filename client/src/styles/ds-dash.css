@@ -54,15 +54,6 @@
 .ds.dsh-fs .dsh-rail,
 .ds.dsh-fs .dsh-top,
 .ds.dsh-fs .dsh-scrim{display:none}
-/* The gutter the rail used to be.
-   The project workspace is the one screen in here that does NOT wrap itself in
-   .dsh-in, so its content sits at x=0 of .dsh-main and the rail's right edge is
-   what makes that look deliberate. Take the rail away and the title is against
-   the glass. This is the same gutter .dsh-in uses, at the same breakpoints, so
-   full screen reads like the rest of the app rather than like a page that lost
-   its margins — and normal mode is untouched, which is what keeps his design
-   his. */
-.ds.dsh-fs .dsh-main{padding:22px 36px var(--ada-clear)}
 
 
 /* ---------------------------------------------------------------- app bar */
@@ -315,7 +306,6 @@
 .ds .dsh-burger{display:flex}
 .ds .dsh-top{padding:0 20px}
 .ds .dsh-in{padding:24px 20px 56px}
-.ds.dsh-fs .dsh-main{padding:20px 20px var(--ada-clear)}
 .ds .dsh-search{display:none}
 }
 
@@ -727,7 +717,6 @@
 .ds .dsh-top{gap:10px;padding:0 16px}
 .ds .dsh-top .ttl{font-size:14.5px}
 .ds .dsh-in{padding:20px 16px 48px}
-.ds.dsh-fs .dsh-main{padding:16px 16px var(--ada-clear)}
 .ds .dsh-head{gap:16px;margin-bottom:22px}
 .ds .dsh-head h1{font-size:25px}
 .ds .dsh-head p{font-size:13.5px}

@@ -98,6 +98,14 @@ describe("what full screen actually does to the layout", () => {
     expect(bar?.body.replace(/\s/g, "")).toContain("--dash-bar:0px");
   });
 
+  // It used to override .dsh-main's padding, because the project page had no
+  // gutter of its own. It has one now — the .dsh-in his work-project.html
+  // always had — so a second source of padding here would be two rules to keep
+  // in step for one measurement.
+  it("does not set a gutter of its own", () => {
+    expect(dash.some((r) => /\.dsh-main/.test(r.sel) && /padding/.test(r.body))).toBe(false);
+  });
+
   it("re-sticks his tab strip to the top, where the bar was", () => {
     const tabs = fsRules("ds-work-proj.css").find((r) => r.sel.includes(".pj-tabs"));
     expect(tabs?.body.replace(/\s/g, "")).toContain("top:0");
