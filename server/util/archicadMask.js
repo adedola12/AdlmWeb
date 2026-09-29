@@ -19,10 +19,13 @@
 // `vat` and a test caught it holding ₦2.5m in plain sight, which is the whole
 // argument for denying by pattern AND checking the pattern.
 //
+// `budget` was the second gap: the BoQ document carries the owner's
+// targetBudget at its top level, and nothing above matched it.
+//
 // `net` and `gross` are deliberately absent: netCost / grossAmount already
 // match through cost and amount, while bare `net` would also catch `network`.
 const MONEY_KEY =
-  /(rate|cost|amount|total|price|margin|profit|overhead|subtotal|vat|tax|retention|contingency|prelim|provisional|discount|fee|sum)/i;
+  /(rate|cost|amount|total|price|margin|profit|overhead|subtotal|vat|tax|retention|contingency|prelim|provisional|discount|fee|sum|budget)/i;
 
 // Keys that match the pattern but carry no money and are worth keeping, so a
 // masked reader's screen still knows where a rate came from.

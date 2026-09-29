@@ -121,3 +121,10 @@ test("the tax, retention and provisional words are covered too", () => {
   assert.equal(out.lines[0].quantity, 12);
   assert.equal(out.lines[0].network, "n/a", "a word that merely contains 'net' is not money");
 });
+
+test("the owner's target budget is money too", () => {
+  // The document carries targetBudget at its top level; the first pattern had
+  // no word for it, so a masked reader could read the owner's budget.
+  const out = maskArchicadMoney({ targetBudget: 2_500_000, lines: [] }, false);
+  assert.equal(out.targetBudget, 0);
+});

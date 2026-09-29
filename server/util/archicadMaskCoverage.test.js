@@ -22,11 +22,12 @@ const SRC = fs.readFileSync(
 );
 const LINES = SRC.split(/\r?\n/);
 
-// POST /boq/extract is the one response that must NOT be masked: it is the
-// plugin posting its own model and reading back what it just priced, it never
-// goes through findProjectForUser, so req.projectAccess is undefined there —
-// and masking on a falsy value would zero the owner's own BoQ.
-const UNMASKED_BY_DESIGN = ["/boq/extract"];
+// There used to be one exception, POST /boq/extract: it never went through
+// findProjectForUser, so req.projectAccess was undefined there and masking on
+// it would have zeroed the owner's own BoQ. It now resolves access itself (a
+// full collaborator whose money is hidden must not read the owner's prices
+// back from their own model update), so nothing is unmasked by design.
+const UNMASKED_BY_DESIGN = [];
 
 function routeAbove(index) {
   for (let i = index; i >= 0; i--) {
@@ -58,14 +59,19 @@ test("every buildBoqDocument response is wrapped in maskArchicadMoney", () => {
   );
 });
 
-test("the extract route is still the only deliberate exception", () => {
-  // If this count moves, somebody added an unmasked BoQ response and the
-  // exception list above quietly absorbed it.
+test("no BoQ response is unmasked, the extract included", () => {
+  // If this count moves, somebody added an unmasked BoQ response.
   const unmasked = LINES.filter(
     (l) => l.includes("buildBoqDocument(") && /res\.json\(|boq:/.test(l) && !l.includes("maskArchicadMoney("),
   );
-  assert.equal(unmasked.length, 1, "expected exactly one unmasked BoQ response");
-  assert.equal(routeAbove(LINES.indexOf(unmasked[0])), "POST /boq/extract");
+  assert.deepEqual(unmasked, [], "expected no unmasked BoQ response");
+  // And the extract really is one of the masked ones.
+  const extract = LINES.findIndex((l) => l.includes('router.post("/boq/extract"'));
+  const next = LINES.findIndex((l, i) => i > extract && /router\.(get|post|put|patch|delete)\(/.test(l));
+  assert.ok(
+    LINES.slice(extract, next).some((l) => l.includes("maskArchicadMoney(buildBoqDocument(")),
+    "POST /boq/extract should mask its response",
+  );
 });
 
 test("no route returns a grandTotal without asking about rates first", () => {
