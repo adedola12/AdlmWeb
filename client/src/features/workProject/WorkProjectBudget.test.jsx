@@ -219,3 +219,26 @@ describe("a budget that exists but is not priced yet", () => {
     expect(within(c).getByText("No budget yet")).toBeTruthy();
   });
 });
+
+// The buy schedule reads like the Budget: what to buy, how much, what it costs,
+// on one line with the figures in columns. The amount used to sit inside the
+// material cell's sub-line as a compact figure — the one number a QS compares
+// when deciding what to order first.
+describe("the buy schedule's amount column", () => {
+  it("shows the amount in full, in its own cell", () => {
+    const row = buy().querySelector(".pj-buy .rw");
+    const cells = [...row.querySelectorAll(".n")];
+    expect(cells.length).toBeGreaterThanOrEqual(2);
+    // Last numeric cell is the money one.
+    expect(cells[cells.length - 1].textContent).toMatch(/[₦\d]/);
+  });
+
+  it("names the column in the header", () => {
+    expect(buy().querySelector(".pj-buy .hd").textContent).toContain("Amount");
+  });
+
+  it("keeps the ordered-so-far note on the material, not the money", () => {
+    const c = buy();
+    expect(c.querySelector(".pj-buy .rw .m .n")).toBe(null);
+  });
+});
