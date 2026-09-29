@@ -1848,3 +1848,16 @@
 }
 :root.mnav-open .ds .nav.stuck{background:var(--bg)}
 :root.mnav-open .ds .nav > .nav-in{position:relative;z-index:2}
+/* R09: client logos in the home "trusted by" strip (owner, 27 Sep 2026).
+   The porter swaps his text <span>s for <span class="clogo"><img>; a name with
+   no logo (Godaret) stays text and sits on the same centre line. Greyscale at
+   rest, colour on hover. Most of these marks are dark ink on transparent, so
+   on the dark and black themes each sits on a light tile rather than vanish. */
+.ds .marq-track{align-items:center}
+.ds .marq .clogo{display:inline-flex;align-items:center;justify-content:center;height:46px;padding:6px 12px;border-radius:10px}
+.ds .marq .clogo img{display:block;height:34px;width:auto;max-width:170px;object-fit:contain;
+  filter:grayscale(1);opacity:.72;transition:filter .25s ease,opacity .25s ease}
+.ds .marq .clogo:hover img{filter:none;opacity:1}
+:root.dark .ds .marq .clogo{background:#F2F4F7}
+:root.dark .ds .marq .clogo img{opacity:.85}
+@media (prefers-reduced-motion:reduce){.ds .marq .clogo img{transition:none}}

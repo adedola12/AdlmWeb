@@ -6,8 +6,12 @@
 // (Actions settings, secrets, tokens) can silence it. Checks:
 //   1. main is still a protected branch
 //   2. main was not force-pushed (history rewritten)
-//   3. every new commit on main belongs to a merged pull request that the
-//      release approver approved
+//   3. every change that LANDED on main (each step of main's first-parent
+//      line: a pull request's merge or squash commit, or a direct push)
+//      belongs to a merged pull request that the release approver approved.
+//      Commits carried in by a merge are covered by that merge's approval;
+//      checking each one on its own flagged old branch work arriving inside
+//      an approved merge (the 16-19 Sep alerts of 25-27 Sep 2026).
 // Findings go to the approver and the owner by SES, and to the locked bucket.
 //
 // State: the last commit it has vetted, in SSM (<prefix>/last-main-sha).
@@ -17,6 +21,7 @@
 import { SSMClient, GetParameterCommand, PutParameterCommand } from "@aws-sdk/client-ssm";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import { newCommits, landedOnMain, approvedByApprover } from "./gate.mjs";
 
 const ssm = new SSMClient({});
 const s3 = new S3Client({});
@@ -99,19 +104,6 @@ async function mail(to, subject, lines) {
   }
 }
 
-async function approvedByApprover(sha, approverLogin) {
-  const pulls = (await gh(`repos/${REPO}/commits/${sha}/pulls`)) || [];
-  const merged = pulls.filter((p) => p.merged_at && p.base?.ref === "main");
-  for (const pr of merged) {
-    const reviews = (await gh(`repos/${REPO}/pulls/${pr.number}/reviews?per_page=100`)) || [];
-    const ok = reviews.some(
-      (r) => r.state === "APPROVED" && String(r.user?.login || "").toLowerCase() === approverLogin.toLowerCase(),
-    );
-    if (ok) return { ok: true, pr: pr.number };
-  }
-  return { ok: false, pr: merged[0]?.number || null };
-}
-
 export async function handler() {
   token = await param("github-token", true);
   const approverEmail = await param("approver-email");
@@ -144,7 +136,7 @@ export async function handler() {
   } else if (head && head !== last && approverLogin) {
     let cmp;
     try {
-      cmp = await gh(`repos/${REPO}/compare/${last}...${head}`);
+      cmp = await newCommits(REPO, last, head, gh);
     } catch (err) {
       console.warn("[release-watch] compare failed, will retry:", err.message);
       cmp = undefined;
@@ -155,10 +147,10 @@ export async function handler() {
       );
       vetted = head;
     } else if (cmp) {
-      const commits = (cmp.commits || []).slice(0, MAX_COMMITS);
+      const commits = landedOnMain(head, cmp.commits || []).slice(0, MAX_COMMITS);
       try {
         for (const c of commits) {
-          const verdict = await approvedByApprover(c.sha, approverLogin);
+          const verdict = await approvedByApprover(REPO, c.sha, approverLogin, gh);
           if (!verdict.ok) {
             const title = String(c.commit?.message || "").split("\n")[0];
             const who = c.author?.login || c.commit?.author?.email || "unknown";

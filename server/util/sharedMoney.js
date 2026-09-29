@@ -42,6 +42,24 @@ export const ROLLUP_MONEY_FIELDS = Object.freeze([
   "totalCost",
   "valuedAmount",
   "remainingAmount",
+// The three totals every list row carries: measured work, what has been
+// valued and what is left. They were left unmasked when this masking was
+// first added, on the grounds that they predated it. That left a collaborator
+// without RateGen reading the value, the amount certified and the balance of
+// a project whose rates the project page itself hides from them (found in the
+// R4b review, 27 Sep 2026), so they are masked on both lists now. The field
+// stays on the row, as a number, so the plugins that parse the per-product
+// list as a bare array read a zero exactly as they already do on a masked
+// project GET; the screens show an en dash wherever `moneyHidden` is set.
+export const LIST_TOTAL_FIELDS = Object.freeze([
+  "totalCost",
+  "valuedAmount",
+  "remainingAmount",
+]);
+
+// The rollup fields /me/projects-rollup masks.
+export const ROLLUP_MONEY_FIELDS = Object.freeze([
+  ...LIST_TOTAL_FIELDS,
   "certifiedToDate",
   "provisionalTotal",
   "approvedVariationsTotal",
@@ -60,6 +78,11 @@ export const PROJECT_LIST_MONEY_FIELDS = Object.freeze([
   "totalCost",
   "valuedAmount",
   "remainingAmount",
+// The equivalent fields on a per-product project list row: the three totals,
+// the contract sum and the grand-summary cascade that builds the "Estimated"
+// figure.
+export const PROJECT_LIST_MONEY_FIELDS = Object.freeze([
+  ...LIST_TOTAL_FIELDS,
   "contractSum",
   "provisionalTotal",
   "approvedVariationsTotal",
@@ -84,6 +107,11 @@ export const MERGED_CONTRACT_MONEY_FIELDS = Object.freeze([
  * zero here too, and `moneyHidden` says so rather than letting a zero be
  * mistaken for "nothing certified".
  *
+ * `priced` survives the masking as a plain yes/no (does the bill carry any
+ * value at all?), because the gallery reads a project's stage from it and a
+ * hidden row would otherwise read as "Takeoff" whatever its real state. It
+ * says nothing about how much.
+ *
  * `rows` must already carry the `shared` flag (true when the row belongs to
  * someone else): an owner's own row is never masked.
  */
@@ -98,6 +126,7 @@ export function maskSharedMoney(rows, canSeeRates, fields = ROLLUP_MONEY_FIELDS)
     // a screen reading a figure we have just withheld. Without this, masking
     // totalCost would relabel a shared, fully priced job as un-priced.
     out.priced = Number(p.totalCost) > 0 || Number(p.contractSum) > 0;
+    if ("totalCost" in p) out.priced = Number(p.totalCost) > 0;
     for (const f of fields) out[f] = 0;
     out.moneyHidden = true;
     return out;

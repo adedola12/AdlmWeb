@@ -1,0 +1,75 @@
+# Checks the client before a pull request can be merged.
+#
+# WHY THIS EXISTS
+# The client deploys itself: Vercel builds every push to main and publishes it.
+# Until now nothing ran between "merge" and "customers have it", so a mistake
+# that only shows at runtime reached the live site. On 27 Sep 2026 that took
+# the whole site down for six hours (see client/scripts/check-render-safety.mjs).
+#
+# Two jobs, in the order they catch things:
+#   render-safety — a name used that nothing defines. Seconds to run, and the
+#                   exact failure that has now happened twice.
+#   build         — the real production build, including the SSR pass. Catches
+#                   a bad import path, a syntax error, or a missing asset.
+#
+# Not here on purpose: `npm run lint` in full. It reports 41 pre-existing
+# errors (unused variables, fast-refresh warnings). A check that is red on
+# arrival gets ignored, and then it protects nothing. Those are worth cleaning
+# up separately; render-safety holds the line that matters in the meantime.
+#
+# To make this binding, add "render-safety" and "build" as required status
+# checks on main in Settings > Branches. Until then it reports, and a red run
+# is visible on the pull request but does not block it.
+name: Client checks
+
+on:
+  pull_request:
+    paths:
+      - "client/**"
+      - ".github/workflows/client-checks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+
+# A newer commit on the same branch makes the older run pointless.
+concurrency:
+  group: client-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+        working-directory: client
+      - run: node scripts/gen-changelogs.mjs
+        working-directory: client
+      - run: npm run check:render
+        working-directory: client
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+        working-directory: client
+      # `build` runs prebuild first, so render safety is checked here as well.
+      # The separate job above exists to fail fast and to name the cause.
+      - run: npm run build
+        working-directory: client
+        env:
+          # The build only needs these to be present, not correct: nothing is
+          # called at build time. The real values are Vercel's.
+          VITE_API_BASE: https://api.adlmstudio.net

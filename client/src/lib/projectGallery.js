@@ -45,6 +45,9 @@ export function stageOf(p) {
   // would label a shared, fully priced job "takeoff". Rows that are not
   // masked have no `priced` field and answer from the figure, as before.
   if (typeof p?.priced === "boolean") return p.priced ? "priced" : "takeoff";
+  // A row whose money is withheld arrives with totalCost zeroed; the server
+  // keeps a plain yes/no `priced` so it still reads at the right stage.
+  if (isMoneyHidden(p) && typeof p?.priced === "boolean") return p.priced ? "priced" : "takeoff";
   return Number(p?.totalCost) > 0 ? "priced" : "takeoff";
 }
 
@@ -57,6 +60,10 @@ export function stageOf(p) {
  * once, on the reasoning that the screens would draw the line themselves;
  * three screens did not, and one of them defeated the mask entirely by
  * falling back to totalCost when the masked workValue read 0.
+ * GET /me/projects-rollup (and the per-product list) sets `moneyHidden` on a
+ * project somebody else owns when the reader may not see rates, and zeroes
+ * its money, including totalCost, valuedAmount and remainingAmount (masked
+ * since 27 Sep 2026; before that those three leaked).
  *
  * A screen must still never print money it is telling the reader it is
  * withholding: show an en dash and leave the row out of the totals, so a zero

@@ -34,7 +34,7 @@ function SpeakerCard({ speaker, palette }) {
   );
 }
 
-export default function EventTemplate({ flyer, accent, days, palette }) {
+export default function EventTemplate({ flyer, accent, palette }) {
   const speakers = (flyer.speakers || []).filter((s) => s.name && s.name.trim()).slice(0, 4);
   const presentersLabel = flyer.eventCategory === "Webinar" ? "PRESENTERS" : "FACULTY";
 

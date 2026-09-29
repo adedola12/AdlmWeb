@@ -18,7 +18,9 @@ const { signAccess } = await import("../middleware/auth.js");
 const { User } = await import("../models/User.js");
 const { Setting } = await import("../models/Setting.js");
 const { meDownloads } = await import("./downloads.js");
-const { canDownloadInstallerHub, HUB_REQUIRES_PAID } = await import("../util/installerHubAccess.js");
+const { canDownloadInstallerHub, DESKTOP_PRODUCT_KEYS, HUB_REQUIRES_PAID } = await import(
+  "../util/installerHubAccess.js"
+);
 const { _resetDownloadCache } = await import("../util/downloadLinks.js");
 
 const HUB_URL = "https://downloads.example.test/ADLM-Installer-Hub-Setup.exe";
@@ -137,4 +139,47 @@ test("the pure rule: one live licence among expired ones is enough", () => {
   assert.equal(canDownloadInstallerHub(u, now), true);
   assert.equal(canDownloadInstallerHub(customer([ent("revit", "active", new Date(now - DAY))]), now), false);
   assert.equal(canDownloadInstallerHub(null, now), false);
+});
+
+// ── Only a DESKTOP licence counts (owner decision 2026-09-27) ───────────────
+
+test("a live course alone does not unlock the Hub: 403", async () => {
+  current = customer([ent("BIMMEP", "active", new Date(Date.now() + 30 * DAY))]);
+  const r = await getHub();
+  assert.equal(r.status, 403);
+  assert.equal(r.body.code, HUB_REQUIRES_PAID);
+  assert.equal(r.body.url, undefined);
+});
+
+test("a live web add-on alone does not unlock the Hub", () => {
+  const now = Date.UTC(2026, 8, 27);
+  for (const key of ["boq-import", "ai", "bimbld"]) {
+    assert.equal(canDownloadInstallerHub(customer([ent(key, "active", new Date(now + DAY))]), now), false, key);
+  }
+});
+
+test("every product the Hub installs unlocks it, whatever the key's case", () => {
+  const now = Date.UTC(2026, 8, 27);
+  for (const key of DESKTOP_PRODUCT_KEYS) {
+    assert.equal(canDownloadInstallerHub(customer([ent(key, "active", new Date(now + DAY))]), now), true, key);
+  }
+  assert.equal(canDownloadInstallerHub(customer([ent("Revit", "active")]), now), true);
+});
+
+test("a course plus an EXPIRED desktop licence is still refused", () => {
+  const now = Date.UTC(2026, 8, 27);
+  const u = customer([
+    ent("BIMMEP", "active", new Date(now + DAY)),
+    ent("planswift", "active", new Date(now - DAY)),
+  ]);
+  assert.equal(canDownloadInstallerHub(u, now), false);
+});
+
+test("the desktop list covers the live catalogue's installable products and no course", () => {
+  // Live catalogue, 27 Sep 2026: qs-takeoff, civil3d, mep, planswift, rategen,
+  // revit are software; BIMMEP and bimbld are courses.
+  for (const k of ["qs-takeoff", "civil3d", "mep", "planswift", "rategen", "revit", "archicad"]) {
+    assert.ok(DESKTOP_PRODUCT_KEYS.has(k), k);
+  }
+  for (const k of ["bimmep", "BIMMEP", "bimbld"]) assert.equal(DESKTOP_PRODUCT_KEYS.has(k), false, k);
 });

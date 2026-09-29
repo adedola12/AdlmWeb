@@ -59,6 +59,8 @@ import { isMoneyHidden } from "../lib/projectGallery.js";
 // Placeholder for a figure this reader may not see. En dash, like everywhere
 // else a value is absent.
 const DASH = "–";
+import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { isMoneyHidden } from "../lib/projectGallery.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -844,6 +846,8 @@ export default function DsWorkProgramme() {
               <div className="f">
                 <div>
                   <b>{isMoneyHidden(p) ? DASH : money(p.totalCost)}</b>
+                  {/* Withheld money arrives as zero; show the en dash, never ₦0. */}
+                  <b>{isMoneyHidden(p) ? "–" : money(p.totalCost)}</b>
                   <span>bill value</span>
                 </div>
                 <div>

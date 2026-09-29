@@ -12,6 +12,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { getIfcApi } from "./ifcElements.js";
+import { elongatedFrame } from "./modelFraming.js";
 
 const HIGHLIGHT_COLOR = new THREE.Color(0xf97316); // orange-500
 const HIGHLIGHT_EMISSIVE = new THREE.Color(0x7c2d12);
@@ -231,16 +232,29 @@ export class IfcViewer {
   _fitToScene() {
     this.modelGroup.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.modelGroup);
-    if (!box.isEmpty()) this._frameBox(box, 1.3);
+    if (box.isEmpty()) return;
+    // A long corridor fitted whole is a grey line: frame its first stretch
+    // and look along it instead (lib/modelFraming.js).
+    const corridor = elongatedFrame(box);
+    if (corridor) {
+      const part = new THREE.Box3(
+        new THREE.Vector3(corridor.min.x, corridor.min.y, corridor.min.z),
+        new THREE.Vector3(corridor.max.x, corridor.max.y, corridor.max.z),
+      );
+      const { x, y, z } = corridor.dir;
+      this._frameBox(part, 1.2, new THREE.Vector3(x, y, z));
+      return;
+    }
+    this._frameBox(box, 1.3);
   }
 
-  _frameBox(box, factor = 1.4) {
+  _frameBox(box, factor = 1.4, viewDir = null) {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) || 10;
     const dist =
       (maxDim * factor) / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
-    const dir = new THREE.Vector3(1, 0.8, 1).normalize();
+    const dir = (viewDir ? viewDir.clone() : new THREE.Vector3(1, 0.8, 1)).normalize();
     this.camera.position.copy(center.clone().add(dir.multiplyScalar(dist)));
     this.camera.near = Math.max(dist / 1000, 0.01);
     this.camera.far = dist * 1000;

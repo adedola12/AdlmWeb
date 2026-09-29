@@ -29,6 +29,18 @@ const COLLABORATOR = new mongoose.Types.ObjectId();
 const STRANGER = new mongoose.Types.ObjectId();
 const PROJECT_ID = new mongoose.Types.ObjectId();
 
+// Both exports are priced, so a collaborator also needs RateGen to export
+// (projects.boq.rateGen.test.js pins the refusal). The collaborator here holds
+// it, so these tests stay about access levels and the exporter itself.
+User.findById = (id) => {
+  const doc = {
+    _id: id,
+    entitlements:
+      String(id) === String(COLLABORATOR) ? [{ productKey: "rategen", status: "active" }] : [],
+  };
+  return { lean: async () => doc, then: (ok, ko) => Promise.resolve(doc).then(ok, ko) };
+};
+
 function projectDoc(extra = {}) {
   return {
     _id: PROJECT_ID,

@@ -45,7 +45,21 @@ export function apiMongoOptions(env = process.env) {
   const waitQueue = num(env.MONGO_WAIT_QUEUE_TIMEOUT_MS, 10000);
   if (socket > 0) out.socketTimeoutMS = socket;
   if (waitQueue > 0) out.waitQueueTimeoutMS = waitQueue;
+  // No index or collection building from API containers. With these on, every
+  // cold container queued ~324 createCollection/createIndex commands in its
+  // pool ahead of real queries, and a deploy's wave of cold containers made
+  // those queries wait past waitQueueTimeoutMS: the post-deploy 503 burst
+  // (util/indexSync.js has the numbers). The scheduled job builds indexes
+  // instead. MONGO_AUTO_INDEX=true in SSM restores mongoose's default.
+  if (!truthy(env.MONGO_AUTO_INDEX)) {
+    out.autoIndex = false;
+    out.autoCreate = false;
+  }
   return out;
+}
+
+function truthy(v) {
+  return /^(1|true|yes|on)$/i.test(String(v ?? "").trim());
 }
 
 // Errors that mean "the database did not answer", as opposed to "the database

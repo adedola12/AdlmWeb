@@ -148,6 +148,33 @@ test("a shared row still reports whether it is priced", async () => {
   rows = [row({ shared: true })];
   const res = await list();
   assert.equal(res.body[0].priced, true);
+test("measured work, value to date and balance are withheld too", async () => {
+  me = { _id: USER_ID, email: "qs@example.com", entitlements: [planswift()] };
+  rows = [row({ shared: true })];
+  const res = await list();
+  // These three were left unmasked when this gate was added, which let a
+  // collaborator without RateGen read the value, the amount certified and the
+  // balance of a project whose rates the project page hides from them. The
+  // fields stay on the row as numbers, so a plugin reads a zero.
+  assert.equal(res.body[0].totalCost, 0);
+  assert.equal(res.body[0].valuedAmount, 0);
+  assert.equal(res.body[0].remainingAmount, 0);
+  // Whether the bill is priced at all survives, so the stage still reads right.
+  assert.equal(res.body[0].priced, true);
+});
+
+test("a RateGen reader and the owner still see all three", async () => {
+  me = { _id: USER_ID, email: "qs@example.com", entitlements: [planswift(), rategen()] };
+  rows = [row({ shared: true })];
+  const shared = await list();
+  assert.equal(shared.body[0].totalCost, 40_000_000);
+  assert.equal(shared.body[0].remainingAmount, 27_000_000);
+
+  me = { _id: USER_ID, email: "qs@example.com", entitlements: [planswift()] };
+  rows = [row()];
+  const own = await list();
+  assert.equal(own.body[0].totalCost, 40_000_000);
+  assert.equal(own.body[0].valuedAmount, 13_000_000);
 });
 
 test("the shape a plugin reads is unchanged — a bare array, same rows, same order", async () => {

@@ -30,6 +30,13 @@ describe("STAGES", () => {
 });
 
 describe("stageOf", () => {
+  it("reads a withheld row's stage from `priced`, not its zeroed totalCost", () => {
+    expect(stageOf(row({ moneyHidden: true, totalCost: 0, priced: true }))).toBe("priced");
+    expect(stageOf(row({ moneyHidden: true, totalCost: 0, priced: false }))).toBe("takeoff");
+    // `priced` means nothing on a row whose money is not hidden.
+    expect(stageOf(row({ totalCost: 0, priced: true }))).toBe("takeoff");
+  });
+
   it("is Takeoff while nothing is priced", () => {
     expect(stageOf(row())).toBe("takeoff");
   });
