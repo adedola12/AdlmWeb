@@ -313,17 +313,12 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
   let reproducesRate = true;
 
   if (net > 0 && billAmount > 0) {
-    const markupPct = (billAmount / net - 1) * 100;
-    if (markupPct >= 0) {
-      // Report it the way the Budget tab does: overhead to its constant first,
-      // then whatever is left is profit.
-      oh = round(Math.min(markupPct, K.get(MC.MarkupOverheadPercent)), 4);
-      pr = round(markupPct - oh, 4);
-    } else {
-      // The build-up costs more than the rate sells for. groupMarkup clamps a
-      // percentage at 0, so a negative markup cannot be carried there without
-      // the rate failing to reproduce and the bill rising on a GET. One named
-      // row absorbs the difference instead, and the QS is told.
+    // The build-up costs more than the rate sells for. groupMarkup clamps a
+    // percentage at 0, so a negative markup cannot be carried there without
+    // the rate failing to reproduce and the bill rising on a GET. One named
+    // row absorbs the difference instead, and the QS is told.
+    const reconciled = billAmount < net;
+    if (reconciled) {
       const target = billAmount / (1 + (overheadPercent + profitPercent) / 100);
       const adjustment = round(target - net);
       rows.push({
@@ -336,12 +331,39 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
           "This rate prices the work below what its build-up costs at today's prices. " +
           "This line holds the difference so the bill rate stays exactly as picked.",
       });
-      oh = overheadPercent;
-      pr = profitPercent;
       net += adjustment;
       warnings.push(
         `${code}: the build-up costs more than the picked rate. The bill rate is unchanged and the difference is on a "Rate reconciliation" line.`,
       );
+    }
+
+    // Back-solve the O&P on the net the rows actually carry. Report it the way
+    // the Budget tab does: overhead to its constant first, then whatever is
+    // left is profit. A reconciled line keeps the rate's own overhead, and its
+    // profit takes up the part of a kobo the rounded reconciliation row could
+    // not (at 1 m³, net × 1.35 moves in 1.35-kobo steps and can skip the rate).
+    //
+    // The percentages are stored too, so they get rounded as well, but to no
+    // fewer places than the pick needs. At a fixed 4dp a markup of 20.0137497…%
+    // drops ₦0.50 across 100 m³ and a ₦12,150 rate reads back ₦12,149.99.
+    // Take the tidiest precision that still reproduces the rate to the kobo.
+    const markupPct = Math.max(0, (billAmount / net - 1) * 100);
+    const ohBase = Math.min(
+      markupPct,
+      reconciled ? overheadPercent : K.get(MC.MarkupOverheadPercent),
+    );
+    const wanted = round(unitCost);
+    const reproduces = (o, p) => round((net * (1 + (o + p) / 100)) / billQty) === wanted;
+    oh = ohBase;
+    pr = markupPct - ohBase;
+    for (let dp = 4; dp <= 12; dp += 1) {
+      const o = round(ohBase, dp);
+      const p = round(markupPct - o, dp);
+      if (reproduces(o, p)) {
+        oh = o;
+        pr = p;
+        break;
+      }
     }
   } else {
     reproducesRate = false;
