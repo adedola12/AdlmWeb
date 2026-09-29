@@ -34,6 +34,9 @@ export default function WorkProjectPm({
   view = "timeline",
   onView,
   onGo,
+  onPlan,
+  planning = false,
+  planFailed = "",
   now: nowProp,
 }) {
   // Fixed for the life of the mount. A fresh Date() on every render would make
@@ -74,13 +77,24 @@ export default function WorkProjectPm({
         </p>
         <p className="ds-sub">
           {canEdit
-            ? "Planning is done in the full workspace for now."
+            ? "One task per section, dated in bill order. Move them afterwards — planning again never touches a task you have already changed."
             : "No tasks have been planned yet."}
         </p>
+        {planFailed ? <p className="ds-sub">{planFailed}</p> : null}
         {canEdit ? (
-          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => onGo?.("bill")}>
-            Back to the bill
-          </button>
+          <div className="pj-acts">
+            <button
+              type="button"
+              className="ds-btn btn-p ds-btn-sm"
+              disabled={planning || !items.length}
+              onClick={() => onPlan?.()}
+            >
+              {planning ? "Planning…" : "Plan the work from the bill"}
+            </button>
+            <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => onGo?.("bill")}>
+              Back to the bill
+            </button>
+          </div>
         ) : null}
       </div>
     );

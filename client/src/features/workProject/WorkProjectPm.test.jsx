@@ -245,3 +245,52 @@ describe("a project with nothing planned", () => {
     expect(() => render(<WorkProjectPm project={null} now={NOW} />)).not.toThrow();
   });
 });
+
+describe("planning the work from the bill", () => {
+  // The missing middle of the chain. With no tasks nothing has a date, so the
+  // buy schedule cannot work out a buy-by (earliest linked task start less the
+  // lead time), the PM dashboard has no KPIs and there is no cashflow.
+  const unplanned = { name: "Richard House", items: [{ code: "BQ-1", qty: 1, rate: 100 }], pm: { tasks: [] } };
+
+  it("offers to plan it, to someone who can edit", () => {
+    const c = render(<WorkProjectPm project={unplanned} canEdit onPlan={() => {}} />).container;
+    expect(within(c).getByText("Plan the work from the bill")).toBeTruthy();
+  });
+
+  it("says planning again will not disturb a task already changed", () => {
+    const c = render(<WorkProjectPm project={unplanned} canEdit onPlan={() => {}} />).container;
+    expect(within(c).getByText(/never touches a task you have already changed/)).toBeTruthy();
+  });
+
+  it("asks the shell to plan when pressed", () => {
+    const onPlan = vi.fn();
+    const c = render(<WorkProjectPm project={unplanned} canEdit onPlan={onPlan} />).container;
+    fireEvent.click(within(c).getByText("Plan the work from the bill"));
+    expect(onPlan).toHaveBeenCalled();
+  });
+
+  it("will not plan a project with no bill to plan from", () => {
+    const c = render(
+      <WorkProjectPm project={{ items: [], pm: { tasks: [] } }} canEdit onPlan={() => {}} />,
+    ).container;
+    expect(within(c).getByText("Plan the work from the bill").disabled).toBe(true);
+  });
+
+  it("holds the button while the server is working", () => {
+    const c = render(<WorkProjectPm project={unplanned} canEdit onPlan={() => {}} planning />).container;
+    expect(within(c).getByText("Planning…").disabled).toBe(true);
+  });
+
+  it("says so when it failed, and that nothing changed", () => {
+    const c = render(
+      <WorkProjectPm project={unplanned} canEdit onPlan={() => {}} planFailed="It could not be generated. Nothing was changed." />,
+    ).container;
+    expect(within(c).getByText(/Nothing was changed/)).toBeTruthy();
+  });
+
+  it("offers a view-only reader nothing to press", () => {
+    const c = render(<WorkProjectPm project={unplanned} canEdit={false} />).container;
+    expect(within(c).queryByText("Plan the work from the bill")).toBe(null);
+    expect(within(c).getByText("No tasks have been planned yet.")).toBeTruthy();
+  });
+});

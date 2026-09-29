@@ -221,6 +221,46 @@ export default function WorkProjectShell({ productKey, id }) {
   // canManage is owner-only on the server (routes/projects.js:899), which is
   // exactly who his Collaborators entry is for.
   const isOwner = project?._access?.canManage === true;
+  // "Plan the work from the bill" — the programme the rest of this page needs.
+  //
+  // The generator is the server's: POST /pm/generate-from-boq, which already
+  // dates one task per bill line, links each to its bill identity, and leaves
+  // every task that already exists alone. onlyUnlinked keeps that promise
+  // explicit — planning twice adds what is missing rather than rebuilding a
+  // programme somebody has adjusted.
+  //
+  // It is the missing middle of the chain: with no tasks nothing has a date, so
+  // the buy schedule cannot work out a buy-by (it is the earliest linked task's
+  // start less the lead time), the PM dashboard has no KPIs and there is no
+  // cashflow. One call fills all three.
+  const [planning, setPlanning] = React.useState(false);
+  const [planFailed, setPlanFailed] = React.useState("");
+  const planFromBill = React.useCallback(async () => {
+    if (viewOnly || planning) return;
+    setPlanning(true);
+    setPlanFailed("");
+    try {
+      await apiAuthed(
+        `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(id)}/pm/generate-from-boq`,
+        { token: accessToken, method: "POST", body: { onlyUnlinked: true } },
+      );
+      // Re-read rather than patch our copy: the server dates the tasks, and
+      // guessing those dates here is how the Gantt and the buy schedule come to
+      // disagree about the same programme.
+      const fresh = await apiAuthed(
+        `/projects/${encodeURIComponent(productKey)}/by-slug/${encodeURIComponent(id)}`,
+        { token: accessToken },
+      );
+      setFull(fresh?.project || fresh || null);
+    } catch (e) {
+      setPlanFailed(
+        e?.message ||
+          "The programme could not be generated just now. Nothing was changed.",
+      );
+    } finally {
+      setPlanning(false);
+    }
+  }, [viewOnly, planning, productKey, id, accessToken]);
   const clientName = String(project?.clientName || project?.client || "").trim();
   // The file his line names is the model the take-off came from.
   const sourceFileName = attachedModels(project)[0]?.sourceFile || "";
@@ -411,6 +451,9 @@ export default function WorkProjectShell({ productKey, id }) {
             view={rateView}
             onView={setRateView}
             onGo={go}
+            onPlan={planFromBill}
+            planning={planning}
+            planFailed={planFailed}
           />
         ) : tab === "valuations" && !fullFailed ? (
           <WorkProjectValuations
