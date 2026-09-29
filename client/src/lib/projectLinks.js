@@ -3,7 +3,7 @@
 // Where a project opens, and which product it belongs to — one answer for the
 // Work overview, the projects list and the programme.
 //
-// Projects open in the full workspace (/projects/:tool), the screen with the
+// Projects open in the classic workspace (/projects/:tool), the screen with the
 // bill, budget, valuation, PM views and the Work area. The link carries the
 // project's slug, not its database id: the id is an internal key and has no
 // business in an address bar people copy and share. A project with no slug

@@ -25,7 +25,7 @@ const when = (d) => {
     : "";
 };
 
-export default function WorkProjectPeople({ project, fullWorkspaceHref }) {
+export default function WorkProjectPeople({ project, classicWorkspaceHref }) {
   const people = Array.isArray(project?.collaborators) ? project.collaborators : [];
   const codes = Array.isArray(project?.shareCodes) ? project.shareCodes : [];
   const live = codes.filter((c) => !c.revoked).length;
@@ -61,7 +61,7 @@ export default function WorkProjectPeople({ project, fullWorkspaceHref }) {
         <p className="hint">
           {live === 1 ? "One code can be used" : `${live} codes can be used`} to join this project.
         </p>
-        <Link className="ds-btn btn-o ds-btn-sm" to={fullWorkspaceHref}>
+        <Link className="ds-btn btn-o ds-btn-sm" to={classicWorkspaceHref}>
           Manage codes and access
         </Link>
       </div>

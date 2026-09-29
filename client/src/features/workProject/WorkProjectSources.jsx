@@ -42,7 +42,7 @@ export function WorkProjectModel({ project, canEdit = false, onGo }) {
           it — anything that moved is flagged here.
         </p>
         {canEdit ? (
-          <p className="ds-sub">Uploading is done in the full workspace.</p>
+          <p className="ds-sub">Uploading is done in the classic workspace.</p>
         ) : null}
       </div>
     );
@@ -230,7 +230,7 @@ export function WorkProjectServices({ project, canEdit = false }) {
             total joins this project&rsquo;s.
           </p>
           {canEdit ? (
-            <p className="ds-sub">Linking is done in the full workspace.</p>
+            <p className="ds-sub">Linking is done in the classic workspace.</p>
           ) : null}
         </div>
       )}

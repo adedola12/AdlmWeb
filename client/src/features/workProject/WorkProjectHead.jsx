@@ -45,7 +45,8 @@ export default function WorkProjectHead({
   canEdit = false,
   isOwner = false,
   canSeePm = true,
-  fullWorkspaceHref,
+  classicWorkspaceHref,
+  fullScreen = false,
   onAction,
 }) {
   const navigate = useNavigate();
@@ -60,8 +61,8 @@ export default function WorkProjectHead({
     [projects, projectId, term],
   );
   const actions = React.useMemo(
-    () => overflowActions({ isOwner, canSeePm }),
-    [isOwner, canSeePm],
+    () => overflowActions({ isOwner, canSeePm, fullScreen }),
+    [isOwner, canSeePm, fullScreen],
   );
 
   // His rule: the tab you were on survives the jump if the project jumped to is
@@ -95,6 +96,20 @@ export default function WorkProjectHead({
             </>
           ) : null}
         </span>
+      ) : null}
+
+      {/* Full screen hides the rail and the app bar, which are the two things
+          that normally say "there is a way out of here". A mode you can only
+          leave through a menu you have to remember is a trap, so the way out is
+          on the page — and Escape does it too (WorkProjectShell). */}
+      {fullScreen ? (
+        <button
+          type="button"
+          className="ds-btn btn-o ds-btn-sm"
+          onClick={() => onAction?.("full")}
+        >
+          Leave full screen
+        </button>
       ) : null}
 
       <button
@@ -160,10 +175,10 @@ export default function WorkProjectHead({
       {open === "more" ? (
         <WorkProjectPopover anchorRef={moreRef} label="More actions" onClose={close}>
           {actions.map((a) =>
-            a.key === "full" ? (
+            a.key === "classic" ? (
               <Link
                 key={a.key}
-                to={fullWorkspaceHref}
+                to={classicWorkspaceHref}
                 // .pj-pop styles its own buttons; an <a> in the same list needs
                 // the same box, which is what he does for his plugin link
                 // (work-proj.js:465).

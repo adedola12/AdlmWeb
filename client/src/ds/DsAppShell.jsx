@@ -76,12 +76,20 @@ function initialsOf(text, fallback) {
  *                                          would. Two tab rows stacked is not a
  *                                          spacing problem, it is two different
  *                                          navigations in the same place.
+ * @param {boolean} [props.full]             full screen: the rail and the app
+ *                                          bar go and the screen takes the
+ *                                          viewport. Only the project
+ *                                          workspace asks for it — a bill of
+ *                                          280 lines beside a 264px rail is
+ *                                          the reason — and the screen that
+ *                                          asks owns the way back out of it.
  */
 export default function DsAppShell({
   children,
   title = "",
   page = "",
   sectionTabs = true,
+  full = false,
 }) {
   const { user, accessToken, clear } = useAuth();
   const staff = isStaff(user);
@@ -250,7 +258,7 @@ export default function DsAppShell({
   };
 
   return (
-    <div className="ds">
+    <div className={full ? "ds dsh-fs" : "ds"}>
       {/* Every screen inside this shell is behind ProtectedRoute: a crawler
           that reaches one can only be redirected to /login, so indexing it
           spends crawl budget to publish a page nobody can open. robots.txt

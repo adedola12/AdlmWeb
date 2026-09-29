@@ -37,6 +37,33 @@
 .ds .dsh-in{max-width:none;padding:28px 36px 72px}
    /* Richard: the dashboard fills the viewport */
 
+/* ------------------------------------------------------------ full screen
+   A screen that has asked for the whole viewport (DsAppShell's `full`). The
+   rail and the app bar go and the grid drops to one column; nothing else about
+   the screen changes, so it is the same screen in both modes rather than a
+   second layout to keep in step.
+
+   --dash-bar goes to 0 with them, because a dozen rules elsewhere reserve
+   space for a bar that is no longer there — sticky offsets, scroll-margin for
+   #anchors, the lesson sidebar's height. One variable, not a dozen overrides.
+
+   The rail drawer's scrim goes too: its burger is in the bar, so nothing can
+   open it, and a scrim left behind would swallow clicks. */
+.ds.dsh-fs{--dash-bar:0px}
+.ds.dsh-fs .dsh{grid-template-columns:1fr}
+.ds.dsh-fs .dsh-rail,
+.ds.dsh-fs .dsh-top,
+.ds.dsh-fs .dsh-scrim{display:none}
+/* The gutter the rail used to be.
+   The project workspace is the one screen in here that does NOT wrap itself in
+   .dsh-in, so its content sits at x=0 of .dsh-main and the rail's right edge is
+   what makes that look deliberate. Take the rail away and the title is against
+   the glass. This is the same gutter .dsh-in uses, at the same breakpoints, so
+   full screen reads like the rest of the app rather than like a page that lost
+   its margins — and normal mode is untouched, which is what keeps his design
+   his. */
+.ds.dsh-fs .dsh-main{padding:22px 36px var(--ada-clear)}
+
 
 /* ---------------------------------------------------------------- app bar */
 .ds .dsh-top{position:sticky;top:0;z-index:70;height:var(--dash-bar);flex:none;
@@ -288,6 +315,7 @@
 .ds .dsh-burger{display:flex}
 .ds .dsh-top{padding:0 20px}
 .ds .dsh-in{padding:24px 20px 56px}
+.ds.dsh-fs .dsh-main{padding:20px 20px var(--ada-clear)}
 .ds .dsh-search{display:none}
 }
 
@@ -699,6 +727,7 @@
 .ds .dsh-top{gap:10px;padding:0 16px}
 .ds .dsh-top .ttl{font-size:14.5px}
 .ds .dsh-in{padding:20px 16px 48px}
+.ds.dsh-fs .dsh-main{padding:16px 16px var(--ada-clear)}
 .ds .dsh-head{gap:16px;margin-bottom:22px}
 .ds .dsh-head h1{font-size:25px}
 .ds .dsh-head p{font-size:13.5px}

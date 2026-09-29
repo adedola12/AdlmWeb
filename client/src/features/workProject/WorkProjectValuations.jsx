@@ -86,7 +86,7 @@ function LockedOut({ project, canEdit, drift, onGo }) {
           className={ready ? "ds-btn btn-p ds-btn-sm" : "ds-btn btn-o ds-btn-sm"}
           onClick={() => onGo?.("overview")}
         >
-          {ready ? "Lock the contract on the full workspace" : "See the project stages"}
+          {ready ? "Lock the contract on the classic workspace" : "See the project stages"}
         </button>
       ) : null}
     </div>
@@ -235,7 +235,7 @@ function Certificates({ bars, certs, contractSum, canEdit }) {
             <b>No valuations yet</b>
             <p>
               {canEdit
-                ? "Record progress on the bill, then raise the first certificate in the full workspace."
+                ? "Record progress on the bill, then raise the first certificate in the classic workspace."
                 : "Nothing has been certified on this contract yet."}
             </p>
           </div>

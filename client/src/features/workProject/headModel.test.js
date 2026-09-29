@@ -98,9 +98,23 @@ describe("what the overflow offers", () => {
     expect(shared).not.toContain("people");
   });
 
-  it("offers both reports and the full workspace to everyone", () => {
+  it("offers both reports and both workspaces to everyone", () => {
     const keys = overflowActions({ isOwner: false }).map((a) => a.key);
-    expect(keys).toEqual(["id", "report", "pm-report", "full"]);
+    expect(keys).toEqual(["id", "report", "pm-report", "full", "classic"]);
+  });
+
+  // The two used to be one entry, and it navigated away — which is not what
+  // "full workspace" means to anybody reading it.
+  it("keeps full screen and the classic screen as separate entries", () => {
+    const keys = overflowActions({}).map((a) => a.key);
+    expect(keys).toContain("full");
+    expect(keys).toContain("classic");
+  });
+
+  it("says which way full screen will go", () => {
+    const label = (o) => overflowActions(o).find((a) => a.key === "full").label;
+    expect(label({})).toBe("Open the full workspace");
+    expect(label({ fullScreen: true })).toBe("Leave the full workspace");
   });
 
   it("leaves out the PM report on a project with no PM tab", () => {

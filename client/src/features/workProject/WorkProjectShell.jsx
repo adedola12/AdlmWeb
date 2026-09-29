@@ -98,7 +98,7 @@ export default function WorkProjectShell({ productKey, id }) {
 
   // The rollup carries the head — name, client, tool — but not the bill, and
   // the Overview is mostly arithmetic over bill lines. This is the same
-  // address the full workspace loads a project from
+  // address the classic workspace loads a project from
   // (ProjectsGeneric.jsx:278), so there is one way in, not two.
   const [full, setFull] = React.useState(null);
   const [fullFailed, setFullFailed] = React.useState(false);
@@ -129,6 +129,21 @@ export default function WorkProjectShell({ productKey, id }) {
   // rides in the URL like the tab does, so a link to a view is shareable and
   // Back walks them.
   const rateView = params.get("view") || "rates";
+
+  // FULL SCREEN
+  //
+  // In the URL, like the tab and the rate view, for the same three reasons: a
+  // reload stays where you were, the link you send opens the way you left it,
+  // and Back leaves the mode instead of leaving the project. `replace` is
+  // deliberately NOT used — going full screen is a navigation a QS will want to
+  // undo with the browser's own back button.
+  const fullScreen = params.get("full") === "1";
+  const toggleFullScreen = React.useCallback(() => {
+    const q = new URLSearchParams(params);
+    if (q.get("full") === "1") q.delete("full");
+    else q.set("full", "1");
+    setParams(q);
+  }, [params, setParams]);
   const setRateView = React.useCallback(
     (next) => {
       const q = new URLSearchParams(params);
@@ -227,7 +242,9 @@ export default function WorkProjectShell({ productKey, id }) {
   // classic=1 is the "I meant it" marker ClassicProjectRedirect looks for.
   // Without it the redirect would send this link straight back here, and the
   // two screens would bounce a reader between them.
-  const fullWorkspaceHref = `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}&classic=1`;
+  // The OLDER screen, not this one full screen. `classic=1` is what stops
+  // ClassicProjectRedirect bouncing straight back here.
+  const classicWorkspaceHref = `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}&classic=1`;
   // canManage is owner-only on the server (routes/projects.js:899), which is
   // exactly who his Collaborators entry is for.
   const isOwner = project?._access?.canManage === true;
@@ -295,12 +312,30 @@ export default function WorkProjectShell({ productKey, id }) {
         else no();
         return;
       }
+      if (action === "full") {
+        toggleFullScreen();
+        return;
+      }
       if (action === "report") setReport("project");
       if (action === "pm-report") setReport("pm");
       if (action === "retry" && lastPatch.current) save(lastPatch.current);
     },
-    [panel, project, fb, save],
+    [panel, project, fb, save, toggleFullScreen],
   );
+
+  // Escape leaves full screen — but only when it is the outermost thing open.
+  // A line panel and a report dialog both close on Escape too, and a key that
+  // dismisses two layers at once loses the one the reader meant.
+  React.useEffect(() => {
+    if (!fullScreen) return undefined;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (panel.visible || report) return;
+      toggleFullScreen();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [fullScreen, panel.visible, report, toggleFullScreen]);
 
   // His "that project is not on this account" (work-proj.js:310).
   //
@@ -329,7 +364,12 @@ export default function WorkProjectShell({ productKey, id }) {
   return (
     // sectionTabs={false}: his work-project.html carries no tab strip above
     // the breadcrumb — the page's own .pj-tabs are its navigation.
-    <DsAppShell title={project?.name || "Project"} page="work-projects" sectionTabs={false}>
+    <DsAppShell
+      title={project?.name || "Project"}
+      page="work-projects"
+      sectionTabs={false}
+      full={fullScreen}
+    >
       <div className="pj-head">
         <nav className="pj-crumb">
           <Link to="/work/projects">Projects</Link>
@@ -376,7 +416,8 @@ export default function WorkProjectShell({ productKey, id }) {
           canEdit={!viewOnly}
           isOwner={isOwner}
           canSeePm={tabs.some((t) => t.key === "pm")}
-          fullWorkspaceHref={fullWorkspaceHref}
+          classicWorkspaceHref={classicWorkspaceHref}
+          fullScreen={fullScreen}
           onAction={onAction}
         />
       </div>
@@ -394,8 +435,8 @@ export default function WorkProjectShell({ productKey, id }) {
         <div className="pj-note">
           <div>
             <b>This project&rsquo;s bill could not be read just now.</b> Every figure below is
-            computed from it, so they are missing rather than zero. Reload, or open the full
-            workspace, which reads it a different way.
+            computed from it, so they are missing rather than zero. Reload, or open the
+            classic workspace, which reads it a different way.
           </div>
         </div>
       ) : failed ? (
@@ -488,7 +529,7 @@ export default function WorkProjectShell({ productKey, id }) {
 
       {panel.content?.kind === "people" ? (
         <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>
-          <WorkProjectPeople project={project} fullWorkspaceHref={fullWorkspaceHref} />
+          <WorkProjectPeople project={project} classicWorkspaceHref={classicWorkspaceHref} />
         </WorkProjectPanel>
       ) : null}
 

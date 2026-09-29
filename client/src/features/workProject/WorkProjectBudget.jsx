@@ -7,7 +7,7 @@
 //
 // His one change on these screens is here: ticking a material as bought. A
 // budget row's cost rate, its supplier and its target date are all editable in
-// the full workspace, and a second place to type a cost rate is how two screens
+// the classic workspace, and a second place to type a cost rate is how two screens
 // come to disagree about what a job costs.
 
 import React from "react";

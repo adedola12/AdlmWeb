@@ -396,7 +396,7 @@ function BillSummary({ project, totals, canEdit, onGo }) {
 
       {canEdit && !locked ? (
         <p className="hint">
-          The percentages and the sums are edited in the full workspace for now.
+          The percentages and the sums are edited in the classic workspace for now.
         </p>
       ) : null}
     </section>

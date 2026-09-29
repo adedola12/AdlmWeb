@@ -1,6 +1,6 @@
 // The /work/project/:productKey/:id route.
 //
-// It used to be a bare redirect: every project opened in the full workspace at
+// It used to be a bare redirect: every project opened in the classic workspace at
 // /projects/:tool, which is where the bill, budget, valuation, PM views and
 // the Work area are. That is still true for everyone who is not staff, so old
 // links and bookmarks keep working exactly as they did.

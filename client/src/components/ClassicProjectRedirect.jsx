@@ -27,7 +27,7 @@
 //
 // THE WAY BACK
 //
-// The new page offers "Open the full workspace" for the things it does not do:
+// The new page offers "Open the classic workspace" for the things it does not do:
 // pricing, the Excel export, editing the budget. That link carries ?classic=1,
 // and this hands it straight through. Without it the two screens would bounce
 // a reader between them.

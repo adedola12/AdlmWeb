@@ -199,6 +199,10 @@
 .ds .pj-tabs button[aria-selected="true"]::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--action)}
 .ds .pj-tabs em{font-style:normal;font-size:11px;padding:1px 6px;border-radius:99px;background:var(--bg-alt);border:1px solid var(--line);color:var(--ink-3)}
 .ds .pj-tabs .adlm-dot{margin-left:0}
+/* His tab strip sticks below the app bar. In full screen there is no app bar,
+   so it sticks to the top of the scroller instead — otherwise it parks 64px
+   down and the bill scrolls through the gap above it. */
+.ds.dsh-fs .pj-tabs{top:0}
 .ds .pj-tb{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .ds .pj-tb .tot{margin-left:auto;font-size:12.5px;color:var(--ink-3)}
 .ds .pj-tb .tot b{color:var(--ink);font-weight:500}
