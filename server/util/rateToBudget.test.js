@@ -222,6 +222,23 @@ test("a rate with no plant writes no Plant row and behaves exactly as today", ()
   assert.equal(deriveLineRate(it.qty, rows).rate, 12150);
 });
 
+test("the picked rate reproduces to the kobo whatever the bill quantity and constants give", () => {
+  // The back-solved O&P is stored rounded. At a fixed 4dp, a ₦12,150 rate on
+  // 100 m³ read back ₦12,149.99 once the constants moved (28 Sep 2026). Sweep
+  // quantities and rates so no constants change can reopen that.
+  const misses = [];
+  for (const totalCost of [12150, 13500, 9876.54, 25000.01]) {
+    const r = concreteRate({ netCost: totalCost / 1.35, totalCost });
+    for (const qty of [1, 3, 7.5, 12.345, 57, 100, 250.8, 999]) {
+      const it = item({ qty });
+      const { rows } = buildRateBudgetRows(it, r, K, { priceFor });
+      const got = deriveLineRate(it.qty, rows).rate;
+      if (got !== totalCost) misses.push(`${totalCost} × ${qty} → ${got}`);
+    }
+  }
+  assert.deepEqual(misses, []);
+});
+
 test("a rate that itemises no labour still gets a Labour row, from the constants", () => {
   const materialOnly = {
     description: "Concrete",
