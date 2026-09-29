@@ -208,7 +208,10 @@ export default function WorkProjectShell({ productKey, id }) {
   // shell already owns.
   const fb = useFeedback();
   const [report, setReport] = React.useState("");
-  const fullWorkspaceHref = `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}`;
+  // classic=1 is the "I meant it" marker ClassicProjectRedirect looks for.
+  // Without it the redirect would send this link straight back here, and the
+  // two screens would bounce a reader between them.
+  const fullWorkspaceHref = `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}?project=${encodeURIComponent(id || "")}&classic=1`;
   // canManage is owner-only on the server (routes/projects.js:899), which is
   // exactly who his Collaborators entry is for.
   const isOwner = project?._access?.canManage === true;

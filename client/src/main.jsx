@@ -206,6 +206,7 @@ import DsPreview from "./ds/DsPreview.jsx";
 import DsPreviewGate from "./ds/DsPreviewGate.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import PreviewHostGate from "./components/PreviewHostGate.jsx";
+import ClassicProjectRedirect from "./components/ClassicProjectRedirect.jsx";
 const AdminReleases = lazyScreen(() => import("./pages/AdminReleases.jsx"));
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
@@ -567,13 +568,15 @@ const router = createBrowserRouter([
         path: "projects/:tool",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={ProjectsGeneric}
-                title="Projects"
-                page="work-projects"
-              />
-            </LazyScreen>
+            <ClassicProjectRedirect>
+              <LazyScreen>
+                <WorkShellRoute
+                  screen={ProjectsGeneric}
+                  title="Projects"
+                  page="work-projects"
+                />
+              </LazyScreen>
+            </ClassicProjectRedirect>
           </ProtectedRoute>
         ),
       },
