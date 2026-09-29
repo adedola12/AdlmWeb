@@ -182,3 +182,40 @@ describe("the Buy schedule view", () => {
     expect(within(c).getByText("Nothing to buy yet")).toBeTruthy();
   });
 });
+
+describe("a budget that exists but is not priced yet", () => {
+  // Found on a real QUIV project: 271 rows of material and labour, every one
+  // linked to its bill line, and the screen said "No budget yet" — because the
+  // empty state tested the total VALUE, and an unpriced bill makes that 0.
+  // Whether there is a budget is a question about rows.
+  const unpriced = {
+    budgetItems: [
+      { componentKind: "Material", materialName: "Cement", unit: "bags", qty: 9.91, rate: 0, billIdentity: "e48c" },
+      { componentKind: "Material", materialName: "Sharp sand", unit: "tons", qty: 1.1, rate: 0, billIdentity: "e48c" },
+      { componentKind: "Labour", description: "Mason gang", unit: "days", qty: 4, rate: 0 },
+    ],
+  };
+
+  it("shows the rows instead of claiming there is no budget", () => {
+    const c = render(<WorkProjectBudgetView project={unpriced} />).container;
+    expect(within(c).queryByText("No budget yet")).toBe(null);
+    expect(c.querySelectorAll(".pj-bud .br").length).toBe(3);
+    expect(within(c).getByText("Cement")).toBeTruthy();
+  });
+
+  it("says why every figure is a quantity and not money", () => {
+    const c = render(<WorkProjectBudgetView project={unpriced} />).container;
+    expect(within(c).getByText(/3 rows of material and labour/)).toBeTruthy();
+    expect(within(c).getByText(/None of it carries a cost rate yet/)).toBeTruthy();
+  });
+
+  it("marks an unpriced row rather than printing ₦0", () => {
+    const c = render(<WorkProjectBudgetView project={unpriced} />).container;
+    expect(within(c).getAllByText("Not priced").length).toBe(3);
+  });
+
+  it("still says there is no budget when there are genuinely no rows", () => {
+    const c = render(<WorkProjectBudgetView project={{ budgetItems: [] }} />).container;
+    expect(within(c).getByText("No budget yet")).toBeTruthy();
+  });
+});

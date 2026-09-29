@@ -36,7 +36,13 @@ export function WorkProjectBudgetView({ project, canEdit = false, saving = false
   const cols = React.useMemo(() => budgetColumns(project), [project]);
   const t = React.useMemo(() => budgetTotals(project), [project]);
 
-  if (!t.all) {
+  // Whether there IS a budget is a question about ROWS, not about value. A
+  // QUIV save writes the Material & Labour schedule with quantities long before
+  // anything is priced, so testing the total hid a real budget — 271 rows, every
+  // one linked to its bill line — behind "No budget yet" on an unpriced job.
+  const rowCount = cols.material.length + cols.labour.length + cols.plant.length;
+
+  if (!rowCount) {
     return (
       <div className="pj-empty">
         <b>No budget yet</b>
@@ -54,6 +60,19 @@ export function WorkProjectBudgetView({ project, canEdit = false, saving = false
 
   return (
     <>
+      {!t.all ? (
+        <div className="pj-note">
+          <div>
+            <b>
+              {rowCount} {rowCount === 1 ? "row" : "rows"} of material and labour, measured
+              from the bill.
+            </b>{" "}
+            None of it carries a cost rate yet, so every figure below is a quantity
+            rather than money. Price the bill and the budget follows.
+          </div>
+        </div>
+      ) : null}
+
       <div className="pj-ov c">
         <section className="pj-card2">
           <Donut
@@ -149,13 +168,13 @@ function Column({ title, note, rows, tickable = false, saving = false, onTick, u
                   onChange={(e) => onTick?.(r.index, e.target.checked)}
                 />
                 <BudRow row={r} unitWord={unitWord} />
-                <span className="n">{money(r.amount)}</span>
+                <span className="n">{r.amount ? money(r.amount) : "Not priced"}</span>
               </label>
             ) : (
               <div className="br" key={r.index}>
                 <span />
                 <BudRow row={r} unitWord={unitWord} />
-                <span className="n">{money(r.amount)}</span>
+                <span className="n">{r.amount ? money(r.amount) : "Not priced"}</span>
               </div>
             ),
           )}

@@ -63,25 +63,29 @@ const TOOL_NAMES = {
 
 const toolName = (k) => TOOL_NAMES[String(k || "").toLowerCase()] || String(k || "").toUpperCase();
 
-/** Match on either id or slug: both appear in links and bookmarks. */
+/**
+ * Match on either id or slug: both appear in links and bookmarks.
+ *
+ * Returns null when nothing matches, and that matters. It used to fall back to
+ * the first project of the same tool "so the page still gets the right tool
+ * chrome", which on a stale link produced the worst page of the three: a stale
+ * URL for a project that does not exist, showing ANOTHER project's name, stage
+ * and bill count, beside an error note about the bill it could not read. Read
+ * quickly it looks like that other project is broken. His design answers this
+ * properly — "That project is not on this account" (work-proj.js:310) — and so
+ * does the shell now.
+ */
 function findProject(projects, productKey, id) {
   if (!Array.isArray(projects)) return null;
   const want = String(id || "").toLowerCase();
-  const key = String(productKey || "").toLowerCase();
   return (
     projects.find(
       (p) =>
         String(p?.slug || "").toLowerCase() === want ||
         String(p?.id || p?._id || "").toLowerCase() === want,
-    ) ||
-    // A project whose id is not in the rollup still deserves the right tool
-    // chrome rather than a blank page, so fall back to the tool itself.
-    projects.find((p) => String(p?.productKey || "").toLowerCase() === key) ||
-    null
+    ) || null
   );
 }
-
-
 export default function WorkProjectShell({ productKey, id }) {
   const { projects, failed } = useProjects();
   const { accessToken } = useAuth();
@@ -248,6 +252,30 @@ export default function WorkProjectShell({ productKey, id }) {
     [panel, project, fb, save],
   );
 
+  // His "that project is not on this account" (work-proj.js:310).
+  //
+  // Both sources have to come up empty, not just the rollup. A project can load
+  // by slug without being in the rollup — a shared one, or a rollup that failed —
+  // and the old fallback existed for exactly that case; it just answered it by
+  // showing ANOTHER project's chrome. So: the authoritative fetch has to have
+  // failed (fullFailed), and the rollup has to not know it either. A stale slug
+  // hits both, which is the case this is for.
+  if (fullFailed && !full && !summary) {
+    return (
+      <DsAppShell title="Project" page="work-projects" sectionTabs={false}>
+        <div className="pj-empty">
+          <b>That project is not on this account</b>
+          <p>
+            It may have been deleted, or it belongs to someone who has not shared it with
+            you.
+          </p>
+          <Link className="ds-btn btn-p ds-btn-sm" to="/work/projects">
+            All projects
+          </Link>
+        </div>
+      </DsAppShell>
+    );
+  }
   return (
     // sectionTabs={false}: his work-project.html carries no tab strip above
     // the breadcrumb — the page's own .pj-tabs are its navigation.
@@ -269,7 +297,9 @@ export default function WorkProjectShell({ productKey, id }) {
               the rail below still read "Takeoff", because stageIndex falls back
               to it. Two parts of one header disagreeing about the same fact.
               Both now read the same resolved stage. */}
-          <span className="pill">{STAGES[stageIndex(project)].name}</span>
+          <span className={`pj-stage s-${STAGES[stageIndex(project)].id}`}>
+            {STAGES[stageIndex(project)].name}
+          </span>
         </div>
 
         {/* His three spans: tool · file, client, location (work-proj.js:339).
