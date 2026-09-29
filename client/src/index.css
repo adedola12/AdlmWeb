@@ -20,6 +20,20 @@
 
   /* Brand colors */
   --color-adlm-orange: #E86A27;
+
+  /* The full blue ramp. Only 600 and 700 used to be declared, so every
+     adlm-blue-50 / 100 / 200 / 300 / 400 / 500 class already written across
+     the app matched no token and Tailwind emitted nothing for it: 94 such
+     usages, all silently doing nothing, which is why dark-mode accents like
+     dark:text-adlm-blue-300 fell back to the inherited colour. 400-700 are
+     the values tailwind.config.js has always carried (legacy under v4, kept
+     as the reference); 50-300 are tints on the same ramp. */
+  --color-adlm-blue-50: #eaf2ff;
+  --color-adlm-blue-100: #d3e4ff;
+  --color-adlm-blue-200: #a9c9ff;
+  --color-adlm-blue-300: #7db0ff;
+  --color-adlm-blue-400: #5cb3ff;
+  --color-adlm-blue-500: #36a3ff;
   --color-adlm-blue-600: #239cff;
   --color-adlm-blue-700: #005be3;
 

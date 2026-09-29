@@ -1082,6 +1082,11 @@ export default function ProjectsGeneric() {
   const sidebarMeta = React.useMemo(() => getSidebarMeta(tool), [tool]);
 
   const [rows, setRows] = React.useState([]);
+  // Starts true. The first load() fires from a mount effect, so without this
+  // the grid renders its empty state, "No projects found", for the length of
+  // the fetch and then replaces it with the user's projects. The list cannot
+  // tell "nothing yet" from "nothing loaded" on rows alone.
+  const [listLoading, setListLoading] = React.useState(true);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
   const [storageInfo, setStorageInfo] = React.useState(null);
@@ -2066,6 +2071,7 @@ export default function ProjectsGeneric() {
   async function load({ keepSelection = true } = {}) {
     setErr("");
     setNotice("");
+    setListLoading(true);
 
     try {
       const [list, storage] = await Promise.all([
@@ -2128,6 +2134,10 @@ export default function ProjectsGeneric() {
           ? `${msg}: ${product} projects can only be opened with an active ${product} subscription. Renew it under Manage > Products & seats to open them again; nothing has been deleted.`
           : msg,
       );
+    } finally {
+      // finally, not the try tail: a failed load has to clear the skeleton
+      // too, or the grid shimmers on for ever behind the error.
+      setListLoading(false);
     }
   }
 
@@ -5318,6 +5328,25 @@ export default function ProjectsGeneric() {
                 sectionSummary={sectionSummary}
                 statusPastLabel={statusPastLabel}
                 storageInfo={storageInfo}
+                loading={listLoading}
+                searchQuery={projectQuery}
+                totalCount={rows.length}
+                toolLabel={sidebarMeta.app || "your plugin"}
+                onClearSearch={() => setProjectQuery("")}
+                onAddShared={() => {
+                  setClaimErr("");
+                  setClaimUpsell(null);
+                  setClaimCode("");
+                  setClaimOpen(true);
+                }}
+                onImportBoq={
+                  canBoqImport
+                    ? () => {
+                        setBoqImportErr("");
+                        setBoqImportOpen(true);
+                      }
+                    : undefined
+                }
               />
             ) : (
               <ProjectOpenView

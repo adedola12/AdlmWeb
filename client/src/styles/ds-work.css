@@ -900,3 +900,44 @@
 .ds .st-explain{margin:6px 0 0;font-size:12.5px;font-weight:300;color:var(--ink-3);line-height:1.65;
   max-width:80ch}
 .ds .st-explain b{font-weight:500;color:var(--ink-2)}
+
+
+/* =========================================================
+   LOADING AND EMPTY
+   The project list had neither. `rows` starts [] and the first load()
+   fires from a mount effect, so .wk-empty rendered "No projects found."
+   for the length of every fetch and was then replaced by the projects.
+   A skeleton says "still fetching"; an empty state says "there is
+   nothing". They are not interchangeable, so there is now one of each.
+   ========================================================= */
+.ds .wk-sk{display:block;border-radius:6px;position:relative;overflow:hidden;
+  background:color-mix(in srgb,var(--ink) 9%,transparent)}
+.ds .wk-sk::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,
+    color-mix(in srgb,var(--ink) 6%,transparent),transparent);
+  animation:wk-sheen 1.6s var(--e-fast) infinite}
+@keyframes wk-sheen{100%{transform:translateX(100%)}}
+
+/* Mirrors .wk-proj's own shape, so the grid does not reflow when the
+   real cards arrive: title row, sub-line, then the three-figure foot. */
+.ds .wk-proj.sk{pointer-events:none}
+.ds .wk-proj.sk .t{align-items:flex-start}
+.ds .wk-proj.sk .t .wk-sk:first-child{height:17px;width:58%}
+.ds .wk-proj.sk .t .wk-sk:last-child{height:21px;width:84px;border-radius:999px}
+.ds .wk-proj.sk .c .wk-sk{height:13px;width:44%}
+.ds .wk-proj.sk .f .wk-sk{height:14px;width:70%}
+.ds .wk-proj.sk .f .wk-sk + .wk-sk{height:11px;width:52%;margin-top:5px}
+
+/* The empty state carries a sentence and the actions that apply, so
+   .wk-empty grows a heading, body and button row. Plain .wk-empty is
+   untouched and still renders as a single centred line. */
+.ds .wk-empty h4{margin:0;font-size:16px;font-weight:500;letter-spacing:-.02em;color:var(--ink)}
+.ds .wk-empty p{margin:9px auto 0;max-width:46ch;font-size:13.5px;font-weight:300;
+  color:var(--ink-3);line-height:1.65}
+.ds .wk-empty .wk-empty-acts{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;
+  margin-top:20px}
+.ds .wk-empty .wk-empty-hint{margin-top:16px;font-size:12px;opacity:.8}
+
+@media (prefers-reduced-motion:reduce){
+  .ds .wk-sk::after{animation:none;opacity:0}
+}

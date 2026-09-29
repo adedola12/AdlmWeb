@@ -46,23 +46,67 @@ const updatedAt = (d) =>
 // The icon wrapper sizes by its `size` prop (default 22), not by font-size.
 const iconStyle = { verticalAlign: -3, marginRight: 8, color: "var(--action)" };
 
+// One skeleton card, shaped like .wk-proj so the grid does not reflow.
+function SkeletonProjectCard() {
+  return (
+    <div className="wk-proj sk" aria-hidden="true">
+      <div className="t">
+        <span className="wk-sk" />
+        <span className="wk-sk" />
+      </div>
+      <p className="c">
+        <span className="wk-sk" />
+      </p>
+      <div className="f">
+        <div>
+          <span className="wk-sk" />
+          <span className="wk-sk" />
+        </div>
+        <div>
+          <span className="wk-sk" />
+          <span className="wk-sk" />
+        </div>
+        <div>
+          <span className="wk-sk" />
+          <span className="wk-sk" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectExplorerGrid({
   bulkBusy = false,
+  loading = false,
+  onAddShared,
+  onClearSearch,
   onClearSelection,
   onDeleteAll,
   onDeleteProject,
   onDeleteSelected,
+  onImportBoq,
   onMergeSelected,
   onOpenProject,
   onSelectAllShown,
   onToggleSelect,
   rowsShown = [],
+  searchQuery = "",
   sectionSummary,
   selectedIdsCount = 0,
   selectedMap = {},
   statusPastLabel = "Completed to date",
   storageInfo = null,
+  toolLabel = "your plugin",
+  totalCount = null,
 }) {
+  // rowsShown is the search-filtered view; totalCount is what the account
+  // actually holds. An empty view over a non-empty account is a failed
+  // search, not an empty workspace, and the two need different sentences.
+  const total = totalCount == null ? rowsShown.length : totalCount;
+  const hasSearch = !!String(searchQuery || "").trim();
+  const isEmpty = !loading && rowsShown.length === 0;
+  const isSearchMiss = isEmpty && hasSearch && total > 0;
+
   return (
     <div style={{ marginTop: 20 }}>
       <ProjectSectionSummary statusPastLabel={statusPastLabel} summary={sectionSummary} />
@@ -77,68 +121,139 @@ export default function ProjectExplorerGrid({
         </div>
       ) : null}
 
-      <div className="wk-bar">
-        <p className="wk-count" style={{ margin: 0, marginRight: "auto" }}>
-          {plural(rowsShown.length, "project")}
-          {selectedIdsCount ? ` · ${selectedIdsCount} selected` : ""}
-        </p>
-        <div className="wk-acts" style={{ flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="ds-btn ds-btn-sm btn-o"
-            onClick={onSelectAllShown}
-            disabled={!rowsShown.length || bulkBusy}
-            title="Select all projects in this view"
-          >
-            Select all
-          </button>
-          <button
-            type="button"
-            className="ds-btn ds-btn-sm btn-o"
-            onClick={onClearSelection}
-            disabled={!selectedIdsCount || bulkBusy}
-            title="Clear selection"
-          >
-            Clear
-          </button>
-          {onMergeSelected ? (
-            <button
-              type="button"
-              className="ds-btn ds-btn-sm btn-o"
-              onClick={onMergeSelected}
-              disabled={selectedIdsCount < 2 || bulkBusy}
-              title={
-                selectedIdsCount < 2
-                  ? "Select two or more projects to merge them into one"
-                  : `Merge ${selectedIdsCount} projects into a single project`
-              }
-            >
-              <FaObjectGroup size={13} /> Merge selected
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="ds-btn ds-btn-sm btn-o"
-            onClick={onDeleteSelected}
-            disabled={!selectedIdsCount || bulkBusy}
-            title="Delete selected"
-          >
-            <FaTrash size={13} /> Delete selected
-          </button>
-          <button
-            type="button"
-            className="ds-btn ds-btn-sm btn-o"
-            onClick={onDeleteAll}
-            disabled={!rowsShown.length || bulkBusy}
-            title="Delete all projects"
-          >
-            <FaTrash size={13} /> Delete all
-          </button>
+      {/* The bulk actions used to sit here permanently, five wide and
+          greyed out until something was selected, which made the loudest
+          row on the page a row of things you could not do and gave
+          "Delete all" the same weight as "Select all". The bar is quiet
+          until there is a selection, and the actions that destroy things
+          appear once they have something to destroy. */}
+      {!loading && rowsShown.length > 0 ? (
+        <div className="wk-bar">
+          <p className="wk-count" style={{ margin: 0, marginRight: "auto" }}>
+            {selectedIdsCount
+              ? `${selectedIdsCount.toLocaleString()} of ${plural(rowsShown.length, "project")} selected`
+              : plural(rowsShown.length, "project")}
+            {!selectedIdsCount && hasSearch && total > rowsShown.length
+              ? ` of ${total.toLocaleString()}`
+              : ""}
+          </p>
+          <div className="wk-acts" style={{ flexWrap: "wrap" }}>
+            {selectedIdsCount ? (
+              <>
+                {onMergeSelected ? (
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-sm btn-o"
+                    onClick={onMergeSelected}
+                    disabled={selectedIdsCount < 2 || bulkBusy}
+                    title={
+                      selectedIdsCount < 2
+                        ? "Select two or more projects to merge them into one"
+                        : `Merge ${selectedIdsCount} projects into a single project`
+                    }
+                  >
+                    <FaObjectGroup size={13} /> Merge selected
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-sm btn-o"
+                  onClick={onDeleteSelected}
+                  disabled={bulkBusy}
+                  title="Delete selected"
+                >
+                  <FaTrash size={13} /> Delete selected
+                </button>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-sm btn-o"
+                  onClick={onClearSelection}
+                  disabled={bulkBusy}
+                  title="Clear selection"
+                >
+                  Clear
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-sm btn-o"
+                  onClick={onSelectAllShown}
+                  disabled={bulkBusy}
+                  title="Select all projects in this view"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-sm btn-o"
+                  onClick={onDeleteAll}
+                  disabled={bulkBusy}
+                  title="Delete all projects"
+                >
+                  <FaTrash size={13} /> Delete all
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {rowsShown.length === 0 ? (
-        <div className="wk-empty">No projects found.</div>
+      {loading ? (
+        <div className="wk-projs" role="status" aria-live="polite" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonProjectCard key={i} />
+          ))}
+        </div>
+      ) : isSearchMiss ? (
+        // A search that matched nothing is the reader's own filter, and is
+        // undone with one button. Not the same state as an empty account.
+        <div className="wk-empty">
+          <h4>Nothing matches “{searchQuery}”</h4>
+          <p>
+            None of your {total.toLocaleString()}{" "}
+            {total === 1 ? "project" : "projects"} has a name matching that.
+            Search covers project names only.
+          </p>
+          {onClearSearch ? (
+            <div className="wk-empty-acts">
+              <button type="button" className="ds-btn ds-btn-sm btn-o" onClick={onClearSearch}>
+                Clear search
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : isEmpty ? (
+        // Projects reach this list from the plugin's Save to Cloud, not from
+        // anything on this page, so the empty state says so and offers the
+        // two things that do work from here.
+        <div className="wk-empty">
+          <h4>No projects saved to the cloud</h4>
+          <p>
+            Projects appear here once you run a takeoff in {toolLabel} and use
+            Save to Cloud. The bill, rates, contract and valuation tools all
+            open from a saved project.
+          </p>
+          {onAddShared || onImportBoq ? (
+            <div className="wk-empty-acts">
+              {onAddShared ? (
+                <button type="button" className="ds-btn ds-btn-sm btn-o" onClick={onAddShared}>
+                  Add shared project
+                </button>
+              ) : null}
+              {onImportBoq ? (
+                <button type="button" className="ds-btn ds-btn-sm btn-p" onClick={onImportBoq}>
+                  Import Excel BoQ
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <p className="wk-empty-hint">
+            Got a share code from a colleague? Add it above and their project
+            lands in this list.
+          </p>
+        </div>
       ) : (
         <div className="wk-projs">
           {rowsShown.map((row, index) => {
