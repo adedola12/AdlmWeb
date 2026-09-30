@@ -122,7 +122,7 @@ function buildAuthPayload(user) {
   };
 }
 
-// What goes INSIDE the access token: buildAuthPayload without the entitlements.
+// What goes INSIDE the access token: buildAuthPayload with slim entitlements.
 //
 // The token rides on every request's Authorization header, and the API edge
 // refuses a request whose headers pass ~10 KB before it reaches Express: the
@@ -131,14 +131,31 @@ function buildAuthPayload(user) {
 // token at 16,923 characters (network check Y8XQZV, 28 Sep 2026) and locked
 // them out of every signed-in page on web and Hub for two months.
 //
-// Nothing reads entitlements from the token: every gate loads them from the
-// database, the AI service fetches them from /api/entitlements, and clients
-// read them from the `user` body of the login / refresh reply, which still
-// carries them. An uploaded avatar can be a data: URL of any size, so only a
-// plain link is kept; /me reads the real one from the database.
+// The desktop plugins DO read entitlements from the token: QUIV, HERON and the
+// other Revit/WPF products decode the JWT and look up productKey / status /
+// expiresAt before they open. Dropping the list outright (PR #77) made every
+// QUIV sign-in say "No subscription information found" (29 Sep 2026). So each
+// entitlement keeps its plain scalar fields and loses only its arrays and
+// objects (the per-seat devices rows), which is what made the token big.
+// Server gates still load entitlements from the database. An uploaded avatar
+// can be a data: URL of any size, so only a plain link is kept; /me reads the
+// real one from the database.
 const MAX_TOKEN_AVATAR_URL = 512;
+const isScalar = (v) => v === null || ["string", "number", "boolean"].includes(typeof v);
+export function tokenEntitlements(entitlements) {
+  return (Array.isArray(entitlements) ? entitlements : []).map((ent) => {
+    const src = ent && typeof ent.toObject === "function" ? ent.toObject() : ent || {};
+    const slim = {};
+    for (const [key, value] of Object.entries(src)) {
+      if (isScalar(value)) slim[key] = value;
+      else if (value instanceof Date) slim[key] = value.toISOString();
+    }
+    return slim;
+  });
+}
 export function accessTokenClaims(payload) {
   const { entitlements, avatarUrl, ...claims } = payload;
+  claims.entitlements = tokenEntitlements(entitlements);
   const avatar = String(avatarUrl || "");
   claims.avatarUrl = avatar.length <= MAX_TOKEN_AVATAR_URL && !avatar.startsWith("data:") ? avatar : "";
   return claims;

@@ -88,6 +88,15 @@ invalidates it and the batch has to be tested again. A database problem, an
 unreachable API or an unknown commit all answer **not approved**: the check
 fails closed.
 
+**Only user-facing UI needs him (owner's rule, 29 Sep 2026).** The check first
+reads the pull request's changed files. When nothing is under `client/` and
+none of the gate's own files changed (`.github/`, this runbook, any
+`server/**/*release*` file), it passes at once: a server fix, a script or a
+test ships on its checks, without a batch. Anything under `client/` or the gate
+still needs his approved batch. It runs as `pull_request_target`, so the copy
+on `main` decides and a pull request cannot rewrite its own gate. If it cannot
+read the file list it asks for a batch.
+
 To make it binding: Settings > Branches > main > Require status checks, add
 **approved batch**, keep **Include administrators** ticked, and (only then)
 drop the code-owner review requirement.
