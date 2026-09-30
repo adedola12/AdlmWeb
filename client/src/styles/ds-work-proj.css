@@ -897,3 +897,38 @@
   .ds .fd-date{min-width:0;order:-1}
   .ds .fd-scrub{flex-basis:100%;order:1}
 }
+
+/* ------------------------------------------------ labour activity schedule */
+.ds .ac-load{border:1px solid var(--line);border-radius:16px;background:var(--bg);padding:12px 14px;margin-bottom:14px}
+.ds .ac-load .hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.ds .ac-load .hd b{font-size:13px;font-weight:500;color:var(--ink)}
+.ds .ac-load .hd em{font-style:normal;font-size:11.5px;color:var(--ink-3);margin-left:auto}
+.ds .ac-load .bars{display:flex;align-items:flex-end;gap:2px;height:64px}
+.ds .ac-load .b{flex:1 1 0;min-width:2px;border-radius:3px 3px 0 0;background:color-mix(in srgb,var(--action) 40%,var(--line-2))}
+.ds .ac-load .b.pk{background:var(--action)}
+.ds .ac-load .ft{display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--ink-3)}
+
+.ds .ac-list{border:1px solid var(--line);border-radius:16px;background:var(--bg);overflow:hidden}
+.ds .ac-list .hd, .ds .ac-list .rw{display:grid;
+  grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 110px 120px 84px 84px 52px;
+  gap:12px;align-items:center;padding:0 16px;text-align:left}
+.ds .ac-list .hd{height:34px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);background:var(--bg-alt);border-bottom:1px solid var(--line)}
+.ds .ac-list .rw{min-height:50px;width:100%;border:0;border-top:1px solid var(--line);background:none;font:inherit;color:inherit;cursor:pointer}
+.ds .ac-list .rw:first-of-type{border-top:0}
+.ds .ac-list .rw:hover{background:var(--bg-alt)}
+.ds .ac-list .rw.un{background:color-mix(in srgb,var(--fb-warn,#c98a00) 5%,transparent)}
+.ds .ac-list .rw.un .dt{color:var(--ink-3)}
+.ds .ac-list .ac{min-width:0}
+.ds .ac-list .ac b{display:block;font-size:13px;font-weight:400;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .ac-list .ac em{display:block;font-style:normal;font-size:11px;color:var(--ink-3)}
+.ds .ac-list .td{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .ac-list .n{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--ink);white-space:nowrap}
+.ds .ac-list .dt{font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+
+@media (max-width:900px){
+  .ds .ac-list .hd{display:none}
+  .ds .ac-list .rw{grid-template-columns:minmax(0,1fr) auto;row-gap:2px;padding:10px 14px}
+  .ds .ac-list .rw .td{grid-column:1}
+  .ds .ac-list .rw .n{grid-column:2;text-align:right}
+  .ds .ac-list .rw .dt{grid-column:1;font-size:11.5px;color:var(--ink-3)}
+}

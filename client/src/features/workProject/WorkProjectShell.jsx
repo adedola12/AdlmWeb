@@ -31,6 +31,7 @@ import WorkProjectOverview from "./WorkProjectOverview.jsx";
 import WorkProjectBill from "./WorkProjectBill.jsx";
 import WorkProjectRates from "./WorkProjectRates.jsx";
 import WorkProjectPm from "./WorkProjectPm.jsx";
+import WorkProjectActivity from "./WorkProjectActivity.jsx";
 import WorkProjectValuations from "./WorkProjectValuations.jsx";
 import {
   WorkProjectDrawings,
@@ -557,7 +558,13 @@ export default function WorkProjectShell({ productKey, id }) {
               planning={planning}
               planFailed={planFailed}
             />
-          ) : tab === "valuations" && !fullFailed ? (
+          ) : tab === "activity" && !fullFailed ? (
+          <WorkProjectActivity
+            project={project}
+            onGo={go}
+            onOpenLine={(index) => panel.show({ kind: "line", index })}
+          />
+        ) : tab === "valuations" && !fullFailed ? (
             <WorkProjectValuations
               project={project}
               canEdit={!viewOnly}

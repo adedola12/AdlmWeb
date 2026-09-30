@@ -55,7 +55,7 @@ export function jumpList(projects, currentId, term = "") {
  * not, because the project jumped to may not have them and would land on a tab
  * that is not there.
  */
-const KEPT = new Set(["overview", "bill", "rates", "pm", "valuations"]);
+const KEPT = new Set(["overview", "bill", "rates", "pm", "activity", "valuations"]);
 export const keepTabOnJump = (tab) => (KEPT.has(tab) && tab !== "overview" ? tab : "");
 
 /** His 'ADLM-PRJ-' + id.toUpperCase() (work-proj.js:477). */
