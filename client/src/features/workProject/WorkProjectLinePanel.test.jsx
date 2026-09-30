@@ -433,3 +433,48 @@ describe("recording what was measured on site", () => {
     expect(within(c).getByPlaceholderText(/120 in the contract/).disabled).toBe(true);
   });
 });
+
+describe("when a measurement was taken", () => {
+  const withStamps = (extra) => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items: [{ code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, ...extra }],
+  });
+
+  const draw = (project) =>
+    render(<WorkProjectLinePanel project={project} index={0} canEdit contractLocked />).container;
+
+  it("shows when the line was measured", () => {
+    // The server has stamped this since the field existed and nothing showed it.
+    // For a QS it is the provenance that makes a variation defensible.
+    const c = draw(
+      withStamps({
+        actualQty: 134,
+        actualRecordedAt: "2026-09-28T09:00:00Z",
+        actualUpdatedAt: "2026-09-28T09:00:00Z",
+      }),
+    );
+    expect(within(c).getByText(/Measured on 28 Sept 2026/)).toBeTruthy();
+    // A first measurement is not a revision.
+    expect(within(c).queryByText(/revised/)).toBe(null);
+  });
+
+  it("says when a figure was revised later", () => {
+    const c = draw(
+      withStamps({
+        actualQty: 134,
+        actualRecordedAt: "2026-09-28T09:00:00Z",
+        actualUpdatedAt: "2026-09-30T14:00:00Z",
+      }),
+    );
+    expect(within(c).getByText(/Measured on 28 Sept 2026, revised on 30 Sept 2026/)).toBeTruthy();
+  });
+
+  it("says nothing at all for a line nobody has measured", () => {
+    const c = draw(withStamps({}));
+    // Anchored on a DATE: the section's own heading is "Measured on site", so a
+    // bare /Measured on/ matches the heading and passes whatever the code does.
+    expect(within(c).queryByText(/Measured on \d/)).toBe(null);
+    expect(within(c).getByText(/Not measured yet/)).toBeTruthy();
+  });
+});

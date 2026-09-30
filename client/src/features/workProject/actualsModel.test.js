@@ -7,6 +7,7 @@ import {
   anyMeasured,
   contractAmountOf,
   isLocked,
+  measuredWhen,
   optional,
   showActuals,
   varianceOf,
@@ -200,5 +201,42 @@ describe("recording a measurement", () => {
     expect(withActualQty(project(), 9, 1)).toBe(null);
     expect(withActualQty(project(), -1, 1)).toBe(null);
     expect(withActualRate({ items: [] }, 0, 1)).toBe(null);
+  });
+});
+
+describe("when a line was measured", () => {
+  it("reads the stamps the server has been keeping all along", () => {
+    // routes/projects.js sets actualRecordedAt on the first measurement and
+    // actualUpdatedAt on every change. Verified against the live API on
+    // 30 Sep 2026: recording 2.5 stamped both; clearing it cleared both.
+    const w = measuredWhen({
+      actualRecordedAt: "2026-09-28T09:00:00Z",
+      actualUpdatedAt: "2026-09-30T14:00:00Z",
+    });
+    expect(w.recorded.toISOString()).toBe("2026-09-28T09:00:00.000Z");
+    expect(w.updated.toISOString()).toBe("2026-09-30T14:00:00.000Z");
+    expect(w.revised).toBe(true);
+  });
+
+  it("does not claim a first measurement was revised", () => {
+    // The server writes both to the SAME instant on a first measurement, so
+    // "measured on the 30th, revised on the 30th" would be noise.
+    const same = "2026-09-30T14:00:00Z";
+    expect(measuredWhen({ actualRecordedAt: same, actualUpdatedAt: same }).revised).toBe(false);
+  });
+
+  it("says nothing for a line nobody has measured", () => {
+    // Both stamps are null until there is an actual, and null again once it is
+    // cleared — so an unmeasured line must render no date at all.
+    const w = measuredWhen({ actualRecordedAt: null, actualUpdatedAt: null });
+    expect(w.recorded).toBe(null);
+    expect(w.revised).toBe(false);
+    expect(measuredWhen({}).recorded).toBe(null);
+    expect(measuredWhen(null).recorded).toBe(null);
+  });
+
+  it("survives a stamp that is not a date", () => {
+    expect(measuredWhen({ actualRecordedAt: "not a date" }).recorded).toBe(null);
+    expect(measuredWhen({ actualRecordedAt: "" }).recorded).toBe(null);
   });
 });

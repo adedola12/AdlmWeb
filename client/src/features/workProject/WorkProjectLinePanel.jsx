@@ -28,6 +28,7 @@ import {
   actualAmountOf,
   actualQtyOf,
   isLocked,
+  measuredWhen,
   optional as actualsOf,
   showActuals as actualsShowing,
   varianceOf,
@@ -124,6 +125,7 @@ export default function WorkProjectLinePanel({
   const actualQty = actualQtyOf(it);
   const actualAmount = actualAmountOf(it);
   const variance = varianceOf(it);
+  const measured = measuredWhen(it);
 
   return (
     <>
@@ -301,6 +303,15 @@ export default function WorkProjectLinePanel({
               </>
             )}
           </p>
+          {/* When it was measured. The server has stamped this since the field
+              existed and nothing ever showed it — and it is the provenance that
+              makes a variation defensible rather than a number from nowhere. */}
+          {measured.recorded ? (
+            <p className="hint">
+              Measured {onThe(measured.recorded)}
+              {measured.revised ? <>, revised {onThe(measured.updated)}</> : null}.
+            </p>
+          ) : null}
           <p className="hint">
             Clear the box to go back to &ldquo;not measured&rdquo;. A measured 0 is an omission of
             the whole line, which is a different thing.
@@ -359,3 +370,9 @@ export default function WorkProjectLinePanel({
     </>
   );
 }
+
+/** A date a person reads on a bill: "on 30 Sept 2026". */
+const onThe = (d) =>
+  d
+    ? `on ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
+    : "";

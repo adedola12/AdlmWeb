@@ -92,6 +92,41 @@ export function varianceOf(item) {
   return actual - contractAmountOf(item);
 }
 
+/**
+ * When this line was measured, and when the figure was last changed.
+ *
+ * THE SERVER HAS KEPT THIS ALL ALONG
+ *
+ * routes/projects.js stamps `actualRecordedAt` the first time a measurement
+ * lands and `actualUpdatedAt` every time it changes, preserving the first date
+ * across later edits and clearing both when the measurement is removed.
+ * Verified against the live API: recording 2.5 on a line stamped both; clearing
+ * it back to null cleared both.
+ *
+ * Nothing ever showed them. For a QS that is the provenance that makes a
+ * variation defensible — "measured on the 30th, revised on the 2nd" is a
+ * different conversation from a number that appeared from nowhere.
+ *
+ * @returns {{recorded: Date|null, updated: Date|null, revised: boolean}}
+ */
+export function measuredWhen(item) {
+  const at = (v) => {
+    if (!v) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const recorded = at(item?.actualRecordedAt);
+  const updated = at(item?.actualUpdatedAt);
+  return {
+    recorded,
+    updated,
+    // Only worth saying when the two differ: on a first measurement the server
+    // sets both to the same instant, and "measured on the 30th, revised on the
+    // 30th" is noise.
+    revised: Boolean(recorded && updated && updated.getTime() - recorded.getTime() > 1000),
+  };
+}
+
 /** Has anybody measured anything yet? Decides whether a total means anything. */
 export const anyMeasured = (items) =>
   (Array.isArray(items) ? items : []).some((it) => actualQtyOf(it) !== null);

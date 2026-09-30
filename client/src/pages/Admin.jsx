@@ -649,11 +649,34 @@ const naira = (n) =>
  * A missing rate is named rather than treated as zero: a zero silently makes a
  * trip look cheaper than it is, which is the opposite of the point.
  */
-function TripCostFields({ form, setForm }) {
+function TripCostFields({ form, setForm, supported = true }) {
   const travel = form.travel || {};
   const est = form.estimate;
   const set = (k, v) =>
     setForm((f) => ({ ...f, travel: { ...(f.travel || {}), [k]: v } }));
+
+  // THE API MAY NOT HAVE THIS YET.
+  //
+  // The client deploys on every push to its branch; the API deploys separately.
+  // In the window between the two, this form renders and the server's PUT does
+  // not read `travel` at all — so a rate typed here would be accepted, saved
+  // with a 200, and silently lost. That is precisely the failure this codebase
+  // keeps producing, so it is said out loud instead. The list response carries
+  // `fields` only when the server knows about travel rates, which is how this
+  // is detected rather than guessed.
+  if (!supported) {
+    return (
+      <div className="mt-4 rounded-lg bg-amber-50 ring-1 ring-amber-200 p-3">
+        <h4 className="font-semibold text-sm">What the trip costs us</h4>
+        <p className="text-xs text-amber-900 mt-1">
+          Not available on this server yet. The flight, hotel, feeding and local-fare rates are
+          ready in the app but the API has not been deployed with them, and anything typed here
+          would be saved with a success message and quietly dropped. The fields are hidden until
+          the API is updated, rather than taking figures it will lose.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4 rounded-lg bg-white ring-1 ring-slate-200 p-3">
@@ -827,6 +850,8 @@ export default function Admin({ section = null }) {
   const [tLocBusy, setTLocBusy] = React.useState(false);
   const [tLocMsg, setTLocMsg] = React.useState("");
   const [tLocForm, setTLocForm] = React.useState(null); // null = closed, {} = new, {_id} = edit
+  // Whether THIS server can store the travel rates. See loadTLocations.
+  const [tLocTravel, setTLocTravel] = React.useState(false);
   const [trainingDateModal, setTrainingDateModal] = React.useState({ open: false, purchaseId: null });
   const [trainingDateVal, setTrainingDateVal] = React.useState("");
   const [trainingEndDateVal, setTrainingEndDateVal] = React.useState("");
@@ -993,6 +1018,11 @@ export default function Admin({ section = null }) {
     try {
       const data = await apiAuthed("/admin/training-locations", { token: accessToken });
       setTLocations(Array.isArray(data?.locations) ? data.locations : []);
+      // Does this server know about travel rates at all? It says so by sending
+      // TRAVEL_RATE_FIELDS back with the list. Asked rather than assumed,
+      // because the client and the API deploy separately and in between the two
+      // this form would take rates the server drops without a word.
+      setTLocTravel(Array.isArray(data?.fields) && data.fields.length > 0);
     } catch { /* ignore */ }
   }, [accessToken]);
 
@@ -4676,7 +4706,7 @@ export default function Admin({ section = null }) {
                   every estimate came out at zero with every rate listed as
                   missing. There is no flight API and no live hotel pricing — a
                   rate is a figure somebody here maintains. */}
-              <TripCostFields form={tLocForm} setForm={setTLocForm} />
+              <TripCostFields form={tLocForm} setForm={setTLocForm} supported={tLocTravel} />
 
               <div className="flex gap-2 mt-3">
                 <button
@@ -4755,6 +4785,11 @@ export default function Admin({ section = null }) {
                         >
                           {Number(loc.estimate.total || 0).toLocaleString()}
                         </span>
+                      ) : !tLocTravel ? (
+                        // The server predates travel rates entirely. "rates not
+                        // set" would blame the reader for a deploy that has not
+                        // happened.
+                        <span className="text-xs text-slate-400">–</span>
                       ) : (
                         // Named, not zeroed. A 0 here would read as "costs
                         // nothing to run", which is how a trip gets
