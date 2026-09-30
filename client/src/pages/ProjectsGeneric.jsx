@@ -50,6 +50,12 @@ import {
   rateEditState,
   rateFieldsForSave,
 } from "../features/projects/rateStamp.js";
+import {
+  mergePricedProject,
+  priceFromRateBody,
+  priceFromRateFailure,
+  priceFromRatePath,
+} from "../features/projects/priceFromRate.js";
 
 // His orange palette, for a note that is a warning rather than information.
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
@@ -2632,6 +2638,7 @@ export default function ProjectsGeneric() {
     const prev = ratesRef.current || {};
     const next = { ...prev, [k0]: value };
     const stamped = [k0];
+    const pricedCodes = [it?.code];
     const blank = String(value ?? "").trim() === "";
     if (groupId && isGroupLinked(groupId) && !blank) {
       for (let j = 0; j < its.length; j++) {
@@ -2645,12 +2652,75 @@ export default function ProjectsGeneric() {
         if (onlyFillEmpty && existing !== 0) continue;
         next[kj] = value;
         stamped.push(kj);
+        pricedCodes.push(its[j]?.code);
       }
     }
     setRates(next);
     // A rate carried onto a linked sibling was applied by the QS just as much
     // as the line he typed into, so it carries the same stamp.
     stampRates(stamped, meta, { keepRateKey: String(it?.appliedRateKey || "") });
+    // A pick out of the library prices the material and labour behind it
+    // straight away, on every line the rate just landed on. The materials view
+    // picks component prices, not rates, so it has no build-up to write.
+    if (!showMaterials) {
+      const body = priceFromRateBody(value, meta);
+      if (body) priceLinesFromRate(pricedCodes, body);
+    }
+  }
+
+  // Price the Budget of each line from the rate the QS just picked. The server
+  // writes the rows and saves them; the page takes back only what that changed
+  // (priceFromRate.js), so his other unsaved edits survive. Save is held off
+  // while this runs, because the save's baseVersion must be the one it returns.
+  async function priceLinesFromRate(codes, body) {
+    const projectId = selectedId;
+    const list = [
+      ...new Set(codes.map((c) => String(c ?? "").trim()).filter(Boolean)),
+    ];
+    if (!projectId || !list.length) return;
+    setSaving(true);
+    const priced = [];
+    let last = null;
+    let failure = "";
+    const warnings = [];
+    try {
+      for (const code of list) {
+        try {
+          last = await apiAuthed(
+            priceFromRatePath(endpoints.one(projectId), code),
+            { token: accessToken, method: "POST", body },
+          );
+          priced.push(code);
+          for (const w of last?._rateWarnings || []) warnings.push(w);
+        } catch (e) {
+          failure = priceFromRateFailure(e);
+          // The same rate and the same access fail the same way on every line.
+          break;
+        }
+      }
+    } finally {
+      // The QS may have opened another project while this ran.
+      if (last) {
+        setSel((cur) =>
+          String(cur?._id || cur?.id || "") === String(projectId)
+            ? mergePricedProject(cur, last, priced)
+            : cur,
+        );
+      }
+      setSaving(false);
+    }
+    if (failure) {
+      fb.toast({ tone: "warning", title: "Budget not priced", msg: failure });
+    } else if (priced.length) {
+      fb.toast({
+        tone: "success",
+        title:
+          priced.length === 1
+            ? "Material and labour priced from the rate"
+            : `Material and labour priced on ${priced.length} lines`,
+        msg: warnings.length ? warnings.join(" ") : "See the Budget tab.",
+      });
+    }
   }
   function handleActualQtyChange(rowIndex, value) {
     if (!sel) return;
