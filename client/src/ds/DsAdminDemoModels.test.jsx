@@ -307,3 +307,63 @@ describe("what the filters count", () => {
     expect(within(screen.getByRole("tab", { name: /Not published/ })).getByText("1")).toBeTruthy();
   });
 });
+
+describe("correcting a model without re-uploading it", () => {
+  // PATCH has always accepted title, description, productKey, access and
+  // published, and the only thing that called it sent { published }. So an admin
+  // who mistyped a title had to REMOVE a 700 MB upload and do it again.
+
+  it("offers an Edit control on a row", async () => {
+    answer = async () => ({ ok: true, items: [model()] });
+    mount();
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+  });
+
+  it("saves the title and audience without touching the file", async () => {
+    answer = async () => ({ ok: true, items: [model()] });
+    mount();
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    await waitFor(() => expect(screen.getByLabelText(/^Name/)).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Ikoyi duplex v2" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.path === "/admin/demo-models/m1" && c.method === "PATCH")).toBe(
+        true,
+      ),
+    );
+    const patch = calls.find((c) => c.method === "PATCH");
+    expect(patch.body.title).toBe("Ikoyi duplex v2");
+    // No file is sent, and nothing is uploaded.
+    expect(patch.body.fileName).toBe(undefined);
+    expect(puts).toHaveLength(0);
+  });
+
+  it("does not offer to change WHO may download a course model", async () => {
+    // A course model's audience is its course, set server-side — the endpoint
+    // would refuse anything else, so asking would be a dead control.
+    answer = async () => ({
+      ok: true,
+      items: [model({ purpose: "course", courseSku: "quiv-101", courseTitle: "QUIV 101" })],
+    });
+    mount();
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    await waitFor(() => expect(screen.getByLabelText(/^Name/)).toBeTruthy());
+    expect(screen.queryByLabelText(/Who may download it/)).toBe(null);
+  });
+
+  it("will not save an empty name", async () => {
+    answer = async () => ({ ok: true, items: [model()] });
+    mount();
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    await waitFor(() => expect(screen.getByLabelText(/^Name/)).toBeTruthy());
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "" } });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(screen.getByText("This is needed.")).toBeTruthy());
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+});

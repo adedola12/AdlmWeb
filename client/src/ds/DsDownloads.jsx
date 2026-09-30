@@ -20,6 +20,7 @@ import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
 import { useAuth } from "../store.jsx";
+import DsSampleModels from "./DsSampleModels.jsx";
 
 const ICONS = {
   revit: "/ds/ic-quiv.png",
@@ -346,6 +347,12 @@ export default function DsDownloads() {
               </p>
             </div>
           </section>
+
+          {/* The Revit and IFC files courses and demos are built on. The whole
+              reader half of that library had no screen at all: an admin could
+              publish a model and no learner could ever reach it. `quiet` so a
+              practice with none sees nothing rather than an empty panel. */}
+          <DsSampleModels quiet />
 
           <section className="dsh-panel">
             <div className="dsh-ph">

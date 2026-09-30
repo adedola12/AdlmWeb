@@ -637,7 +637,11 @@ import {
   splitMergedWrite,
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
-import { certificateMoney, certifiedSoFar } from "../util/certificateMaths.js";
+import {
+  certificateMoney,
+  certifiedSoFar,
+  earnedLineValue,
+} from "../util/certificateMaths.js";
 import { sendMail } from "../util/mailer.js";
 import { contractLocked } from "../util/emailContent.js";
 import {
@@ -692,7 +696,11 @@ import {
   suggestionMapForBill,
   worthOffering,
 } from "../util/rateSuggestions.js";
-import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
+import {
+  applyRateRows,
+  buildRateBudgetRows,
+  whyRateCannotPrice,
+} from "../util/rateToBudget.js";
 import {
   collectBudgetEdits,
   reapplyBudgetEdits,
@@ -2045,7 +2053,15 @@ function buildValuationLogs(project, productKey) {
       : Math.max(0, Math.min(100, safeNum(it?.percentComplete)));
     if (!ratified && pct <= 0) continue; // nothing earned on this line
 
-    const amount = safeNum(it?.qty) * safeNum(it?.rate) * (pct / 100);
+    // THE SAME RULE THE CERTIFICATE USES.
+    //
+    // This read qty * rate — the frozen CONTRACT figures — while
+    // computeValueToDate, which feeds the interim certificate, reads the
+    // actuals. On a line re-measured from 120 m³ to 134 the certificate said
+    // ₦11,390,000 and the printed Interim Payment Application said
+    // ₦10,200,000, for the same work on the same day. Whichever the client saw
+    // first was the one they believed.
+    const amount = earnedLineValue(it, pct);
     if (amount <= 0) continue;
 
     const when =
@@ -4873,9 +4889,9 @@ function computeValueToDate(project) {
   for (const it of items) {
     const factor = valuationFactor(it, statusField);
     if (factor <= 0) continue;
-    const q = safeNum(it?.actualQty != null ? it.actualQty : it.qty);
-    const r = safeNum(it?.actualRate != null ? it.actualRate : it.rate);
-    measured += q * r * factor;
+    // Same helper the daily valuation log uses, so the certificate and the
+    // printed application cannot quote different figures for the same line.
+    measured += earnedLineValue(it, factor * 100);
   }
 
   // Variations and PC sums each carry a `completed` flag. Both contribute
@@ -7066,11 +7082,15 @@ async function priceLineFromRate(req, res) {
       unitCost: Number(req.body?.unitCost) || 0,
     });
     if (!built) {
-      return res.status(422).json({
-        error:
-          "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+      // Three unrelated causes used to share one message, so a line with no
+      // quantity was told the RATE had no build-up — and the QS would go and
+      // rebuild a rate that was never the problem.
+      const why = whyRateCannotPrice(item, rate, { unitCost: Number(req.body?.unitCost) || 0 }) || {
         code: "RATE_HAS_NO_BUILDUP",
-      });
+        message:
+          "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+      };
+      return res.status(422).json({ error: why.message, code: why.code });
     }
 
     project.budgetItems = sanitizeBudgetItems(

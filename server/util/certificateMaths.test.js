@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { certificateMoney, certifiedSoFar, percentCertified } from "./certificateMaths.js";
+import {
+  certificateMoney,
+  certifiedSoFar,
+  earnedLineValue,
+  percentCertified,
+} from "./certificateMaths.js";
 
 // Six valuations to 80%, which is the scenario nobody had run end to end.
 
@@ -141,4 +146,52 @@ test("a percentage that is not a number does not become NaN money", () => {
     if (typeof v === "number") assert.equal(Number.isFinite(v), true, k);
   }
   assert.equal(c.retentionPct, 5, "falls back to the standard 5%");
+});
+
+// ── One line, one value, two documents ──
+//
+// After a lock, a re-measure lives in actualQty/actualRate beside the frozen
+// contract figures. computeValueToDate (the interim CERTIFICATE) read the
+// actuals; the daily valuation log (the printed Interim Payment Application)
+// read qty * rate. So a line re-measured from 120 m³ to 134 was certified at
+// ₦11,390,000 and printed at ₦10,200,000, same work, same day.
+
+const CONCRETE = { qty: 120, rate: 85_000 };
+
+test("a re-measured line is worth the measured quantity", () => {
+  assert.equal(earnedLineValue({ ...CONCRETE, actualQty: 134 }), 11_390_000);
+});
+
+test("an unmeasured line is worth its contract figures", () => {
+  assert.equal(earnedLineValue(CONCRETE), 10_200_000);
+  assert.equal(earnedLineValue({ ...CONCRETE, actualQty: null }), 10_200_000);
+});
+
+test("a measured ZERO is an omission, not a missing measurement", () => {
+  // The null-is-not-a-zero rule, on the money side: 0 means the work was
+  // measured and there is none of it.
+  assert.equal(earnedLineValue({ ...CONCRETE, actualQty: 0 }), 0);
+});
+
+test("an agreed actual RATE is used too", () => {
+  assert.equal(earnedLineValue({ ...CONCRETE, actualRate: 90_000 }), 10_800_000);
+  assert.equal(earnedLineValue({ ...CONCRETE, actualQty: 134, actualRate: 90_000 }), 12_060_000);
+});
+
+test("part-complete work earns part of the line", () => {
+  assert.equal(earnedLineValue(CONCRETE, 50), 5_100_000);
+  assert.equal(earnedLineValue({ ...CONCRETE, actualQty: 134 }, 50), 5_695_000);
+});
+
+test("a percentage outside 0-100 cannot earn more than the line", () => {
+  assert.equal(earnedLineValue(CONCRETE, 150), 10_200_000);
+  assert.equal(earnedLineValue(CONCRETE, -20), 0);
+});
+
+test("nothing priced earns nothing, and never NaN", () => {
+  for (const it of [{}, null, { qty: "abc", rate: "x" }, { qty: 10 }]) {
+    const v = earnedLineValue(it);
+    assert.equal(Number.isFinite(v), true, JSON.stringify(it));
+    assert.equal(v, 0);
+  }
 });

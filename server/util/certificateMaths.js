@@ -125,3 +125,29 @@ export function percentCertified(cumulativeValue, worksValue) {
   if (works <= 0) return 0;
   return Math.round((num(cumulativeValue) / works) * 1000) / 10;
 }
+
+/**
+ * What one bill line is worth, at the quantity and rate that actually apply.
+ *
+ * ONE RULE, BECAUSE TWO PAYMENT DOCUMENTS MUST NOT DISAGREE
+ *
+ * After a contract is locked a re-measure is recorded in actualQty/actualRate
+ * beside the frozen contract figures. computeValueToDate — which feeds the
+ * interim CERTIFICATE — read the actuals. The daily valuation log, which feeds
+ * the printed Interim Payment Application, read `qty * rate`.
+ *
+ * So on a line certified at 134 m³ the certificate said ₦11,390,000 and the
+ * application printed ₦10,200,000, for the same work, on the same day, from the
+ * same project. Whichever the client received first was the one they believed.
+ *
+ * Both now call this.
+ *
+ * @param {object} item
+ * @param {number} [percentComplete]  0-100; omit for the whole line
+ */
+export function earnedLineValue(item, percentComplete = 100) {
+  const qty = item?.actualQty != null ? num(item.actualQty) : num(item?.qty);
+  const rate = item?.actualRate != null ? num(item.actualRate) : num(item?.rate);
+  const pct = Math.max(0, Math.min(100, num(percentComplete)));
+  return qty * rate * (pct / 100);
+}

@@ -10,11 +10,12 @@ import assert from "node:assert/strict";
 
 import { resolveConstants, MC } from "./materialConstants.js";
 import {
-  buildRateBudgetRows,
+  RATEGEN_SOURCE,
   applyRateRows,
+  buildRateBudgetRows,
   isRateGenRow,
   splitRateByKind,
-  RATEGEN_SOURCE,
+  whyRateCannotPrice,
 } from "./rateToBudget.js";
 import { deriveLineRate, deriveBillRatesFromBudget } from "./deriveBillRates.js";
 import { isGeneratedRow } from "./mlSchedule.js";
@@ -395,4 +396,65 @@ test("a converted rate reproduces the converted figure, not the rate's own", () 
   const it = item({ unit: "m2", qty: 40 });
   const { rows } = buildRateBudgetRows(it, concreteRate(), K, { priceFor, unitCost: 2025 });
   assert.equal(deriveLineRate(it.qty, rows).rate, 2025);
+});
+
+// ── Why a rate could not price a line ──
+//
+// buildRateBudgetRows answers null for three unrelated reasons and the route
+// reported all of them as RATE_HAS_NO_BUILDUP. So a preliminaries line imported
+// with a unit of "Item" and no quantity — the importer's own amount-only lump
+// case — told the QS that a perfectly built-up rate had no build-up, and they
+// would go and rebuild a rate that was never the problem.
+
+const builtUp = {
+  totalCost: 42_000,
+  overheadPercent: 10,
+  profitPercent: 10,
+  breakdown: [
+    { componentName: "Cement", refKind: "material", quantity: 6, unitPrice: 800, lineTotal: 4_800 },
+  ],
+};
+
+test("a line with no QUANTITY is not told the rate is at fault", () => {
+  const why = whyRateCannotPrice({ code: "BQ-1", qty: 0, unit: "Item" }, builtUp);
+  assert.equal(why.code, "LINE_HAS_NO_QUANTITY");
+  assert.match(why.message, /no quantity/);
+  // And it says what to do instead.
+  assert.match(why.message, /lump sum/);
+});
+
+test("a line with no REFERENCE says so", () => {
+  assert.equal(whyRateCannotPrice({ code: "", qty: 10 }, builtUp).code, "LINE_HAS_NO_CODE");
+});
+
+test("a rate with no build-up still says exactly that", () => {
+  const why = whyRateCannotPrice({ code: "BQ-1", qty: 10 }, { totalCost: 5_000 });
+  assert.equal(why.code, "RATE_HAS_NO_BUILDUP");
+});
+
+test("a rate that prices to nothing is its own answer", () => {
+  // Applying it would leave the line unpriced, which is not the same as having
+  // no build-up to split.
+  const why = whyRateCannotPrice({ code: "BQ-1", qty: 10 }, { ...builtUp, totalCost: 0 });
+  assert.equal(why.code, "RATE_IS_WORTH_NOTHING");
+});
+
+test("nothing wrong, nothing said", () => {
+  assert.equal(whyRateCannotPrice({ code: "BQ-1", qty: 10 }, builtUp), null);
+});
+
+test("the reason agrees with what buildRateBudgetRows actually did", () => {
+  // Same guards, same order — so a refusal always has a matching explanation
+  // and a success never has one. K is the real constants map: the valid case
+  // gets past the guards and into the arithmetic, which reads it.
+  const cases = [
+    { code: "", qty: 10 },
+    { code: "BQ-1", qty: 0 },
+    { code: "BQ-1", qty: 10 },
+  ];
+  for (const item of cases) {
+    const built = buildRateBudgetRows(item, builtUp, K, { priceFor: () => 0 });
+    const why = whyRateCannotPrice(item, builtUp);
+    assert.equal(Boolean(built), !why, JSON.stringify(item));
+  }
 });

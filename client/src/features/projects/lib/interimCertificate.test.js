@@ -106,3 +106,33 @@ describe("the interim payment certificate", () => {
     expect(c.amountDue).toBe(0);
   });
 });
+
+describe("the sub-rows add up to the line above them", () => {
+  // "Less previous payments" is each earlier certificate NET of its own
+  // retention. Three surfaces print the sub-rows — the PDF, the spreadsheet and
+  // the screen — and two of them printed the GROSS, so at 10% retention a first
+  // valuation of ₦100m showed "₦100,000,000" beneath a total of "₦90,000,000".
+  it("every previous entry carries the amount actually paid", () => {
+    const c = buildCertificate(V2, [V1, V2], settings(), 0);
+    expect(c.previousEntries).toHaveLength(1);
+    expect(c.previousEntries[0].netAmount).toBe(90_000_000);
+    // And that is exactly the "Less previous payments" line.
+    expect(c.previousPayments).toBe(90_000_000);
+    const listed = c.previousEntries.reduce((a, e) => a + e.netAmount, 0);
+    expect(listed).toBe(c.previousPayments);
+  });
+
+  it("holds over SIX valuations, not just the second", () => {
+    const six = [V1, V2, V3, val("2026-06-30", 20_000_000), val("2026-07-31", 20_000_000), val("2026-08-31", 10_000_000)];
+    const c = buildCertificate(six[5], six, settings(), 0);
+    const listed = c.previousEntries.reduce((a, e) => a + e.netAmount, 0);
+    expect(c.previousEntries).toHaveLength(5);
+    expect(listed).toBeCloseTo(c.previousPayments, 6);
+  });
+
+  it("the gross is still available, and is NOT what the sub-rows show", () => {
+    const c = buildCertificate(V2, [V1, V2], settings(), 0);
+    expect(c.previousGross).toBe(100_000_000);
+    expect(c.previousEntries[0].netAmount).not.toBe(c.previousEntries[0].totalAmount);
+  });
+});

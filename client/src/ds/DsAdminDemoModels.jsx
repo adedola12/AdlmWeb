@@ -143,6 +143,11 @@ const FIELDS = [
   },
 ];
 
+// The editable half. Purpose and the course are NOT here: moving a demo model
+// into a course would change who may download it, and the file is already
+// uploaded under one story — that is a remove-and-add, not an edit.
+const EDIT_FIELDS = FIELDS.filter((f) => !["purpose", "courseSku", "discipline"].includes(f.k));
+
 const BLANK = {
   title: "",
   description: "",
@@ -206,6 +211,63 @@ export default function DsAdminDemoModels() {
     const exts = (d?.formats || []).map((f) => f.ext).filter(Boolean);
     return exts.length ? exts.join(",") : FALLBACK_ACCEPT;
   }, [d]);
+
+  // PATCH accepts title, description, productKey, access and published, and the
+  // only thing that ever called it sent { published }. So an admin who mistyped
+  // a title, or picked the wrong audience, had to REMOVE a 700 MB upload and do
+  // it again — for a text field the endpoint was already willing to change.
+  function startEdit(m) {
+    setOpen({
+      mode: "edit",
+      id: m.id,
+      values: {
+        title: m.title || "",
+        description: m.description || "",
+        purpose: m.purpose || "demo",
+        courseSku: m.courseSku || "",
+        productKey: m.productKey || "",
+        access: m.access === "course" ? "signed-in" : m.access || "signed-in",
+        discipline: m.discipline || "",
+      },
+      errors: {},
+      isCourse: m.purpose === "course",
+    });
+    if (m.purpose === "course") loadCourses();
+  }
+
+  async function saveEdit() {
+    const values = open.values;
+    // Only the fields the drawer shows are validated: the file is not being
+    // changed, and there is no upload to check.
+    const errors = checkFields(EDIT_FIELDS, values);
+    if (Object.keys(errors).length) {
+      setOpen((o) => ({ ...o, errors }));
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiAuthed(`/admin/demo-models/${open.id}`, {
+        token: accessToken,
+        method: "PATCH",
+        body: {
+          title: values.title,
+          description: values.description,
+          // A course model's audience IS its course, set server-side, so the
+          // access level is not offered for one and not sent.
+          ...(open.isCourse
+            ? {}
+            : { productKey: values.productKey, access: values.access }),
+        },
+      });
+      setOpen(null);
+      say("Saved.");
+      await load();
+    } catch (e) {
+      say(String(e?.message || "That change could not be saved."));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function startAdd() {
     setFile(null);
@@ -382,6 +444,14 @@ export default function DsAdminDemoModels() {
           ) : null}
           <button
             type="button"
+            className="ds-btn btn-o ds-btn-sm"
+            disabled={busy}
+            onClick={() => startEdit(m)}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
             className={`ds-btn ds-btn-sm ${m.published ? "btn-o" : "btn-p"}`}
             disabled={busy || (!m.published && !m.ready)}
             title={!m.ready && !m.published ? "The file has not finished uploading." : undefined}
@@ -463,6 +533,45 @@ export default function DsAdminDemoModels() {
           }
         />
       )}
+
+      {open?.mode === "edit" ? (
+        <AdmDrawer
+          title="Edit this model"
+          intro="The file itself is not changed. To replace it, add a new model and remove this one."
+          onClose={() => (busy ? null : setOpen(null))}
+          foot={
+            <>
+              <button
+                type="button"
+                className="ds-btn btn-o ds-btn-sm"
+                disabled={busy}
+                onClick={() => setOpen(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ds-btn btn-p ds-btn-sm"
+                disabled={busy}
+                onClick={saveEdit}
+              >
+                {busy ? "Saving…" : "Save"}
+              </button>
+            </>
+          }
+        >
+          <AdmFields
+            // A course model's audience is its course, so the access question is
+            // not asked — the server sets it and would refuse anything else.
+            fields={EDIT_FIELDS.filter(
+              (f) => !(open.isCourse && ["productKey", "access"].includes(f.k)),
+            ).map((f) => ({ ...f, when: undefined }))}
+            values={open.values}
+            errors={open.errors}
+            onChange={(values) => setOpen((o) => ({ ...o, values }))}
+          />
+        </AdmDrawer>
+      ) : null}
 
       {open?.mode === "add" ? (
         <AdmDrawer
