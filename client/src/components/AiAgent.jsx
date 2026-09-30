@@ -1,8 +1,9 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
 import ChatMarkdown from "../lib/chatMarkdown.jsx";
+import { agentPageContext } from "../lib/agentPageContext.js";
 
 /**
  * ADLM AI Agent ("Ada") — a conversion-focused conversational assistant that
@@ -77,6 +78,10 @@ function getSessionId() {
 
 export default function AiAgent() {
   const navigate = useNavigate();
+  // Which project the reader is looking at, so a question about "this job"
+  // does not have to name it. A hint only — the server resolves it against the
+  // caller's own projects (lib/agentPageContext.js).
+  const location = useLocation();
   const { user, accessToken } = useAuth();
 
   const [open, setOpen] = React.useState(false);
@@ -140,6 +145,7 @@ export default function AiAgent() {
           message: text,
           history,
           sessionId: sessionRef.current,
+          ...agentPageContext(location),
           // This chat renders light Markdown (lib/chatMarkdown.jsx).
           format: "markdown",
         }),

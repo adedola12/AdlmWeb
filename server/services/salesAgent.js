@@ -13,6 +13,7 @@ import {
   getProjectDetails,
   getAccountSummary,
   getResourceQuantity,
+  getProcurementSchedule,
   getProjectBudget,
   getProjectBill,
   getBillItemsForAi,
@@ -164,6 +165,30 @@ const ACCOUNT_TOOLS = [
         },
       },
       required: ["resource"],
+    },
+  },
+  {
+    name: "get_procurement_schedule",
+    description:
+      "What the user still has to BUY on a project, and WHEN each thing must be " +
+      "ordered — soonest first, with anything already overdue called out. This is " +
+      "THE tool for 'what do I buy next', 'what should I be ordering this week', " +
+      "'my procurement list', 'what is late to order', 'next spend'. Order dates " +
+      "come from the programme: the earliest task that needs a material, less the " +
+      "lead time. Say which project, or omit it to use the one they are looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "Project name. Omit to use the project the user is viewing.",
+        },
+        leadDays: {
+          type: "number",
+          description: "Supplier lead time in days. Defaults to 14.",
+        },
+      },
+      additionalProperties: false,
     },
   },
   {
@@ -521,14 +546,20 @@ async function handleAccountTool(name, input, ctx) {
   try {
     if (name === "get_my_projects") return await getPortfolioSummary(ctx.user._id);
     if (name === "get_my_account") return await getAccountSummary(ctx.user);
+    // ctx.page is the address the user is standing on. It is used only when
+    // they did not name a project — see resolveProject.
     if (name === "get_project_details")
-      return await getProjectDetails(ctx.user._id, input?.projectName);
+      return await getProjectDetails(ctx.user._id, input?.projectName, ctx.page);
     if (name === "get_resource_quantity")
-      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName);
+      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName, ctx.page);
     if (name === "get_project_budget")
-      return await getProjectBudget(ctx.user._id, input?.projectName);
+      return await getProjectBudget(ctx.user._id, input?.projectName, ctx.page);
+    if (name === "get_procurement_schedule")
+      return await getProcurementSchedule(ctx.user._id, input?.projectName, ctx.page, {
+        leadDays: input?.leadDays,
+      });
     if (name === "get_project_bill")
-      return await getProjectBill(ctx.user._id, input?.projectName, input?.search);
+      return await getProjectBill(ctx.user._id, input?.projectName, input?.search, ctx.page);
 
     // ── ADLM AI Service (AWS) — always fed the user's REAL bill lines ──
     if (name === "check_my_rates" || name === "find_project_errors") {
@@ -630,6 +661,18 @@ export async function runSalesAgent(history, message, opts = {}) {
     accessToken: opts.accessToken || "",
     sessionId: opts.sessionId || "",
     ip: opts.ip || "",
+    // WHERE THE USER IS STANDING.
+    //
+    // The widget is mounted on every route and used to send nothing about the
+    // page, so a user on their own project page asking "what is left to buy on
+    // this job" was asked which project they meant. The client now sends the
+    // reference its own address carries — an ObjectId on the classic workspace,
+    // a slug on the new one — and the tools fall back to it only when no
+    // project was named.
+    page: {
+      projectRef: String(opts.page?.projectRef || "").trim().slice(0, 120),
+      productKey: String(opts.page?.productKey || "").trim().toLowerCase().slice(0, 40),
+    },
     productIndex,
     pendingActions: [],
   };
