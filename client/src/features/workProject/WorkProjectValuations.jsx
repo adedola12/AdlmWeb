@@ -101,14 +101,18 @@ function Unlocked({ project, canEdit, view, onView }) {
   // renders once it IS locked.
   const progress = React.useMemo(() => completePercent(project), [project]);
   const contractSum = Number(project?.contract?.contractSum) || totals.total;
+  // What a certificate is drawn against: measured work, sums, preliminaries and
+  // approved variations — not contingency, not VAT. One definition, in
+  // projectTotals, so this screen and the certificate cannot disagree.
+  const worksValue = Number(totals.works) || 0;
 
   const k = React.useMemo(
-    () => valuationKpis(project, { contractSum, progressPercent: progress }),
-    [project, contractSum, progress],
+    () => valuationKpis(project, { contractSum, worksValue, progressPercent: progress }),
+    [project, contractSum, worksValue, progress],
   );
   const bars = React.useMemo(
-    () => certificateBars(project, { contractSum, progressPercent: progress }),
-    [project, contractSum, progress],
+    () => certificateBars(project, { contractSum, worksValue, progressPercent: progress }),
+    [project, contractSum, worksValue, progress],
   );
   const certs = React.useMemo(() => certificatesNewestFirst(project), [project]);
   const settings = project?.valuationSettings || {};

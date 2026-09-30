@@ -637,6 +637,7 @@ import {
   splitMergedWrite,
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
+import { certificateMoney, certifiedSoFar } from "../util/certificateMaths.js";
 import { sendMail } from "../util/mailer.js";
 import { contractLocked } from "../util/emailContent.js";
 import {
@@ -4976,10 +4977,10 @@ async function issueCertificate(req, res) {
     const previousCerts = (project.certificates || []).filter(
       (c) => c.status !== "draft" || Number.isFinite(Number(c.thisCertificate)),
     );
-    const lessPrevious = previousCerts.reduce(
-      (acc, c) => acc + safeNum(c.thisCertificate),
-      0,
-    );
+    // Each certificate's OWN share, summed. A recovery (a negative one)
+    // subtracts, so the next certificate starts from the corrected position
+    // instead of carrying an overpayment forward for ever.
+    const lessPrevious = certifiedSoFar(previousCerts);
 
     // A viewer who cannot see rates was served a certificate panel of zeros,
     // so the figures they send back are those zeros. Ignore the body's money
@@ -4991,8 +4992,6 @@ async function issueCertificate(req, res) {
     const cumulativeValue = moneyFromClient
       ? safeNum(req.body?.cumulativeValue ?? rollup.cumulativeValue)
       : safeNum(rollup.cumulativeValue);
-    const thisCertificate = Math.max(0, cumulativeValue - lessPrevious);
-
     // Rates default to the project's valuation settings.
     const valSettings = project.valuationSettings || {};
     const retentionPct =
@@ -5009,11 +5008,30 @@ async function issueCertificate(req, res) {
         : safeNum(valSettings.withholdingPct) || 2.5;
     const retentionReleased = moneyFromClient ? safeNum(req.body?.retentionReleased) : 0;
 
-    const retentionAmount = (thisCertificate * retentionPct) / 100;
-    const netBeforeTax = thisCertificate - retentionAmount + retentionReleased;
-    const vatAmount = (netBeforeTax * vatPct) / 100;
-    const whtAmount = (netBeforeTax * whtPct) / 100;
-    const netPayable = netBeforeTax + vatAmount - whtAmount;
+    // Every figure on the certificate, in one tested place. In particular
+    // `thisCertificate` is NO LONGER CLAMPED AT ZERO: when the value earned
+    // falls below what has already been certified — a certified variation later
+    // rejected, or a downward re-measure — the true figure is negative, and a
+    // negative interim certificate is how an overpayment is recovered. The
+    // clamp printed ₦0 payable, ₦0 retention and ₦0 VAT, with nothing anywhere
+    // saying the over-certified amount was outstanding.
+    const {
+      thisCertificate,
+      retentionAmount,
+      netBeforeTax,
+      vatAmount,
+      whtAmount,
+      netPayable,
+      overCertified,
+      overCertifiedBy,
+    } = certificateMoney({
+      cumulativeValue,
+      lessPrevious,
+      retentionPct,
+      retentionReleased,
+      vatPct,
+      whtPct,
+    });
 
     const number =
       (project.certificates || []).reduce((acc, c) => Math.max(acc, Number(c.number) || 0), 0) + 1;
@@ -5047,6 +5065,10 @@ async function issueCertificate(req, res) {
       notes,
       snapshotCompletedCount: rollup.markedItems,
       snapshotTotalCount: rollup.totalItems,
+      // So a screen and a PDF can both explain a negative certificate rather
+      // than printing a figure nobody expects.
+      overCertified,
+      overCertifiedBy,
     };
 
     project.certificates = [...(project.certificates || []), cert];
