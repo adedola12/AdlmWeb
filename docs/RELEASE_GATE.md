@@ -24,36 +24,6 @@ Switching a product **off** is never gated: that is the safety action.
   Hub is offered the pending build (`GET /me/deployments` overlays it for the
   approver only), so they install and test exactly the bytes they approve.
 
-## Rollout: firms first, everyone three months later
-
-Standing rule from 26 Sep 2026 (`server/util/releaseRollout.js`).
-
-- **Who goes first.** Every account of a firm holding **more than 5** active
-  organisation seats. Seats are added up across all the firm's products and all
-  its accounts. A firm is the organisation name on its entitlements, compared
-  trimmed and case-folded, the way `/admin/organizations` groups them.
-- **Approve means "to firms".** On approval the build is stored as the
-  deployment's `earlyAccess`. The live fields, which everyone else is offered,
-  do not change. `GET /me/deployments` swaps in the early build for accounts in
-  the first group, flagged `earlyAccess: true` with `generalVersion`. The
-  "new version" email goes to those accounts only.
-- **Everyone, by hand, after three months.** The "Release to everyone" button
-  on `/admin/releases` unlocks three calendar months after the build first went
-  to firms, and the approver is emailed that morning. Nothing moves on its own.
-  Pressing it writes the build to the live row and widens its email to every
-  licence holder not already mailed.
-- **A newer build during the window** replaces the firms' build but keeps the
-  original clock, so fixes do not push single users back another three months.
-- **Hotfixes go to everyone.** Tick "Hotfix: release to everyone now" on the
-  pending release, or stage it with `rollout: "everyone"` / `hotfix: true` in
-  the PUT body. It still needs the approver. If it catches up with the firms'
-  build, the early stage ends.
-- **First releases, a product switched back on, same-version fixes and
-  rollbacks** always go to everyone, because single users would otherwise have
-  nothing to stay on.
-- **Take back from firms** (note required) clears the early build. Firms are
-  offered the live build again, and its unsent firms-only email is cancelled.
-
 ## The emergency override (visible, not secret)
 
 There is **no hidden bypass**, and none should ever be added. A secret way
@@ -111,22 +81,14 @@ invalidates it and the batch has to be tested again. A database problem, an
 unreachable API or an unknown commit all answer **not approved**: the check
 fails closed.
 
-**Only user-facing UI needs the batch** (owner's rule, 29 Sep 2026). The
-check first lists the pull request's changed files. If none is under
-`client/` and none is a gate file, it is a code fix (server, infra, scripts,
-tests) and the check passes without asking the release desk, so it ships as
-soon as the other checks pass. The gate files always need the batch:
-
-- `.github/` (every workflow, this check included)
-- `docs/RELEASE_GATE.md`, `infra/lib/adlm-release-gate-stack.ts`
-- `server/models/Release{Batch,Candidate,GateConfig}.js`
-- `server/routes/{admin.batch,admin.releases,releaseGatePublic}.js`
-- `server/scripts/release-gate.mjs`, `server/util/releaseGate*.js`
-- `server/util/rbac.js` (the roles decide who can approve)
-
-A renamed file counts under both names. When the list cannot be read for
-certain (the API call fails, 3,000+ files, a manual run with no pull
-request) the check asks for a batch as before.
+**Only user-facing UI needs him (owner's rule, 29 Sep 2026).** The check first
+reads the pull request's changed files. When nothing is under `client/` and
+none of the gate's own files changed (`.github/`, this runbook, any
+`server/**/*release*` file), it passes at once: a server fix, a script or a
+test ships on its checks, without a batch. Anything under `client/` or the gate
+still needs his approved batch. It runs as `pull_request_target`, so the copy
+on `main` decides and a pull request cannot rewrite its own gate. If it cannot
+read the file list it asks for a batch.
 
 To make it binding: Settings > Branches > main > Require status checks, add
 **approved batch**, keep **Include administrators** ticked, and (only then)

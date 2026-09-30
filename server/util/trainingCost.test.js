@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isRoadTrip, trainingCostEstimate } from "./trainingCost.js";
+import { DEFAULT_PEOPLE, isRoadTrip, TRAINING_DAYS, trainingCostEstimate } from "./trainingCost.js";
 
 const abuja = {
   city: "Abuja", state: "FCT", durationDays: 3, trainingCostNGN: 1_500_000,
@@ -31,21 +31,29 @@ test("the flag on the location beats the city name", () => {
   assert.equal(isRoadTrip({ city: "Lagos", travel: { byRoad: false } }), false);
 });
 
-test("two people, two rooms, three nights — the arithmetic", () => {
+test("two people, two rooms, a full week — the arithmetic", () => {
+  // A training is a week, whatever the location's teaching days say: the trip
+  // is a week and costing it shorter is how it comes in under-budgeted.
   const e = trainingCostEstimate(abuja);
-  assert.deepEqual(e.assumptions, { people: 2, rooms: 2, days: 3, nights: 3, byRoad: false });
+  assert.deepEqual(e.assumptions, { people: 2, rooms: 2, days: 7, nights: 7, byRoad: false });
   const by = Object.fromEntries(e.lines.map((l) => [l.key, l.amount]));
   assert.equal(by.flights, 180_000 * 2);
-  assert.equal(by.hotel, 60_000 * 2 * 3);
-  assert.equal(by.feeding, 20_000 * 2 * 3);
-  assert.equal(e.total, 360_000 + 360_000 + 120_000);
+  assert.equal(by.hotel, 60_000 * 2 * 7);
+  assert.equal(by.feeding, 20_000 * 2 * 7);
 });
 
-test("Lagos: a return fare each, every day", () => {
+test("a week and two people are the defaults, not the location's own duration", () => {
+  assert.equal(TRAINING_DAYS, 7);
+  assert.equal(DEFAULT_PEOPLE, 2);
+  // abuja.durationDays is 3 — what the client is sold. The trip is still a week.
+  assert.equal(trainingCostEstimate({ ...abuja, durationDays: 1 }).assumptions.days, 7);
+});
+
+test("Lagos: a return fare each, every day of the week", () => {
   const e = trainingCostEstimate(lagos);
   const by = Object.fromEntries(e.lines.map((l) => [l.key, l.amount]));
-  assert.equal(by.transport, 6_000 * 2 * 2 * 2, "2 people × 2 days × return");
-  assert.equal(by.feeding, 20_000 * 2 * 2);
+  assert.equal(by.transport, 6_000 * 2 * 7 * 2, "2 people × 7 days × return");
+  assert.equal(by.feeding, 20_000 * 2 * 7);
 });
 
 test("one room can be asked for, but never assumed", () => {

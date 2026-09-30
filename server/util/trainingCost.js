@@ -31,6 +31,11 @@ const num = (v) => {
 
 const low = (v) => String(v || "").trim().toLowerCase();
 
+/** A physical training runs a week. */
+export const TRAINING_DAYS = 7;
+/** Two go: the owner and Ebun. */
+export const DEFAULT_PEOPLE = 2;
+
 /**
  * Is this somewhere the team travels to by road rather than by air?
  *
@@ -61,8 +66,13 @@ export function isRoadTrip(location) {
  */
 export function trainingCostEstimate(location, opts = {}) {
   const t = location?.travel || {};
-  const people = Math.max(1, Math.round(Number(opts.people) || 2));
-  const days = Math.max(1, Math.round(Number(opts.days) || Number(location?.durationDays) || 1));
+  // Two, because it is the owner and Ebun who go.
+  const people = Math.max(1, Math.round(Number(opts.people) || DEFAULT_PEOPLE));
+  // A training is a week. The location's own durationDays is what the CLIENT is
+  // sold; the trip is a week whatever the teaching days say, and costing it at
+  // the shorter figure is how a trip comes in under-budgeted. Overridable for a
+  // one-off.
+  const days = Math.max(1, Math.round(Number(opts.days) || TRAINING_DAYS));
   const nights = Math.max(0, Math.round(Number(opts.nights ?? days)));
   const rooms = Math.max(1, Math.round(Number(opts.rooms) || people));
   const road = isRoadTrip(location);
