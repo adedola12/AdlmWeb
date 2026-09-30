@@ -145,6 +145,15 @@ export const EMAILS = [
     editable: true,
   },
   {
+    key: "project.contract-locked",
+    name: "Contract locked",
+    when:
+      "The contract on a project is locked; sent to every collaborator on it, and to the owner " +
+      "when somebody else locked it",
+    file: "routes/projects.js",
+    editable: true,
+  },
+  {
     key: "video.published",
     name: "New video on the channel",
     when: "ADLM Studio publishes a video, found by the poller or announced by hand",

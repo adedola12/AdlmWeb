@@ -637,6 +637,13 @@ import {
   splitMergedWrite,
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
+import { sendMail } from "../util/mailer.js";
+import { contractLocked } from "../util/emailContent.js";
+import {
+  isShared,
+  lockedByName,
+  lockNoticeRecipients,
+} from "../util/contractLockNotice.js";
 import {
   maskSharedMoney,
   readerMaySeeRates,
@@ -4614,9 +4621,79 @@ async function lockContract(req, res) {
       contractSum,
     });
     res.json({ ok: true, contract: contractOut, version: project.version });
+
+    // TELL EVERYBODY ELSE ON THE PROJECT.
+    //
+    // Locking changes what editing MEANS: a re-measure stops moving the contract
+    // quantity and records an actual beside it, new scope becomes a variation,
+    // and progress starts feeding the valuations. A collaborator who carries on
+    // without knowing believes they are correcting the contract and is in fact
+    // recording a variation against it. The activity trail records the lock, but
+    // nobody reads an activity trail to find out the rules changed under them.
+    //
+    // AFTER res.json, and never awaited. A mail outage must not fail a contract
+    // lock, and a notification must not sit in a request somebody is waiting on
+    // — the God-login OTP did exactly that until it was fixed.
+    notifyContractLocked(project, userId, contractSum).catch((e) => {
+      console.error("[contract-lock] notice:", e?.message || e);
+    });
   } catch (err) {
     console.error("POST lock error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+}
+
+/**
+ * Mail the collaborators that a contract is now locked.
+ *
+ * Who and what is decided in util/contractLockNotice.js, which is pure and
+ * tested. This part is only the reads and the send, and it never throws at its
+ * caller: everything here is after the response.
+ *
+ * SES only. If SES refuses, this reports and stops — it does not try another
+ * way (standing rule, 15 September).
+ */
+async function notifyContractLocked(project, lockedByUserId, contractSum) {
+  // The overwhelming majority of projects have no collaborators. Nothing to
+  // send, so not even the user reads are done.
+  if (!isShared(project)) return;
+
+  const ids = [
+    String(project.userId || ""),
+    ...(project.collaborators || []).map((c) => String(c?.userId || "")),
+  ].filter(Boolean);
+
+  const [locker, people] = await Promise.all([
+    User.findById(lockedByUserId, { name: 1, firstName: 1, lastName: 1, email: 1 }).lean(),
+    User.find({ _id: { $in: ids } }, { email: 1, name: 1, firstName: 1 }).lean(),
+  ]);
+  const byId = new Map(people.map((u) => [String(u._id), u]));
+
+  const to = lockNoticeRecipients(project, locker, byId);
+  if (!to.length) return;
+
+  const href = `${process.env.CLIENT_URL || "https://www.adlmstudio.net"}/projects/${encodeURIComponent(
+    String(project.productKey || "revit"),
+  )}`;
+  const by = lockedByName(locker);
+
+  // One at a time rather than one mail to everybody: each is addressed by name,
+  // and a BCC list would show every collaborator that the others exist.
+  for (const r of to) {
+    const { subject, html } = contractLocked({
+      firstName: r.firstName,
+      projectName: String(project.name || "your project"),
+      lockedBy: by,
+      contractSum,
+      currency: String(project.currency || "NGN"),
+      href,
+    });
+    try {
+      await sendMail({ to: r.email, subject, html });
+    } catch (e) {
+      // One bad address must not stop the rest being told.
+      console.error(`[contract-lock] could not tell ${r.email}: ${e?.message || e}`);
+    }
   }
 }
 
