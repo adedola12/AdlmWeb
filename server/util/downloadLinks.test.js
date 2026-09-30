@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveDownload, directLink, driveFileId, _resetDownloadCache, forgetStored } from "./downloadLinks.js";
+import { resolveDownload, directLink, driveFileId, isPublicHubCopy, _resetDownloadCache, forgetStored } from "./downloadLinks.js";
 
 const settings = {
   mobileAppUrl: "https://drive.google.com/file/d/1Pr16vXqTRAOgQrB2Fk3GzZnyMBPiHPRO/view?usp=sharing",
-  installerHubUrl: "https://pub-abc.r2.dev/adlm/installer-hub/171-Setup.exe",
+  // NOT a public copy under adlm/installer-hub. The fail-safe is a real idea —
+  // storage being down should not take the button with it — but this fixture
+  // used to be exactly the shape that skips the paid gate, so the tests below
+  // were asserting that the hole stayed open.
+  installerHubUrl: "https://cdn.adlmstudio.net/hub/ADLM-Installer-Hub-Setup.exe",
 };
 
 test("a file in our storage wins, as a short-lived signed link", async () => {
@@ -65,4 +69,46 @@ test("an app uploaded from Site Settings is served at once, not after the cache 
   const r = await resolveDownload("android", { settings, store, now: t + 60_000 });
   assert.equal(r.source, "store");
   assert.equal(r.url, "https://signed/apps/adlm-android.apk");
+});
+
+test("a public copy of the Hub is refused on the way out, not just on the way in", async () => {
+  // The Hub is paid-accounts-only. Builds used to be written to the public
+  // prefix adlm/installer-hub and the URL pasted into the setting; anyone with
+  // that link downloaded the Hub with no licence check. New ones have been
+  // refused for a while, but only on SAVE — so a value stored before that guard
+  // was still being served. On 30 Sep 2026 the live gate was handing out
+  // pub-….r2.dev/adlm/installer-hub/…-ADLMInstallerHub-v2.0.0.zip while telling
+  // the customer the file was ADLM-Installer-Hub-Setup.exe.
+  _resetDownloadCache();
+  const store = { headFile: async () => null, presignDownload: async () => assert.fail("not stored") };
+  const leaky = { installerHubUrl: "https://pub-abc.r2.dev/adlm/installer-hub/171-Setup.exe" };
+  const r = await resolveDownload("installer-hub", { settings: leaky, store });
+  assert.equal(r.url, "", "a gate-skipping link was served");
+  assert.equal(r.source, "none");
+  assert.equal(r.refused, "public-copy");
+  // It still names the file it WOULD serve, so the screen can say what to upload.
+  assert.equal(r.fileName, "ADLM-Installer-Hub-Setup.exe");
+});
+
+test("a zip is refused the same way — the gate promises a Setup.exe", async () => {
+  _resetDownloadCache();
+  const store = { headFile: async () => null, presignDownload: async () => assert.fail("not stored") };
+  const zip = { installerHubUrl: "https://pub-abc.r2.dev/adlm/installer-hub/1790559616492-ADLMInstallerHub-v2.0.0.zip" };
+  assert.equal((await resolveDownload("installer-hub", { settings: zip, store })).url, "");
+});
+
+test("the android download is untouched — only the Hub has a public prefix", async () => {
+  _resetDownloadCache();
+  const store = { headFile: async () => null, presignDownload: async () => assert.fail("not stored") };
+  const r = await resolveDownload("android", { settings, store });
+  assert.equal(r.source, "drive");
+});
+
+test("isPublicHubCopy reads the path, not the host", () => {
+  assert.equal(isPublicHubCopy("https://pub-abc.r2.dev/adlm/installer-hub/x.exe"), true);
+  assert.equal(isPublicHubCopy("https://res.cloudinary.com/y/raw/upload/adlm/installer-hub/x.exe"), true);
+  assert.equal(isPublicHubCopy("https://pub-abc.r2.dev/adlm%2Finstaller-hub/x.exe"), true);
+  assert.equal(isPublicHubCopy("https://cdn.adlmstudio.net/hub/ADLM-Installer-Hub-Setup.exe"), false);
+  assert.equal(isPublicHubCopy(""), false);
+  assert.equal(isPublicHubCopy(null), false);
 });
