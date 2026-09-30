@@ -56,6 +56,7 @@ export const NAV = [
     group: "Commerce",
     items: [
       { to: "/admin/subscriptions", label: "Subscriptions", icon: "hi-shield", area: "adminhub" },
+      { to: "/admin/referrals", label: "Referrals", icon: "hi-team", area: "adminhub" },
       { to: "/admin/active", label: "Entitlements", icon: "hi-plus", area: "adminhub" },
       { to: "/admin/proposals", label: "Quotations", icon: "ai-quote", area: "proposals" },
       { to: "/admin/invoices", label: "Invoices", icon: "hi-billing", area: "invoices" },

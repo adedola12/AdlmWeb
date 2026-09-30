@@ -45,6 +45,7 @@ const AdminPeople = lazyScreen(() => import("./pages/AdminPeople.jsx"));
 const AdminEnrolments = lazyScreen(() => import("./pages/AdminEnrolments.jsx"));
 const AdminSubmissions = lazyScreen(() => import("./pages/AdminSubmissions.jsx"));
 const AdminFollowUpsDesk = lazyScreen(() => import("./pages/AdminFollowUpsDesk.jsx"));
+const AdminReferrals = lazyScreen(() => import("./pages/AdminReferrals.jsx"));
 const AdminDsOrganisations = lazyScreen(() => import("./pages/AdminDsOrganisations.jsx"));
 const AdminDsRoles = lazyScreen(() => import("./pages/AdminDsRoles.jsx"));
 const AdminDsSupport = lazyScreen(() => import("./pages/AdminDsSupport.jsx"));
@@ -718,6 +719,17 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="adminhub">
             <AdminPurchases />
+          </AdminRoute>
+        ),
+      },
+      {
+        // Who referred whom, and whether they subscribed. The purchases
+        // queue shows "referred by" on an order; it cannot show a referral
+        // that never became one, which is the half a referrer waits on.
+        path: "admin/referrals",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminReferrals />
           </AdminRoute>
         ),
       },
