@@ -239,7 +239,7 @@ test("R26 (x-adlm-client: revit-arch-plugin) on the Hub's machine matches its ro
 const PRE_CHANGE_ROW_KEYS = ["boundAt", "fingerprint", "fpVersion", "lastSeenAt", "name", "revokedAt"];
 const tokenClaims = (jwt) => JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8"));
 
-test("login: device rows in the body carry no provenance, and the token carries no entitlements (the Hub's id stays out)", () =>
+test("login: device rows in the body carry no provenance, and the token carries slim entitlements (the Hub's id stays out)", () =>
   withSwitch(undefined, async () => {
     const doc = userWith(revitEnt([hubRow(HUB_A, "PC-A")]));
     const r = await login(QUIV_A);
@@ -251,14 +251,19 @@ test("login: device rows in the body carry no provenance, and the token carries 
     const [row] = r.body.user.entitlements[0].devices;
     assert.deepEqual(Object.keys(row).sort(), PRE_CHANGE_ROW_KEYS);
     assert.equal(row.fingerprint, QUIV_A);
-    // The token carries no entitlements at all (routes/auth.js accessTokenClaims).
-    assert.equal(tokenClaims(r.body.accessToken).entitlements, undefined);
+    // The token carries each entitlement without its device rows (routes/auth.js
+    // accessTokenClaims); the plugins read productKey / status / expiresAt.
+    const [tokEnt] = tokenClaims(r.body.accessToken).entitlements;
+    assert.equal(tokEnt.productKey, "revit");
+    assert.equal(tokEnt.status, "active");
+    assert.ok(tokEnt.expiresAt);
+    assert.equal(tokEnt.devices, undefined);
     assert.ok(!r.body.accessToken.includes(HUB_A.slice(0, 10)));
     assert.ok(!JSON.stringify(tokenClaims(r.body.accessToken)).includes(HUB_A));
     assert.ok(!JSON.stringify(r.body.user).includes(HUB_A));
   }));
 
-test("refresh (lean user): device rows in the body carry no provenance, and the token carries no entitlements", async () => {
+test("refresh (lean user): device rows in the body carry no provenance, and the token carries slim entitlements", async () => {
   const { default: cookieParser } = await import("cookie-parser");
   const { signRefresh } = await import("../util/jwt.js");
   const userId = new mongoose.Types.ObjectId();
@@ -294,7 +299,9 @@ test("refresh (lean user): device rows in the body carry no provenance, and the 
     assert.equal(rows.length, 2);
     for (const row of rows) assert.deepEqual(Object.keys(row).sort(), PRE_CHANGE_ROW_KEYS);
     assert.equal(rows[1].name, "PC-B");
-    assert.equal(tokenClaims(body.accessToken).entitlements, undefined);
+    const [tokEnt] = tokenClaims(body.accessToken).entitlements;
+    assert.equal(tokEnt.productKey, "revit");
+    assert.equal(tokEnt.devices, undefined);
     assert.ok(!JSON.stringify(tokenClaims(body.accessToken)).includes('"installerName"'));
     // The lean record itself is untouched.
     assert.equal(lean.entitlements[0].devices[0].installerFingerprint, HUB_A);
