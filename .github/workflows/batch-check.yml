@@ -5,8 +5,17 @@
 # check is what makes GitHub honour that decision. It asks the website whether
 # the approver approved the exact commit being merged, and fails if not.
 #
+# From 29 Sep 2026 (owner's rule) the approver signs off only what end users
+# SEE: a pull request that changes nothing under client/ and none of the gate's
+# own files passes straight away, so a server fix does not wait for a batch.
+# Everything else still needs his approved batch.
+#
 # It can only ever BLOCK a merge. It merges nothing and needs no credential:
 # the endpoint is read-only and answers yes or no about one commit hash.
+#
+# pull_request_target, so the check that runs is always main's copy: a pull
+# request cannot rewrite its own gate. It never checks out the pull request's
+# code; it only reads the list of changed file names.
 #
 # To make it binding:
 #   Settings > Branches > main > Require status checks to pass >
@@ -15,12 +24,14 @@
 name: release gate
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   approved-batch:
@@ -28,7 +39,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Does this change what end users see?
+        id: scope
+        if: github.event_name == 'pull_request_target'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          # Paths that need the approver's tested batch: the website UI, and
+          # the gate itself so the rule cannot be loosened by a quiet PR.
+          NEEDS_APPROVER='^(client/|\.github/|docs/RELEASE_GATE\.md$|server/.*[Rr]elease[A-Za-z.-]*\.(js|mjs)$)'
+          if ! files=$(gh api --paginate "repos/${{ github.repository }}/pulls/$PR/files" --jq '.[].filename'); then
+            # Could not read the file list: fail closed, ask for a batch.
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          hits=$(printf '%s\n' "$files" | grep -E "$NEEDS_APPROVER" || true)
+          if [ -z "$hits" ]; then
+            echo "ui=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No user-facing UI or gate files changed. The approver is not needed for this one."
+          else
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            echo "These files need the approver's tested batch:"
+            printf '%s\n' "$hits"
+          fi
+
       - name: Ask the release desk about this commit
+        if: steps.scope.outputs.ui != 'false'
         env:
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
