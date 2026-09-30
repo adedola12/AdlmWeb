@@ -90,3 +90,24 @@ describe("chrome that is used on both gated and public pages", () => {
     }
   });
 });
+
+describe("the hole the sweep found in this very file", () => {
+  it("refuses a protocol-relative URL, which is not an in-app path", () => {
+    // "starts with /" accepts //evil.example, which leaves the site. The same
+    // bug was fixed in agentActions.js; the sweep found it still here, in the
+    // file that is now the single funnel for every chrome link.
+    const BS = String.fromCharCode(92); // a real backslash, unambiguously
+    for (const bad of ["//evil.example", "//evil.example/quote", `/${BS}evil.example`, `/${BS}${BS}x`]) {
+      expect(newBuildPath(bad)).toBe("");
+      expect(insideNewBuild(bad)).toBe("");
+      expect(linkFrom("/fit", bad)).toBe("");
+      expect(linkFrom("/privacy", bad)).toBe("");
+    }
+  });
+
+  it("still lets a real in-app path through", () => {
+    expect(insideNewBuild("/quote")).toBe("/preview/quote");
+    expect(insideNewBuild("/projects/planswift")).toBe("/projects/planswift");
+    expect(linkFrom("/privacy", "/quote")).toBe("/quote");
+  });
+});

@@ -61,6 +61,10 @@ const PAGE = Object.freeze({
   "/learn": "learn",
 });
 
+// An in-app path: one leading slash, and the next character is not another
+// slash or a backslash (browsers treat "/\\" as protocol-relative too).
+const IN_APP = /^\/(?![/\\])/;
+
 /** Where a ported page is served. */
 export const previewPath = (slug) => (slug ? `/preview/${slug}` : "");
 
@@ -73,7 +77,11 @@ export const previewPath = (slug) => (slug ? `/preview/${slug}` : "");
  */
 export function newBuildPath(classicPath) {
   const raw = String(classicPath || "").trim();
-  if (!raw.startsWith("/")) return "";
+  // An in-app path, and "starts with /" is not enough: "//evil.example" passes
+  // that and is a protocol-relative URL that leaves the site, as does "/\\".
+  // The same hole was fixed in lib/agentActions.js; this file is now the single
+  // funnel for every new-build chrome link, so it matters more here.
+  if (!IN_APP.test(raw)) return "";
   // Drop any query or hash before matching; carry it through afterwards.
   const [path, rest] = [raw.replace(/[?#].*$/, ""), raw.slice(raw.replace(/[?#].*$/, "").length)];
 
@@ -93,7 +101,16 @@ export function newBuildPath(classicPath) {
  * Falls back to the classic path when the redesign has no counterpart, because
  * a dead link is worse than an old one.
  */
-export const insideNewBuild = (classicPath) => newBuildPath(classicPath) || String(classicPath || "");
+export const insideNewBuild = (classicPath) => {
+  const mapped = newBuildPath(classicPath);
+  if (mapped) return mapped;
+  // The fallback has to re-check: newBuildPath answers "" both for a path the
+  // redesign has not reached AND for something that is not an in-app path at
+  // all, and handing the raw input back would put "//evil.example" straight
+  // into a <Link to=…>.
+  const raw = String(classicPath || "").trim();
+  return IN_APP.test(raw) ? raw : "";
+};
 
 /**
  * Is this route itself inside the redesign?
@@ -121,5 +138,8 @@ export function isNewBuildRoute(pathname) {
  *
  * One call for the chrome: pass the current pathname and the classic target.
  */
-export const linkFrom = (pathname, classicPath) =>
-  isNewBuildRoute(pathname) ? insideNewBuild(classicPath) : String(classicPath || "");
+export const linkFrom = (pathname, classicPath) => {
+  if (isNewBuildRoute(pathname)) return insideNewBuild(classicPath);
+  const raw = String(classicPath || "").trim();
+  return IN_APP.test(raw) ? raw : "";
+};

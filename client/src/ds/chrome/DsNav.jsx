@@ -340,7 +340,7 @@ export default function DsNav() {
                     {" "}
                   </div>
                   {" "}
-                  <Link className="np-art" to="/how-it-works" data-ds-page="how-it-works">
+                  <Link className="np-art" to={href("/how-it-works")} data-ds-page="how-it-works">
                     {" "}
                     <img src="/ds/hd-cad.jpg" alt="" loading="lazy" />
                     {" "}
@@ -478,7 +478,7 @@ export default function DsNav() {
                     {" "}
                   </div>
                   {" "}
-                  <Link className="np-art np-art-lg" to="/testimonials" data-ds-page="customers">
+                  <Link className="np-art np-art-lg" to={href("/testimonials")} data-ds-page="customers">
                     {" "}
                     <img src="/ds/hd-helmet.jpg" alt="" loading="lazy" />
                     {" "}
@@ -626,7 +626,7 @@ export default function DsNav() {
                     {" "}
                   </div>
                   {" "}
-                  <Link className="np-art np-art-lg" to="/learn#courses" data-ds-page="learn">
+                  <Link className="np-art np-art-lg" to={href("/learn#courses")} data-ds-page="learn">
                     {" "}
                     <img src="/ds/hd-desk.jpg" alt="" loading="lazy" />
                     {" "}
@@ -774,7 +774,7 @@ export default function DsNav() {
                     {" "}
                   </div>
                   {" "}
-                  <Link className="np-art np-art-lg" to="/about" data-ds-page="about">
+                  <Link className="np-art np-art-lg" to={href("/about")} data-ds-page="about">
                     {" "}
                     <img src="/ds/hd-team.jpg" alt="" loading="lazy" />
                     {" "}

@@ -1292,6 +1292,47 @@ const router = createBrowserRouter([
   // has these pages, so they render in its shell, like /certificate: not through
   // DsPreview, which would turn every link on them into a staff-only /preview
   // one. Nothing else of the redesign is exposed by this.
+  // THE SAME BUG, ELEVEN MORE PAGES.
+  //
+  // /privacy, /terms and /licensing were "Page not found" because only the
+  // redesign had them and nothing was mounted at the real path. Exactly the
+  // same is true of these eleven — and they are worse, because the redesign's
+  // own nav and footer LINK to them, and that chrome renders on the four public
+  // DsShell pages above. So a visitor reading the privacy policy clicked
+  // Pricing, Contact or any Solutions link and got Page not found.
+  //
+  // Same remedy, same reason: they render in his shell at their real public
+  // path, not through DsPreview, which would turn every link on them into a
+  // staff-only /preview one.
+  ...[
+    "pricing",
+    "contact",
+    "how-it-works",
+    "mobile",
+    "careers",
+    "press",
+    "ada",
+  ].map((slug) => ({
+    path: `/${slug}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
+
+  // The four Solutions pages, whose public path has a segment the slug does not.
+  ...["firms", "professionals", "students", "institutions"].map((who) => ({
+    path: `/solutions/${who}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(`solutions-${who}`)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
+
   ...["privacy", "terms", "licensing"].map((slug) => ({
     path: `/${slug}`,
     element: (
