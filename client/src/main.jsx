@@ -822,7 +822,28 @@ const router = createBrowserRouter([
         ),
       },
       {
+        // THE REAL SETTINGS EDITOR, NOT THE READ-ONLY REGISTER.
+        //
+        // This path rendered <AdminDocSystem />, which is
+        // <DsAdminDocuments screen="system" /> — the System register. That
+        // register's own "Open the settings editor" button points here, so the
+        // button navigated from the register to the register and looked dead,
+        // and the actual editor (site settings, the exchange rate, the mobile
+        // app link and the Installer Hub upload) was reachable from nowhere at
+        // all. The Hub could not be given its Setup.exe because the only screen
+        // that uploads one had no route.
         path: "admin/settings",
+        element: (
+          <AdminRoute permission="adminhub">
+            <Admin section="settings" />
+          </AdminRoute>
+        ),
+      },
+      {
+        // The register keeps its own address — SCREENS.system in
+        // ds/DsAdminDocuments.jsx has always declared this path, and nothing
+        // was mounted at it.
+        path: "admin/docs/system",
         element: (
           <AdminRoute permission="adminhub">
             <AdminDocSystem />
