@@ -59,22 +59,57 @@ test("filters combine", () => {
 });
 
 test("the totals come out of the aggregate", () => {
-  assert.deepEqual(referralTotals([{ total: 12, converted: 5, revenue: 640_000 }]), {
-    total: 12,
-    converted: 5,
-    waiting: 7,
-    revenue: 640_000,
-  });
+  const t = referralTotals([{ _id: "NGN", total: 12, converted: 5, revenue: 640_000 }]);
+  assert.equal(t.total, 12);
+  assert.equal(t.converted, 5);
+  assert.equal(t.waiting, 7);
+  assert.equal(t.revenue, 640_000);
+  assert.equal(t.mixedCurrency, false);
+});
+
+test("NAIRA AND DOLLARS ARE NOT ADDED TOGETHER", () => {
+  // convertedAmount is copied from the purchase, whose currency is NGN or USD.
+  // Summing them into one number and printing it with a naira sign understates
+  // the real take by roughly ₦600,000 a dollar sale, while looking precise.
+  const t = referralTotals([
+    { _id: "NGN", total: 2, converted: 2, revenue: 300_000 },
+    { _id: "USD", total: 1, converted: 1, revenue: 400 },
+  ]);
+  assert.equal(t.total, 3, "counts fold across currencies");
+  assert.equal(t.converted, 3);
+  assert.deepEqual(t.byCurrency, { NGN: 300_000, USD: 400 });
+  assert.deepEqual(t.currencies, ["NGN", "USD"]);
+  assert.equal(t.mixedCurrency, true);
+  // There is deliberately NO single figure to print when takings are mixed.
+  assert.equal(t.revenue, null);
+});
+
+test("an unconverted referral carries no currency and no money", () => {
+  // Its group is keyed on "" and its revenue is 0, so it must not invent a
+  // currency bucket.
+  const t = referralTotals([
+    { _id: "", total: 4, converted: 0, revenue: 0 },
+    { _id: "NGN", total: 1, converted: 1, revenue: 250_000 },
+  ]);
+  assert.equal(t.total, 5);
+  assert.equal(t.converted, 1);
+  assert.deepEqual(t.currencies, ["NGN"]);
+  assert.equal(t.revenue, 250_000);
 });
 
 test("an empty aggregate is zeroes, not NaN", () => {
   // Mongo returns [] from a $group over no documents. NaN would render as
   // "NaN of NaN have subscribed".
-  assert.deepEqual(referralTotals([]), { total: 0, converted: 0, waiting: 0, revenue: 0 });
-  assert.deepEqual(referralTotals(null), { total: 0, converted: 0, waiting: 0, revenue: 0 });
-  assert.deepEqual(referralTotals(undefined), { total: 0, converted: 0, waiting: 0, revenue: 0 });
+  for (const empty of [[], null, undefined]) {
+    const t = referralTotals(empty);
+    assert.equal(t.total, 0);
+    assert.equal(t.converted, 0);
+    assert.equal(t.waiting, 0);
+    assert.equal(t.revenue, 0);
+    assert.equal(t.mixedCurrency, false);
+  }
 });
 
 test("waiting is never negative, however odd the aggregate", () => {
-  assert.equal(referralTotals([{ total: 2, converted: 5 }]).waiting, 0);
+  assert.equal(referralTotals([{ _id: "NGN", total: 2, converted: 5 }]).waiting, 0);
 });

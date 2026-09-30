@@ -92,11 +92,21 @@ export function canDownloadModel(model, user, enrolments = []) {
   return { allowed: false, reason: "That model is not available." };
 }
 
-/** What a viewer may see listed, which is not the same as what they may download. */
-export function visibleToViewer(model, user) {
-  if (!model?.published) return false;
-  // Everything published is listed — a student should be able to SEE that a
-  // course has a model before enrolling. The download is where the gate is.
-  if (str(model.access) === "public") return true;
-  return Boolean(user?._id) || str(model.access) !== "signed-in";
+/**
+ * What a viewer may see LISTED, which is not the same as what they may download.
+ *
+ * Everything published is listed, including a model the viewer cannot take. A
+ * student should be able to see that a course ships a Revit model before
+ * deciding to enrol, and somebody evaluating QUIV should see that a sample
+ * exists. canDownloadModel is the gate, and each row carries its own reason.
+ *
+ * This used to end `Boolean(user?._id) || access !== "signed-in"`, which for a
+ * signed-OUT visitor and a "signed-in" model is `false || false` — and
+ * "signed-in" is the default on both the schema and the admin route, so the
+ * common case was hidden from exactly the visitor it was meant to attract. The
+ * page then said the product ships no sample. That contradicted the rule stated
+ * two lines above it, so the rule wins.
+ */
+export function visibleToViewer(model) {
+  return Boolean(model?.published);
 }

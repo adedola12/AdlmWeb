@@ -14,6 +14,15 @@
 //    destination is gated with, and the rail is filtered per session. Someone
 //    holding everything sees his rail.
 //
+//    `area` must be the SAME key the route's AdminRoute checks, and a route
+//    gated `roles={["admin"]}` must carry `admin: true` here. Thirteen entries
+//    had drifted: Follow-ups, Support, What's New, Composer, Audit log and AI
+//    usage all claimed "adminhub" while their routes wanted their own key — so
+//    the Follow-Up Calls role, which exists precisely so somebody can work the
+//    renewal list without purchase rights, never saw the Follow-ups link at
+//    all; and Courses, Products, Coupons, Enrolments, Submissions and Quizzes
+//    were drawn for any mini-admin and refused on arrival.
+//
 // 2. His hrefs are his page names and ours are ours — /admin/users-lite is his
 //    "People", /admin/rategen-master his "Rate data". The mapping is written
 //    out rather than guessed at, and where he drew a screen we have not built
@@ -38,9 +47,9 @@ export const NAV = [
       // different name. It is where a purchase waits for a person.
       { to: "/admin/pending", label: "Purchases", icon: "hi-card", area: "adminhub", badge: "purchases" },
       { to: "/admin/installations", label: "Installations", icon: "hi-computer", area: "adminhub", badge: "installations" },
-      { to: "/admin/ptrainings", label: "Enrolments", icon: "hi-calendar", area: "trainings", badge: "enrolments" },
-      { to: "/admin/course-grading", label: "Submissions", icon: "hi-check", area: "learn", badge: "submissions" },
-      { to: "/admin/follow-ups", label: "Follow-ups", icon: "hi-phone", area: "adminhub", badge: "followups" },
+      { to: "/admin/ptrainings", label: "Enrolments", icon: "hi-calendar", area: "trainings", badge: "enrolments", admin: true },
+      { to: "/admin/course-grading", label: "Submissions", icon: "hi-check", area: "learn", badge: "submissions", admin: true },
+      { to: "/admin/follow-ups", label: "Follow-ups", icon: "hi-phone", area: "followups", badge: "followups" },
     ],
   },
   {
@@ -49,7 +58,7 @@ export const NAV = [
       { to: "/admin/organizations", label: "Organisations", icon: "ai-org", area: "adminhub" },
       { to: "/admin/users-lite", label: "People", icon: "hi-team", area: "users" },
       { to: "/admin/roles", label: "Roles", icon: "hi-shield", area: "adminhub", admin: true },
-      { to: "/admin/support-tickets", label: "Support", icon: "hi-support", area: "adminhub", badge: "support" },
+      { to: "/admin/support-tickets", label: "Support", icon: "hi-support", area: "support", badge: "support" },
     ],
   },
   {
@@ -60,14 +69,14 @@ export const NAV = [
       { to: "/admin/active", label: "Entitlements", icon: "hi-plus", area: "adminhub" },
       { to: "/admin/proposals", label: "Quotations", icon: "ai-quote", area: "proposals" },
       { to: "/admin/invoices", label: "Invoices", icon: "hi-billing", area: "invoices" },
-      { to: "/admin/coupons", label: "Coupons", icon: "ai-tag", area: "adminhub" },
+      { to: "/admin/coupons", label: "Coupons", icon: "ai-tag", area: "adminhub", admin: true },
       { to: "/admin/waitlist", label: "Waitlist", icon: "ai-mail", area: "waitlist" },
     ],
   },
   {
     group: "Catalogue",
     items: [
-      { to: "/admin/products", label: "Products", icon: "hi-products", area: "adminhub" },
+      { to: "/admin/products", label: "Products", icon: "hi-products", area: "adminhub", admin: true },
       { to: "/admin/pricing", label: "Price book", icon: "hi-doc", area: "adminhub" },
       { to: "/admin/rategen-master", label: "Rate data", icon: "wi-library", area: "rategen" },
       { to: "/admin/rategen/build", label: "Build a rate", icon: "hi-plus", area: "rategen" },
@@ -78,17 +87,17 @@ export const NAV = [
   {
     group: "Learning",
     items: [
-      { to: "/admin/courses", label: "Courses", icon: "hi-learning", area: "adminhub" },
+      { to: "/admin/courses", label: "Courses", icon: "hi-learning", area: "adminhub", admin: true },
       { to: "/admin/learn", label: "Free lessons", icon: "hi-play", area: "learn" },
       // The channel the free lessons come from, beside the library: filed,
       // held, missing, and whether each video still plays.
       { to: "/admin/youtube", label: "YouTube", icon: "hi-play", area: "learn" },
-      { to: "/admin/quizzes", label: "Quizzes", icon: "hi-check", area: "learn" },
+      { to: "/admin/quizzes", label: "Quizzes", icon: "hi-check", area: "learn", admin: true },
       // The Revit and IFC files a course works through, and the demo models
       // somebody evaluating a product can open. `learn`, because the people
       // who make a course are the people who add its model.
       { to: "/admin/sample-models", label: "Sample models", icon: "hi-computer", area: "learn" },
-      { to: "/admin/physical-training", label: "Events", icon: "hi-calendar", area: "trainings" },
+      { to: "/admin/physical-training", label: "Events", icon: "hi-calendar", area: "adminhub" },
       // Issuing has always happened here; nothing ever looked over what had
       // been issued, and there was no way to withdraw one.
       { to: "/admin/certificates", label: "Certificates", icon: "hi-check", area: "adminhub" },
@@ -97,7 +106,7 @@ export const NAV = [
   {
     group: "Content",
     items: [
-      { to: "/admin/changelogs", label: "What's New", icon: "hi-alert", area: "adminhub" },
+      { to: "/admin/changelogs", label: "What's New", icon: "hi-alert", area: "changelogs" },
       { to: "/admin/showcase", label: "Marketing", icon: "hi-info", area: "showcase" },
       // The rotating band low on every public page. His newest screen, and a
       // schedule rather than a banner editor - a slide stops on its own.
@@ -124,7 +133,7 @@ export const NAV = [
       // His split, restored: Composer is the tool, Saved is what it kept. One
       // entry pointing at the register with a button to the composer made the
       // tool feel like a footnote to its own output.
-      { to: "/admin/documents/compose", label: "Composer", icon: "hi-doc", area: "adminhub" },
+      { to: "/admin/documents/compose", label: "Composer", icon: "hi-doc", area: "invoices" },
       // His three: what the engine can produce, what the composer kept, and
       // what has actually left the studio.
       { to: "/admin/documents/templates", label: "Templates", icon: "hi-doc", area: "adminhub" },
@@ -136,7 +145,7 @@ export const NAV = [
       // Templates, Saved, Issued. The route stays so nothing linking to it
       // breaks; it just no longer has a place in his rail, and what it showed
       // is on Issued and under Commerce > Quotations anyway.
-      { to: "/admin/audit-log", label: "Audit log", icon: "hi-shield", area: "adminhub", admin: true },
+      { to: "/admin/audit-log", label: "Audit log", icon: "hi-shield", area: "audit", admin: true },
     ],
   },
   {
@@ -150,7 +159,7 @@ export const NAV = [
       // The work board (docs/WORK_BOARD.md): what is in flight, and approval
       // before a new feature or button is built.
       { to: "/admin/work", label: "Work board", icon: "hi-check", area: "releases" },
-      { to: "/admin/ai-usage", label: "AI usage", icon: "ai-ada", area: "adminhub" },
+      { to: "/admin/ai-usage", label: "AI usage", icon: "ai-ada", area: "aiusage" },
       // The Takeoff Time Log: hours saved per firm, user and product, with the
       // baseline it rests on written out. Same area as the hub: it is a report,
       // and the one write on it (a new rate-table version) is a hub decision.

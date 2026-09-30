@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isShared, lockedByName, lockNoticeRecipients } from "./contractLockNotice.js";
+import {
+  isShared,
+  lockedByName,
+  lockNoticeRecipients,
+  maySeeMoney,
+} from "./contractLockNotice.js";
 
 const OWNER = "652f00000000000000000001";
 const ALICE = "652f00000000000000000002";
@@ -113,4 +118,55 @@ test("whoever locked it is named readably, never blank", () => {
   assert.equal(lockedByName({ email: "bola@firm.com" }), "bola@firm.com");
   assert.equal(lockedByName({}), "Somebody on this project");
   assert.equal(lockedByName(null), "Somebody on this project");
+});
+
+// ── The mail must not say what the screen hides ──
+//
+// A collaborator without RateGen has canSeeRates false (util/projectAccess.js),
+// so every read of the project comes back with contract.contractSum: 0 and
+// _ratesMasked: true. Posting the real figure into their inbox would hand over,
+// unprompted and in writing, the one number the product is built to withhold.
+
+test("the owner is always told what the contract is worth", () => {
+  return maySeeMoney({ role: "owner", userId: OWNER }, async () => false).then((v) =>
+    assert.equal(v, true),
+  );
+});
+
+test("a collaborator WITH RateGen is told the figure", async () => {
+  const seen = [];
+  const v = await maySeeMoney({ role: "editor", userId: ALICE }, async (uid) => {
+    seen.push(uid);
+    return true;
+  });
+  assert.equal(v, true);
+  assert.deepEqual(seen, [ALICE]);
+});
+
+test("a collaborator WITHOUT RateGen is not", async () => {
+  assert.equal(await maySeeMoney({ role: "viewer", userId: BOB }, async () => false), false);
+  assert.equal(await maySeeMoney({ role: "editor", userId: BOB }, async () => false), false);
+});
+
+test("an entitlement lookup that FAILS withholds the figure", async () => {
+  // Failing open would leak exactly the number this guard exists for.
+  assert.equal(
+    await maySeeMoney({ role: "viewer", userId: BOB }, async () => {
+      throw new Error("db down");
+    }),
+    false,
+  );
+});
+
+test("no check to make, no figure", async () => {
+  assert.equal(await maySeeMoney({ role: "viewer", userId: BOB }, null), false);
+  assert.equal(await maySeeMoney({ role: "viewer", userId: "" }, async () => true), false);
+  assert.equal(await maySeeMoney(null, async () => true), false);
+});
+
+test("recipients default to not seeing money unless they own the project", () => {
+  // The default on the row matters: a caller that forgets to ask must not leak.
+  const to = lockNoticeRecipients(project(), { _id: BOB, email: "bob@firm.com" }, users);
+  assert.equal(to.find((r) => r.role === "owner").seesMoney, true);
+  assert.equal(to.find((r) => r.role === "editor").seesMoney, false);
 });

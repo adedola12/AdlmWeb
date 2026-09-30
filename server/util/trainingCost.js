@@ -73,7 +73,26 @@ export function trainingCostEstimate(location, opts = {}) {
   // the shorter figure is how a trip comes in under-budgeted. Overridable for a
   // one-off.
   const days = Math.max(1, Math.round(Number(opts.days) || TRAINING_DAYS));
-  const nights = Math.max(0, Math.round(Number(opts.nights ?? days)));
+  // Nights defaults to the teaching days, and ONLY a real number overrides it.
+  //
+  // `Number(opts.nights ?? days)` accepted anything: "abc" became NaN, which
+  // survives Math.round and Math.max, so every amount came out NaN, the whole
+  // estimate serialised as null, and `complete` still said true. An empty
+  // string was worse — it became 0, which silently dropped the entire hotel
+  // line and produced a total ₦910,000 short that looked perfectly ordinary.
+  // A value that is not a number is not an instruction; it is noise, and the
+  // default is what a caller meant.
+  // An ABSENT value means "use the teaching days". null, undefined and "" are
+  // all absent — Number("") and Number(null) are both 0, so treating them as a
+  // number would read a blank form field as "no nights away" and drop the
+  // hotel. An explicit 0 IS honoured: a same-day trip is a real thing.
+  const rawNights = opts.nights;
+  const askedNights =
+    rawNights === null || rawNights === undefined || rawNights === ""
+      ? NaN
+      : Number(rawNights);
+  const nights =
+    Number.isFinite(askedNights) && askedNights >= 0 ? Math.round(askedNights) : days;
   const rooms = Math.max(1, Math.round(Number(opts.rooms) || people));
   const road = isRoadTrip(location);
 

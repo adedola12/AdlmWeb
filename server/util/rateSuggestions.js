@@ -33,16 +33,59 @@ const UNIT_ALIASES = new Map(
   Object.entries({
     m2: "m2", "m²": "m2", sqm: "m2", "sq m": "m2", "square metre": "m2", "square meter": "m2",
     m3: "m3", "m³": "m3", cum: "m3", "cu m": "m3", "cubic metre": "m3", "cubic meter": "m3",
-    m: "m", lm: "m", "lin m": "m", "linear metre": "m", rm: "m",
-    nr: "nr", no: "nr", "no.": "nr", each: "nr", ea: "nr", item: "nr", unit: "nr",
-    kg: "kg", t: "t", tonne: "t", tons: "t", ton: "t",
+    m: "m", lm: "m", "lin m": "m", "linear metre": "m", "lineal metre": "m", rm: "m",
+    nr: "nr", no: "nr", each: "nr", ea: "nr", item: "nr", unit: "nr", pc: "nr", piece: "nr",
+    kg: "kg", t: "t", tonne: "t", ton: "t",
+    // Measured by volume of liquid, and by the packet. Neither has a master
+    // rate today, but a QS who builds one must be able to match a bill that
+    // spells it either way.
+    l: "l", litre: "l", liter: "l",
+    pack: "pack", packet: "pack", bag: "bag", roll: "roll", set: "set", sum: "sum",
   }),
 );
 
-/** The same measurement written any of the ways a QS writes it. */
+/**
+ * The same measurement written any of the ways a QS writes it.
+ *
+ * WHY THE PUNCTUATION AND THE PLURAL ARE STRIPPED FIRST
+ *
+ * A unit mismatch is a HARD exclusion here (see below), so a spelling this does
+ * not recognise is not a weaker match — it is a rate that is never offered at
+ * all. Real bills write "Nos.", "Sq.m", "Cu.m", "Lin.m", "L.M", "pcs" and
+ * "tonnes"; an earlier version stripped only a TRAILING dot, so every one of
+ * those normalised to itself and could never meet the library's "Nr", "m2",
+ * "m3", "m" or "tonne". The QS saw "No suggestion" on a line they had a perfect
+ * rate for, with nothing to say why.
+ *
+ * So: lower-case, drop every dot, collapse whitespace, then try the table; and
+ * if that misses, try again without a trailing "s". "Sq.m" -> "sqm" -> m2.
+ * "Nos." -> "nos" -> (plural) "no" -> nr. "tonnes" -> "tonne" -> t.
+ */
+const SQUASHED = new Map(
+  [...UNIT_ALIASES.entries()].map(([k, v]) => [k.replace(/\s+/g, ""), v]),
+);
+
 export function normaliseUnit(unit) {
-  const u = low(unit).replace(/\s+/g, " ").replace(/\.$/, "");
-  return UNIT_ALIASES.get(u) || u;
+  const u = low(unit)
+    .replace(/\./g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!u) return "";
+
+  const look = (key) => {
+    if (!key) return "";
+    // Spelt as the table has it, or with the spaces closed up: "lin m" and
+    // "Lin.m" are the same unit, and a bill writes it both ways.
+    const hit = UNIT_ALIASES.get(key) || SQUASHED.get(key.replace(/\s+/g, ""));
+    return hit || "";
+  };
+
+  return (
+    look(u) ||
+    // "nos", "pcs", "tonnes", "items", "bags" — the plural of something known.
+    (u.endsWith("s") ? look(u.slice(0, -1)) : "") ||
+    u
+  );
 }
 
 /** Do these two units measure the same thing? */
@@ -91,6 +134,7 @@ export function suggestRatesForLine(item, rates, { limit = 5, minScore = 0.45 } 
     const score = similarityScore(text, desc);
     if (score < minScore) continue;
 
+    const own = isOwnRate(r);
     out.push({
       rateId: str(r?.rateId || r?.id || r?._id),
       description: desc,
@@ -99,13 +143,36 @@ export function suggestRatesForLine(item, rates, { limit = 5, minScore = 0.45 } 
       score: Math.round(score * 100) / 100,
       // The QS's own rate outranks a master one at the same score: they built
       // it, for their own prices, and it is the answer they already gave.
-      own: Boolean(r?.isCustom || r?.custom || r?.userOwned),
-      why: describeMatch(score, Boolean(r?.isCustom || r?.custom || r?.userOwned)),
+      own,
+      why: describeMatch(score, own),
     });
   }
 
   out.sort((a, b) => b.score - a.score || Number(b.own) - Number(a.own));
   return out.slice(0, Math.max(1, Math.min(20, limit)));
+}
+
+/**
+ * Is this the QS's own rate, rather than one ADLM published?
+ *
+ * READ THE FIELD THE MERGE ACTUALLY EMITS
+ *
+ * mergeRatesWithUserData builds every rate through toUserRateDefinition
+ * (util/rategenUserRates.js), which records ownership ONLY as
+ *   source: "master" | "user-override" | "user-custom"
+ * An earlier version of this file looked for `isCustom`, `custom` or
+ * `userOwned` — none of which exist on that object; `isCustom` is a local
+ * variable inside toUserRateDefinition, not a field on its result. So `own` was
+ * false for every rate a real request could return, and a QS picking a rate
+ * THEY had built was told "Close match in the ADLM library". The tie-break that
+ * puts their own rate first was inert for the same reason.
+ *
+ * The other spellings are kept as a fallback so a caller passing a raw
+ * RateGenLibrary.customRates row still reads correctly.
+ */
+export function isOwnRate(rate) {
+  if (String(rate?.source || "").startsWith("user")) return true;
+  return Boolean(rate?.isCustom || rate?.custom || rate?.userOwned || rate?.customRateId);
 }
 
 /** A sentence the screen prints beside the figure, so a pick is never blind. */

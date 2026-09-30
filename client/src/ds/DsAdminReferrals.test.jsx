@@ -155,3 +155,48 @@ describe("the filter", () => {
     await waitFor(() => expect(screen.getByText(/newest 200 are shown/)).toBeTruthy());
   });
 });
+
+describe("what the referrals brought in", () => {
+  it("prints the take in its own currency", async () => {
+    answer = async () => ({
+      ok: true,
+      items: [],
+      totals: {
+        total: 12, converted: 5, waiting: 7,
+        byCurrency: { NGN: 640_000 }, currencies: ["NGN"], revenue: 640_000, mixedCurrency: false,
+      },
+    });
+    mount();
+    await waitFor(() => expect(screen.getByText(/5 of 12 have subscribed/)).toBeTruthy());
+    expect(screen.getByText(/₦640,000/)).toBeTruthy();
+  });
+
+  it("does NOT add naira to dollars", async () => {
+    // Two ₦150,000 sales and one $400 sale summed into "₦300,400" understates
+    // the take by roughly ₦600,000 while looking precise.
+    answer = async () => ({
+      ok: true,
+      items: [],
+      totals: {
+        total: 3, converted: 3, waiting: 0,
+        byCurrency: { NGN: 300_000, USD: 400 }, currencies: ["NGN", "USD"],
+        revenue: null, mixedCurrency: true,
+      },
+    });
+    mount();
+    await waitFor(() => expect(screen.getByText(/₦300,000/)).toBeTruthy());
+    expect(screen.getByText(/\$400/)).toBeTruthy();
+    // The summed figure must appear nowhere.
+    expect(screen.queryByText(/300,400/)).toBe(null);
+  });
+
+  it("says nothing about money before anything has converted", async () => {
+    answer = async () => ({
+      ok: true, items: [],
+      totals: { total: 4, converted: 0, waiting: 4, byCurrency: {}, currencies: [], revenue: 0 },
+    });
+    mount();
+    await waitFor(() => expect(screen.getByText(/0 of 4 have subscribed/)).toBeTruthy());
+    expect(screen.queryByText(/worth/)).toBe(null);
+  });
+});

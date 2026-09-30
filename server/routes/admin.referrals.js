@@ -49,12 +49,16 @@ router.get("/", async (req, res) => {
       Referral.find(where).sort({ createdAt: -1 }).limit(LIMIT).lean(),
       // The totals are over ALL referrals, not the filtered page: a screen
       // showing "3 of 3 converted" because the filter is on would be a lie.
+      // Grouped BY CURRENCY, not summed across them. convertedAmount is copied
+      // from the purchase, whose currency is NGN or USD, and adding ₦150,000 to
+      // $400 to print "₦300,400" understates the real take by roughly ₦600,000
+      // per dollar sale while looking like a precise figure.
       Referral.aggregate([
         {
           $group: {
-            _id: null,
+            _id: { $ifNull: ["$convertedCurrency", ""] },
             total: { $sum: 1 },
-            converted: { $sum: { $cond: [{ $ifNull: ["$convertedAt", false] }, 1, 0] } },
+            converted: { $sum: { $cond: [{ $ne: [{ $ifNull: ["$convertedAt", null] }, null] }, 1, 0] } },
             revenue: { $sum: { $ifNull: ["$convertedAmount", 0] } },
           },
         },

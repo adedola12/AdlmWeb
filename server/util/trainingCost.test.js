@@ -181,3 +181,39 @@ test("every field the form renders is a key the patch accepts", () => {
     assert.deepEqual(travelPatch({ [f.key]: 1234 }), { [f.key]: 1234 }, f.key);
   }
 });
+
+test("a nights override that is not a number falls back, never to NaN", () => {
+  // The override endpoint takes nights from a query string. "abc" used to make
+  // every amount NaN — which serialises to null — while `complete` still said
+  // true, so the caller got an estimate that claimed to be whole and carried no
+  // figures at all.
+  const e = trainingCostEstimate(abuja, { nights: "abc" });
+  assert.equal(Number.isFinite(e.total), true);
+  assert.equal(e.assumptions.nights, TRAINING_DAYS);
+  for (const l of e.lines) assert.equal(Number.isFinite(l.amount), true, l.key);
+});
+
+test("a BLANK nights is absent, not zero", () => {
+  // Number("") and Number(null) are both 0, so a blank form field read as a
+  // number means "no nights away" — which drops the hotel line entirely and
+  // produces a total roughly ₦910,000 short that looks perfectly ordinary.
+  for (const blank of ["", null, undefined]) {
+    const e = trainingCostEstimate(abuja, { nights: blank });
+    assert.equal(e.assumptions.nights, TRAINING_DAYS, JSON.stringify(blank));
+    assert.ok(e.lines.some((l) => l.key === "hotel"), "the hotel is still costed");
+  }
+});
+
+test("a negative nights is not an instruction", () => {
+  assert.equal(trainingCostEstimate(abuja, { nights: -3 }).assumptions.nights, TRAINING_DAYS);
+});
+
+test("an explicit zero nights IS honoured — a same-day trip is a real thing", () => {
+  const e = trainingCostEstimate(abuja, { nights: 0 });
+  assert.equal(e.assumptions.nights, 0);
+  assert.equal(e.lines.some((l) => l.key === "hotel"), false);
+});
+
+test("a numeric STRING is a real answer", () => {
+  assert.equal(trainingCostEstimate(abuja, { nights: "3" }).assumptions.nights, 3);
+});

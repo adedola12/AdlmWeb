@@ -649,7 +649,7 @@ const naira = (n) =>
  * A missing rate is named rather than treated as zero: a zero silently makes a
  * trip look cheaper than it is, which is the opposite of the point.
  */
-function TripCostFields({ form, setForm, supported = true }) {
+function TripCostFields({ form, setForm, supported = true, unknown = false }) {
   const travel = form.travel || {};
   const est = form.estimate;
   const set = (k, v) =>
@@ -664,6 +664,22 @@ function TripCostFields({ form, setForm, supported = true }) {
   // keeps producing, so it is said out loud instead. The list response carries
   // `fields` only when the server knows about travel rates, which is how this
   // is detected rather than guessed.
+  // The list never loaded, so whether the server supports travel rates is
+  // UNKNOWN. Saying "not available on this server" would be a guess dressed as
+  // a fact — and the wrong one whenever the read simply failed.
+  if (unknown) {
+    return (
+      <div className="mt-4 rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3">
+        <h4 className="font-semibold text-sm">What the trip costs us</h4>
+        <p className="text-xs text-slate-600 mt-1">
+          The location list could not be read, so it is not known whether this server stores
+          travel rates. Reload the page before entering any &mdash; if it does not, what you type
+          here would be saved with a success message and dropped.
+        </p>
+      </div>
+    );
+  }
+
   if (!supported) {
     return (
       <div className="mt-4 rounded-lg bg-amber-50 ring-1 ring-amber-200 p-3">
@@ -852,6 +868,8 @@ export default function Admin({ section = null }) {
   const [tLocForm, setTLocForm] = React.useState(null); // null = closed, {} = new, {_id} = edit
   // Whether THIS server can store the travel rates. See loadTLocations.
   const [tLocTravel, setTLocTravel] = React.useState(false);
+  // Why the list could not be read. "" when it was.
+  const [tLocFailed, setTLocFailed] = React.useState("");
   const [trainingDateModal, setTrainingDateModal] = React.useState({ open: false, purchaseId: null });
   const [trainingDateVal, setTrainingDateVal] = React.useState("");
   const [trainingEndDateVal, setTrainingEndDateVal] = React.useState("");
@@ -1015,6 +1033,7 @@ export default function Admin({ section = null }) {
 
   // ── Training Locations helpers ──
   const loadTLocations = React.useCallback(async () => {
+    setTLocFailed("");
     try {
       const data = await apiAuthed("/admin/training-locations", { token: accessToken });
       setTLocations(Array.isArray(data?.locations) ? data.locations : []);
@@ -1023,7 +1042,17 @@ export default function Admin({ section = null }) {
       // because the client and the API deploy separately and in between the two
       // this form would take rates the server drops without a word.
       setTLocTravel(Array.isArray(data?.fields) && data.fields.length > 0);
-    } catch { /* ignore */ }
+    } catch (e) {
+      // A FAILED READ IS NOT AN EMPTY LIST. Swallowing this left tLocations at
+      // [] with no flag, so the table stated "No training locations yet." — and
+      // a 403 (an adminhub-only role reaching a `trainings` route) read as
+      // "somebody deleted them all". It also left tLocTravel false, so the trip
+      // -cost panel claimed the API lacked the feature when nobody had asked it.
+      setTLocFailed(
+        String(e?.message || "").trim() ||
+          "The training locations could not be read just now.",
+      );
+    }
   }, [accessToken]);
 
   React.useEffect(() => {
@@ -4706,7 +4735,12 @@ export default function Admin({ section = null }) {
                   every estimate came out at zero with every rate listed as
                   missing. There is no flight API and no live hotel pricing — a
                   rate is a figure somebody here maintains. */}
-              <TripCostFields form={tLocForm} setForm={setTLocForm} supported={tLocTravel} />
+              <TripCostFields
+                form={tLocForm}
+                setForm={setTLocForm}
+                supported={tLocTravel}
+                unknown={Boolean(tLocFailed)}
+              />
 
               <div className="flex gap-2 mt-3">
                 <button
@@ -4725,6 +4759,13 @@ export default function Admin({ section = null }) {
               </div>
             </div>
           )}
+
+          {tLocFailed ? (
+            <div className="mb-3 rounded-lg bg-rose-50 ring-1 ring-rose-200 p-3 text-sm text-rose-900">
+              {tLocFailed} This is not the same as there being none &mdash; nothing below is a
+              complete list until it loads.
+            </div>
+          ) : null}
 
           {/* Locations table */}
           <div className="overflow-x-auto">

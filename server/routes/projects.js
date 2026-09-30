@@ -643,6 +643,7 @@ import {
   isShared,
   lockedByName,
   lockNoticeRecipients,
+  maySeeMoney,
 } from "../util/contractLockNotice.js";
 import {
   maskSharedMoney,
@@ -4678,8 +4679,15 @@ async function notifyContractLocked(project, lockedByUserId, contractSum) {
   const by = lockedByName(locker);
 
   // One at a time rather than one mail to everybody: each is addressed by name,
-  // and a BCC list would show every collaborator that the others exist.
+  // a BCC list would show every collaborator that the others exist — and each
+  // one is asked separately whether they may be told what the contract is
+  // worth, which a single shared message could not do.
   for (const r of to) {
+    // THE MAIL MUST NOT SAY WHAT THE SCREEN HIDES. A collaborator without
+    // RateGen sees contractSum: 0 and _ratesMasked: true on every read of this
+    // project; posting the real figure to them would hand over in writing the
+    // one number the product withholds. They still get the message, without it.
+    const showMoney = await maySeeMoney(r, (uid) => userHasActiveEntitlement(uid, "rategen"));
     const { subject, html } = contractLocked({
       firstName: r.firstName,
       projectName: String(project.name || "your project"),
@@ -4687,6 +4695,7 @@ async function notifyContractLocked(project, lockedByUserId, contractSum) {
       contractSum,
       currency: String(project.currency || "NGN"),
       href,
+      showMoney,
     });
     try {
       await sendMail({ to: r.email, subject, html });

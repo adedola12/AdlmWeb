@@ -239,17 +239,28 @@ export function contractLocked({
   contractSum,
   currency = "NGN",
   href,
+  // A collaborator without RateGen has every figure on this project masked in
+  // the app (util/projectAccess.js). The mail must not say what the screen
+  // hides, so for them the sum is left out and only the fact is sent. They
+  // still need the fact: what editing means has changed for them too.
+  showMoney = true,
 }) {
+  const sum = money(contractSum, currency);
   return {
-    subject: `"${projectName}" is now under contract at ${money(contractSum, currency)}`,
+    subject: showMoney
+      ? `"${projectName}" is now under contract at ${sum}`
+      : `"${projectName}" is now under contract`,
     html: wrapEmail({
       title: "The contract has been locked",
-      preheader: `${projectName} is fixed at ${money(contractSum, currency)}.`,
+      preheader: showMoney
+        ? `${projectName} is fixed at ${sum}.`
+        : `${projectName} is fixed. The bill is now the contract.`,
       body:
         p(`Hello ${first(firstName)},`) +
         p(
-          `<b>${lockedBy}</b> has locked the contract on <b>${projectName}</b> at ` +
-            `<b>${money(contractSum, currency)}</b>.`,
+          showMoney
+            ? `<b>${lockedBy}</b> has locked the contract on <b>${projectName}</b> at <b>${sum}</b>.`
+            : `<b>${lockedBy}</b> has locked the contract on <b>${projectName}</b>.`,
         ) +
         p("What changes from now:") +
         `<ul style="margin:0 0 14px;padding-left:20px;color:#374151">
@@ -569,6 +580,12 @@ export const PREVIEW = {
       firstName: "Adaeze", projectName: "Lekki Phase 2 Tower",
       lockedBy: "Babajide Gbajumo", contractSum: 486_250_000, currency: "NGN",
       href: `${SITE}/work`,
+    }),
+  "project.contract-locked-masked": () =>
+    contractLocked({
+      firstName: "Adaeze", projectName: "Lekki Phase 2 Tower",
+      lockedBy: "Babajide Gbajumo", contractSum: 486_250_000, currency: "NGN",
+      href: `${SITE}/work`, showMoney: false,
     }),
   "entitlement.boq-import": () =>
     entitlementGranted({ firstName: "Adaeze", productName: "BoQ Import" }),

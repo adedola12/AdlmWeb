@@ -58,14 +58,40 @@ export function referralListFilter(query = {}) {
  * a plausible one.
  */
 export function referralTotals(agg) {
-  const t = (Array.isArray(agg) ? agg[0] : agg) || {};
-  const total = Number(t.total) || 0;
-  const converted = Number(t.converted) || 0;
+  // The aggregate groups BY CURRENCY, so there is one row per currency and the
+  // counts have to be folded across them.
+  const rows = Array.isArray(agg) ? agg : agg ? [agg] : [];
+
+  let total = 0;
+  let converted = 0;
+  const byCurrency = {};
+
+  for (const r of rows) {
+    total += Number(r?.total) || 0;
+    converted += Number(r?.converted) || 0;
+    const amount = Number(r?.revenue) || 0;
+    if (!amount) continue;
+    // _id is the currency the group was keyed on; a referral that never
+    // converted has none, and contributes nothing to money either way.
+    const cur = String(r?._id ?? r?.currency ?? "").trim().toUpperCase() || "NGN";
+    byCurrency[cur] = (byCurrency[cur] || 0) + amount;
+  }
+
+  const currencies = Object.keys(byCurrency).sort();
   return {
     total,
     converted,
     // Never negative, however odd the aggregate.
     waiting: Math.max(0, total - converted),
-    revenue: Number(t.revenue) || 0,
+    // Money PER CURRENCY. Adding ₦150,000 to $400 and printing "₦300,400"
+    // understates the take by roughly ₦600,000 a sale while looking precise, so
+    // there is no single `revenue` number to reach for by accident.
+    byCurrency,
+    currencies,
+    // The base-currency figure, offered only when there is nothing to convert.
+    // Null when takings are mixed, so a screen has to say so rather than print
+    // a total that silently means two things.
+    revenue: currencies.length <= 1 ? byCurrency[currencies[0]] || 0 : null,
+    mixedCurrency: currencies.length > 1,
   };
 }

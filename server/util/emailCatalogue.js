@@ -154,6 +154,15 @@ export const EMAILS = [
     editable: true,
   },
   {
+    key: "project.contract-locked-masked",
+    name: "Contract locked (no figures)",
+    when:
+      "The same message, to a collaborator without RateGen: their copy of the project masks " +
+      "every figure, so the contract sum is left out rather than posted to them",
+    file: "routes/projects.js",
+    editable: true,
+  },
+  {
     key: "video.published",
     name: "New video on the channel",
     when: "ADLM Studio publishes a video, found by the poller or announced by hand",

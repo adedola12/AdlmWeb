@@ -84,6 +84,8 @@ export default function WorkProjectLinePanel({
   const priced = it ? isPriced(it) : false;
   const [picks, setPicks] = React.useState(null); // null = not asked yet
   const [looking, setLooking] = React.useState(false);
+  // Why a measurement was not taken. Cleared on the next good one.
+  const [refused, setRefused] = React.useState("");
 
   React.useEffect(() => {
     // Only for a line somebody can actually price. An unpriced line with no
@@ -261,6 +263,15 @@ export default function WorkProjectLinePanel({
           <label className="pn-num">
             <span>Actual quantity</span>
             <input
+              // KEYED ON THE LINE, so Previous/Next gives a fresh box.
+              //
+              // The panel keeps its place in the tree as the reader moves
+              // between lines, so React reuses this input — and defaultValue is
+              // read on mount only. Without the key, moving from a line
+              // measured at 134 to an unmeasured one leaves 134 sitting in the
+              // box, which reads as that line's measurement. The key forces a
+              // remount, so the box always shows the line it belongs to.
+              key={code}
               type="number"
               min="0"
               step="any"
@@ -272,10 +283,27 @@ export default function WorkProjectLinePanel({
               // On blur rather than per keystroke: each save is a whole-project
               // write, and one per digit would be a write per digit.
               onBlur={(e) => {
-                const next = actualsOf(e.target.value);
-                if (next === actualQty) return;
-                const patch = withActualQty(project, index, e.target.value);
-                if (patch) onSave?.(patch);
+                const typed = e.target.value;
+                const next = actualsOf(typed);
+                if (next === actualQty) {
+                  setRefused("");
+                  return;
+                }
+                const patch = withActualQty(project, index, typed);
+                if (patch) {
+                  setRefused("");
+                  onSave?.(patch);
+                  return;
+                }
+                // withActualQty refuses a negative. Saying nothing left the box
+                // showing -5 with no save and no explanation, which reads as a
+                // broken screen. A reduction is a SMALLER quantity, not a
+                // negative one; an omission is 0.
+                setRefused(
+                  next !== null && next < 0
+                    ? "A measured quantity cannot be negative. Record a reduction as the smaller quantity, or 0 if none of it was done."
+                    : "That quantity could not be recorded.",
+                );
               }}
               placeholder={`${num(it.qty)} in the contract`}
             />
@@ -303,6 +331,7 @@ export default function WorkProjectLinePanel({
               </>
             )}
           </p>
+          {refused ? <p className="pn-bad">{refused}</p> : null}
           {/* When it was measured. The server has stamped this since the field
               existed and nothing ever showed it — and it is the provenance that
               makes a variation defensible rather than a number from nowhere. */}

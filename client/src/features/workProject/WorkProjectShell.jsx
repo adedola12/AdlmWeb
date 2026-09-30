@@ -374,12 +374,24 @@ export default function WorkProjectShell({ productKey, id }) {
       { token: accessToken },
     )
       .then((d) => {
-        if (live) setRateMap(d?.byCode && typeof d.byCode === "object" ? d.byCode : {});
+        if (!live) return;
+        // Keep what the server SAID, not just the matches. It reports when it
+        // stopped at its ceiling and when rates are masked from this reader,
+        // and dropping those turns "we did not look at these 300 lines" into
+        // "these 300 lines have no rate" — an absence read as a fact.
+        setRateMap({
+          byCode: d?.byCode && typeof d.byCode === "object" ? d.byCode : {},
+          truncated: Boolean(d?.truncated),
+          considered: Number(d?.considered) || 0,
+          unpriced: Number(d?.unpriced) || 0,
+          masked: Boolean(d?.masked),
+          libraryCount: Number(d?.libraryCount) || 0,
+        });
       })
-      // A suggestion that cannot be fetched must not break the tab: {} means
-      // "asked, nothing to offer", which is what the slot already said.
+      // A suggestion that cannot be fetched must not break the tab, but it must
+      // not read as "nothing matched" either: `failed` says which it was.
       .catch(() => {
-        if (live) setRateMap({});
+        if (live) setRateMap({ byCode: {}, failed: true });
       });
     return () => {
       live = false;

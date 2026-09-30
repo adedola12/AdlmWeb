@@ -68,6 +68,9 @@ export function lockNoticeRecipients(project, lockedByUser, byId = new Map()) {
       email: addr,
       firstName: str(u?.firstName) || str(u?.name) || "",
       role,
+      // Filled in by the caller, which is the only place that can ask whether
+      // this person holds RateGen. See maySeeMoney below.
+      seesMoney: role === "owner",
     });
   };
 
@@ -107,3 +110,38 @@ export function lockedByName(user) {
  */
 export const isShared = (project) =>
   Array.isArray(project?.collaborators) && project.collaborators.length > 0;
+
+/**
+ * May this recipient be told what the contract is worth?
+ *
+ * THE MAIL MUST NOT SAY WHAT THE SCREEN HIDES
+ *
+ * util/projectAccess.js gives a collaborator `canSeeRates` only when they hold
+ * an active RateGen entitlement. Without it, every GET of that project comes
+ * back with `_ratesMasked: true` and `contract.contractSum: 0` — the app shows
+ * them no money at all, deliberately.
+ *
+ * A notification is not an exemption from that. Posting the real contract sum
+ * into their inbox would hand over, in writing, the one figure the product is
+ * built to withhold — and it would arrive from us, unprompted. So the sum is
+ * dropped for anyone the project itself would mask it from, and they get the
+ * same mail without the figure: they still need to know the contract is locked,
+ * because what editing MEANS has changed for them too.
+ *
+ * The owner always sees it. So does anyone holding RateGen.
+ *
+ * @param {object} recipient                     a row from lockNoticeRecipients
+ * @param {(userId:string)=>Promise<boolean>} hasRateGen
+ */
+export async function maySeeMoney(recipient, hasRateGen) {
+  if (!recipient) return false;
+  if (recipient.role === "owner") return true;
+  if (typeof hasRateGen !== "function") return false;
+  if (!recipient.userId) return false;
+  try {
+    return Boolean(await hasRateGen(recipient.userId));
+  } catch {
+    // An entitlement lookup that fails must not leak the figure.
+    return false;
+  }
+}

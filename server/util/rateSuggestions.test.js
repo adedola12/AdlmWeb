@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   billLineText,
+  isOwnRate,
   needsRate,
   normaliseUnit,
   suggestRatesForLine,
@@ -183,4 +184,104 @@ test("says when it stopped short instead of implying the rest have no match", ()
 test("survives a bill that is not a list", () => {
   assert.deepEqual(suggestionMapForBill(null, RATES).byCode, {});
   assert.deepEqual(suggestionMapForBill([{ code: "A", rate: 0 }], null).byCode, {});
+});
+
+// ── The shape the merge ACTUALLY emits ──
+//
+// These fixtures are the real thing: mergeRatesWithUserData builds every rate
+// through toUserRateDefinition, which records ownership only as
+// `source: "master" | "user-override" | "user-custom"` and carries the sell
+// price as `totalCost`. The earlier fixtures in this file invented
+// `isCustom: true` and `unitPrice`, neither of which production emits — which
+// is exactly why they passed while `own` was false for every real suggestion.
+
+const merged = (over = {}) => ({
+  id: "r1",
+  rateId: "r1",
+  customRateId: null,
+  source: "master",
+  description: "Blockwork 225mm thick in cement mortar",
+  unit: "m2",
+  netCost: 8000,
+  totalCost: 9600,
+  breakdown: [],
+  ...over,
+});
+
+test("a rate the QS built themselves is marked as theirs", () => {
+  // `own` drives the sentence printed under the figure AND the tie-break. Read
+  // from the wrong field it is false for every rate a real request returns, and
+  // a QS is told their own rate came from ADLM.
+  assert.equal(isOwnRate(merged({ source: "user-custom", customRateId: "bw-1" })), true);
+  assert.equal(isOwnRate(merged({ source: "user-override" })), true);
+  assert.equal(isOwnRate(merged({ source: "master" })), false);
+});
+
+test("the sentence names where the rate came from, on the real shape", () => {
+  const own = suggestRatesForLine(
+    { description: "Blockwork 225mm thick in cement mortar", unit: "m2" },
+    [merged({ source: "user-custom", customRateId: "bw-1" })],
+  );
+  assert.equal(own.length, 1);
+  assert.equal(own[0].own, true);
+  assert.match(own[0].why, /your own rate/);
+  // And the price comes off totalCost, because the merged shape has no
+  // unitPrice at all.
+  assert.equal(own[0].unitPrice, 9600);
+
+  const master = suggestRatesForLine(
+    { description: "Blockwork 225mm thick in cement mortar", unit: "m2" },
+    [merged()],
+  );
+  assert.match(master[0].why, /the ADLM library/);
+});
+
+test("the QS's own rate is offered ahead of an identical master one", () => {
+  const out = suggestRatesForLine(
+    { description: "Blockwork 225mm thick in cement mortar", unit: "m2" },
+    [merged({ id: "m1", rateId: "m1" }), merged({ id: "c1", source: "user-custom", totalCost: 11500 })],
+  );
+  assert.equal(out.length, 2);
+  assert.equal(out[0].own, true, "their own rate first on an equal score");
+  assert.equal(out[0].unitPrice, 11500);
+});
+
+test("suggestionMapForBill hands the list the QS's OWN rate, not the master", () => {
+  // limit: 1, so the tie-break decides which single figure the Rates tab shows.
+  const { byCode } = suggestionMapForBill(
+    [{ code: "BQ-1", description: "Blockwork 225mm thick in cement mortar", unit: "m2", rate: 0 }],
+    [merged({ id: "m1", rateId: "m1" }), merged({ id: "c1", source: "user-custom", totalCost: 11500 })],
+  );
+  assert.equal(byCode["bq-1"].unitPrice, 11500);
+  assert.equal(byCode["bq-1"].own, true);
+});
+
+// ── Units as bills actually spell them ──
+
+test("a unit written with dots or in the plural still matches", () => {
+  // A unit mismatch is a HARD exclusion, so a spelling this does not know is a
+  // rate that is never offered. Real bills carry every one of these.
+  const pairs = [
+    ["Nos.", "Nr"], ["Sq.m", "m2"], ["Cu.m", "m3"], ["Lin.m", "m"],
+    ["L.M", "m"], ["pcs", "Nr"], ["tonnes", "tonne"], ["ITEM", "No"],
+    ["sq m", "m2"], ["square metre", "m2"],
+  ];
+  for (const [bill, library] of pairs) {
+    assert.equal(unitsAgree(bill, library), true, `${bill} should match ${library}`);
+  }
+});
+
+test("a REAL mismatch is still excluded outright", () => {
+  // The rule this exists to protect: a rate per m3 cannot price a line in m2,
+  // however well the words match, and the wrong answer would look right.
+  assert.equal(unitsAgree("m2", "m3"), false);
+  assert.equal(unitsAgree("Sq.m", "Cu.m"), false);
+  assert.equal(unitsAgree("kg", "tonnes"), false);
+  assert.equal(unitsAgree("Nos.", "m2"), false);
+
+  const out = suggestRatesForLine(
+    { description: "Blockwork 225mm thick in cement mortar", unit: "m3" },
+    [merged({ unit: "Sq.m" })],
+  );
+  assert.equal(out.length, 0);
 });

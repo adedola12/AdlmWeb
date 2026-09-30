@@ -56,6 +56,20 @@ const VIA = {
   renewal: "credited on a renewal",
 };
 
+/**
+ * What the referrals brought in, per currency.
+ *
+ * NAIRA AND DOLLARS ARE NOT ADDED TOGETHER. convertedAmount is copied from the
+ * purchase, and purchases are taken in NGN or USD; summing them into one number
+ * and printing it with a naira sign understates the real take by roughly
+ * ₦600,000 a dollar sale, while looking like a precise figure. So the server
+ * hands back a bucket per currency and this prints them side by side.
+ */
+const takings = (totals) =>
+  (totals.currencies || [])
+    .map((c) => money(totals.byCurrency?.[c] || 0, c))
+    .join(" and ");
+
 // The screen's filter, and what the server wants for it. Kept as one table so
 // the two cannot drift.
 const CONVERTED_PARAM = { all: "", yes: "1", no: "0" };
@@ -161,11 +175,17 @@ export default function DsAdminReferrals() {
             Who arrived on whose link, and whether they have subscribed. A referral converts once,
             the first time that person pays for anything &mdash; a renewal does not convert them
             again, so nobody is credited twice for the same customer.
-            {totals.total
-              ? ` ${totals.converted} of ${totals.total} have subscribed, worth ${money(
-                  totals.revenue,
-                )}.`
-              : ""}
+            {totals.total ? ` ${totals.converted} of ${totals.total} have subscribed` : ""}
+            {totals.total && totals.currencies?.length ? (
+              <>
+                {" "}
+                &mdash; worth {takings(totals)}.
+              </>
+            ) : totals.total ? (
+              "."
+            ) : (
+              ""
+            )}
           </p>
         </div>
       </div>

@@ -478,3 +478,73 @@ describe("when a measurement was taken", () => {
     expect(within(c).getByText(/Not measured yet/)).toBeTruthy();
   });
 });
+
+describe("a measurement the system will not take", () => {
+  const locked = (items) => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items,
+  });
+  const LINE = { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500 };
+
+  it("says why a negative quantity was refused instead of doing nothing", () => {
+    // withActualQty returns null for a negative and the `if (patch)` guard
+    // skipped the save — so the box sat showing -5, nothing was written, and no
+    // message appeared. That reads as a broken screen.
+    const onSave = vi.fn();
+    const c = render(
+      <WorkProjectLinePanel
+        project={locked([LINE])}
+        index={0}
+        canEdit
+        contractLocked
+        onSave={onSave}
+      />,
+    ).container;
+    fireEvent.blur(within(c).getByPlaceholderText(/120 in the contract/), {
+      target: { value: "-5" },
+    });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).getByText(/cannot be negative/)).toBeTruthy();
+    // And it tells them what to do instead.
+    expect(within(c).getByText(/smaller quantity, or 0/)).toBeTruthy();
+  });
+
+  it("clears the complaint once a real figure is entered", () => {
+    const onSave = vi.fn();
+    const c = render(
+      <WorkProjectLinePanel
+        project={locked([LINE])}
+        index={0}
+        canEdit
+        contractLocked
+        onSave={onSave}
+      />,
+    ).container;
+    const box = within(c).getByPlaceholderText(/120 in the contract/);
+    fireEvent.blur(box, { target: { value: "-5" } });
+    expect(within(c).getByText(/cannot be negative/)).toBeTruthy();
+    fireEvent.blur(box, { target: { value: "134" } });
+    expect(within(c).queryByText(/cannot be negative/)).toBe(null);
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT carry one line's measurement into another", () => {
+    // The panel keeps its place in the tree, so React reuses the input and
+    // defaultValue is read on mount only. Without a key, moving from a line
+    // measured at 134 to an unmeasured one left 134 in the box — which reads as
+    // that line's measurement and is one blur away from being saved as one.
+    const p = locked([
+      { ...LINE, actualQty: 134 },
+      { code: "BQ-2", description: "Columns", qty: 40, unit: "m3", rate: 72_000 },
+    ]);
+    const view = render(
+      <WorkProjectLinePanel project={p} index={0} canEdit contractLocked />,
+    );
+    expect(view.container.querySelector("input[type=number]").value).toBe("134");
+
+    view.rerender(<WorkProjectLinePanel project={p} index={1} canEdit contractLocked />);
+    // BQ-2 has never been measured, so its box must be empty.
+    expect(view.container.querySelector("input[type=number]").value).toBe("");
+  });
+});

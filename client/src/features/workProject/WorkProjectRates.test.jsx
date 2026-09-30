@@ -107,7 +107,7 @@ describe("what still needs a rate", () => {
   });
 
   it("says there is no suggestion once the server has answered with none", () => {
-    const c = draw({ rateMap: {} });
+    const c = draw({ rateMap: { byCode: {} } });
     expect(within(c).getByText(/No suggestion/)).toBeTruthy();
     expect(within(c).queryByText("Use this rate")).toBe(null);
   });
@@ -117,12 +117,14 @@ describe("what still needs a rate", () => {
     // as the server sends it.
     const c = draw({
       rateMap: {
-        "bq-3": {
+        byCode: {
+          "bq-3": {
           rateId: "r9",
           description: "Ceramic wall tiling 200x300",
           unit: "m2",
           unitPrice: 18_500,
           why: "Close match in your own rate",
+          },
         },
       },
     });
@@ -140,7 +142,7 @@ describe("what still needs a rate", () => {
       unitPrice: 18_500,
       why: "Close match in your own rate",
     };
-    const c = draw({ rateMap: { "bq-3": pick }, onApplyRate });
+    const c = draw({ rateMap: { byCode: { "bq-3": pick } }, onApplyRate });
     fireEvent.click(within(c).getByText("Use this rate"));
     expect(onApplyRate).toHaveBeenCalledWith("BQ-3", pick);
   });
@@ -150,7 +152,7 @@ describe("what still needs a rate", () => {
       <WorkProjectRates
         project={project()}
         canEdit={false}
-        rateMap={{ "bq-3": { rateId: "r9", unit: "m2", unitPrice: 1, why: "x", description: "y" } }}
+        rateMap={{ byCode: { "bq-3": { rateId: "r9", unit: "m2", unitPrice: 1, why: "x", description: "y" } } }}
       />,
     ).container;
     expect(within(c).queryByText("Use this rate")).toBe(null);
@@ -269,5 +271,51 @@ describe("a rate that no longer agrees with its build-up", () => {
 describe("a project that has not loaded", () => {
   it("does not throw", () => {
     expect(() => render(<WorkProjectRates project={null} />)).not.toThrow();
+  });
+});
+
+describe("an absence that is not a fact", () => {
+  // "No suggestion — price it from the build-up" is only true when the server
+  // looked and found nothing. Three other states used to print it too.
+
+  it("says a line was NOT CHECKED when the server stopped at its ceiling", () => {
+    // A 900-line bill: the server matches the first 600 and says so. Printing
+    // "no suggestion" against the other 300 sends a QS off to price by hand
+    // work the library could have done.
+    const items = Array.from({ length: 5 }, (_, i) => ({
+      code: `BQ-${i}`,
+      description: `Line ${i}`,
+      unit: "m2",
+      qty: 1,
+      rate: 0,
+      category: "Substructure",
+    }));
+    const c = render(
+      <WorkProjectRates
+        project={{ ...project(), items }}
+        canEdit
+        rateMap={{ byCode: {}, truncated: true, considered: 2, unpriced: 5 }}
+      />,
+    ).container;
+    expect(within(c).getByText(/first 2 of 5 unpriced lines were looked at/)).toBeTruthy();
+    expect(within(c).getAllByText(/Not checked yet/).length).toBeGreaterThan(0);
+  });
+
+  it("says rates are masked rather than claiming there are none", () => {
+    const c = draw({ rateMap: { byCode: {}, masked: true } });
+    expect(within(c).getByText(/Rates are not shown on this project for your account/)).toBeTruthy();
+    expect(within(c).queryByText(/No suggestion/)).toBe(null);
+  });
+
+  it("says the library could not be read rather than claiming no match", () => {
+    const c = draw({ rateMap: { byCode: {}, failed: true } });
+    expect(within(c).getByText(/could not be read just now/)).toBeTruthy();
+    expect(within(c).getByText(/not the same as having no matching rate/)).toBeTruthy();
+    expect(within(c).queryByText(/No suggestion/)).toBe(null);
+  });
+
+  it("still says NO SUGGESTION when the server genuinely looked and found none", () => {
+    const c = draw({ rateMap: { byCode: {}, truncated: false, considered: 1, unpriced: 1 } });
+    expect(within(c).getByText(/No suggestion/)).toBeTruthy();
   });
 });
