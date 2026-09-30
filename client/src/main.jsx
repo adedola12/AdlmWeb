@@ -46,6 +46,7 @@ const AdminEnrolments = lazyScreen(() => import("./pages/AdminEnrolments.jsx"));
 const AdminSubmissions = lazyScreen(() => import("./pages/AdminSubmissions.jsx"));
 const AdminFollowUpsDesk = lazyScreen(() => import("./pages/AdminFollowUpsDesk.jsx"));
 const AdminReferrals = lazyScreen(() => import("./pages/AdminReferrals.jsx"));
+const AdminDemoModels = lazyScreen(() => import("./pages/AdminDemoModels.jsx"));
 const AdminDsOrganisations = lazyScreen(() => import("./pages/AdminDsOrganisations.jsx"));
 const AdminDsRoles = lazyScreen(() => import("./pages/AdminDsRoles.jsx"));
 const AdminDsSupport = lazyScreen(() => import("./pages/AdminDsSupport.jsx"));
@@ -719,6 +720,18 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="adminhub">
             <AdminPurchases />
+          </AdminRoute>
+        ),
+      },
+      {
+        // The sample models a course works through, and the demos somebody
+        // evaluating a product can open. The API for these has existed since
+        // they were built and nothing could reach it, so an admin could not
+        // add one at all. `learn`, matching the route's own permission.
+        path: "admin/sample-models",
+        element: (
+          <AdminRoute permission="learn">
+            <AdminDemoModels />
           </AdminRoute>
         ),
       },

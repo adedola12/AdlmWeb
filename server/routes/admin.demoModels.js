@@ -28,6 +28,8 @@ import {
   contentTypeFor,
   formatFor,
   MODEL_ACCESS,
+  MODEL_FORMATS,
+  MODEL_MAX_BYTES,
   MODEL_PURPOSES,
   modelStorageKey,
   modelUploadProblem,
@@ -55,7 +57,15 @@ router.get("/", async (_req, res) => {
         fileKey: undefined,
         ready: Boolean(m.fileKey && m.uploadedAt),
       })),
-      formats: Object.keys(MODEL_ACCESS),
+      // MODEL_ACCESS is a frozen ARRAY, so Object.keys on it answered
+      // ["0","1","2","3"] — a form built on that would have offered four
+      // file formats called 0 to 3. The formats are their own table.
+      formats: Object.entries(MODEL_FORMATS).map(([key, f]) => ({
+        key,
+        ext: f.ext,
+        label: f.label,
+      })),
+      maxBytes: MODEL_MAX_BYTES,
       purposes: MODEL_PURPOSES,
       accessLevels: MODEL_ACCESS,
     });

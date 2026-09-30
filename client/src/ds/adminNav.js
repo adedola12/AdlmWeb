@@ -84,6 +84,10 @@ export const NAV = [
       // held, missing, and whether each video still plays.
       { to: "/admin/youtube", label: "YouTube", icon: "hi-play", area: "learn" },
       { to: "/admin/quizzes", label: "Quizzes", icon: "hi-check", area: "learn" },
+      // The Revit and IFC files a course works through, and the demo models
+      // somebody evaluating a product can open. `learn`, because the people
+      // who make a course are the people who add its model.
+      { to: "/admin/sample-models", label: "Sample models", icon: "hi-computer", area: "learn" },
       { to: "/admin/physical-training", label: "Events", icon: "hi-calendar", area: "trainings" },
       // Issuing has always happened here; nothing ever looked over what had
       // been issued, and there was no way to withdraw one.
