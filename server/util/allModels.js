@@ -58,6 +58,7 @@ import "../models/RateGenMaterial.js";
 import "../models/RateGenMeta.js";
 import "../models/RateGenRate.js";
 import "../models/Refresh.js";
+import "../models/DemoModel.js";
 import "../models/Referral.js";
 import "../models/ReleaseBatch.js";
 import "../models/ReleaseCandidate.js";

@@ -475,6 +475,8 @@ import adminLearnQueues from "./routes/admin.learnQueues.js";
 import adminCommerce from "./routes/admin.commerce.js";
 import adminCatalogue from "./routes/admin.catalogue.js";
 import adminLearnContent from "./routes/admin.learnContent.js";
+import adminDemoModels from "./routes/admin.demoModels.js";
+import meDemoModels from "./routes/me.demoModels.js";
 import adminDocuments from "./routes/admin.documents.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
@@ -493,6 +495,9 @@ app.use("/admin/commerce", adminCommerce);
 app.use("/admin/catalogue", adminCatalogue);
 app.use("/admin/lc", adminLearnContent);
 app.use("/admin/docs", adminDocuments);
+// Before the /admin catch-all below, or the catch-all answers first.
+app.use("/admin/demo-models", adminDemoModels);
+app.use("/me/demo-models", meDemoModels);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);
 
