@@ -8,6 +8,14 @@
 # It can only ever BLOCK a merge. It merges nothing and needs no credential:
 # the endpoint is read-only and answers yes or no about one commit hash.
 #
+# The approver signs off what end users SEE (owner's rule, 29 Sep 2026). A pull
+# request that changes nothing under client/ and none of the gate's own files
+# is a code fix (server, infra, scripts, tests) and passes here without a
+# batch, so a customer fix does not wait days for a design review. The gate's
+# own files ALWAYS need his batch, so this rule cannot be loosened quietly.
+# Anything this step cannot read for certain (no pull request, the file list
+# fails, a list too long to be complete) falls through to asking for a batch.
+#
 # To make it binding:
 #   Settings > Branches > main > Require status checks to pass >
 #   add "approved batch", and keep "Include administrators" ticked.
@@ -21,6 +29,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   approved-batch:
@@ -28,7 +37,55 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Does this change need the approver?
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          CHANGED: ${{ github.event.pull_request.changed_files }}
+        run: |
+          set -uo pipefail
+          # What end users see: the website app.
+          ui='^client/'
+          # The gate itself: its workflows, its doc, its stack, its models,
+          # routes, script and helpers, and the roles that decide who approves.
+          gate='^\.github/|^docs/RELEASE_GATE\.md$|^infra/lib/adlm-release-gate-stack\.ts$'
+          gate+='|^server/models/Release(Batch|Candidate|GateConfig)\.js$'
+          gate+='|^server/routes/(admin\.batch|admin\.releases|releaseGatePublic)\.js$'
+          gate+='|^server/scripts/release-gate\.mjs$|^server/util/releaseGate[^/]*\.js$'
+          gate+='|^server/util/rbac\.js$'
+
+          if [ -z "$PR" ]; then
+            echo "Not a pull request: asking for a batch."
+            echo "needs=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # A rename counts under both names, so moving a file out of client/
+          # still needs him.
+          if ! files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" \
+                 --jq '.[] | .filename, (.previous_filename // empty)'); then
+            echo "Could not list the changed files: asking for a batch."
+            echo "needs=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          listed=$(printf '%s\n' "$files" | grep -c . || true)
+          # The API stops at 3,000 files; past that the list is not the change.
+          if [ "${CHANGED:-0}" -ge 3000 ] || [ "$listed" -eq 0 ]; then
+            echo "The file list may be incomplete ($listed listed, $CHANGED changed): asking for a batch."
+            echo "needs=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          hits=$(printf '%s\n' "$files" | grep -E "$ui|$gate" | sort -u || true)
+          if [ -n "$hits" ]; then
+            echo "These change what users see, or the gate itself, so the approver must test them:"
+            printf '  %s\n' $hits
+            echo "needs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No user-facing UI and no gate file in $listed changed file(s): a code fix, no batch needed."
+            echo "needs=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Ask the release desk about this commit
+        if: steps.scope.outputs.needs != 'false'
         env:
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
