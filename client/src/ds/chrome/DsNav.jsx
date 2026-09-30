@@ -6,11 +6,14 @@ import { Link, useLocation } from "react-router-dom";
 import { linkFrom } from "../../lib/newBuildPaths.js";
 
 export default function DsNav() {
-  // Same rule as the footer: this nav is mounted by DsShell on gated redesign
-  // pages AND on public ones (/certificate, /privacy, /terms, /licensing), so
-  // each link asks where it is. A classic link on a redesign page drops the
-  // reader out of the build; a /preview link on a public page puts a member of
-  // the public in front of a staff gate.
+  // WHERE THIS IS MOUNTED DECIDES WHERE ITS LINKS GO.
+  //
+  // DsShell renders this on BOTH gated redesign pages (/fit, /preview/*)
+  // and genuinely public ones (/certificate, /privacy, /terms,
+  // /licensing - see main.jsx). On a redesign page a classic link drops
+  // the reader out of the build they are in; on a public page a /preview
+  // link puts a member of the public in front of a staff gate. So each
+  // link asks where it is rather than being repointed wholesale.
   const { pathname } = useLocation();
   const href = (to) => linkFrom(pathname, to);
   return (
