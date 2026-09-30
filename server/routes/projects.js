@@ -678,7 +678,11 @@ import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
-import { suggestRatesForLine, worthOffering } from "../util/rateSuggestions.js";
+import {
+  suggestRatesForLine,
+  suggestionMapForBill,
+  worthOffering,
+} from "../util/rateSuggestions.js";
 import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
 import {
   collectBudgetEdits,
@@ -6854,6 +6858,60 @@ async function rateSuggestionsForLine(req, res) {
   }
 }
 
+/**
+ * A rate for EVERY line on this project that has none, in one read.
+ *
+ * WHY BULK AND NOT FIVE HUNDRED CALLS
+ *
+ * The Rates tab lists every unpriced line at once, and its "suggested rate"
+ * slot has read "No suggestion" since it was written. Filling it per line would
+ * be one request each, and each one re-reads the whole rate library — which is
+ * the expensive part. Loading the library once and matching in memory is both
+ * cheaper and the only version that does not fall over on a bill with four
+ * hundred unpriced lines.
+ *
+ * Returns the BEST match per line only. The panel offers the full five when a
+ * line is opened; a list needs one figure, not five.
+ */
+async function rateSuggestionsForProject(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) {
+      return res.json({ ok: true, byCode: {}, masked: true });
+    }
+
+    // Only the lines that need one. A priced line's rate is the QS's decision
+    // and must not be second-guessed in a list.
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+      Array.isArray(lib?.customRates) ? lib.customRates : [],
+    );
+
+    // Every rule — which lines, the lowercased key, the ceiling — is in
+    // util/rateSuggestions.js, where it is tested without a database.
+    const found = suggestionMapForBill(project.items, merged);
+    res.json({ ok: true, ...found, libraryCount: merged.length });
+  } catch (err) {
+    console.error("GET project rate-suggestions error:", err);
+    res.status(500).json({ error: "Could not look for rates." });
+  }
+}
+
 async function priceLineFromRate(req, res) {
   try {
     const userId = getUserObjectId(req);
@@ -8054,6 +8112,13 @@ router.put(
 // client sends WHICH rate was picked, never what it costs — the server
 // re-resolves the rate from that user's own merged library, so a price can
 // only ever be one they already hold.
+router.get(
+  "/:productKey/:id/rate-suggestions",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  rateSuggestionsForProject,
+);
+
 router.get(
   "/:productKey/:id/bill/:code/rate-suggestions",
   mapEntitlementParam,

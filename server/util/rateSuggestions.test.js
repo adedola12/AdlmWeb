@@ -2,8 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   billLineText,
+  needsRate,
   normaliseUnit,
   suggestRatesForLine,
+  suggestionMapForBill,
   unitsAgree,
   worthOffering,
 } from "./rateSuggestions.js";
@@ -100,4 +102,85 @@ test("worthOffering is the editorial gate, in one place", () => {
   assert.equal(worthOffering({ score: 0.2, unitPrice: 10 }), false);
   assert.equal(worthOffering({ score: 0.9, unitPrice: 0 }), false);
   assert.equal(worthOffering(null), false);
+});
+
+// ── The whole bill's suggestions, in one map ──
+
+const RATES = [
+  { rateId: "r1", description: "Excavate foundation trench", unit: "m3", unitPrice: 3200 },
+  { rateId: "r2", description: "Ceramic wall tiling 200x300", unit: "m2", unitPrice: 18500 },
+];
+
+test("keys on the LOWERCASED code, which the client looks it up by", () => {
+  // If either side stopped lowercasing, every line whose code carries a
+  // letter would show "No suggestion" while a match existed — silent.
+  const { byCode } = suggestionMapForBill(
+    [{ code: "BQ-1", description: "Excavate foundation trench n.e. 1.5m", unit: "m3", rate: 0 }],
+    RATES,
+  );
+  assert.equal(Object.keys(byCode)[0], "bq-1");
+  assert.equal(byCode["bq-1"].rateId, "r1");
+});
+
+test("skips a line that already has a rate", () => {
+  const { byCode, unpriced } = suggestionMapForBill(
+    [
+      { code: "BQ-1", description: "Excavate foundation trench", unit: "m3", rate: 3000 },
+      { code: "BQ-2", description: "Ceramic wall tiling 200x300", unit: "m2", rate: 0 },
+    ],
+    RATES,
+  );
+  assert.equal(unpriced, 1);
+  assert.ok(!byCode["bq-1"]);
+  assert.equal(byCode["bq-2"].rateId, "r2");
+});
+
+test("treats a missing, zero or unparseable rate as needing one", () => {
+  for (const rate of [undefined, null, 0, "", "abc", -5]) {
+    assert.equal(needsRate({ rate }), true, `rate ${JSON.stringify(rate)}`);
+  }
+  for (const rate of [1, "2500", 0.5]) {
+    assert.equal(needsRate({ rate }), false, `rate ${JSON.stringify(rate)}`);
+  }
+});
+
+test("skips a line with no code, which the apply endpoint cannot address", () => {
+  const { byCode, unpriced } = suggestionMapForBill(
+    [{ code: "", description: "Excavate foundation trench", unit: "m3", rate: 0 }],
+    RATES,
+  );
+  assert.equal(unpriced, 1);
+  assert.deepEqual(byCode, {});
+});
+
+test("offers ONE rate per line, not five", () => {
+  const many = [
+    { rateId: "a", description: "Excavate foundation trench", unit: "m3", unitPrice: 3000 },
+    { rateId: "b", description: "Excavate foundation trenches", unit: "m3", unitPrice: 3400 },
+  ];
+  const { byCode } = suggestionMapForBill(
+    [{ code: "BQ-1", description: "Excavate foundation trench", unit: "m3", rate: 0 }],
+    many,
+  );
+  assert.equal(typeof byCode["bq-1"], "object");
+  assert.ok(!Array.isArray(byCode["bq-1"]));
+});
+
+test("says when it stopped short instead of implying the rest have no match", () => {
+  const bill = Array.from({ length: 5 }, (_, i) => ({
+    code: `BQ-${i}`,
+    description: "Excavate foundation trench",
+    unit: "m3",
+    rate: 0,
+  }));
+  const { truncated, considered, unpriced } = suggestionMapForBill(bill, RATES, { cap: 2 });
+  assert.equal(unpriced, 5);
+  assert.equal(considered, 2);
+  assert.equal(truncated, true);
+  assert.equal(suggestionMapForBill(bill, RATES).truncated, false);
+});
+
+test("survives a bill that is not a list", () => {
+  assert.deepEqual(suggestionMapForBill(null, RATES).byCode, {});
+  assert.deepEqual(suggestionMapForBill([{ code: "A", rate: 0 }], null).byCode, {});
 });

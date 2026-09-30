@@ -306,6 +306,105 @@ export default function WorkProjectShell({ productKey, id }) {
       setPlanning(false);
     }
   }, [viewOnly, planning, productKey, saveId, id, accessToken]);
+  // PRICING A LINE FROM A RATE.
+  //
+  // This closes the loop the Rates tab had: "Open the line" opened the panel,
+  // and the panel's "Price it" went back to Rates, with nowhere in between to
+  // actually price anything. The Rates view is read-only on purpose — a rate is
+  // built in RateGen — so the answer is to offer the rate the QS already built.
+  //
+  // The endpoint has existed since 23 September and nothing ever called it:
+  // it sets the line's rate AND writes the material, labour and plant rows, so
+  // the budget is priced in the same step rather than left on 0-rate
+  // placeholders. Re-reads afterwards because the server touches two
+  // collections and guessing the result here is how two screens come to
+  // disagree.
+  const [pricing, setPricing] = React.useState(false);
+  const [priceFailed, setPriceFailed] = React.useState("");
+  // What the build-up could not price. The endpoint returns these — a material
+  // with no price in the constants library, say — and dropping them leaves a
+  // budget row sitting at zero with nothing said about why.
+  const [priceNotes, setPriceNotes] = React.useState([]);
+  const priceLineFromRate = React.useCallback(
+    async (code, pick) => {
+      if (viewOnly || !code || !pick) return false;
+      setPricing(true);
+      setPriceFailed("");
+      setPriceNotes([]);
+      try {
+        const wrote = await apiAuthed(
+          `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/bill/${encodeURIComponent(code)}/price-from-rate`,
+          {
+            token: accessToken,
+            method: "POST",
+            body: { rateId: pick.rateId, description: pick.description, unit: pick.unit },
+          },
+        );
+        const warnings = Array.isArray(wrote?._rateWarnings) ? wrote._rateWarnings : [];
+        if (warnings.length) setPriceNotes(warnings.map((w) => String(w)).slice(0, 6));
+        const fresh = await apiAuthed(
+          `/projects/${encodeURIComponent(productKey)}/by-slug/${encodeURIComponent(id)}`,
+          { token: accessToken },
+        );
+        setFull(fresh?.project || fresh || null);
+        return true;
+      } catch (e) {
+        setPriceFailed(
+          String(e?.message || "").trim() || "That rate could not be applied just now.",
+        );
+        return false;
+      } finally {
+        setPricing(false);
+      }
+    },
+    [viewOnly, productKey, saveId, id, accessToken],
+  );
+
+  // The best rate per unpriced line, for the Rates tab's list.
+  //
+  // Fetched when that tab is opened rather than on every load: it reads the
+  // whole rate library, and most visits never look at Rates. One request for
+  // the list; the side panel asks separately for a line's full five.
+  const [rateMap, setRateMap] = React.useState(null);
+  React.useEffect(() => {
+    if (tab !== "rates" || !accessToken || !saveId || !productKey) return undefined;
+    let live = true;
+    apiAuthed(
+      `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/rate-suggestions`,
+      { token: accessToken },
+    )
+      .then((d) => {
+        if (live) setRateMap(d?.byCode && typeof d.byCode === "object" ? d.byCode : {});
+      })
+      // A suggestion that cannot be fetched must not break the tab: {} means
+      // "asked, nothing to offer", which is what the slot already said.
+      .catch(() => {
+        if (live) setRateMap({});
+      });
+    return () => {
+      live = false;
+    };
+  }, [tab, accessToken, saveId, productKey]);
+
+  // The rates this line could be priced with — the QS's own library, matched on
+  // description and unit. Returns [] rather than throwing: a suggestion that
+  // cannot be fetched must not stop somebody opening a line.
+  const rateSuggestions = React.useCallback(
+    async (code) => {
+      if (!code) return [];
+      try {
+        const d = await apiAuthed(
+          `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/bill/${encodeURIComponent(code)}/rate-suggestions`,
+          { token: accessToken },
+        );
+        return Array.isArray(d?.suggestions) ? d.suggestions : [];
+      } catch {
+        return [];
+      }
+    },
+    [productKey, saveId, accessToken],
+  );
+
   const clientName = String(project?.clientName || project?.client || "").trim();
   // The file his line names is the model the take-off came from.
   const sourceFileName = attachedModels(project)[0]?.sourceFile || "";
@@ -546,6 +645,11 @@ export default function WorkProjectShell({ productKey, id }) {
               onGo={go}
               onSave={save}
               saving={saveState === "saving"}
+              rateMap={rateMap}
+              onApplyRate={priceLineFromRate}
+              pricing={pricing}
+              priceFailed={priceFailed}
+              priceNotes={priceNotes}
             />
           ) : tab === "pm" && !fullFailed ? (
             <WorkProjectPm
@@ -616,6 +720,11 @@ export default function WorkProjectShell({ productKey, id }) {
               saving={saveState === "saving"}
               onGoToLine={(i) => panel.show({ kind: "line", index: i })}
               onGo={go}
+              onFetchRates={rateSuggestions}
+              onApplyRate={priceLineFromRate}
+              pricing={pricing}
+              priceFailed={priceFailed}
+              priceNotes={priceNotes}
             />
           </WorkProjectPanel>
         ) : null}

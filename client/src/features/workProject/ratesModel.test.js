@@ -8,6 +8,7 @@ import {
   rateWasApplied,
   resolveRateView,
   splitByRate,
+  suggestionFor,
 } from "./ratesModel.js";
 
 // His rates() (work-proj.js:975-1040). WORK.md §13: the Rates & budget tab IS
@@ -163,5 +164,43 @@ describe("what a priced line is worth", () => {
   it("reads junk as zero rather than NaN", () => {
     expect(lineAmount({ qty: "n/a", rate: 100 })).toBe(0);
     expect(lineAmount(null)).toBe(0);
+  });
+});
+
+describe("the rate the server offered for a line", () => {
+  const MAP = {
+    "06.02": { rateId: "r1", unitPrice: 42000, unit: "m3", why: "Close match in your own rate" },
+    a1: { rateId: "r2", unitPrice: 900, unit: "m2", why: "Likely match in the ADLM library" },
+  };
+
+  it("finds the rate for a line", () => {
+    expect(suggestionFor(MAP, { code: "06.02" })?.rateId).toBe("r1");
+  });
+
+  it("matches a code however it is capitalised or spaced", () => {
+    // The whole point: the map is lowercased server-side. Looking it up with
+    // "A1" would find nothing and the screen would claim there was no
+    // suggestion while the server had one.
+    expect(suggestionFor(MAP, { code: "A1" })?.rateId).toBe("r2");
+    expect(suggestionFor(MAP, { code: " a1 " })?.rateId).toBe("r2");
+  });
+
+  it("says nothing for a line the server had no rate for", () => {
+    expect(suggestionFor(MAP, { code: "99.99" })).toBe(null);
+  });
+
+  it("offers nothing to a line with no code, which could not be priced anyway", () => {
+    // The apply endpoint addresses a line BY its code; a button here would
+    // always 400.
+    expect(suggestionFor(MAP, { code: "" })).toBe(null);
+    expect(suggestionFor(MAP, {})).toBe(null);
+    expect(suggestionFor(MAP, null)).toBe(null);
+  });
+
+  it("distinguishes 'not asked yet' from 'nothing to offer'", () => {
+    // null map = the fetch has not landed. The screen says "checking", not
+    // "no suggestion", and the two must not collapse into one.
+    expect(suggestionFor(null, { code: "a1" })).toBe(null);
+    expect(suggestionFor({}, { code: "a1" })).toBe(null);
   });
 });

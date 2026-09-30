@@ -932,3 +932,20 @@
   .ds .ac-list .rw .n{grid-column:2;text-align:right}
   .ds .ac-list .rw .dt{grid-column:1;font-size:11.5px;color:var(--ink-3)}
 }
+
+/* Pricing a bill line from the QS's own rate library, in the side panel.
+   The panel is narrow, so each rate is a stacked button rather than a row:
+   price first, then what the rate is for, then why it was offered. */
+.ds .pn-rates{margin-top:12px;display:grid;gap:6px}
+.ds .pn-rates-k{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+.ds .pn-rate{display:grid;gap:1px;width:100%;text-align:left;padding:9px 11px;border:1px solid var(--line);border-radius:11px;background:var(--bg);font:inherit;color:inherit;cursor:pointer}
+.ds .pn-rate:hover:not(:disabled){border-color:var(--ink-3);background:var(--bg-alt)}
+.ds .pn-rate:disabled{opacity:.55;cursor:default}
+.ds .pn-rate b{font-size:13.5px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .pn-rate .d{font-size:12px;color:var(--ink-2);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .pn-rate .w{font-size:11px;color:var(--ink-3)}
+.ds .pn-bad{margin-top:10px;font-size:12px;color:var(--fb-bad,#b3261e)}
+.ds .pj-need-bad{margin:0 16px 10px;font-size:12px;color:var(--fb-bad,#b3261e)}
+.ds .pj-need-notes,.ds .pn-notes{margin:8px 0 0;padding-left:18px;list-style:disc}
+.ds .pj-need-notes{margin:0 16px 10px}
+.ds .pj-need-notes li,.ds .pn-notes li{font-size:11.5px;color:var(--fb-warn,#c98a00);line-height:1.5}

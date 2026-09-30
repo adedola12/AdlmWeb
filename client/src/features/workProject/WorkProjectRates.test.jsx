@@ -96,12 +96,69 @@ describe("what still needs a rate", () => {
     expect(within(c).getByText("Needs a rate").textContent).toContain("1");
   });
 
-  it("does not invent a suggested rate", () => {
-    // His design shows a suggested library rate here, from a fixture field. We
-    // have nothing that suggests one, and putting a figure in a QS's mouth on a
-    // bill is not a small liberty — so the slot says what it is.
+  it("invents nothing while it has not been told what the server found", () => {
+    // The rule that mattered when this slot was written still holds: nothing
+    // here may put a figure in a QS's mouth. With no map it says it is looking
+    // — it does NOT show a rate and does NOT claim there is none, because those
+    // are different answers and only the server knows which.
     const c = draw();
+    expect(within(c).getByText(/Checking your rate library/)).toBeTruthy();
+    expect(within(c).queryByText("Use this rate")).toBe(null);
+  });
+
+  it("says there is no suggestion once the server has answered with none", () => {
+    const c = draw({ rateMap: {} });
     expect(within(c).getByText(/No suggestion/)).toBeTruthy();
+    expect(within(c).queryByText("Use this rate")).toBe(null);
+  });
+
+  it("shows the rate the server matched, and what it is", () => {
+    // BQ-3 is the unpriced line in the fixture. The map is keyed lowercased,
+    // as the server sends it.
+    const c = draw({
+      rateMap: {
+        "bq-3": {
+          rateId: "r9",
+          description: "Ceramic wall tiling 200x300",
+          unit: "m2",
+          unitPrice: 18_500,
+          why: "Close match in your own rate",
+        },
+      },
+    });
+    const panel = within(c).getByText("Needs a rate").closest(".wk-panel");
+    expect(within(panel).getByText(/18,500/)).toBeTruthy();
+    expect(within(panel).getByText(/Close match in your own rate/)).toBeTruthy();
+  });
+
+  it("applies the pick by the line's own code, which is what the endpoint wants", () => {
+    const onApplyRate = vi.fn();
+    const pick = {
+      rateId: "r9",
+      description: "Ceramic wall tiling 200x300",
+      unit: "m2",
+      unitPrice: 18_500,
+      why: "Close match in your own rate",
+    };
+    const c = draw({ rateMap: { "bq-3": pick }, onApplyRate });
+    fireEvent.click(within(c).getByText("Use this rate"));
+    expect(onApplyRate).toHaveBeenCalledWith("BQ-3", pick);
+  });
+
+  it("offers no rate to a view-only reader", () => {
+    const c = render(
+      <WorkProjectRates
+        project={project()}
+        canEdit={false}
+        rateMap={{ "bq-3": { rateId: "r9", unit: "m2", unitPrice: 1, why: "x", description: "y" } }}
+      />,
+    ).container;
+    expect(within(c).queryByText("Use this rate")).toBe(null);
+  });
+
+  it("says what the build-up could not price rather than leaving a zero row unexplained", () => {
+    const c = draw({ priceNotes: ["No price for cement in your constants library"] });
+    expect(within(c).getByText(/No price for cement/)).toBeTruthy();
   });
 
   it("opens the line rather than offering an action that does nothing", () => {

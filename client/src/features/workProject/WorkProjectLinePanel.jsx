@@ -38,6 +38,11 @@ export default function WorkProjectLinePanel({
   onSave,
   onGoToLine,
   onGo,
+  onFetchRates,
+  onApplyRate,
+  pricing = false,
+  priceFailed = "",
+  priceNotes = [],
 }) {
   // Both memos sit above the "no such line" return: a hook after an early
   // return runs in a different order on the render that takes it.
@@ -54,9 +59,49 @@ export default function WorkProjectLinePanel({
     return [...seen].filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [items, it]);
 
+  // THE RATE THIS LINE COULD BE PRICED WITH.
+  //
+  // This panel used to offer "Price it", which opened the Rates tab — which is
+  // read-only, because a rate is built in RateGen. So the two screens sent the
+  // reader to each other and neither took a rate. A tester hit exactly that
+  // today.
+  //
+  // The suggestions are the QS's OWN rates, matched on description and unit
+  // (server-side, in util/rateSuggestions.js). Nothing here invents a figure
+  // and nothing here posts one: the body names the rate, and the server
+  // re-resolves it from that user's library before writing anything.
+  const code = String(it?.code || "").trim();
+  const priced = it ? isPriced(it) : false;
+  const [picks, setPicks] = React.useState(null); // null = not asked yet
+  const [looking, setLooking] = React.useState(false);
+
+  React.useEffect(() => {
+    // Only for a line somebody can actually price. An unpriced line with no
+    // code cannot be addressed by the endpoint at all (it matches on the code),
+    // so asking would 400 for nothing.
+    if (!canEdit || priced || !code || typeof onFetchRates !== "function") {
+      setPicks(null);
+      return undefined;
+    }
+    let live = true;
+    setLooking(true);
+    setPicks(null);
+    onFetchRates(code)
+      .then((list) => {
+        // The reader may have moved to another line while this was in flight;
+        // showing its answer here would offer rates for a different item.
+        if (live) setPicks(Array.isArray(list) ? list : []);
+      })
+      .finally(() => {
+        if (live) setLooking(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [canEdit, priced, code, onFetchRates]);
+
   if (!it) return null;
 
-  const priced = isPriced(it);
   const done = doneOf(it);
 
   return (
@@ -125,13 +170,58 @@ export default function WorkProjectLinePanel({
         ) : (
           <p className="none">No rate yet — it is not counted in the estimated total.</p>
         )}
+        {canEdit && !priced && picks?.length ? (
+          <div className="pn-rates">
+            <span className="pn-rates-k">Price it from your own rates</span>
+            {picks.map((r) => (
+              <button
+                key={r.rateId || r.description}
+                type="button"
+                className="pn-rate"
+                disabled={pricing || saving}
+                onClick={() => onApplyRate?.(code, r)}
+              >
+                <b>{money(r.unitPrice)}</b>
+                <span className="d">{r.description}</span>
+                <span className="w">
+                  per {r.unit} &middot; {r.why}
+                </span>
+              </button>
+            ))}
+            <p className="hint">
+              Applying one sets this line&rsquo;s rate and prices its material, labour and
+              plant in the budget.
+            </p>
+          </div>
+        ) : null}
+
+        {canEdit && !priced && looking ? (
+          <p className="hint">Looking through your rate library&hellip;</p>
+        ) : null}
+
+        {canEdit && !priced && picks?.length === 0 && !looking ? (
+          <p className="hint">
+            Nothing in your rate library matches this line in {unitOf(it)}. Build the rate in
+            Rate Gen and it will be offered here.
+          </p>
+        ) : null}
+
+        {priceFailed ? <p className="pn-bad">{priceFailed}</p> : null}
+        {priceNotes.length ? (
+          <ul className="pn-notes">
+            {priceNotes.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        ) : null}
+
         {canEdit ? (
           <button
             type="button"
             className="ds-btn btn-o ds-btn-sm"
             onClick={() => onGo?.("rates")}
           >
-            {priced ? "Open in Rates & budget" : "Price it"}
+            {priced ? "Open in Rates & budget" : "Open Rates & budget"}
           </button>
         ) : null}
       </div>

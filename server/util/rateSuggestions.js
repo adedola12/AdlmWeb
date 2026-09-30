@@ -123,3 +123,60 @@ function describeMatch(score, own) {
  * belongs in one place rather than in every screen that shows a list.
  */
 export const worthOffering = (s) => Boolean(s) && s.score >= 0.45 && s.unitPrice > 0;
+
+/** Does this line still need a rate? The same test the client's isPriced makes. */
+export const needsRate = (item) => !(Number(item?.rate) > 0);
+
+/**
+ * The best rate for every line on a bill that has none, keyed by bill code.
+ *
+ * WHY ONE MAP AND NOT ONE REQUEST PER LINE
+ *
+ * The Rates tab lists every unpriced line at once. Asking per line would
+ * re-read the whole rate library each time, and that read is the expensive
+ * part; matching in memory over a library loaded once is both cheaper and the
+ * only version that survives a bill with four hundred unpriced lines.
+ *
+ * THE KEY IS LOWERCASED, AND THAT IS A CONTRACT
+ *
+ * The endpoint that applies a pick matches a line case-insensitively on its
+ * code, and the client looks a suggestion up the same way
+ * (client/src/features/workProject/ratesModel.js, suggestionFor). If either
+ * side stopped lowercasing, every line whose code carries a letter would show
+ * "No suggestion" while a match existed — a silent miss, not an error. Both
+ * sides are tested against it.
+ *
+ * A line with NO code is skipped: the apply endpoint addresses a line by its
+ * code, so offering one a rate would build a button that always fails.
+ *
+ * @param {Array} items    the bill
+ * @param {Array} rates    the merged rate set (master + the user's own)
+ * @param {object} [opts]
+ * @param {number} [opts.cap]  most lines to consider, so one huge bill cannot
+ *                             hold a request open
+ * @returns {{byCode: object, considered: number, unpriced: number, truncated: boolean}}
+ */
+export function suggestionMapForBill(items, rates, { cap = 600 } = {}) {
+  const needing = (Array.isArray(items) ? items : []).filter(needsRate);
+  const lines = needing.slice(0, Math.max(0, cap));
+
+  const byCode = {};
+  for (const item of lines) {
+    const code = str(item?.code).toLowerCase();
+    if (!code) continue;
+    // First match wins, which matters when two lines share a code: they are the
+    // same line to the apply endpoint too, so a second answer would be noise.
+    if (byCode[code]) continue;
+    const best = suggestRatesForLine(item, rates, { limit: 1 }).filter(worthOffering)[0];
+    if (best) byCode[code] = best;
+  }
+
+  return {
+    byCode,
+    considered: lines.length,
+    unpriced: needing.length,
+    // Reported rather than silent: a screen showing suggestions for the first
+    // 600 of 900 lines while saying nothing reads as "the rest have no match".
+    truncated: needing.length > lines.length,
+  };
+}
