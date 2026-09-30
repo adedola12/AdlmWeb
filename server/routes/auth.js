@@ -1,4 +1,5 @@
 import express from "express";
+import { recordReferral } from "../services/referrals.js";
 import { mustVerifyEmail } from "../util/emailGate.js";
 import {
   verifyEmail,
@@ -360,6 +361,21 @@ router.post("/signup", async (req, res) => {
         whatsapp: normalizeWhatsApp(whatsapp),
         entitlements: [],
       });
+
+      // WHO SENT THEM. A referral is an attribution, never a gate: recordReferral
+      // swallows every failure and returns a reason, so nothing here can stop an
+      // account being created. The code rides in the body from the ?ref= the
+      // browser held on to (client/src/lib/referralRef.js).
+      if (user?._id) {
+        const ref = await recordReferral({
+          code: req.body?.ref,
+          newUser: user,
+          signupMethod: "password",
+        });
+        if (!ref.ok && ref.reason !== "no-code") {
+          console.warn(`[referrals] signup capture skipped: ${ref.reason}`);
+        }
+      }
     } catch (createErr) {
       await slot.release().catch(() => {});
       throw createErr;
@@ -1379,6 +1395,18 @@ router.post("/social", authLimiter, async (req, res) => {
           entitlements: [],
         });
         created = true;
+        // The SECOND place an account is made. A referral captured only in the
+        // password path loses every Google and Microsoft signup, which on this
+        // site is most of them. The code survived the provider round trip in the
+        // browser's own storage and comes back in this request's body.
+        const ref = await recordReferral({
+          code: req.body?.ref,
+          newUser: user,
+          signupMethod: "social",
+        });
+        if (!ref.ok && ref.reason !== "no-code") {
+          console.warn(`[referrals] social capture skipped: ${ref.reason}`);
+        }
       }
     }
 

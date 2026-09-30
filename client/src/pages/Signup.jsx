@@ -1,4 +1,5 @@
 import React from "react";
+import { clearRef, readRef } from "../lib/referralRef.js";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
@@ -49,8 +50,12 @@ export default function Signup() {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           whatsapp: normalizeWhatsApp(whatsapp),
+          // Who sent them, if anyone did. Held since they landed
+          // (lib/referralRef.js); the server treats it as attribution only.
+          ref: readRef(),
         }),
       });
+      clearRef();
       setAuth({
         user: res.user, // now includes firstName, lastName, whatsapp
         accessToken: res.accessToken,

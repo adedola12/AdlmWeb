@@ -1,4 +1,5 @@
 import React from "react";
+import { captureRef } from "./lib/referralRef.js";
 import DsLaunchStrip from "./ds/DsLaunchStrip.jsx";
 import { Link, Outlet, useLocation, ScrollRestoration } from "react-router-dom";
 import { useAuth } from "./store.jsx";
@@ -51,6 +52,16 @@ export default function App() {
   React.useEffect(() => {
     setShowVideo(location.pathname === "/");
   }, [location.pathname]);
+
+  // A referral code arriving on any page, held until they actually sign up.
+  //
+  // Nothing in the app read query parameters on landing, so a ?ref= had no
+  // capture point at all. It runs on every navigation, not just the first,
+  // because a referral link can point at any page — and it keeps the FIRST code
+  // it is given (lib/referralRef.js).
+  React.useEffect(() => {
+    captureRef(location.search);
+  }, [location.search]);
 
   // Announce boot into the dataLayer once per load. GTM fires its own
   // gtm.js/gtm.dom/gtm.load, but nothing told it the app itself had started.

@@ -5,6 +5,7 @@
 // widget to render.
 
 import { createMessage, supportsTools } from "./aiClient.js";
+import { referralSummary } from "./referrals.js";
 import { getCatalog } from "./catalog.js";
 import { Lead } from "../models/Lead.js";
 import { syncLeadToNotion } from "../util/notion.js";
@@ -166,6 +167,16 @@ const ACCOUNT_TOOLS = [
       },
       required: ["resource"],
     },
+  },
+  {
+    name: "get_my_referral_link",
+    description:
+      "Get the LOGGED-IN user's own referral/invite link, and how many people " +
+      "have signed up and subscribed through it. Use for 'can I get an invite " +
+      "link', 'refer a friend', 'my referral link', 'how many people have I " +
+      "referred'. ALWAYS print the link as a plain URL on its own line — never " +
+      "inside markdown brackets — so they can read and copy it. No arguments.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "get_procurement_schedule",
@@ -554,6 +565,20 @@ async function handleAccountTool(name, input, ctx) {
       return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName, ctx.page);
     if (name === "get_project_budget")
       return await getProjectBudget(ctx.user._id, input?.projectName, ctx.page);
+    if (name === "get_my_referral_link") {
+      const r = await referralSummary(ctx.user._id);
+      if (!r) return "Their referral link could not be made just now.";
+      // The bare URL on its own line: chatMarkdown renders a naked https link
+      // as a real anchor, while [text](url) would hide the code from the person
+      // who has to read it out or paste it somewhere else.
+      return [
+        `Referral link: ${r.link}`,
+        `Code: ${r.code}`,
+        `Signed up through it: ${r.signups}`,
+        `Of those, subscribed: ${r.converted}`,
+        "Print the link exactly as written above, on its own line, not as a markdown link.",
+      ].join("\n");
+    }
     if (name === "get_procurement_schedule")
       return await getProcurementSchedule(ctx.user._id, input?.projectName, ctx.page, {
         leadDays: input?.leadDays,
