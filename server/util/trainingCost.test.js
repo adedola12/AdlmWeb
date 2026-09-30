@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_PEOPLE, isRoadTrip, TRAINING_DAYS, trainingCostEstimate } from "./trainingCost.js";
+import {
+  DEFAULT_PEOPLE,
+  TRAINING_DAYS,
+  TRAVEL_RATE_FIELDS,
+  isRoadTrip,
+  trainingCostEstimate,
+  travelPatch,
+} from "./trainingCost.js";
 
 const abuja = {
   city: "Abuja", state: "FCT", durationDays: 3, trainingCostNGN: 1_500_000,
@@ -119,4 +126,58 @@ test("rubbish does not throw", () => {
   assert.ok(Number.isFinite(e.total));
   assert.equal(e.complete, false);
   assert.equal(trainingCostEstimate({}, { people: -5 }).assumptions.people, 1);
+});
+
+// ── The rates off a form, normalised ──
+
+test('byRoad "" means DECIDE FROM THE CITY, not "by air"', () => {
+  // The one rule here that fails silently. A <select> sends "" for the default
+  // option, and Boolean("") is false — which means "by air". Get it wrong and a
+  // Lagos training is costed with two airfares instead of a Bolt fare: a figure
+  // two orders of magnitude out that looks perfectly plausible on a sheet.
+  assert.equal(travelPatch({ byRoad: "" }).byRoad, null);
+  assert.equal(travelPatch({ byRoad: null }).byRoad, null);
+  assert.equal(travelPatch({ byRoad: true }).byRoad, true);
+  assert.equal(travelPatch({ byRoad: false }).byRoad, false);
+});
+
+test("a null byRoad still lets Lagos decide for itself", () => {
+  // The end of that chain: the patch says null, and the estimate reads the city.
+  const lagos = { city: "Lagos", travel: travelPatch({ byRoad: "", localFareNGN: 4500 }) };
+  assert.equal(isRoadTrip(lagos), true);
+  // And a flight rate is not what it charges.
+  assert.ok(trainingCostEstimate(lagos).lines.some((l) => l.key === "transport"));
+  assert.ok(!trainingCostEstimate(lagos).lines.some((l) => l.key === "flights"));
+});
+
+test("a rate is clamped at zero, never negative", () => {
+  assert.equal(travelPatch({ flightNGN: -5 }).flightNGN, 0);
+  assert.equal(travelPatch({ hotelPerNightNGN: "abc" }).hotelPerNightNGN, 0);
+  assert.equal(travelPatch({ feedingPerDayNGN: "15000" }).feedingPerDayNGN, 15_000);
+});
+
+test("an absent rate is left absent, so it does not wipe a saved one", () => {
+  // The form sends the whole block, but a partial patch must not zero the rest.
+  const patch = travelPatch({ flightNGN: 180_000 });
+  assert.deepEqual(Object.keys(patch), ["flightNGN"]);
+});
+
+test("nothing to patch is undefined, not an empty object", () => {
+  // An empty object assigned over a saved subdocument is a no-op, but the route
+  // reads this to decide whether to touch `travel` at all.
+  assert.equal(travelPatch(undefined), undefined);
+  assert.equal(travelPatch(null), undefined);
+  assert.equal(travelPatch("15000"), undefined);
+});
+
+test("the label is trimmed and survives", () => {
+  assert.equal(travelPatch({ otherLabel: "  Venue hire  " }).otherLabel, "Venue hire");
+  assert.equal(travelPatch({ otherLabel: "" }).otherLabel, "");
+});
+
+test("every field the form renders is a key the patch accepts", () => {
+  // A field on the form with no key here would take a rate and lose it.
+  for (const f of TRAVEL_RATE_FIELDS) {
+    assert.deepEqual(travelPatch({ [f.key]: 1234 }), { [f.key]: 1234 }, f.key);
+  }
 });

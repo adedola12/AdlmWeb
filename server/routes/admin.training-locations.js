@@ -1,5 +1,9 @@
 import express from "express";
-import { TRAVEL_RATE_FIELDS, trainingCostEstimate } from "../util/trainingCost.js";
+import {
+  TRAVEL_RATE_FIELDS,
+  trainingCostEstimate,
+  travelPatch,
+} from "../util/trainingCost.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { TrainingLocation } from "../models/TrainingLocation.js";
 
@@ -35,6 +39,7 @@ router.post("/", async (req, res) => {
       trainingCostNGN, trainingCostUSD,
       bimInstallCostNGN, bimInstallCostUSD,
       durationDays, isActive,
+      travel,
     } = req.body || {};
 
     if (!name?.trim()) {
@@ -52,9 +57,18 @@ router.post("/", async (req, res) => {
       bimInstallCostUSD: Number(bimInstallCostUSD || 0),
       durationDays: Math.max(Number(durationDays || 1), 1),
       isActive: isActive !== false,
+      // The travel rates on the way in, so a location can be set up in one pass
+      // rather than created and then edited. Dropping them here meant a form
+      // that offered the fields and quietly lost them.
+      travel: travelPatch(travel),
     });
 
-    return res.json({ ok: true, location: loc });
+    return res.json({
+      ok: true,
+      location: loc,
+      // So the form can show what a trip works out to without a second read.
+      estimate: trainingCostEstimate(loc.toObject()),
+    });
   } catch (e) {
     console.error("admin training-locations create error:", e);
     return res.status(500).json({ error: "Failed to create training location" });
@@ -91,17 +105,8 @@ router.put("/:id", async (req, res) => {
     // The travel rates, as a block. Each is a rate somebody maintains, so an
     // empty string clears it to 0 and util/trainingCost.js then reports it as
     // missing rather than counting it as free.
-    if (req.body.travel && typeof req.body.travel === "object") {
-      const t = req.body.travel;
-      for (const k of ["flightNGN", "hotelPerNightNGN", "feedingPerDayNGN", "localFareNGN", "otherNGN"]) {
-        if (t[k] !== undefined) loc.travel[k] = Math.max(0, Number(t[k] || 0));
-      }
-      if (t.otherLabel !== undefined) loc.travel.otherLabel = String(t.otherLabel || "").trim();
-      // null means "let the city decide"; true/false is a deliberate answer.
-      if (t.byRoad !== undefined) {
-        loc.travel.byRoad = t.byRoad === null || t.byRoad === "" ? null : Boolean(t.byRoad);
-      }
-    }
+    const patch = travelPatch(req.body.travel);
+    if (patch) Object.assign(loc.travel, patch);
 
     await loc.save();
     return res.json({ ok: true, location: loc, estimate: trainingCostEstimate(loc.toObject()) });

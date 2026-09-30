@@ -177,3 +177,38 @@ export const TRAVEL_RATE_FIELDS = Object.freeze([
   { key: "localFareNGN", label: "Local fare, one way", hint: "Bolt or taxi — used instead of flights on a road trip" },
   { key: "otherNGN", label: "Anything else, per training" },
 ]);
+
+/** The rate keys, in the order a form asks for them. */
+export const TRAVEL_RATE_KEYS = Object.freeze(TRAVEL_RATE_FIELDS.map((f) => f.key));
+
+/**
+ * The travel rates off a request, normalised.
+ *
+ * Shared by create and update so the two cannot disagree about what a rate
+ * means, and here rather than in the route because one of its rules fails
+ * silently: byRoad arrives from a <select> as "" for "let the city decide", and
+ * a plain Boolean("") is FALSE — which means "by air". Get that wrong and a
+ * Lagos training is costed with two airfares instead of a Bolt fare, a figure
+ * two orders of magnitude out that looks perfectly plausible on a sheet.
+ *
+ * A rate is clamped at 0 and an absent one left absent. A 0 is not "free": the
+ * estimate reports it as missing, because a zero silently makes a trip look
+ * cheaper than it is.
+ *
+ * @returns {object|undefined} undefined when there is nothing to patch
+ */
+export function travelPatch(travel) {
+  if (!travel || typeof travel !== "object") return undefined;
+  const out = {};
+  for (const k of TRAVEL_RATE_KEYS) {
+    if (travel[k] !== undefined) out[k] = num(travel[k]);
+  }
+  if (travel.otherLabel !== undefined) out.otherLabel = String(travel.otherLabel || "").trim();
+  if (travel.byRoad !== undefined) {
+    // "" and null both mean "decide from the city". Only a real true/false is a
+    // deliberate answer.
+    out.byRoad =
+      travel.byRoad === null || travel.byRoad === "" ? null : Boolean(travel.byRoad);
+  }
+  return out;
+}
