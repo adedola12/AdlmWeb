@@ -20,9 +20,16 @@ const KEEP = [
   { key: "remove", label: "Remove", tone: "bg-red-100 text-red-700" },
 ];
 
-function Item({ item, canDecide, onVerdict, busy }) {
+// A verdict shows the moment it is picked and saves in the background; only this card
+// waits for its own save. It used to disable every button and reload the whole page after
+// each click, so the approver waited on every answer and watched the page refresh.
+function Item({ item, canDecide, onVerdict, saving }) {
   const options = item.kind === "not-in-design" ? KEEP : VERDICTS;
   const [note, setNote] = React.useState(item.note || "");
+  // A note typed after the verdict is saved when the box is left, with the same verdict.
+  const saveNote = () => {
+    if (item.verdict && note !== (item.note || "")) onVerdict(item.key, item.verdict, note);
+  };
 
   return (
     <div className="rounded-lg border border-slate-200 p-3 space-y-2">
@@ -45,7 +52,8 @@ function Item({ item, canDecide, onVerdict, busy }) {
           {options.map((o) => (
             <button
               key={o.key}
-              disabled={busy}
+              disabled={saving}
+              aria-pressed={item.verdict === o.key}
               onClick={() => onVerdict(item.key, o.key, note)}
               className={`btn btn-sm ${item.verdict === o.key ? "ring-2 ring-offset-1 ring-slate-400" : ""}`}
             >
@@ -57,7 +65,9 @@ function Item({ item, canDecide, onVerdict, busy }) {
             placeholder="Note (what should change?)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            onBlur={saveNote}
           />
+          {saving && <span className="text-xs text-slate-500">Saving…</span>}
         </div>
       ) : (
         item.verdict && (
@@ -76,6 +86,7 @@ export default function ReleaseBatchCard({ token, onChanged }) {
   const [msg, setMsg] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [note, setNote] = React.useState("");
+  const [savingKeys, setSavingKeys] = React.useState(() => new Set());
 
   const load = React.useCallback(async () => {
     try {
@@ -102,6 +113,31 @@ export default function ReleaseBatchCard({ token, onChanged }) {
       setMsg(e?.message || "Action failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // One verdict: shown at once, saved in the background, nothing reloaded. On failure the
+  // card goes back to what the server holds and says so.
+  async function saveVerdict(batchId, key, verdict, itemNote) {
+    const patch = (fn) =>
+      setData((d) => (d?.batch ? { ...d, batch: { ...d.batch, items: d.batch.items.map((i) => (i.key === key ? fn(i) : i)) } } : d));
+    let before = null;
+    patch((i) => {
+      before = { verdict: i.verdict, note: i.note };
+      return { ...i, verdict, note: itemNote };
+    });
+    setSavingKeys((s) => new Set(s).add(key));
+    try {
+      await apiAuthed(`/admin/releases/batch/${batchId}/verdict`, { token, method: "POST", body: { key, verdict, note: itemNote } });
+    } catch (e) {
+      if (before) patch((i) => ({ ...i, ...before }));
+      setMsg(`Not saved: ${e?.message || "the verdict could not be saved"}. Pick it again.`);
+    } finally {
+      setSavingKeys((s) => {
+        const n = new Set(s);
+        n.delete(key);
+        return n;
+      });
     }
   }
 
@@ -152,8 +188,8 @@ export default function ReleaseBatchCard({ token, onChanged }) {
           key={item.key}
           item={item}
           canDecide={canDecide}
-          busy={busy}
-          onVerdict={(key, verdict, itemNote) => act(`/admin/releases/batch/${batch._id}/verdict`, { key, verdict, note: itemNote })}
+          saving={savingKeys.has(item.key)}
+          onVerdict={(key, verdict, itemNote) => saveVerdict(batch._id, key, verdict, itemNote)}
         />
       ))}
 
@@ -178,12 +214,12 @@ export default function ReleaseBatchCard({ token, onChanged }) {
           />
           <button
             className="btn btn-sm bg-green-600 hover:bg-green-700 text-white"
-            disabled={busy}
+            disabled={busy || savingKeys.size > 0}
             onClick={() => act(`/admin/releases/batch/${batch._id}/approve`, { note })}
           >
             Approve and send to customers
           </button>
-          <button className="btn btn-sm" disabled={busy} onClick={() => act(`/admin/releases/batch/${batch._id}/reject`, { note })}>
+          <button className="btn btn-sm" disabled={busy || savingKeys.size > 0} onClick={() => act(`/admin/releases/batch/${batch._id}/reject`, { note })}>
             Send back for changes
           </button>
           {undecided > 0 && (
