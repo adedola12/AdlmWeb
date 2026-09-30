@@ -35,6 +35,17 @@ import {
   withSectionAdded,
   withSectionMoved,
 } from "./sectionsModel.js";
+// The actual columns, after a lock. Every rule about what a null means and what
+// a variance is worth is in actualsModel.js, tested without a project.
+import {
+  actualAmountOf,
+  actualQtyOf,
+  actualTotals,
+  isLocked,
+  showActuals,
+  varianceOf,
+  withActualColumns,
+} from "./actualsModel.js";
 
 export default function WorkProjectBill({
   project,
@@ -50,6 +61,23 @@ export default function WorkProjectBill({
   const items = React.useMemo(
     () => (Array.isArray(project?.items) ? project.items : []),
     [project],
+  );
+
+  // THE ACTUAL COLUMNS.
+  //
+  // Only after a lock, because before one there is a single quantity and it is
+  // the estimate — there is nothing to compare against. After a lock the
+  // contract quantity is frozen and a re-measure is recorded beside it, which is
+  // what makes a variation due to measured work visible instead of letting the
+  // contract sum drift with no record of why.
+  //
+  // The switch is saved on the project rather than in this browser, so two
+  // people looking at the same locked contract see the same columns.
+  const locked = isLocked(project);
+  const actuals = locked && showActuals(project);
+  const actualSums = React.useMemo(
+    () => (actuals ? actualTotals(items) : null),
+    [actuals, items],
   );
 
   // The Drawings tab jumps here with ?q=<where it was measured>, which is his
@@ -175,18 +203,48 @@ export default function WorkProjectBill({
           </>
         ) : null}
 
+        {locked ? (
+          // Eight columns is a lot to read, and before a lock they are all
+          // empty, so this is off by default and can be put away again.
+          <button
+            type="button"
+            className="pj-lnk"
+            disabled={saving || !canEdit}
+            aria-pressed={actuals}
+            title={
+              canEdit
+                ? "What was measured on site, beside what the contract says"
+                : "Only an editor can change which columns everybody sees"
+            }
+            onClick={() => onSave?.(withActualColumns(project, !actuals))}
+          >
+            {actuals ? "Hide actuals" : "Show actuals"}
+          </button>
+        ) : null}
+
         <span className="tot">
           Measured <b>{money(totals.measured)}</b>
         </span>
       </div>
 
-      <div className="pj-bill" role="table" aria-label="Bill of quantities">
+      <div
+        className={actuals ? "pj-bill act" : "pj-bill"}
+        role="table"
+        aria-label="Bill of quantities"
+      >
         <div className="hd" role="row">
           <span>Ref</span>
           <span>Description</span>
-          <span className="n">Qty</span>
+          <span className="n">{actuals ? "Contract qty" : "Qty"}</span>
           <span className="n">Rate</span>
           <span className="n">Amount</span>
+          {actuals ? (
+            <>
+              <span className="n">Actual qty</span>
+              <span className="n">Actual amount</span>
+              <span className="n">Variation</span>
+            </>
+          ) : null}
           <span>Done</span>
         </div>
 
@@ -293,6 +351,7 @@ export default function WorkProjectBill({
                         <span className="n">
                           <b>{priced ? money(amountOf(it)) : EN_DASH}</b>
                         </span>
+                        {actuals ? <ActualCells item={it} /> : null}
                         <span className="dn">
                           <Bar percent={doneOf(it)} tone="ok" />
                           <em>{doneOf(it)}%</em>
@@ -319,6 +378,8 @@ export default function WorkProjectBill({
           </div>
         ) : null}
       </div>
+
+      {actualSums ? <ActualsStrip sums={actualSums} onGo={onGo} /> : null}
 
       <BillSummary project={project} totals={totals} canEdit={canEdit} onGo={onGo} />
 
@@ -422,6 +483,85 @@ function BillSummary({ project, totals, canEdit, onGo }) {
           The percentages and the sums are edited in the classic workspace for now.
         </p>
       ) : null}
+    </section>
+  );
+}
+
+/**
+ * One line's measured quantity, what it came to, and the difference.
+ *
+ * An unmeasured line shows an en dash in all three rather than repeating its
+ * contract figures, which would read as a confirmed measurement.
+ */
+function ActualCells({ item }) {
+  const qty = actualQtyOf(item);
+  const amount = actualAmountOf(item);
+  const variance = varianceOf(item);
+  return (
+    <>
+      <span className="n">
+        {qty === null ? (
+          EN_DASH
+        ) : (
+          <>
+            {num(qty)} <small>{unitOf(item)}</small>
+          </>
+        )}
+      </span>
+      <span className="n">{amount === null ? EN_DASH : money(amount)}</span>
+      <span className={variance ? (variance > 0 ? "n vr up" : "n vr dn") : "n vr"}>
+        {variance === null
+          ? EN_DASH
+          : variance === 0
+            ? "agrees"
+            : `${variance > 0 ? "+" : EN_DASH}${money(Math.abs(variance))}`}
+      </span>
+    </>
+  );
+}
+
+/**
+ * The two totals and what separates them.
+ *
+ * Says how many lines the actual figure rests on, because an unmeasured line
+ * counts at its contract amount: a bill with three lines measured out of four
+ * hundred has an "actual" total that is almost entirely the contract one, and
+ * presenting that as a fact would be the wrong impression.
+ */
+function ActualsStrip({ sums, onGo }) {
+  return (
+    <section className="pj-actsum">
+      <div className="r">
+        <span className="l">Contract</span>
+        <b>{money(sums.contract)}</b>
+      </div>
+      <div className="r">
+        <span className="l">
+          Measured to date
+          <em>
+            {sums.anyMeasured
+              ? `${sums.measured} of ${sums.lines} lines re-measured; the rest stand as agreed`
+              : "nothing re-measured yet, so this is the contract figure"}
+          </em>
+        </span>
+        <b>{money(sums.actual)}</b>
+      </div>
+      <div className={sums.variance ? (sums.variance > 0 ? "r t up" : "r t dn") : "r t"}>
+        <span className="l">
+          Variation from measured work
+          <em>
+            New scope is a variation of its own and is not counted here.{" "}
+            <button type="button" className="pj-lnk" onClick={() => onGo?.("valuations")}>
+              See variations
+            </button>
+          </em>
+        </span>
+        <b>
+          {sums.variance === 0
+            ? "None"
+            : `${sums.variance > 0 ? "+" : EN_DASH}${money(Math.abs(sums.variance))}`}
+        </b>
+      </div>
     </section>
   );
 }

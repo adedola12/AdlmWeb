@@ -949,3 +949,37 @@
 .ds .pj-need-notes,.ds .pn-notes{margin:8px 0 0;padding-left:18px;list-style:disc}
 .ds .pj-need-notes{margin:0 16px 10px}
 .ds .pj-need-notes li,.ds .pn-notes li{font-size:11.5px;color:var(--fb-warn,#c98a00);line-height:1.5}
+
+/* THE BILL WITH ITS ACTUAL COLUMNS, after a contract lock.
+   Six columns become nine, so the grid is redefined rather than stretched: at
+   the original widths the description collapses to nothing. Below 1200px the
+   table scrolls sideways instead of crushing every number, because a bill read
+   at two characters a column is not read. */
+.ds .pj-bill.act{overflow-x:auto}
+.ds .pj-bill.act .hd, .ds .pj-bill.act .rw{
+  grid-template-columns:46px minmax(190px,1fr) 104px 96px 112px 104px 112px 112px 92px;
+  gap:10px;min-width:1140px}
+.ds .pj-bill.act .n{font-size:12.5px}
+/* A variation reads as a direction first and a figure second. */
+.ds .pj-bill .vr{font-size:12px;color:var(--ink-3)}
+.ds .pj-bill .vr.up{color:var(--fb-bad,#b3261e)}
+.ds .pj-bill .vr.dn{color:var(--fb-ok,#1b7f4d)}
+
+/* Contract against measured, under the bill. */
+.ds .pj-actsum{margin-top:14px;border:1px solid var(--line);border-radius:16px;background:var(--bg);overflow:hidden}
+.ds .pj-actsum .r{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;
+  padding:12px 18px;border-top:1px solid var(--line)}
+.ds .pj-actsum .r:first-child{border-top:0}
+.ds .pj-actsum .l{font-size:13px;color:var(--ink-2);min-width:0}
+.ds .pj-actsum .l em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:3px;line-height:1.5}
+.ds .pj-actsum b{font-size:14px;font-weight:500;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ds .pj-actsum .r.t{background:var(--bg-alt)}
+.ds .pj-actsum .r.t.up b{color:var(--fb-bad,#b3261e)}
+.ds .pj-actsum .r.t.dn b{color:var(--fb-ok,#1b7f4d)}
+/* The measured-quantity box in the side panel. */
+.ds .pn-num{display:grid;gap:5px;margin-top:10px}
+.ds .pn-num > span{font-size:12px;color:var(--ink-2)}
+.ds .pn-num input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);font:400 13.5px var(--font);color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .pn-num input:focus{outline:2px solid color-mix(in srgb,var(--action) 45%,transparent);outline-offset:1px}
+.ds .pn-num input:disabled{opacity:.6}

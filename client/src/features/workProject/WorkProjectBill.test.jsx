@@ -2,6 +2,7 @@ import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent, within } from "@testing-library/react";
 import WorkProjectBill from "./WorkProjectBill.jsx";
+import { EN_DASH } from "./workProjectFormat.js";
 
 // His Bill tab (work-proj.js:708-823) on a real bill. These pin the STRUCTURE —
 // his toolbar, his grouped table, his summary box — and the two figures that
@@ -353,5 +354,111 @@ describe("the arranging controls actually do something (reported broken)", () =>
     fireEvent.dragStart(secs[0].querySelector(".sh"));
     fireEvent.drop(secs[1]);
     expect(onSave).toHaveBeenCalled();
+  });
+});
+
+describe("the actual columns, after a contract lock", () => {
+  const locked = (over = {}) => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items: [
+      { code: "BQ-1", description: "Excavate", category: "Substructure", qty: 120, unit: "m3", rate: 4_500, actualQty: 134 },
+      { code: "BQ-2", description: "Columns", category: "Frame", qty: 40, unit: "m3", rate: 72_000 },
+    ],
+    ...over,
+  });
+
+  const draw = (project, props = {}) =>
+    render(<WorkProjectBill project={project} canEdit {...props} />).container;
+
+  it("offers the switch only once the contract is locked", () => {
+    // Before a lock the actuals are all empty and there is nothing to compare
+    // against, so the switch itself would be noise.
+    expect(within(draw(locked({ contract: {} }))).queryByText(/actuals/i)).toBe(null);
+    expect(within(draw(locked())).getByText("Hide actuals")).toBeTruthy();
+    expect(
+      within(draw(locked({ valuationSettings: { showActualColumns: false } }))).getByText(
+        "Show actuals",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("names the frozen column CONTRACT qty once actuals are showing", () => {
+    // "Qty" beside "Actual qty" does not say which one is the agreed figure.
+    const c = draw(locked());
+    expect(within(c).getByText("Contract qty")).toBeTruthy();
+    expect(within(c).getByText("Actual qty")).toBeTruthy();
+    expect(within(c).getByText("Variation")).toBeTruthy();
+  });
+
+  it("saves the switch to the project, not to this browser", () => {
+    // Two people on the same locked contract must see the same columns.
+    const onSave = vi.fn();
+    const c = draw(locked({ valuationSettings: { showActualColumns: false, showDailyLog: true } }), {
+      onSave,
+    });
+    fireEvent.click(within(c).getByText("Show actuals"));
+    expect(onSave).toHaveBeenCalledWith({
+      // And it keeps the other valuation settings, which the PUT would otherwise
+      // fall back on.
+      valuationSettings: { showDailyLog: true, showActualColumns: true },
+    });
+  });
+
+  it("shows an unmeasured line as nothing, not as its contract figure", () => {
+    // Repeating the contract amount in the actual column reads as a confirmed
+    // measurement. BQ-2 has not been measured, so its three actual cells are
+    // empty while BQ-1 carries real figures.
+    const c = draw(locked({ items: [locked().items[1]] })); // BQ-2 alone
+    const row = c.querySelector(".pj-bill.act .rw");
+    expect(row).toBeTruthy();
+    const cells = [...row.querySelectorAll("span")].map((n) => n.textContent.trim());
+    // 40 x 72,000 = 2,880,000 appears ONCE, in the contract amount column.
+    expect(cells.filter((t) => t.includes("2,880,000"))).toHaveLength(1);
+    // The variation cell says nothing, not "agrees" and not a figure.
+    expect(row.querySelector(".vr").textContent.trim()).toBe(EN_DASH);
+  });
+
+  it("shows a measured line's own figures and its variance", () => {
+    const c = draw(locked({ items: [locked().items[0]] })); // BQ-1, measured 134
+    const row = c.querySelector(".pj-bill.act .rw");
+    const text = row.textContent;
+    expect(text).toContain("120"); // the contract quantity, unchanged
+    expect(text).toContain("134"); // what was measured
+    expect(text).toContain("603,000"); // 134 x 4,500
+    expect(row.querySelector(".vr").textContent).toContain("63,000");
+    expect(row.querySelector(".vr.up")).toBeTruthy(); // over the contract
+  });
+
+  it("totals the contract against what has been measured, and says how much rests on it", () => {
+    // 134 x 4,500 = 603,000 measured; BQ-2 stands at 2,880,000 either way.
+    const c = draw(locked());
+    expect(within(c).getByText(/1 of 2 lines re-measured/)).toBeTruthy();
+    expect(within(c).getByText(/the rest stand as agreed/)).toBeTruthy();
+    expect(within(c).getByText("Variation from measured work")).toBeTruthy();
+  });
+
+  it("says plainly when nothing has been re-measured", () => {
+    // Otherwise two identical totals and a variation of zero read as a bill
+    // that has been checked and found to agree.
+    const c = draw(
+      locked({
+        items: [{ code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500 }],
+      }),
+    );
+    expect(within(c).getByText(/nothing re-measured yet/)).toBeTruthy();
+    expect(within(c).getByText("None")).toBeTruthy();
+  });
+
+  it("points new scope at the variations list rather than counting it here", () => {
+    // Re-measured work and new scope are two different variations, and adding
+    // them together on this strip would double-count against the contract.
+    const c = draw(locked());
+    expect(within(c).getByText(/New scope is a variation of its own/)).toBeTruthy();
+  });
+
+  it("does not let a viewer change what everybody sees", () => {
+    const c = render(<WorkProjectBill project={locked()} canEdit={false} />).container;
+    expect(within(c).getByText("Hide actuals").disabled).toBe(true);
   });
 });

@@ -24,6 +24,15 @@ import {
 import { EN_DASH, money, num } from "./workProjectFormat.js";
 import { Bar } from "./workProjectBits.jsx";
 import { withLineElement, withLineProgress } from "./saveProject.js";
+import {
+  actualAmountOf,
+  actualQtyOf,
+  isLocked,
+  optional as actualsOf,
+  showActuals as actualsShowing,
+  varianceOf,
+  withActualQty,
+} from "./actualsModel.js";
 
 /** His progress steps (work-proj.js:920). */
 const STEPS = [0, 25, 50, 75, 100];
@@ -103,6 +112,18 @@ export default function WorkProjectLinePanel({
   if (!it) return null;
 
   const done = doneOf(it);
+  // The measured figures.
+  //
+  // `contractLocked` is the prop the shell passes; isLocked(project) is the same
+  // fact read off the document. BOTH are required, not either: a stale prop
+  // showing these columns on an unlocked bill would invite somebody to record a
+  // variation against a contract that does not exist yet. They come from the
+  // same document in practice, so requiring both costs nothing.
+  const showActuals =
+    contractLocked && isLocked(project) && actualsShowing(project);
+  const actualQty = actualQtyOf(it);
+  const actualAmount = actualAmountOf(it);
+  const variance = varianceOf(it);
 
   return (
     <>
@@ -225,6 +246,67 @@ export default function WorkProjectLinePanel({
           </button>
         ) : null}
       </div>
+
+      {/* WHAT WAS ACTUALLY MEASURED.
+          Only after a lock, and only when the columns are showing — this is the
+          place the figure in them is entered. The contract quantity above does
+          not move: that is the whole point, and it is why a variation due to
+          measured work is visible at all. New scope is not this; it is its own
+          row in the variations list. */}
+      {showActuals ? (
+        <div className="pn-sec">
+          <span className="k">Measured on site</span>
+          <label className="pn-num">
+            <span>Actual quantity</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              inputMode="decimal"
+              disabled={!canEdit || saving}
+              // The raw stored value, not a formatted one: a number box fed
+              // "1,234" shows empty, which reads as "nothing measured".
+              defaultValue={actualQty === null ? "" : actualQty}
+              // On blur rather than per keystroke: each save is a whole-project
+              // write, and one per digit would be a write per digit.
+              onBlur={(e) => {
+                const next = actualsOf(e.target.value);
+                if (next === actualQty) return;
+                const patch = withActualQty(project, index, e.target.value);
+                if (patch) onSave?.(patch);
+              }}
+              placeholder={`${num(it.qty)} in the contract`}
+            />
+          </label>
+          <p className="amt">
+            {actualQty === null ? (
+              // Not the same as agreeing. Said plainly so an empty row is not
+              // read as a line that has been checked.
+              <>Not measured yet &mdash; this line stands at its contract figure.</>
+            ) : (
+              <>
+                Actual <b>{money(actualAmount)}</b> against {money(amountOf(it))}
+                {variance === 0 ? (
+                  <> &middot; agrees with the contract</>
+                ) : (
+                  <>
+                    {" "}
+                    &middot;{" "}
+                    <b>
+                      {variance > 0 ? "+" : EN_DASH}
+                      {money(Math.abs(variance))}
+                    </b>
+                  </>
+                )}
+              </>
+            )}
+          </p>
+          <p className="hint">
+            Clear the box to go back to &ldquo;not measured&rdquo;. A measured 0 is an omission of
+            the whole line, which is a different thing.
+          </p>
+        </div>
+      ) : null}
 
       <div className="pn-sec">
         <span className="k">Progress</span>

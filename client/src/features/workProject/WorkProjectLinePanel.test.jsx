@@ -297,3 +297,139 @@ describe("pricing an unpriced line from a rate", () => {
     expect(within(c).getByText(/No price for cement/)).toBeTruthy();
   });
 });
+
+describe("recording what was measured on site", () => {
+  const locked = (over = {}) => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items: [
+      { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500 },
+      { code: "BQ-2", description: "Columns", qty: 40, unit: "m3", rate: 72_000 },
+    ],
+    ...over,
+  });
+
+  const draw = (project, props = {}) =>
+    render(
+      <WorkProjectLinePanel project={project} index={0} canEdit contractLocked {...props} />,
+    ).container;
+
+  it("is not offered before the contract is locked", () => {
+    // Before a lock there is one quantity and it IS the estimate — there is
+    // nothing to compare against, so an "actual" box would be noise.
+    const c = render(
+      <WorkProjectLinePanel
+        project={locked({ contract: {} })}
+        index={0}
+        canEdit
+        contractLocked={false}
+      />,
+    ).container;
+    expect(within(c).queryByText("Measured on site")).toBe(null);
+  });
+
+  it("is not offered when the columns are put away", () => {
+    const c = draw(locked({ valuationSettings: { showActualColumns: false } }));
+    expect(within(c).queryByText("Measured on site")).toBe(null);
+  });
+
+  it("does NOT appear on an unlocked project even if the prop says locked", () => {
+    // Both the prop and the document have to agree. A stale prop showing these
+    // columns on an unlocked bill would invite somebody to record a variation
+    // against a contract that does not exist.
+    const c = draw(locked({ contract: { locked: false } }));
+    expect(within(c).queryByText("Measured on site")).toBe(null);
+  });
+
+  it("says a line is not measured rather than showing it as agreed", () => {
+    const c = draw(locked());
+    expect(within(c).getByText("Measured on site")).toBeTruthy();
+    expect(within(c).getByText(/Not measured yet/)).toBeTruthy();
+    // And the box is empty, not pre-filled with the contract quantity, which
+    // would be a measurement nobody took.
+    expect(within(c).getByLabelText?.("Actual quantity")?.value ?? "").toBe("");
+  });
+
+  it("records a measurement WITHOUT touching the contract quantity", () => {
+    // The entire reason the actual columns exist. Overwriting qty would make the
+    // variation vanish and the contract sum drift with no record of why.
+    const onSave = vi.fn();
+    const p = locked();
+    const c = draw(p, { onSave });
+    const box = within(c).getByPlaceholderText(/120 in the contract/);
+    fireEvent.blur(box, { target: { value: "134" } });
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const patch = onSave.mock.calls[0][0];
+    expect(Object.keys(patch)).toEqual(["items"]);
+    expect(patch.items[0].actualQty).toBe(134);
+    expect(patch.items[0].qty).toBe(120);
+    // Every other line goes back whole, because the PUT replaces the array.
+    expect(patch.items[1]).toEqual(p.items[1]);
+  });
+
+  it("shows the variance once a line is measured", () => {
+    const c = draw(
+      locked({
+        items: [
+          { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, actualQty: 134 },
+        ],
+      }),
+    );
+    // 134 x 4,500 = 603,000 against 540,000.
+    expect(within(c).getByText(/603,000/)).toBeTruthy();
+    expect(within(c).getByText(/63,000/)).toBeTruthy();
+  });
+
+  it("says a measured line AGREES rather than showing a variance of nothing", () => {
+    const c = draw(
+      locked({
+        items: [
+          { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, actualQty: 120 },
+        ],
+      }),
+    );
+    expect(within(c).getByText(/agrees with the contract/)).toBeTruthy();
+  });
+
+  it("does not save when the figure has not changed", () => {
+    // Blur fires on every click away. A save per blur is a whole-project write
+    // per glance.
+    const onSave = vi.fn();
+    const c = draw(
+      locked({
+        items: [
+          { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, actualQty: 134 },
+        ],
+      }),
+      { onSave },
+    );
+    const box = within(c).getByPlaceholderText(/120 in the contract/);
+    fireEvent.blur(box, { target: { value: "134" } });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("clears a measurement back to not-measured", () => {
+    const onSave = vi.fn();
+    const c = draw(
+      locked({
+        items: [
+          { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, actualQty: 134 },
+        ],
+      }),
+      { onSave },
+    );
+    fireEvent.blur(within(c).getByPlaceholderText(/120 in the contract/), {
+      target: { value: "" },
+    });
+    expect(onSave.mock.calls[0][0].items[0].actualQty).toBe(null);
+  });
+
+  it("is read-only for a viewer", () => {
+    const c = render(
+      <WorkProjectLinePanel project={locked()} index={0} canEdit={false} contractLocked />,
+    ).container;
+    // They still SEE it — a view-only collaborator is reading the same contract.
+    expect(within(c).getByText("Measured on site")).toBeTruthy();
+    expect(within(c).getByPlaceholderText(/120 in the contract/).disabled).toBe(true);
+  });
+});
