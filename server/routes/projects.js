@@ -678,6 +678,7 @@ import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
+import { suggestRatesForLine, worthOffering } from "../util/rateSuggestions.js";
 import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
 import {
   collectBudgetEdits,
@@ -6789,6 +6790,70 @@ async function putProjectResources(req, res) {
 // The body says WHICH rate, not what it costs. The rate is re-resolved from
 // this user's own merged library server-side, so a client cannot post a price
 // into a project.
+/**
+ * The QS's own rates that could price this line.
+ *
+ * The new build's rate list has said "No suggestion — price it from the
+ * build-up" since it was written, on the reasoning that inventing a figure is
+ * not a small liberty on a bill. That reasoning holds; the mistake was assuming
+ * there was no honest source. RateGen holds the master rates plus this user's
+ * overrides and custom rates, and priceLineFromRate already resolves a pick
+ * against exactly that merged set — so a suggestion is the QS's own decision,
+ * found, not a number put in their mouth.
+ *
+ * Read-only, and masked the same way pricing is: a collaborator who may not see
+ * rates may not be shown them here either.
+ */
+async function rateSuggestionsForLine(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const code = String(req.params.code || "").trim();
+    if (!code) return res.status(400).json({ error: "A bill line code is required" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) {
+      // Not an error: an empty list with the reason, so the screen says why
+      // rather than looking broken.
+      return res.json({ ok: true, suggestions: [], masked: true });
+    }
+
+    const item = (project.items || []).find(
+      (it) => String(it?.code || "").trim().toLowerCase() === code.toLowerCase(),
+    );
+    if (!item) return res.status(404).json({ error: "That bill line is not on this project" });
+
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+      Array.isArray(lib?.customRates) ? lib.customRates : [],
+    );
+
+    const suggestions = suggestRatesForLine(item, merged, { limit: 5 }).filter(worthOffering);
+    res.json({
+      ok: true,
+      suggestions,
+      // So the screen can say "none of your rates match" rather than "none".
+      libraryCount: merged.length,
+    });
+  } catch (err) {
+    console.error("GET rate-suggestions error:", err);
+    res.status(500).json({ error: "Could not look for a rate." });
+  }
+}
+
 async function priceLineFromRate(req, res) {
   try {
     const userId = getUserObjectId(req);
@@ -7989,6 +8054,13 @@ router.put(
 // client sends WHICH rate was picked, never what it costs — the server
 // re-resolves the rate from that user's own merged library, so a price can
 // only ever be one they already hold.
+router.get(
+  "/:productKey/:id/bill/:code/rate-suggestions",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  rateSuggestionsForLine,
+);
+
 router.post(
   "/:productKey/:id/bill/:code/price-from-rate",
   mapEntitlementParam,
