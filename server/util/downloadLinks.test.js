@@ -24,7 +24,7 @@ test("until a file is uploaded, the Admin setting is the fail-safe; Drive goes d
   const a = await resolveDownload("android", { settings, store });
   assert.equal(a.source, "drive");
   assert.equal(a.url, "https://drive.google.com/uc?export=download&id=1Pr16vXqTRAOgQrB2Fk3GzZnyMBPiHPRO");
-  const h = await resolveDownload("installer-hub", { settings, store });
+  const h = await resolveDownload("installer-hub", { settings, store, allowed: true });
   assert.equal(h.source, "setting");
   assert.equal(h.url, settings.installerHubUrl);
 });
@@ -37,7 +37,7 @@ test("storage that is down or unconfigured never takes the button with it", asyn
     },
     presignDownload: async () => assert.fail("never reached"),
   };
-  const r = await resolveDownload("installer-hub", { settings, store });
+  const r = await resolveDownload("installer-hub", { settings, store, allowed: true });
   assert.equal(r.source, "setting");
   assert.equal((await resolveDownload("android", { settings: {}, store })).source, "none");
 });

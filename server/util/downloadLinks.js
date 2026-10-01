@@ -9,6 +9,11 @@
 // turned into Drive's direct-download form rather than its preview page.
 //
 // Upload a file to its key with scripts/upload-download.mjs.
+//
+// A `gated` download (the Installer Hub, R3) is only for some accounts, so its
+// link, stored or fail-safe, comes back only when the caller passes
+// `allowed: true` after checking the account. Anyone else gets the source but
+// an empty url, so a caller that forgets the check leaks nothing.
 
 import { headFile, presignDownload } from "./fileStore.js";
 
@@ -22,6 +27,7 @@ export const DOWNLOADS = {
     key: "installers/ADLM-Installer-Hub-Setup.exe",
     fileName: "ADLM-Installer-Hub-Setup.exe",
     setting: "installerHubUrl",
+    gated: true,
   },
 };
 
@@ -67,12 +73,15 @@ async function storedAt(key, store, now) {
  * @param {object} opts
  * @param {object} [opts.settings]   the global Setting document
  * @param {number} [opts.expiresIn]  seconds a signed URL lives
+ * @param {boolean} [opts.allowed]   required for a gated download to carry a url
  * @returns {Promise<{ url: string, source: "store"|"setting"|"drive"|"none", fileName: string }>}
  */
-export async function resolveDownload(kind, { settings, expiresIn = 300, store = { headFile, presignDownload }, now = Date.now() } = {}) {
+export async function resolveDownload(kind, { settings, expiresIn = 300, allowed = false, store = { headFile, presignDownload }, now = Date.now() } = {}) {
   const d = DOWNLOADS[kind];
   if (!d) throw new Error(`Unknown download: ${kind}`);
+  const locked = d.gated && allowed !== true;
   if (await storedAt(d.key, store, now)) {
+    if (locked) return { url: "", source: "store", fileName: d.fileName };
     try {
       const url = await store.presignDownload({ key: d.key, fileName: d.fileName, expiresIn });
       return { url, source: "store", fileName: d.fileName };
@@ -83,7 +92,7 @@ export async function resolveDownload(kind, { settings, expiresIn = 300, store =
   const configured = String(settings?.[d.setting] || "").trim();
   if (!configured) return { url: "", source: "none", fileName: d.fileName };
   return {
-    url: directLink(configured),
+    url: locked ? "" : directLink(configured),
     source: driveFileId(configured) ? "drive" : "setting",
     fileName: d.fileName,
   };

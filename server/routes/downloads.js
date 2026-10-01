@@ -50,7 +50,7 @@ meDownloads.get("/installer-hub", requireAuth, async (req, res, next) => {
     if (!canDownloadInstallerHub(user)) {
       return res.status(403).json({ error: HUB_REQUIRES_PAID_MESSAGE, code: HUB_REQUIRES_PAID });
     }
-    const r = await resolveDownload("installer-hub", { settings: await settingsNow() });
+    const r = await resolveDownload("installer-hub", { settings: await settingsNow(), allowed: true });
     if (!r.url) return res.status(404).json({ error: "The Installer Hub is not available for download yet." });
     res.json(r);
   } catch (err) {
