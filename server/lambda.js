@@ -97,6 +97,10 @@ async function loadOriginVerifySecret() {
     console.error(
       `[origin-verify] could not read the secret, check is OFF for this container: ${err?.name || err}`,
     );
+  }
+}
+
+/**
  * Open the Mongo connection and seed the roles while the secrets load.
  *
  * A cold first request used to run these one after another: SSM (~0.8s over
@@ -187,8 +191,9 @@ function loadApp() {
 
   _appModulePromise = (async () => {
     // In parallel: a cold start already waits on SSM, so the second read
-    // adds no latency of its own.
-    await Promise.all([loadSecretsIntoEnv(), loadOriginVerifySecret()]);
+    // adds no latency of its own. Never rejects (it logs and turns the check
+    // off), so awaiting it below cannot fail the cold start.
+    const originVerify = loadOriginVerifySecret();
     // The database's own parameters first, by name, in one call. When they
     // arrive, the connection and the role seed start while the rest of the
     // secrets are still paging in: both are network waits, so they genuinely
@@ -204,6 +209,7 @@ function loadApp() {
     });
     await loadSecretsIntoEnv();
     await early;
+    await originVerify;
     // Deferred on purpose — see the note at the top of this file.
     return import("./index.js");
   })().catch((err) => {

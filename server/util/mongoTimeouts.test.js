@@ -24,20 +24,19 @@ test("the API fails a stalled operation well inside Lambda's 60s kill", () => {
 test("either limit can be tuned or switched off from SSM without a code change", () => {
   assert.deepEqual(
     apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "15000", MONGO_WAIT_QUEUE_TIMEOUT_MS: "5000" }),
-    { socketTimeoutMS: 15000, waitQueueTimeoutMS: 5000, minPoolSize: 1 },
+    {
+      socketTimeoutMS: 15000,
+      waitQueueTimeoutMS: 5000,
+      minPoolSize: 1,
+      autoIndex: false,
+      autoCreate: false,
+    },
   );
   // 0 means "no limit", i.e. the driver default, so the option is left out.
   assert.deepEqual(
     apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "0", MONGO_WAIT_QUEUE_TIMEOUT_MS: "0", MONGO_MIN_POOL: "0" }),
-    {},
+    { autoIndex: false, autoCreate: false },
   );
-    { socketTimeoutMS: 15000, waitQueueTimeoutMS: 5000, autoIndex: false, autoCreate: false },
-  );
-  // 0 means "no limit", i.e. the driver default, so the option is left out.
-  assert.deepEqual(apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "0", MONGO_WAIT_QUEUE_TIMEOUT_MS: "0" }), {
-    autoIndex: false,
-    autoCreate: false,
-  });
 });
 
 test("a nonsense value falls back to the default rather than disabling the limit", () => {
@@ -53,6 +52,8 @@ test("the minimum pool is tunable and can never exceed the maximum", () => {
   assert.equal(apiMongoOptions({ MONGO_MIN_POOL: "3", MONGO_MAX_POOL: "2" }).minPoolSize, 2);
   assert.equal(apiMongoOptions({ MONGO_MIN_POOL: "junk" }).minPoolSize, 1);
   assert.equal(apiMongoOptions({ MONGO_MIN_POOL: "1.7" }).minPoolSize, 1);
+});
+
 // ── No index building from API containers ──────────────────────────────────
 
 test("the API connects without building indexes or collections", () => {
