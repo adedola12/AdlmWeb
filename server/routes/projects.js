@@ -712,6 +712,7 @@ import {
   finalAccountSavings,
 } from "../util/finalAccountMath.js";
 import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
+import { carryCloudRateLocks } from "../util/cloudRateLocks.js";
 import {
   sanitizeResourceItems,
   applyResourceRows,
@@ -2424,6 +2425,9 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
   // qty/rate to the baseline and divert post-lock changes to actualQty/actualRate, push brand-new
   // lines to variations, and re-insert omitted base items — so a plugin (HERON) re-save via the
   // unified /full or per-key POST can never overwrite a locked contract. No-op when unlocked/new.
+  // A rate the QS set on the website keeps its lock through a plugin re-save
+  // (the plugins' payload has no rateLockedAt; see util/cloudRateLocks.js).
+  if (!created) carryCloudRateLocks(project.items, items);
   const sanitizedNext = sanitizeItems(items, productKey);
   const { lockedItems, extraVariations } = enforceContractLock({ project, sanitizedNext });
 
@@ -3931,6 +3935,10 @@ async function updateProject(req, res) {
     if (name !== undefined) project.name = String(name).trim();
 
     if (Array.isArray(items)) {
+      // A rate the QS set on the website keeps its lock through a plugin re-save
+      // (QUIV's PUT has no rateLockedAt; see util/cloudRateLocks.js).
+      carryCloudRateLocks(project.items, items);
+
       // Self-learning category model — augment items missing an explicit
       // category with the user's learned mapping before sanitizing. This
       // only affects items the client didn't supply a category for.
@@ -4182,6 +4190,12 @@ async function updateProject(req, res) {
           }
           budget = kept.rows.map((b) => ({ ...b, lineId: keepLineId(b.lineId) }));
         }
+        // What the QS owns on these rows (procurement, typed rates), read before
+        // the plugin's list replaces them - the same protection saveProjectFull
+        // has had since the resave-wipe fix. QUIV saves its budget through this
+        // PUT, so without it every QUIV re-save put the plugin's prices back over
+        // the website's and the bill rates followed.
+        const previousBudget = project.budgetItems || [];
         backfillBudgetLinks(project.items, budget);
         const freshBudget = ensureBillItemCoverage(project.items, budget);
         // After coverage, so the synthesised rows get their edits back too.
@@ -4194,6 +4208,7 @@ async function updateProject(req, res) {
             `[update] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
           );
         }
+        preserveBudgetUserEdits(previousBudget, freshBudget);
         project.budgetItems = freshBudget;
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
