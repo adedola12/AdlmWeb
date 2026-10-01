@@ -27,14 +27,22 @@ import { useAuth } from "../store.jsx";
 import { canViewPreview } from "../utils/roles.js";
 import { classicFallbackFor } from "../lib/classicPaths.js";
 
-// The one switch. Flip it to false as part of the go-live change on 1 Oct and
-// the whole gate becomes a pass-through; delete the file in the commit after.
+// The one switch. FLIPPED AT GO-LIVE, 1 October 2026: the gate is now a
+// pass-through and the new build is the build. The file stays for one release
+// so this line is a visible, revertible record of when customers were moved —
+// put it back to true and the classic screens are serving again in one deploy.
+//
+// It had to move in the SAME change as the /dashboard redirect and
+// AFTER_SIGN_IN. While it was true, those two made a customer's home an
+// infinite loop: /dashboard -> /manage -> this gate -> /dashboard. That is the
+// invariant newBuildGate.golive.test.js exists to hold, and it caught exactly
+// that mistake being made here.
 //
 // Deliberately NOT derived from the launch date: this decides which dashboard a
 // customer sees, and a browser with a wrong clock would switch them early or
 // leave them behind. Go-live is a deploy either way (see docs/CLASSIC-BUILD.md),
 // so the flip is a reviewed line rather than something nobody can see coming.
-export const GATE_NEW_BUILD = true;
+export const GATE_NEW_BUILD = false;
 
 export default function NewBuildGate({ children }) {
   const { user } = useAuth();

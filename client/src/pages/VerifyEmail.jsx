@@ -11,12 +11,17 @@ import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
+import { AFTER_SIGN_IN } from "../lib/afterSignIn.js";
 
 export default function VerifyEmail() {
   const { user, accessToken, setAuth, clear } = useAuth();
   const nav = useNavigate();
   const [params] = useSearchParams();
-  const next = params.get("next") || "/dashboard";
+  // The shared constant, not a sixth copy of the decision. This was hardcoded
+  // to "/dashboard", which from go-live is a redirect to /manage — so a
+  // confirmed account landed via an extra hop, and would have gone to the
+  // wrong screen entirely if the redirect were ever dropped.
+  const next = params.get("next") || AFTER_SIGN_IN;
   const [code, setCode] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [changing, setChanging] = React.useState(false);
