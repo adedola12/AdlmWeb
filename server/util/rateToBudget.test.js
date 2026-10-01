@@ -9,6 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveConstants, MC } from "./materialConstants.js";
+import { generateMlSchedule } from "./mlSchedule.js";
 import {
   RATEGEN_SOURCE,
   applyRateRows,
@@ -457,4 +458,95 @@ test("the reason agrees with what buildRateBudgetRows actually did", () => {
     const why = whyRateCannotPrice(item, builtUp);
     assert.equal(Boolean(built), !why, JSON.stringify(item));
   }
+});
+
+// ── Picking a rate replaces the line's budget, it does not add to it ──
+//
+// Reported from live testing: "the rates got filled but the material got
+// duplicated and labour wasn't priced, and the budget total was more than the
+// bill total."
+//
+// There are TWO automatic sources of budget rows and each has its own sn band:
+// the M&L constants generator at 800,000,000+ and rateToBudget at 700,000,000+.
+// applyRateRows cleared only its own band, so a line the generator had already
+// priced kept those rows AND gained the rate's.
+
+test("a line the generator already priced does not double when a rate is picked", () => {
+  const item = { code: "BQ-1", description: "Concrete (1:2:4) in bases", takeoffLine: "", unit: "m3", qty: 10, rate: 50_000 };
+  const generated = generateMlSchedule([item], [], K).budgetItems;
+  const mineOf = (rows) => rows.filter((b) => String(b.billIdentity || "").toLowerCase() === "bq-1");
+  assert.equal(mineOf(generated).length, 4, "cement, sand, granite and labour");
+
+  const rate = {
+    rateId: "r1", unit: "m3", totalCost: 52_000, overheadPercent: 10, profitPercent: 10,
+    breakdown: [
+      { componentName: "Cement", refKind: "material", quantity: 6.5, unitPrice: 5_000, lineTotal: 32_500 },
+      { componentName: "Mason", refKind: "labour", quantity: 1, unitPrice: 8_000, lineTotal: 8_000 },
+    ],
+  };
+  const built = buildRateBudgetRows(item, rate, K, { priceFor: () => 0 });
+  const after = mineOf(applyRateRows(generated, "BQ-1", built.rows));
+
+  // Was 8 — every material and the labour listed twice.
+  assert.equal(after.length, 4, "the rate replaces the line's rows, it does not add to them");
+  const names = after.map((b) => `${b.componentKind}/${b.materialName || b.description}`);
+  assert.equal(new Set(names).size, names.length, "no duplicate rows");
+});
+
+test("the duplication is what pushed the budget over the bill", () => {
+  // The symptom the QS actually saw. One line, bill worth ₦500,000.
+  const item = { code: "BQ-1", description: "Concrete (1:2:4) in bases", takeoffLine: "", unit: "m3", qty: 10, rate: 50_000 };
+  const generated = generateMlSchedule([item], [], K).budgetItems;
+  const rate = {
+    rateId: "r1", unit: "m3", totalCost: 52_000, overheadPercent: 10, profitPercent: 10,
+    breakdown: [
+      { componentName: "Cement", refKind: "material", quantity: 6.5, unitPrice: 5_000, lineTotal: 32_500 },
+      { componentName: "Mason", refKind: "labour", quantity: 1, unitPrice: 8_000, lineTotal: 8_000 },
+    ],
+  };
+  const built = buildRateBudgetRows(item, rate, K, { priceFor: () => 0 });
+  const amount = (b) => Number(b.amount) || Number(b.total) || Number(b.qty) * Number(b.rate) || 0;
+  const budget = applyRateRows(generated, "BQ-1", built.rows)
+    .filter((b) => String(b.billIdentity || "").toLowerCase() === "bq-1")
+    .reduce((a, b) => a + amount(b), 0);
+
+  // The rate re-prices the line to 10 x 52,000; the cost behind it must be less
+  // than what it is sold for, or the line loses money.
+  assert.ok(budget < 10 * 52_000, `budget ${Math.round(budget)} must sit under the line's value`);
+});
+
+test("LABOUR is priced even when the picked rate has none in its build-up", () => {
+  // Most of a real library is material-only build-ups ("Mortar Mix (1:3)"), and
+  // a line with no labour row prices labour at nothing, silently.
+  const item = { code: "BQ-1", description: "Concrete (1:2:4) in bases", takeoffLine: "", unit: "m3", qty: 10, rate: 50_000 };
+  const materialOnly = {
+    rateId: "r2", unit: "m3", totalCost: 52_000, overheadPercent: 10, profitPercent: 10,
+    breakdown: [
+      { componentName: "Cement", refKind: "material", quantity: 6.5, unitPrice: 5_000, lineTotal: 32_500 },
+      { componentName: "Sharp sand", refKind: "material", quantity: 0.6, unitPrice: 9_000, lineTotal: 5_400 },
+    ],
+  };
+  const built = buildRateBudgetRows(item, materialOnly, K, { priceFor: () => 0 });
+  const labour = built.rows.filter((r) => r.componentKind === "Labour");
+  assert.equal(labour.length, 1, "a labour row is still produced");
+  // From the constants' own output for this work, not zero.
+  assert.ok(labour[0].qty * labour[0].rate > 0, "and it carries money");
+});
+
+test("a row the QS added by hand is NOT swept away by picking a rate", () => {
+  // Only the two AUTOMATIC bands are replaceable. A hand-added row is the QS's
+  // own decision and must survive.
+  const item = { code: "BQ-1", description: "Concrete (1:2:4) in bases", takeoffLine: "", unit: "m3", qty: 10, rate: 50_000 };
+  const byHand = { billIdentity: "BQ-1", sn: 12, componentKind: "Material", materialName: "Curing compound", unit: "L", qty: 5, rate: 2_000 };
+  const generated = [...generateMlSchedule([item], [], K).budgetItems, byHand];
+  const rate = {
+    rateId: "r1", unit: "m3", totalCost: 52_000, overheadPercent: 10, profitPercent: 10,
+    breakdown: [{ componentName: "Cement", refKind: "material", quantity: 6.5, unitPrice: 5_000, lineTotal: 32_500 }],
+  };
+  const built = buildRateBudgetRows(item, rate, K, { priceFor: () => 0 });
+  const after = applyRateRows(generated, "BQ-1", built.rows);
+  assert.ok(
+    after.some((b) => b.materialName === "Curing compound"),
+    "the hand-added row survives",
+  );
 });

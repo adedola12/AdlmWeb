@@ -38,7 +38,13 @@
 //
 // Pure (no DB / mongoose).
 
-import { deriveMaterials, classifyWork, measureBasis, labourRateFor } from "./mlSchedule.js";
+import {
+  classifyWork,
+  deriveMaterials,
+  isGeneratedRow,
+  labourRateFor,
+  measureBasis,
+} from "./mlSchedule.js";
 import { MC } from "./materialConstants.js";
 import { classifyResourceKind, kindLabel, KIND } from "./resourceKind.js";
 
@@ -415,8 +421,22 @@ export function applyRateRows(budgetItems, code, rows) {
   const existing = Array.isArray(budgetItems) ? budgetItems : [];
   if (!billCode) return existing.slice();
 
+  // EVERY AUTOMATIC ROW FOR THIS LINE, NOT JUST THE RATE GEN ONES.
+  //
+  // There are two automatic sources and they sit in their own sn bands: the M&L
+  // constants generator at 800,000,000+ and this module at 700,000,000+. This
+  // used to clear only its own band, so a line the generator had already priced
+  // kept those rows AND gained the rate's — Cement, sharp sand, granite and
+  // labour each listed twice, and the budget for that line jumped from ₦55,000
+  // to ₦457,397 against a bill line worth ₦500,000.
+  //
+  // Picking a rate is a decision about how the line is priced, so the rate
+  // becomes the single authority for it. A row the QS added or edited by hand
+  // is NOT automatic and is kept untouched; their procurement marks still merge
+  // back on through priorEdits below.
+  const automatic = (b) => isRateGenRow(b) || isGeneratedRow(b);
   const mine = (b) =>
-    String(b?.billIdentity || "").trim().toLowerCase() === billCode && isRateGenRow(b);
+    String(b?.billIdentity || "").trim().toLowerCase() === billCode && automatic(b);
 
   const editKey = (b) =>
     [b?.sn, b?.materialName || b?.description, b?.unit, b?.componentKind]
