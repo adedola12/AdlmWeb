@@ -2215,7 +2215,7 @@ export default function DsBeyondBim() {
                 <Link to="/learn#courses" data-ds-page="learn">
                   certificated courses
                 </Link>
-                {" "}are self-paced through Google Classroom and go deep on one discipline. Beyond BIM is a live cohort that runs one project end to end across every stage of the QS role.
+                {" "}are self-paced on the ADLM Studio platform and go deep on one discipline. Beyond BIM is a live cohort that runs one project end to end across every stage of the QS role.
               </div>
               {" "}
             </details>

@@ -143,7 +143,7 @@ export default function DsLearnPage({ d }) {
             {" "}
           </div>
           {" "}
-          <div className="pgrid pgrid-4">
+          <div className="pgrid">
             {" "}
             <article className="pcard2 pc-ico pal-deep tilt rise">
               {" "}
@@ -171,7 +171,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · Google Classroom · self-paced
+                  100% online · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -244,7 +244,7 @@ export default function DsLearnPage({ d }) {
                 </div>
                 {" "}
                 <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · Google Classroom · self-paced
+                  100% online · self-paced
                 </p>
                 {" "}
                 <ul>
@@ -349,75 +349,6 @@ export default function DsLearnPage({ d }) {
                 {" "}
                 <Link to="/contact" data-ds-page="contact" className="ds-btn btn-o btn-full">
                   Request a quote
-                </Link>
-                {" "}
-              </div>
-              {" "}
-            </article>
-            {" "}
-            <article className="pcard2 pc-ico pal-light tilt rise" id="course-4">
-              {" "}
-              <div className="pcard2-body">
-                {" "}
-                <img className="picon" src="/ds/ic-rategen.png" alt="" width="66" height="66" />
-                {" "}
-                <span className="host">
-                  Certificated · 4 weeks
-                </span>
-                {" "}
-                <h3>
-                  Rates &amp; 2D Takeoff
-                </h3>
-                {" "}
-                <p className="blurb">
-                  Measure from drawings, then build a rate you can defend.
-                </p>
-                {" "}
-                <div className="amt">
-                  ₦85,000
-                  <small>
-                    {" "}/ yr
-                  </small>
-                </div>
-                {" "}
-                <p className="inst" style={{ marginTop: "10px" }}>
-                  100% online · Google Classroom · self-paced
-                </p>
-                {" "}
-                <ul>
-                  {" "}
-                  <li>
-                    <svg viewBox="0 0 24 24">
-                      <use href="#i-check" />
-                    </svg>
-                    HERON 2D takeoff on PlanSwift
-                  </li>
-                  {" "}
-                  <li>
-                    <svg viewBox="0 0 24 24">
-                      <use href="#i-check" />
-                    </svg>
-                    RateGen build-ups from first principles
-                  </li>
-                  {" "}
-                  <li>
-                    <svg viewBox="0 0 24 24">
-                      <use href="#i-check" />
-                    </svg>
-                    Materials, waste and labour output
-                  </li>
-                  {" "}
-                  <li>
-                    <svg viewBox="0 0 24 24">
-                      <use href="#i-check" />
-                    </svg>
-                    Certificate of completion
-                  </li>
-                  {" "}
-                </ul>
-                {" "}
-                <Link to="/learn#courses" data-ds-page="learn" className="ds-btn btn-p btn-full">
-                  View course
                 </Link>
                 {" "}
               </div>
@@ -1809,7 +1740,7 @@ export default function DsLearnPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Self-paced, delivered through Google Classroom, with weekly assessments to keep you moving. Support is available while you work through it.
+                Self-paced, delivered on the ADLM Studio platform, with weekly assessments to keep you moving. Support is available while you work through it.
               </div>
               {" "}
             </details>
