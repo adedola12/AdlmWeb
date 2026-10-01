@@ -19,6 +19,7 @@ import {
   isBoqImportEligible,
 } from "../util/boqImportAccess.js";
 import { Setting } from "../models/Setting.js";
+import { installerHubPageUrl } from "../util/installerHubAccess.js";
 import {
   resolveUserGuideUrl,
   getUserGuideAttachment,
@@ -862,9 +863,11 @@ router.post(
         purchase.firstName || user.firstName || user.username || "";
 
       // Installer Hub download + user guide links, so a new subscriber gets the
-      // app and the walkthrough in the same email as their receipt.
+      // app and the walkthrough in the same email as their receipt. R3: the Hub
+      // button opens the signed-in dashboard, never the file itself, so
+      // the paid-licence check runs when it is clicked.
       const hubSettings = await Setting.findOne({ key: "global" })
-        .select("installerHubUrl installerHubGuideUrl")
+        .select("installerHubGuideUrl")
         .lean()
         .catch(() => null);
 
@@ -880,7 +883,7 @@ router.post(
           receiptLink,
           anydeskLink,
           isPendingInstall,
-          installerHubLink: hubSettings?.installerHubUrl || "",
+          installerHubLink: installerHubPageUrl(WEB_URL),
           userGuideLink: resolveUserGuideUrl(hubSettings?.installerHubGuideUrl),
           guideAttached: !!guideAttachment,
         }),
