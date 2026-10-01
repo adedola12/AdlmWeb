@@ -79,6 +79,12 @@ function classicToolPath(storageKey) {
 
 // Fixed one-to-one moves. Everything not listed falls through to CLASSIC_HOME.
 const EXACT = Object.freeze({
+  // The Material Constants library. /work/constants is the same editor inside
+  // the app frame; the classic route has always existed, is open to any signed
+  // -in customer, and is what the Budget tab already links to. Without this the
+  // rail entry falls through to the dashboard, which is the exact failure the
+  // whole rewrite exists to prevent.
+  "/work/constants": "/rategen/material-constants",
   "/manage": CLASSIC_HOME,
   "/manage/products": CLASSIC_HOME,
   "/manage/team": CLASSIC_HOME,

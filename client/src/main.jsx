@@ -141,6 +141,7 @@ const AdminAddRate = lazyScreen(() => import("./pages/AdminAddRate.jsx"));
 const RateGenUpdates = lazyScreen(() => import("./pages/RateGenUpdates.jsx"));
 const ServiceConstants = lazyScreen(() => import("./pages/ServiceConstants.jsx"));
 const MaterialConstants = lazyScreen(() => import("./pages/MaterialConstants.jsx"));
+const WorkConstants = lazyScreen(() => import("./pages/WorkConstants.jsx"));
 const Receipt = lazyScreen(() => import("./pages/Receipt.jsx"));
 const OrderDetail = lazyScreen(() => import("./pages/OrderDetail.jsx"));
 import AuthCallback from "./pages/AuthCallback.jsx";
@@ -404,6 +405,10 @@ const router = createBrowserRouter([
         { path: "work/tool/:t", el: <WorkTool /> },
         { path: "manage/support", el: <ManageSupport /> },
         { path: "work/library", el: <WorkLibrary /> },
+        // The constants behind every budget, in the app frame so the rail
+        // survives. /rategen/material-constants still answers for the link
+        // the classic Budget tab has always used.
+        { path: "work/constants", el: <WorkConstants /> },
         { path: "work/rate/:id", el: <WorkRate /> },
         { path: "work/project/:productKey/:id", el: <WorkProject /> },
         { path: "work/programme", el: <WorkProgramme /> },
