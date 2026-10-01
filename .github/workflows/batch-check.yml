@@ -49,9 +49,24 @@ jobs:
           set -uo pipefail
           # Paths that need the approver's tested batch: the website UI, and
           # the gate itself so the rule cannot be loosened by a quiet PR.
-          NEEDS_APPROVER='^(client/|\.github/|docs/RELEASE_GATE\.md$|server/.*[Rr]elease[A-Za-z.-]*\.(js|mjs)$)'
-          if ! files=$(gh api --paginate "repos/${{ github.repository }}/pulls/$PR/files" --jq '.[].filename'); then
+          # Also: the route that prepares and approves batches, the roles that
+          # decide who may approve, and the stack that holds the locked audit
+          # trail; none of them has "release" in its name.
+          NEEDS_APPROVER='^(client/|\.github/|docs/RELEASE_GATE\.md$|server/.*[Rr]elease[A-Za-z.-]*\.(js|mjs)$'
+          NEEDS_APPROVER+='|server/routes/admin\.batch\.js$|server/util/rbac\.js$|infra/lib/adlm-release-gate-stack\.ts$)'
+          # A rename is checked under its old name too, so moving a file out
+          # of client/ still needs him.
+          if ! files=$(gh api --paginate "repos/${{ github.repository }}/pulls/$PR/files" \
+                 --jq '.[] | .filename, (.previous_filename // empty)'); then
             # Could not read the file list: fail closed, ask for a batch.
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # An empty list, or one cut off at the API's 3,000 files, is not the
+          # whole change: fail closed.
+          listed=$(printf '%s\n' "$files" | grep -c . || true)
+          if [ "$listed" -eq 0 ] || [ "${{ github.event.pull_request.changed_files || 0 }}" -ge 3000 ]; then
+            echo "The file list may be incomplete: asking for a batch."
             echo "ui=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
