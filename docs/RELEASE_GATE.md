@@ -84,11 +84,16 @@ fails closed.
 **Only user-facing UI needs him (owner's rule, 29 Sep 2026).** The check first
 reads the pull request's changed files. When nothing is under `client/` and
 none of the gate's own files changed (`.github/`, this runbook, any
-`server/**/*release*` file), it passes at once: a server fix, a script or a
-test ships on its checks, without a batch. Anything under `client/` or the gate
-still needs his approved batch. It runs as `pull_request_target`, so the copy
-on `main` decides and a pull request cannot rewrite its own gate. If it cannot
-read the file list it asks for a batch.
+`server/**/*release*` file, `server/routes/admin.batch.js` where batches are
+prepared and approved, `server/util/rbac.js` which decides who may approve,
+and `infra/lib/adlm-release-gate-stack.ts` which holds the locked audit
+trail), it passes at once: a server fix, a script or a test ships on its
+checks, without a batch. Anything under `client/` or the gate still needs his
+approved batch. A renamed file counts under its old name too. It runs as
+`pull_request_target`, so the copy on `main` decides and a pull request cannot
+rewrite its own gate. If it cannot read the whole file list (the call fails,
+it comes back empty, or the PR passes the API's 3,000-file limit) it asks for
+a batch.
 
 To make it binding: Settings > Branches > main > Require status checks, add
 **approved batch**, keep **Include administrators** ticked, and (only then)
