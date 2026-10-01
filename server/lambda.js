@@ -76,6 +76,27 @@ async function loadSecretsIntoEnv() {
 }
 
 /**
+ * The header CloudFront adds so the API can tell it from a direct Function URL
+ * call (middleware/originVerify.js). Only the secret's ARN is configured; the
+ * value is fetched here, once per container, and never logged. A failure
+ * leaves ORIGIN_VERIFY_SECRET unset, which turns the check off for this
+ * container rather than refusing every request.
+ */
+async function loadOriginVerifySecret() {
+  const arn = process.env.ORIGIN_VERIFY_SECRET_ARN;
+  if (!arn || process.env.ORIGIN_VERIFY_SECRET) return;
+  try {
+    const { SecretsManagerClient, GetSecretValueCommand } = await import(
+      "@aws-sdk/client-secrets-manager"
+    );
+    const out = await new SecretsManagerClient({}).send(
+      new GetSecretValueCommand({ SecretId: arn }),
+    );
+    if (out.SecretString) process.env.ORIGIN_VERIFY_SECRET = out.SecretString;
+  } catch (err) {
+    console.error(
+      `[origin-verify] could not read the secret, check is OFF for this container: ${err?.name || err}`,
+    );
  * Open the Mongo connection and seed the roles while the secrets load.
  *
  * A cold first request used to run these one after another: SSM (~0.8s over
@@ -165,6 +186,9 @@ function loadApp() {
   if (_appModulePromise) return _appModulePromise;
 
   _appModulePromise = (async () => {
+    // In parallel: a cold start already waits on SSM, so the second read
+    // adds no latency of its own.
+    await Promise.all([loadSecretsIntoEnv(), loadOriginVerifySecret()]);
     // The database's own parameters first, by name, in one call. When they
     // arrive, the connection and the role seed start while the rest of the
     // secrets are still paging in: both are network waits, so they genuinely
