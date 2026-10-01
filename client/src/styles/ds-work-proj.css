@@ -984,3 +984,12 @@
 .ds .pn-num input:focus{outline:2px solid color-mix(in srgb,var(--action) 45%,transparent);outline-offset:1px}
 .ds .pn-num input:disabled{opacity:.6}
 .ds .pj-need-note{margin:0 16px 10px;font-size:11.5px;color:var(--ink-3);line-height:1.55}
+/* Finding a rate by name, in the side panel. A rate in the wrong unit is shown
+   but dimmed and unclickable — visible so nobody hunts for it, inert so nobody
+   prices a line with it. */
+.ds .pn-find{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.ds .pn-find .pn-num{margin-top:0}
+.ds .pn-find input[type="search"]{width:100%;padding:8px 11px;border:1px solid var(--line);
+  border-radius:10px;background:var(--bg);font:400 13px var(--font);color:var(--ink)}
+.ds .pn-rate.off{opacity:.5;cursor:not-allowed}
+.ds .pn-rate.off .w{color:var(--fb-warn,#c98a00)}

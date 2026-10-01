@@ -398,6 +398,34 @@ export default function WorkProjectShell({ productKey, id }) {
     };
   }, [tab, accessToken, saveId, productKey]);
 
+  // THE WHOLE RATE LIBRARY, for searching by name.
+  //
+  // Both ends of this are deployed everywhere: the merged library here, and
+  // POST .../price-from-rate to apply a pick. The scored SUGGESTIONS need a
+  // newer endpoint that is not on every server yet — so where they are missing,
+  // this is what lets a QS price a line at all, and where they are present it
+  // is still how somebody finds the rate they already have in mind by name.
+  //
+  // Fetched once and kept: it is the same list for every line on the project,
+  // and re-reading it per keystroke would be a request per keystroke.
+  const libraryRef = React.useRef(null);
+  const [libraryFailed, setLibraryFailed] = React.useState(false);
+  const rateLibrary = React.useCallback(async () => {
+    if (libraryRef.current) return libraryRef.current;
+    try {
+      const d = await apiAuthed("/rategen-v2/library/user-rates/merged", { token: accessToken });
+      const items = Array.isArray(d?.items) ? d.items : [];
+      libraryRef.current = items;
+      setLibraryFailed(false);
+      return items;
+    } catch {
+      // Say so rather than return [] — "no rates" and "could not read your
+      // rates" are different answers and only one of them is the QS's fault.
+      setLibraryFailed(true);
+      return null;
+    }
+  }, [accessToken]);
+
   // The rates this line could be priced with — the QS's own library, matched on
   // description and unit. Returns [] rather than throwing: a suggestion that
   // cannot be fetched must not stop somebody opening a line.
@@ -733,6 +761,8 @@ export default function WorkProjectShell({ productKey, id }) {
               onGoToLine={(i) => panel.show({ kind: "line", index: i })}
               onGo={go}
               onFetchRates={rateSuggestions}
+              onSearchRates={rateLibrary}
+              libraryFailed={libraryFailed}
               onApplyRate={priceLineFromRate}
               pricing={pricing}
               priceFailed={priceFailed}

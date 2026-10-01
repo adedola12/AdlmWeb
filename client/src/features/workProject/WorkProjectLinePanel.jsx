@@ -24,6 +24,7 @@ import {
 import { EN_DASH, money, num } from "./workProjectFormat.js";
 import { Bar } from "./workProjectBits.jsx";
 import { withLineElement, withLineProgress } from "./saveProject.js";
+import { applicableCount, searchRates } from "./rateSearch.js";
 import {
   actualAmountOf,
   actualQtyOf,
@@ -49,6 +50,8 @@ export default function WorkProjectLinePanel({
   onGoToLine,
   onGo,
   onFetchRates,
+  onSearchRates,
+  libraryFailed = false,
   onApplyRate,
   pricing = false,
   priceFailed = "",
@@ -86,6 +89,32 @@ export default function WorkProjectLinePanel({
   const [looking, setLooking] = React.useState(false);
   // Why a measurement was not taken. Cleared on the next good one.
   const [refused, setRefused] = React.useState("");
+  // FINDING A RATE BY NAME.
+  //
+  // The suggestions answer "what would price this line?". This answers "I know
+  // which rate I want" — which is how a QS usually thinks, and the only way to
+  // price a line at all on a server that does not have the suggestions endpoint
+  // yet. Both are offered; neither replaces the other.
+  const [query, setQuery] = React.useState("");
+  const [library, setLibrary] = React.useState(null);
+
+  // Loaded on the first keystroke, not on open: most lines are never priced
+  // from this box, and the merged library is the whole rate set.
+  React.useEffect(() => {
+    if (!query.trim() || library || typeof onSearchRates !== "function") return undefined;
+    let live = true;
+    onSearchRates().then((items) => {
+      if (live && items) setLibrary(items);
+    });
+    return () => {
+      live = false;
+    };
+  }, [query, library, onSearchRates]);
+
+  const found = React.useMemo(
+    () => (library ? searchRates(library, query, { unit: unitOf(it), limit: 8 }) : []),
+    [library, query, it],
+  );
 
   React.useEffect(() => {
     // Only for a line somebody can actually price. An unpriced line with no
@@ -217,6 +246,67 @@ export default function WorkProjectLinePanel({
               Applying one sets this line&rsquo;s rate and prices its material, labour and
               plant in the budget.
             </p>
+          </div>
+        ) : null}
+
+        {canEdit && !priced ? (
+          <div className="pn-find">
+            <label className="pn-num">
+              <span>Or find a rate by name</span>
+              <input
+                type="search"
+                value={query}
+                placeholder={`Search your rates in ${unitOf(it)}`}
+                disabled={pricing || saving}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+
+            {query.trim() && libraryFailed ? (
+              <p className="pn-bad">
+                Your rate library could not be read just now. That is not the same as having no
+                matching rate.
+              </p>
+            ) : null}
+
+            {query.trim() && !library && !libraryFailed ? (
+              <p className="hint">Reading your rate library&hellip;</p>
+            ) : null}
+
+            {library && query.trim() ? (
+              found.length ? (
+                <div className="pn-rates">
+                  {found.map((r) => (
+                    <button
+                      key={r.rateId || r.description}
+                      type="button"
+                      className={r.canApply ? "pn-rate" : "pn-rate off"}
+                      // A rate in another unit is SHOWN so nobody hunts for one
+                      // they can see in Rate Gen — and cannot be applied,
+                      // because pricing an m2 line at an m3 rate is wrong by the
+                      // thickness and looks entirely reasonable on the bill.
+                      disabled={!r.canApply || pricing || saving}
+                      title={r.canApply ? undefined : r.why}
+                      onClick={() => onApplyRate?.(code, r)}
+                    >
+                      <b>{money(r.amount)}</b>
+                      <span className="d">{r.description}</span>
+                      <span className="w">
+                        per {r.unit} &middot; {r.why}
+                      </span>
+                    </button>
+                  ))}
+                  {applicableCount(found) === 0 ? (
+                    <p className="hint">
+                      None of these is in {unitOf(it)}, so none can price this line. Build the rate
+                      in that unit in Rate Gen.
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="hint">Nothing in your library matches that.</p>
+              )
+            ) : null}
           </div>
         ) : null}
 

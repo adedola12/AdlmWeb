@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent, within } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
 
 // His line panel (work-proj.js:891). Reading it is most of the panel; the two
@@ -546,5 +546,113 @@ describe("a measurement the system will not take", () => {
     view.rerender(<WorkProjectLinePanel project={p} index={1} canEdit contractLocked />);
     // BQ-2 has never been measured, so its box must be empty.
     expect(view.container.querySelector("input[type=number]").value).toBe("");
+  });
+});
+
+describe("pricing a line by searching for a rate by name", () => {
+  // The scored suggestions need an endpoint that is not on every server yet.
+  // This path uses two that ARE deployed everywhere — the merged library and
+  // the apply endpoint — so a QS can always price a line, and can always find a
+  // rate they already have in mind by name.
+
+  const LIBRARY = [
+    { id: "m1", rateId: "m1", source: "master", description: "Reinforced concrete grade 25 in columns", unit: "m3", totalCost: 72_000 },
+    { id: "c1", rateId: null, customRateId: "c1", source: "user-custom", description: "Reinforced concrete grade 25 in columns", unit: "m3", totalCost: 78_400 },
+    { id: "m2", rateId: "m2", source: "master", description: "Reinforced concrete in slabs", unit: "m2", totalCost: 9_000 },
+  ];
+
+  const draw = (props = {}) =>
+    render(
+      <WorkProjectLinePanel
+        project={project()}
+        index={1}
+        canEdit
+        onSearchRates={vi.fn().mockResolvedValue(LIBRARY)}
+        {...props}
+      />,
+    ).container;
+
+  const box = (c) => within(c).getByPlaceholderText(/Search your rates in m3/);
+
+  it("offers the search even when no suggestions came back", async () => {
+    // The state every server is in until the suggestions endpoint ships.
+    const c = draw({ onFetchRates: vi.fn().mockResolvedValue([]) });
+    expect(box(c)).toBeTruthy();
+  });
+
+  it("does not read the library until somebody types", async () => {
+    // Most lines are never priced from this box and the library is the whole
+    // rate set.
+    const onSearchRates = vi.fn().mockResolvedValue(LIBRARY);
+    draw({ onSearchRates });
+    expect(onSearchRates).not.toHaveBeenCalled();
+  });
+
+  it("finds a rate by name and offers the QS's own one first", async () => {
+    const c = draw();
+    fireEvent.change(box(c), { target: { value: "concrete" } });
+    await waitFor(() => expect(within(c).getByText(/78,400/)).toBeTruthy());
+    const picks = c.querySelectorAll(".pn-find .pn-rate");
+    expect(picks[0].textContent).toMatch(/78,400/);
+    expect(picks[0].textContent).toMatch(/Your own rate/);
+  });
+
+  it("applies the pick by the line's code, and the budget follows", async () => {
+    // price-from-rate writes the material, labour and plant rows as it goes —
+    // that is what "the budget is autofilled" means.
+    const onApplyRate = vi.fn();
+    const c = draw({ onApplyRate });
+    fireEvent.change(box(c), { target: { value: "concrete grade 25" } });
+    await waitFor(() => expect(within(c).getByText(/78,400/)).toBeTruthy());
+    fireEvent.click(within(c).getByText(/78,400/).closest("button"));
+    expect(onApplyRate).toHaveBeenCalledTimes(1);
+    expect(onApplyRate.mock.calls[0][0]).toBe("BQ-2");
+    expect(onApplyRate.mock.calls[0][1].rateId).toBe("c1");
+  });
+
+  it("SHOWS a rate in another unit but will not apply it", async () => {
+    const onApplyRate = vi.fn();
+    const c = draw({ onApplyRate });
+    fireEvent.change(box(c), { target: { value: "reinforced concrete" } });
+    await waitFor(() => expect(within(c).getByText(/9,000/)).toBeTruthy());
+    const wrong = within(c).getByText(/9,000/).closest("button");
+    expect(wrong.disabled).toBe(true);
+    expect(wrong.textContent).toMatch(/Measured in m2 — this line is m3/);
+    fireEvent.click(wrong);
+    expect(onApplyRate).not.toHaveBeenCalled();
+  });
+
+  it("says when nothing matches, and when nothing matches IN THIS UNIT", async () => {
+    const c = draw();
+    fireEvent.change(box(c), { target: { value: "scaffolding" } });
+    await waitFor(() => expect(within(c).getByText(/Nothing in your library matches/)).toBeTruthy());
+
+    fireEvent.change(box(c), { target: { value: "slabs" } });
+    await waitFor(() =>
+      expect(within(c).getByText(/None of these is in m3/)).toBeTruthy(),
+    );
+  });
+
+  it("does NOT claim there are no rates when the library could not be read", async () => {
+    const c = draw({ onSearchRates: vi.fn().mockResolvedValue(null), libraryFailed: true });
+    fireEvent.change(box(c), { target: { value: "concrete" } });
+    await waitFor(() =>
+      expect(within(c).getByText(/could not be read just now/)).toBeTruthy(),
+    );
+    expect(within(c).queryByText(/Nothing in your library matches/)).toBe(null);
+  });
+
+  it("is not offered on a line that already has a rate", async () => {
+    const c = render(
+      <WorkProjectLinePanel project={project()} index={0} canEdit onSearchRates={vi.fn()} />,
+    ).container;
+    expect(within(c).queryByPlaceholderText(/Search your rates/)).toBe(null);
+  });
+
+  it("is not offered to a viewer", async () => {
+    const c = render(
+      <WorkProjectLinePanel project={project()} index={1} canEdit={false} onSearchRates={vi.fn()} />,
+    ).container;
+    expect(within(c).queryByPlaceholderText(/Search your rates/)).toBe(null);
   });
 });
