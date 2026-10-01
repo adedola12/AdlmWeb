@@ -48,8 +48,28 @@ function isMaterial(b) {
 // a Labour line only. Everything else defaults to Material + Labour.
 // Start-anchored stems (no trailing \b) so "excavat" matches "excavation",
 // "compact" matches "compacting", etc.
+
+// "PLANKING AND STRUTTING" IS THE TERM OF ART; BARE "STRUTTING" IS NOT.
+//
+// This listed `planking` and `strutting` as separate excavation verbs, and the
+// test for it runs BEFORE the formwork branch. So "Sawn formwork, props and
+// strutting to slab soffit" — ordinary wording on a Nigerian bill — classified
+// as excavation: no formwork board, no bracing timber, no nails, and labour at
+// the excavation rate, which is per CUBIC metre, applied to SQUARE metres of
+// soffit.
+//
+// What made it invisible is the reconciliation. On a priced line the engine
+// back-solves the gap, so 100 m2 at NGN 4,500 produced ONE labour row at
+// NGN 1,350 with profitPercent 223 — NGN 3,150/m2 booked as profit instead of
+// as board, bracing and nails that have to be bought. The bill still totalled
+// correctly, so the invariant that guards everything else here could not catch
+// it.
+//
+// Only the gerunds triggered it: "...including all necessary struts and props"
+// and "...including propping" were always fine. So the fix is the phrase, plus
+// the guard below.
 const LABOUR_ONLY_RE =
-  /\b(?:excavat|disposal|dispose|cart\s*away|compact|levell?ing|earthwork[\s-]?support|planking|strutting|backfill|back\s*fill|setting[\s-]?out|site\s*clearance|clearing|topsoil|ramming|grading|hand[\s-]?trim)/i;
+  /\b(?:excavat|disposal|dispose|cart\s*away|compact|levell?ing|earthwork[\s-]?support|planking\s*(?:and|&|\/)?\s*strutting|backfill|back\s*fill|setting[\s-]?out|site\s*clearance|clearing|topsoil|ramming|grading|hand[\s-]?trim)/i;
 
 function isLabourOnly(it) {
   return LABOUR_ONLY_RE.test(
