@@ -357,6 +357,52 @@ describe("the arranging controls actually do something (reported broken)", () =>
   });
 });
 
+describe("rearranging on a phone (native drag never fires on touch)", () => {
+  const messy = {
+    productKey: "revit",
+    customCategories: ["Frames", "Substructure"],
+    items: [
+      { code: "BQ-1", category: "Frames", description: "Concrete column", qty: 1, rate: 100 },
+      { code: "BQ-2", category: "Substructure", description: "Excavate", qty: 1, rate: 100 },
+    ],
+  };
+
+  it("moves a section with a finger on the grip", () => {
+    const onSave = vi.fn();
+    const c = render(<WorkProjectBill project={messy} canEdit onSave={onSave} />).container;
+    const secs = [...c.querySelectorAll(".bsec")];
+    const grip = secs[1].querySelector(".grip");
+    expect(grip).toBeTruthy();
+    // jsdom has no layout; say which section is under the finger.
+    const had = document.elementFromPoint;
+    document.elementFromPoint = () => secs[0].querySelector(".sh");
+    try {
+      fireEvent.pointerDown(grip, { pointerType: "touch", pointerId: 1, clientX: 5, clientY: 300 });
+      fireEvent.pointerMove(grip, { pointerType: "touch", pointerId: 1, clientX: 5, clientY: 200 });
+      fireEvent.pointerUp(grip, { pointerType: "touch", pointerId: 1, clientX: 5, clientY: 200 });
+    } finally {
+      document.elementFromPoint = had;
+    }
+    expect(onSave.mock.calls[0][0].customCategories).toEqual(["Substructure", "Frames"]);
+  });
+
+  it("moves a section with the arrow keys on the grip", () => {
+    const onSave = vi.fn();
+    const c = render(<WorkProjectBill project={messy} canEdit onSave={onSave} />).container;
+    fireEvent.keyDown(c.querySelectorAll(".grip")[0], { key: "ArrowDown" });
+    expect(onSave.mock.calls[0][0].customCategories).toEqual(["Substructure", "Frames"]);
+  });
+
+  it("shows no grip to a view-only reader or on a searched view", () => {
+    expect(render(<WorkProjectBill project={messy} />).container.querySelector(".grip")).toBe(null);
+    cleanup();
+    const c = render(
+      <WorkProjectBill project={messy} canEdit onSave={vi.fn()} initialQuery="column" />,
+    ).container;
+    expect(c.querySelector(".grip")).toBe(null);
+  });
+});
+
 describe("the actual columns, after a contract lock", () => {
   const locked = (over = {}) => ({
     contract: { locked: true },

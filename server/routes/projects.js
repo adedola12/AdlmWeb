@@ -692,10 +692,15 @@ import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
 import {
+  lineKey,
   suggestRatesForLine,
   suggestionMapForBill,
+  usageIndex,
   worthOffering,
 } from "../util/rateSuggestions.js";
+import { RateUsage } from "../models/RateUsage.js";
+import { conversionFactor } from "../util/unitConversion.js";
+import { unitsAgree } from "../util/rateSuggestions.js";
 import {
   applyRateRows,
   buildRateBudgetRows,
@@ -6986,7 +6991,17 @@ async function rateSuggestionsForLine(req, res) {
       Array.isArray(lib?.customRates) ? lib.customRates : [],
     );
 
-    const suggestions = suggestRatesForLine(item, merged, { limit: 5 }).filter(worthOffering);
+    const usage = await loadRateUsage(userId);
+    // Converted offers only for a screen that can show a conversion: the panel
+    // asks with ?convert=1. An older screen would show a converted figure as if
+    // it were the rate's own, and its Apply would be refused for want of the
+    // dimension.
+    const convert = String(req.query?.convert || "") === "1";
+    const suggestions = suggestRatesForLine(item, merged, {
+      limit: 5,
+      usage,
+      convert,
+    }).filter(worthOffering);
     res.json({
       ok: true,
       suggestions,
@@ -7045,7 +7060,11 @@ async function rateSuggestionsForProject(req, res) {
 
     // Every rule — which lines, the lowercased key, the ceiling — is in
     // util/rateSuggestions.js, where it is tested without a database.
-    const found = suggestionMapForBill(project.items, merged);
+    const usage = await loadRateUsage(userId);
+    const found = suggestionMapForBill(project.items, merged, {
+      usage,
+      convert: String(req.query?.convert || "") === "1",
+    });
     res.json({ ok: true, ...found, libraryCount: merged.length });
   } catch (err) {
     console.error("GET project rate-suggestions error:", err);
@@ -7080,12 +7099,10 @@ async function priceLineFromRate(req, res) {
       return refuseRateMaskedWrite(res, "price a bill line from a rate");
     }
 
-    const item = (project.items || []).find(
-      (it) => String(it?.code || "").trim().toLowerCase() === code.toLowerCase(),
-    );
+    const item = findBillLine(project, code);
     if (!item) return res.status(404).json({ error: "No bill line with that code" });
 
-    const rate = await resolvePickedRate(userId, req.body || {});
+    const rate = findPickedRate(await loadMergedRates(userId), req.body || {});
     if (!rate) {
       return res.status(404).json({
         error: "That rate is not in your Rate Gen library.",
@@ -7094,49 +7111,23 @@ async function priceLineFromRate(req, res) {
     }
 
     const ctx = await buildMlScheduleContext(userId);
-    const built = buildRateBudgetRows(item, rate, ctx.K, {
-      priceFor: ctx.priceFor,
-      unitCost: Number(req.body?.unitCost) || 0,
-    });
-    if (!built) {
-      // Three unrelated causes used to share one message, so a line with no
-      // quantity was told the RATE had no build-up — and the QS would go and
-      // rebuild a rate that was never the problem.
-      const why = whyRateCannotPrice(item, rate, { unitCost: Number(req.body?.unitCost) || 0 }) || {
-        code: "RATE_HAS_NO_BUILDUP",
-        message:
-          "That rate carries no build-up, so it cannot be split into material, labour and plant.",
-      };
-      return res.status(422).json({ error: why.message, code: why.code });
-    }
+    const unitCost = Number(req.body?.unitCost) || 0;
+    const convert = cleanConvert(req.body?.convert);
+    const one = priceBillLine(project, item, rate, ctx, { unitCost, convert });
+    if (one.error) return res.status(422).json({ error: one.error.message, code: one.error.code });
 
-    project.budgetItems = sanitizeBudgetItems(
-      applyRateRows(project.budgetItems, code, built.rows),
-    );
-    // The gang and plant behind that one Labour row and one Plant row. Into
-    // resourceItems, never budgetItems — deriveBillRatesFromBudget below sums
-    // every budget row under this code, so filing the gang there would count
-    // the labour twice and raise the client's bill.
-    project.resourceItems = sanitizeResourceItems(
-      applyResourceRows(project.resourceItems, code, buildResourcesFromRate(item, rate)),
-    );
-    backfillBudgetLinks(project.items, project.budgetItems);
-    project.budgetItems = ensureBillItemCoverage(project.items, project.budgetItems);
-    // The build-up now reproduces the picked rate, so this sets the bill line
-    // to exactly what the QS chose instead of reverting it.
-    deriveBillRatesFromBudget(project);
-    reconcileItemsFromBudget(project);
-    project.version = (Number(project.version) || 0) + 1;
+    settlePricedProject(project);
     await project.save();
 
     recordActivity(req, project, ACT.BUDGET_UPDATED, "Priced a bill line from a rate", {
       code,
       rate: String(rate.description || "").slice(0, 200),
     });
+    recordRateUsage(userId, project, [{ item, rate, convert }], "panel");
 
     return res.json({
       ...projectForClient(project, access),
-      _rateWarnings: built.warnings,
+      _rateWarnings: one.warnings,
     });
   } catch (err) {
     console.error("priceLineFromRate error:", err);
@@ -7144,29 +7135,261 @@ async function priceLineFromRate(req, res) {
   }
 }
 
-// The picked rate, re-read from the caller's own merged library. Matched by
-// rateId first; a custom rate the desktop app created has no master id, so a
+// PRICE MANY LINES IN ONE WRITE.
+//
+// Two callers. The line panel, when a QS prices "Lintel Concrete [L:01]" and
+// leaves the 35 other levels of it ticked; and Ada, after the QS confirms the
+// rates she proposed for a whole bill. Each line says which rate, never what it
+// costs, exactly as the single-line endpoint does; every rate is re-resolved
+// from the caller's own library.
+//
+// A line can instead say `sameAs: <code>`: "price this at whatever rate that
+// line got". That reads the rate from RateUsage, so it only works for a line
+// that was itself priced from a rate on the web; a rate typed into a plugin
+// has no rate behind it to copy, and the line is skipped with that reason.
+//
+// One save at the end, not one per line: a save per line on a 300-line bill
+// is 300 whole-project writes, and a failure half way would leave half a bill
+// priced with nothing to say which half. Lines that cannot be priced are
+// skipped and reported; the rest go through.
+const PRICE_MANY_MAX = 500;
+
+async function priceManyFromRates(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+    if (!lines.length) return res.status(400).json({ error: "No lines to price" });
+    if (lines.length > PRICE_MANY_MAX) {
+      return res
+        .status(400)
+        .json({ error: `At most ${PRICE_MANY_MAX} lines can be priced at once.` });
+    }
+    const via = ["panel", "similar", "ada"].includes(req.body?.via) ? req.body.via : "similar";
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res
+        .status(403)
+        .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "price bill lines from rates");
+    }
+
+    const [merged, ctx] = await Promise.all([
+      loadMergedRates(userId),
+      buildMlScheduleContext(userId),
+    ]);
+
+    // The rate each `sameAs` line points at, read once for all of them.
+    const sameAsCodes = [
+      ...new Set(lines.map((l) => String(l?.sameAs || "").trim()).filter(Boolean)),
+    ];
+    const copied = new Map();
+    if (sameAsCodes.length) {
+      const rows = await RateUsage.find({
+        projectId: project._id,
+        code: { $in: sameAsCodes },
+      })
+        .sort({ createdAt: -1 })
+        .select("code rateId rateDescription rateUnit convert unit")
+        .lean();
+      for (const r of rows) {
+        const k = String(r.code || "").toLowerCase();
+        if (!copied.has(k)) copied.set(k, r);
+      }
+    }
+
+    const priced = [];
+    const skipped = [];
+    const warnings = new Set();
+    const used = [];
+    const seen = new Set();
+
+    for (const line of lines) {
+      const code = String(line?.code || "").trim();
+      if (!code) continue;
+      if (seen.has(code.toLowerCase())) continue;
+      seen.add(code.toLowerCase());
+
+      const item = findBillLine(project, code);
+      if (!item) {
+        skipped.push({ code, reason: "No bill line with that code" });
+        continue;
+      }
+
+      let pick = line;
+      const sameAs = String(line?.sameAs || "").trim();
+      if (sameAs) {
+        const from = copied.get(sameAs.toLowerCase());
+        if (!from) {
+          skipped.push({
+            code,
+            reason: `Line ${sameAs} was not priced from a Rate Gen rate here, so there is no rate to copy`,
+          });
+          continue;
+        }
+        pick = {
+          rateId: from.rateId,
+          description: from.rateDescription,
+          unit: from.rateUnit || "",
+          // The same conversion the copied line was priced with. Lines of one
+          // item share a type, so they share its thickness.
+          convert: line?.convert || from.convert || null,
+        };
+      }
+
+      const rate = findPickedRate(merged, pick);
+      if (!rate) {
+        skipped.push({ code, reason: "That rate is not in your Rate Gen library" });
+        continue;
+      }
+      const convert = cleanConvert(pick?.convert);
+      const one = priceBillLine(project, item, rate, ctx, { convert });
+      if (one.error) {
+        skipped.push({ code, reason: one.error.message });
+        continue;
+      }
+      one.warnings.forEach((w) => warnings.add(String(w)));
+      priced.push(code);
+      used.push({ item, rate, convert });
+    }
+
+    if (priced.length) {
+      settlePricedProject(project);
+      await project.save();
+      recordActivity(
+        req,
+        project,
+        ACT.BUDGET_UPDATED,
+        `Priced ${priced.length} bill ${priced.length === 1 ? "line" : "lines"} from rates`,
+        { codes: priced.slice(0, 50), count: priced.length, via },
+      );
+      recordRateUsage(userId, project, used, via);
+    }
+
+    return res.json({
+      ...projectForClient(project, access),
+      _priced: priced,
+      _skipped: skipped,
+      _rateWarnings: [...warnings].slice(0, 20),
+    });
+  } catch (err) {
+    console.error("priceManyFromRates error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+/** A bill line by its code, case-insensitively, the way every caller addresses it. */
+function findBillLine(project, code) {
+  const want = String(code || "").trim().toLowerCase();
+  return (project.items || []).find((it) => String(it?.code || "").trim().toLowerCase() === want);
+}
+
+/**
+ * Write one line's rate into the project, IN MEMORY.
+ *
+ * The rate's build-up becomes the line's material, labour and plant rows, and
+ * its gang and plant go to resourceItems (never budgetItems: the bill rate is
+ * derived by summing budget rows, so filing them there would count labour
+ * twice). The caller settles the project and saves it once.
+ */
+function priceBillLine(project, item, rate, ctx, { unitCost = 0, convert = null } = {}) {
+  const code = String(item?.code || "").trim();
+
+  // A RATE IN ANOTHER UNIT. The factor is worked out here from the two units
+  // and the dimension the QS confirmed; a factor is never taken from a client.
+  // Units that do not agree and cannot be converted are refused, because the
+  // alternative is a line priced wrong by a thickness, which looks right.
+  let scale = 1;
+  if (!unitsAgree(item?.unit, rate?.unit)) {
+    const c = conversionFactor(item?.unit, rate?.unit, convert || {});
+    if (!c.ok) return { error: { code: c.code, message: c.message } };
+    scale = c.factor;
+    if (!(Number(unitCost) > 0)) unitCost = Number(rate?.totalCost ?? rate?.unitPrice ?? 0) * scale;
+  }
+
+  const built = buildRateBudgetRows(item, rate, ctx.K, {
+    priceFor: ctx.priceFor,
+    unitCost,
+    scale,
+  });
+  if (!built) {
+    // Three unrelated causes used to share one message, so a line with no
+    // quantity was told the RATE had no build-up, and the QS would go and
+    // rebuild a rate that was never the problem.
+    const why = whyRateCannotPrice(item, rate, { unitCost }) || {
+      code: "RATE_HAS_NO_BUILDUP",
+      message:
+        "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+    };
+    return { error: why };
+  }
+  project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, built.rows));
+  project.resourceItems = sanitizeResourceItems(
+    applyResourceRows(project.resourceItems, code, buildResourcesFromRate(item, rate, { scale })),
+  );
+  return { warnings: Array.isArray(built.warnings) ? built.warnings : [], scale };
+}
+
+/** After one or many lines are priced: links, coverage, and the bill rates derived from the budget. */
+function settlePricedProject(project) {
+  backfillBudgetLinks(project.items, project.budgetItems);
+  project.budgetItems = ensureBillItemCoverage(project.items, project.budgetItems);
+  // The build-up now reproduces the picked rate, so this sets the bill line
+  // to exactly what the QS chose instead of reverting it.
+  deriveBillRatesFromBudget(project);
+  reconcileItemsFromBudget(project);
+  project.version = (Number(project.version) || 0) + 1;
+}
+
+/**
+ * The dimensions a client sent for a unit conversion, as plain numbers, and
+ * nothing else. conversionFactor() checks their range.
+ */
+function cleanConvert(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  for (const k of ["thickness", "width", "depth", "kgPerM", "perItem"]) {
+    const n = Number(raw[k]);
+    if (Number.isFinite(n) && n > 0) out[k] = n;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** The caller's merged rate set: master rates plus their overrides and custom rates. */
+async function loadMergedRates(userId) {
+  const [masterRates, lib] = await Promise.all([
+    RateGenRate.find({}).lean(),
+    RateGenLibrary.findOne({ userId }).lean(),
+  ]);
+  return mergeRatesWithUserData(
+    masterRates,
+    Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+    Array.isArray(lib?.customRates) ? lib.customRates : [],
+  );
+}
+
+// The picked rate, found in the caller's own merged library. Matched by rateId
+// first; a custom rate the desktop app created has no master id, so a
 // description + unit match is the fallback.
-async function resolvePickedRate(userId, body) {
+function findPickedRate(merged, body) {
   const wantedId = String(body?.rateId || "").trim();
   const wantedDesc = String(body?.description || "").trim().toLowerCase();
   const wantedUnit = String(body?.unit || "").trim().toLowerCase();
   if (!wantedId && !wantedDesc) return null;
 
-  const [masterRates, lib] = await Promise.all([
-    RateGenRate.find({}).lean(),
-    RateGenLibrary.findOne({ userId }).lean(),
-  ]);
-  const merged = mergeRatesWithUserData(
-    masterRates,
-    Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
-    Array.isArray(lib?.customRates) ? lib.customRates : [],
-  );
-
   if (wantedId) {
-    const byId = merged.find(
-      (r) => String(r?.rateId || r?.id || "") === wantedId,
-    );
+    const byId = merged.find((r) => String(r?.rateId || r?.id || "") === wantedId);
     if (byId) return byId;
   }
   if (!wantedDesc) return null;
@@ -7176,6 +7399,48 @@ async function resolvePickedRate(userId, body) {
         String(r?.description || "").trim().toLowerCase() === wantedDesc &&
         (!wantedUnit || String(r?.unit || "").trim().toLowerCase() === wantedUnit),
     ) || null
+  );
+}
+
+/**
+ * What this user has chosen before, for the suggestions. Never throws: a
+ * suggestion without history is still a suggestion.
+ */
+async function loadRateUsage(userId) {
+  try {
+    const rows = await RateUsage.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(3000)
+      .select("key unit rateId projectId projectName createdAt")
+      .lean();
+    return usageIndex(rows.map((r) => ({ ...r, at: r.createdAt })));
+  } catch (err) {
+    console.warn("loadRateUsage failed:", err?.message || err);
+    return null;
+  }
+}
+
+/** Record which rate priced which line. Fire-and-forget; never fails the pricing. */
+function recordRateUsage(userId, project, used, via) {
+  const docs = (Array.isArray(used) ? used : [])
+    .map(({ item, rate, convert }) => ({
+      userId,
+      projectId: project?._id || null,
+      projectName: String(project?.name || "").slice(0, 200),
+      productKey: String(project?.productKey || "").toLowerCase(),
+      code: String(item?.code || "").trim(),
+      key: lineKey(item?.description),
+      unit: String(item?.unit || "").trim(),
+      rateId: String(rate?.rateId || rate?.id || "").trim(),
+      rateDescription: String(rate?.description || "").slice(0, 300),
+      rateUnit: String(rate?.unit || "").trim(),
+      convert: convert || null,
+      via,
+    }))
+    .filter((d) => d.key && d.rateId);
+  if (!docs.length) return;
+  RateUsage.insertMany(docs, { ordered: false }).catch((err) =>
+    console.warn("recordRateUsage failed:", err?.message || err),
   );
 }
 
@@ -8276,6 +8541,15 @@ router.post(
   mapEntitlementParam,
   requireEntitlementParam,
   priceLineFromRate,
+);
+
+// Several lines at once: the lines like the one just priced, or the rates Ada
+// proposed and the QS confirmed. Same rules as above, one write.
+router.post(
+  "/:productKey/:id/bill/price-many",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  priceManyFromRates,
 );
 
 // Price all services bill lines from RateGen (MEP web Budget view).
