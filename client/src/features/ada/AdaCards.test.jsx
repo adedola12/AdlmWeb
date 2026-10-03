@@ -96,3 +96,45 @@ describe("AdaReportCard", () => {
     expect(screen.queryByText(/₦/)).toBeNull();
   });
 });
+
+describe("AdaPricingCard with a stated rate", () => {
+  const stated = {
+    type: "price-proposal",
+    mode: "user-rate",
+    basis: "area",
+    category: "windows",
+    ratePerM2: 88000,
+    split: { material: 60, labour: 20, overheadProfit: 20 },
+    repricedCount: 1,
+    project: { id: "65f0c0ffee", productKey: "revit", name: "Lekki duplex" },
+    lines: [
+      { code: "W1", description: "Window W1 (1200×1500)", qty: 4, unit: "nr", sizeLabel: "1200×1500", areaM2: 1.8, ratePerM2: 88000, userRate: 158400, amount: 633600, split: { material: 60, labour: 20, overheadProfit: 20 }, splitAmounts: { material: 95040, labour: 31680, overheadProfit: 31680 } },
+      { code: "W2", description: "Window W2 (600x600)", qty: 2, unit: "nr", sizeLabel: "600×600", areaM2: 0.36, ratePerM2: 88000, userRate: 31680, amount: 63360, currentRate: 30000, split: { material: 60, labour: 20, overheadProfit: 20 }, splitAmounts: { material: 19008, labour: 6336, overheadProfit: 6336 } },
+    ],
+  };
+
+  it("shows the size, area, split and the rate a line has now", () => {
+    render(<AdaPricingCard card={stated} token="t" />);
+    const text = document.body.textContent;
+    expect(text).toMatch(/Windows at .*88,000 per m²/);
+    expect(text).toMatch(/60% material · 20% labour · 20% overhead & profit/);
+    expect(text).toMatch(/1200×1500 mm · 1\.8 m²/);
+    expect(text).toMatch(/now .*30,000/);
+    expect(text).toMatch(/already has a rate/);
+    expect(screen.getByRole("button", { name: "Apply 2 rates" })).toBeTruthy();
+  });
+
+  it("posts the rate per m2 for the ticked windows only", async () => {
+    apiAuthed.mockResolvedValue({ _priced: ["W1"], _skipped: [], _rateWarnings: [] });
+    render(<AdaPricingCard card={stated} token="tok" />);
+    fireEvent.click(screen.getAllByRole("checkbox")[1]);
+    fireEvent.click(screen.getByRole("button", { name: "Apply 1 rate" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/1 line priced/));
+    const [path, init] = apiAuthed.mock.calls[0];
+    expect(path).toBe("/projects/revit/65f0c0ffee/bill/price-many");
+    expect(init.body).toEqual({
+      lines: [{ code: "W1", ratePerM2: 88000, split: { material: 60, labour: 20, overheadProfit: 20 } }],
+      via: "ada",
+    });
+  });
+});

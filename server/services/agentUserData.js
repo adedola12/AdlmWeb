@@ -18,6 +18,7 @@ import { ActivityLog } from "../models/ActivityLog.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
 import { resolveProjectAccess } from "../util/projectAccess.js";
 import { buildPricingProposal } from "../util/pricingProposal.js";
+import { buildAreaProposal, buildSetRatesProposal } from "../util/priceByArea.js";
 import { RateUsage } from "../models/RateUsage.js";
 import { usageIndex } from "../util/rateSuggestions.js";
 import { parseReportRange, buildPeriodSummary } from "./reportPeriod.js";
@@ -1173,6 +1174,200 @@ export async function getPricingProposal(userId, projectName, context = {}) {
       unmatchedCount: p.unmatchedCount,
       noCodeCount: p.noCodeCount,
       truncated: p.truncated,
+    },
+  };
+}
+
+// ── Rates the USER states ──────────────────────────────────────────────────
+// "Windows are 88,000 per m2", "set blockwork to 9,500 per m2", "rate line 14
+// at 2,000". The figure is the user's, not Ada's; these build the same kind of
+// confirm card as propose_project_pricing and write nothing. Apply posts the
+// stated rate (and for openings the rate PER M², never the line's figure) to
+// price-many, which re-works every line from the bill itself.
+
+/** The project, whole, if the caller may price it; otherwise the words why not. */
+async function projectToPrice(userId, projectName, context) {
+  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  if (error) return { error };
+  const project = await loadWhole(userId, found);
+  if (!project) return { error: "That project could not be loaded." };
+  const access = await accessFor(userId, project);
+  if (!access.canSeeRates) {
+    return { error: `The user cannot see rates on "${project.name}", so no rates can be set on it. Say so plainly.` };
+  }
+  if (!access.canEdit) {
+    return { error: `The user has view-only access to "${project.name}", so rates cannot be applied to it. Say so plainly.` };
+  }
+  return { project, note };
+}
+
+function splitWords(split) {
+  return `${split.material}% material, ${split.labour}% labour, ${split.overheadProfit}% overhead and profit`;
+}
+
+const CONFIRM_RULE =
+  "A confirm card listing every line, each with a tick box, is shown under your reply. NOTHING has been priced. " +
+  "Tell the user to untick any line they disagree with and press Apply. Never say the rates are applied or saved.";
+
+/**
+ * Every window or door on a project priced from its size at a stated rate per m².
+ *
+ * @param {{category: string, ratePerM2: number, split?: object}} input
+ * @returns {Promise<string | {text: string, card: object}>}
+ */
+export async function getAreaPricingProposal(userId, projectName, input = {}, context = {}) {
+  const { project, note, error } = await projectToPrice(userId, projectName, context);
+  if (error) return error;
+
+  const p = buildAreaProposal(project.items, input);
+  if (!p.ok) return `${p.error} Ask the user to restate it.`;
+  const noun = p.category === "windows" ? "window" : "door";
+
+  if (!p.lines.length) {
+    const why = [];
+    if (p.skipped.noSize) why.push(`${p.skipped.noSize} ${noun} line(s) carry no width × height in their description`);
+    if (p.skipped.noQty) why.push(`${p.skipped.noQty} have no quantity`);
+    if (p.skipped.noCode) why.push(`${p.skipped.noCode} have no bill code`);
+    return [
+      `No ${noun} lines on "${project.name}" could be priced by area.`,
+      why.length
+        ? `${why.join("; ")}.`
+        : `The bill has no line that starts with "${noun}" and carries a size like (1200×1500).`,
+      "Say so plainly. Do NOT work out figures yourself.",
+    ].join("\n");
+  }
+
+  const lines = [];
+  lines.push(
+    `Proposal for "${project.name}" (${productLabel(project.productKey)}): ${p.lines.length} ${noun} line(s) at ${naira(p.ratePerM2)} per m², split ${splitWords(p.split)}. Applying all of them would put ${naira(p.totalToAdd)} on the bill for these lines.`,
+  );
+  if (p.repricedCount) {
+    lines.push(`${p.repricedCount} of them already have a rate; applying replaces it. Point this out.`);
+  }
+  if (p.skipped.aggregate) {
+    lines.push(`${p.skipped.aggregate} total line(s) (total area / perimeter) were left alone, as they should be.`);
+  }
+  if (p.skipped.noSize) lines.push(`${p.skipped.noSize} ${noun} line(s) had no size in the description and are not on the card.`);
+  if (p.skipped.noQty) lines.push(`${p.skipped.noQty} ${noun} line(s) have no quantity and are not on the card.`);
+  if (p.skipped.noCode) lines.push(`${p.skipped.noCode} ${noun} line(s) have no bill code and must be priced on the line.`);
+  lines.push("");
+  lines.push("By size (largest first):");
+  for (const g of p.groups.slice(0, 15)) {
+    lines.push(
+      `- ${g.sizeLabel} mm = ${g.areaM2} m² → ${naira(g.rate)} each; ${g.count} line(s), ${fmtQty(g.qty)} in all, ${naira(g.amount)}.`,
+    );
+  }
+  lines.push("");
+  lines.push(CONFIRM_RULE);
+  if (note) lines.push(note);
+
+  return {
+    text: lines.join("\n"),
+    card: {
+      type: "price-proposal",
+      mode: "user-rate",
+      basis: "area",
+      cardKey: `area-${p.category}`,
+      label: `Apply ${p.lines.length} rate${p.lines.length === 1 ? "" : "s"}`,
+      project: cardProject(project),
+      category: p.category,
+      ratePerM2: p.ratePerM2,
+      split: p.split,
+      lines: p.lines,
+      groups: p.groups,
+      totalToAdd: p.totalToAdd,
+      repricedCount: p.repricedCount,
+      skipped: p.skipped,
+    },
+  };
+}
+
+/**
+ * A stated rate on the bill lines a message names (description words, codes or
+ * line numbers).
+ *
+ * @param {{match: object, rate: number, unit?: string, split?: object}} input
+ * @returns {Promise<string | {text: string, card: object}>}
+ */
+export async function getSetRatesProposal(userId, projectName, input = {}, context = {}) {
+  const { project, note, error } = await projectToPrice(userId, projectName, context);
+  if (error) return error;
+
+  const p = buildSetRatesProposal(project.items, input);
+  if (!p.ok) return `${p.error} Ask the user to restate it.`;
+
+  const m = input?.match || {};
+  const asked = [
+    m.text ? `"${String(m.text).slice(0, 80)}"` : "",
+    m.code ? `code ${[].concat(m.code).join(", ")}` : "",
+    m.sn ? `line ${[].concat(m.sn).join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join(" / ");
+
+  if (!p.lines.length) {
+    const out = [];
+    if (!p.matchedCount) {
+      out.push(`No bill line on "${project.name}" matches ${asked || "that"}.`);
+      out.push("Ask how the item is worded on their bill, or look it up with get_project_bill and a search.");
+    } else {
+      out.push(`${p.matchedCount} line(s) on "${project.name}" match ${asked}, but none can take this rate.`);
+      if (p.skipped.wrongUnit.length) {
+        const units = [...new Set(p.skipped.wrongUnit.map((w) => w.unit || "no unit"))].join(", ");
+        out.push(
+          `${p.skipped.wrongUnit.length} are measured in ${units}, not ${p.unit}. Do NOT convert; ask the user for a rate in that unit.`,
+        );
+      }
+      if (p.skipped.noQty) out.push(`${p.skipped.noQty} have no quantity.`);
+      if (p.skipped.noCode) out.push(`${p.skipped.noCode} have no bill code and must be priced on the line.`);
+    }
+    return out.join("\n");
+  }
+
+  const lines = [];
+  lines.push(
+    `Proposal for "${project.name}" (${productLabel(project.productKey)}): ${naira(p.rate)}${p.unit ? ` per ${p.unit}` : ""} on ${p.lines.length} line(s) matching ${asked}, split ${splitWords(p.split)}. Applying all of them would put ${naira(p.totalToAdd)} on the bill for these lines.`,
+  );
+  if (p.repricedCount) lines.push(`${p.repricedCount} of them already have a rate; applying replaces it. Point this out.`);
+  if (p.skipped.wrongUnit.length) {
+    lines.push(
+      `${p.skipped.wrongUnit.length} matching line(s) are in another unit (${p.skipped.wrongUnit
+        .slice(0, 5)
+        .map((w) => `${w.code}: ${w.unit || "no unit"}`)
+        .join(", ")}) and are NOT on the card. Do not convert.`,
+    );
+  }
+  if (p.skipped.noQty) lines.push(`${p.skipped.noQty} matching line(s) have no quantity and are not on the card.`);
+  if (p.lines.length > 1) {
+    lines.push("Check with the user that every line on the card is one they meant: a description match can catch more than intended.");
+  }
+  lines.push("");
+  lines.push("On the card (first 12):");
+  for (const l of p.lines.slice(0, 12)) {
+    lines.push(
+      `- ${l.code}: ${l.description.slice(0, 80)} — ${fmtQty(l.qty)} ${l.unit} × ${naira(l.userRate)} = ${naira(l.amount)}${l.currentRate ? ` (now ${naira(l.currentRate)})` : ""}.`,
+    );
+  }
+  lines.push("");
+  lines.push(CONFIRM_RULE);
+  if (note) lines.push(note);
+
+  return {
+    text: lines.join("\n"),
+    card: {
+      type: "price-proposal",
+      mode: "user-rate",
+      basis: "rate",
+      cardKey: `rate-${p.rate}-${p.unit}-${p.lines.map((l) => l.code).join(",")}`.slice(0, 160),
+      label: `Apply ${p.lines.length} rate${p.lines.length === 1 ? "" : "s"}`,
+      project: cardProject(project),
+      rate: p.rate,
+      unit: p.unit,
+      split: p.split,
+      lines: p.lines,
+      totalToAdd: p.totalToAdd,
+      repricedCount: p.repricedCount,
+      skipped: { wrongUnit: p.skipped.wrongUnit.length, noQty: p.skipped.noQty, noCode: p.skipped.noCode },
     },
   };
 }
