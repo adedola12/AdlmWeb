@@ -16,6 +16,7 @@
 
 import { icmsCode, mapBill, groupTitle, ICMS_GROUPS } from "./icmsMap.js";
 import { suggestRatesForLine, unitsAgree } from "./rateSuggestions.js";
+import { matchWorkRate } from "./icmsWorkCarbon.js";
 
 const fold = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -32,7 +33,7 @@ function carbonIndex(rates = []) {
   }
   // rateSuggestions prices nothing without money in it; carbon rates carry their net cost
   const forMatching = withCarbon.map((r) => ({ ...r, unitPrice: num(r.netCost) || 1 }));
-  return { byDesc, forMatching };
+  return { byDesc, forMatching, all: withCarbon };
 }
 
 function findRate(item, index) {
@@ -45,6 +46,12 @@ function findRate(item, index) {
   }
   const same = sameUnit(index.byDesc.get(fold(item?.description)));
   if (same) return { rate: same, source: "same", score: 1 };
+  // by the work the line measures (concrete m3, rebar kg -> tonne, 225 blockwork m2)
+  const work = matchWorkRate(item, index.all);
+  if (work) {
+    const assumed = [work.assumed, work.sized].filter(Boolean).join(" ") || null;
+    return { rate: work.rate, source: "work", score: work.score, factor: work.factor, workType: work.workType, assumed };
+  }
   const [best] = suggestRatesForLine(item, index.forMatching, { limit: 1, minScore: CARBON_MATCH_MIN_SCORE });
   if (best) {
     const rate = index.forMatching.find((r) => fold(r.description) === fold(best.description) && unitsAgree(r.unit, best.unit));
@@ -77,6 +84,7 @@ export function icmsLines(items = [], { productKey = "", carbonRates = [], overr
 
     const found = qty > 0 ? findRate(item, index) : null;
     const c = found?.rate.carbon;
+    const f = found?.factor ?? 1; // the line's unit into the rate's (kg -> tonne)
     out.push({
       key,
       description,
@@ -89,11 +97,13 @@ export function icmsLines(items = [], { productKey = "", carbonRates = [], overr
       code: group ? icmsCode({ group, subGroup }) : null,
       basis: own ? "placed" : m.basis,
       why: own ? "Placed by the QS." : m.why,
-      carbonPerUnit: c ? c.total : null,
-      carbonKg: c ? c.total * qty : null,
-      carbonLowKg: c ? c.low * qty : null,
+      carbonPerUnit: c ? c.total * f : null,
+      carbonKg: c ? c.total * qty * f : null,
+      carbonLowKg: c ? c.low * qty * f : null,
       carbonSource: found ? found.source : "none",
       carbonRate: found ? found.rate.description : null,
+      carbonWorkType: found?.workType || null,
+      carbonAssumed: found?.assumed || null,
       carbonScore: found ? found.score : null,
       carbonCoverage: c ? c.coverage : null,
     });
@@ -109,7 +119,7 @@ export function icmsSummary(lines = []) {
   const groups = ICMS_GROUPS.map((g) => ({ code: g.code, title: groupTitle(g.code), icms: icmsCode({ group: g.code }), carbonReported: g.carbon, amount: 0, carbonKg: 0, carbonLowKg: 0, lines: 0 }));
   const byCode = new Map(groups.map((g) => [g.code, g]));
   let total = 0, unplaced = 0, unplacedLines = 0, withCarbon = 0;
-  const bySource = { applied: 0, same: 0, matched: 0, none: 0 };
+  const bySource = { applied: 0, same: 0, work: 0, matched: 0, none: 0 };
   for (const l of lines) {
     total += l.amount;
     bySource[l.carbonSource] = (bySource[l.carbonSource] || 0) + l.amount;

@@ -21,6 +21,10 @@ const TTL_MS = 5 * 60 * 1000;
 const _cache = new Map(); // `${userId}|${state}|${zone}` -> { at, value }
 const _libs = new Map(); // `${state}|${zone}` -> { at, lib, labour }
 
+/** A rate the desktop's carbon screen wrote: its lines end in "Upfront carbon, A1-A5". */
+export const isCarbonCopy = (rate) =>
+  (rate?.breakdown || []).some((b) => /^(carbon of the build-up above|upfront carbon, a1-a5)/i.test(String(b?.componentName || "").trim()));
+
 /** The key a bill line and a rate share: description and unit, case and spacing folded. */
 export function rateCarbonKey(description, unit) {
   const fold = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -57,11 +61,14 @@ export async function carbonForUser(userId, { state = null, zone = null } = {}) 
     userId ? RateGenLibrary.findOne({ userId }).lean() : null,
     masterLibrary(state, zone),
   ]);
+  // The desktop syncs its own carbon list ("Carbon and Others") back into the
+  // library: copies of rates already here, with the carbon summary as lines. They
+  // are output, not rates, and would count every rate twice.
   const merged = mergeRatesWithUserData(
     masterRates,
     Array.isArray(userLib?.rateOverrides) ? userLib.rateOverrides : [],
     Array.isArray(userLib?.customRates) ? userLib.customRates : [],
-  );
+  ).filter((r) => !isCarbonCopy(r));
   const results = buildCarbonRates(merged, lib, labour);
 
   const rates = merged.map((r, i) => {

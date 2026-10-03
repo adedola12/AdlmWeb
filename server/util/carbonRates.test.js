@@ -233,6 +233,27 @@ test("an unpriced build-up (Ada's draft) is weighed by its quantities", () => {
   near(c.coverage, 3 / 4); // cement, stone and the finisher; not the release agent
 });
 
+test("a day of another item, unpriced, is divided by the build-up's own stated output", () => {
+  const [, dig] = buildCarbonRates(
+    [
+      {
+        sectionKey: "ground", itemNo: 1, description: "Clearing site using D8 bulldozer", unit: "m2", netCost: 1000,
+        breakdown: [{ componentName: "Diesel", quantity: 304, unit: "Liters", unitPrice: 1200, totalPrice: 364800 }],
+      },
+      {
+        sectionKey: "ground", itemNo: 3, description: "Excavate oversite to remove topsoil using D8", unit: "m2", netCost: 1597,
+        breakdown: [
+          { componentName: "SubItem from Item1 approach", quantity: 1, unit: "Lump", unitPrice: 0, totalPrice: 0 },
+          { componentName: "Output per day", quantity: 980, unit: "m2/day", unitPrice: 0, totalPrice: 0 },
+        ],
+      },
+    ],
+    MATS, LABOUR,
+  );
+  // a day of diesel over 980 m2, not the whole day on every m2
+  near(dig.total, (304 * 2.66155) / 980);
+});
+
 test("an unpriced line is never weighed in a library row's other unit", () => {
   const mats = [...MATS, { name: "Sawn timber", category: "Timber - Hardwood", unit: "m3", price: 250000 }];
   const [c] = buildCarbonRates(

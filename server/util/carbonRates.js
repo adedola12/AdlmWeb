@@ -224,6 +224,10 @@ function assessRate(rate, lib, labourNames, refs) {
   // A build-up with plant hired by the day ("1 No/Day") states its fuel and its
   // consumables for that same day, even when their unit ("250 Liters", "3%") says not.
   const hasDayLines = lines.some((l) => BATCH.test(String(l.unit || "")));
+  // "Output per day: 980 m2/day": what a day of another item's kit is divided by
+  const output = num(lines.find((l) => /^output per (day|hr|hour)\b/i.test(String(l.componentName || "").trim()))?.quantity);
+  // carbon already per unit of this rate (a day's kit over the stated output): not scaled again
+  let f13 = 0, f4 = 0, f5w = 0, f5a = 0;
 
   for (const line of lines) {
     const raw = String(line.componentName || "");
@@ -298,9 +302,15 @@ function assessRate(rate, lib, labourNames, refs) {
     if (day) {
       coveredCost += total; coveredLines++;
       const q = qty > 0 ? qty : 1;
-      a13 += day.raw.a13 * q; a4 += day.raw.a4 * q; a5w += day.raw.a5w * q; a5a += day.raw.a5a * q;
+      if (output > 0) {
+        // the build-up states its output: a day of the kit over that, whatever the prices say
+        f13 += (day.raw.a13 * q) / output; f4 += (day.raw.a4 * q) / output; f5w += (day.raw.a5w * q) / output; f5a += (day.raw.a5a * q) / output;
+      } else {
+        a13 += day.raw.a13 * q; a4 += day.raw.a4 * q; a5w += day.raw.a5w * q; a5a += day.raw.a5a * q;
+      }
       bl.carbonKg = day.raw.total * q;
-      bl.carbonBasis = `${Number(q.toFixed(4))} x the build-up of item ${item[1]}, "${day.description}", at ${Number(day.raw.total.toFixed(3))} kgCO2e as written (before that rate divides it by its output).`;
+      bl.carbonBasis = `${Number(q.toFixed(4))} x the build-up of item ${item[1]}, "${day.description}", at ${Number(day.raw.total.toFixed(3))} kgCO2e as written` +
+        (output > 0 ? `, over this rate's output of ${output} per day.` : " (before this rate divides it by its output).");
       breakdown.push(bl);
       continue;
     }
@@ -347,7 +357,7 @@ function assessRate(rate, lib, labourNames, refs) {
     breakdown.push(bl);
   }
 
-  const carbonOfBuildUp = a13 + a4 + a5w + a5a;
+  const carbonOfBuildUp = a13 + a4 + a5w + a5a + (f13 + f4 + f5w + f5a) * (output || 1);
   // Every rate with a build-up gets a figure, the owner's rule (3 Oct 2026). A
   // labour-only rate (hand excavation, backfill) has no upfront carbon: it is 0,
   // and says so, rather than missing. Only a rate with no lines at all has none.
@@ -368,7 +378,7 @@ function assessRate(rate, lib, labourNames, refs) {
     else scale = ratio; // all of it is a batch (a mixer load, a day's output)
   }
   const per = (all, b) => (all - b + b * batchScale) * scale;
-  a13 = per(a13, b13); a4 = per(a4, b4); a5w = per(a5w, b5w); a5a = per(a5a, b5a);
+  a13 = per(a13, b13) + f13; a4 = per(a4, b4) + f4; a5w = per(a5w, b5w) + f5w; a5a = per(a5a, b5a) + f5a;
   const perUnit = a13 + a4 + a5w + a5a;
   const perUnitLow = perUnit - per(gap, bgap);
 
