@@ -20,7 +20,7 @@ export const PRODUCT_LABELS = {
   quiv: "QUIV (Revit)",
   heron: "HERON (PlanSwift)",
   rategen: "RateGen",
-  mep: "Revit MEP Suite",
+  mep: "SERVIQ Suite",
   civiq: "CIVIQ",
   timepro: "Time Pro",
   archicad: "QUIV for ArchiCAD",

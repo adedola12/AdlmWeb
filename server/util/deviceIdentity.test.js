@@ -98,7 +98,7 @@ test("clientLabel prefers the header, then the User-Agent product token", () => 
 test("holderAppLabel names the Hub only for a Hub row no app has signed in on", () => {
   assert.equal(holderAppLabel({ name: "PC", fpVersion: 2 }, "revit"), "ADLM Installer Hub");
   assert.equal(holderAppLabel({ name: "PC", fpVersion: 2, appSeenAt: new Date() }, "revit"), "QUIV app");
-  assert.equal(holderAppLabel({ source: "app" }, "mep"), "ADLM MEP & HVAC app");
+  assert.equal(holderAppLabel({ source: "app" }, "mep"), "SERVIQ app");
   assert.equal(holderAppLabel({ source: "app" }, "unknown-product"), "ADLM app");
 });
 
