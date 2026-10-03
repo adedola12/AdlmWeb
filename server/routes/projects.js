@@ -4195,6 +4195,10 @@ async function updateProject(req, res) {
         // rates. QUIV saves its budget through this PUT, so without restoring
         // it every QUIV re-save put the plugin's prices back over the website's
         // and the bill rates followed.
+        // previousBudget is read once, above, before anything replaces it.
+        // QUIV saves its budget through this PUT, so without that read every
+        // QUIV re-save put the plugin's prices back over the website's and the
+        // bill rates followed.
         backfillBudgetLinks(project.items, budget);
         const freshBudget = ensureBillItemCoverage(project.items, budget);
         // After coverage, so the synthesised rows get their edits back too.
