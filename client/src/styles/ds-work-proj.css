@@ -283,6 +283,17 @@
   font:400 13px var(--font);color:var(--ink);cursor:pointer;text-align:left}
 .ds .pj-bill .sh svg{width:13px;height:13px;fill:none;stroke:var(--ink-3);stroke-width:2;transition:transform 200ms}
 .ds .pj-bill .bsec.open .sh svg{transform:rotate(90deg)}
+/* the section grip: a finger cannot use native drag-and-drop, so this takes the pointer */
+.ds .pj-bill .shw{display:flex;align-items:stretch}
+.ds .pj-bill .shw .sh{flex:1;min-width:0}
+.ds .pj-bill .grip{display:grid;place-items:center;width:36px;flex:none;background:var(--bg-alt);border-bottom:1px solid var(--line);
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;color:var(--ink-3)}
+.ds .pj-bill .grip svg{width:16px;height:16px;fill:currentColor}
+.ds .pj-bill .grip:hover,.ds .pj-bill .grip:focus-visible{color:var(--ink)}
+.ds .pj-bill .grip:focus-visible{outline:2px solid var(--action);outline-offset:-2px}
+.ds .pj-bill .grip + .sh{padding-left:4px}
+.ds .pj-bill .bsec.dragging{opacity:.55}
+.ds .pj-bill .bsec.drop{box-shadow:inset 0 3px var(--action)}
 .ds .pj-bill .sh b{font-weight:500}
 .ds .pj-bill .sh em{font-style:normal;font-size:12px;color:var(--ink-3)}
 .ds .pj-bill .sh span{margin-left:auto;font-weight:500;font-variant-numeric:tabular-nums}

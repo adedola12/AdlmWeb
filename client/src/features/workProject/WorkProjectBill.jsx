@@ -92,6 +92,9 @@ export default function WorkProjectBill({
   // Which section is being dragged. Index into `order`, not a name: two
   // sections can read alike after trimming and the index cannot be ambiguous.
   const [dragFrom, setDragFrom] = React.useState(null);
+  // Where a touch drag would drop, for the highlight. Native drag-and-drop
+  // never fires on a phone, so the grip handle runs its own pointer drag.
+  const [dragOver, setDragOver] = React.useState(null);
   React.useEffect(() => setQuery(initialQuery), [initialQuery]);
   const [filter, setFilter] = React.useState("all");
   const [by, setBy] = React.useState("element");
@@ -117,6 +120,65 @@ export default function WorkProjectBill({
   );
 
   const anyShown = groups.some((g) => g.indexes.length > 0);
+  const canArrange = canEdit && !query && filter === "all" && by === "element";
+
+  function moveSection(from, to) {
+    setDragFrom(null);
+    setDragOver(null);
+    if (from == null || to == null || from === to) return;
+    const patch = withSectionMoved(project, from, to);
+    if (patch) onSave?.(patch);
+  }
+
+  // THE GRIP, FOR A FINGER.
+  //
+  // HTML5 drag-and-drop is mouse-only: a phone never fires dragstart, so the
+  // header drag below was dead on mobile. The grip takes the pointer instead and
+  // finds the section under the finger itself. A mouse still uses the native
+  // drag on the whole section, which already works.
+  const sectionAt = (x, y) => {
+    const el = document.elementFromPoint?.(x, y)?.closest?.("[data-sec]");
+    return el ? sectionIndex(order, el.getAttribute("data-sec")) : null;
+  };
+  const gripProps = (name) => ({
+    onPointerDown: (e) => {
+      if (e.pointerType === "mouse" || saving) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      setDragFrom(sectionIndex(order, name));
+      setDragOver(sectionIndex(order, name));
+    },
+    onPointerMove: (e) => {
+      if (e.pointerType === "mouse" || dragFrom == null) return;
+      // Scroll the page while the finger holds near an edge, or a long bill
+      // could only be rearranged a screen at a time.
+      if (e.clientY < 70) window.scrollBy?.(0, -14);
+      else if (e.clientY > window.innerHeight - 70) window.scrollBy?.(0, 14);
+      const at = sectionAt(e.clientX, e.clientY);
+      if (at != null && at >= 0) setDragOver(at);
+    },
+    onPointerUp: (e) => {
+      if (e.pointerType === "mouse" || dragFrom == null) return;
+      const at = sectionAt(e.clientX, e.clientY);
+      moveSection(dragFrom, at != null && at >= 0 ? at : dragOver);
+    },
+    onPointerCancel: () => {
+      setDragFrom(null);
+      setDragOver(null);
+    },
+    // And for a keyboard: the grip is focusable, and the arrows move it.
+    onKeyDown: (e) => {
+      const from = sectionIndex(order, name);
+      if (e.key === "ArrowUp" && from > 0) {
+        e.preventDefault();
+        moveSection(from, from - 1);
+      } else if (e.key === "ArrowDown" && from < order.length - 1) {
+        e.preventDefault();
+        moveSection(from, from + 1);
+      }
+    },
+  });
 
   function toggleAll() {
     // His [data-fold]: if everything is shut, open everything; otherwise shut it.
@@ -263,12 +325,22 @@ export default function WorkProjectBill({
           return (
             <div
               key={g.name}
-              className={open ? "bsec open" : "bsec"}
+              data-sec={g.name}
+              className={[
+                "bsec",
+                open ? "open" : "",
+                dragFrom != null && dragFrom === sectionIndex(order, g.name) ? "dragging" : "",
+                dragFrom != null && dragOver === sectionIndex(order, g.name) && dragOver !== dragFrom
+                  ? "drop"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               // Reordering is on the section, not on its lines: a bill is
               // arranged by moving whole sections, and dragging a header is
               // what a QS reaches for. Only an editor gets it — a drag that
               // silently did nothing would be worse than no handle.
-              draggable={canEdit && !query && filter === "all" && by === "element"}
+              draggable={canArrange}
               // Case-insensitively: `order` keeps the project's spelling of a
               // section ("Frames") while a group takes its name from the lines
               // ("frames"), and an exact match returned -1 — which
@@ -276,14 +348,32 @@ export default function WorkProjectBill({
               // nothing.
               onDragStart={() => setDragFrom(sectionIndex(order, g.name))}
               onDragOver={(e) => (dragFrom == null ? null : e.preventDefault())}
-              onDrop={() => {
-                const to = sectionIndex(order, g.name);
-                const patch = withSectionMoved(project, dragFrom, to);
+              onDrop={() => moveSection(dragFrom, sectionIndex(order, g.name))}
+              onDragEnd={() => {
                 setDragFrom(null);
-                if (patch) onSave?.(patch);
+                setDragOver(null);
               }}
-              onDragEnd={() => setDragFrom(null)}
             >
+              <div className="shw">
+              {canArrange ? (
+                <span
+                  className="grip"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Move ${g.name}. Drag, or use the up and down arrows.`}
+                  title="Drag to move this section"
+                  {...gripProps(g.name)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="9" cy="6" r="1.6" />
+                    <circle cx="15" cy="6" r="1.6" />
+                    <circle cx="9" cy="12" r="1.6" />
+                    <circle cx="15" cy="12" r="1.6" />
+                    <circle cx="9" cy="18" r="1.6" />
+                    <circle cx="15" cy="18" r="1.6" />
+                  </svg>
+                </span>
+              ) : null}
               <button
                 type="button"
                 className="sh"
@@ -301,6 +391,7 @@ export default function WorkProjectBill({
                 </em>
                 <span>{money(g.total)}</span>
               </button>
+              </div>
 
               {open && g.empty ? (
                 // Says what it is and what to do with it. An added section that
