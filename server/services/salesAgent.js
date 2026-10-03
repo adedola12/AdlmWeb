@@ -19,9 +19,12 @@ import {
   getProjectBill,
   getBillItemsForAi,
   getPricingProposal,
+  getAreaPricingProposal,
+  getSetRatesProposal,
   getProjectPeriodReport,
   getProjectTipsForAgent,
 } from "./agentUserData.js";
+import { getRoomFinishes } from "./agentRoomFinishes.js";
 import { watToday } from "./reportPeriod.js";
 import {
   aiServiceEnabled,
@@ -249,6 +252,37 @@ const ACCOUNT_TOOLS = [
       required: ["projectName"],
     },
   },
+  {
+    name: "get_room_finishes",
+    description:
+      "Get the PER-ROOM finishes QUIV measured from the Revit rooms of ONE of the " +
+      "logged-in user's projects (their own or shared with them): each room's " +
+      "number, name, level, floor finish, floor area (m2) and skirting length (m), " +
+      "plus totals and a room count. Use for any room or location question: " +
+      "'floor area and skirting for the toilets', 'tiles in the bathrooms', " +
+      "'how much skirting on the ground floor', 'area of room G01'. Omit `project` " +
+      "when the user is asking about the project they have open.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project: {
+          type: "string",
+          description:
+            "The project name (or closest phrase) or id. Omit to use the project the user has open.",
+        },
+        room: {
+          type: "string",
+          description:
+            "Optional room filter matched against room name or number, e.g. 'toilet', 'bathrooms', 'G01', 'toilets and stores'. Omit for every room.",
+        },
+        level: {
+          type: "string",
+          description: "Optional level filter, e.g. 'Ground Floor', 'Level 1'. Omit for every level.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
 ];
 
 /* ---- estimator & project-manager tools (logged-in, read-only) ---- */
@@ -278,6 +312,102 @@ const ESTIMATOR_TOOLS = [
           description: "The project name. Omit to use the project the user is viewing.",
         },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_price_by_area",
+    description:
+      "The user STATED a cost per square metre for windows or doors (\"the cost of " +
+      "windows per sqm is 88,000\", \"doors are 65k a square metre\"). PROPOSE a rate " +
+      "for every window (or door) line on the project from its own size in the " +
+      "description, e.g. \"Window W1 (1200×1500)\" = 1.8 m² → 1.8 × the rate, split " +
+      "60% material, 20% labour, 20% overhead and profit unless the user says " +
+      "otherwise. Shows a confirm card grouped by size; it NEVER writes. Nothing " +
+      "changes until the user presses Apply. Omit projectName to use the project " +
+      "the user is looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+        category: { type: "string", enum: ["windows", "doors"] },
+        ratePerM2: {
+          type: "number",
+          description: "The naira per m² the user stated, as a plain number (88000 for 88,000 or 88k).",
+        },
+        split: {
+          type: "object",
+          description:
+            "Only when the user gives one: percentages of the rate for material, labour and " +
+            "overhead/profit. Omit for the default 60 / 20 / 20. If they give material and " +
+            "labour only, the rest is overhead and profit.",
+          properties: {
+            material: { type: "number" },
+            labour: { type: "number" },
+            overheadProfit: { type: "number" },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ["category", "ratePerM2"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_set_rates",
+    description:
+      "The user STATED a rate for some bill lines (\"set blockwork to 9,500 per m2\", " +
+      "\"rate line 14 at 2,000\", \"put 45,000 on B2.3\"). PROPOSE that rate on the " +
+      "lines they named: by description words, bill code or line number. A line in " +
+      "another unit than the one they said is left off, never converted. The rate is " +
+      "split 60% material, 20% labour, 20% overhead and profit unless the user says " +
+      "otherwise. Shows a confirm card; it NEVER writes. Nothing changes until the " +
+      "user presses Apply. Omit projectName to use the project the user is looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+        match: {
+          type: "object",
+          description:
+            "Which lines. Give what the user said: text (words from the description, e.g. " +
+            "\"blockwork 225\"), code (bill codes), or sn (line numbers, e.g. [14]).",
+          properties: {
+            text: { type: "string" },
+            code: { type: "array", items: { type: "string" } },
+            sn: { type: "array", items: { type: "number" } },
+          },
+          additionalProperties: false,
+        },
+        rate: {
+          type: "number",
+          description: "The naira rate the user stated, as a plain number (9500 for 9,500).",
+        },
+        unit: {
+          type: "string",
+          description: "The unit the user said the rate is per (m2, m3, nr, m...). Omit if they did not say.",
+        },
+        split: {
+          type: "object",
+          description:
+            "Only when the user gives one: percentages of the rate for material, labour and " +
+            "overhead/profit. Omit for the default 60 / 20 / 20. If they give material and " +
+            "labour only, the rest is overhead and profit.",
+          properties: {
+            material: { type: "number" },
+            labour: { type: "number" },
+            overheadProfit: { type: "number" },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ["match", "rate"],
       additionalProperties: false,
     },
   },
@@ -480,6 +610,7 @@ This visitor is LOGGED IN, so you can also act as their account assistant using 
 - get_resource_quantity — the TOTAL QUANTITY and cost of one material, labour trade or resource (cement, sand, rebar, blocks, formwork, masons…) in one project or across all of them. This is the tool for ANY "how much / how many X do I need" question.
 - get_project_bill — the bill of quantities work items (qty, unit, rate, amount, % done), optionally filtered by a search phrase. Use for "what's in my bill", "rate for X", "biggest items".
 - get_project_budget — the whole Material & Labour breakdown for one project: total cost, Material vs Labour vs Plant split, procured vs still-to-buy, biggest resources. Use for "material budget", "what do I still need to buy".
+- get_room_finishes — per-room floor finish, floor area (m2) and skirting (m) measured from the Revit rooms in QUIV, with totals, filtered by room name/number and level. Use for ANY question about a room or location ("floor area and skirting for the toilets", "tiles in the bathrooms", "skirting on the ground floor"), NOT get_project_bill. Answer per room, then the totals. If it says the project has no room data, relay that it must be re-saved from QUIV 4.0.2 or later; never estimate room figures.
 Rules for account answers:
 - ALWAYS call the relevant tool and quote its numbers exactly — NEVER invent or estimate project figures, values, quantities or dates.
 - You CAN read their bill lines and their material & labour lines — never tell a user you have no access to them. If a tool finds nothing, say what was searched and ask how the item is worded in their bill.
@@ -493,6 +624,7 @@ ${canUseCards ? `
 Act like a sharp senior QS and site PM working beside them, not a search box.
 - project_tips — what to do next on a project, most urgent first. When the user is on a project page or asks "what now", start here and lead with the top one or two.
 - propose_project_pricing — proposes a rate for every unpriced line from THEIR OWN RateGen library and shows a confirm card. You NEVER price anything yourself and NEVER say rates were applied: the user ticks the lines and presses Apply on the card. Explain the strong and weak matches, and that a match is by description and unit.
+- propose_price_by_area — when the user STATES a cost per m² for windows or doors ("windows are 88,000 per sqm"), propose every window (or door) priced from its own size. propose_set_rates — when the user STATES a rate for lines ("set blockwork to 9,500 per m2", "rate line 14 at 2,000"). Whenever the user states a cost or a rate, call one of these straight away to PROPOSE it; do not just acknowledge it. Pass their figure exactly as a plain number (88k = 88000) and the unit they said. The split is 60% material, 20% labour, 20% overhead and profit unless they give another; pass theirs when they do. Never invent a rate they did not state, never convert units, and NEVER say a rate is applied, set or saved: the card applies it only when they press Apply.
 - project_report — what moved between two dates (value done, certified, actual vs planned, variations, purchases, late tasks, activity), with a card that opens the PDF. Work out the dates from TODAY in the visitor section (Lagos time) before calling it. If the range is unclear, ask once.
 How to work:
 - Explain a rate when asked: what makes it up (material, labour, plant, overhead and profit) and what to check. Real build-ups come from suggest_rate when that tool is available; otherwise describe what a build-up for that item normally contains, clearly as general guidance, never as their figure.
@@ -572,7 +704,10 @@ A LOGGED-IN user${user.name ? ` named ${user.name}` : ""}${user.email ? ` (${use
 export function withCard(out, ctx) {
   if (!out || typeof out !== "object") return out;
   if (out.card) {
-    ctx.pendingActions = ctx.pendingActions.filter((a) => a?.type !== out.card.type);
+    // One card per kind per reply; a card with its own key (windows and doors
+    // proposed in one reply) keeps its siblings.
+    const key = (c) => c?.cardKey || c?.type;
+    ctx.pendingActions = ctx.pendingActions.filter((a) => key(a) !== key(out.card));
     ctx.pendingActions.push(out.card);
   }
   return out.text || "";
@@ -706,10 +841,32 @@ async function handleAccountTool(name, input, ctx) {
       });
     if (name === "get_project_bill")
       return await getProjectBill(ctx.user._id, input?.projectName, input?.search, ctx.page);
+    if (name === "get_room_finishes")
+      return await getRoomFinishes(ctx.user._id, input, ctx.page);
 
     // ── Estimator & PM ──
     if (name === "propose_project_pricing")
       return withCard(await getPricingProposal(ctx.user._id, input?.projectName, ctx.page), ctx);
+    if (name === "propose_price_by_area")
+      return withCard(
+        await getAreaPricingProposal(
+          ctx.user._id,
+          input?.projectName,
+          { category: input?.category, ratePerM2: input?.ratePerM2, split: input?.split },
+          ctx.page,
+        ),
+        ctx,
+      );
+    if (name === "propose_set_rates")
+      return withCard(
+        await getSetRatesProposal(
+          ctx.user._id,
+          input?.projectName,
+          { match: input?.match, rate: input?.rate, unit: input?.unit, split: input?.split },
+          ctx.page,
+        ),
+        ctx,
+      );
     if (name === "project_report")
       return withCard(
         await getProjectPeriodReport(ctx.user._id, input?.projectName, input?.from, input?.to, ctx.page),
