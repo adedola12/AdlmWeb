@@ -245,6 +245,14 @@ const dsPage = (slug) => {
  * padding on <main>, for any path in lib/dsPublicPaths.js. So his chrome is
  * the only chrome, and his full-bleed layouts are not boxed in.
  */
+// Sign in and create account: his design on our authentication, wired by hand
+// in ds/custom. NOT ds/pages/DsLogin.jsx — that file is generated from his
+// login.html and its form is <form action="/manage" method="get">, so it posts
+// the password into a query string, never calls /auth/login, and has no second
+// step for an OTP account. Routing it would have locked every customer out.
+const DsLoginPage = lazyScreen(() => import("./ds/custom/DsLoginPage.jsx"));
+const DsSignupPage = lazyScreen(() => import("./ds/custom/DsSignupPage.jsx"));
+
 const dsPublic = (slug) => (
   <React.Suspense fallback={null}>
     <DsShellLazy>{dsPage(slug)}</DsShellLazy>
@@ -296,14 +304,14 @@ const router = createBrowserRouter([
       // Public client-facing proposal view
       { path: "proposal/:token", element: <PublicProposal /> },
 
-      { path: "login", element: <Login /> },
+      { path: "login", element: <DsLoginPage /> },
       // Enter the six-digit code sign-up emailed (pages/VerifyEmail.jsx).
       { path: "verify-email", element: <VerifyEmail /> },
       // A separate door, deliberately. His reasoning, kept: an admin session
       // is not a customer session with a flag on it, so it is not reached by
       // adding ?admin to the customer sign-in.
       { path: "admin/login", element: <AdminLogin /> },
-      { path: "signup", element: <Signup /> },
+      { path: "signup", element: <DsSignupPage /> },
 
       // His /learn. The player below it stays classic and keeps the classic
       // chrome, which is why dsPublicPaths matches exactly and not by prefix.

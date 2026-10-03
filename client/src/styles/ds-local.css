@@ -1861,3 +1861,47 @@
 :root.dark .ds .marq .clogo{background:#F2F4F7}
 :root.dark .ds .marq .clogo img{opacity:.85}
 @media (prefers-reduced-motion:reduce){.ds .marq .clogo img{transition:none}}
+
+/* Sign in: the states his form never had.
+ *
+ * His auth.css styles a form that cannot fail — no error, no progress, no
+ * second step — because his build has nothing behind the button. Ours does:
+ * a wrong password, an OTP-gated account that needs a code, and a password
+ * reset in two stages. Those need somewhere to speak.
+ *
+ * Named auth2-* rather than ds-* so they sit in the vocabulary of the sheet
+ * they extend, and built from his tokens (--bad, --ink-2, --action) so the
+ * additions read as part of the page rather than bolted onto it.
+ *
+ * Here and not in ds-auth.css because that file is generated from his CSS and
+ * a re-run of port-ds-css.mjs would discard anything added to it.
+ */
+.ds .auth2-err {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--bad, #c8372d);
+}
+.ds .auth2-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+/* A button that has to read as one of his links: the "Forgot your password?"
+ * control sits in .auth2-row beside the keep-signed-in box, where he styled an
+ * <a>. It cannot BE an anchor — it opens a panel in place rather than
+ * navigating — so it borrows that rule rather than redefining it. */
+.ds .auth2-linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--action);
+  cursor: pointer;
+  text-align: left;
+}
+.ds .auth2-linkbtn:hover { text-decoration: underline; }
+.ds .auth2-linkbtn:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
