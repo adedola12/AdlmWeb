@@ -42,6 +42,11 @@ export const DS_PUBLIC_PATHS = new Set([
   // footer below would frame a page built to fill the window.
   "/login",
   "/signup",
+
+  // /trainings is his now: a page we built in his language, because his build
+  // has no trainings.html. It renders in DsShell like the rest, so the classic
+  // nav and footer must not sit around it.
+  "/trainings",
 ]);
 
 /** The slug in ds/pages/manifest.js that serves a given public path. */

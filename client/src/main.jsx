@@ -252,6 +252,12 @@ const dsPage = (slug) => {
 // step for an OTP account. Routing it would have locked every customer out.
 const DsLoginPage = lazyScreen(() => import("./ds/custom/DsLoginPage.jsx"));
 const DsSignupPage = lazyScreen(() => import("./ds/custom/DsSignupPage.jsx"));
+// His design for the two training screens and the release desk. DsTrainings
+// renders inside DsShell because every class it uses is .ds-scoped — mounted
+// bare it is unstyled markup.
+const DsTrainings = lazyScreen(() => import("./ds/custom/DsTrainings.jsx"));
+const DsTrainingSignup = lazyScreen(() => import("./ds/custom/DsTrainingSignup.jsx"));
+const DsAdminReleases = lazyScreen(() => import("./ds/DsAdminReleases.jsx"));
 
 const dsPublic = (slug) => (
   <React.Suspense fallback={null}>
@@ -330,7 +336,16 @@ const router = createBrowserRouter([
       { path: "whats-new/:slug", element: <WhatsNewProduct /> },
 
       // Online trainings
-      { path: "trainings", element: <Trainings /> },
+      {
+        path: "trainings",
+        element: (
+          <React.Suspense fallback={null}>
+            <DsShellLazy>
+              <DsTrainings />
+            </DsShellLazy>
+          </React.Suspense>
+        ),
+      },
       { path: "trainings/:id", element: <TrainingDetail /> },
       {
         path: "trainings/enrollment/:enrollmentId",
@@ -342,7 +357,7 @@ const router = createBrowserRouter([
       },
 
       // ✅ Physical trainings (Public detail by slug OR id + Protected portal)
-      { path: "ptrainings/:key", element: <PTrainingDetail /> },
+      { path: "ptrainings/:key", element: <DsTrainingSignup /> },
       {
         path: "ptrainings/enrollment/:enrollmentId",
         element: (
@@ -1198,7 +1213,7 @@ const router = createBrowserRouter([
         path: "admin/releases",
         element: (
           <AdminRoute permission="releases">
-            <AdminReleases />
+            <DsAdminReleases />
           </AdminRoute>
         ),
       },
