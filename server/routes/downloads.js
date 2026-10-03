@@ -23,7 +23,28 @@ const settingsNow = () => Setting.findOne({ key: "global" }).select("mobileAppUr
 
 export const publicDownloads = express.Router();
 
-publicDownloads.get("/android", async (_req, res, next) => {
+// THE ANDROID APP NOW NEEDS AN ACCOUNT.
+//
+// The owner's rule (3 Oct 2026): the only thing downloadable from the website
+// is the Installer Hub's .exe; everything else comes from the Hub. Taken
+// literally that removes the mobile app altogether, and the Hub is a Windows
+// desktop application, so it cannot hand out an APK — the app would simply
+// become unobtainable until it is on the Play Store.
+//
+// So the rule is applied where it bites: nothing SOFTWARE is anonymously
+// fetchable from the website any more. The Hub installer already required a
+// paid licence; this was the one build anybody with the URL could pull. A
+// customer who is signed in still gets their app.
+//
+// Deliberately only requireAuth, not a licence check: the mobile app is the
+// companion to an account, not a licensed product (it logs in and reads; it
+// sells nothing), so gating it on a desktop licence would lock out exactly the
+// trainees and new accounts it is for.
+//
+// Left mounted at the same path so the footer link and any QR code already
+// printed keep working — a signed-out visitor is told to sign in rather than
+// meeting a 404.
+publicDownloads.get("/android", requireAuth, async (_req, res, next) => {
   try {
     const r = await resolveDownload("android", { settings: await settingsNow() });
     if (!r.url) return res.status(404).json({ error: "The Android app is not available for download yet." });

@@ -40,6 +40,7 @@ import DsProducts from "./ds/pages/DsProducts.jsx";
 import DsAbout from "./ds/pages/DsAbout.jsx";
 import DsLearn from "./ds/custom/DsLearn.jsx";
 import DsWhatsNew from "./ds/custom/DsWhatsNew.jsx";
+import DsTrainings from "./ds/custom/DsTrainings.jsx";
 
 // The same shape main.jsx mounts, minus the Suspense it does not need here.
 const dsPublic = (Page) => (
@@ -82,7 +83,7 @@ export const marketingRoutes = [
       { path: "product/:key", element: <ProductDetail /> },
       { path: "about", element: dsPublic(DsAbout) },
       { path: "learn", element: dsPublic(DsLearn) },
-      { path: "trainings", element: <Trainings /> },
+      { path: "trainings", element: dsPublic(DsTrainings) },
       { path: "testimonials", element: <Testimonials /> },
       { path: "whats-new", element: dsPublic(DsWhatsNew) },
       { path: "whats-new/:slug", element: <WhatsNewProduct /> },

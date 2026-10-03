@@ -156,6 +156,10 @@ router.post("/chat", rateLimit, optionalAuth, async (req, res) => {
       sessionId,
       ip,
       format: req.body?.format === "markdown" ? "markdown" : "plain",
+      // The chat that renders the pricing and report cards says so. An older
+      // chat would show "Apply N rates" as a button that does nothing, so the
+      // estimator tools are only offered to one that asks.
+      cards: req.body?.cards === true,
       // The page the question was asked from. Only ever a hint: every tool
       // resolves it against the caller's OWN projects, so a reference to
       // somebody else's finds nothing rather than leaking a name.

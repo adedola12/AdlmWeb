@@ -30,6 +30,7 @@ import {
   initialDecision,
   missingBusinessCase,
   needsApproval,
+  partitionDecidable,
   resubmitIfNeeded,
   stageBlock,
 } from "../util/workBoard.js";
@@ -205,6 +206,96 @@ router.post(
       cta: { label: "Open the work board", href: boardUrl() },
     });
     res.json({ ok: true, item: updated });
+  }),
+);
+
+// POST /admin/work/decide-many   one verdict, many proposals
+//
+// WHY THIS EXISTS
+//
+// The approver decides in batches — he reads the board, or settles a dozen on a
+// call, and then has to register what he decided. Forty-five proposals through
+// /:id/decide is forty-five round trips and, worse, forty-five emails: that
+// route mails the owner and the submitter on every decision, which is right for
+// one and a mailbox flood for forty-five.
+//
+// So this applies the SAME rules per item and sends ONE summary instead.
+//
+// WHAT IT DOES NOT DO
+//
+// It does not relax who may decide. decideBlock runs per item exactly as it
+// does for a single decision — including the rule that you cannot approve your
+// own proposal — and an item that fails it is skipped and named in the reply
+// rather than quietly approved. decision.by is still the caller's own address,
+// so the record says who actually pressed it. There is no way here to record a
+// decision as somebody else.
+router.post(
+  "/decide-many",
+  asyncHandler(async (req, res) => {
+    if (refuseViewOnly(req, res)) return;
+    const { cfg, email, approver, superAdmin } = await context(req);
+
+    const verdict = String(req.body?.verdict || "");
+    if (!["approved", "changes", "declined"].includes(verdict)) {
+      return res.status(400).json({ error: "verdict must be approved, changes or declined" });
+    }
+    const note = clip(req.body?.note);
+    if (verdict !== "approved" && note.length < 5) {
+      return res.status(400).json({ error: "Say why, so it can be fixed." });
+    }
+
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+    if (!ids.length) return res.status(400).json({ error: "Name the proposals to decide." });
+    // A ceiling so a mistyped request cannot sweep the whole board in one call.
+    if (ids.length > 100) return res.status(400).json({ error: "At most 100 at a time." });
+
+    const items = await WorkItem.find({ _id: { $in: ids } });
+    const { decidable, blocked } = partitionDecidable(items, {
+      isApprover: approver,
+      isSuperAdmin: superAdmin,
+      email,
+      approverEmail: cfg.approverEmail,
+    });
+    const decided = [];
+    const skipped = blocked.map(({ item, reason }) => ({
+      id: String(item._id),
+      title: item.title,
+      reason,
+    }));
+
+    for (const item of decidable) {
+      await WorkItem.findByIdAndUpdate(item._id, {
+        $set: applyVerdict(item, verdict, { by: email, note }),
+      });
+      // One audit event per item, as a single decision writes: the trail has to
+      // read the same whether a thing was decided alone or in a batch.
+      await recordGateEvent(
+        "work.decision",
+        { itemId: String(item._id), title: item.title, verdict, note, batch: true },
+        req,
+      );
+      decided.push({ id: String(item._id), title: item.title });
+    }
+
+    const missing = ids.filter((id) => !items.some((i) => String(i._id) === id));
+    const word = { approved: "Approved", changes: "Changes requested", declined: "Declined" }[verdict];
+
+    if (decided.length) {
+      await gateMail({
+        to: [ownerEmail()],
+        subject: `${word}: ${decided.length} proposal${decided.length === 1 ? "" : "s"}`,
+        title: `${decided.length} proposal${decided.length === 1 ? "" : "s"} ${word.toLowerCase()}`,
+        lines: [
+          `${esc(email)}: ${word.toLowerCase()}.`,
+          note ? `<em>${esc(note)}</em>` : "",
+          ...decided.slice(0, 50).map((d) => esc(d.title)),
+          decided.length > 50 ? `and ${decided.length - 50} more` : "",
+        ].filter(Boolean),
+        cta: { label: "Open the work board", href: boardUrl() },
+      });
+    }
+
+    res.json({ ok: true, verdict, decided, skipped, missing });
   }),
 );
 

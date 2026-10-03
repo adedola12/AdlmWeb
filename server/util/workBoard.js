@@ -107,6 +107,30 @@ export function decideBlock({ isApprover, isSuperAdmin, email, approverEmail, it
   return "Only the release approver can approve proposals.";
 }
 
+/**
+ * Split a batch of items into the ones this caller may decide and the ones they
+ * may not, using the SAME rule as a single decision.
+ *
+ * Pulled out of the route so the invariant is testable on its own: a batch must
+ * never approve something the caller could not have approved one at a time. The
+ * dangerous failure is silent — forty-five items go in, forty-five come back
+ * "approved", and nobody notices that some of them were never the caller's to
+ * decide. So blocked items are returned WITH their reason, for the reply to
+ * name, rather than dropped.
+ *
+ * @returns {{decidable: Array, blocked: Array<{item: object, reason: string}>}}
+ */
+export function partitionDecidable(items, { isApprover, isSuperAdmin, email, approverEmail }) {
+  const decidable = [];
+  const blocked = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const reason = decideBlock({ isApprover, isSuperAdmin, email, approverEmail, item });
+    if (reason) blocked.push({ item, reason });
+    else decidable.push(item);
+  }
+  return { decidable, blocked };
+}
+
 // What a verdict does to the item. Returns the fields to $set.
 export function applyVerdict(item, verdict, { by, note, at = new Date() }) {
   const set = {

@@ -35,6 +35,18 @@ export const DS_PUBLIC_PATHS = new Set([
   "/learn",
   "/whats-new",
   "/quote",
+
+  // Sign in and create account. These are not marketing pages, but they take
+  // the same treatment for the same reason: his auth2 layout is a full-height
+  // split with its own logo and art panel, so the classic nav above it and the
+  // footer below would frame a page built to fill the window.
+  "/login",
+  "/signup",
+
+  // /trainings is his now: a page we built in his language, because his build
+  // has no trainings.html. It renders in DsShell like the rest, so the classic
+  // nav and footer must not sit around it.
+  "/trainings",
 ]);
 
 /** The slug in ds/pages/manifest.js that serves a given public path. */
@@ -45,6 +57,8 @@ export const DS_PUBLIC_SLUGS = Object.freeze({
   "/learn": "learn",
   "/whats-new": "whats-new",
   "/quote": "quote",
+  // login/signup are served by the WIRED pages in ds/custom, not by the
+  // generated ones in ds/pages, so they have no manifest slug here.
 });
 
 /** Does this pathname render Richard's design? Trailing slashes ignored. */

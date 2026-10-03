@@ -550,3 +550,26 @@ test("a row the QS added by hand is NOT swept away by picking a rate", () => {
     "the hand-added row survives",
   );
 });
+
+// ── a rate in another unit (util/unitConversion.js) ─────────────────────────
+test("an m3 rate converted onto an m2 line reproduces the converted rate", () => {
+  // A 230mm wall: 1 m2 is 0.23 m3, so 13,500/m3 prices the line at 3,105/m2.
+  const it = item({ code: "W-1", description: "Blockwork infill 230mm", unit: "m2", qty: 40 });
+  const { rows } = buildRateBudgetRows(it, concreteRate(), K, {
+    priceFor,
+    unitCost: 13500 * 0.23,
+    scale: 0.23,
+  });
+  assert.equal(deriveLineRate(it.qty, rows).rate, 3105);
+});
+
+test("the rate's own material lines scale with the conversion when the constants know nothing", () => {
+  const it = item({ code: "X-1", description: "Proprietary widget fixing", unit: "m2", qty: 10 });
+  const plain = buildRateBudgetRows(it, concreteRate(), K, { priceFor, unitCost: 13500 });
+  const scaled = buildRateBudgetRows(it, concreteRate(), K, { priceFor, unitCost: 3105, scale: 0.23 });
+  const cement = (r) => r.rows.find((x) => x.name === "Cement");
+  if (cement(plain)) {
+    assert.ok(Math.abs(cement(scaled).qty - cement(plain).qty * 0.23) < 0.01);
+  }
+  assert.equal(deriveLineRate(it.qty, scaled.rows).rate, 3105);
+});
