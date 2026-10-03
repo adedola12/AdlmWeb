@@ -229,6 +229,27 @@ const dsPage = (slug) => {
   const Page = DS_PAGES.find((p) => p.slug === slug)?.Component;
   return Page ? <Page /> : null;
 };
+
+/**
+ * One of Richard's pages at a real public path, inside his shell.
+ *
+ * These stay CHILDREN of <App /> rather than becoming top-level routes like
+ * /pricing and /contact did. App is where AnalyticsTracker is mounted — "so it
+ * sees every route change", because before it a session recorded its first
+ * pageview and nothing after — and it also carries the ErrorBoundary, scroll
+ * restoration and the unconfirmed-email notice. Lifting the six busiest public
+ * pages out of App would have quietly taken analytics off exactly the pages
+ * whose traffic matters most.
+ *
+ * App drops the classic nav, footer, launch strip and coupon banner, and the
+ * padding on <main>, for any path in lib/dsPublicPaths.js. So his chrome is
+ * the only chrome, and his full-bleed layouts are not boxed in.
+ */
+const dsPublic = (slug) => (
+  <React.Suspense fallback={null}>
+    <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+  </React.Suspense>
+);
 const BEYOND_BIM_SOON = (
   <DsComingSoon
     eyebrow="Beyond BIM · coming soon"
@@ -247,7 +268,8 @@ const router = createBrowserRouter([
     element: <App />,
     errorElement: <AppError />,
     children: [
-      { index: true, element: <Home /> },
+      // Richard's home page ("Measure it. Price it. Defend it."), his chrome.
+      { index: true, element: dsPublic("home") },
 
       {
         path: "time-management",
@@ -265,8 +287,8 @@ const router = createBrowserRouter([
         ),
       },
 
-      { path: "products", element: <Products /> },
-      { path: "quote", element: <Quote /> },
+      { path: "products", element: dsPublic("products") },
+      { path: "quote", element: dsPublic("quote") },
       { path: "product/:key", element: <ProductDetail /> },
 
       ...landingRoutes,
@@ -283,18 +305,20 @@ const router = createBrowserRouter([
       { path: "admin/login", element: <AdminLogin /> },
       { path: "signup", element: <Signup /> },
 
-      { path: "learn", element: <Learn /> },
+      // His /learn. The player below it stays classic and keeps the classic
+      // chrome, which is why dsPublicPaths matches exactly and not by prefix.
+      { path: "learn", element: dsPublic("learn") },
       // The player moved to /dash-course/:sku. This resolves rather than
       // 404s, because the URL is in emails and in people's history.
       { path: "learn/course/:sku", element: <LearnCourseRedirect /> },
       { path: "learn/free/:id", element: <FreeVideoDetail /> },
 
-      { path: "about", element: <AboutADLM /> },
+      { path: "about", element: dsPublic("about") },
 
       // Public product changelogs / "What's New".
       // Hub lists every product; each links to its own detail page.
       // Content lives in src/data/changelogs/*.md (one file per product).
-      { path: "whats-new", element: <WhatsNew /> },
+      { path: "whats-new", element: dsPublic("whats-new") },
       { path: "whats-new/:slug", element: <WhatsNewProduct /> },
 
       // Online trainings
