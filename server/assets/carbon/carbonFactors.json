@@ -872,7 +872,7 @@
       "massAssumed": true,
       "id": "duct",
       "label": "Galvanised steel ductwork",
-      "pattern": "^ :: .*\\bducts?\\b|^ :: .*\\bductwork\\b|^ :: (mitered elbows|round (elbow|tee|takeoff)|tees\\b|taps - taps|rectangular to round)",
+      "pattern": "^ :: (?!.*\\b(flexible duct|fans?)\\b).*(\\bducts?\\b|\\bductwork\\b)|^ :: (mitered elbows|round (elbow|tee|takeoff)|tees\\b|taps - taps|rectangular to round)",
       "factor": 2.56,
       "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Hot dip galvanized steel with pure zinc coating' 2.56 kgCO2e/kg",
       "mass": {
@@ -1072,7 +1072,7 @@
       "massAssumed": true,
       "id": "db",
       "label": "Distribution board",
-      "pattern": "^ :: .*\\b(distribution boards?|panelboards?|\\bdb\\b|consumer units?|switch ?gears?)\\b",
+      "pattern": "^ :: .*\\b(distribution boards?|panelboards?|\\bdb\\b|consumer units?|switch ?gears?|changeover)\\b",
       "factor": 9,
       "factorSource": "CIBSE TM65 (2021) Embodied carbon in building services: where a product has no EPD, the UK heating and hot-water products examined averaged 9 kgCO2e per kg of product (CIBSE Journal)",
       "mass": {
@@ -1095,7 +1095,7 @@
       "massAssumed": true,
       "id": "wiring-accessory",
       "label": "Switch or socket outlet",
-      "pattern": "^ :: (?!.*\\b(switchboard|switch ?gear)).*\\b(sockets?|switch(es)?|socket outlets?|receptacles?|\\d+a (sp|dp)|gang)\\b",
+      "pattern": "^ :: (?!.*\\b(switchboard|switch ?gear|changeover)).*\\b(sockets?|switch(es)?|socket outlets?|receptacles?|\\d+a (sp|dp)|gang|cooker control|rccb|mcb|breakers?)\\b",
       "factor": 4.26,
       "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Plastics, Misc' 4.26 kgCO2e/kg",
       "mass": {
@@ -1179,7 +1179,7 @@
       "massAssumed": true,
       "id": "cable-tray",
       "label": "Galvanised steel cable tray or ladder",
-      "pattern": "^ :: .*\\b(cable tray|ladder (cable )?tray|cable ladder|trunking)\\b",
+      "pattern": "^ :: .*\\b(cable tray|ladder (cable )?tray|cable ladder)\\b",
       "factor": 2.56,
       "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Hot dip galvanized steel with pure zinc coating' 2.56 kgCO2e/kg",
       "mass": {
@@ -1189,6 +1189,242 @@
         "open": true
       },
       "massBasis": "1.5 mm galvanised sheet across the tray's width and two sides (from its size as named), plus 15% for rungs, joints and fixings, per m"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "trunking",
+      "label": "PVC cable trunking",
+      "pattern": "^ :: .*\\btrunking\\b",
+      "factor": 3.23,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data), pipe: 'PVC' 3.23 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "m": 0.6
+        }
+      },
+      "massBasis": "50 x 50 mm PVC trunking with lid, about 0.6 kg per m"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "water-tank",
+      "label": "Plastic (polyethylene) water storage tank",
+      "pattern": "^ :: .*\\b(water (storage )?tanks?|storage tanks?)\\b",
+      "factor": 2.52,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data), pipe: 'HDPE (High Density Polyethylene)' 2.52 kgCO2e/kg, taken for a rotomoulded polyethylene tank",
+      "mass": {
+        "rule": "capacity",
+        "per": 0.035,
+        "base": 0,
+        "unit": "litre",
+        "perUnit": {
+          "nr": 35
+        }
+      },
+      "massBasis": "about 35 kg per 1,000 litres of capacity as named"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "pump",
+      "label": "Water pump",
+      "pattern": "^ :: .*\\bpumps?\\b",
+      "factor": 9,
+      "factorSource": "CIBSE TM65 (2021) Embodied carbon in building services: where a product has no EPD, the UK heating and hot-water products examined averaged 9 kgCO2e per kg of product (CIBSE Journal)",
+      "mass": {
+        "rule": "capacity",
+        "per": 7,
+        "base": 8,
+        "unit": "hp",
+        "perUnit": {
+          "nr": 15
+        }
+      },
+      "massBasis": "8 kg plus 7 kg per HP as named (15 kg when not)"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "fire-panel",
+      "label": "Fire alarm control panel",
+      "pattern": "^ :: .*\\bfire alarm (control )?panel\\b",
+      "factor": 9,
+      "factorSource": "CIBSE TM65 (2021) Embodied carbon in building services: where a product has no EPD, the UK heating and hot-water products examined averaged 9 kgCO2e per kg of product (CIBSE Journal)",
+      "mass": {
+        "perUnit": {
+          "nr": 8
+        }
+      },
+      "massBasis": "steel enclosure, electronics and standby batteries, about 8 kg"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "fire-device",
+      "label": "Fire alarm call point or sounder",
+      "pattern": "^ :: .*\\b(manual call points?|call points?|sounders?|bells?|beacons?)\\b",
+      "factor": 9,
+      "factorSource": "CIBSE TM65 (2021) Embodied carbon in building services: where a product has no EPD, the UK heating and hot-water products examined averaged 9 kgCO2e per kg of product (CIBSE Journal)",
+      "mass": {
+        "perUnit": {
+          "nr": 0.3
+        }
+      },
+      "massBasis": "about 300 g"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "emergency-light",
+      "label": "LED emergency light or exit sign",
+      "pattern": "^ :: .*\\b(emergency lights?|exit signs?)\\b",
+      "factor": 9,
+      "factorSource": "CIBSE TM65 (2021) Embodied carbon in building services: where a product has no EPD, the UK heating and hot-water products examined averaged 9 kgCO2e per kg of product (CIBSE Journal)",
+      "mass": {
+        "perUnit": {
+          "nr": 1.5
+        }
+      },
+      "massBasis": "fitting with its battery, about 1.5 kg"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "hose-reel",
+      "label": "Fire hose reel with cabinet (steel)",
+      "pattern": "^ :: .*\\bhose reels?\\b",
+      "factor": 2.28,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Steel, Hot Rolled Coil' 2.28 kgCO2e/kg (cabinet and drum; the hose is not counted)",
+      "mass": {
+        "perUnit": {
+          "nr": 30
+        }
+      },
+      "massBasis": "steel cabinet and reel drum about 30 kg"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "bath",
+      "label": "Acrylic bath",
+      "pattern": "^ :: .*\\b(bath ?tubs?|baths?)\\b",
+      "factor": 4.26,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Plastics, Misc' 4.26 kgCO2e/kg (acrylic sheet with a resin and glass-fibre backing)",
+      "mass": {
+        "perUnit": {
+          "nr": 25
+        }
+      },
+      "massBasis": "about 25 kg"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "earth-rod",
+      "label": "Copper-bonded steel earth rod",
+      "pattern": "^ :: .*\\bearth (rod|electrode)s?\\b",
+      "factor": 2.28,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Steel, Hot Rolled Coil' 2.28 kgCO2e/kg (the steel core; the copper bonding is not counted separately)",
+      "mass": {
+        "perUnit": {
+          "nr": 1.9
+        }
+      },
+      "massBasis": "16 mm x 1.2 m rod with clamp, about 1.9 kg"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "trap",
+      "label": "uPVC trap or gully",
+      "pattern": "^ :: .*\\b(floor traps?|gully traps?|gully|gullies|bottle traps?)\\b",
+      "factor": 3.23,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data), pipe: 'PVC' 3.23 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "nr": 0.8
+        }
+      },
+      "massBasis": "about 0.8 kg of uPVC"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "fire-blanket",
+      "label": "Glass-fibre fire blanket",
+      "pattern": "^ :: .*\\bfire blankets?\\b",
+      "factor": 1.35,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Fibreglass (Glasswool)' 1.35 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "nr": 0.6
+        }
+      },
+      "massBasis": "1.2 x 1.2 m blanket in its case, about 0.6 kg"
+    },
+    {
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to factory-made services components",
+      "c34": 0.013,
+      "fuel": false,
+      "massAssumed": true,
+      "id": "flexible-duct",
+      "label": "Flexible aluminium duct",
+      "pattern": "^ :: .*\\bflexible ducts?\\b",
+      "factor": 13,
+      "factorSource": "IStructE (2020) How to calculate embodied carbon, Table 2.3 (ICE v3.0 / EPDs), A1-A3: aluminium, worldwide consumption 13.0 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "m": 0.25
+        }
+      },
+      "massBasis": "aluminium laminate and wire helix, about 0.25 kg per m"
     }
   ]
 }

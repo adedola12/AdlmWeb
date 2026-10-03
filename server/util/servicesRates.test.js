@@ -11,7 +11,8 @@ import assert from "node:assert/strict";
 import { assessCarbon } from "./carbonEngine.js";
 import { buildCarbonRates } from "./carbonRates.js";
 import { matchWorkRate } from "./icmsWorkCarbon.js";
-import { SERVICES_RATES, SERVICES_TRADES, servicesPriceList } from "./servicesRates.js";
+import { SERVICES_RATES, SERVICES_TRADES, servicesPriceList, pricedServicesRates } from "./servicesRates.js";
+import { MEPF_ITEMS, mepfItem, mepfPrice } from "./mepfLibrary.js";
 
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-3, `${msg ?? ""} ${a} != ${b}`);
 const carbon = buildCarbonRates(SERVICES_RATES, [], SERVICES_TRADES);
@@ -27,10 +28,27 @@ test("every services rate is unpriced and still carries carbon", () => {
   }
 });
 
-test("the price list names every material and trade, unpriced", () => {
-  const list = servicesPriceList();
-  for (const t of SERVICES_TRADES) assert.ok(list.some((x) => x.kind === "labour" && x.name === t), t);
-  assert.ok(list.every((x) => x.unitPrice === null));
+test("every line of every rate is an MEPF library item, on RateGen's own trades", () => {
+  for (const r of SERVICES_RATES) for (const b of r.breakdown) assert.ok(mepfItem(b.componentName), `${b.componentName} (${r.description})`);
+  assert.ok(SERVICES_TRADES.includes("Plumber (skilled)"));
+  assert.ok(servicesPriceList().length > 100);
+});
+
+test("a researched price is never published until the price team checks it", () => {
+  const researched = MEPF_ITEMS.find((i) => i.status === "researched");
+  assert.equal(mepfPrice(researched.name), null);
+  assert.equal(mepfPrice(researched.name, { basis: "preview" }), researched.researched.price);
+  const inMaster = MEPF_ITEMS.find((i) => i.status === "in-master" && i.kind === "material");
+  assert.equal(mepfPrice(inMaster.name), inMaster.masterPrice);
+  // nothing is checked yet, so nothing may publish
+  assert.equal(pricedServicesRates({ basis: "published" }).filter((r) => r.priced).length, 0);
+});
+
+test("labour is priced per hour from the library's day rate", () => {
+  const wc = pricedServicesRates({ basis: "preview" }).find((r) => /WC suite/.test(r.description));
+  const plumber = wc.breakdown.find((b) => b.componentName === "Plumber (skilled)");
+  assert.equal(plumber.unitPrice, Math.round((mepfPrice("Plumber (skilled)") / 8) * 100) / 100);
+  assert.equal(plumber.totalPrice, Math.round(plumber.unitPrice * 3 * 100) / 100);
 });
 
 test("cable is weighed from its cores; ducts and trays from their size", () => {
@@ -60,9 +78,10 @@ test("Revit's duct type 'Mitered Elbows / Taps' is ductwork, not a brass tap", (
 
 test("SERVIQ lines reach their rate, at the nearest size", () => {
   assert.match(pick("Pipes – 25mm PPR cold water branches", "m").rate.description, /25mm PPR/);
-  const soil = pick("Pipes – 100mm uPVC soil and stacks", "m");
-  assert.match(soil.rate.description, /110mm uPVC/);
-  assert.match(soil.assumed, /No 100 rate: the 110 rate used/);
+  assert.match(pick("Pipes – 100mm uPVC soil and stacks", "m").rate.description, /100mm uPVC/);
+  const soil = pick("Pipes – 110mm uPVC soil and stacks", "m");
+  assert.match(soil.rate.description, /100mm uPVC/);
+  assert.match(soil.assumed, /No 110 rate: the 100 rate used/);
   assert.match(pick("Mechanical Equipment – 1.5HP split air conditioner", "nr").rate.description, /1\.5HP/);
   assert.match(pick("Electrical Equipment – 12-way distribution board", "nr").rate.description, /12-way/);
   assert.match(pick("Plumbing Fixtures – WC suite", "nr").rate.description, /WC suite/);

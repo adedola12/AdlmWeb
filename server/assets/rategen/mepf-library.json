@@ -1,0 +1,4210 @@
+{
+ "_readme": "The MEPF library behind RateGen's building-services rates (util/servicesRates.js). inMaster: the item already sells in the RateGen master library (its price stands). researched: a Nigerian market price found online on 3 Oct 2026, with sources; NOT published until ADLM's price team sets checkedPrice. needs-price: no credible source found; the price team must price it.",
+ "asOf": "2026-10-03",
+ "items": [
+  {
+   "kind": "material",
+   "name": "PPR pressure pipe, PN10 to BS EN ISO 15874, 20mm",
+   "catalogueName": "20mm PPR pipe (PN20)",
+   "unit": "m",
+   "category": "MEP - Plumbing - Water Pipework (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "PPR pressure pipe, PN10 to BS EN ISO 15874, 25mm",
+   "catalogueName": "25mm PPR pipe (PN20)",
+   "unit": "m",
+   "category": "MEP - Plumbing - Water Pipework (supply)",
+   "inMaster": true,
+   "masterPrice": 2100,
+   "researched": {
+    "price": 468,
+    "low": 468,
+    "high": null,
+    "confidence": "low",
+    "conversion": "Vinland/Polytech 25mm PPR sold per 6 m length at N2,810 -> N468/m (bulk >=50 pcs N2,240 -> N373/m)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/katampe/building-materials/vinland-ppr-pipes-5oH50F9mJgIac7PgzfyCCrEw.html",
+      "title": "Vinland PPR Pipes 3/4 inch (25mm), Polytech, Abuja Katampe",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N2,810 per 6 m length; N2,240 bulk"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/original-ppr-pipe-yI746KN7LYmHE08lnWfJiR87.html",
+      "title": "Original PPR Pipe 25mm, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N6,000 (length listed as 14 m, likely an error)"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. PN rating not stated in any listing. Abuja price. The Lagos 25mm listing at N6,000 states a 14 m length, which looks like a typo; if it is a 4 m length it would be N1,500/m. Verify length with sellers."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "PPR pressure pipe, PN10 to BS EN ISO 15874, 32mm",
+   "catalogueName": "32mm PPR pipe (PN20)",
+   "unit": "m",
+   "category": "MEP - Plumbing - Water Pipework (supply)",
+   "inMaster": true,
+   "masterPrice": 2300,
+   "researched": {
+    "price": 873,
+    "low": 747,
+    "high": 1000,
+    "confidence": "medium",
+    "conversion": "Polytech 32mm 4 m length N4,000 -> N1,000/m; Vinland 32mm 6 m length N4,480 -> N747/m; median N873/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/polytech-ppr-pipe-and-fittings-gkrsnpgwmV6UC841WnPsBesl.html",
+      "title": "Polytech PPR Pipe 32mm x 4 m x 3mm wall, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N4,000 per piece (N3,950 for 15+)"
+     },
+     {
+      "url": "https://jiji.ng/katampe/building-materials/vinland-ppr-pipe-dGqgbII3kzBjOIYGNAtIwPOw.html",
+      "title": "Vinland PPR Pipe 1 inch (32mm), 6 m, Abuja Katampe",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N4,480 per 6 m length; N3,570 bulk"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Both Abuja sellers; PN rating not stated (3mm wall on 32mm is nearer PN16 than PN20). No Lagos 32mm pipe listing found."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "PPR pressure pipe, PN10 to BS EN ISO 15874, 40mm",
+   "catalogueName": "40mm PPR pipe (PN20)",
+   "unit": "m",
+   "category": "MEP - Plumbing - Water Pipework (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "PPR pressure pipe, PN10 to BS EN ISO 15874, 50mm",
+   "catalogueName": "50mm PPR pipe (PN20)",
+   "unit": "m",
+   "category": "MEP - Plumbing - Water Pipework (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 2368,
+    "low": 2316,
+    "high": 2368,
+    "confidence": "low",
+    "conversion": "RAK 50mm PPR 3.8 m length at N9,000 -> N2,368/m (bulk 5+ N8,800 -> N2,316/m)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/50mm-ppr-pipe-tPfoxJK7oYsKqMMgZ25JAPwq.html",
+      "title": "50mm PPR Pipe, RAK, 3.8 m, 5mm wall, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N9,000 (N8,800 for 5+)"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/2-polypropylene-random-copolymer-ppr-pipe-5fVF2RU2Xfwm4O3ysTihbxNc.html",
+      "title": "2\" PPR Pipe, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N17,000 (length not stated)"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single priced-per-length listing (Abuja). In Nigerian trade '2 inch' PPR usually means 63mm, so the Lagos N17,000 '2\"' listing is probably 63mm and is not used here."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "PPR pressure pipe, PN10 to BS EN ISO 15874, 63mm",
+   "catalogueName": "63mm PPR pipe (PN20)",
+   "unit": "m",
+   "category": "MEP - Plumbing - Water Pipework (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 3947,
+    "low": 3921,
+    "high": 4211,
+    "confidence": "medium",
+    "conversion": "RAK 63mm PPR 3.8 m length at N15,000 -> N3,947/m (bulk N14,900 -> N3,921/m). Lagos N16,000 listings with no length: if also 3.8 m -> N4,211/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/63mm-ppr-pipe-gtnjyB8K91Jnimse3NGh1O5f.html",
+      "title": "63mm PPR Pipe, RAK, 3.8 m, 6mm wall, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N15,000 (N14,900 for 10+)"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/63mm-ppr-pipe-aEGLyaEv769TIiEZy1itSUa0.html",
+      "title": "63mm PPR Pipe, ACV Global, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N16,000 (length not stated)"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/63mm-ppr-pipe-uKWJjbwkNpBuFozz7VDzagWp.html",
+      "title": "63mm PPR Pipe (Green), Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N16,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Lagos and Abuja prices agree closely per length (N15,000-N16,000); the 'high' assumes the Lagos lengths are also 3.8 m, which is not stated."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "PPR bend, 20mm",
+   "catalogueName": "20mm PPR elbow",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "PPR bend, 25mm",
+   "catalogueName": "25mm PPR elbow",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 475,
+    "low": 150,
+    "high": 800,
+    "confidence": "low",
+    "conversion": "Two Lagos Orile listings: 25mm Turkey elbow N150, 3/4\" elbow N800; midpoint N475",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/25mm-turkey-ppr-elbow-C6KLyr3KraoNkbMLBz658rUX.html",
+      "title": "25mm Turkey PPR Elbow, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N150"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/3-4-ppr-elbow-fittings-3AIT8UaSQzySaHfuErmUbHNY.html",
+      "title": "3/4 PPR Elbow Fittings, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N800"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Only two listings and a wide spread; N150 may be a bulk trade price. Check whether either price is per pack."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "PPR bend, 32mm",
+   "catalogueName": "32mm PPR elbow",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 350,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "1\" (32mm) PPR elbow listed per piece",
+    "sources": [
+     {
+      "url": "https://jiji.ng/surulere/plumbing-and-water-supply/1-ppr-elbow-ucr6MaWDvMmMTp4CJuQrwRb2.html",
+      "title": "1\" PPR Elbow, Lagos Surulere",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N350"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "PPR equal tee, 20mm",
+   "catalogueName": "20mm PPR tee",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "PPR equal tee, 25mm",
+   "catalogueName": "25mm PPR tee",
+   "unit": "No.",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": true,
+   "masterPrice": 500,
+   "researched": {
+    "price": 600,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "3/4\" (25mm) PPR equal tee per piece",
+    "sources": [
+     {
+      "url": "https://jiji.ng/port-harcourt/plumbing-and-water-supply/3-quarter-ppr-polypropylene-random-copolymer-equal-tee-pipe-fitting-q3yp01S3tUSZXJQUZcDKVdNK.html",
+      "title": "3 Quarter PPR Equal Tee, Port Harcourt",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N600"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing, Port Harcourt."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "PPR equal tee, 32mm",
+   "catalogueName": "32mm PPR tee",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "PPR coupling, 20mm",
+   "catalogueName": "20mm PPR socket",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "PPR coupling, 25mm",
+   "catalogueName": "25mm PPR socket",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "PPR union connector, 20mm",
+   "catalogueName": "20mm PPR union",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "PPR union connector, 25mm",
+   "catalogueName": "25mm PPR union",
+   "unit": "No.",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": true,
+   "masterPrice": 1600,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "Ball valve, brass, 20mm",
+   "catalogueName": "20mm ball valve (brass)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Valves (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 10000,
+    "low": 10000,
+    "high": 25000,
+    "confidence": "low",
+    "conversion": "1/2\" brass ball valve PN16 threaded, per piece (20mm PPR pairs with 1/2\" thread)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/port-harcourt/plumbing-and-water-supply/1-2-brass-ball-valve-pn16-threaded-3w5qtXXQoczBr06hXcE2RnIu.html",
+      "title": "1/2\" Brass Ball Valve PN16 (MAK), Port Harcourt",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N10,000"
+     },
+     {
+      "url": "https://jiji.ng/ojo/power-equipments/pressure-ball-valve-1-2-brass-yCrJzuplDqXizasGrxzBJ0Cj.html",
+      "title": "Pressure Ball Valve 1/2\" Brass, Lagos Ojo",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N25,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. The N25,000 Lagos item is a 'pressure' valve, probably heavier duty than a domestic isolating valve. Domestic brands may be cheaper."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Ball valve, brass, 25mm",
+   "catalogueName": "25mm ball valve (brass)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Valves (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 5000,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "3/4\" brass full-port threaded ball valve, per piece",
+    "sources": [
+     {
+      "url": "https://jiji.ng/port-harcourt/plumbing-and-water-supply/3-4-inch-brass-full-port-threaded-ball-valve-marked-zN5n3QRxyURimN9gfdNW5h0D.html",
+      "title": "3/4-Inch Brass Full-Port Threaded Ball Valve, Port Harcourt",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N5,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing; cheaper than the 1/2\" listing, so the two sizes are not consistent. Get a supplier price list."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Ball valve, brass, 32mm",
+   "catalogueName": "32mm ball valve (brass)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Valves (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 10000,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "1\" forged brass full-port ball valve, per piece",
+    "sources": [
+     {
+      "url": "https://jiji.ng/port-harcourt/plumbing-and-water-supply/heavy-duty-forged-brass-ball-valve-2WAefqBC3Rr513kt4KkpjK9j.html",
+      "title": "Heavy-duty Forged Brass Ball Valve 1 inch, Port Harcourt",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N10,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Angle valve, chromium plated, 15mm",
+   "catalogueName": "Angle valve (15mm)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Valves (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 2500,
+    "low": 1000,
+    "high": 3000,
+    "confidence": "medium",
+    "conversion": "Per piece; median of three listings (N1,000, N2,500, N3,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/angle-valve-iuy7uTEhK4mKbjOeIkbDE26g.html",
+      "title": "Angle Valve, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N2,500"
+     },
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/angle-valve-cRkj0QKbbX4gq2YKhPUCzfCh.html",
+      "title": "Angle Valve (bulk available), Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N1,000"
+     },
+     {
+      "url": "https://jiji.ng/port-harcourt/plumbing-and-water-supply/cross-angle-valve-z6hNO4A4uBpn5Brbb3zvQSSL.html",
+      "title": "Cross Angle Valve, Port Harcourt",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N3,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Size not stated but these are the standard 1/2\" WC/basin angle stops. No Lagos listing seen."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Flexible connection hose, 15mm",
+   "catalogueName": "Flexible connector (braided, 40cm)",
+   "unit": "No.",
+   "category": "MEP - Plumbing - Water Pipework Fittings (supply)",
+   "inMaster": true,
+   "masterPrice": 1900,
+   "researched": {
+    "price": 4200,
+    "low": 2000,
+    "high": 7000,
+    "confidence": "low",
+    "conversion": "Per piece; median of three listings; length not stated in any",
+    "sources": [
+     {
+      "url": "https://jiji.ng/amuwo-odofin/plumbing-and-water-supply/original-choice-flexible-connector-for-wc-and-kitchen-sink-cFICpx4P8vbKIEo5pPLx1tYU.html",
+      "title": "Original Choice Flexible Connector for WC and Kitchen Sink, Lagos Amuwo-Odofin",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N2,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/1-2-sweethome-rubber-flexible-8FIUG0dWE1mCJfR7QcBuAfxu.html",
+      "title": "1/2 Sweethome Rubber Flexible, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N4,200"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/stainless-steel-flexible-tap-connector-hose-oWcpfAPY7dZG1zAxcVo54jXF.html",
+      "title": "Stainless Steel Flexible Tap Connector Hose, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N7,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. 40cm length not confirmed for any listing."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC soil, waste and vent pipe, 50mm",
+   "catalogueName": "50mm uPVC pipe",
+   "unit": "m",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 2115,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "Lombardy 50mm (1.5\") semi-thick PVC pipe, 2.6 m (8.7 ft) length at N5,500 -> N2,115/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/50mm-11-2inch-lombardy-pvc-semi-thick-pipe-8-7ft-2-6m-iksjEmakgazJhDyDb4gWqnvv.html",
+      "title": "50mm (1.5inch) Lombardy PVC Semi-Thick Pipe - 2.6m, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N5,500"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing with stated length. Semi-thick grade costs more per metre than the thin 110mm waste pipe below; check which grade the rate library assumes."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC soil, waste and vent pipe, 75mm",
+   "catalogueName": "75mm uPVC pipe",
+   "unit": "m",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC soil, waste and vent pipe to BS 4514, 100mm",
+   "catalogueName": "110mm uPVC pipe",
+   "unit": "m",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": true,
+   "masterPrice": 4000,
+   "researched": {
+    "price": 1833,
+    "low": 1800,
+    "high": 1833,
+    "confidence": "low",
+    "conversion": "4\" (110mm) PVC pipe, 3 m length at N5,500 -> N1,833/m (N5,400 for 2+ -> N1,800/m)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/dei-dei/farm-machinery-equipment/4-inch-pvc-pipe-fSQD8uvgvnvMNDy4In5g1adp.html",
+      "title": "4\" PVC Pipe 110mm, 3 m, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N5,500 (N5,400 for 2+)"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/4inch-pvc-pipe-4W96FfeocDl56jmmutgZfhA9.html",
+      "title": "4inch PVC Pipe, Great Don-Iyke Ltd, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N4,000 (length not stated)"
+     },
+     {
+      "url": "https://jiji.ng/ibadan/plumbing-and-water-supply/4-inches-karishma-thick-pipe-2mm-9k3hnQjq7I6pL8FfKMEKp4S.html",
+      "title": "4 Inches Karishma Thick Pipe 2mm, Ibadan",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N6,500 (length not stated)"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Only the Abuja listing states a length. Lagos N4,000 and Ibadan N6,500 per length are in the same range. 110mm pressure-class pipes were listed at N36,000-N45,000 per length (Lagos), so this price is the thin drainage grade only."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC soil, waste and vent pipe, 150mm",
+   "catalogueName": "160mm uPVC pipe",
+   "unit": "m",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 4375,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "Lombardy 150mm (6\") semi-thick PVC pipe, 2.4 m (8.4 ft) at N10,500 -> N4,375/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/150mm-6inch-lombardy-pvc-semi-thick-pipe-8-4ft-2-4m-s8vITe531vZDdqzAUqHZr0U1.html",
+      "title": "150mm (6inch) Lombardy PVC Semi-Thick Pipe - 2.4m, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N10,500"
+     },
+     {
+      "url": "https://jiji.ng/surulere/plumbing-and-water-supply/6-inches-pvc-pipe-7EWl7LPnymwecxvJsaS5qEbl.html",
+      "title": "6\" Inches PVC Pipe, M Global Nig Ltd, Lagos Surulere",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N9,500 (length not stated)"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Proxy: the listing is 150mm (Nigerian '6 inch'), not 160mm. Another Surulere 6\" listing was N7,500, also with no length."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "20mm uPVC condensate pipe",
+   "catalogueName": "20mm uPVC condensate pipe",
+   "unit": "m",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC bend, 50mm",
+   "catalogueName": "50mm uPVC bend",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC bend, 100mm",
+   "catalogueName": "110mm uPVC bend",
+   "unit": "No.",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": true,
+   "masterPrice": 3500,
+   "researched": {
+    "price": 650,
+    "low": 650,
+    "high": 700,
+    "confidence": "low",
+    "conversion": "4\" PVC bend per piece; a second 90-degree drain bend (size not stated) at N700",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/4-bend-pvc-xkPeZmsO8I9akbAG0f1yuM4M.html",
+      "title": "4\" Bend (PVC), Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N650"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/pvc-90deg-elbow-drain-pipe-bend-aEUsgV3F0Fkq5tKEbvZYtUhQ.html",
+      "title": "PVC 90 deg Elbow Drain Pipe (Bend), Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N700"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Thin drainage grade; price is low, so it may be a trade/bulk price."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC junction (tee), 100mm",
+   "catalogueName": "110mm uPVC tee (junction)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC solvent cement (500ml tin)",
+   "catalogueName": "uPVC solvent cement (500ml tin)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 6500,
+    "low": 2500,
+    "high": 13000,
+    "confidence": "low",
+    "conversion": "'Small' Topgit PVC gum per tin N6,500 (size not stated). Bounds: 250ml tin N2,500 (Lekki); 'big' Topgit N13,000",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/building-materials/small-topgit-premium-pvc-gum-for-pipes-and-fittings-AXY292HyT4E8GHv9RjaelxnA.html",
+      "title": "Small Topgit Premium PVC Gum, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N6,500 per tin"
+     },
+     {
+      "url": "https://jiji.ng/lekki/power-equipments/pvc-union-gum-250ml-Bi9GByeNqaYouRed5fiZ5D75.html",
+      "title": "PVC Union Gum 250ml, Lagos Lekki",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N2,500"
+     },
+     {
+      "url": "https://jiji.ng/orile/building-materials/topgit-big-size-pvc-gum-for-pipes-and-fittings-96nm5X9ZyXLeXs7KT5ZlzUxI.html",
+      "title": "Topgit Big Size PVC Gum, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N13,000"
+     },
+     {
+      "url": "https://jiji.ng/port-harcourt/building-materials/zuma-pvc-gum-1kg-8czvVkXdE4G0yP4qfrzuBT1h.html",
+      "title": "Zuma PVC Gum 1KG, Port Harcourt",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N15,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. No listing states 500ml. The 'small' Topgit tin's volume is unverified; scaling the 250ml (N2,500) and 1kg (N15,000) tins gives roughly N5,000-N7,500 for 500ml."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "PTFE thread seal tape",
+   "catalogueName": "PTFE thread seal tape",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 600,
+    "low": 600,
+    "high": 2000,
+    "confidence": "medium",
+    "conversion": "Pack of 10 rolls at N5,999 -> N600/roll; UniHome tape N2,000 (quantity not stated)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/lagos-island-west/plumbing-and-water-supply/10pcs-teflon-tape-thread-seal-tape-for-plumbing-threaded-pipe-joint-g4w1U49lWt1o8XddGIhsB7Td.html",
+      "title": "10pcs Teflon Tape / Thread Seal Tape, Lagos Island",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N5,999 per 10 pcs"
+     },
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/unihome-ptfe-thread-seal-tape-teflon-tape-nGdiGkk359P0PzIsuBedHnOh.html",
+      "title": "UniHome PTFE Thread Seal Tape, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N2,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. "
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Floor trap (100mm, with grating)",
+   "catalogueName": "Floor trap (100mm, with grating)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "Gully trap (110mm)",
+   "catalogueName": "Gully trap (110mm)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "32mm bottle trap and waste",
+   "catalogueName": "32mm bottle trap and waste",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 3500,
+    "low": 3500,
+    "high": 22000,
+    "confidence": "low",
+    "conversion": "Plastic bottle trap per piece N3,500; chrome basin waste kit with bottle trap N22,000 as upper bound",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/plastic-bottle-trap-2IKV779W5GX7sRmQefuNxixA.html",
+      "title": "Plastic Bottle Trap (white), Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N3,500"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/chrome-basin-waste-kit-with-bottle-trap-drain-accessories-n1NJahVMbiLY7nYrhMJymVrB.html",
+      "title": "Chrome Basin Waste Kit With Bottle Trap, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N22,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Plastic trap price is for the trap; whether the waste outlet is included is not stated. Chrome/designer traps list at N35,000-N86,000."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "uPVC pan connector, 100mm",
+   "catalogueName": "WC pan connector",
+   "unit": "No.",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": true,
+   "masterPrice": 5000,
+   "researched": {
+    "price": 8500,
+    "low": 2500,
+    "high": 15000,
+    "confidence": "medium",
+    "conversion": "Per piece; median of 9 listings (N2,500, 5,000, 5,000, 7,500, 8,500, 10,000, 12,500, 13,000, 15,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/pan-connector-uHw2oKtvMBZUy0qOA9tax1Dq.html",
+      "title": "Pan Connector, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N2,500"
+     },
+     {
+      "url": "https://jiji.ng/victoria-island/plumbing-and-water-supply/quality-flexible-wc-pan-connector-3WqbdWfLStOtuGpA8nXDYxNu.html",
+      "title": "Quality Flexible WC Pan Connector, Lagos VI",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N8,500"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/turkish-original-pan-connector-beoWbFw2xkHP6T1KOBhfBicJ.html",
+      "title": "Turkish Original Pan Connector, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N10,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/england-standard-anti-sneak-pan-connector-hKuh16Q0EL0ngPEVir7Cl47c.html",
+      "title": "England Standard Anti Snake Pan Connector, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N12,500"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. The higher prices are anti-snake/non-return types. A plain rigid connector is near the low end."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "Pipe clips and fixings",
+   "catalogueName": "Pipe clips and fixings",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Soil, Waste & Vent (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "Vitreous china WC suite with cistern",
+   "catalogueName": "Vitreous china WC suite with cistern",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 75000,
+    "low": 75000,
+    "high": 95000,
+    "confidence": "medium",
+    "conversion": "Close-coupled WC (pan + cistern) per set; median of three Lagos listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/quality-close-couple-water-closet-k1geqmpu7zBX2ja4LEuHioFe.html",
+      "title": "Quality Close Couple Water Closet, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N75,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/brand-new-water-closet-toilet-close-coupled-soft-close-seat-kyxX8vLaAFwsE25QegO0Sd65.html",
+      "title": "Brand New Water Closet, Close Coupled, Soft Close Seat, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N75,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/vstar-close-couple-water-closet-1tVvhEdfZlPpQN6tnvioXLWe.html",
+      "title": "Vstar Close Couple Water Closet, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N95,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Entry-level Chinese imports. Complete sets that include a basin and pedestal list at N78,000-N86,000 (Vstar, Mersine Corine), and executive/one-piece sets at N200,000-N385,000."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Vitreous china wash hand basin with pedestal",
+   "catalogueName": "Vitreous china wash hand basin with pedestal",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 70000,
+    "low": 35000,
+    "high": 115000,
+    "confidence": "low",
+    "conversion": "Per set (basin + pedestal); median of three standard listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/wall-hung-basin-and-pedestal-rzOZge9zUsD5pB0xFkAVmu9S.html",
+      "title": "Wall Hung Basin and Pedestal, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N35,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/deep-hanging-basin-and-pedestal-wEdzraWrSi4lyo7FlNc5G2C1.html",
+      "title": "Deep Hanging Basin and Pedestal, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N70,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/wall-hung-basin-and-pedestal-8vCdZ5qKIqQ2CoaRsnZsqsy5.html",
+      "title": "Wall Hung Basin and Pedestal, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N115,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Wide spread. Designer one-piece pedestal basins list at N220,000-N250,000 and are excluded."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Vitreous china urinal",
+   "catalogueName": "Vitreous china urinal",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 135000,
+    "low": 100000,
+    "high": 265000,
+    "confidence": "medium",
+    "conversion": "Per piece; median of four wall-hung ceramic urinal listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/port-harcourt/plumbing-and-water-supply/ceramic-wall-mounted-urinal-bowl-xpgqbc7rAkHs1knP8BpsMusa.html",
+      "title": "Ceramic Wall-Mounted Urinal Bowl, Port Harcourt",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N100,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/wall-mounted-ceramic-urinal-bowl-ASHtVsxjwuAdT971PU307mCa.html",
+      "title": "Wall-Mounted Ceramic Urinal Bowl, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N130,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/wall-mounted-ceramic-urinal-bowl-uZqEaeyHFpmoTHolJfTPL8zM.html",
+      "title": "Wall-Mounted Ceramic Urinal Bowl, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N140,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/brand-new-modern-wall-mounted-ceramic-urinal-glossy-white-9LVETQgQ0BdyWHFte0zwnNJ.html",
+      "title": "Modern Wall Mounted Ceramic Urinal, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N265,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Whether the flush valve is included is not stated."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Acrylic bath tub (1700mm)",
+   "catalogueName": "Acrylic bath tub (1700mm)",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 440000,
+    "low": 400000,
+    "high": 480000,
+    "confidence": "medium",
+    "conversion": "Per piece; midpoint of the two 1700mm acrylic listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/1700mm-800mm-acrylic-bathtub-NSXyGQkc0JGHTx3V1OIwpui.html",
+      "title": "1700mm x 800mm Acrylic Bathtub, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N400,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/grey-color-75x170cm-acrylic-bathtub-XCKdeeQFME6gaz2fcmfg0QX.html",
+      "title": "Grey Color 75x170cm Acrylic Bathtub, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N480,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Other plain tubs (size not stated) were N400,000-N500,000. These look like freestanding/premium tubs; a basic built-in panel bath may be cheaper, but no such listing was seen."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Stainless steel double bowl sink",
+   "catalogueName": "Stainless steel double bowl sink",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 47000,
+    "low": 38000,
+    "high": 60000,
+    "confidence": "medium",
+    "conversion": "Per piece; median of five Lagos listings (N38,000, 40,000, 47,000, 55,000, 60,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/stainless-steel-double-bowl-kitchen-sink-with-a-satin-finish-2GR9IscFZTS5GiHP1bC5NhPP.html",
+      "title": "Stainless Steel Double Bowl Kitchen Sink 820x450, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N38,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/high-quality-double-stainless-bowl-steel-kitchen-sink-with-drainboard-utc84D8sO0gu6fdrStKPhAl9.html",
+      "title": "Double Stainless Bowl Kitchen Sink With Drainboard, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N47,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/double-bowl-stainless-steel-sink-thick-gauge-brand-new-cX3s35DHy2Pb6haRaS4eEJ0c.html",
+      "title": "Double Bowl Stainless Steel Sink, Thick Gauge, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N55,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/stainless-steel-double-bowl-kitchen-sink-wBOZiAzKAopub8smIXBil9cD.html",
+      "title": "Stainless Steel Double Bowl Kitchen Sink, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N60,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. "
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Kitchen sink mixer tap",
+   "catalogueName": "Kitchen sink mixer tap",
+   "unit": "set",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 50000,
+    "low": 29000,
+    "high": 125000,
+    "confidence": "medium",
+    "conversion": "Per piece; median of five listings (N29,000, 37,000, 50,000, 80,000, 125,000). Jiji shows most of 395 ads in the N35,000-N78,000 band",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/stainless-big-brother-sink-mixer-rNKfPeI13G5QNFLLFJeHVbPN.html",
+      "title": "Stainless Big Brother Sink Mixer, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N29,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/quality-kitchen-sink-mixer-tap-available-in-different-colors-jTQxc24wrHPS5R8NoSK8xq00.html",
+      "title": "Quality Kitchen Sink Mixer Tap, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N37,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/kitchen-sink-mixer-tap-90hmQvAdUdf3F3BzgNplEibo.html",
+      "title": "Kitchen Sink Mixer Tap, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N50,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/high-grade-kitchen-sink-mixer-also-available-in-different-colors-wSTYP5uw02MDKZntyaDgJlJb.html",
+      "title": "High Grade Kitchen Sink Mixer (pull out), Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N80,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. "
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Pillar taps",
+   "catalogueName": "Pillar taps",
+   "unit": "set",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 25500,
+    "low": 23000,
+    "high": 30000,
+    "confidence": "low",
+    "conversion": "Pair = 2 x median single basin tap (N11,500, 12,000, 13,500, 15,000 -> median N12,750) = N25,500",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/modern-chrome-basin-pillar-tap-Bllsv8u3A8fDxnKvp5jCvf3z.html",
+      "title": "Modern Chrome Basin Pillar Tap, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N13,500"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/chrome-basin-tap-xokp0f4udshx5I8B4KaUdTqf.html",
+      "title": "Chrome Basin Tap, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N15,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/chrome-single-lever-basin-tap-C7Bd9mpyp9JUBgaN5Yt1Ih6Z.html",
+      "title": "Chrome Single Lever Basin Tap, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N12,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/goosehead-single-basin-tap-magS0A7XdzikDwaX1UpkselU.html",
+      "title": "Goosehead Single Basin Tap, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N11,500"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Derived: no listing sold a pair of hot/cold pillar taps, and several listings are single-lever basin taps rather than true pillar taps."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Basin mixer tap",
+   "catalogueName": "Basin mixer tap",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 67500,
+    "low": 23000,
+    "high": 80000,
+    "confidence": "medium",
+    "conversion": "Per piece; median of eight mid-range listings (N23,000-N80,000), excluding Vado N150,000 and Grohe N350,000",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/basin-mixer-tap-nMXZXNU5PiOYvGzSZBJdpJ3a.html",
+      "title": "Basin Mixer Tap, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N50,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/water-fall-basin-mixer-eMU3x3OPbri44RSmj5T3s6NR.html",
+      "title": "Water Fall Basin Mixer, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N28,000"
+     },
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/made-of-brass-material-black-basin-tap-mIromVijn2nH37VIq6l19KHN.html",
+      "title": "Brass Black Basin Tap, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N65,000"
+     },
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/quality-laghi-deck-mount-basin-tap-mixer-white-5a0E2BDWxosx1lj7WwPaVVoW.html",
+      "title": "Laghi Deck-Mount Basin Mixer, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N80,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Jiji reports most of 1,509 basin mixer ads in the N30,000-N63,000 band; Lagos listings sit lower than Abuja ones. Consider about N50,000 for Lagos."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Shower mixer set",
+   "catalogueName": "Shower mixer set",
+   "unit": "set",
+   "category": "MEP - Plumbing - Sanitary Ware (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 35000,
+    "low": 30000,
+    "high": 45000,
+    "confidence": "low",
+    "conversion": "Per set; median of five standard listings (N30,000, 31,000, 35,000, 38,000, 45,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/brimix-black-shower-set-xwb1JsADEHGWyERf3Wze11be.html",
+      "title": "Brimix Black Shower Set, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N30,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/quality-brimix-anti-rust-shower-mixer-saEjbKajvEEemGXDIRhxnviT.html",
+      "title": "Quality Brimix Anti-Rust Shower Mixer, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N31,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/black-piano-shower-p21c-ldIp0J19OKMpj9TvsODnyI0t.html",
+      "title": "Black Piano Shower P21c, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N35,000"
+     },
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/brimix-standing-shower-rain-mixer-with-shower-faucet-set-5azKQzBDIQAfcZ55jx31l7Ps.html",
+      "title": "Brimix Standing Shower Rain Mixer Set, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N45,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Jiji's price bands put more ads in N65,000-N160,000 (228) than N31,000-N65,000 (136), so N35,000 is an entry-level set. Pick a mid-range spec before using it."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "15 litre electric water heater",
+   "catalogueName": "15 litre electric water heater",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Heaters (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 102500,
+    "low": 80000,
+    "high": 125000,
+    "confidence": "low",
+    "conversion": "Ariston 15L per unit; midpoint of two listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=ariston%20water%20heater",
+      "title": "Ariston 15L Water Heater, Kaduna (Jiji search result)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N80,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=ariston%20water%20heater",
+      "title": "15 Liters Ariston Water Heater, Red, Lagos Orile (Jiji search result)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N125,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Taken from Jiji search-results page. Lagos price N125,000. Older blog figures (N38,000-N60,000, nigerianqueries.com) are outdated and not used."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "30 litre electric water heater",
+   "catalogueName": "30 litre electric water heater",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Heaters (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 137500,
+    "low": 125000,
+    "high": 150000,
+    "confidence": "medium",
+    "conversion": "Ariston 30L per unit; midpoint of two Lagos listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=ariston%20water%20heater",
+      "title": "Ariston 30 Litre Blu R Water Heater, Lagos Orile (Jiji search result)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N125,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=ariston%20water%20heater",
+      "title": "Ariston 30 Litre Water Heater Made in Italy, Lagos Orile (Jiji search result)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N150,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Both from Lagos Orile sellers."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "50 litre electric water heater",
+   "catalogueName": "50 litre electric water heater",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Heaters (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 300000,
+    "low": 230000,
+    "high": 320000,
+    "confidence": "medium",
+    "conversion": "Ariston 50L per unit; median of three Lagos listings (N230,000, 300,000, 320,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=ariston%20water%20heater",
+      "title": "Ariston 50l Electric Water Heater (1500w), Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N230,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=ariston%20water%20heater",
+      "title": "Ariston 50litres Water Heater, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N300,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=ariston%20water%20heater",
+      "title": "Ariston Water Heater 50 Litters, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N320,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. "
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "100 litre electric water heater",
+   "catalogueName": "100 litre electric water heater",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Heaters (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 450000,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "Ariston 100L per unit, single listing",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=ariston%20water%20heater",
+      "title": "Ariston Water Heater 100L, Lagos Orile (Jiji search result)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N450,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing. For scale: Ariston 80L was N280,000 and 150L N740,000 at the same market."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "PVC water storage tank, 1000 litres",
+   "catalogueName": "1000 litre plastic water tank",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Storage & Pumps (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 145000,
+    "low": 125000,
+    "high": 160000,
+    "confidence": "medium",
+    "conversion": "GeePee 1000L per tank; Lagos midpoint of N130,000 and N160,000 (Abuja N125,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%201000%20litres",
+      "title": "Geepee Tank 1000 Litres, Lagos Ajah (Jiji search result)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N160,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%201000%20litres",
+      "title": "1000 Litres Geepee Tank, Lagos Ajah (Jiji search result)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N130,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%201000%20litres",
+      "title": "New Geepee Tank, Abuja Dei-Dei (Jiji search result)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N125,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Blog list (nigerianqueries.com, dated 28 Aug 2026) still shows N33,500-N38,500, which is clearly stale and is not used. Delivery is extra."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "PVC water storage tank, 2000 litres",
+   "catalogueName": "2000 litre plastic water tank",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Storage & Pumps (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 178000,
+    "low": 160000,
+    "high": 255000,
+    "confidence": "medium",
+    "conversion": "GeePee 2000L per tank; median of four Lagos listings (N160,000, 161,000, 195,000, 200,000). Abuja/PH N230,000-N255,000",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%202000%20litres",
+      "title": "Geepee Tank, Lagos Lekki",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N161,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%202000%20litres",
+      "title": "2000 Litres Geepee Water Tank, Lagos Surulere",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N195,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%202000%20litres",
+      "title": "Geepee Water Tank Black 2000 Litres, Lagos Island",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N200,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%202000%20litres",
+      "title": "Water Tank Geepee 2000litres, Lagos Ibeju",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N160,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%202000%20litres",
+      "title": "2000 Litres of Geepee Tank, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N230,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Lagos is cheaper than Abuja and Port Harcourt."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "PVC water storage tank, 5000 litres",
+   "catalogueName": "5000 litre plastic water tank",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Storage & Pumps (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 520000,
+    "low": 420000,
+    "high": 560000,
+    "confidence": "medium",
+    "conversion": "GeePee 5000L per tank; median of three Lagos listings (N420,000, 520,000, 550,000); Abuja N560,000",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%205000%20litres",
+      "title": "Geepee Water Storage Tank 5000 Litres, Lagos Alimosho",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N420,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%205000%20litres",
+      "title": "Water Tank 5000 Litres, Lagos Ibeju",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N520,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%205000%20litres",
+      "title": "5000 Litres Geepee Water Tank, Lagos Lekki",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N550,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=geepee%20tank%205000%20litres",
+      "title": "5000 Litres Geepee Tank, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N560,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Excludes the 'Geepee Robust' N880,000 premium line."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Water pump, 1HP, surface mounted",
+   "catalogueName": "1HP surface water pump",
+   "unit": "No.",
+   "category": "MEP - Plumbing - Water Storage & Pumps (supply)",
+   "inMaster": true,
+   "masterPrice": 80000,
+   "researched": {
+    "price": 100000,
+    "low": 75000,
+    "high": 170000,
+    "confidence": "medium",
+    "conversion": "Per unit; median of six Lagos listings (N75,000, 85,000, 90,000, 110,000, 125,000, 170,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/1hp-springdab-surface-pump-with-thermostart-BqBMDcaUF1JAIZEqgAxgpkUe.html",
+      "title": "1hp Springdab Surface Pump, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N90,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/1hp-springdab-surface-pumping-machine-100-copper-coil-wxKYQTx20ACy33duWdQlmQH2.html",
+      "title": "1Hp Springdab Surface Pump 100% Copper Coil, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N110,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/1hp-interdab-surface-water-pump-100-copper-coil-GZpY2uj9aaKsZHdK2PKAqS2.html",
+      "title": "1hp Interdab Surface Water Pump, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N125,000"
+     },
+     {
+      "url": "https://jiji.ng/ojo/plumbing-and-water-supply/1hp-750w-ingco-surface-water-pump-machine-foUDF7O24YVh0fQgWHjjYcYf.html",
+      "title": "1hp 750w Ingco Surface Water Pump, Lagos Ojo",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N170,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Chinese-brand pumps (Springdab, Oceandab, Interdab, Ingco). An Italian brand such as Pedrollo would cost more; none was listed."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "material",
+   "name": "1.5HP submersible borehole pump",
+   "catalogueName": "1.5HP submersible borehole pump",
+   "unit": "nr",
+   "category": "MEP - Plumbing - Water Storage & Pumps (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 229000,
+    "low": 200000,
+    "high": 258000,
+    "confidence": "low",
+    "conversion": "Per unit; midpoint of two AC submersible listings (N200,000, N258,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/dei-dei/plumbing-and-water-supply/1-5hp-submersible-water-pump-3IoF4ijKlnhYvUh6HNV2GhL7.html",
+      "title": "1.5hp Submersible Water Pump, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N200,000"
+     },
+     {
+      "url": "https://jiji.ng/dei-dei/personal-mobility/1-5hp-submersible-pump-or-sub-water-pump-eAe22qeMdrG3AW1M8gm5a4K.html",
+      "title": "1.5hp Submersible Pump, Abuja Dei-Dei",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N258,000"
+     },
+     {
+      "url": "https://jiji.ng/orile/plumbing-and-water-supply/1-5hp-ac-dc-astral-solar-submersible-pump-100-copper-coil-depth-120m-suwgKddYqJoZeWUZY52mkujY.html",
+      "title": "1.5hp AC/DC Astral Solar Submersible Pump, Lagos Orile",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N385,000"
+     }
+    ],
+    "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Brands not stated; Abuja prices. Lagos listings were AC/DC solar-hybrid pumps at N295,000-N480,000, which is a different spec. Cable and control box may not be included."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "1.5mm2 single core copper cable",
+   "catalogueName": "1.5mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 350,
+    "low": 300,
+    "high": 748,
+    "confidence": "medium",
+    "conversion": "100 m coils: Jiji Lagos N30,000-35,000 (Coleman/Nigerchin), Jumia Coleman N58,000-74,800; median of 7 distinct listings N35,000/100 m -> N350/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coleman",
+      "title": "Jiji.ng Coleman electrical cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "1.5mm single Coleman N30,000 (Lagos Island), N30,700 (Kano), N32,500 (Lekki)"
+     },
+     {
+      "url": "https://jiji.ng/297-electrical-cables/nigerchin",
+      "title": "Jiji.ng Nigerchin cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "1.5mm Single Cable Full Gauge Nigerchin N35,000 (Lekki)"
+     },
+     {
+      "url": "https://www.jumia.com.ng/slp/single-core-cable",
+      "title": "Jumia NG single core cable",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Coleman 1.5mm N58,000 / N60,000 / N74,800"
+     }
+    ],
+    "notes": "Two price bands: Jiji market sellers ~N300-350/m, Jumia ~N580-750/m. Jumia shows several near-duplicate N58,000 listings; counted once. Check the price is for a full-gauge 100 m coil."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "2.5mm2 single core copper cable",
+   "catalogueName": "2.5mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 580,
+    "low": 365,
+    "high": 900,
+    "confidence": "medium",
+    "conversion": "100 m coils: Jiji N36,500-85,000, Jumia Coleman N70,000-90,000; median of 9 listings N58,000/100 m -> N580/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coleman",
+      "title": "Jiji.ng Coleman electrical cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "2.5mm single wire Coleman N50,000 (Maryland), N36,500 (Niger)"
+     },
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coil",
+      "title": "Jiji.ng coil electrical cables",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "2.5mm Single Core Coil Cable Coleman Wire N48,000; 2.5mmx1core 100% copper N45,000"
+     },
+     {
+      "url": "https://jiji.ng/lekki/297-electrical-conduit",
+      "title": "Jiji.ng Lekki electrical conduit",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "2.5mm Nigeria Single Cable for Conduits Wiring N58,000"
+     },
+     {
+      "url": "https://www.jumia.com.ng/slp/single-core-cable",
+      "title": "Jumia NG single core cable",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Coleman 2.5mm N70,000 / N73,000 / N90,000"
+     }
+    ],
+    "notes": "A search snippet also showed a Jiji Coleman 2.5mm coil at N85,000 (included)."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "4mm2 single core copper cable",
+   "catalogueName": "4mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 1154,
+    "low": 790,
+    "high": 1518,
+    "confidence": "low",
+    "conversion": "100 m coils: Jiji Coleman N79,000, Jumia Coleman N151,800; median N115,400/100 m -> N1,154/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coleman",
+      "title": "Jiji.ng Coleman electrical cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Original 4mm single Coleman wire pure copper N79,000 (Lagos Island)"
+     },
+     {
+      "url": "https://www.jumia.com.ng/slp/single-core-cable",
+      "title": "Jumia NG single core cable",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Coleman 4mm Single Core N151,800"
+     }
+    ],
+    "notes": "Only two listings, far apart. Coil length assumed 100 m (standard pack); not stated on Jiji."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "6mm2 single core copper cable",
+   "catalogueName": "6mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 1726,
+    "low": 1230,
+    "high": 2222,
+    "confidence": "low",
+    "conversion": "100 m coils: Jiji Coleman N123,000, Jumia Coleman N222,200; median N172,600/100 m -> N1,726/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coleman",
+      "title": "Jiji.ng Coleman electrical cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "6mm single Coleman wire N123,000 (Port Harcourt)"
+     },
+     {
+      "url": "https://www.jumia.com.ng/slp/single-core-cable",
+      "title": "Jumia NG single core cable",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Coleman 6mm Single Core N222,200"
+     }
+    ],
+    "notes": "Only two listings; the Jiji one is from Port Harcourt, not Lagos."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "10mm2 single core copper cable",
+   "catalogueName": "10mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 2180,
+    "low": 1900,
+    "high": 3500,
+    "confidence": "medium",
+    "conversion": "100 m coils: Jiji Coleman N190,000 and N218,000, Jumia Coleman N350,000; median N218,000/100 m -> N2,180/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coil",
+      "title": "Jiji.ng coil electrical cables",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Original Coleman Cable 10mm Single Core One Coil N190,000"
+     },
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coleman",
+      "title": "Jiji.ng Coleman electrical cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "10mm single Coleman N218,000 (Ojo)"
+     },
+     {
+      "url": "https://www.jumia.com.ng/slp/single-core-cable",
+      "title": "Jumia NG single core cable",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Coleman 10mm Single Core N349,999 / N350,000"
+     }
+    ],
+    "notes": "Jumia has two near-identical N350,000 listings; counted once."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "16mm2 single core copper cable",
+   "catalogueName": "16mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 3825,
+    "low": 2950,
+    "high": 4600,
+    "confidence": "medium",
+    "conversion": "Coleman 100 m coils N295,000 (Oyo) and N340,000 (Lagos) on Jiji, N425,000 on Jumia -> N2,950 / 3,400 / 4,250 per m; Alaba per-metre listing N4,600/m; median N3,825/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/oyo/power-equipments/16mm-single-cable-coleman-5vm1e95Met70q3ZzmM6BaUCU.html",
+      "title": "16mm single cable Coleman (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N295,000"
+     },
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coleman",
+      "title": "Jiji.ng Coleman electrical cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "16mm single N340,000 (Maryland)"
+     },
+     {
+      "url": "https://www.jumia.com.ng/slp/single-core-cable",
+      "title": "Jumia NG single core cable",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Coleman 16mm Single Core N425,000"
+     },
+     {
+      "url": "https://jiji.ng/ojo/power-equipments/16mm-x-1-core-single-copper-cable-per-meter-7x8IdVBMLKO3alibll62Et0t.html",
+      "title": "16mm x 1 core single copper cable per meter (Jiji, Alaba)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N4,600 per metre (search snippet; listing now removed, HTTP 410)"
+     }
+    ],
+    "notes": "The per-metre Alaba listing has since been removed; its price comes from the search-result snippet only."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "25mm2 single core copper cable",
+   "catalogueName": "25mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 3800,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "Jiji \"26mm Single Core Coleman Nigerian Cable Coil\" N380,000 / 100 m -> N3,800/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coil",
+      "title": "Jiji.ng coil electrical cables",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "26mm Single Core Coleman Nigerian Cable Coil N380,000"
+     }
+    ],
+    "notes": "SUSPECT: only one listing, titled \"26mm\" (taken to mean 25mm). It works out at about the same per metre as 16mm, which cannot be right. The copper in 100 m of 25mm2 alone is worth roughly this much. Needs a phone quote."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "35mm2 single core copper cable",
+   "catalogueName": "35mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 8000,
+    "low": 7000,
+    "high": 9000,
+    "confidence": "low",
+    "conversion": "Per-metre Jiji (Alaba) listings N7,000 and N9,000/m; median N8,000/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/ha/lagos-island-west/power-equipments/35mm-single-flex-cable-aFPnXWUItbG3pV4cI5bJqeZx.html",
+      "title": "35mm single flex cable (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N9,000 per metre (search snippet; listing now removed)"
+     },
+     {
+      "url": "https://jiji.ng/ha/ojo/power-equipments/35mm-single-flex-iSYPoP0zjNnXAhgHZonViDMz.html",
+      "title": "35mm single flex (Jiji, Ojo)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N7,000 (search snippet; listing now removed)"
+     }
+    ],
+    "notes": "Both listings have expired (404/410), so the prices come from search snippets only. These are flexible single core cables of unknown brand, not Coleman or Nigerchin."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "50mm2 single core copper cable",
+   "catalogueName": "50mm2 single core copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 9700,
+    "low": 9000,
+    "high": 14500,
+    "confidence": "low",
+    "conversion": "Per-metre listings, Alaba: N9,000 and N9,700; Lagos Island N14,500; median N9,700/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/ojo/power-equipments/50mm2-single-core-flexible-cable-tNyZEY5eAefulT6B0SOsbfX3.html",
+      "title": "50mm2 Single Core Flexible Cable (Jiji, C-Divine)",
+      "date": "2026-10-03",
+      "dateKind": "listed",
+      "quoted": "N9,000 (listing body mentions 1,000 m, but at this price it must be per metre)"
+     },
+     {
+      "url": "https://jiji.ng/ha/ojo/power-equipments/50mm-single-core-flexible-electric-cable-5JSCPHKiKLM3ZNiZgp1ACLi8.html",
+      "title": "50mm Single Core Flexible Electric Cable (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "listed",
+      "quoted": "N9,700"
+     },
+     {
+      "url": "https://jiji.ng/lagos-island-west/power-equipments/50mm-single-flex-cable-aMbFCMrW54P1ZO5JqBnxBSLa.html",
+      "title": "50mm single flex cable (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N14,500 negotiable (search snippet; listing now removed)"
+     }
+    ],
+    "notes": "These are flexible cables from a generic/C-Divine brand. Jiji does not show the unit clearly, so per metre is inferred from the price level."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "16mm2 4-core armoured copper cable",
+   "catalogueName": "16mm2 4-core armoured copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 17000,
+    "low": 17000,
+    "high": 17000,
+    "confidence": "low",
+    "conversion": "Listed per metre",
+    "sources": [
+     {
+      "url": "https://jiji.ng/ojo/power-equipments/16mm-armoured-cable-4-core-8DXh9gcthIYf7p17pqGal28x.html",
+      "title": "16mm Armoured Cable 4 Core (Jiji, C-Divine, Alaba)",
+      "date": "2026-10-03",
+      "dateKind": "listed",
+      "quoted": "N17,000, \"price is given per meter\""
+     },
+     {
+      "url": "https://nigerianqueries.com/prices-of-electrical-materials-in-nigeria/",
+      "title": "Latest Prices of Electrical Materials in Nigeria (2026)",
+      "date": "2026-08-24",
+      "dateKind": "listed",
+      "quoted": "16mm 4-core armoured N3,700-5,000 per metre"
+     }
+    ],
+    "notes": "Only one current listing. The blog figure of N3,700-5,000/m is below the value of the copper in the cable, so it is treated as stale and excluded."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "25mm2 4-core armoured copper cable",
+   "catalogueName": "25mm2 4-core armoured copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 26000,
+    "low": 25000,
+    "high": 28500,
+    "confidence": "medium",
+    "conversion": "Per-metre listings N25,000 (Abuja), N26,000 (Nigerchin, Ojodu), N28,500 (Lekki); median N26,000/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/nigerchin",
+      "title": "Jiji.ng Nigerchin cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "25mm 4core Armoured Cable, Nigerchin N26,000 (Ojodu)"
+     },
+     {
+      "url": "https://jiji.ng/abuja/power-equipments/25mm-4core-armored-cable-full-gauge-97e8H08ZczP83nxC9kvA0RoU.html",
+      "title": "25mm 4core armored cable full gauge (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N25,000 (search snippet; listing removed)"
+     },
+     {
+      "url": "https://jiji.ng/lekki/power-equipments/25mm-4core-armored-cable-nigeria-TRuXlkOGM2nRTOjo7TK9EAD.html",
+      "title": "25mm 4core armored cable nigeria (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N28,500 (search snippet; listing removed)"
+     }
+    ],
+    "notes": "Excluded an aluminium (AL/XLPE) 25mm 4-core listing at N10,000. The listing bodies mention drum lengths, but the prices are per metre."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "35mm2 4-core armoured copper cable",
+   "catalogueName": "35mm2 4-core armoured copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 32500,
+    "low": 32000,
+    "high": 33000,
+    "confidence": "medium",
+    "conversion": "Per-metre listings N33,000 (Coleman, Lekki) and N32,000; median N32,500/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/coleman",
+      "title": "Jiji.ng Coleman electrical cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "35mm 4-core Armoured N33,000 (Lekki)"
+     },
+     {
+      "url": "https://jiji.ng/kano/power-equipments/35mm-4core-armored-cable-cvju01HPps8JNJANhTdyxsbx.html",
+      "title": "35mm 4core armored cable (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N32,000 negotiable (search snippet; listing removed)"
+     }
+    ],
+    "notes": ""
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "50mm2 4-core armoured copper cable",
+   "catalogueName": "50mm2 4-core armoured copper cable",
+   "unit": "m",
+   "category": "MEP - Electrical - Cables & Wiring (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 47000,
+    "low": 36500,
+    "high": 60000,
+    "confidence": "medium",
+    "conversion": "Per-metre listings N36,500 (Nigerchin), N46,000 (C-Divine), N48,000 (Nigerchin, Sagamu/Alaba), N60,000 (Kablmetal, Katsina); median N47,000/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/297-electrical-cables/nigerchin",
+      "title": "Jiji.ng Nigerchin cables category",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "50mm 4core Armoured Cable Nigerchin N36,500 (Lagos Island)"
+     },
+     {
+      "url": "https://jiji.ng/ojo/power-equipments/c-divine-50mm-4-core-armoured-cable-C0PM19kJFp3tN4c5qSIfbmWT.html",
+      "title": "C-divine 50mm 4 Core Armoured Cable (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "listed",
+      "quoted": "N46,000 per meter"
+     },
+     {
+      "url": "https://jiji.ng/sagamu/power-equipments/50mm-4-core-nigerchin-armored-cable-jIJty0Bf3fLXhzysaUN7jWSs.html",
+      "title": "50mm 4 Core Nigerchin Armored Cable (Jiji)",
+      "date": "2026-10-03",
+      "dateKind": "listed",
+      "quoted": "N48,000"
+     },
+     {
+      "url": "https://jiji.ng/297-electrical-cables/armoured",
+      "title": "Jiji.ng armoured cables",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "50mm 4core PVC PVC Armoured Kablmetal N60,000 (Katsina)"
+     }
+    ],
+    "notes": "The blog figure of N7,800-8,500/m (nigerianqueries, Aug 2026) is far below every listing and is excluded as stale."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "20mm PVC conduit",
+   "catalogueName": "20mm PVC conduit",
+   "unit": "m",
+   "category": "MEP - Electrical - Containment & Ducts (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "25mm PVC conduit",
+   "catalogueName": "25mm PVC conduit",
+   "unit": "m",
+   "category": "MEP - Electrical - Containment & Ducts (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "Conduit boxes and accessories",
+   "catalogueName": "Conduit boxes and accessories",
+   "unit": "nr",
+   "category": "MEP - Electrical - Containment & Ducts (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "1-gang 1-way switch",
+   "catalogueName": "1-gang 1-way switch",
+   "unit": "nr",
+   "category": "MEP - Electrical - Accessories (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 3000,
+    "low": 1500,
+    "high": 6500,
+    "confidence": "low",
+    "conversion": "Each",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=1+gang+1+way+switch",
+      "title": "Jumia NG search: 1 gang 1 way switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Generic 1-gang 1/2-way wall switch N2,999 and N3,500"
+     },
+     {
+      "url": "https://jiji.ng/search?query=panasonic%20switch%201%20gang",
+      "title": "Jiji.ng search: Panasonic switch 1 gang",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Panasonic switches and sockets N1,500 / N3,500"
+     },
+     {
+      "url": "https://jiji.ng/search?query=1%20gang%202%20way%20switch",
+      "title": "Jiji.ng search: 1 gang 2 way switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Schneider-type 1-4 gang 1/2 way wall switch from N6,500"
+     }
+    ],
+    "notes": "No branded mid-range (Schneider/Legrand/MK) 1-gang 1-way plate switch was found with a price. The nigerianqueries blog lists N800-1,100, which is budget Chinese stock."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "2-gang 1-way switch",
+   "catalogueName": "2-gang 1-way switch",
+   "unit": "nr",
+   "category": "MEP - Electrical - Accessories (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 6500,
+    "low": 3000,
+    "high": 19000,
+    "confidence": "low",
+    "conversion": "Each",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=panasonic+switch",
+      "title": "Jumia NG search: Panasonic switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Panasonic 2-Gang 10A 2-Way SP Switch WABA5022 N6,500"
+     },
+     {
+      "url": "https://jiji.ng/search?query=2%20gang%201%20way%20switch",
+      "title": "Jiji.ng search: 2 gang 1 way switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Luxury Wall Switch 2gang N3,000"
+     },
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=schneider+switch",
+      "title": "Jumia NG search: Schneider switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Schneider Lisse 2 Gang 2 Way Mocha Bronze N19,000"
+     }
+    ],
+    "notes": "The price used is a Panasonic 2-gang 2-way switch, which also serves for 1-way wiring. No 2-gang 1-way listing was found."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "1-gang 2-way switch",
+   "catalogueName": "1-gang 2-way switch",
+   "unit": "nr",
+   "category": "MEP - Electrical - Accessories (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 4250,
+    "low": 1800,
+    "high": 8500,
+    "confidence": "low",
+    "conversion": "Each; median of 4 listings",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=panasonic+switch",
+      "title": "Jumia NG search: Panasonic switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Panasonic 1-Gang 10A 2-Way SP Switch WABA5012 N6,500"
+     },
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=schneider+switch",
+      "title": "Jumia NG search: Schneider switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Schneider Lisse 1 Gang 2 Way N8,500"
+     },
+     {
+      "url": "https://jiji.ng/search?query=1%20gang%202%20way%20switch",
+      "title": "Jiji.ng search: 1 gang 2 way switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Acrylic 1gang2way N2,000; 1 Gang 2 Way Big Button N1,800"
+     }
+    ],
+    "notes": "There is a wide gap between generic stock (N1,800-2,000) and branded switches (N6,500-8,500). For a mid-range specification, about N6,500 (Panasonic) may be the better rate."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "13A twin switched socket outlet",
+   "catalogueName": "13A twin switched socket outlet",
+   "unit": "nr",
+   "category": "MEP - Electrical - Accessories (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 9800,
+    "low": 3800,
+    "high": 10300,
+    "confidence": "high",
+    "conversion": "Each; median of 8 listings",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=13a+twin+switched+socket",
+      "title": "Jumia NG search: 13A twin switched socket",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Schneider Vivace 13A twin gang switched socket N9,600 / N10,300; Vivace (generic seller) N10,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=13a%20switched%20socket",
+      "title": "Jiji.ng search: 13A switched socket",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Panasonic 13A double N7,000 / N8,500 / N10,000; Schneider 13A double with light N10,000; SIASE 2-gang N3,800"
+     }
+    ],
+    "notes": "The sources agree closely, with Schneider Vivace and Panasonic both around N10,000."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "13A single switched socket outlet",
+   "catalogueName": "13A single switched socket outlet",
+   "unit": "nr",
+   "category": "MEP - Electrical - Accessories (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 5200,
+    "low": 2500,
+    "high": 7000,
+    "confidence": "medium",
+    "conversion": "Each; median of 5 listings",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=panasonic+socket",
+      "title": "Jumia NG search: Panasonic socket",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Panasonic 1-Gang 13A SP Switched Socket N4,999 / N5,200"
+     },
+     {
+      "url": "https://jiji.ng/search?query=13a%20switched%20socket",
+      "title": "Jiji.ng search: 13A switched socket",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "13a 1 Gang Red Socket Panasonic N5,500; SIASE 1-gang N2,500; Standard 13A metal clad single N7,000"
+     }
+    ],
+    "notes": ""
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "20A double pole switch",
+   "catalogueName": "20A double pole switch",
+   "unit": "nr",
+   "category": "MEP - Electrical - Accessories (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 9000,
+    "low": 5500,
+    "high": 11000,
+    "confidence": "medium",
+    "conversion": "Each; median of 7 listings",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=panasonic+switch",
+      "title": "Jumia NG search: Panasonic switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Panasonic 1-Gang 20A DP Switch N7,000 / N7,500 / N10,000 / N10,500"
+     },
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=20a+double+pole+switch",
+      "title": "Jumia NG search: 20A double pole switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Generic 20A DP N5,500 / N8,999 / N10,999"
+     }
+    ],
+    "notes": ""
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "45A cooker control unit",
+   "catalogueName": "45A cooker control unit",
+   "unit": "nr",
+   "category": "MEP - Electrical - Accessories (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 18250,
+    "low": 10200,
+    "high": 33500,
+    "confidence": "medium",
+    "conversion": "Each; median of 6 listings",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=cooker+control+unit",
+      "title": "Jumia NG search: cooker control unit",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Panasonic 45A DP + 13A socket N10,200 / N16,500 / N23,500; generic 45A CCU N16,500; Schneider Lisse CCU N33,500"
+     },
+     {
+      "url": "https://jiji.ng/search?query=13a%20switched%20socket",
+      "title": "Jiji.ng search: 13A switched socket",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "6x6 Cooker Unit Mounted Switch N20,000 (Onitsha)"
+     }
+    ],
+    "notes": "The nigerianqueries blog lists a 6x6 cooker unit at N6,500-8,500, which looks stale."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "4-way distribution board with MCBs",
+   "catalogueName": "4-way distribution board with MCBs",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 46250,
+    "low": 15000,
+    "high": 70000,
+    "confidence": "low",
+    "conversion": "Board median N28,250 (10 single-phase D4 listings, N15,000-70,000) + 4 SP MCBs at N4,500 = N18,000 -> N46,250",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=distribution%20board%20single%20phase",
+      "title": "Jiji.ng search: distribution board single phase",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "D4 single phase A&B Tech N28,500; D4 N28,000 / N25,000 / N48,500 / N70,000; 4way DB with MCBs N15,000"
+     },
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=distribution+board",
+      "title": "Jumia NG search: distribution board",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "A&B French range D4 single N45,000; A&B G21 D4 single N50,000; generic D4 N20,000 / N23,000"
+     }
+    ],
+    "notes": "Most listings do not say whether MCBs are included. We assumed they are empty boards and added MCBs (see the Single pole MCB item). The N15,000 listing does include MCBs. Schneider/ABB D4 boards at N115,000-120,000 were excluded as premium."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "6-way distribution board with MCBs",
+   "catalogueName": "6-way distribution board with MCBs",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 77000,
+    "low": 38000,
+    "high": 75000,
+    "confidence": "low",
+    "conversion": "Board median N50,000 (5 listings: N38,000-75,000) + 6 SP MCBs at N4,500 = N27,000 -> N77,000",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=distribution%20board%20single%20phase",
+      "title": "Jiji.ng search: distribution board single phase",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "D6 single phase N38,000; A&BT D6 N40,000; H.L.P D6 N55,000; Havells D6 N75,000"
+     },
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=distribution+board",
+      "title": "Jumia NG search: distribution board",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "A&B Tech French Range 6-Way (D6) N50,000"
+     }
+    ],
+    "notes": "Low and high are the board-only range. MCB inclusion is not stated, so we assumed the board is empty and added MCBs."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "8-way distribution board with MCBs",
+   "catalogueName": "8-way distribution board with MCBs",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 128500,
+    "low": 75000,
+    "high": 130000,
+    "confidence": "low",
+    "conversion": "Board median N92,500 (4 listings: N75,000-130,000) + 8 SP MCBs at N4,500 = N36,000 -> N128,500",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=distribution%20board%20single%20phase",
+      "title": "Jiji.ng search: distribution board single phase",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "D8 single phase N75,000; Indonesia 8-way N85,000; Schneider D8 N100,000; Schneider 8-way N130,000"
+     }
+    ],
+    "notes": "Two of the four listings are Schneider boards, which pushes the median up. Low and high are the board-only range. MCBs are assumed not included."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "12-way distribution board with MCBs",
+   "catalogueName": "12-way distribution board with MCBs",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 109000,
+    "low": 60000,
+    "high": 195000,
+    "confidence": "low",
+    "conversion": "Taken as a D4 TPN board (12 ways) sold with MCBs: Jumia A&B N100,000 / N109,000 / N110,000; median N109,000",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=distribution+board",
+      "title": "Jumia NG search: distribution board",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "A&B D4 TPN with MCBs N100,000 / N109,000 / N110,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=distribution%20board%20single%20phase",
+      "title": "Jiji.ng search: distribution board single phase",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Original Schneider 12-Ways Single Phase N195,000"
+     },
+     {
+      "url": "https://nigerianqueries.com/prices-of-electrical-materials-in-nigeria/",
+      "title": "Latest Prices of Electrical Materials in Nigeria (2026)",
+      "date": "2026-08-24",
+      "dateKind": "listed",
+      "quoted": "Distribution board (D12) N55,000-65,000"
+     }
+    ],
+    "notes": "It is unclear whether \"12-way\" here means single-phase 12-way or D4 TPN. If it means a single-phase board, use the Schneider N195,000 as the upper bound."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "18-way distribution board with MCBs",
+   "catalogueName": "18-way distribution board with MCBs",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 130000,
+    "low": 90000,
+    "high": 130000,
+    "confidence": "low",
+    "conversion": "Taken as a D6 TPN board (18 ways): ABB D6 18-way 3-phase with MCBs N130,000",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=distribution+board",
+      "title": "Jumia NG search: distribution board",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "A&B ABB D6 18-Way 3-Phase (TPN) N130,000 (MCBs included); Oxford D6 three phase N90,000"
+     }
+    ],
+    "notes": "Only two listings. It is not stated whether the Oxford board at N90,000 includes MCBs."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "24-way distribution board with MCBs",
+   "catalogueName": "24-way distribution board with MCBs",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 221750,
+    "low": 105000,
+    "high": 165000,
+    "confidence": "low",
+    "conversion": "Taken as a D8 TPN board: median of 4 board listings N113,750 + 24 SP MCBs at N4,500 = N108,000 -> N221,750",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=distribution+board",
+      "title": "Jumia NG search: distribution board",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Havells 24 ways D8 TPN N105,000 / N112,500 / N115,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=distribution%20board%20single%20phase",
+      "title": "Jiji.ng search: distribution board single phase",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "D8 Three Phase Indonesia DB N165,000"
+     }
+    ],
+    "notes": "The listings do not say whether MCBs are included. If the Havells boards do include them, the rate is about N113,750. Low and high are the board-only range."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Single pole MCB (10-32A)",
+   "catalogueName": "Single pole MCB (10-32A)",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 4500,
+    "low": 2000,
+    "high": 8000,
+    "confidence": "medium",
+    "conversion": "Each; median of Lagos listings (Jiji N2,000-5,000, Jumia N5,000-8,000)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=single%20pole%20mcb%20breaker",
+      "title": "Jiji.ng search: single pole MCB breaker",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Schneider 6A SP N3,500; ABB 6A SP N2,500; 1pole MCB N4,500; Chint 63A SP N3,500 / N5,000; Schneider MCB N2,000"
+     },
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=mcb+breaker",
+      "title": "Jumia NG search: MCB breaker",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Havells 6A 1P N5,500; generic 32A 1P N5,000; Schneider Easy9 1P 16A N8,000"
+     }
+    ],
+    "notes": "Several listings are outside the 10-32A range but in the same price class. Very cheap branded listings on Jiji may be counterfeit."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "63A RCCB (2-pole)",
+   "catalogueName": "63A RCCB (2-pole)",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 12000,
+    "low": 5000,
+    "high": 27000,
+    "confidence": "low",
+    "conversion": "Each",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=rccb%2063a%202%20pole",
+      "title": "Jiji.ng search: RCCB 63A 2 pole",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "RCCB 2pole Hager 63a 30mA N12,000 (Ojo); generic 1P+N RCCB N5,000 / N6,000; Residual current breaker N27,000"
+     },
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=rccb",
+      "title": "Jumia NG search: RCCB",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Schneider RCCB 63A N25,000 (poles not stated); ABB/Schneider 63A 4P N27,000"
+     }
+    ],
+    "notes": "The rate is the Hager 2-pole 63A listing. Schneider and ABB RCCBs list at N25,000-27,000."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "100A changeover switch",
+   "catalogueName": "100A changeover switch",
+   "unit": "nr",
+   "category": "MEP - Electrical - Distribution (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 120000,
+    "low": 67000,
+    "high": 183848,
+    "confidence": "low",
+    "conversion": "Each; enclosed 4-pole (FP/TPN) changeover",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=100a+changeover+switch",
+      "title": "Jumia NG search: 100A changeover switch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Powertec Changeover Switch 100A 415V F.P. N120,000; CS Electric Onload Changeover 100A FP with enclosure N183,848; 2-pole knife switches N7,900-24,300"
+     },
+     {
+      "url": "https://nigerianqueries.com/prices-of-electrical-materials-in-nigeria/",
+      "title": "Latest Prices of Electrical Materials in Nigeria (2026)",
+      "date": "2026-08-24",
+      "dateKind": "listed",
+      "quoted": "100 amp changeover N67,000-75,000"
+     }
+    ],
+    "notes": "Priced for the enclosed 4-pole switch normally used in building services. A 2-pole knife-type changeover costs only about N8,000-24,000. Confirm which type the rate is for."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "600x600 LED panel luminaire",
+   "catalogueName": "600x600 LED panel luminaire",
+   "unit": "nr",
+   "category": "MEP - Electrical - Luminaires (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 35000,
+    "low": 13500,
+    "high": 100000,
+    "confidence": "medium",
+    "conversion": "Each; median of 8 listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=600x600%20led%20panel%20light",
+      "title": "Jiji.ng search: 600x600 LED panel light",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Surface panel N13,500; warm white N18,000; grille panel N19,000; Ansell N35,000; generic N35,000; Philips N43,000 (x2); Philips Greenperform N100,000"
+     }
+    ],
+    "notes": "Generic panels cost N13,500-19,000, branded ones (Ansell/Philips) N35,000-43,000. Wattage is not stated."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "LED downlight (12W)",
+   "catalogueName": "LED downlight (12W)",
+   "unit": "nr",
+   "category": "MEP - Electrical - Luminaires (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 9500,
+    "low": 2500,
+    "high": 30000,
+    "confidence": "medium",
+    "conversion": "Each; median of 12 listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=12w%20led%20downlight",
+      "title": "Jiji.ng search: 12W LED downlight",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N2,500 / N3,000 / N3,200 / N4,500 / N6,500 / N8,500 / N10,500 / N15,000 (x2) / N25,000 / N30,000"
+     },
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=12w+led+downlight",
+      "title": "Jumia NG search: 12W LED downlight",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "AKT LED COB Downlight 12W N19,500"
+     }
+    ],
+    "notes": "The range is very wide, from glass \"POP\" lights to adjustable anti-glare COB fittings."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "LED linear luminaire",
+   "catalogueName": "LED linear luminaire",
+   "unit": "nr",
+   "category": "MEP - Electrical - Luminaires (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "LED batten (4ft, 18W)",
+   "catalogueName": "LED batten (4ft, 18W)",
+   "unit": "nr",
+   "category": "MEP - Electrical - Luminaires (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 4500,
+    "low": 3700,
+    "high": 13500,
+    "confidence": "medium",
+    "conversion": "Each; median of 5 single 4ft all-in-one LED fittings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=4ft%20led%20tube%20fitting",
+      "title": "Jiji.ng search: 4ft LED tube fitting",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Veiimax N3,700 / N3,800; Vellmax N4,500; mixed colour N6,500; Powertec 4ft single LED fitting complete N13,500"
+     }
+    ],
+    "notes": "The wattage is not stated on most listings (typically 18-20W). Powertec is the branded option at the top of the range."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "LED bulkhead (outdoor)",
+   "catalogueName": "LED bulkhead (outdoor)",
+   "unit": "nr",
+   "category": "MEP - Electrical - Luminaires (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 15000,
+    "low": 2200,
+    "high": 24000,
+    "confidence": "low",
+    "conversion": "Each; mid-range branded bulkhead chosen (the median of all 11 listings is N4,500)",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=led%20bulkhead%20light%20outdoor",
+      "title": "Jiji.ng search: LED bulkhead light outdoor",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Outdoor Bulkhead N15,000; Philips Essential 12W N17,000; IP65 bulkhead N20,000; Philips 15W round N24,000; generic N2,200-5,000"
+     }
+    ],
+    "notes": "Prices split into two groups: unbranded at N2,200-5,000 and branded/IP65 at N15,000-24,000. We used the lower end of the mid-range group. The price team should choose."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "LED floodlight (100W)",
+   "catalogueName": "LED floodlight (100W)",
+   "unit": "nr",
+   "category": "MEP - Electrical - Luminaires (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 42000,
+    "low": 36500,
+    "high": 45000,
+    "confidence": "medium",
+    "conversion": "Each; median of 5 mains-powered 100W listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=100w%20led%20floodlight",
+      "title": "Jiji.ng search: 100W LED floodlight",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "AKT 100W N36,500 / N38,000 / N42,000; 100W industrial floodlight N42,750; Havells 100W N45,000"
+     }
+    ],
+    "notes": "Solar and UV floodlights were excluded."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Ceiling fan",
+   "catalogueName": "Ceiling fan",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 35000,
+    "low": 24500,
+    "high": 68000,
+    "confidence": "medium",
+    "conversion": "Each; median of 9 standard AC 56-inch fans",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=ceiling+fan",
+      "title": "Jumia NG search: ceiling fan",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Ox Imperial 56\" N26,700; Duravolt 56\" N24,500 / N25,500"
+     },
+     {
+      "url": "https://jiji.ng/search?query=ceiling%20fan%2056%20inch",
+      "title": "Jiji.ng search: ceiling fan 56 inch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Qasa N35,000; Ox Imperial N35,500; Binatone N40,000; GSR N50,000; STC N27,000; Maxi N68,000; Panasonic N135,000 (excluded)"
+     }
+    ],
+    "notes": "AC/DC solar fans (N39,000-62,000) and Panasonic (N135,000) were excluded."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "150mm extractor fan",
+   "catalogueName": "150mm extractor fan",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 30000,
+    "low": 20000,
+    "high": 47500,
+    "confidence": "high",
+    "conversion": "Each; median of 16 six-inch (150mm) fans",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=extractor+fan",
+      "title": "Jumia NG search: extractor fan",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Futina 6\" N33,000 / N35,000 / N38,000 / N42,000 / N47,500; generic 6\" N26,000 / N26,300"
+     },
+     {
+      "url": "https://jiji.ng/search?query=extractor%20fan%206%20inch",
+      "title": "Jiji.ng search: extractor fan 6 inch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N20,000-43,210 incl. Futina N25,000, Lekaufen 150mm N29,870, FanGoFast 150mm N43,210"
+     }
+    ],
+    "notes": "Xpelair at N170,000 was excluded as premium."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "200mm extractor fan",
+   "catalogueName": "200mm extractor fan",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 43000,
+    "low": 29500,
+    "high": 68000,
+    "confidence": "medium",
+    "conversion": "Each; median of 17 eight-inch (200mm) fans",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/catalog/?q=extractor+fan",
+      "title": "Jumia NG search: extractor fan",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Futina 8\" N43,000 / N55,000 / N65,000; duct 8\" N29,500; generic metal 8\" N56,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=extractor%20fan%208%20inch",
+      "title": "Jiji.ng search: extractor fan 8 inch",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "N32,000-68,000 incl. Futina N33,000, Argent Crystal N35,000, 1st Image N57,000"
+     }
+    ],
+    "notes": "Includes both wall and ceiling-duct types."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Copper-bonded earth rod (1.2m) with clamp",
+   "catalogueName": "Copper-bonded earth rod (1.2m) with clamp",
+   "unit": "nr",
+   "category": "MEP - Electrical - Earthing & Lightning Protection (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 10400,
+    "low": 6500,
+    "high": 52500,
+    "confidence": "low",
+    "conversion": "Rod median N6,750 (1.2 m rods: N5,000-8,000; N45,000 outlier) + clamp median N3,650 (N1,500-7,500) -> N10,400",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=copper%20bonded%20earth%20rod",
+      "title": "Jiji.ng search: copper bonded earth rod",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "1.2m copper bonded N5,000; 4ft N6,000 / N6,500 / N7,000 / N8,000; \"4ft 100%\" N45,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=earth%20rod%20clamp",
+      "title": "Jiji.ng search: earth rod clamp",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Single clamps N1,500 / N3,200 / N3,500 / N3,800 / N4,000 / N7,500"
+     }
+    ],
+    "notes": "Rods at N5,000-8,000 are probably thin copper-coated steel. A genuine 16mm copper-bonded rod may cost much more (one listing at N45,000). Check the specification."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Earth inspection pit",
+   "catalogueName": "Earth inspection pit",
+   "unit": "nr",
+   "category": "MEP - Electrical - Earthing & Lightning Protection (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 15000,
+    "low": 12000,
+    "high": 75000,
+    "confidence": "medium",
+    "conversion": "Each; median of 12 listings",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=earth%20inspection%20pit",
+      "title": "Jiji.ng search: earth inspection pit",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Furse N15,000; plastic N12,000; PVC N12,500; N13,500; N14,000; N18,500; N19,000; N20,000; N25,000; N30,000; 400x400 concrete N75,000"
+     }
+    ],
+    "notes": "Price is for a plastic/polymer pit. A 400x400 concrete chamber costs about N75,000."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Ladder cable tray (300x75mm)",
+   "catalogueName": "Ladder cable tray (300x75mm)",
+   "unit": "m",
+   "category": "MEP - Electrical - Containment & Ducts (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "Cable trunking (50x50mm)",
+   "catalogueName": "Cable trunking (50x50mm)",
+   "unit": "m",
+   "category": "MEP - Electrical - Containment & Ducts (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 1111,
+    "low": 1111,
+    "high": 5833,
+    "confidence": "low",
+    "conversion": "PVC 50x50 N3,000 per 2.7 m length -> N1,111/m; galvanised 50x50 N17,500 per 3 m -> N5,833/m",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=pvc%20trunking%2050x50",
+      "title": "Jiji.ng search: PVC trunking 50x50",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "50x50x2.7meters PVC trunking pipe N3,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=cable%20trunking%2050x50",
+      "title": "Jiji.ng search: cable trunking 50x50",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "50x50mm Galvanized Trunk (3 meters) N17,500"
+     }
+    ],
+    "notes": "Priced as PVC trunking. If the specification is galvanised steel, use about N5,833/m. Only one listing for each material."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "1HP split air conditioner (indoor and outdoor units)",
+   "catalogueName": "1HP split air conditioner (indoor and outdoor units)",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 400300,
+    "low": 310000,
+    "high": 684200,
+    "confidence": "high",
+    "conversion": "Sold per set (indoor + outdoor). Median of 11 retail listings (mix of non-inverter and common inverter models); the median is a Haier Thermocool 09TESN non-inverter (conventional) split.",
+    "sources": [
+     {
+      "url": "https://zit.ng/collections/air-conditioners",
+      "title": "Zit Nigeria - Air Conditioners",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Hisense 1HP Copper Split ₦310,000; Skyrun 1HP ₦348,000; Glamstar 1HP ₦372,000; Kenstar 1HP with kit ₦402,000; Royal 1HP inverter ₦420,000; Thermocool 1HP Quantum ₦440,000; Midea 1HP inverter ₦515,000; Daikin 1HP ₦684,200"
+     },
+     {
+      "url": "https://blog.slot.ng/home-appliance-prices-in-nigeria-2026",
+      "title": "Slot - Home appliance prices in Nigeria 2026",
+      "date": "2026-08-31",
+      "dateKind": "listed",
+      "quoted": "Royal Split AC 1HP Basic ₦375,400; Haier Thermocool 09TESN Split Cool 1HP ₦400,300"
+     },
+     {
+      "url": "https://jiji.ng/ha/surulere/home-appliances/hisense-as09dk-split-unit-air-conditioner-1hp-2AREh1PCQieh7rO7dy1hfAeM.html",
+      "title": "Jiji - Hisense AS09DK Split Unit 1hp (Surulere, Lagos)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦355,000"
+     }
+    ],
+    "notes": "Excludes installation. Some listings include an installation kit. naijatechguide's table (₦68k-₦210k, last updated 7 Jan 2025) is stale and was not used."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "1.5HP split air conditioner (indoor and outdoor units)",
+   "catalogueName": "1.5HP split air conditioner (indoor and outdoor units)",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 462000,
+    "low": 320000,
+    "high": 1150000,
+    "confidence": "high",
+    "conversion": "Per set. Median of 13 listings (Glamstar 1.5HP inverter at the median). Mid-range non-inverter units sit around ₦415,000-₦432,000.",
+    "sources": [
+     {
+      "url": "https://zit.ng/collections/air-conditioners",
+      "title": "Zit Nigeria - Air Conditioners",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Bruhm 1.5HP + kit ₦415,000; Skyrun 1.5HP inverter ₦415,000; SYINIX 1.5HP inverter ₦430,000; Royal 1.5HP inverter ₦432,000; Glamstar 1.5HP inverter ₦462,000; Samsung 1.5HP ₦498,000; Kenstar 1.5HP inverter ₦502,000; LG 1.5HP Gencool Dual Inverter ₦533,000; Thermocool 1.5HP GenPal ₦619,000; Daikin 1.5HP inverter ₦863,500; Panasonic 1.5HP inverter ₦1,150,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=ac%20copper%20pipe",
+      "title": "Jiji search - Polystar 1.5hp Non-Inverter PV-SN12 (Epe, Lagos)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦340,000"
+     },
+     {
+      "url": "https://jiji.ng/search?query=ac%20installation%20kit",
+      "title": "Jiji search - Nexus 1.5hp Non Inverter split",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦320,000"
+     }
+    ],
+    "notes": "A wide spread across brands; premium brands (Daikin, Panasonic) double the price."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "2HP split air conditioner (indoor and outdoor units)",
+   "catalogueName": "2HP split air conditioner (indoor and outdoor units)",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 780000,
+    "low": 532000,
+    "high": 1128000,
+    "confidence": "medium",
+    "conversion": "Per set. Median of 13 listings (LG 2HP inverter split / Bruhm 2HP, both ₦780,000).",
+    "sources": [
+     {
+      "url": "https://zit.ng/collections/air-conditioners",
+      "title": "Zit Nigeria - Air Conditioners",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Royal 2HP ₦565,000; Haier Thermocool 2HP Low Voltage ₦648,000; Skyrun 2HP inverter ₦660,000; LG 2HP inverter ₦780,000; LG 2HP Dual Inverter ₦868,500; Thermocool 2HP GenPal ₦893,000; Haier 2HP GenPal ₦1,053,000; Panasonic 2HP Basic ₦1,128,000"
+     },
+     {
+      "url": "https://zit.ng/products/restpoint-2hp-split-unit-air-conditioner-rp-18pk",
+      "title": "Zit - Restpoint 2HP split RP-18PK",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦532,000"
+     },
+     {
+      "url": "https://www.zit.ng/products/hisense-2hp-copper-split-unit-air-conditioner-spl-2-hp-copper-tg",
+      "title": "Zit - Hisense 2HP Copper split",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦556,350 (was ₦620,000)"
+     },
+     {
+      "url": "https://zit.ng/products/midea-20hp-inverter-split-unit-air-conditioner",
+      "title": "Zit - Midea 2.0HP inverter split",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦864,000 (was ₦950,400)"
+     },
+     {
+      "url": "https://jiji.ng/search?query=ac%20installation%20kit",
+      "title": "Jiji search - Kenstar 2hp inverter with installation kit",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦610,000"
+     }
+    ],
+    "notes": "Non-inverter mid-range is about ₦556,000-₦648,000. The median is pulled up by inverter models; the price team may prefer about ₦610,000 for a basic unit."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "2.5HP split air conditioner (indoor and outdoor units)",
+   "catalogueName": "2.5HP split air conditioner (indoor and outdoor units)",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 990000,
+    "low": null,
+    "high": null,
+    "confidence": "low",
+    "conversion": "Per set. Single listing.",
+    "sources": [
+     {
+      "url": "https://zit.ng/products/haier-thermocool-2-5hp-split-cool-24tesn-01/",
+      "title": "Zit - Haier Thermocool 2.5HP Split Cool 24TESN-01",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦990,000 (out of stock)"
+     }
+    ],
+    "notes": "Only one current listing was found, and it is out of stock. Few retailers stock 2.5HP wall splits. naijatechguide's ₦205k-₦330k (Jan 2025) is stale. Get a dealer quote."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "3HP split air conditioner (indoor and outdoor units)",
+   "catalogueName": "3HP split air conditioner (indoor and outdoor units)",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "5HP floor standing air conditioner",
+   "catalogueName": "5HP floor standing air conditioner",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 2400000,
+    "low": 1724000,
+    "high": 4080000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of 7 zit.ng listings (Kenstar 5HP non-inverter).",
+    "sources": [
+     {
+      "url": "https://zit.ng/products/hisense-5hp-floor-standing-air-conditioner-5-tons-fs-5hp",
+      "title": "Zit - Hisense 5HP Floor Standing FS 5HP",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦1,724,000"
+     },
+     {
+      "url": "https://zit.ng/products/polystar-5tons-inverter-floor-standing-ac-501-inv",
+      "title": "Zit - Polystar 5 tons inverter floor standing",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦1,977,360"
+     },
+     {
+      "url": "https://zit.ng/products/restpoint-5hp-floor-standing-air-conditioner-pc-5005b",
+      "title": "Zit - Restpoint 5HP floor standing",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦2,162,738 (product page) / ₦2,290,600 (collection page)"
+     },
+     {
+      "url": "https://zit.ng/products/kenstar-floor-standing-5tons-air-conditioner",
+      "title": "Zit - Kenstar 5HP floor standing",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦2,400,000"
+     },
+     {
+      "url": "https://zit.ng/products/hisense-floor-standing-air-conditioner-fs-5hp-inverter",
+      "title": "Zit - Hisense 5HP inverter floor standing",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦2,815,000"
+     },
+     {
+      "url": "https://zit.ng/products/samsung-5-hp-inverter-floor-standing-air-conditioner-5tons-1",
+      "title": "Zit - Samsung 5HP inverter floor standing",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦3,480,000"
+     },
+     {
+      "url": "https://zit.ng/collections/air-conditioners",
+      "title": "Zit - Panasonic 5HP standing unit",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦4,080,000"
+     }
+    ],
+    "notes": "Mostly from one retailer. A mid-range non-inverter unit costs about ₦1.7m-₦2.4m."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Copper refrigerant pipe pair",
+   "catalogueName": "Copper refrigerant pipe pair",
+   "unit": "m",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "Refrigerant pipe insulation (Armaflex)",
+   "catalogueName": "Refrigerant pipe insulation (Armaflex)",
+   "unit": "m",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 750,
+    "low": 750,
+    "high": 950,
+    "confidence": "low",
+    "conversion": "Listings are per tube. Assumes the standard Armaflex tube length of 2 m (manufacturer standard; the listings do not state the length): 5/8 in tube ₦1,500 / 2 m = ₦750/m; 7/8 in ₦1,900 / 2 m = ₦950/m. This is per metre of a single pipe; a pair (liquid + suction) needs two tubes, about ₦1,500-₦1,700/m.",
+    "sources": [
+     {
+      "url": "https://jiji.ng/ojo/building-materials/5-8-armaflex-insulation-hose-pipe-5mz5ELWz01rNX2o2HeNWJAZj.html",
+      "title": "Jiji - 5/8\" Armaflex Insulation Hose/Pipe (Ojo, Lagos)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦1,500"
+     },
+     {
+      "url": "https://jiji.ng/ojo/building-materials/7-8-armaflex-insulation-hose-pipe-r1qSw3Wq50PXXr58RvvQYMCK.html",
+      "title": "Jiji - 7/8\" Armaflex Insulation Hose/Pipe (Ojo, Lagos)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦1,900"
+     }
+    ],
+    "notes": "One seller. The tube length and wall thickness are not stated, and the 2 m assumption must be confirmed. Decide whether the rate is per single pipe or per pair."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Outdoor unit wall bracket and fixings",
+   "catalogueName": "Outdoor unit wall bracket and fixings",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 10000,
+    "low": 7250,
+    "high": 25000,
+    "confidence": "medium",
+    "conversion": "Per bracket pair. Median of 3 listings. Fixings are not priced separately.",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=ac%20outdoor%20bracket",
+      "title": "Jiji search - AC outdoor bracket",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "AC Wall Bracket Outdoor Hanger ₦7,250 (Ojo, Lagos); Greenlight AC Bracket GLE-120 ₦10,000 (Ikeja, Lagos); NTD-ACHG1 Heavy-Duty AC Brackets ₦25,000 (Owerri)"
+     }
+    ],
+    "notes": "Add a small amount for anchor bolts if they are not included."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "0.6mm galvanised steel sheet ductwork",
+   "catalogueName": "0.6mm galvanised steel sheet ductwork",
+   "unit": "m2",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "Duct sealant, hangers and fixings allowance",
+   "catalogueName": "Duct sealant, hangers and fixings allowance",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "Flexible duct (200mm)",
+   "catalogueName": "Flexible duct (200mm)",
+   "unit": "m",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "600x600 aluminium supply air diffuser",
+   "catalogueName": "600x600 aluminium supply air diffuser",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "600x300 aluminium return air grille",
+   "catalogueName": "600x300 aluminium return air grille",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "material",
+   "name": "Inline duct fan (200mm)",
+   "catalogueName": "Inline duct fan (200mm)",
+   "unit": "nr",
+   "category": "MEP - Mechanical - Air Conditioning & Ventilation (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 105000,
+    "low": 85000,
+    "high": 300000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of 3 listings of 8 inch (200 mm) inline fans.",
+    "sources": [
+     {
+      "url": "https://jiji.ng/ojo/other-repair-and-constraction-items/duct-extractor-inline-pTNURiVTcsPJ9Rhdzm06zWG0.html",
+      "title": "Jiji - 8 inch RF duct inline extractor fan (Ojo)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦105,000"
+     },
+     {
+      "url": "https://jiji.ng/ojo/manufacturing-equipments/in-line-extractors-8M0Wu0HDfwQ5GLodEQRPD0yW.html",
+      "title": "Jiji - 8 inch inline ducted extractor (Ojo)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦85,000"
+     },
+     {
+      "url": "https://jiji.ng/ikeja/manufacturing-equipments/extractor-fan-wQfO32D0m7NfLMV6COXhcLsk.html",
+      "title": "Jiji - 8 inch S&P inline duct fan (Ikeja)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦300,000"
+     }
+    ],
+    "notes": "The ₦300k listing is a premium brand (S&P). A generic unit costs ₦85k-₦105k."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "6kg dry powder fire extinguisher",
+   "catalogueName": "6kg dry powder fire extinguisher",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 18500,
+    "low": 16954,
+    "high": 30000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of 3 listings.",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/fire-extinguishers/",
+      "title": "Jumia - Fire extinguishers",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Angus 6kg DCP ₦16,954; Angus 6kg DCP ₦18,500"
+     },
+     {
+      "url": "https://jiji.ng/search?query=12kg%20fire%20extinguisher",
+      "title": "Jiji search - 6kg DCP (Lagos)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦30,000"
+     }
+    ],
+    "notes": "nigerianqueries.com (19 Aug 2026) gives generic ranges of ₦5,000-₦15,000 for budget brands."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "9kg dry powder fire extinguisher",
+   "catalogueName": "9kg dry powder fire extinguisher",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 28250,
+    "low": 22999,
+    "high": 39000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of 4 listings (mean of ₦26,500 and ₦30,000).",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/fire-extinguishers/",
+      "title": "Jumia - Fire extinguishers",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Angus 9kg DCP ₦22,999; Angus 9kg DCP ₦26,500"
+     },
+     {
+      "url": "https://jiji.ng/search?query=12kg%20fire%20extinguisher",
+      "title": "Jiji search - 9kg DCP",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦30,000 (Lagos); ₦39,000 (Abuja)"
+     }
+    ],
+    "notes": ""
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "12kg dry powder fire extinguisher",
+   "catalogueName": "12kg dry powder fire extinguisher",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 55000,
+    "low": 40000,
+    "high": 85000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of 7 DCP listings (a 12kg CO2 listing at ₦220,000 was excluded).",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=12kg%20fire%20extinguisher",
+      "title": "Jiji search - 12kg fire extinguisher",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦40,000 (Ajah); ₦45,000 (Alimosho); ₦50,000 (Lagos Island); ₦55,000 (Ojo); ₦70,000, ₦75,000, ₦85,000 (Port Harcourt)"
+     }
+    ],
+    "notes": "Lagos-only listings give ₦40k-₦55k; Port Harcourt listings are higher."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "5kg CO2 fire extinguisher",
+   "catalogueName": "5kg CO2 fire extinguisher",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 55000,
+    "low": 35000,
+    "high": 95000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of the sampled listings.",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=5kg%20co2%20fire%20extinguisher",
+      "title": "Jiji search - 5kg CO2 fire extinguisher",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦35,000 (Orile); ₦45,000 (Lagos Island); ₦55,000 DX (VI); ₦55,000 Angus (Sagamu); ₦60,000 (Lekki); range up to ₦95,000"
+     }
+    ],
+    "notes": "Most listings fall at ₦40k-₦55k."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Wall bracket and fixings",
+   "catalogueName": "Wall bracket and fixings",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 3000,
+    "low": 1000,
+    "high": 5000,
+    "confidence": "low",
+    "conversion": "Midpoint of the quoted range for fire extinguisher wall mounts.",
+    "sources": [
+     {
+      "url": "https://nigerianqueries.com/best-brands-of-fire-extinguishers-prices-in-nigeria/",
+      "title": "Best Brands of Fire Extinguishers & Prices in Nigeria (2026)",
+      "date": "2026-08-19",
+      "dateKind": "listed",
+      "quoted": "Wall mounts: ₦1,000 – ₦5,000"
+     }
+    ],
+    "notes": "Blog range only; no standalone bracket listing was found on jiji.ng. Many extinguishers come with a bracket."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Optical smoke detector",
+   "catalogueName": "Optical smoke detector",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 16750,
+    "low": 9000,
+    "high": 65000,
+    "confidence": "medium",
+    "conversion": "Per head. Median of 10 conventional/optical listings in Lagos (mean of ₦15,500 and ₦18,000). A Consilium marine detector at ₦95,000 was excluded.",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=conventional%20smoke%20detector",
+      "title": "Jiji search - conventional smoke detector",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Chloride UK Eco ₦9,000; Chloride UK ₦11,000; Zeta ₦11,000; Zeta optical ₦13,000; C-Tec optical ₦15,500; Zeta conventional ₦18,000; Visionwide ₦22,000; Honeywell ₦49,000; Esser optical ₦62,850; Kidde ₦65,000"
+     }
+    ],
+    "notes": "Budget UK-brand heads cost ₦9k-₦22k; premium brands ₦49k-₦65k. It is unclear whether the prices include the base."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Heat detector",
+   "catalogueName": "Heat detector",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 10250,
+    "low": 8500,
+    "high": 12000,
+    "confidence": "low",
+    "conversion": "Per head. Mean of 2 listings.",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=conventional%20smoke%20detector",
+      "title": "Jiji search - conventional detectors (heat)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Chloride UK heat detector ₦12,000 (Ikeja); Chloride UK Eco heat detector ₦8,500 (Ojo)"
+     }
+    ],
+    "notes": "Only 2 listings, both Chloride."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Manual call point",
+   "catalogueName": "Manual call point",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 12500,
+    "low": 8000,
+    "high": 25000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of 6 conventional listings (addressable and ex-rated units excluded).",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=manual%20call%20point",
+      "title": "Jiji search - manual call point",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Chloride UK resettable ₦8,000; break glass resettable ₦8,500; break glass ₦11,000; Chloride ₦14,000 (Enugu); Gent resettable ₦17,000; MCP/break glass ₦25,000"
+     }
+    ],
+    "notes": ""
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Fire alarm sounder",
+   "catalogueName": "Fire alarm sounder",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 18000,
+    "low": 14000,
+    "high": 25000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of 5 conventional sounder/bell listings (addressable excluded).",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=fire%20alarm%20sounder",
+      "title": "Jiji search - fire alarm sounder",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Sounder flasher 12-24VDC ₦14,000; sounder bell strobe ₦17,000; Chloride UK sounder ₦18,000; sounder with flasher ₦22,000; alarm bell ₦25,000"
+     }
+    ],
+    "notes": "Includes sounder-strobe combos."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "4-zone conventional fire alarm panel",
+   "catalogueName": "4-zone conventional fire alarm panel",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 240000,
+    "low": 100000,
+    "high": 750000,
+    "confidence": "medium",
+    "conversion": "Per panel. Median of 10 listings (mean of ₦220,000 and ₦260,000).",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=4%20zone%20fire%20alarm%20panel",
+      "title": "Jiji search - 4 zone fire alarm panel",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Generic ₦100,000/₦110,000/₦130,000; Intergent ₦110,000; Hikvision ₦220,000; C-Tec ₦260,000/₦285,000; Zeta IN4 ₦350,000; Asenware ₦550,000 (PH); Gent ₦750,000"
+     }
+    ],
+    "notes": "Brand-dependent: generic panels cost about ₦100k-₦130k; UK brands (C-Tec, Zeta) ₦260k-₦350k."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Fire hose reel (30m) with cabinet",
+   "catalogueName": "Fire hose reel (30m) with cabinet",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 240000,
+    "low": 190000,
+    "high": 300000,
+    "confidence": "medium",
+    "conversion": "Per set. Median of 6 single-cabinet listings (double cabinets excluded).",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=fire%20hose%20reel%20cabinet",
+      "title": "Jiji search - fire hose reel cabinet",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦190,000 (PH); ₦230,000 (Orile); ₦230,000 13mm 30m (PH); Angus ₦250,000; 3/4\" 30m with cabinet ₦285,000 (Orile); ₦300,000 (Ojo)"
+     }
+    ],
+    "notes": "Not every listing states a 30 m hose. The 3/4 in 30 m with cabinet listing is ₦285,000. A jiji listing at ₦365,000 also appeared in web search results."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "Fire blanket",
+   "catalogueName": "Fire blanket",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 14999,
+    "low": 14400,
+    "high": 15000,
+    "confidence": "medium",
+    "conversion": "Per blanket, 1.2 x 1.8 m. Median of 3 listings.",
+    "sources": [
+     {
+      "url": "https://www.jumia.com.ng/fire-extinguishers/",
+      "title": "Jumia - fire blankets",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "1.2m x 1.8m fire blanket ₦14,400 to ₦15,000; fiberglass 1.2m x 1.8m ₦14,999"
+     }
+    ],
+    "notes": "1.2 x 1.8 m size; generic brand."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "LED emergency light",
+   "catalogueName": "LED emergency light",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 61750,
+    "low": 30000,
+    "high": 65000,
+    "confidence": "low",
+    "conversion": "Per unit. Median of twin-spot / bulkhead LED listings (an explosion-proof unit at ₦150,000 was excluded).",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=twin%20spot%20emergency%20light",
+      "title": "Jiji search - twin spot emergency light",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Virgo IP65 twin-head ₦61,750; twin emergency spot light ₦65,000 (Ojo)"
+     },
+     {
+      "url": "https://jiji.ng/search?query=emergency%20exit%20sign%20light",
+      "title": "Jiji search - emergency lights",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Ansell Kite LED emergency light ₦30,000 (Ojo); LED emergency light ₦48,000 (PH)"
+     }
+    ],
+    "notes": "Few listings. A simple non-maintained LED bulkhead (e.g. Ansell Kite) costs about ₦30,000; twin-spot units about ₦62k-₦65k. Choose the type the spec intends."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "material",
+   "name": "LED exit sign",
+   "catalogueName": "LED exit sign",
+   "unit": "nr",
+   "category": "MEP - Fire - Protection & Alarm (supply)",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 31500,
+    "low": 15000,
+    "high": 125000,
+    "confidence": "medium",
+    "conversion": "Per unit. Median of 10 listings (mean of ₦30,000 and ₦33,000).",
+    "sources": [
+     {
+      "url": "https://jiji.ng/search?query=emergency%20exit%20sign%20light",
+      "title": "Jiji search - emergency exit sign light",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "₦15,000 x2; ₦25,000 x2; ₦30,000; ₦33,000 wall mounted; ₦55,000; Eterna slim maintained ₦85,000/₦125,000; EM134C ₦110,000 (Lagos)"
+     }
+    ],
+    "notes": "Basic exit signs cost ₦15k-₦33k; branded maintained units ₦85k-₦125k."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "labour",
+   "name": "Plumber (skilled)",
+   "catalogueName": "Plumber",
+   "unit": "day",
+   "category": "Labour - MEP",
+   "inMaster": true,
+   "masterPrice": 10000,
+   "researched": {
+    "price": 19000,
+    "low": 16000,
+    "high": 22000,
+    "confidence": "medium",
+    "sources": [
+     {
+      "url": "https://www.profolio.ng/plumber/salary-guide",
+      "title": "Profolio - Plumber salary guide (Nigeria)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Lagos: N16,000 to N22,000 per day (citing a Nigerian labour-cost guide published 30 April 2026; national N10,000-N22,000)"
+     }
+    ],
+    "notes": "Secondary aggregator; the underlying 30 April 2026 guide is not named or linked, so the primary could not be checked. Midpoint 19,000 is 1.9x RateGen's south_west Plumber (skilled) 10,000 and even the Lagos low (16,000) is above RateGen's 15,000 foreman. RateGen's plumber rate looks stale/low for Lagos (it sits at the bottom of the national band)."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "labour",
+   "name": "Electrician (skilled)",
+   "catalogueName": "Electrician",
+   "unit": "day",
+   "category": "Labour - MEP",
+   "inMaster": true,
+   "masterPrice": 10000,
+   "researched": {
+    "price": 18000,
+    "low": 15000,
+    "high": 25000,
+    "confidence": "medium",
+    "sources": [
+     {
+      "url": "https://www.profolio.ng/electrician/salary-guide",
+      "title": "Profolio - Electrician salary guide (Nigeria)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Skilled electricians N10,000 to N20,000 a day; commercial fit-out N15,000-N20,000 per day; rates sit at the top of that range in Lagos, Abuja and Port Harcourt"
+     },
+     {
+      "url": "https://www.profolio.ng/plumber/salary-guide",
+      "title": "Profolio - Plumber salary guide (comparative trades table)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Electrician: N12,000-N25,000 per day (30 April 2026 labour-cost guide, national)"
+     }
+    ],
+    "notes": "Typical figure is a reasoned pick within quoted bands, not a single quoted Lagos number; price team should confirm. 1.8x RateGen's south_west Electrician (skilled) 10,000, which equals the national floor."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "labour",
+   "name": "HVAC technician (split AC installer)",
+   "catalogueName": "HVAC technician",
+   "unit": "day",
+   "category": "Labour - MEP",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": {
+    "price": 8650,
+    "low": 5770,
+    "high": 11540,
+    "confidence": "low",
+    "sources": [
+     {
+      "url": "https://www.profolio.ng/hvac-technician/salary-guide",
+      "title": "Profolio - HVAC technician salary guide (Nigeria)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Lagos job adverts June-September 2026 cluster between N150,000 and N300,000 a month; split installs 1-1.5HP N20,000-N35,000 per unit"
+     },
+     {
+      "url": "https://www.hotnigerianjobs.com/print/646852/",
+      "title": "AC Technician at Eko Maintenance Limited (search snippet; listing cited by Profolio at N150,000-N200,000, Victoria Island, Aug 2026)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "HVAC technician role at N150,000 to N200,000 (per Profolio summary)"
+     }
+    ],
+    "notes": "No credible published day rate found for AC installers; most AC work is priced per unit (N20,000-N50,000 per split install). The salaried-employee conversion understates what a site subcontractor charges per day, so treat 8,650 as a floor. It sits below RateGen's Skilled/Artisan 10,000. RateGen has no HVAC labour row in south_west; suggest pricing at least at the skilled plumber/electrician level pending a contractor quote."
+   },
+   "checkedPrice": null,
+   "status": "researched"
+  },
+  {
+   "kind": "labour",
+   "name": "Duct fitter (sheet metal)",
+   "catalogueName": "Duct fitter",
+   "unit": "day",
+   "category": "Labour - MEP",
+   "inMaster": false,
+   "masterPrice": null,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "needs-price"
+  },
+  {
+   "kind": "labour",
+   "name": "Plumber mate",
+   "catalogueName": "Mate",
+   "unit": "day",
+   "category": "Labour - MEP",
+   "inMaster": true,
+   "masterPrice": 7000,
+   "researched": {
+    "price": 6500,
+    "low": 5000,
+    "high": 8000,
+    "confidence": "low",
+    "sources": [
+     {
+      "url": "https://www.profolio.ng/bricklayer/salary-guide",
+      "title": "Profolio - Bricklayer salary guide (Nigeria)",
+      "date": "2026-10-03",
+      "dateKind": "accessed",
+      "quoted": "Site labourers serving masons earn N5,000 to N8,000 per day"
+     }
+    ],
+    "notes": "National band for mason's labourers, not Lagos-specific and not specifically a plumber's/electrician's mate (Lagos likely toward the top, ~8,000). Sits between RateGen's Labourer 5,500 and its Plumber/Electrician mate 7,000, so RateGen's mate rate is broadly in line, unlike its skilled rates. Older Structville figure of N2,000-N4,000/day is pre-2024 and was ignored."
+   },
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "labour",
+   "name": "Electrician mate",
+   "catalogueName": "Electrician mate",
+   "unit": "day",
+   "category": "Labour - Electrical",
+   "inMaster": true,
+   "masterPrice": 7000,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "in-master"
+  },
+  {
+   "kind": "labour",
+   "name": "Pipefitter (PPR fusion and uPVC solvent welding)",
+   "catalogueName": "Pipefitter (PPR fusion and uPVC solvent welding)",
+   "unit": "day",
+   "category": "Labour - Plumbing",
+   "inMaster": true,
+   "masterPrice": 10000,
+   "researched": null,
+   "checkedPrice": null,
+   "status": "in-master"
+  }
+ ]
+}

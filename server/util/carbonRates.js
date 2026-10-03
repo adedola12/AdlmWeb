@@ -252,8 +252,9 @@ function assessRate(rate, lib, labourNames, refs) {
 
     const bl = { componentName: name, quantity: qty, unit, unitPrice, totalPrice: total, refName: name, refKind: kind, carbonKg: null, carbonBasis: "" };
 
-    const person = kind === "labour" || HANDLING.test(name) || PEOPLE.test(name) || TIME_UNIT.test(unit)
-      || labourNames.has(name.toLowerCase());
+    // a cloud line marked material is material, whatever its name ("2-gang switch" is not a gang)
+    const person = kind === "labour" || (refKind !== "material"
+      && (HANDLING.test(name) || PEOPLE.test(name) || TIME_UNIT.test(unit) || labourNames.has(name.toLowerCase())));
     if (consumable && !fuel) {
       bl.carbonBasis = "Plant oil and consumables: no published carbon factor; not counted. It lowers this rate's coverage.";
       breakdown.push(bl);

@@ -109,6 +109,12 @@ function sizedMass(m, n, u) {
       if (u !== "m") return null;
       let mm2 = 0;
       for (const c of n.matchAll(/(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*mm/g)) mm2 += Number(c[1]) * Number(c[2]);
+      // "16mm2 4-core armoured", "5 core 6mm2": the cores times the size
+      if (!mm2) {
+        const size = n.match(/(\d+(?:\.\d+)?)\s*mm(?:²|2)/);
+        const cores = n.match(/(\d+)[\s-]*cores?\b/);
+        if (size && cores) mm2 = Number(cores[1]) * Number(size[1]);
+      }
       if (!mm2) {
         const one = n.match(/(\d+(?:\.\d+)?)\s*mm(²|2)/);
         if (one) mm2 = Number(one[1]);
