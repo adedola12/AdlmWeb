@@ -25,6 +25,7 @@ import { EN_DASH, money, num } from "./workProjectFormat.js";
 import { Bar } from "./workProjectBits.jsx";
 import { withLineElement, withLineProgress } from "./saveProject.js";
 import { applicableCount, searchRates } from "./rateSearch.js";
+import { pricedSentence, similarLines } from "./similarLines.js";
 import {
   actualAmountOf,
   actualQtyOf,
@@ -53,6 +54,8 @@ export default function WorkProjectLinePanel({
   onSearchRates,
   libraryFailed = false,
   onApplyRate,
+  onPriceMany,
+  pricedNote = null,
   pricing = false,
   priceFailed = "",
   priceNotes = [],
@@ -110,6 +113,36 @@ export default function WorkProjectLinePanel({
       live = false;
     };
   }, [query, library, onSearchRates]);
+
+  // THE SAME ITEM ELSEWHERE ON THE BILL.
+  //
+  // "Lintel Concrete" on every level is one decision, not thirty-six. The
+  // unpriced lines that are the same item, in the same unit, are listed and
+  // ticked; picking a rate prices this line and every ticked one in one write.
+  // Unticking is how a QS says "not that one". A priced line is never touched.
+  const similar = React.useMemo(() => (it ? similarLines(items, it) : []), [items, it]);
+  // Codes the QS unticked. Kept per line opened: moving to another line starts
+  // with everything ticked again.
+  const [unticked, setUnticked] = React.useState(() => new Set());
+  const [showAllSimilar, setShowAllSimilar] = React.useState(false);
+  React.useEffect(() => {
+    setUnticked(new Set());
+    setShowAllSimilar(false);
+  }, [code]);
+  const ticked = similar.filter((l) => !unticked.has(l.code));
+
+  // One rate for this line and the ticked ones; one rate per line otherwise.
+  const applyRate = (r) => {
+    if (ticked.length && typeof onPriceMany === "function") {
+      const pick = { rateId: r.rateId, description: r.description, unit: r.unit };
+      onPriceMany(
+        [{ code, ...pick }, ...ticked.map((l) => ({ code: l.code, ...pick }))],
+        "similar",
+      );
+      return;
+    }
+    onApplyRate?.(code, r);
+  };
 
   const found = React.useMemo(
     () => (library ? searchRates(library, query, { unit: unitOf(it), limit: 8 }) : []),
@@ -224,6 +257,60 @@ export default function WorkProjectLinePanel({
         ) : (
           <p className="none">No rate yet — it is not counted in the estimated total.</p>
         )}
+
+        {canEdit && similar.length ? (
+          <SimilarLines
+            lines={similar}
+            unticked={unticked}
+            showAll={showAllSimilar}
+            onShowAll={() => setShowAllSimilar(true)}
+            disabled={pricing || saving}
+            onToggle={(c) =>
+              setUnticked((prev) => {
+                const next = new Set(prev);
+                if (next.has(c)) next.delete(c);
+                else next.add(c);
+                return next;
+              })
+            }
+            onOpen={onGoToLine}
+            priced={priced}
+            unit={unitOf(it)}
+          />
+        ) : null}
+
+        {canEdit && priced && ticked.length && typeof onPriceMany === "function" ? (
+          // This line already has its rate. Copying it to the rest is the same
+          // decision, so it is one button. The server copies the rate this line
+          // was priced FROM, which only exists if it was priced on the web; a
+          // rate typed in a plugin is skipped with that reason.
+          <button
+            type="button"
+            className="ds-btn ds-btn-sm"
+            disabled={pricing || saving}
+            onClick={() =>
+              onPriceMany(
+                ticked.map((l) => ({ code: l.code, sameAs: code })),
+                "similar",
+              )
+            }
+          >
+            Price {ticked.length} similar {ticked.length === 1 ? "line" : "lines"} at this rate
+          </button>
+        ) : null}
+
+        {pricedNote && (pricedNote.priced.length || pricedNote.skipped.length) ? (
+          <div className="pn-done" role="status">
+            <p>{pricedSentence({ _priced: pricedNote.priced, _skipped: pricedNote.skipped })}</p>
+            {pricedNote.skipped.length ? (
+              <ul className="pn-notes">
+                {pricedNote.skipped.slice(0, 6).map((k) => (
+                  <li key={k.code}>{k.reason}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
         {canEdit && !priced && picks?.length ? (
           <div className="pn-rates">
             <span className="pn-rates-k">Price it from your own rates</span>
@@ -233,7 +320,7 @@ export default function WorkProjectLinePanel({
                 type="button"
                 className="pn-rate"
                 disabled={pricing || saving}
-                onClick={() => onApplyRate?.(code, r)}
+                onClick={() => applyRate(r)}
               >
                 <b>{money(r.unitPrice)}</b>
                 <span className="d">{r.description}</span>
@@ -243,8 +330,11 @@ export default function WorkProjectLinePanel({
               </button>
             ))}
             <p className="hint">
-              Applying one sets this line&rsquo;s rate and prices its material, labour and
-              plant in the budget.
+              Applying one sets this line&rsquo;s rate
+              {ticked.length
+                ? ` and the ${ticked.length} ticked ${ticked.length === 1 ? "line" : "lines"} like it`
+                : ""}
+              , and prices material, labour and plant in the budget.
             </p>
           </div>
         ) : null}
@@ -287,7 +377,7 @@ export default function WorkProjectLinePanel({
                       // thickness and looks entirely reasonable on the bill.
                       disabled={!r.canApply || pricing || saving}
                       title={r.canApply ? undefined : r.why}
-                      onClick={() => onApplyRate?.(code, r)}
+                      onClick={() => applyRate(r)}
                     >
                       <b>{money(r.amount)}</b>
                       <span className="d">{r.description}</span>
@@ -487,6 +577,59 @@ export default function WorkProjectLinePanel({
         </button>
       </div>
     </>
+  );
+}
+
+/** How many lines to list before "Show all": a 36-level item would fill the panel. */
+const SIMILAR_SHOWN = 6;
+
+/**
+ * The lines that are the same item as this one, each with a tick.
+ *
+ * Ticked by default, because that is what the QS almost always means; the
+ * list is there so "almost always" is never a surprise.
+ */
+function SimilarLines({ lines, unticked, showAll, onShowAll, onToggle, onOpen, disabled, priced, unit }) {
+  const shown = showAll ? lines : lines.slice(0, SIMILAR_SHOWN);
+  const on = lines.filter((l) => !unticked.has(l.code)).length;
+  return (
+    <div className="pn-similar">
+      <span className="pn-rates-k">
+        {priced ? "Same item, no rate yet" : "Also price the same item on"} &middot; {on} of{" "}
+        {lines.length}
+      </span>
+      <ul>
+        {shown.map((l) => (
+          <li key={l.code}>
+            <label>
+              <input
+                type="checkbox"
+                checked={!unticked.has(l.code)}
+                disabled={disabled}
+                onChange={() => onToggle(l.code)}
+              />
+              <span className="lv">{l.level || l.code}</span>
+              <span className="q">
+                {num(l.qty)} {l.unit || unit}
+              </span>
+            </label>
+            <button type="button" className="pj-lnk" onClick={() => onOpen?.(l.index)}>
+              Open
+            </button>
+          </li>
+        ))}
+      </ul>
+      {!showAll && lines.length > SIMILAR_SHOWN ? (
+        <button type="button" className="pj-lnk" onClick={onShowAll}>
+          Show all {lines.length}
+        </button>
+      ) : null}
+      <p className="hint">
+        {priced
+          ? "Untick any line that should not take this rate."
+          : "Picking a rate below prices this line and every ticked one. Untick any that should differ."}
+      </p>
+    </div>
   );
 }
 

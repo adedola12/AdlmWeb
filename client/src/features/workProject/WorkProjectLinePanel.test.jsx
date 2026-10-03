@@ -656,3 +656,99 @@ describe("pricing a line by searching for a rate by name", () => {
     expect(within(c).queryByPlaceholderText(/Search your rates/)).toBe(null);
   });
 });
+
+describe("pricing the same item on every level at once", () => {
+  const lintel = (lv, over = {}) => ({
+    code: `L${lv}`,
+    description: `Blockwork - Lintel Concrete [L:0${lv} FLOOR ${lv} | T:Generic - 230mm]`,
+    qty: lv,
+    unit: "m3",
+    rate: 0,
+    category: "Frames",
+    ...over,
+  });
+  const bill = {
+    items: [lintel(1), lintel(2), lintel(3), lintel(4, { rate: 9000 }), lintel(5, { unit: "m2" })],
+  };
+  const pick = { rateId: "c20", description: "Concrete grade 20", unit: "m3", unitPrice: 154916, why: "You used this on 3 lines" };
+
+  it("lists the unpriced lines of the same item, all ticked", async () => {
+    const c = render(
+      <WorkProjectLinePanel project={bill} index={0} canEdit onFetchRates={vi.fn().mockResolvedValue([pick])} onPriceMany={vi.fn()} />,
+    ).container;
+    const boxes = [...c.querySelectorAll(".pn-similar input[type=checkbox]")];
+    // L2 and L3: L4 is priced and L5 is in m2.
+    expect(boxes).toHaveLength(2);
+    expect(boxes.every((b) => b.checked)).toBe(true);
+  });
+
+  it("prices this line and the ticked ones in one call", async () => {
+    const onPriceMany = vi.fn();
+    const onApplyRate = vi.fn();
+    const c = render(
+      <WorkProjectLinePanel
+        project={bill}
+        index={0}
+        canEdit
+        onFetchRates={vi.fn().mockResolvedValue([pick])}
+        onApplyRate={onApplyRate}
+        onPriceMany={onPriceMany}
+      />,
+    ).container;
+    // Untick L3.
+    fireEvent.click(c.querySelectorAll(".pn-similar input")[1]);
+    await waitFor(() => expect(c.querySelector(".pn-rate")).toBeTruthy());
+    fireEvent.click(c.querySelector(".pn-rate"));
+    expect(onApplyRate).not.toHaveBeenCalled();
+    const [lines, via] = onPriceMany.mock.calls[0];
+    expect(via).toBe("similar");
+    expect(lines.map((l) => l.code)).toEqual(["L1", "L2"]);
+    expect(lines[1]).toMatchObject({ rateId: "c20", unit: "m3" });
+  });
+
+  it("falls back to the single-line call when every line is unticked", async () => {
+    const onPriceMany = vi.fn();
+    const onApplyRate = vi.fn();
+    const c = render(
+      <WorkProjectLinePanel project={bill} index={0} canEdit onFetchRates={vi.fn().mockResolvedValue([pick])} onApplyRate={onApplyRate} onPriceMany={onPriceMany} />,
+    ).container;
+    c.querySelectorAll(".pn-similar input").forEach((b) => fireEvent.click(b));
+    await waitFor(() => expect(c.querySelector(".pn-rate")).toBeTruthy());
+    fireEvent.click(c.querySelector(".pn-rate"));
+    expect(onPriceMany).not.toHaveBeenCalled();
+    expect(onApplyRate).toHaveBeenCalledWith("L1", pick);
+  });
+
+  it("copies a priced line's rate to the rest with one button", () => {
+    const onPriceMany = vi.fn();
+    const priced = { items: [lintel(1, { rate: 154916 }), lintel(2), lintel(3)] };
+    const c = render(<WorkProjectLinePanel project={priced} index={0} canEdit onPriceMany={onPriceMany} />).container;
+    fireEvent.click(within(c).getByText("Price 2 similar lines at this rate"));
+    expect(onPriceMany).toHaveBeenCalledWith(
+      [
+        { code: "L2", sameAs: "L1" },
+        { code: "L3", sameAs: "L1" },
+      ],
+      "similar",
+    );
+  });
+
+  it("says how many were priced and why any were skipped", () => {
+    const c = render(
+      <WorkProjectLinePanel
+        project={bill}
+        index={0}
+        canEdit
+        onPriceMany={vi.fn()}
+        pricedNote={{ priced: ["L1", "L2"], skipped: [{ code: "L3", reason: "That rate is not in your Rate Gen library" }] }}
+      />,
+    ).container;
+    expect(within(c).getByText("Priced 2 lines. 1 line skipped.")).toBeTruthy();
+    expect(within(c).getByText("That rate is not in your Rate Gen library")).toBeTruthy();
+  });
+
+  it("offers a view-only reader nothing to tick", () => {
+    const c = render(<WorkProjectLinePanel project={bill} index={0} />).container;
+    expect(c.querySelector(".pn-similar")).toBe(null);
+  });
+});

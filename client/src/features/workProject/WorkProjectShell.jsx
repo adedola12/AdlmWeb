@@ -360,6 +360,50 @@ export default function WorkProjectShell({ productKey, id }) {
     [viewOnly, productKey, saveId, id, accessToken],
   );
 
+  // PRICING MANY LINES AT ONCE.
+  //
+  // The lines like the one being priced ("Lintel Concrete" on every level), or
+  // a priced line's rate copied to the rest of them. One request and one write
+  // server-side (POST .../bill/price-many); every rate is still re-read from the
+  // QS's own library there. Returns what the server said so the panel can say
+  // how many were priced and why any were skipped.
+  const [pricedNote, setPricedNote] = React.useState(null);
+  const priceManyLines = React.useCallback(
+    async (lines, via = "similar") => {
+      if (viewOnly || !Array.isArray(lines) || !lines.length) return null;
+      setPricing(true);
+      setPriceFailed("");
+      setPriceNotes([]);
+      setPricedNote(null);
+      try {
+        const wrote = await apiAuthed(
+          `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/bill/price-many`,
+          { token: accessToken, method: "POST", body: { lines, via } },
+        );
+        const warnings = Array.isArray(wrote?._rateWarnings) ? wrote._rateWarnings : [];
+        if (warnings.length) setPriceNotes(warnings.map((w) => String(w)).slice(0, 6));
+        setPricedNote({
+          priced: Array.isArray(wrote?._priced) ? wrote._priced : [],
+          skipped: Array.isArray(wrote?._skipped) ? wrote._skipped : [],
+        });
+        const fresh = await apiAuthed(
+          `/projects/${encodeURIComponent(productKey)}/by-slug/${encodeURIComponent(id)}`,
+          { token: accessToken },
+        );
+        setFull(fresh?.project || fresh || null);
+        return wrote;
+      } catch (e) {
+        setPriceFailed(
+          String(e?.message || "").trim() || "Those lines could not be priced just now.",
+        );
+        return null;
+      } finally {
+        setPricing(false);
+      }
+    },
+    [viewOnly, productKey, saveId, id, accessToken],
+  );
+
   // The best rate per unpriced line, for the Rates tab's list.
   //
   // Fetched when that tab is opened rather than on every load: it reads the
@@ -764,6 +808,8 @@ export default function WorkProjectShell({ productKey, id }) {
               onSearchRates={rateLibrary}
               libraryFailed={libraryFailed}
               onApplyRate={priceLineFromRate}
+              onPriceMany={priceManyLines}
+              pricedNote={pricedNote}
               pricing={pricing}
               priceFailed={priceFailed}
               priceNotes={priceNotes}
