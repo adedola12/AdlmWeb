@@ -355,21 +355,51 @@ export default function DsAdminReleases() {
     load();
   }, [load]);
 
-  /** Every verb on this screen is one POST and a reload. */
+  /**
+   * Every verb on this screen is one POST.
+   *
+   * MOST of them then reload, because they change what the whole desk says. A
+   * VERDICT does not: it changes one row, and reloading for it is what made
+   * this screen unpleasant to use. Richard, testing batch 2 on 30 September,
+   * had to wait after every answer and watched the page refresh each time —
+   * eleven flows, eleven refreshes. The fix for that was written against the
+   * old card (PR #89) and never reached him, because this screen replaced the
+   * card before it merged. So it is done here instead.
+   *
+   * `patch` is applied to local state the moment the server says yes, and no
+   * reload follows. It is not optimistic — nothing moves until the POST
+   * returns — so a refused verdict still shows the error and leaves the row
+   * exactly as it was.
+   */
   const act = React.useCallback(
-    async (path, body, told, clearNote) => {
+    async (path, body, told, patch) => {
       if (busy) return;
       setActionError("");
       setBusy(path);
       try {
         const r = await apiAuthed(path, { token: accessToken, method: "POST", body });
-        // Deliberately NOT clearing the box. What he typed IS the stored note
-        // now; emptying it hides what he just recorded and sends "" with his
-        // next verdict on the same row.
-        void clearNote;
         setAsk(null);
         setReason("");
-        await load();
+        if (patch) {
+          // One row, in place. The note box is deliberately left alone: what
+          // he typed IS the stored note now, and emptying it would hide what
+          // he just recorded and send "" with his next verdict on that row.
+          setB((prev) =>
+            prev?.batch
+              ? {
+                  ...prev,
+                  batch: {
+                    ...prev.batch,
+                    items: (prev.batch.items || []).map((it) =>
+                      it.key === patch.key ? { ...it, ...patch.set } : it,
+                    ),
+                  },
+                }
+              : prev,
+          );
+        } else {
+          await load();
+        }
         say(r?.message || told);
       } catch (e) {
         const msg = e?.message || "That did not go through. Nothing was changed.";
@@ -398,7 +428,12 @@ export default function DsAdminReleases() {
   const flows = (batch?.items || []).filter((i) => i.kind !== "behind-the-scenes");
   const behind = (batch?.items || []).filter((i) => i.kind === "behind-the-scenes");
   const marked = flows.filter((i) => i.verdict).length;
-  const canDecideBatch = Boolean(b?.isApprover && batch && batch.status !== "merged");
+  // Once approved there is nothing left for him to do on it: the verdicts are
+  // recorded, the merge happens off the back of it, and leaving the flows and
+  // the Approve button on screen invites a second press on a decision already
+  // taken. It collapses to a line saying who approved it and when.
+  const batchSettled = batch?.status === "approved" || batch?.status === "merged";
+  const canDecideBatch = Boolean(b?.isApprover && batch && !batchSettled);
   const readyForEveryone = rollouts.filter((r) => r.canReleaseToEveryone).length;
 
   // Four counts, each one a length of something the server sent. A strand that
@@ -577,7 +612,13 @@ export default function DsAdminReleases() {
               </div>
             ) : null}
 
-            {flows.map((item) => {
+            {/* Gone once he has approved. He asked for this: having pressed
+                "Approve and send to customers" he does not want to scroll back
+                through the flows he has just signed off, and the buttons
+                beneath them invite a second press on a decision already
+                taken. The confirmation line at the foot is the whole card
+                from here on; the detail is still on the sheet he tested from. */}
+            {!batchSettled && flows.map((item) => {
               const opts = optionsFor(item);
               const chosen = opts.find((o) => o.key === item.verdict);
               const key = `item:${item.key}`;
@@ -621,7 +662,7 @@ export default function DsAdminReleases() {
                                 `/admin/releases/batch/${batch._id}/verdict`,
                                 { key: item.key, verdict: o.key, note: note(key) },
                                 `${item.title}: ${o.label.toLowerCase()}.`,
-                                key,
+                                { key: item.key, set: { verdict: o.key, note: note(key) } },
                               )
                             }
                           >
@@ -709,9 +750,10 @@ export default function DsAdminReleases() {
               </>
             )}
 
-            {batch.status === "approved" ? (
+            {batchSettled ? (
               <p className="adm-note">
-                Approved by {batch.approvedBy} on {stamp(batch.approvedAt)}. Nothing else to do.
+                {batch.status === "merged" ? "Live" : "Approved"} by {batch.approvedBy} on{" "}
+                {stamp(batch.approvedAt)}. Nothing else to do.
               </p>
             ) : null}
           </div>
