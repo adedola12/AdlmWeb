@@ -31,12 +31,14 @@ import useProductPricing from "./useProductPricing.js";
  */
 export default function DsGridPrice({ productKey, fallback }) {
   // yearly/install are not shown on a grid card; they are supplied because the
-  // hook needs a complete fallback shape, and derived from the monthly figure
-  // rather than invented — a wrong yearly here would never be seen, but a
-  // NaN would reach the saving arithmetic inside the hook.
+  // hook needs a complete fallback shape. Yearly is ten months, not twelve —
+  // every price in the catalogue follows that rule (50k/500k, 25k/250k,
+  // 20k/200k, 45k/450k, 5k/50k) and it is what "yearly billing costs ten
+  // months, so two are free" means on the Solutions pages. Twelve would feed a
+  // wrong saving into the hook's arithmetic.
   const { monthly } = useProductPricing(productKey, {
     monthly: fallback,
-    yearly: fallback * 12,
+    yearly: fallback * 10,
     install: 0,
   });
   return <b>{monthly}</b>;

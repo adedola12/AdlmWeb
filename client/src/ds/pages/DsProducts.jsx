@@ -149,7 +149,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <DsGridPrice productKey="planswift" fallback={12000} />
+                <DsGridPrice productKey="planswift" fallback={25000} />
                 {" "}/ month
               </p>
               {" "}
@@ -183,7 +183,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <DsGridPrice productKey="rategen" fallback={8000} />
+                <DsGridPrice productKey="rategen" fallback={20000} />
                 {" "}/ month
               </p>
               {" "}
@@ -217,7 +217,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <DsGridPrice productKey="mep" fallback={18000} />
+                <DsGridPrice productKey="mep" fallback={45000} />
                 {" "}/ month
               </p>
               {" "}
@@ -251,7 +251,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <DsGridPrice productKey="qs-takeoff" fallback={2000} />
+                <DsGridPrice productKey="qs-takeoff" fallback={5000} />
                 {" "}/ month
               </p>
               {" "}
