@@ -1,11 +1,11 @@
 // Learn — his page, with the real course prices from the catalogue.
 //
-// Two of the three course cards are catalogue rows (bimbld, BIMMEP) and read
-// their per-seat price from GET /products. The third, "Rates & 2D Takeoff" at
-// ₦85,000, is left exactly as he wrote it: there is no catalogue row because
-// the course does not exist. His own notes record its name, price and syllabus
-// as provisional, so it stays visibly hardcoded rather than being dressed up
-// as live data. It is on docs/richard-snag-list.md as content to confirm or pull.
+// Both course cards are catalogue rows (bimbld, BIMMEP) and read their
+// per-seat price from GET /products. There is no third price to fetch: his
+// fourth card, "Rates & 2D Takeoff" at ₦85,000, was a course that does not
+// exist, and it is now removed by port-ds-html.mjs rather than carried into
+// the build. The card beside them, "On-site training", is a service and asks
+// for a quote, so it has no per-seat price either.
 
 import React from "react";
 import DsLearnPage from "../pages/DsLearnPage.jsx";

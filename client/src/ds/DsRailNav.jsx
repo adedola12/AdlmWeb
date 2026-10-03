@@ -123,10 +123,22 @@ function Tools({ group, activeId, d, dots, owned }) {
  * @param {Set<string>|null} [props.owned]  productKeys with a live licence
  * @param {(e) => void} props.onSignOut
  */
-export default function DsRailNav({ activeId, d, dots, owned = null, onSignOut, rail = RAIL }) {
+// `homeHref` is the brand mark's destination. It is a prop because the shell
+// knows whether this viewer may open /work: for a customer before launch the
+// logo has to go to the classic home, or the one affordance everybody trusts to
+// mean "take me home" throws them off the screen they were reading.
+export default function DsRailNav({
+  activeId,
+  d,
+  dots,
+  owned = null,
+  onSignOut,
+  rail = RAIL,
+  homeHref = "/work",
+}) {
   return (
     <aside className="dsh-rail" aria-label="ADLM Studio">
-      <Link className="dsh-brand" to="/work" aria-label="ADLM Studio">
+      <Link className="dsh-brand" to={homeHref} aria-label="ADLM Studio">
         <img className="logo-l" src="/ds/logo-light.svg" alt="ADLM Studio" />
         <img className="logo-d" src="/ds/logo-dark.svg" alt="ADLM Studio" />
       </Link>

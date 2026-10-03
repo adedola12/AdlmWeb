@@ -523,7 +523,7 @@ const EXTRACT_BODY = {
   ],
 };
 
-test("a view-only collaborator reads the bill but every write answers 403 VIEW_ONLY", async () => {
+test("a view-only collaborator reads the bill but every write and export answers 403 PROJECT_ACCESS_DENIED", async () => {
   reset();
   await withServer(async (base) => {
     const read = await call(base, `/boq/${PROJECT_ID}`, { as: VIEWER });
@@ -535,11 +535,14 @@ test("a view-only collaborator reads the bill but every write answers 403 VIEW_O
       [`/boq/${PROJECT_ID}/reapply-rates`, "POST", {}],
       [`/boq/${PROJECT_ID}/margin`, "PATCH", { global: 20 }],
       [`/boq/${PROJECT_ID}/budget`, "PATCH", { targetBudget: 1 }],
+      // Exporting is owner-or-full everywhere in the product (canExport).
+      [`/boq/${PROJECT_ID}/export/excel`, "GET", undefined],
+      [`/boq/${PROJECT_ID}/export/pdf`, "GET", undefined],
     ];
     for (const [path, method, body] of writes) {
       const r = await call(base, path, { as: VIEWER, method, body });
       assert.equal(r.status, 403, `${method} ${path}`);
-      assert.equal(r.body.code, "VIEW_ONLY", `${method} ${path}`);
+      assert.equal(r.body.code, "PROJECT_ACCESS_DENIED", `${method} ${path}`);
     }
     assert.deepEqual(saves, { project: 0, version: 0 }, "nothing was written");
     assert.equal(createdVersions.length, 0, "no version was made");
@@ -597,5 +600,30 @@ test("the owner's own extract and a brand-new project are priced from the sender
     });
     assert.equal(fresh.status, 200);
     assert.deepEqual(libraryAskedFor, [String(SHOWN)], "a new project's owner is whoever created it");
+  });
+});
+
+// ── What the page is told (work board: archicad-shared-readonly-ui) ─────────
+
+test("the BoQ document tells the page canEdit and isOwner, per reader", async () => {
+  reset();
+  await withServer(async (base) => {
+    const flags = async (who, id = PROJECT_ID) => {
+      const r = await call(base, `/boq/${id}`, { as: who });
+      assert.equal(r.status, 200);
+      return {
+        canEdit: r.body.canEdit,
+        canExport: r.body.canExport,
+        isOwner: r.body.isOwner,
+        moneyHidden: !!r.body.moneyHidden,
+      };
+    };
+    assert.deepEqual(await flags(OWNER), { canEdit: true, canExport: true, isOwner: true, moneyHidden: false });
+    assert.deepEqual(await flags(SHOWN), { canEdit: true, canExport: true, isOwner: false, moneyHidden: false });
+    assert.deepEqual(await flags(VIEWER), { canEdit: false, canExport: false, isOwner: false, moneyHidden: false });
+    assert.deepEqual(await flags(HIDDEN), { canEdit: true, canExport: true, isOwner: false, moneyHidden: true });
+    // A sample: read-only for everyone, owned by no one, money shown, and it
+    // can be exported (learning material).
+    assert.deepEqual(await flags(NORATE, SAMPLE_ID), { canEdit: false, canExport: true, isOwner: false, moneyHidden: false });
   });
 });

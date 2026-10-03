@@ -27,9 +27,34 @@ export const DOWNLOADS = {
     key: "installers/ADLM-Installer-Hub-Setup.exe",
     fileName: "ADLM-Installer-Hub-Setup.exe",
     setting: "installerHubUrl",
+    // Paid accounts only, so it is served as a signed link to private storage.
+    // Builds used to be written to this PUBLIC prefix and the URL pasted into
+    // the setting; such a link skips the licence check and must never be
+    // served, however it got there.
+    publicPrefix: "adlm/installer-hub",
     gated: true,
   },
 };
+
+/**
+ * True when `url` is a public copy under a download's old public prefix.
+ *
+ * Lives here rather than in hubStorage.js because hubStorage imports DOWNLOADS
+ * from this module, and the reverse import would close the circle — HUB_KEY is
+ * read at module load, so a cycle would not merely be untidy, it would be
+ * undefined.
+ */
+export function isPublicHubCopy(url, prefix = DOWNLOADS["installer-hub"].publicPrefix) {
+  const s = String(url || "").trim();
+  if (!s || !prefix) return false;
+  let path = s;
+  try {
+    path = decodeURIComponent(new URL(s).pathname);
+  } catch {
+    /* not a URL: check the raw text */
+  }
+  return new RegExp(`(^|/)${prefix}/`, "i").test(path);
+}
 
 /** The file id of a Google Drive link, or "" for anything else. */
 export function driveFileId(url) {
@@ -91,6 +116,23 @@ export async function resolveDownload(kind, { settings, expiresIn = 300, allowed
   }
   const configured = String(settings?.[d.setting] || "").trim();
   if (!configured) return { url: "", source: "none", fileName: d.fileName };
+  // A LEGACY PUBLIC COPY IS NOT A FALLBACK, IT IS THE HOLE.
+  //
+  // The Hub is paid-accounts-only, handed out as a short-lived signed link to
+  // private storage. Before that was tightened, each build was written to the
+  // PUBLIC prefix adlm/installer-hub and its URL pasted into the setting —
+  // anyone holding that link downloads the Hub with no licence check.
+  // isPublicHubCopy() has refused new ones since, but only on the way IN, so a
+  // value saved before that kept being served for ever: on 30 Sep 2026 this
+  // path was still handing out
+  // pub-….r2.dev/adlm/installer-hub/…-ADLMInstallerHub-v2.0.0.zip — public, and
+  // a .zip while the gate told the customer it was ADLM-Installer-Hub-Setup.exe.
+  //
+  // Refusing it here reads as "no build available", which is true: there is no
+  // build that may be served. The admin screen says what to upload.
+  if (d.publicPrefix && isPublicHubCopy(configured, d.publicPrefix)) {
+    return { url: "", source: "none", fileName: d.fileName, refused: "public-copy" };
+  }
   return {
     url: locked ? "" : directLink(configured),
     source: driveFileId(configured) ? "drive" : "setting",

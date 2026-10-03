@@ -6,6 +6,7 @@
 // for Ada to read another user's projects, money, or subscriptions.
 
 import mongoose from "mongoose";
+import { projectStage, stageLabel, STAGES, stageIsOpen } from "../util/projectStage.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { computePmDashboard, computeProjectScope } from "./pmCompute.js";
 import { productLabel } from "./reportEngine.js";
@@ -79,6 +80,16 @@ export async function getPortfolioSummary(userId) {
         name: 1,
         origin: 1,
         updatedAt: 1,
+        // "Who is this job for" had no answer at all: the client was never
+        // projected, so Ada could list a portfolio and not name a single one.
+        clientName: 1,
+        // The five facts the stage is worked out from (util/projectStage.js).
+        // Without them a tendered job is indistinguishable from a priced one,
+        // and "all my open projects" cannot be answered.
+        contractLocked: { $ifNull: ["$contract.locked", false] },
+        tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
+        finalized: { $ifNull: ["$finalAccount.finalized", false] },
+        certificateCount: { $size: { $ifNull: ["$certificates", []] } },
         // Which disciplines have a 3D (IFC) model attached — the question
         // "which of my projects has a model" has no other answer source.
         modelArch: { $gt: [{ $strLenCP: { $ifNull: ["$models.architectural.url", ""] } }, 0] },
@@ -111,7 +122,19 @@ export async function getPortfolioSummary(userId) {
   let grandValued = 0;
   let grandItems = 0;
   let grandMarked = 0;
+  // "What is the total value of all my OPEN projects" is the question people
+  // actually ask, and it is not the same number as the whole portfolio: a
+  // finalised account is a finished job whose money is settled.
+  let openCost = 0;
+  let openCount = 0;
+  const byStage = new Map();
   for (const r of rows) {
+    r.stage = projectStage(r);
+    byStage.set(r.stage, (byStage.get(r.stage) || 0) + 1);
+    if (stageIsOpen(r.stage)) {
+      openCount += 1;
+      openCost += safeNum(r.totalCost);
+    }
     grandCost += safeNum(r.totalCost);
     grandValued += safeNum(r.valuedAmount);
     grandItems += safeNum(r.itemCount);
@@ -127,10 +150,19 @@ export async function getPortfolioSummary(userId) {
 
   const lines = [];
   lines.push(`Total projects: ${rows.length}`);
+  lines.push(
+    `Open projects (everything except a finalised account): ${openCount}, worth ${naira(openCost)}`,
+  );
   lines.push(`Combined project value (sum of BoQ qty×rate): ${naira(grandCost)}`);
   lines.push(`Value of work completed to date: ${naira(grandValued)}`);
   lines.push(`Outstanding (remaining) value: ${naira(grandCost - grandValued)}`);
   lines.push(`Overall delivery progress: ${overall.toFixed(1)}%`);
+  lines.push("");
+  lines.push("By stage:");
+  for (const st of STAGES) {
+    const n = byStage.get(st.key) || 0;
+    if (n) lines.push(`- ${st.label}: ${n} project(s)`);
+  }
   lines.push("");
   lines.push("Breakdown by product:");
   for (const [key, g] of [...byProduct.entries()].sort((a, b) => b[1].cost - a[1].cost)) {
@@ -175,8 +207,24 @@ export async function getPortfolioSummary(userId) {
     const pct = safeNum(r.itemCount) > 0 ? (safeNum(r.progressShare) / safeNum(r.itemCount)) * 100 : 0;
     const model = r.modelArch || r.modelStruct || r.modelMep ? ", 3D model attached" : "";
     const imported = r.origin === "boq-import" ? ", imported from Excel" : "";
+    // The client and the stage. "Who is the Lekki job for" and "which of these
+    // are still live" were both unanswerable without them.
+    const client = String(r.clientName || "").trim();
+    const forWhom = client ? ` for ${client}` : "";
     lines.push(
-      `- ${r.name || "Untitled"}: ${productLabel(r.productKey)}, ${r.itemCount} lines, value ${naira(r.totalCost)}, ${pct.toFixed(0)}% done${model}${imported}, updated ${fmtDate(r.updatedAt)}`,
+      `- ${r.name || "Untitled"}${forWhom}: ${productLabel(r.productKey)}, ${stageLabel(r.stage)}, ${r.itemCount} lines, value ${naira(r.totalCost)}, ${pct.toFixed(0)}% done${model}${imported}, updated ${fmtDate(r.updatedAt)}`,
+    );
+  }
+
+  // The clients, so "who are my clients" is one answer rather than a list the
+  // model has to re-read line by line.
+  const clients = [...new Set(rows.map((r) => String(r.clientName || "").trim()).filter(Boolean))];
+  lines.push("");
+  if (clients.length) {
+    lines.push(`Clients on these projects (${clients.length}): ${clients.join(", ")}`);
+  } else {
+    lines.push(
+      "No client is recorded on any of these projects. The client is set on the project's own page.",
     );
   }
 
@@ -191,10 +239,43 @@ export async function getPortfolioSummary(userId) {
 // Fuzzy-find ONE of the user's own projects by name. Returns either
 // { project } (loaded, owner-scoped) or { error } — a sentence Ada can relay.
 // Shared by every project-scoped tool so they all disambiguate identically.
-async function resolveProject(userId, projectName) {
+/**
+ * THE PROJECT THE USER IS LOOKING AT.
+ *
+ * `ref` is whatever the page's address carries — an ObjectId on the classic
+ * workspace, a slug on the new one. Resolved against the caller's own projects,
+ * so a ref belonging to somebody else finds nothing rather than leaking a name.
+ */
+async function projectFromRef(userId, ref, productKey) {
+  const raw = String(ref || "").trim();
+  if (!raw) return null;
+  const uid = oid(userId);
+  const where = { userId: uid };
+  if (productKey) where.productKey = String(productKey).trim().toLowerCase();
+  const fields = { name: 1, productKey: 1, updatedAt: 1, pmTrackerOnly: 1 };
+  if (/^[a-f\d]{24}$/i.test(raw)) {
+    const byId = await TakeoffProject.findOne({ ...where, _id: raw }, fields).lean();
+    if (byId) return byId;
+  }
+  return TakeoffProject.findOne({ ...where, slug: raw }, fields).lean();
+}
+
+async function resolveProject(userId, projectName, context = {}) {
   const uid = oid(userId);
   const query = String(projectName || "").trim();
-  if (!query) return { error: "Ask the user which project they mean (by name)." };
+
+  // WHAT THE USER IS LOOKING AT, WHEN THEY DID NOT SAY A NAME.
+  //
+  // "how much is left to buy on this job" used to be unanswerable: the tool
+  // asked which project they meant, while the page they were standing on
+  // already knew. The client now sends its own address with every message and
+  // it is used ONLY when no name was given — naming a project still wins, so
+  // "and what about Lekki Mall" works from any page.
+  if (!query) {
+    const here = await projectFromRef(uid, context.projectRef, context.productKey);
+    if (here) return { project: here };
+    return { error: "Ask the user which project they mean (by name)." };
+  }
 
   const candidates = await TakeoffProject.find(
     { userId: uid },
@@ -251,8 +332,8 @@ async function resolveProject(userId, projectName) {
 
 // ── Single project detail ──────────────────────────────────────────────────
 // Summarise one project's value, progress and schedule.
-export async function getProjectDetails(userId, projectName) {
-  const { project, error, note } = await resolveProject(userId, projectName);
+export async function getProjectDetails(userId, projectName, context = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
   if (error) return error;
 
   const scope = computeProjectScope(project);
@@ -413,7 +494,7 @@ function formatQtyByUnit(map) {
 // breakdown (and the bill lines as a fallback) for rows matching `resource`,
 // then totals the quantity PER UNIT. Scoped to one project when projectName is
 // given, otherwise across every project the user owns.
-export async function getResourceQuantity(userId, resource, projectName) {
+export async function getResourceQuantity(userId, resource, projectName, context = {}) {
   const query = String(resource || "").trim();
   if (!query) {
     return "Ask the user which material, labour or resource they want the quantity for (e.g. cement, rebar, mason).";
@@ -422,7 +503,7 @@ export async function getResourceQuantity(userId, resource, projectName) {
   let projects = [];
   let resolveNote = "";
   if (String(projectName || "").trim()) {
-    const { project, error, note } = await resolveProject(userId, projectName);
+    const { project, error, note } = await resolveProject(userId, projectName, context);
     if (error) return error;
     projects = [project];
     resolveNote = note || "";
@@ -554,8 +635,8 @@ export async function getResourceQuantity(userId, resource, projectName) {
 // ── Budget (Material & Labour) breakdown ───────────────────────────────────
 // The whole cost plan for one project: Material vs Labour vs Plant totals,
 // procurement status, and the biggest resources by cost.
-export async function getProjectBudget(userId, projectName) {
-  const { project, error, note } = await resolveProject(userId, projectName);
+export async function getProjectBudget(userId, projectName, context = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
   if (error) return error;
 
   const rows = budgetRows(project);
@@ -628,8 +709,8 @@ export async function getProjectBudget(userId, projectName) {
 // ── Bill of Quantities lines ───────────────────────────────────────────────
 // The measured work items themselves — qty, unit, rate, amount, % complete —
 // optionally filtered to lines matching a search phrase.
-export async function getProjectBill(userId, projectName, search) {
-  const { project, error, note } = await resolveProject(userId, projectName);
+export async function getProjectBill(userId, projectName, search, context = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
   if (error) return error;
 
   const all = billRows(project);
@@ -701,8 +782,8 @@ export async function getProjectBill(userId, projectName, search) {
 // rate-check / error-scan tools run against the user's REAL bill rather than
 // anything the model retyped. `search` narrows a big bill; `limit` keeps the
 // request (and the AI service's per-call cost) bounded.
-export async function getBillItemsForAi(userId, projectName, search, limit = 200, opts = {}) {
-  const { project, error, note } = await resolveProject(userId, projectName);
+export async function getBillItemsForAi(userId, projectName, search, limit = 200, opts = {}, context = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
   if (error) return { error };
 
   const all = billRows(project);
@@ -789,15 +870,44 @@ export async function getAccountSummary(user) {
   // answer "how many projects can I still create?".
   try {
     const uid = oid(user._id);
+    // TWO THINGS WERE WRONG WITH THIS COUNT.
+    //
+    // It counted the auto-created *-materials siblings as projects of their
+    // own, so a QS with five HERON jobs was told they had ten, listed under a
+    // product called "HERON Materials". Real slot accounting never counts them
+    // (routes/projects.js, projectLimitForProduct and its caller).
+    //
+    // And it captioned the answer "used of 30-slot base cap per product", which
+    // is the PERSONAL cap. An organisation licence gets 50, and any product can
+    // carry purchased extraProjectSlots on top. Ada's own tool description
+    // promises "how many projects can I still create", so a wrong cap is a
+    // wrong answer to the question she is advertising.
     const counts = await TakeoffProject.aggregate([
-      { $match: { userId: uid, pmTrackerOnly: { $ne: true } } },
+      {
+        $match: {
+          userId: uid,
+          pmTrackerOnly: { $ne: true },
+          productKey: { $not: /-material/i },
+        },
+      },
       { $group: { _id: "$productKey", count: { $sum: 1 } } },
     ]);
     if (counts.length) {
+      const isOrg = ents.some(
+        (e) => e?.licenseType === "organization" && e?.status === "active",
+      );
+      const base = isOrg ? 50 : 30;
       lines.push("");
-      lines.push("Project usage (used of 30-slot base cap per product):");
+      lines.push(
+        `Project usage (${isOrg ? "organisation" : "personal"} licence: ${base} slots per product, plus any purchased):`,
+      );
       for (const c of counts.sort((a, b) => b.count - a.count)) {
-        lines.push(`- ${productLabel(c._id)}: ${c.count} project(s)`);
+        const ent = ents.find((e) => e?.productKey === c._id && e?.status === "active");
+        const extra = safeNum(ent?.extraProjectSlots);
+        const cap = base + extra;
+        lines.push(
+          `- ${productLabel(c._id)}: ${c.count} of ${cap} used${extra ? ` (${base} + ${extra} purchased)` : ""}, ${Math.max(0, cap - c.count)} left`,
+        );
       }
     }
   } catch {
@@ -808,5 +918,118 @@ export async function getAccountSummary(user) {
   lines.push(
     "If a subscription is expired or they want more seats/slots, offer a renewal/upgrade next step.",
   );
+  return lines.join("\n");
+}
+
+// ── Procurement ────────────────────────────────────────────────────────────
+//
+// "What do I need to buy next" had no answer. getProjectBudget returns
+// procured-vs-outstanding as one figure and the fifteen biggest resources by
+// cost — useful for "how much is left to spend", useless for "what do I order
+// this week", which is a question about DATES.
+//
+// The dates already exist. A budget row carries billIdentity; a programme task
+// carries the identities of the lines it builds and its own start. So the
+// earliest task that needs a material, less the supplier's lead time, is when
+// it has to be ordered — exactly what the Buy schedule screen shows. This is
+// that list, in words.
+//
+// Nothing is invented: a project with no programme has no dates, and this says
+// so rather than making some up.
+export async function getProcurementSchedule(userId, projectName, context = {}, opts = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
+  if (error) return error;
+
+  const leadDays = Math.max(0, Math.min(180, safeNum(opts.leadDays) || 14));
+  const budget = Array.isArray(project.budgetItems) ? project.budgetItems : [];
+  if (!budget.length) {
+    return `${project.name} has no Material & Labour breakdown yet, so there is nothing to buy from. It arrives with the bill from QUIV or HERON, or from cost rates typed against each line.`;
+  }
+
+  const tasks = Array.isArray(project?.projectManagement?.tasks)
+    ? project.projectManagement.tasks
+    : [];
+  // Bill code -> the earliest task that builds it.
+  const startByCode = new Map();
+  for (const t of tasks) {
+    const start = t?.startDate ? new Date(t.startDate) : null;
+    if (!start || Number.isNaN(start.getTime())) continue;
+    for (const ident of t?.linkedBoqIdentities || []) {
+      const parts = String(ident || "").split("::");
+      const code = String(parts.length > 1 ? parts[1] : parts[0] || "").trim().toLowerCase();
+      if (!code) continue;
+      const cur = startByCode.get(code);
+      if (!cur || start < cur.start) startByCode.set(code, { start, name: String(t?.name || "") });
+    }
+  }
+
+  const DAY = 86400000;
+  const rows = budget
+    .filter((r) => {
+      const kind = canonicalKind(r?.componentKind);
+      // Only a material is bought from a supplier against a lead time. A gang
+      // in a purchase list is how somebody orders a bricklayer.
+      return kind !== "Labour" && kind !== "Plant";
+    })
+    .map((r) => {
+      const hit = startByCode.get(String(r?.billIdentity || "").trim().toLowerCase());
+      const amount = safeNum(r?.qty) * (safeNum(r?.budgetRate) || safeNum(r?.rate));
+      return {
+        name: String(r?.materialName || r?.description || "Unnamed material").trim(),
+        unit: String(r?.unit || "").trim(),
+        qty: safeNum(r?.qty),
+        amount,
+        supplier: String(r?.supplier || "").trim(),
+        bought: r?.procured === true || safeNum(r?.procuredPercent) >= 100,
+        needBy: hit ? hit.start : null,
+        buyBy: hit ? new Date(hit.start.getTime() - leadDays * DAY) : null,
+        forTask: hit ? hit.name : "",
+      };
+    })
+    .filter((r) => !r.bought);
+
+  if (!rows.length) {
+    return `Everything on ${project.name}'s material schedule is already marked bought.`;
+  }
+
+  const dated = rows.filter((r) => r.buyBy).sort((a, b) => a.buyBy - b.buyBy);
+  const undated = rows.filter((r) => !r.buyBy).sort((a, b) => b.amount - a.amount);
+  const now = Date.now();
+  const overdue = dated.filter((r) => r.buyBy.getTime() < now);
+  const outstanding = rows.reduce((a, r) => a + r.amount, 0);
+
+  const lines = [];
+  lines.push(`Procurement still to buy on ${project.name}: ${naira(outstanding)} across ${rows.length} material(s).`);
+  if (overdue.length) {
+    lines.push(
+      `${overdue.length} should already have been ordered, worth ${naira(overdue.reduce((a, r) => a + r.amount, 0))}.`,
+    );
+  }
+
+  if (dated.length) {
+    lines.push("");
+    lines.push(`Next to order (soonest first, ${leadDays}-day lead time):`);
+    for (const r of dated.slice(0, 20)) {
+      const late = r.buyBy.getTime() < now ? " — OVERDUE" : "";
+      const who = r.supplier ? ` from ${r.supplier}` : "";
+      lines.push(
+        `- ${r.name}: ${r.qty ? `${Math.ceil(r.qty)} ${r.unit}`.trim() : "quantity not set"}, ${naira(r.amount)}, order by ${fmtDate(r.buyBy)} for ${fmtDate(r.needBy)} on site${who}${late}`,
+      );
+    }
+    if (dated.length > 20) lines.push(`…and ${dated.length - 20} more with dates.`);
+  }
+
+  if (undated.length) {
+    lines.push("");
+    // Honest about WHY, because the remedy is one button on the PM dashboard.
+    lines.push(
+      `${undated.length} material(s) worth ${naira(undated.reduce((a, r) => a + r.amount, 0))} have no order date: no programme task covers their bill lines, so nothing says when they are needed. Planning the work from the bill on the PM dashboard gives them dates.`,
+    );
+    for (const r of undated.slice(0, 10)) {
+      lines.push(`- ${r.name}: ${naira(r.amount)}`);
+    }
+  }
+
+  if (note) lines.push(note);
   return lines.join("\n");
 }

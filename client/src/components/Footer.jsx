@@ -23,6 +23,9 @@ export default function Footer() {
         "/about",
         "/trainings",
         "/testimonials",
+        // Both: /manage is the overview, and /dashboard still resolves to it
+        // as a redirect, so a footer link to either lands somewhere.
+        "/manage",
         "/dashboard",
         "/profile",
       ]),

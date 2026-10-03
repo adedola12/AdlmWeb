@@ -1,5 +1,6 @@
 // server/routes/admin.js
 import express from "express";
+import { creditReferral } from "../services/referrals.js";
 import dayjs from "dayjs";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import mongoose from "mongoose";
@@ -774,6 +775,11 @@ router.post(
         );
         await user.save();
         userMutated = true;
+        // A transfer or invoice order is the ONLY conversion for a non-card
+        // customer, and this path never sets `paid` — so anything keyed on that
+        // field drops every one of them. purchaseRaw is the .lean() copy the
+        // grant math uses; creditReferral only reads.
+        await creditReferral(purchaseRaw || purchase, "admin-approval");
       }
 
       // Apply purchased project-storage slots to the user's entitlement(s).

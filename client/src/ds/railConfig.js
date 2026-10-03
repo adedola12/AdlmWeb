@@ -41,6 +41,20 @@ export const RAIL = [
           { id: "tool-quiv", label: "QUIV", to: "/work/tool/quiv", product: "revit", img: "/ds/ic-quiv.png", also: ["/projects/revit"] },
           { id: "tool-heron", label: "HERON", to: "/work/tool/heron", product: "planswift", img: "/ds/ic-heron.png", also: ["/projects/planswift"] },
           { id: "work-library", label: "RateGen", to: "/work/library", img: "/ds/ic-rategen.png", also: ["/work/rate/:id"] },
+          // THE CONSTANTS BEHIND EVERY BUDGET.
+          //
+          // The library is 122 keys — waste factors, concrete and mortar mixes,
+          // formwork re-use, and the Labour.*.Per* and Plant.*.Per* outputs that
+          // decide what a budget costs. It has been editable and deployed all
+          // along, and reachable from exactly ONE link buried in the classic
+          // Budget tab: no rail, no settings, no nav. So a QS who has never
+          // opened that tab does not know their firm's own standards are
+          // theirs to set, prices on defaults calibrated from 580 other firms'
+          // bills, and then does not trust the budget it produces.
+          //
+          // It sits beside RateGen because that is what it belongs to: the
+          // rates are what work costs, these are what it takes.
+          { id: "work-constants", label: "Constants", to: "/work/constants", icon: "wi-library", also: ["/rategen/material-constants"] },
           { id: "tool-mep", label: "Revit MEP", to: "/work/tool/mep", product: "mep", img: "/ds/ic-mep.png", also: ["/projects/mep"] },
           { id: "tool-civiq", label: "CIVIQ", to: "/work/tool/civiq", product: "civil3d", img: "/ds/ic-civiq.png", also: ["/projects/civil3d"] },
         ],

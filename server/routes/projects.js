@@ -638,6 +638,19 @@ import {
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
 import {
+  certificateMoney,
+  certifiedSoFar,
+  earnedLineValue,
+} from "../util/certificateMaths.js";
+import { sendMail } from "../util/mailer.js";
+import { contractLocked } from "../util/emailContent.js";
+import {
+  isShared,
+  lockedByName,
+  lockNoticeRecipients,
+  maySeeMoney,
+} from "../util/contractLockNotice.js";
+import {
   maskSharedMoney,
   readerMaySeeRates,
   PROJECT_LIST_MONEY_FIELDS,
@@ -678,12 +691,27 @@ import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
-import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
+import {
+  suggestRatesForLine,
+  suggestionMapForBill,
+  worthOffering,
+} from "../util/rateSuggestions.js";
+import {
+  applyRateRows,
+  buildRateBudgetRows,
+  whyRateCannotPrice,
+} from "../util/rateToBudget.js";
 import {
   collectBudgetEdits,
   reapplyBudgetEdits,
   preserveBudgetUserEdits,
 } from "../util/budgetUserEdits.js";
+import { preliminaryPercentOf } from "../util/contractDefaults.js";
+import {
+  certifiableContractSum,
+  finalAccountSavings,
+} from "../util/finalAccountMath.js";
+import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
 import { carryCloudRateLocks } from "../util/cloudRateLocks.js";
 import {
   sanitizeResourceItems,
@@ -893,43 +921,13 @@ function accessFilter(id, userId, productKey) {
 //   canExport:   owner or full  (xlsx / model download)
 //   canManage:   owner only     (codes, collaborators, delete project)
 //   canSeeRates: owner always; collaborator only with active rategen
+// The rule itself moved to util/projectAccess.js so the ArchiCAD routes can
+// ask the same question — they were not asking it at all. Behaviour here is
+// unchanged; this is the same function with its body shared.
 async function resolveProjectAccess(req, project) {
-  const uid = getUserObjectId(req);
-  const out = {
-    role: "none",
-    accessLevel: null,
-    canEdit: false,
-    canExport: false,
-    canManage: false,
-    canSeeRates: false,
-  };
-  if (!project || !uid) return out;
-
-  // Samples: look at everything, including rates, but change nothing.
-  if (project.isSample) {
-    out.role = "sample";
-    out.accessLevel = "view";
-    out.canExport = true;
-    out.canSeeRates = true;
-    return out;
-  }
-
-  if (project.userId && uid.equals(project.userId)) {
-    out.role = "owner";
-    out.canEdit = out.canExport = out.canManage = out.canSeeRates = true;
-    return out;
-  }
-
-  const collab = (project.collaborators || []).find(
-    (c) => c.userId && uid.equals(c.userId),
-  );
-  if (!collab) return out; // not owner, not collaborator → no access
-
-  out.role = collab.accessLevel === "full" ? "full" : "view";
-  out.accessLevel = out.role;
-  out.canEdit = out.canExport = out.role === "full";
-  out.canSeeRates = await userHasActiveEntitlement(uid, "rategen");
-  return out;
+  return resolveSharedProjectAccess(getUserObjectId(req), project, {
+    hasRateGen: (uid) => userHasActiveEntitlement(uid, "rategen"),
+  });
 }
 
 // ── Cross-project linking (e.g. MEP services → architectural bill) ─────────
@@ -1762,7 +1760,36 @@ function bucketPreviousItems(items) {
   return buckets;
 }
 
-function applyValuationTracking({ productKey, previousItems = [], nextItems = [], previousEvents = [] }) {
+/**
+ * Does this payload have an opinion about what has been built?
+ *
+ * The website round-trips a line's earned position — completed / purchased /
+ * percentComplete — so an absent field there means "no". A desktop plugin
+ * never sends them at all: HERON's CloudTakeoffItemDto carries sn,
+ * description, qty, unit, rate, level, type and code, and nothing about
+ * progress. Treating that silence as "nothing is built" resets the line.
+ *
+ * actualRate is deliberately NOT in this list. QUIV's takeoff sends the
+ * planned rate in it (see sanitizeItems), so it would report every Revit
+ * payload as carrying progress and the guard would never fire.
+ */
+function carriesValuationState(rawItems) {
+  return (Array.isArray(rawItems) ? rawItems : []).some(
+    (it) =>
+      it &&
+      (it.percentComplete !== undefined ||
+        it.completed !== undefined ||
+        it.purchased !== undefined),
+  );
+}
+
+function applyValuationTracking({
+  productKey,
+  previousItems = [],
+  nextItems = [],
+  previousEvents = [],
+  keepEarnedPosition = false,
+}) {
   const statusField = statusFieldForProductKey(productKey);
   const statusDateField = statusDateFieldForProductKey(productKey);
   const otherStatusField = statusField === "purchased" ? "completed" : "purchased";
@@ -1779,6 +1806,19 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
     else previousBuckets.delete(key);
 
     const previousItem = previousMatch?.item || {};
+    // A payload with no opinion about progress must not be read as "nothing
+    // is built". percentComplete and completed are the multiplier in
+    // valuationFactor and therefore the basis of every interim certificate,
+    // so a plugin re-save used to zero the earned position of a line the QS
+    // had marked 60% done — and emit a NEGATIVE valuation event for it.
+    if (keepEarnedPosition && previousMatch) {
+      item = {
+        ...item,
+        completed: previousItem.completed,
+        purchased: previousItem.purchased,
+        percentComplete: previousItem.percentComplete,
+      };
+    }
     const previousStatus = Boolean(previousItem?.[statusField]);
     const nextStatus = Boolean(item?.[statusField]);
     const previousStatusAt = parseOptionalDate(previousItem?.[statusDateField]);
@@ -2014,7 +2054,15 @@ function buildValuationLogs(project, productKey) {
       : Math.max(0, Math.min(100, safeNum(it?.percentComplete)));
     if (!ratified && pct <= 0) continue; // nothing earned on this line
 
-    const amount = safeNum(it?.qty) * safeNum(it?.rate) * (pct / 100);
+    // THE SAME RULE THE CERTIFICATE USES.
+    //
+    // This read qty * rate — the frozen CONTRACT figures — while
+    // computeValueToDate, which feeds the interim certificate, reads the
+    // actuals. On a line re-measured from 120 m³ to 134 the certificate said
+    // ₦11,390,000 and the printed Interim Payment Application said
+    // ₦10,200,000, for the same work on the same day. Whichever the client saw
+    // first was the one they believed.
+    const amount = earnedLineValue(it, pct);
     if (amount <= 0) continue;
 
     const when =
@@ -2391,6 +2439,9 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
       created || !Array.isArray(project.valuationEvents)
         ? []
         : project.valuationEvents,
+    // A plugin payload says nothing about progress. That is not the same as
+    // saying nothing has been built.
+    keepEarnedPosition: !carriesValuationState(items),
   });
   project.items = tracked.items;
   project.valuationEvents = tracked.valuationEvents;
@@ -3386,6 +3437,12 @@ async function applyMergedLineWrite({ req, container, body, canSeeRates = true }
     const source = byId.get(sourceId);
     const pk = source.productKey;
 
+    // Variations diverted by a source's own contract lock. Collected here
+    // rather than applied inside the items branch, so the payload's own
+    // variations can be laid down FIRST and these appended on top — the same
+    // composition the container does below.
+    let lockVariations = [];
+
     if (Array.isArray(bucket.items)) {
       const sanitizedNext = sanitizeItems(bucket.items, pk);
       // When the CONTAINER is locked, enforcement already happened above
@@ -3405,20 +3462,33 @@ async function applyMergedLineWrite({ req, container, body, canSeeRates = true }
       });
       source.items = tracked.items;
       source.valuationEvents = tracked.valuationEvents;
-      if (extraVariations.length) {
-        source.variations = sanitizeVariations([
-          ...(Array.isArray(source.variations) ? source.variations : []),
-          ...extraVariations,
-        ]);
-      }
+      lockVariations = extraVariations;
       source.markModified("items");
     }
 
     if (Array.isArray(bucket.provisionalSums)) {
       source.provisionalSums = sanitizeProvisionalSums(bucket.provisionalSums);
     }
-    if (Array.isArray(bucket.variations) && !Array.isArray(bucket.items)) {
+    // A save from the project screen sends the whole bill AND the whole
+    // variations list together, which is every ordinary save. Guarding this on
+    // "no items in the payload" therefore threw the QS's variation edits away
+    // on a merged project every single time: approve a variation, save, and the
+    // approval was gone on the next load.
+    //
+    // The guard existed because the items branch above appended the lock's own
+    // diverted variations, and assigning the payload afterwards would have
+    // wiped them. So they compose instead, in the order the container already
+    // uses: the QS's edits set the list, the lock's diversions land on top.
+    if (Array.isArray(bucket.variations)) {
       source.variations = sanitizeVariations(bucket.variations);
+      source.markModified("variations");
+    }
+    if (lockVariations.length) {
+      source.variations = sanitizeVariations([
+        ...(Array.isArray(source.variations) ? source.variations : []),
+        ...lockVariations,
+      ]);
+      source.markModified("variations");
     }
     if (Array.isArray(bucket.materialItems)) {
       source.materialItems = sanitizeItems(bucket.materialItems, pk);
@@ -3990,6 +4060,7 @@ async function updateProject(req, res) {
         previousEvents: Array.isArray(project.valuationEvents)
           ? project.valuationEvents
           : [],
+        keepEarnedPosition: !carriesValuationState(items),
       });
       project.items = tracked.items;
       project.valuationEvents = tracked.valuationEvents;
@@ -4081,6 +4152,15 @@ async function updateProject(req, res) {
       // to its bill line so material + labour bundle together. Guarded so a
       // mapping issue can never break the save.
       try {
+        // Read before anything replaces it. The same QS-owned fields that
+        // saveProjectFull was dropping are dropped here too — procurement
+        // marks, the buy-schedule slot, a rate typed on the website — and this
+        // is QUIV's primary save route, so it is the path most projects take.
+        // preserveMaskedMoney below does NOT cover it: that guard only runs
+        // for a rate-masked collaborator, and it restores money, not
+        // procurement, so the owner of the project got nothing back at all.
+        const previousBudget = project.budgetItems || [];
+
         let budget = sanitizeBudgetItems(materialItems);
         // This REPLACES budgetItems from a different array, so a rate-masked
         // viewer whose materialItems were blank (nothing stored to restore
@@ -4110,15 +4190,27 @@ async function updateProject(req, res) {
           }
           budget = kept.rows.map((b) => ({ ...b, lineId: keepLineId(b.lineId) }));
         }
-        // What the QS owns on these rows (procurement, typed rates), read before
-        // the plugin's list replaces them - the same protection saveProjectFull
-        // has had since the resave-wipe fix. QUIV saves its budget through this
-        // PUT, so without it every QUIV re-save put the plugin's prices back over
-        // the website's and the bill rates followed.
-        const previousBudget = project.budgetItems || [];
+        // previousBudget (read at the top of this block, before anything
+        // replaced it) is what the QS owns on these rows: procurement and typed
+        // rates. QUIV saves its budget through this PUT, so without restoring
+        // it every QUIV re-save put the plugin's prices back over the website's
+        // and the bill rates followed.
+        // previousBudget is read once, above, before anything replaces it.
+        // QUIV saves its budget through this PUT, so without that read every
+        // QUIV re-save put the plugin's prices back over the website's and the
+        // bill rates followed.
         backfillBudgetLinks(project.items, budget);
         const freshBudget = ensureBillItemCoverage(project.items, budget);
-        preserveBudgetUserEdits(previousBudget, freshBudget);
+        // After coverage, so the synthesised rows get their edits back too.
+        // For a masked viewer this runs on top of preserveMaskedMoney and
+        // agrees with it — both restore the rate from the same stored budget —
+        // and it adds back the procurement that guard was never about.
+        const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+        if (restored.procurement || restored.pricing) {
+          console.log(
+            `[update] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+          );
+        }
         project.budgetItems = freshBudget;
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
@@ -4139,7 +4231,7 @@ async function updateProject(req, res) {
         if (!project.contract) project.contract = {};
         project.contract.preliminaryPercent = clampPercentage(
           n,
-          safeNum(project.contract?.preliminaryPercent) || 7.5,
+          preliminaryPercentOf(project.contract),
         );
       }
     }
@@ -4462,12 +4554,14 @@ async function lockContract(req, res) {
     const approvedAt = req.body?.approvedAt
       ? new Date(req.body.approvedAt)
       : new Date();
+    // Locking freezes this into the contract sum, so a 0% job must lock at 0%
+    // and not quietly acquire a 7.5% preliminary pool it never had.
     const preliminaryPercent = Number.isFinite(Number(req.body?.preliminaryPercent))
       ? clampPercentage(
           Number(req.body.preliminaryPercent),
-          safeNum(project.contract?.preliminaryPercent) || 7.5,
+          preliminaryPercentOf(project.contract),
         )
-      : safeNum(project.contract?.preliminaryPercent) || 7.5;
+      : preliminaryPercentOf(project.contract);
     const notes = String(req.body?.notes || "").trim().slice(0, 1000);
 
     // 4-digit lock PIN. Required for new locks (this version onwards).
@@ -4562,9 +4656,87 @@ async function lockContract(req, res) {
       contractSum,
     });
     res.json({ ok: true, contract: contractOut, version: project.version });
+
+    // TELL EVERYBODY ELSE ON THE PROJECT.
+    //
+    // Locking changes what editing MEANS: a re-measure stops moving the contract
+    // quantity and records an actual beside it, new scope becomes a variation,
+    // and progress starts feeding the valuations. A collaborator who carries on
+    // without knowing believes they are correcting the contract and is in fact
+    // recording a variation against it. The activity trail records the lock, but
+    // nobody reads an activity trail to find out the rules changed under them.
+    //
+    // AFTER res.json, and never awaited. A mail outage must not fail a contract
+    // lock, and a notification must not sit in a request somebody is waiting on
+    // — the God-login OTP did exactly that until it was fixed.
+    notifyContractLocked(project, userId, contractSum).catch((e) => {
+      console.error("[contract-lock] notice:", e?.message || e);
+    });
   } catch (err) {
     console.error("POST lock error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+}
+
+/**
+ * Mail the collaborators that a contract is now locked.
+ *
+ * Who and what is decided in util/contractLockNotice.js, which is pure and
+ * tested. This part is only the reads and the send, and it never throws at its
+ * caller: everything here is after the response.
+ *
+ * SES only. If SES refuses, this reports and stops — it does not try another
+ * way (standing rule, 15 September).
+ */
+async function notifyContractLocked(project, lockedByUserId, contractSum) {
+  // The overwhelming majority of projects have no collaborators. Nothing to
+  // send, so not even the user reads are done.
+  if (!isShared(project)) return;
+
+  const ids = [
+    String(project.userId || ""),
+    ...(project.collaborators || []).map((c) => String(c?.userId || "")),
+  ].filter(Boolean);
+
+  const [locker, people] = await Promise.all([
+    User.findById(lockedByUserId, { name: 1, firstName: 1, lastName: 1, email: 1 }).lean(),
+    User.find({ _id: { $in: ids } }, { email: 1, name: 1, firstName: 1 }).lean(),
+  ]);
+  const byId = new Map(people.map((u) => [String(u._id), u]));
+
+  const to = lockNoticeRecipients(project, locker, byId);
+  if (!to.length) return;
+
+  const href = `${process.env.CLIENT_URL || "https://www.adlmstudio.net"}/projects/${encodeURIComponent(
+    String(project.productKey || "revit"),
+  )}`;
+  const by = lockedByName(locker);
+
+  // One at a time rather than one mail to everybody: each is addressed by name,
+  // a BCC list would show every collaborator that the others exist — and each
+  // one is asked separately whether they may be told what the contract is
+  // worth, which a single shared message could not do.
+  for (const r of to) {
+    // THE MAIL MUST NOT SAY WHAT THE SCREEN HIDES. A collaborator without
+    // RateGen sees contractSum: 0 and _ratesMasked: true on every read of this
+    // project; posting the real figure to them would hand over in writing the
+    // one number the product withholds. They still get the message, without it.
+    const showMoney = await maySeeMoney(r, (uid) => userHasActiveEntitlement(uid, "rategen"));
+    const { subject, html } = contractLocked({
+      firstName: r.firstName,
+      projectName: String(project.name || "your project"),
+      lockedBy: by,
+      contractSum,
+      currency: String(project.currency || "NGN"),
+      href,
+      showMoney,
+    });
+    try {
+      await sendMail({ to: r.email, subject, html });
+    } catch (e) {
+      // One bad address must not stop the rest being told.
+      console.error(`[contract-lock] could not tell ${r.email}: ${e?.message || e}`);
+    }
   }
 }
 
@@ -4734,9 +4906,9 @@ function computeValueToDate(project) {
   for (const it of items) {
     const factor = valuationFactor(it, statusField);
     if (factor <= 0) continue;
-    const q = safeNum(it?.actualQty != null ? it.actualQty : it.qty);
-    const r = safeNum(it?.actualRate != null ? it.actualRate : it.rate);
-    measured += q * r * factor;
+    // Same helper the daily valuation log uses, so the certificate and the
+    // printed application cannot quote different figures for the same line.
+    measured += earnedLineValue(it, factor * 100);
   }
 
   // Variations and PC sums each carry a `completed` flag. Both contribute
@@ -4838,10 +5010,10 @@ async function issueCertificate(req, res) {
     const previousCerts = (project.certificates || []).filter(
       (c) => c.status !== "draft" || Number.isFinite(Number(c.thisCertificate)),
     );
-    const lessPrevious = previousCerts.reduce(
-      (acc, c) => acc + safeNum(c.thisCertificate),
-      0,
-    );
+    // Each certificate's OWN share, summed. A recovery (a negative one)
+    // subtracts, so the next certificate starts from the corrected position
+    // instead of carrying an overpayment forward for ever.
+    const lessPrevious = certifiedSoFar(previousCerts);
 
     // A viewer who cannot see rates was served a certificate panel of zeros,
     // so the figures they send back are those zeros. Ignore the body's money
@@ -4853,8 +5025,6 @@ async function issueCertificate(req, res) {
     const cumulativeValue = moneyFromClient
       ? safeNum(req.body?.cumulativeValue ?? rollup.cumulativeValue)
       : safeNum(rollup.cumulativeValue);
-    const thisCertificate = Math.max(0, cumulativeValue - lessPrevious);
-
     // Rates default to the project's valuation settings.
     const valSettings = project.valuationSettings || {};
     const retentionPct =
@@ -4871,11 +5041,30 @@ async function issueCertificate(req, res) {
         : safeNum(valSettings.withholdingPct) || 2.5;
     const retentionReleased = moneyFromClient ? safeNum(req.body?.retentionReleased) : 0;
 
-    const retentionAmount = (thisCertificate * retentionPct) / 100;
-    const netBeforeTax = thisCertificate - retentionAmount + retentionReleased;
-    const vatAmount = (netBeforeTax * vatPct) / 100;
-    const whtAmount = (netBeforeTax * whtPct) / 100;
-    const netPayable = netBeforeTax + vatAmount - whtAmount;
+    // Every figure on the certificate, in one tested place. In particular
+    // `thisCertificate` is NO LONGER CLAMPED AT ZERO: when the value earned
+    // falls below what has already been certified — a certified variation later
+    // rejected, or a downward re-measure — the true figure is negative, and a
+    // negative interim certificate is how an overpayment is recovered. The
+    // clamp printed ₦0 payable, ₦0 retention and ₦0 VAT, with nothing anywhere
+    // saying the over-certified amount was outstanding.
+    const {
+      thisCertificate,
+      retentionAmount,
+      netBeforeTax,
+      vatAmount,
+      whtAmount,
+      netPayable,
+      overCertified,
+      overCertifiedBy,
+    } = certificateMoney({
+      cumulativeValue,
+      lessPrevious,
+      retentionPct,
+      retentionReleased,
+      vatPct,
+      whtPct,
+    });
 
     const number =
       (project.certificates || []).reduce((acc, c) => Math.max(acc, Number(c.number) || 0), 0) + 1;
@@ -4909,6 +5098,10 @@ async function issueCertificate(req, res) {
       notes,
       snapshotCompletedCount: rollup.markedItems,
       snapshotTotalCount: rollup.totalItems,
+      // So a screen and a PDF can both explain a negative certificate rather
+      // than printing a figure nobody expects.
+      overCertified,
+      overCertifiedBy,
     };
 
     project.certificates = [...(project.certificates || []), cert];
@@ -5305,7 +5498,14 @@ async function finalizeAccount(req, res) {
     const finalContractValue =
       measuredWorkFinal + provisionalFinal + preliminaryFinal + variationsFinal;
     const agreedContractSum = safeNum(project.contract?.contractSum);
-    const savings = agreedContractSum - finalContractValue;
+    // Compared against the CERTIFIABLE part of the agreed sum, not the grand
+    // total. contractSum carries contingency and VAT; finalContractValue
+    // deliberately does not, because neither is ever certified. Subtracting one
+    // from the other reported the contingency plus the VAT as money the job
+    // saved — ₦12.875m on a ₦100m subtotal at the defaults, on a job that came
+    // in exactly as measured. See util/finalAccountMath.js.
+    const agreedCertifiableSum = certifiableContractSum(project.contract);
+    const savings = finalAccountSavings(project.contract, finalContractValue);
 
     project.finalAccount = {
       finalized: true,
@@ -5318,6 +5518,11 @@ async function finalizeAccount(req, res) {
       retentionReleased,
       totalCertifiedToDate,
       agreedContractSum,
+      // The baseline the saving was actually measured against, so the report
+      // can show the comparison rather than asking the reader to trust it.
+      agreedCertifiableSum: safeNum(agreedCertifiableSum),
+      contingencyAtLock: safeNum(project.contract?.contingencyAtLock),
+      taxAtLock: safeNum(project.contract?.taxAtLock),
       finalContractValue,
       savings,
       notes: String(req.body?.notes || "").trim().slice(0, 2000),
@@ -6730,6 +6935,124 @@ async function putProjectResources(req, res) {
 // The body says WHICH rate, not what it costs. The rate is re-resolved from
 // this user's own merged library server-side, so a client cannot post a price
 // into a project.
+/**
+ * The QS's own rates that could price this line.
+ *
+ * The new build's rate list has said "No suggestion — price it from the
+ * build-up" since it was written, on the reasoning that inventing a figure is
+ * not a small liberty on a bill. That reasoning holds; the mistake was assuming
+ * there was no honest source. RateGen holds the master rates plus this user's
+ * overrides and custom rates, and priceLineFromRate already resolves a pick
+ * against exactly that merged set — so a suggestion is the QS's own decision,
+ * found, not a number put in their mouth.
+ *
+ * Read-only, and masked the same way pricing is: a collaborator who may not see
+ * rates may not be shown them here either.
+ */
+async function rateSuggestionsForLine(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const code = String(req.params.code || "").trim();
+    if (!code) return res.status(400).json({ error: "A bill line code is required" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) {
+      // Not an error: an empty list with the reason, so the screen says why
+      // rather than looking broken.
+      return res.json({ ok: true, suggestions: [], masked: true });
+    }
+
+    const item = (project.items || []).find(
+      (it) => String(it?.code || "").trim().toLowerCase() === code.toLowerCase(),
+    );
+    if (!item) return res.status(404).json({ error: "That bill line is not on this project" });
+
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+      Array.isArray(lib?.customRates) ? lib.customRates : [],
+    );
+
+    const suggestions = suggestRatesForLine(item, merged, { limit: 5 }).filter(worthOffering);
+    res.json({
+      ok: true,
+      suggestions,
+      // So the screen can say "none of your rates match" rather than "none".
+      libraryCount: merged.length,
+    });
+  } catch (err) {
+    console.error("GET rate-suggestions error:", err);
+    res.status(500).json({ error: "Could not look for a rate." });
+  }
+}
+
+/**
+ * A rate for EVERY line on this project that has none, in one read.
+ *
+ * WHY BULK AND NOT FIVE HUNDRED CALLS
+ *
+ * The Rates tab lists every unpriced line at once, and its "suggested rate"
+ * slot has read "No suggestion" since it was written. Filling it per line would
+ * be one request each, and each one re-reads the whole rate library — which is
+ * the expensive part. Loading the library once and matching in memory is both
+ * cheaper and the only version that does not fall over on a bill with four
+ * hundred unpriced lines.
+ *
+ * Returns the BEST match per line only. The panel offers the full five when a
+ * line is opened; a list needs one figure, not five.
+ */
+async function rateSuggestionsForProject(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) {
+      return res.json({ ok: true, byCode: {}, masked: true });
+    }
+
+    // Only the lines that need one. A priced line's rate is the QS's decision
+    // and must not be second-guessed in a list.
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+      Array.isArray(lib?.customRates) ? lib.customRates : [],
+    );
+
+    // Every rule — which lines, the lowercased key, the ceiling — is in
+    // util/rateSuggestions.js, where it is tested without a database.
+    const found = suggestionMapForBill(project.items, merged);
+    res.json({ ok: true, ...found, libraryCount: merged.length });
+  } catch (err) {
+    console.error("GET project rate-suggestions error:", err);
+    res.status(500).json({ error: "Could not look for rates." });
+  }
+}
+
 async function priceLineFromRate(req, res) {
   try {
     const userId = getUserObjectId(req);
@@ -6776,11 +7099,15 @@ async function priceLineFromRate(req, res) {
       unitCost: Number(req.body?.unitCost) || 0,
     });
     if (!built) {
-      return res.status(422).json({
-        error:
-          "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+      // Three unrelated causes used to share one message, so a line with no
+      // quantity was told the RATE had no build-up — and the QS would go and
+      // rebuild a rate that was never the problem.
+      const why = whyRateCannotPrice(item, rate, { unitCost: Number(req.body?.unitCost) || 0 }) || {
         code: "RATE_HAS_NO_BUILDUP",
-      });
+        message:
+          "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+      };
+      return res.status(422).json({ error: why.message, code: why.code });
     }
 
     project.budgetItems = sanitizeBudgetItems(
@@ -7355,7 +7682,25 @@ async function priceServicesProject(req, res) {
       }
     });
 
-    project.budgetItems = budgetItems;
+    // Third instance of the same replace-without-preserve defect, on the
+    // button a services QS presses most. The pricing pass builds a brand-new
+    // array and this used to assign it straight over the stored rows, so
+    // every procurement mark, supplier, target date and typed rate went —
+    // and because the pass returns early for a bill line whose build-up is
+    // empty, those lines' rows were not rebuilt either, they simply vanished.
+    //
+    // Coverage puts the skipped lines back, then the QS's own fields go back
+    // on top. Same helper and same order as the plugin paths.
+    const previousBudget = project.budgetItems || [];
+    backfillBudgetLinks(project.items, budgetItems);
+    const freshBudget = ensureBillItemCoverage(project.items, budgetItems);
+    const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+    if (restored.procurement || restored.pricing) {
+      console.log(
+        `[services] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+      );
+    }
+    project.budgetItems = freshBudget;
     const { updated } = deriveBillRatesFromBudget(project);
     reconcileItemsFromBudget(project);
     project.markModified("budgetItems");
@@ -7912,6 +8257,20 @@ router.put(
 // client sends WHICH rate was picked, never what it costs — the server
 // re-resolves the rate from that user's own merged library, so a price can
 // only ever be one they already hold.
+router.get(
+  "/:productKey/:id/rate-suggestions",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  rateSuggestionsForProject,
+);
+
+router.get(
+  "/:productKey/:id/bill/:code/rate-suggestions",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  rateSuggestionsForLine,
+);
+
 router.post(
   "/:productKey/:id/bill/:code/price-from-rate",
   mapEntitlementParam,

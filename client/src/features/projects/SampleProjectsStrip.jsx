@@ -11,7 +11,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { FaCube, FaEye } from "../../components/icons.jsx";
-import { projectWorkspaceHref } from "../../lib/projectLinks.js";
+import { useProjectHref } from "../../lib/useProjectHref.js";
 
 // What the row says a sample is, per product. Anything unlisted gets the
 // generic line.
@@ -68,6 +68,7 @@ function CardBody({ s }) {
 }
 
 export default function SampleProjectsStrip({ samples = [], onOpenProject, productKey }) {
+  const projectHref = useProjectHref();
   const [open, setOpen] = React.useState(() => {
     try {
       return localStorage.getItem("adlm.samples.collapsed") !== "1";
@@ -116,7 +117,7 @@ export default function SampleProjectsStrip({ samples = [], onOpenProject, produ
                 <CardBody s={s} />
               </button>
             ) : (
-              <Link key={s.id} className="pj-card" to={projectWorkspaceHref(s)}>
+              <Link key={s.id} className="pj-card" to={projectHref(s)}>
                 <CardBody s={s} />
               </Link>
             ),

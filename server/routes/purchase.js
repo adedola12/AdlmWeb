@@ -1,4 +1,5 @@
 import express from "express";
+import { creditReferral } from "../services/referrals.js";
 import { paystackKeys, paystackSecret } from "../util/paystackKeys.js";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth.js";
 import { Purchase } from "../models/Purchase.js";
@@ -520,6 +521,11 @@ router.get("/verify", async (req, res) => {
       const { applyEntitlementsFromPurchase } =
         await import("../util/applyEntitlements.js");
       await applyEntitlementsFromPurchase(purchase);
+
+      // Credit whoever referred this buyer — once, ever. Atomic inside
+      // creditReferral, because this path and the webhook below race on purpose
+      // and Paystack re-delivers. A renewal never credits.
+      await creditReferral(purchase, "card");
 
       const { autoEnrollFromPurchase } = await import("../util/autoEnroll.js");
       await autoEnrollFromPurchase(purchase);

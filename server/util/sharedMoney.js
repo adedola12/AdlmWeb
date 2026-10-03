@@ -92,7 +92,12 @@ export function maskSharedMoney(rows, canSeeRates, fields = ROLLUP_MONEY_FIELDS)
   return rows.map((p) => {
     if (!p?.shared) return p;
     const out = { ...p };
-    if ("totalCost" in p) out.priced = Number(p.totalCost) > 0;
+    // Priced means the job carries money at all, not that it has measured
+    // lines: a locked contract with nothing measured yet is still priced. Both
+    // figures are about to be zeroed, so the question is answered first.
+    if ("totalCost" in p || "contractSum" in p) {
+      out.priced = Number(p.totalCost) > 0 || Number(p.contractSum) > 0;
+    }
     for (const f of fields) out[f] = 0;
     out.moneyHidden = true;
     return out;

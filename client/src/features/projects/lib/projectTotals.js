@@ -135,7 +135,7 @@ export function measuredTotal(items) {
  * @param {object[]} [input.linkedSummaries]
  * @returns {{measured:number, pc:number, provisional:number, sums:number,
  *   prelims:number, subtotal:number, contingency:number, tax:number,
- *   planned:number, variations:number, total:number, linked:number,
+ *   planned:number, variations:number, total:number, works:number, linked:number,
  *   preliminaryPercent:number, contingencyPercent:number, taxPercent:number}}
  */
 export function projectTotals(input = {}) {
@@ -168,6 +168,20 @@ export function projectTotals(input = {}) {
     planned,
     variations,
     total: planned + variations,
+    // THE FIGURE A CERTIFICATE IS DRAWN AGAINST.
+    //
+    // Measured work, the sums, preliminaries and approved variations — and
+    // NOT contingency or VAT. A certificate certifies works done; VAT is added
+    // on top of it and contingency is only money if it is spent.
+    //
+    // It exists because screens were dividing certified money by `total` (or by
+    // contract.contractSum, which is the same shape) to report how complete a
+    // project is. A job that has genuinely earned 80% of everything a
+    // certificate can ever pay came out at roughly 71%, and nothing looked
+    // wrong because both numbers are real. Worse, the denominator includes a
+    // contingency that is usually never spent, so such a project can never
+    // reach 100% however finished it is.
+    works: subtotal + variations,
     linked: linkedServicesTotal(input.linkedSummaries),
     preliminaryPercent,
     contingencyPercent,
@@ -176,3 +190,23 @@ export function projectTotals(input = {}) {
 }
 
 export default projectTotals;
+
+export const DEFAULT_PRELIMINARY_PERCENT = 7.5;
+
+/**
+ * The preliminary percentage for a contract, honouring a deliberate 0.
+ *
+ * `safeNum(x) || 7.5` cannot tell "no preliminaries on this job" from "never
+ * set", because 0 is falsy — so a QS who typed 0% got a 7.5% pool on the
+ * Overview and the project card while the Bill and the certificates said
+ * zero. Mirrors server/util/contractDefaults.js; the two must agree.
+ *
+ * null, undefined and "" are all absent, and all three come back from Number()
+ * as 0, so they are checked before the numeric test rather than through it.
+ */
+export function preliminaryPercentOf(contract, fallback = DEFAULT_PRELIMINARY_PERCENT) {
+  const value = contract?.preliminaryPercent;
+  if (value === null || value === undefined || value === "") return fallback;
+  const raw = Number(value);
+  return Number.isFinite(raw) ? raw : fallback;
+}

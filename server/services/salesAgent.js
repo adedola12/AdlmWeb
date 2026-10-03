@@ -5,6 +5,7 @@
 // widget to render.
 
 import { createMessage, supportsTools } from "./aiClient.js";
+import { referralSummary } from "./referrals.js";
 import { getCatalog } from "./catalog.js";
 import { Lead } from "../models/Lead.js";
 import { syncLeadToNotion } from "../util/notion.js";
@@ -13,6 +14,7 @@ import {
   getProjectDetails,
   getAccountSummary,
   getResourceQuantity,
+  getProcurementSchedule,
   getProjectBudget,
   getProjectBill,
   getBillItemsForAi,
@@ -164,6 +166,40 @@ const ACCOUNT_TOOLS = [
         },
       },
       required: ["resource"],
+    },
+  },
+  {
+    name: "get_my_referral_link",
+    description:
+      "Get the LOGGED-IN user's own referral/invite link, and how many people " +
+      "have signed up and subscribed through it. Use for 'can I get an invite " +
+      "link', 'refer a friend', 'my referral link', 'how many people have I " +
+      "referred'. ALWAYS print the link as a plain URL on its own line — never " +
+      "inside markdown brackets — so they can read and copy it. No arguments.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "get_procurement_schedule",
+    description:
+      "What the user still has to BUY on a project, and WHEN each thing must be " +
+      "ordered — soonest first, with anything already overdue called out. This is " +
+      "THE tool for 'what do I buy next', 'what should I be ordering this week', " +
+      "'my procurement list', 'what is late to order', 'next spend'. Order dates " +
+      "come from the programme: the earliest task that needs a material, less the " +
+      "lead time. Say which project, or omit it to use the one they are looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "Project name. Omit to use the project the user is viewing.",
+        },
+        leadDays: {
+          type: "number",
+          description: "Supplier lead time in days. Defaults to 14.",
+        },
+      },
+      additionalProperties: false,
     },
   },
   {
@@ -521,14 +557,34 @@ async function handleAccountTool(name, input, ctx) {
   try {
     if (name === "get_my_projects") return await getPortfolioSummary(ctx.user._id);
     if (name === "get_my_account") return await getAccountSummary(ctx.user);
+    // ctx.page is the address the user is standing on. It is used only when
+    // they did not name a project — see resolveProject.
     if (name === "get_project_details")
-      return await getProjectDetails(ctx.user._id, input?.projectName);
+      return await getProjectDetails(ctx.user._id, input?.projectName, ctx.page);
     if (name === "get_resource_quantity")
-      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName);
+      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName, ctx.page);
     if (name === "get_project_budget")
-      return await getProjectBudget(ctx.user._id, input?.projectName);
+      return await getProjectBudget(ctx.user._id, input?.projectName, ctx.page);
+    if (name === "get_my_referral_link") {
+      const r = await referralSummary(ctx.user._id);
+      if (!r) return "Their referral link could not be made just now.";
+      // The bare URL on its own line: chatMarkdown renders a naked https link
+      // as a real anchor, while [text](url) would hide the code from the person
+      // who has to read it out or paste it somewhere else.
+      return [
+        `Referral link: ${r.link}`,
+        `Code: ${r.code}`,
+        `Signed up through it: ${r.signups}`,
+        `Of those, subscribed: ${r.converted}`,
+        "Print the link exactly as written above, on its own line, not as a markdown link.",
+      ].join("\n");
+    }
+    if (name === "get_procurement_schedule")
+      return await getProcurementSchedule(ctx.user._id, input?.projectName, ctx.page, {
+        leadDays: input?.leadDays,
+      });
     if (name === "get_project_bill")
-      return await getProjectBill(ctx.user._id, input?.projectName, input?.search);
+      return await getProjectBill(ctx.user._id, input?.projectName, input?.search, ctx.page);
 
     // ── ADLM AI Service (AWS) — always fed the user's REAL bill lines ──
     if (name === "check_my_rates" || name === "find_project_errors") {
@@ -630,6 +686,18 @@ export async function runSalesAgent(history, message, opts = {}) {
     accessToken: opts.accessToken || "",
     sessionId: opts.sessionId || "",
     ip: opts.ip || "",
+    // WHERE THE USER IS STANDING.
+    //
+    // The widget is mounted on every route and used to send nothing about the
+    // page, so a user on their own project page asking "what is left to buy on
+    // this job" was asked which project they meant. The client now sends the
+    // reference its own address carries — an ObjectId on the classic workspace,
+    // a slug on the new one — and the tools fall back to it only when no
+    // project was named.
+    page: {
+      projectRef: String(opts.page?.projectRef || "").trim().slice(0, 120),
+      productKey: String(opts.page?.productKey || "").trim().toLowerCase().slice(0, 40),
+    },
     productIndex,
     pendingActions: [],
   };

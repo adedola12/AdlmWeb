@@ -3,7 +3,7 @@
 // Where a project opens, and which product it belongs to — one answer for the
 // Work overview, the projects list and the programme.
 //
-// Projects open in the full workspace (/projects/:tool), the screen with the
+// Projects open in the classic workspace (/projects/:tool), the screen with the
 // bill, budget, valuation, PM views and the Work area. The link carries the
 // project's slug, not its database id: the id is an internal key and has no
 // business in an address bar people copy and share. A project with no slug
@@ -88,8 +88,20 @@ export function normaliseRollup(list) {
   }));
 }
 
-/** The workspace address for a project (by slug). */
-export function projectWorkspaceHref(p) {
+/**
+ * The workspace address for a project (by slug).
+ *
+ * `newBuild` sends it to Richard's project page instead of the classic
+ * workspace. It is a parameter rather than a global because the answer differs
+ * per VIEWER, not per project: until 1 October only staff may open /work/*, and
+ * a customer linked there would be bounced straight back to the classic
+ * workspace by NewBuildGate — the right destination, but an extra hop for the
+ * one journey they make most.
+ *
+ * ArchiCAD and RateGen are unchanged either way: neither has a page under
+ * /work/project, and both had their own home before this.
+ */
+export function projectWorkspaceHref(p, { newBuild = false } = {}) {
   const k = String(p?.productKey || "").toLowerCase();
   if (k === "archicad") {
     const key = p?.slug || p?.id || p?._id || "";
@@ -98,5 +110,8 @@ export function projectWorkspaceHref(p) {
   if (k === "rategen") return "/rategen";
   if (!k) return "/manage";
   const key = p?.slug || p?.id || p?._id || "";
+  if (newBuild && key) {
+    return `/work/project/${encodeURIComponent(k)}/${encodeURIComponent(key)}`;
+  }
   return key ? `/projects/${k}?project=${encodeURIComponent(key)}` : `/projects/${k}`;
 }

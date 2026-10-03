@@ -256,19 +256,60 @@ export function preservePlantLines(incoming, stored, opts = {}) {
     ...(Array.isArray(stored?.materials) ? stored.materials : []),
     ...(Array.isArray(stored?.labour) ? stored.labour : []),
   ];
-  const storedPlant = storedLines.filter(isPlant);
+
+  // WHERE A WEBSITE-AUTHORED PLANT LINE ACTUALLY LIVES.
+  //
+  // The rate builder files plant ONLY in breakdown[], with refKind "plant" —
+  // it says so itself (client/src/ds/rategen/customRateDraft.js): "Plant has no
+  // master library of its own (deferred), so a plant line lives in the
+  // breakdown with refKind 'plant'." materials[] holds kind === "material" and
+  // labour[] holds kind === "labour", and nothing else.
+  //
+  // So looking only at those two arrays found NO plant on any rate built here,
+  // this guard returned the payload untouched, and the next Rate Gen desktop
+  // push — which cannot send plant back — silently dropped it. On "Concrete
+  // 1:2:4" with a ₦1,000 mixer, the stored rate fell from ₦8,544 to ₦7,344 and
+  // every bill line priced from it was short, with no warning anywhere.
+  const storedBreakdownPlant = (Array.isArray(stored?.breakdown) ? stored.breakdown : [])
+    .filter((b) => {
+      const k = canonicalKind(b?.refKind);
+      return k === KIND.PLANT || k === KIND.EQUIPMENT;
+    })
+    // Back into the line shape the arrays use, so the rebuild below sees one
+    // kind of object.
+    .map((b) => ({
+      description: normalizeText(b?.componentName || b?.refName),
+      unit: normalizeText(b?.unit),
+      quantity: toNum(b?.quantity, 0),
+      unitPrice: toNum(b?.unitPrice, 0),
+      totalCost: toNum(b?.lineTotal, toNum(b?.quantity, 0) * toNum(b?.unitPrice, 0)),
+      rateType: KIND.PLANT,
+      refSn: b?.refSn ?? null,
+      refName: normalizeText(b?.refName || b?.componentName),
+      priceAsOf: b?.priceAsOf ?? null,
+    }));
+
+  const key = (l) => `${normalizeText(l?.description).toLowerCase()}|${l?.unit || ""}`;
+  const fromArrays = storedLines.filter(isPlant);
+  // A rate that carries plant in BOTH places (a desktop push after a website
+  // edit) must not have it preserved twice.
+  const known = new Set(fromArrays.map(key));
+  const storedPlant = [...fromArrays, ...storedBreakdownPlant.filter((l) => !known.has(key(l)))];
   if (!storedPlant.length) return incoming;
 
   const incomingLines = [
     ...(Array.isArray(incoming.materials) ? incoming.materials : []),
     ...(Array.isArray(incoming.labour) ? incoming.labour : []),
   ];
-  const seen = new Set(
-    incomingLines.map((l) => `${normalizeText(l?.description).toLowerCase()}|${l?.unit || ""}`),
-  );
-  const missing = storedPlant.filter(
-    (l) => !seen.has(`${normalizeText(l?.description).toLowerCase()}|${l?.unit || ""}`),
-  );
+  // A push that already carries the plant line — in either array, or in its own
+  // breakdown — needs nothing preserved.
+  const seen = new Set([
+    ...incomingLines.map(key),
+    ...(Array.isArray(incoming.breakdown) ? incoming.breakdown : []).map((b) =>
+      key({ description: b?.componentName || b?.refName, unit: b?.unit }),
+    ),
+  ]);
+  const missing = storedPlant.filter((l) => !seen.has(key(l)));
   if (!missing.length) return incoming;
 
   // Plant lines ride in `materials`: the schema has only the two arrays, and

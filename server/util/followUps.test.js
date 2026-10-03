@@ -62,10 +62,23 @@ test("an unparseable expiry falls back to the stored status", () => {
 test("daysOverdue counts whole days since the expiry day ended", () => {
   // A fixed clock: reading dayjs() here made the result depend on when the
   // suite ran, which is how the first-hour-after-midnight bug surfaced.
-  const now = dayjs("2026-09-26T12:00:00Z"); // 13:00 WAT
-  assert.equal(daysOverdue(null, now), 0);
-  assert.equal(daysOverdue(now.add(30, "day").toDate(), now), 0);
-  assert.equal(daysOverdue(now.subtract(10, "day").toDate(), now), 10);
+  const fixed = dayjs("2026-09-26T12:00:00Z"); // 13:00 WAT
+  assert.equal(daysOverdue(null, fixed), 0);
+  assert.equal(daysOverdue(fixed.add(30, "day").toDate(), fixed), 0);
+
+  // Pinned, because this read the wall clock and so failed for one hour a
+  // night: the hour-based count truncated the minutes past midnight and
+  // answered 9 where every other hour answered 10.
+  //
+  // 4397073 then fixed the cause rather than the symptom — the count is Lagos
+  // calendar days now — so the midnight hour answers 10 like the rest, and the
+  // tests below this one cover that directly. What is left here is the part
+  // still worth holding: the answer must not depend on when the suite runs.
+  const at = (hhmm) => dayjs(`2026-09-26T${hhmm}:00`);
+  for (const hhmm of ["00:10", "00:40", "01:30", "09:00", "14:00", "23:30"]) {
+    const now = at(hhmm);
+    assert.equal(daysOverdue(now.subtract(10, "day").toDate(), now), 10, hhmm);
+  }
 });
 
 test("daysOverdue is right in the hour after Lagos midnight", () => {

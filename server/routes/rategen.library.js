@@ -943,7 +943,27 @@ router.put("/library/user-rates", async (req, res, next) => {
     }
 
     if (Array.isArray(customRates)) {
-      lib.customRates = customRates.map((item) => normalizeCustomRate(item));
+      // PLANT SURVIVES THE BULK SYNC TOO.
+      //
+      // This path replaced every custom rate wholesale, and unlike the
+      // single-rate push it never asked preservePlantLines — so one sync from a
+      // Rate Gen desktop that cannot send plant stripped the plant line from
+      // EVERY rate the QS had built here, in one write, each one silently worth
+      // less than before. Same rule as the single push: a client that declares
+      // supportsPlant is authoritative, including for a deliberate deletion.
+      const storedById = new Map(
+        (lib.customRates || []).map((r) => [
+          String(r?.customRateId || r?.id || ""),
+          typeof r?.toObject === "function" ? r.toObject() : r,
+        ]),
+      );
+      lib.customRates = customRates.map((item) => {
+        const next = normalizeCustomRate(item);
+        const prior = storedById.get(String(next.customRateId || ""));
+        return prior
+          ? preservePlantLines(next, prior, { clientSupportsPlant: req.body?.supportsPlant === true })
+          : next;
+      });
       lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
     }
 

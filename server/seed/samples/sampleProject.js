@@ -16,6 +16,7 @@ import {
 import { QUIV_TRADES } from "../../util/boqCategory.js";
 import { deriveBillRatesFromBudget } from "../../util/deriveBillRates.js";
 import { archicadLines } from "./archicadSample.js";
+import { phaseTasks } from "./powTemplate.js";
 
 const r2 = (n) => Math.round(n * 100) / 100;
 const r3 = (n) => Math.round(n * 1000) / 1000;
@@ -898,34 +899,61 @@ export function assembleSampleProject(scheme, productKey, { modelUrls = {} } = {
     const slip = pi % 3 === 1 ? 4 : pi % 3 === 2 ? -2 : 1;
     const actualStart = pct > 0 ? day(isoDay(s), Math.max(0, slip)) : null;
     const actualEnd = pct >= 100 ? day(isoDay(e), slip) : null;
-    tasks.push({
-      taskId: `T${ph.n}`,
-      wbs: `${ph.n + 1}`,
-      name: ph.name,
-      startDate: s,
-      endDate: e,
-      baselineStart: s,
-      baselineEnd: e,
-      durationDays: ph.days,
-      actualStartDate: actualStart,
-      actualEndDate: actualEnd,
-      actualDurationDays: actualEnd ? ph.days + slip - Math.max(0, slip) : 0,
-      percentComplete: pct,
-      status: pct >= 100 ? "completed" : pct > 0 ? "in-progress" : "not-started",
-      priority: ph.priority || "medium",
-      predecessors: [`T${ph.n - 1}`],
-      linkedBoqIdentities: idxs.map((i) => itemIdentity(project.items[i], i)),
-      linkedBoqWeights: idxs.map(() => 100),
-      baselineCost: planned,
-      actualCost: r2(planned * (pct / 100) * (1 + (pi % 2 === 0 ? 0.04 : -0.02))),
-      isMilestone: false,
-      criticalPath: !ph.slack,
-      totalSlackDays: ph.slack || 0,
-      resourceNames: ph.resource,
-      assignedTo: ph.lead || "Site engineer",
-      source: "boq",
-      notes: "",
+    // A PHASE IS NOT ONE BAR.
+    //
+    // This used to push a single task per phase — "Substructure, 24 days" —
+    // which demonstrates a Gantt and teaches a QS nothing. A real programme
+    // draws the trades: formwork, reinforcement overlapping it, and a pour that
+    // is always one day. powTemplate.js carries that shape, transcribed from a
+    // genuine 451-day programme for a 7-storey hotel.
+    //
+    // Deliberately NO summary bar above the leaves: nothing in the client
+    // excludes isSummary from its totals, so a summary would double-count its
+    // own children in the schedule KPIs.
+    //
+    // The phase keeps its start, its length and its progress, so every figure
+    // already derived from phases — earned value, the certificates, the final
+    // account — is untouched. The lines are shared across the leaves so the
+    // value adds up to the phase's, not to a multiple of it.
+    const leaves = phaseTasks(ph.name, ph.days);
+    leaves.forEach((leaf, li) => {
+      const ls = day(isoDay(s), leaf.offset);
+      const le = day(isoDay(ls), leaf.days);
+      const mine = idxs.filter((_, k) => k % leaves.length === li);
+      const share = sum(mine, (i) => project.items[i].qty * project.items[i].rate);
+      tasks.push({
+        taskId: `T${ph.n}.${li + 1}`,
+        wbs: `${ph.n + 1}.${li + 1}`,
+        name: `${ph.name} — ${leaf.name}`,
+        startDate: ls,
+        endDate: le,
+        baselineStart: ls,
+        baselineEnd: le,
+        durationDays: leaf.days,
+        actualStartDate: pct > 0 ? day(isoDay(ls), Math.max(0, slip)) : null,
+        actualEndDate: pct >= 100 ? day(isoDay(le), slip) : null,
+        actualDurationDays: pct >= 100 ? leaf.days + slip - Math.max(0, slip) : 0,
+        percentComplete: pct,
+        status: pct >= 100 ? "completed" : pct > 0 ? "in-progress" : "not-started",
+        priority: ph.priority || "medium",
+        predecessors: li === 0 ? [`T${ph.n - 1}`] : [`T${ph.n}.${li}`],
+        linkedBoqIdentities: mine.map((i) => itemIdentity(project.items[i], i)),
+        linkedBoqWeights: mine.map(() => 100),
+        baselineCost: share,
+        actualCost: r2(share * (pct / 100) * (1 + (pi % 2 === 0 ? 0.04 : -0.02))),
+        isMilestone: false,
+        criticalPath: !ph.slack && leaf.trade !== "MEP",
+        totalSlackDays: ph.slack || 0,
+        // The trade is the thing a planner reads first, so it leads.
+        resourceNames: leaf.trade ? `${leaf.trade} gang` : ph.resource,
+        assignedTo: ph.lead || "Site engineer",
+        source: "boq",
+        notes: "",
+      });
     });
+    // Unused now that a phase is many bars, but kept so the shape of the loop
+    // still reads: a phase's planned value is the sum of its leaves'.
+    void planned;
     cursor = e;
   });
   const finish = cursor;

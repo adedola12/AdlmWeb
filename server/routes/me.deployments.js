@@ -6,6 +6,7 @@ import { Purchase } from "../models/Purchase.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
 import { ReleaseCandidate } from "../models/ReleaseCandidate.js";
 import { getGateConfig, isApprover } from "../util/releaseGate.js";
+import { bigOrgKeys, inEarlyRing, loadOrgUsers, withEarlyAccess } from "../util/releaseRollout.js";
 import {
   createPresignedGetUrl,
   isPrivateInstallerStorageEnabled,
@@ -288,6 +289,24 @@ router.get(
     })
       .sort({ productKey: 1 })
       .lean();
+
+    // STAGED ROLLOUT (util/releaseRollout.js). A build approved for firms is
+    // offered to accounts of firms holding more than 5 organisation seats;
+    // everyone else keeps the live build until it is released to everyone.
+    // The ring is only worked out when it can matter: some product here has an
+    // early build and this account holds an organisation licence.
+    let inRing = false;
+    const hasOrgLicence = (user.entitlements || []).some(
+      (e) => String(e?.licenseType || "").toLowerCase() === "organization",
+    );
+    if (hasOrgLicence && rawItems.some((r) => r.earlyAccess)) {
+      try {
+        inRing = inEarlyRing(user, bigOrgKeys(await loadOrgUsers(User)));
+      } catch (err) {
+        console.error("[me/deployments] early-access ring lookup failed:", err?.message || err);
+      }
+    }
+    for (let i = 0; i < rawItems.length; i += 1) rawItems[i] = withEarlyAccess(rawItems[i], { inRing });
 
     // Strip envVars unless the caller has an active entitlement for the
     // product. localRandomVars is safe to return to anyone (the actual

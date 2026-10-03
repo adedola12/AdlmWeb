@@ -41,9 +41,11 @@ import {
   variationRow,
 } from "../features/projects/lib/projectRows.js";
 import { reconcileBill } from "../features/projects/rateReconcile.js";
+import { preliminaryPercentOf } from "../features/projects/lib/projectTotals.js";
 // The same product/host table the gallery names its tools from (P0.4), so the
 // two screens say "Measure in QUIV, inside Revit" in exactly the same words.
 import { SOURCES } from "../lib/projectGallery.js";
+import { isFolderMarker } from "../lib/folderMarker.js";
 import {
   budgetDrivenCodes as budgetDrivenCodesFor,
   nextRateStamp,
@@ -1231,6 +1233,11 @@ export default function ProjectsGeneric() {
   // Set true when the user reorders bill items so the Save button activates
   // (item order isn't otherwise part of the dirty check). Reset on project
   // load — see the effect just after selectedId is defined.
+  // The items ARRAY changed — reordered, a row deleted, a delete undone. Every
+  // other dirty check compares the per-row edit maps, and none of them notices
+  // a row leaving: an unpriced row contributes nothing to any map, and
+  // ratesEqual reads a missing key and an empty cell as the same 0. So deleting
+  // one left Save disabled and the row came back on the next load.
   const [orderDirty, setOrderDirty] = React.useState(false);
   // Contract lock state — populated from the loaded project.
   const [contract, setContract] = React.useState({
@@ -3118,6 +3125,7 @@ export default function ProjectsGeneric() {
     });
     its.splice(rowIndex, 1);
     setSel((prev) => (prev ? { ...prev, items: its } : prev));
+    setOrderDirty(true); // a removed row is a change to save, priced or not
     // clear rate/status caches for the removed index
     setRates((prev) => {
       const next = {};
@@ -3143,6 +3151,9 @@ export default function ProjectsGeneric() {
           its.splice(at, 0, item);
           return { ...cur, items: its };
         });
+        // Putting the row back is a change to the array too. Without this, an
+        // undo of an unpriced row left Save disabled and the undo was lost.
+        setOrderDirty(true);
         if (cachedRate != null) {
           // Re-seed the rate cache at the new index's key so the row
           // shows its original rate immediately, not a blank cell.
@@ -4548,8 +4559,11 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // compute all rows
+  // compute all rows. HERON's folder markers ("--- GF ---") are dropped here, after
+  // the map, so every row keeps its index into items[] (row.i and the rate/status maps
+  // are keyed by it) while the Bill, its counts and its exports never see a marker.
   const computedAll = items.map((it, i) => {
+    if (isFolderMarker(it)) return null;
     const k = itemKey(it, i);
     const qty = safeNum(it?.qty);
     const rate =
@@ -4631,7 +4645,7 @@ export default function ProjectsGeneric() {
       markedAt:
         statusField === "purchased" ? it?.purchasedAt || null : it?.completedAt || null,
     };
-  });
+  }).filter(Boolean);
   const grossAmount = computedAll.reduce(
     (acc, row) => acc + safeNum(row.fullAmount),
     0,
@@ -4663,7 +4677,7 @@ export default function ProjectsGeneric() {
   const variationsTotalForOverview = approvedVariationsTotal(variations);
   const variationsDoneAmount = approvedVariationsEarned(variations);
 
-  const preliminaryPctForOverview = safeNum(contract?.preliminaryPercent) || 7.5;
+  const preliminaryPctForOverview = preliminaryPercentOf(contract);
   const preliminaryPoolForOverview =
     ((grossAmount + provTotalForOverview) * preliminaryPctForOverview) / 100;
   // Pro-rate the preliminary pool by the allocation of each completed item.

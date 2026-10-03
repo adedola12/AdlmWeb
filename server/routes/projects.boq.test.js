@@ -79,6 +79,10 @@ function projectDoc(extra = {}) {
 // The filters findOne was called with, so a test can assert on what reached Mongo.
 let filters = [];
 let stored = null;
+// The caller's entitlements, for the rates-visibility check on the export.
+// Empty by default: the owner is never gated on it, so most tests never care.
+let entitlements = [];
+const rategen = () => [{ productKey: "rategen", status: "active" }];
 
 function installMongoStub() {
   // A connected-looking connection. readyState and db are prototype getters.
@@ -102,6 +106,10 @@ function installMongoStub() {
         : null;
     return { lean: async () => hit };
   };
+
+  // The export now also asks whether the caller may see the money, which
+  // reads the caller's entitlements. Driven by `entitlements` below.
+  User.findById = () => ({ lean: async () => ({ entitlements }) });
 }
 
 installMongoStub();
@@ -174,8 +182,9 @@ for (const [path, label] of EXPORTS) {
   });
 }
 
-test("a full collaborator may export; a view-only one is told why not", async () => {
+test("a full collaborator with RateGen may export; a view-only one is told why not", async () => {
   await withServer(async (base) => {
+    entitlements = rategen();
     stored = projectDoc({
       collaborators: [{ userId: COLLABORATOR, accessLevel: "full" }],
     });
@@ -197,6 +206,47 @@ test("a full collaborator may export; a view-only one is told why not", async ()
     assert.equal(res.status, 403);
     const body = await res.json();
     assert.equal(body.code, "VIEW_ONLY");
+  });
+  entitlements = [];
+});
+
+test("a full collaborator WITHOUT RateGen cannot export the rates", async () => {
+  // The screen masked every rate to zero for this reader and the workbook
+  // handed all of them over. A bill with its rates stripped is not a bill, so
+  // the export refuses and says what would lift it rather than shipping a
+  // spreadsheet of zeros that reads as data loss.
+  await withServer(async (base) => {
+    entitlements = [];
+    stored = projectDoc({
+      collaborators: [{ userId: COLLABORATOR, accessLevel: "full" }],
+    });
+    const res = await get(
+      base,
+      `/projectsboq/planswift/${PROJECT_ID}/export/bill-budget`,
+      tokenFor(COLLABORATOR),
+    );
+    assert.equal(res.status, 403);
+    const body = await res.json();
+    // Two guards cover this now, added by two sessions: loadProject refuses a
+    // non-owner without RateGen before the project is even returned, and
+    // mayExportRates refuses later for projects reached by scan. The first one
+    // fires here, and it uses RATEGEN_REQUIRED, the code the rest of the
+    // platform already uses for exactly this refusal.
+    assert.equal(body.code, "RATEGEN_REQUIRED");
+    assert.match(body.error, /RateGen/);
+  });
+});
+
+test("the owner is never gated on rates, whatever they are subscribed to", async () => {
+  await withServer(async (base) => {
+    entitlements = [];
+    stored = projectDoc();
+    const res = await get(
+      base,
+      `/projectsboq/planswift/${PROJECT_ID}/export/bill-budget`,
+      tokenFor(OWNER),
+    );
+    assert.equal(res.status, 200);
   });
 });
 

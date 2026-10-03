@@ -321,7 +321,8 @@ const ContractBaseItemSchema = new mongoose.Schema(
 // One numbered interim certificate. Cumulative-less-previous arithmetic:
 // each certificate carries its own cumulative value-to-date; the amount due
 // this period is derived as cumulativeValue minus the sum of all previous
-// certificates' `thisCertificate` totals. Retention / VAT / WHT are captured
+// certificates' `thisCertificate` totals. The arithmetic itself is in
+// util/certificateMaths.js, tested over the whole six-valuation sequence. Retention / VAT / WHT are captured
 // at the moment of issue so historical certs remain reproducible even if
 // the project settings change later.
 const CertificateSchema = new mongoose.Schema(
@@ -341,6 +342,14 @@ const CertificateSchema = new mongoose.Schema(
     whtPct: { type: Number, default: 2.5 },
     whtAmount: { type: Number, default: 0 },
     netPayable: { type: Number, default: 0 },
+    // A certificate can be NEGATIVE: when the value earned falls below what has
+    // already been certified (a certified variation later rejected, a downward
+    // re-measure), the interim certificate recovers the difference. That is
+    // ordinary practice, and it used to be clamped to zero — which printed ₦0
+    // payable and said nothing about the amount outstanding. Recorded so a
+    // screen and a PDF can both explain it.
+    overCertified: { type: Boolean, default: false },
+    overCertifiedBy: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ["draft", "approved", "paid"],
@@ -369,6 +378,13 @@ const FinalAccountSchema = new mongoose.Schema(
     retentionReleased: { type: Number, default: 0 },
     totalCertifiedToDate: { type: Number, default: 0 },
     agreedContractSum: { type: Number, default: 0 },
+    // The certifiable part of the agreed sum — measured + provisional +
+    // preliminaries, before contingency and VAT. `savings` is measured against
+    // THIS, not against agreedContractSum: neither contingency nor VAT is ever
+    // certified, so their difference is not a saving. util/finalAccountMath.js.
+    agreedCertifiableSum: { type: Number, default: 0 },
+    contingencyAtLock: { type: Number, default: 0 },
+    taxAtLock: { type: Number, default: 0 },
     finalContractValue: { type: Number, default: 0 },
     savings: { type: Number, default: 0 }, // positive = under-run, negative = over-run
     notes: { type: String, default: "" },
