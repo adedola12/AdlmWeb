@@ -42,6 +42,9 @@ function load() {
       c34: f.c34 ?? 0.013,
       fuel: f.fuel === true,
       massAssumed: f.massAssumed === true,
+      // matched only against "<line> || <the rate's description>": a line that says
+      // "Sheeting (975 x 2250)" is fibre cement or zinc only by what the rate says
+      context: f.context === true,
       mass: f.mass && typeof f.mass === "object" ? f.mass : {},
       rx: new RegExp(f.pattern || "", "i"),
     })),
@@ -55,10 +58,14 @@ export const carbonFactors = () => load().factors;
 
 const fmt = (v, dp) => String(Number(v.toFixed(dp)));
 
-/** The factor for a library row ("category :: name"), or null. */
-export function matchFactor(category, name) {
+/**
+ * The factor for a library row ("category :: name"), or null. With
+ * { context: true } only the factors that need the rate's own description are
+ * tried, and `name` is expected as "<line> || <rate description>".
+ */
+export function matchFactor(category, name, { context = false } = {}) {
   const key = `${String(category || "").trim()} :: ${String(name || "").trim()}`.toLowerCase();
-  return load().factors.find((f) => f.rx.test(key)) || null;
+  return load().factors.find((f) => f.context === context && f.rx.test(key)) || null;
 }
 
 /** kg (or litres of fuel) per library unit, or null when it cannot be read. */
@@ -107,18 +114,41 @@ export function massPerUnit(f, name, unit, hint = "") {
       const t = p[4] ? (Number(p[3]) + Number(p[4])) / 2 : Number(p[3]);
       return (Number(p[1]) * Number(p[2]) * t) / 1000 * 7850;
     }
-    case "block":
-      // NIS 87:2007 sizes at 1,920 kg/m3 (see the factor's massBasis)
-      if (n.startsWith("225")) return 27.5;
-      if (n.startsWith("150")) return 18.2;
-      if (n.startsWith("100")) return 19.4;
-      return null;
+    case "block": {
+      // NIS 87:2007 sizes at 1,920 kg/m3 (see the factor's massBasis); the size
+      // leads a library row ("225 x 225 x 450mm") or sits in a line ("blocks per m2 (225mm)")
+      const size = ["225", "150", "100"].find((s) => n.startsWith(s)) || n.match(/\b(225|150|100)\s*mm\b/)?.[1];
+      return size === "225" ? 27.5 : size === "150" ? 18.2 : size === "100" ? 19.4 : null;
+    }
     case "timber":
     case "board": {
+      const density = m.density ?? (m.rule === "timber" ? 500 : 600);
       const t = n.match(/\((\d+)x(\d+)x(\d+)mm\)/);
-      if (!t) return null;
-      const m3 = (Number(t[1]) * Number(t[2]) * Number(t[3])) / 1e9;
-      return m3 * (m.density ?? (m.rule === "timber" ? 500 : 600));
+      if (t) return ((Number(t[1]) * Number(t[2]) * Number(t[3])) / 1e9) * density;
+      // a build-up line: boards by the m2 at their thickness ("formwork boards (25mm)"),
+      // or a section by the metre ("studs (50x50mm)")
+      if (u.startsWith("m2")) {
+        const th = n.match(/\((\d+(?:\.\d+)?)\s*mm\)/);
+        return th ? (Number(th[1]) / 1000) * density : null;
+      }
+      if (u === "m") {
+        const s = n.match(/(\d+)\s*x\s*(\d+)\s*mm/);
+        return s ? ((Number(s[1]) * Number(s[2])) / 1e6) * density : null;
+      }
+      return null;
+    }
+    case "opening": {
+      // a door or window by its size as named ("1800 x 1200mm"), at kg per m2 of opening
+      if (u.startsWith("m2")) return m.density ?? null;
+      const o = n.match(/(\d{3,4})\s*x\s*(\d{3,4})\s*mm/);
+      return o ? ((Number(o[1]) * Number(o[2])) / 1e6) * (m.density ?? 20) : null;
+    }
+    case "pipe": {
+      // a pipe by the metre from its nominal diameter, wall at D/26 (SDR 26)
+      const d = n.match(/\b(\d{2,3})\s*mm\b/);
+      if (!d || u !== "m") return null;
+      const D = Number(d[1]) / 1000;
+      return Math.PI * D * (D / 26) * (m.density ?? 1400);
     }
     case "aluminium": {
       if (n.includes("angle ridge")) return u === "m" ? 0.0007 * 0.6 * 2700 : null;
@@ -141,8 +171,8 @@ export function massPerUnit(f, name, unit, hint = "") {
  * factor or its mass cannot be worked out. Never guessed.
  * Returns { factor, kg, a13, a4, a5w, a5a, total, totalLow, basis }.
  */
-export function assessCarbon(category, name, unit, qty, hint = "") {
-  const f = matchFactor(category, name);
+export function assessCarbon(category, name, unit, qty, hint = "", { context = false } = {}) {
+  const f = matchFactor(category, name, { context });
   if (!f || !(qty > 0)) return null;
   const perUnit = massPerUnit(f, name, unit, hint);
   if (perUnit == null || !(perUnit > 0)) return null;

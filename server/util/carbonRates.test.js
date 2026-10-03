@@ -132,8 +132,8 @@ test("plant fuel is site energy (A5a), even when the cloud tags the line as plan
   near(c.a13, 0);
 });
 
-test("handling is labour, never matched to the material it moves", () => {
-  const out = buildCarbonRates(
+test("handling is labour, never matched to the material it moves: 0, labour only", () => {
+  const [c] = buildCarbonRates(
     [{
       description: "Handling only",
       unit: "Bag",
@@ -142,9 +142,145 @@ test("handling is labour, never matched to the material it moves", () => {
     }],
     MATS, LABOUR,
   );
-  assert.equal(out[0], null); // no carbon at all: not a carbon rate
+  assert.equal(c.total, 0);
+  assert.equal(c.labourOnly, true);
+  assert.equal(c.coverage, 1);
+});
+
+test("every built-up rate gets a figure: hand excavation is 0, not missing", () => {
+  const [c] = buildCarbonRates(
+    [{
+      sectionKey: "ground",
+      description: "Excavate by hand shallow trench in soft sand",
+      unit: "m3",
+      netCost: 962.5,
+      breakdown: [
+        { componentName: "Labourer (soft sand excavation)", quantity: 1.4, unit: "hr/m3", unitPrice: 687.5, totalPrice: 962.5 },
+        { componentName: "Total Cost/m3", quantity: 1, unit: "m3", unitPrice: 962.5, totalPrice: 962.5 },
+      ],
+    }],
+    MATS, LABOUR,
+  );
+  assert.equal(c.total, 0);
+  assert.equal(c.labourOnly, true);
+  assert.match(c.note, /Labour/);
 });
 
 test("a rate with no build-up has no carbon", () => {
   assert.deepEqual(buildCarbonRates([{ description: "Lump sum", unit: "item", netCost: 5 }], MATS, LABOUR), [null]);
+});
+
+test("a sheet named only by its size takes its material from the rate's description", () => {
+  const sheet = (description) => ({
+    sectionKey: "roofing",
+    description,
+    unit: "m2",
+    netCost: 2000,
+    breakdown: [
+      { componentName: "Sheeting (975 x 2250)", quantity: 2.19, unit: "m2", unitPrice: 250, totalPrice: 547.5 },
+      { componentName: "Drive screws", quantity: 4, unit: "No/m2", unitPrice: 35, totalPrice: 140 },
+      { componentName: "Add for waste on bolts/screws", quantity: 5, unit: "%", unitPrice: 0, totalPrice: 7 },
+    ],
+  });
+  const [asb, zinc] = buildCarbonRates(
+    [sheet("Super lightweight (SLW) asbestos roofing sheet laid on purlins"), sheet("Corrugated zinc galvanised roofing sheet")],
+    MATS, LABOUR,
+  );
+  assert.match(asb.breakdown[0].carbonBasis, /Fibre cement/);
+  assert.match(zinc.breakdown[0].carbonBasis, /zinc/i);
+  // fibre cement: 2.19 m2 x 14 kg x 0.585, plus transport and waste
+  assert.ok(asb.a13 > 2.19 * 14 * 0.585 - 1e-6);
+  // screws are steel fixings; the waste line on them is not a fixing
+  assert.match(asb.breakdown[1].carbonBasis, /Bolts, drive screws/);
+  assert.equal(asb.breakdown[2].carbonKg, 0);
+});
+
+test("a window is weighed from its size as named", () => {
+  const [c] = buildCarbonRates(
+    [{
+      sectionKey: "doors_windows",
+      description: "Supply and install natural anodised sliding window size 1800 x 1200mm",
+      unit: "No",
+      netCost: 183061,
+      breakdown: [{ componentName: "Window size 1800 x 1200mm high.", quantity: 1, unit: "no", unitPrice: 169344, totalPrice: 169344 }],
+    }],
+    MATS, LABOUR,
+  );
+  // 2.16 m2 x 20 kg/m2 = 43.2 kg at 7.22 kgCO2e/kg: about the CIDB figure of 279 per window
+  near(c.a13, 43.2 * 7.22);
+  assert.equal(c.hasAssumedMass, true);
+});
+
+test("an unpriced build-up (Ada's draft) is weighed by its quantities", () => {
+  const [c] = buildCarbonRates(
+    [{
+      description: "Grade 30 concrete",
+      unit: "m3",
+      netCost: 0,
+      breakdown: [
+        { componentName: "Cement (Grade 42.5)", quantity: 7, unit: "bag", unitPrice: 0, totalPrice: 0, refKind: "material" },
+        { componentName: "Coarse aggregate (20mm stone)", quantity: 0.85, unit: "m3", unitPrice: 0, totalPrice: 0, refKind: "material" },
+        { componentName: "Formwork release agent (used engine oil/diesel)", quantity: 0.15, unit: "litre", unitPrice: 0, totalPrice: 0, refKind: "material" },
+        { componentName: "Skilled concrete finisher", quantity: 0.025, unit: "day", unitPrice: 0, totalPrice: 0, refKind: "labour" },
+      ],
+    }],
+    MATS, LABOUR,
+  );
+  assert.ok(c.total > cement(7));
+  assert.match(c.breakdown[1].carbonBasis, /rock|granite/i);
+  // release agent is not fuel burnt on site
+  assert.equal(c.breakdown[2].carbonKg, null);
+  near(c.coverage, 3 / 4); // cement, stone and the finisher; not the release agent
+});
+
+test("an unpriced line is never weighed in a library row's other unit", () => {
+  const mats = [...MATS, { name: "Sawn timber", category: "Timber - Hardwood", unit: "m3", price: 250000 }];
+  const [c] = buildCarbonRates(
+    [{
+      description: "Formwork to edges of slab",
+      unit: "m",
+      netCost: 0,
+      breakdown: [{ componentName: "Sawn timber formwork boards (25mm)", quantity: 1.05, unit: "m2", unitPrice: 0, totalPrice: 0 }],
+    }],
+    mats, LABOUR,
+  );
+  // 1.05 m2 x 25 mm x 500 kg/m3 = 13.1 kg of softwood, not 1.05 m3 of hardwood
+  assert.match(c.breakdown[0].carbonBasis, /softwood/i);
+  assert.ok(c.total < 10, `${c.total}`);
+});
+
+test("a day of another rate's plant is followed by its item number and divided by the output", () => {
+  const [d8, dig] = buildCarbonRates(
+    [
+      {
+        sectionKey: "ground",
+        itemNo: 1,
+        description: "Clearing site using D8 bulldozer",
+        unit: "m2",
+        netCost: 1079.75,
+        breakdown: [
+          { componentName: "D8 Bulldozer", quantity: 1, unit: "No/Day", unitPrice: 950000, totalPrice: 950000 },
+          { componentName: "Diesel", quantity: 304, unit: "Liters", unitPrice: 1200, totalPrice: 364800 },
+        ],
+      },
+      {
+        sectionKey: "groundwork",
+        itemNo: 2,
+        description: "Excavation as before but distance not exceeding 50 meters",
+        unit: "m3",
+        netCost: 756.73,
+        breakdown: [
+          { componentName: "Subtotal from Item1 approach", quantity: 1, unit: "Lump", unitPrice: 1377244, totalPrice: 1377244 },
+          { componentName: "Output per day", quantity: 1820, unit: "m3/day", unitPrice: 0, totalPrice: 0 },
+          { componentName: "Total Cost/m3", quantity: 1, unit: "Unit", unitPrice: 756.73, totalPrice: 756.73 },
+        ],
+      },
+    ],
+    MATS, LABOUR,
+  );
+  const day = 304 * 2.66155;
+  near(d8.raw.total, day);
+  // a day of the D8's diesel, divided down as the price is (net / cost of the day)
+  near(dig.total, day * (756.73 / 1377244));
+  assert.equal(dig.coverage, 1);
 });

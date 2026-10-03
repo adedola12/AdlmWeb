@@ -211,6 +211,9 @@ function assessRate(rate, lib, labourNames, refs) {
   if (!lines) return null;
 
   let resourceCost = 0, coveredCost = 0, a13 = 0, a4 = 0, a5w = 0, a5a = 0;
+  // a build-up written without prices (Ada's drafts) is weighed by its quantities,
+  // and its coverage counted by lines instead of by cost
+  let lineCount = 0, coveredLines = 0;
   // the part of the build-up costed per day or per hour, which the rate divides by its output
   let batchCost = 0, b13 = 0, b4 = 0, b5w = 0, b5a = 0;
   // how far the low end (Nigerian cement, Scope 1) sits below the figure
@@ -237,6 +240,7 @@ function assessRate(rate, lib, labourNames, refs) {
     // a cloud line tagged labour or plant is the gang, unless it is the plant's fuel
     const kind = prefix ? prefix[1].toLowerCase() : (refKind === "labour" || refKind === "plant") && !fuel ? "labour" : "";
     resourceCost += total;
+    lineCount++;
     const consumable = CONSUMABLES.test(name);
     const batch = BATCH.test(unit) || /\bper\s*(day|hr|hour)\b/i.test(name)
       || (hasDayLines && (fuel || consumable) && !PER_UNIT_OF_WORK.test(unit));
@@ -252,7 +256,7 @@ function assessRate(rate, lib, labourNames, refs) {
       continue;
     }
     if (person && !POINTS_BACK.test(name) && !fuel) {
-      coveredCost += total;
+      coveredCost += total; coveredLines++;
       bl.carbonKg = 0;
       bl.carbonBasis = "Labour or plant hire: no material carbon. The plant's fuel is counted on its own line (A5a).";
       breakdown.push(bl);
@@ -266,6 +270,10 @@ function assessRate(rate, lib, labourNames, refs) {
         const named = line.refName ? lib.byName.get(String(line.refName).trim().toLowerCase()) : null;
         mat = named || findMaterial(name, unitPrice, unit, lib) || byPrice(trade, name, unitPrice, lib.rows);
       }
+      // An unpriced line (Ada's drafts) has only its own quantity, in its own unit:
+      // a library row sold in another unit cannot take it (1.05 m2 of boards is not
+      // 1.05 m3 of hardwood). Its own wording weighs it instead.
+      if (mat && !(total > 0) && unitHead(mat.unit) !== unitHead(unit)) mat = null;
       if (mat) {
         // the quantity in library units, exactly as the cost was built
         const libQty = mat.price > 0 && total > 0 ? total / mat.price : qty;
@@ -273,14 +281,35 @@ function assessRate(rate, lib, labourNames, refs) {
         if (carbon) bl.refName = mat.name;
         else mat = null; // priced from a row with no factor: let the line's own wording try
       }
-      carbon ??= assessCarbon("", name, unit, qty, name);
+      // "Hardcore (cubic metre content in 1m2 of filling)" holds m3 whatever its unit says
+      const ownUnit = /\bcubic met(re|er)s?\b/i.test(name) ? "m3" : unit;
+      carbon ??= assessCarbon("", name, ownUnit, qty, name);
+      // "Sheeting (975 x 2250)", "Window size 1800 x 1200mm": what it is made of is in
+      // the rate's own description ("asbestos roofing sheet", "natural anodised")
+      carbon ??= assessCarbon("", `${name} || ${self}`, unit, qty, name, { context: true });
+    }
+
+    // "Subtotal from Item1 approach": a day of another rate's kit (the D8 and its
+    // diesel), which this rate divides by its own output
+    const item = !carbon && kind !== "labour" ? name.match(/\bitem\s*(\d+)\b/i) : null;
+    const day = item
+      ? refs.find((r) => r.itemNo === Number(item[1]) && r.sectionKey === normalizeSectionKey(rate.sectionKey) && r.description !== self && r.raw)
+      : null;
+    if (day) {
+      coveredCost += total; coveredLines++;
+      const q = qty > 0 ? qty : 1;
+      a13 += day.raw.a13 * q; a4 += day.raw.a4 * q; a5w += day.raw.a5w * q; a5a += day.raw.a5a * q;
+      bl.carbonKg = day.raw.total * q;
+      bl.carbonBasis = `${Number(q.toFixed(4))} x the build-up of item ${item[1]}, "${day.description}", at ${Number(day.raw.total.toFixed(3))} kgCO2e as written (before that rate divides it by its output).`;
+      breakdown.push(bl);
+      continue;
     }
 
     // a line that is another rate: its carbon per unit, times the quantity this build-up uses
     if (!carbon && kind !== "labour" && !HANDLING.test(name) && !WASTE_ALLOWANCE.test(name)) {
       const r = byReference(trade, name, unitPrice, total, refs.filter((x) => x.description !== self));
       if (r) {
-        coveredCost += total;
+        coveredCost += total; coveredLines++;
         const kg = r.ref.carbonPerUnit * r.qty;
         a13 += kg; // carried as product carbon: the referenced rate's A1-A5 per unit
         if (batch) b13 += kg;
@@ -295,7 +324,7 @@ function assessRate(rate, lib, labourNames, refs) {
     }
 
     if (carbon) {
-      coveredCost += total;
+      coveredCost += total; coveredLines++;
       a13 += carbon.a13; a4 += carbon.a4; a5w += carbon.a5w; a5a += carbon.a5a;
       if (batch) { b13 += carbon.a13; b4 += carbon.a4; b5w += carbon.a5w; b5a += carbon.a5a; }
       const lg = carbon.total - carbon.totalLow;
@@ -305,11 +334,11 @@ function assessRate(rate, lib, labourNames, refs) {
       bl.carbonKg = carbon.total;
       bl.carbonBasis = carbon.basis;
     } else if (WASTE_ALLOWANCE.test(name)) {
-      coveredCost += total; // material wasted on site is A5w, worked out per material above
+      coveredCost += total; coveredLines++; // material wasted on site is A5w, worked out per material above
       bl.carbonKg = 0;
       bl.carbonBasis = "Waste allowance: the carbon of material wasted on site is counted as A5w on each material line.";
     } else if (!mat && (kind === "labour" || HANDLING.test(name) || labourNames.has(name.toLowerCase()) || LABOUR_OR_PLANT.test(name))) {
-      coveredCost += total; // labour and plant hire: no material carbon
+      coveredCost += total; coveredLines++; // labour and plant hire: no material carbon
       bl.carbonKg = 0;
       bl.carbonBasis = "Labour or plant hire: no material carbon. The plant's fuel is counted on its own line (A5a).";
     } else {
@@ -319,14 +348,18 @@ function assessRate(rate, lib, labourNames, refs) {
   }
 
   const carbonOfBuildUp = a13 + a4 + a5w + a5a;
-  if (carbonOfBuildUp <= 0 || resourceCost <= 0) return null;
+  // Every rate with a build-up gets a figure, the owner's rule (3 Oct 2026). A
+  // labour-only rate (hand excavation, backfill) has no upfront carbon: it is 0,
+  // and says so, rather than missing. Only a rate with no lines at all has none.
+  if (lineCount === 0) return null;
+  const raw = { a13, a4, a5w, a5a, total: carbonOfBuildUp };
 
   // A build-up written for a batch (a day's output, a mixer load) is divided down
   // to one unit for its price; the carbon is divided the same way. Lines given per
   // unit of the rate stand as they are; only the day's or hour's lines are divided,
   // by the output the price itself implies: net = per-unit lines + day lines x (1 / output).
   const net = num(rate.netCost);
-  const ratio = net > 0 ? net / resourceCost : 1;
+  const ratio = net > 0 && resourceCost > 0 ? net / resourceCost : 1;
   const unitCost = resourceCost - batchCost;
   let scale = 1;
   let batchScale = 1;
@@ -339,8 +372,11 @@ function assessRate(rate, lib, labourNames, refs) {
   const perUnit = a13 + a4 + a5w + a5a;
   const perUnitLow = perUnit - per(gap, bgap);
 
+  const labourOnly = carbonOfBuildUp <= 0 && coveredLines === lineCount;
   return {
     trade,
+    sectionKey: normalizeSectionKey(rate.sectionKey),
+    itemNo: rate.itemNo ?? null,
     description: rate.description || "Untitled",
     unit: rate.unit || "",
     netCost: net,
@@ -349,9 +385,16 @@ function assessRate(rate, lib, labourNames, refs) {
     a5: a5w + a5a,
     total: Math.round(perUnit * 1000) / 1000,
     low: Math.round(perUnitLow * 1000) / 1000,
-    coverage: Math.min(1, coveredCost / resourceCost),
+    coverage: resourceCost > 0 ? Math.min(1, coveredCost / resourceCost) : coveredLines / lineCount,
     hasAssumedMass: anyAssumed,
+    labourOnly,
+    note: labourOnly
+      ? "Labour and plant hire only: no material or fuel in the build-up, so no upfront carbon."
+      : carbonOfBuildUp <= 0
+        ? "No line of this build-up could be weighed: the figure is 0 and its coverage shows how much is not counted."
+        : "",
     carbonOfBuildUp,
+    raw,
     scale: scale < 1 ? scale : batchScale,
     breakdown,
   };
@@ -372,13 +415,16 @@ export function buildCarbonRates(rates = [], materials = [], labourNames = []) {
   for (let pass = 0; pass < 4; pass++) {
     const refs = [...done.values()]
       .filter((c) => c.netCost > 0 && c.total > 0)
-      .map((c) => ({ trade: c.trade, description: c.description, unit: c.unit, netCost: c.netCost, carbonPerUnit: c.total, carbonLowPerUnit: c.low }));
+      .map((c) => ({
+        trade: c.trade, sectionKey: c.sectionKey, itemNo: c.itemNo, description: c.description, unit: c.unit,
+        netCost: c.netCost, carbonPerUnit: c.total, carbonLowPerUnit: c.low, raw: c.raw,
+      }));
     const before = done.size;
     const totalBefore = [...done.values()].reduce((s, c) => s + c.total, 0);
     rates.forEach((rate, i) => {
       try {
         const c = assessRate(rate, lib, labours, refs);
-        if (c && c.total > 0) done.set(i, c);
+        if (c) done.set(i, c);
       } catch (err) {
         console.warn(`[carbon] ${rate?.description}: ${err.message}`);
       }

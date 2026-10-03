@@ -7,13 +7,14 @@
     "IStructE (2020) How to calculate embodied carbon, Table 2.3 (ICE v3.0 / EPDs), A1-A3",
     "UK Government GHG Conversion Factors 2024 (DESNZ), Scope 1 fuels",
     "CARES EPD 0060 (2026)",
-    "Dangote Cement 2024 Annual Report; Lafarge Africa 2024 Annual Report"
+    "Dangote Cement 2024 Annual Report; Lafarge Africa 2024 Annual Report",
+    "Etex / Eternit corrugated fibre cement sheet EPDs (EN 15804+A2), via the One Click LCA materials database"
   ],
   "factors": [
     {
       "id": "diesel",
       "label": "Diesel (AGO) burnt on site",
-      "pattern": "^fuels :: diesel$|^ :: .*\\bdiesel\\b",
+      "pattern": "^fuels :: diesel$|^ :: (?!.*(release|engine oil|lubric)).*\\bdiesel\\b",
       "factor": 2.66155,
       "factorSource": "UK Government GHG Conversion Factors 2024 (DESNZ), Scope 1 fuels: Diesel (100% mineral diesel) 2.66155 kgCO2e per litre",
       "mass": {
@@ -24,7 +25,7 @@
       "massBasis": "per litre burnt",
       "massAssumed": false,
       "a4": 0,
-      "wf": 0.0,
+      "wf": 0,
       "wfBasis": "no published waste factor; site waste not counted",
       "c34": 0.013,
       "fuel": true
@@ -32,7 +33,7 @@
     {
       "id": "petrol",
       "label": "Petrol (PMS) burnt on site",
-      "pattern": "^fuels :: petrol$|^ :: .*\\bpetrol\\b",
+      "pattern": "^fuels :: petrol$|^ :: (?!.*(release|engine oil|lubric)).*\\bpetrol\\b",
       "factor": 2.35372,
       "factorSource": "UK Government GHG Conversion Factors 2024 (DESNZ), Scope 1 fuels: Petrol (100% mineral petrol) 2.35372 kgCO2e per litre",
       "mass": {
@@ -43,7 +44,7 @@
       "massBasis": "per litre burnt",
       "massAssumed": false,
       "a4": 0,
-      "wf": 0.0,
+      "wf": 0,
       "wfBasis": "no published waste factor; site waste not counted",
       "c34": 0.013,
       "fuel": true
@@ -62,7 +63,7 @@
       "massBasis": "13 kg per cylinder, as named",
       "massAssumed": false,
       "a4": 0,
-      "wf": 0.0,
+      "wf": 0,
       "wfBasis": "no published waste factor; site waste not counted",
       "c34": 0.013,
       "fuel": true
@@ -112,7 +113,7 @@
     {
       "id": "crushed",
       "label": "Crushed rock, granite",
-      "pattern": "^crushed rock products :: (\\d+-\\d+mm|granite.*)$|^ :: .*(granite|crushed)",
+      "pattern": "^crushed rock products :: (\\d+-\\d+mm|granite.*)$|^ :: .*(granite|crushed|coarse aggregate|\\d+ ?mm stone\\b)",
       "factor": 0.01,
       "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Gravel, crushed' 0.01 kgCO2e/kg",
       "mass": {
@@ -172,7 +173,7 @@
     {
       "id": "wire",
       "label": "Binding wire",
-      "pattern": "binding wire",
+      "pattern": "binding wire|^ :: .*\\btie wire\\b",
       "factor": 2.27,
       "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Steel, wire rod' 2.27 kgCO2e/kg",
       "mass": {
@@ -346,7 +347,7 @@
       "id": "alu-sheet",
       "label": "Aluminium roofing sheet",
       "pattern": "^(longspan aluminium roofing sheet|lm) :: (\\d\\.\\d+mm \\(\\d+swg\\) sheet|angle ridge)",
-      "factor": 13.0,
+      "factor": 13,
       "factorSource": "IStructE (2020) How to calculate embodied carbon, Table 2.3 (ICE v3.0 / EPDs), A1-A3: aluminium sheet, worldwide consumption (31% recycled) 13.0 kgCO2e/kg",
       "mass": {
         "rule": "aluminium"
@@ -523,7 +524,7 @@
       "massBasis": "1,000 kg per tonne",
       "massAssumed": false,
       "a4": 0.032,
-      "wf": 0.0,
+      "wf": 0,
       "wfBasis": "no published waste factor; site waste not counted",
       "c34": 0.013,
       "fuel": false
@@ -542,7 +543,7 @@
       "massBasis": "1,000 kg per tonne",
       "massAssumed": false,
       "a4": 0.032,
-      "wf": 0.0,
+      "wf": 0,
       "wfBasis": "no published waste factor; site waste not counted",
       "c34": 0.013,
       "fuel": false
@@ -561,9 +562,247 @@
       "massBasis": "1,000 kg per tonne",
       "massAssumed": false,
       "a4": 0.005,
-      "wf": 0.0,
+      "wf": 0,
       "wfBasis": "no published waste factor; site waste not counted",
       "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "fibre-cement-sheet",
+      "label": "Fibre cement (asbestos-cement) roofing sheet",
+      "context": true,
+      "pattern": "^ :: (sheeting|ridge capping|ridge)\\b.*\\|\\|.*\\b(asbestos|fibre cement|fiber cement|nigerite|slw|super seven)\\b|^ :: .*\\b(fibre|fiber) cement (roofing )?sheet",
+      "factor": 0.585,
+      "factorSource": "Etex / Eternit corrugated fibre cement sheet EPDs (EN 15804+A2), A1-A3: 7.98 kgCO2e/m2 at 13.9 kg/m2 (0.574 kgCO2e/kg) and 8.35 kgCO2e/m2 at 14 kg/m2 (0.596 kgCO2e/kg); mean 0.585 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "m2": 14,
+          "m": 7
+        }
+      },
+      "massBasis": "14 kg per m2 of 6 mm corrugated sheet, as the EPDs state; ridge capping 7 kg per m at about 500 mm girth",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to sheet cladding; laps are already in the line's quantity",
+      "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "zinc-sheet",
+      "label": "Galvanised steel ('zinc') roofing sheet",
+      "context": true,
+      "pattern": "^ :: (sheeting|ridge capping|ridge)\\b.*\\|\\|.*\\b(zinc|galvani[sz]ed)\\b",
+      "factor": 2.56,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Hot dip galvanized steel with pure zinc coating' 2.56 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "m2": 2.36,
+          "m": 1.2
+        }
+      },
+      "massBasis": "0.30 mm steel sheet x 7,850 kg/m3 = 2.36 kg per m2; ridge 1.2 kg per m",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010 (steel frame), applied to sheet metal",
+      "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "timber-door",
+      "label": "Timber door",
+      "context": true,
+      "pattern": "^ :: (ditto\\b|.*\\bdoor\\b).*\\|\\|.*\\b(timber|wood|wooden|flush|panell?ed)\\b.*\\bdoor|^ :: .*\\b(timber|wood|wooden|flush|panell?ed) door\\b",
+      "factor": 2.208,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Door, inner, wood' 55.2 kgCO2e per m2 of door; at an assumed 25 kg per m2 that is 2.208 kgCO2e/kg",
+      "mass": {
+        "rule": "opening",
+        "density": 25
+      },
+      "massBasis": "door size as named (W x H) at 25 kg per m2 for a 44 mm door",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to a factory-made unit",
+      "c34": 1.77,
+      "fuel": false
+    },
+    {
+      "id": "alu-window",
+      "label": "Aluminium framed glazed window or door",
+      "context": true,
+      "pattern": "^ :: .*\\b(window|door)\\b.*\\|\\|.*\\b(alumin\\w*|anodi[sz]ed)\\b|^ :: .*\\balumin\\w*\\b.*\\b(window|door)\\b",
+      "factor": 7.22,
+      "factorSource": "IStructE (2020) How to calculate embodied carbon, Table 2.3 (ICE v3.0 / EPDs), A1-A3: aluminium 13.0 and glass 1.44 kgCO2e/kg, as a unit of equal masses of frame and 4 mm glass (7.22 kgCO2e/kg). CIDB (2021) gives 279 kgCO2e for an aluminium framed window, which this matches for a 1.8 x 1.2 m window",
+      "mass": {
+        "rule": "opening",
+        "density": 20
+      },
+      "massBasis": "window or door size as named (W x H) at 20 kg per m2: 10 kg of aluminium frame and 10 kg of 4 mm glass",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to a factory-made unit",
+      "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "fibreboard-ceiling",
+      "label": "Fibreboard (softboard) ceiling",
+      "pattern": "^ :: .*\\b(celotex|fibre ?board|fiber ?board|soft ?board)\\b",
+      "factor": 0.72,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Timber, Fibreboard' 0.72 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "m2": 3.6
+        }
+      },
+      "massBasis": "13 mm board at about 280 kg/m3 = 3.6 kg per m2",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010; the build-up's own waste line is not added again",
+      "c34": 1.77,
+      "fuel": false
+    },
+    {
+      "id": "fibre-cement-board",
+      "label": "Fibre cement (asbestos) ceiling board",
+      "context": true,
+      "pattern": "^ :: .*\\basbestos ceiling\\b|^ :: .*\\b(fibre|fiber) cement (ceiling|board)",
+      "factor": 0.585,
+      "factorSource": "Etex / Eternit fibre cement sheet EPDs (EN 15804+A2), A1-A3, mean 0.585 kgCO2e/kg (as the fibre cement roofing sheet)",
+      "mass": {
+        "rule": "tile",
+        "density": 1500,
+        "perUnit": {
+          "m2": 6
+        }
+      },
+      "massBasis": "board thickness as named in the rate (e.g. 1200 x 1200 x 3mm) at 1,500 kg/m3; 6 kg per m2 when no thickness is named",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010; the build-up's own waste line is not added again",
+      "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "alu-strip-ceiling",
+      "label": "Aluminium strip ceiling",
+      "pattern": "^ :: .*\\b(luxalon|alumin\\w* (strip|linear) ceiling)\\b",
+      "factor": 13,
+      "factorSource": "IStructE (2020) How to calculate embodied carbon, Table 2.3 (ICE v3.0 / EPDs), A1-A3: aluminium sheet, worldwide consumption (31% recycled) 13.0 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "m2": 1.5
+        }
+      },
+      "massBasis": "0.5 mm strips covering 84% of the area plus carriers, about 1.5 kg per m2",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010, applied to sheet metal",
+      "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "fixings",
+      "label": "Bolts, drive screws and fixing lugs",
+      "pattern": "^ :: (?!.*\\bwaste\\b).*\\b(drive screws?|bolts?|screws?|fixing lugs?|cramps?)\\b",
+      "factor": 2.27,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Steel, wire rod' 2.27 kgCO2e/kg (as nails and screws)",
+      "mass": {
+        "perUnit": {
+          "no": 0.03,
+          "nr": 0.03,
+          "no/m2": 0.03,
+          "no/m": 0.03
+        }
+      },
+      "massBasis": "about 30 g per bolt, drive screw or lug",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010 (steel frame)",
+      "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "nails-line",
+      "label": "Wire nails",
+      "pattern": "^ :: .*\\b(wire )?nails\\b",
+      "factor": 2.27,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data): 'Steel, wire rod' 2.27 kgCO2e/kg",
+      "mass": {
+        "perUnit": {
+          "kg": 1,
+          "bag": 25
+        }
+      },
+      "massBasis": "kg as stated; 25 kg per bag",
+      "massAssumed": false,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010 (steel frame)",
+      "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "softwood-line",
+      "label": "Sawn softwood (named in the build-up)",
+      "pattern": "^ :: .*\\b(sawn timber|softwood|timber (boards?|studs?|battens?|props?|bracing))\\b",
+      "factor": 0.263,
+      "factorSource": "IStructE (2020) How to calculate embodied carbon, Table 2.3 (ICE v3.0 / EPDs), A1-A3: softwood studwork/framing, 100% FSC/PEFC 0.263 kgCO2e/kg (sequestration excluded)",
+      "mass": {
+        "rule": "timber",
+        "density": 500
+      },
+      "massBasis": "section as named: (W x D mm) by the length in metres, or (T mm) by the area in m2, at 500 kg/m3",
+      "massAssumed": false,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010 (timber, plywood)",
+      "c34": 1.77,
+      "fuel": false
+    },
+    {
+      "id": "pvc-pipe",
+      "label": "PVC pipe",
+      "pattern": "^ :: (?!.*(fitting|coupling|solvent|primer|support|clamp|bracket)).*\\bu?pvc\\b.*\\bpipe\\b",
+      "factor": 3.23,
+      "factorSource": "CIDB Malaysia (2021) Embodied Carbon Inventory Data for Construction Materials, cradle-to-gate (compiled from ICE v3.0, EPDs and national LCA data), pipe: 'PVC' 3.23 kgCO2e/kg",
+      "mass": {
+        "rule": "pipe",
+        "density": 1400
+      },
+      "massBasis": "nominal diameter as named, wall at one 26th of the diameter (SDR 26), 1,400 kg/m3",
+      "massAssumed": true,
+      "a4": 0.032,
+      "wf": 0.01,
+      "wfBasis": "CIDB (2021) worked example: waste factor 0.010",
+      "c34": 0.013,
+      "fuel": false
+    },
+    {
+      "id": "haulage",
+      "label": "Transport to site of a stated mass",
+      "pattern": "^ :: (transport|transportation|haulage|cartage|carting)\\b",
+      "factor": 0,
+      "factorSource": "No product carbon: the line moves material priced elsewhere. Transport only (A4): BEIS 2020 via CIDB 2021 and IStructE 2020, 0.032 kgCO2e/kg, national, 300 km by road",
+      "mass": {
+        "perUnit": {
+          "tonne": 1000,
+          "t": 1000
+        }
+      },
+      "massBasis": "1,000 kg per tonne, as stated",
+      "massAssumed": false,
+      "a4": 0.032,
+      "wf": 0,
+      "wfBasis": "transport only; no site waste",
+      "c34": 0,
       "fuel": false
     }
   ]
