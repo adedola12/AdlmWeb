@@ -105,6 +105,98 @@ export function billLineText(item) {
 }
 
 /**
+ * The same item, whichever level or type of it this line happens to be.
+ *
+ * A Revit bill repeats one item per level: "Blockwork - Lintel Concrete
+ * [L:01 NATURAL GROUND LEVEL | T:Generic - 230mm]", then L:02, L:03... The level
+ * says WHERE the work is, not WHAT it is, so it is dropped. The type ("T:...")
+ * is kept: a 230mm wall and a 150mm wall are different rates per m2.
+ *
+ * Mirrored on the client (client/src/features/workProject/similarLines.js);
+ * both are tested against the same descriptions.
+ */
+export function lineKey(description) {
+  return low(description)
+    .replace(/\[([^\]]*)\]/g, (_, inner) => {
+      const kept = String(inner)
+        .split("|")
+        .map((part) => part.trim())
+        .filter((part) => part && !/^l(evel)?\s*:/i.test(part));
+      return kept.length ? ` [${kept.join(" | ")}]` : "";
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * What this QS has priced before, keyed by item and unit.
+ *
+ * Built from RateUsage records (one per line priced from a rate on the web).
+ * Each entry is a rate they chose for that item, with how often and where,
+ * so a suggestion can say "you used this on 3 projects" rather than just
+ * "this looks similar".
+ *
+ * @param {Array} records  {key, unit, rateId, projectId, projectName, at}
+ * @returns {Map<string, Array<{rateId, uses, projects, lastAt, lastProject}>>}
+ *          keyed `${lineKey}|${normalisedUnit}`
+ */
+export function usageIndex(records) {
+  const byKey = new Map();
+  for (const r of Array.isArray(records) ? records : []) {
+    const key = str(r?.key);
+    const unit = normaliseUnit(r?.unit);
+    const rateId = str(r?.rateId);
+    if (!key || !unit || !rateId) continue;
+    const slot = `${key}|${unit}`;
+    const list = byKey.get(slot) || [];
+    let hit = list.find((u) => u.rateId === rateId);
+    if (!hit) {
+      hit = { rateId, uses: 0, projects: new Set(), lastAt: 0, lastProject: "" };
+      list.push(hit);
+    }
+    hit.uses += 1;
+    if (r?.projectId) hit.projects.add(String(r.projectId));
+    const at = new Date(r?.at || 0).getTime() || 0;
+    if (at >= hit.lastAt) {
+      hit.lastAt = at;
+      hit.lastProject = str(r?.projectName);
+    }
+    byKey.set(slot, list);
+  }
+  return byKey;
+}
+
+/** The rates this QS used before on this item, exactly or on a near-identical one. */
+function usedBefore(item, usage) {
+  if (!(usage instanceof Map) || !usage.size) return [];
+  const key = lineKey(item?.description || billLineText(item));
+  const unit = normaliseUnit(item?.unit);
+  if (!key || !unit) return [];
+  const exact = usage.get(`${key}|${unit}`);
+  if (exact?.length) return exact.map((u) => ({ ...u, exact: true }));
+  // Not the same words, but plainly the same item ("Lintel concrete 230mm"
+  // against "Lintel concrete - 230mm"). Only in the same unit.
+  const near = [];
+  for (const [slot, list] of usage) {
+    if (!slot.endsWith(`|${unit}`)) continue;
+    const other = slot.slice(0, -(unit.length + 1));
+    if (similarityScore(key, other) >= 0.8) near.push(...list.map((u) => ({ ...u, exact: false })));
+  }
+  return near;
+}
+
+/** "You used this on 3 lines across 2 projects, last on Sunrise Estate." */
+function describeUse(u) {
+  const projects = u.projects instanceof Set ? u.projects.size : Number(u.projects) || 0;
+  const lines = `${u.uses} ${u.uses === 1 ? "line" : "lines"}`;
+  const across = projects > 1 ? ` across ${projects} projects` : "";
+  const last = u.lastProject ? `, last on ${u.lastProject}` : "";
+  return u.exact
+    ? `You used this on ${lines}${across}${last}`
+    : `You used this on a similar item (${lines}${across})`;
+}
+
+/**
  * The rates that could price this line, best first.
  *
  * @param {object} item                 the bill line
@@ -114,10 +206,27 @@ export function billLineText(item) {
  * @param {number} [opts.minScore]      below this, a match is a coincidence
  * @returns {Array<{rateId, description, unit, unitPrice, score, why}>}
  */
-export function suggestRatesForLine(item, rates, { limit = 5, minScore = 0.45 } = {}) {
+export function suggestRatesForLine(
+  item,
+  rates,
+  { limit = 5, minScore = 0.45, usage = null } = {},
+) {
   const text = billLineText(item);
   const unit = str(item?.unit);
   if (!text || !unit) return [];
+
+  // WHAT THEY CHOSE LAST TIME COMES FIRST.
+  //
+  // Word-matching alone missed the obvious: "Lintel Concrete" shares almost no
+  // words with "Concrete (1:2:4) grade 20", so a QS who has priced lintels with
+  // that rate on five projects was offered nothing and had to search again. A
+  // rate they already chose for this item is the strongest evidence there is.
+  // It is still re-read from today's library, so the price is today's.
+  const used = new Map();
+  for (const u of usedBefore(item, usage)) {
+    const had = used.get(u.rateId);
+    if (!had || (u.exact && !had.exact) || u.uses > had.uses) used.set(u.rateId, u);
+  }
 
   const out = [];
   for (const r of Array.isArray(rates) ? rates : []) {
@@ -131,12 +240,20 @@ export function suggestRatesForLine(item, rates, { limit = 5, minScore = 0.45 } 
     // A rate with no money in it prices nothing.
     if (!Number.isFinite(price) || price <= 0) continue;
 
-    const score = similarityScore(text, desc);
-    if (score < minScore) continue;
+    const rateId = str(r?.rateId || r?.id || r?._id);
+    const use = rateId ? used.get(rateId) : null;
+    const words = similarityScore(text, desc);
+    if (words < minScore && !use) continue;
+
+    // Used before on this exact item outranks any word match; on a near one it
+    // ranks with a likely match.
+    const score = use
+      ? Math.max(words, use.exact ? 0.9 + Math.min(use.uses, 9) / 100 : 0.7)
+      : words;
 
     const own = isOwnRate(r);
     out.push({
-      rateId: str(r?.rateId || r?.id || r?._id),
+      rateId,
       description: desc,
       unit: str(r?.unit),
       unitPrice: price,
@@ -144,7 +261,10 @@ export function suggestRatesForLine(item, rates, { limit = 5, minScore = 0.45 } 
       // The QS's own rate outranks a master one at the same score: they built
       // it, for their own prices, and it is the answer they already gave.
       own,
-      why: describeMatch(score, own),
+      usedBefore: use
+        ? { uses: use.uses, projects: use.projects?.size ?? 0, exact: use.exact }
+        : null,
+      why: use ? describeUse(use) : describeMatch(words, own),
     });
   }
 
@@ -223,7 +343,7 @@ export const needsRate = (item) => !(Number(item?.rate) > 0);
  *                             hold a request open
  * @returns {{byCode: object, considered: number, unpriced: number, truncated: boolean}}
  */
-export function suggestionMapForBill(items, rates, { cap = 600 } = {}) {
+export function suggestionMapForBill(items, rates, { cap = 600, usage = null } = {}) {
   const needing = (Array.isArray(items) ? items : []).filter(needsRate);
   const lines = needing.slice(0, Math.max(0, cap));
 
@@ -234,7 +354,7 @@ export function suggestionMapForBill(items, rates, { cap = 600 } = {}) {
     // First match wins, which matters when two lines share a code: they are the
     // same line to the apply endpoint too, so a second answer would be noise.
     if (byCode[code]) continue;
-    const best = suggestRatesForLine(item, rates, { limit: 1 }).filter(worthOffering)[0];
+    const best = suggestRatesForLine(item, rates, { limit: 1, usage }).filter(worthOffering)[0];
     if (best) byCode[code] = best;
   }
 
@@ -246,4 +366,26 @@ export function suggestionMapForBill(items, rates, { cap = 600 } = {}) {
     // 600 of 900 lines while saying nothing reads as "the rest have no match".
     truncated: needing.length > lines.length,
   };
+}
+
+/**
+ * The other lines on this bill that are the same item as `item`: same key,
+ * same unit, a code to address them by, and (by default) no rate yet.
+ *
+ * Pricing one of them is the QS's decision about all of them ("lintel concrete
+ * is this rate"), so the panel offers the rest, ticked.
+ */
+export function similarLines(items, item, { unpricedOnly = true } = {}) {
+  const key = lineKey(item?.description);
+  const unit = normaliseUnit(item?.unit);
+  const code = low(item?.code);
+  if (!key || !unit) return [];
+  return (Array.isArray(items) ? items : []).filter(
+    (other) =>
+      low(other?.code) &&
+      low(other?.code) !== code &&
+      (!unpricedOnly || needsRate(other)) &&
+      normaliseUnit(other?.unit) === unit &&
+      lineKey(other?.description) === key,
+  );
 }
