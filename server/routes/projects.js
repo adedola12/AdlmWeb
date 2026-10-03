@@ -4190,6 +4190,11 @@ async function updateProject(req, res) {
           }
           budget = kept.rows.map((b) => ({ ...b, lineId: keepLineId(b.lineId) }));
         }
+        // previousBudget (read at the top of this block, before anything
+        // replaced it) is what the QS owns on these rows: procurement and typed
+        // rates. QUIV saves its budget through this PUT, so without restoring
+        // it every QUIV re-save put the plugin's prices back over the website's
+        // and the bill rates followed.
         // previousBudget is read once, above, before anything replaces it.
         // QUIV saves its budget through this PUT, so without that read every
         // QUIV re-save put the plugin's prices back over the website's and the
