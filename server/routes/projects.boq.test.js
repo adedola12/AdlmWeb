@@ -98,10 +98,12 @@ function installMongoStub() {
     const matchesOwner = uid && stored?.userId && String(uid) === String(stored.userId);
     const matchesCollab =
       uid && (stored?.collaborators || []).some((c) => String(c.userId) === String(uid));
+    // the query's own sample clause ({ isSample: true }) opens a sample to anyone
+    const matchesSample = stored?.isSample === true && (filter?.$or || []).some((c) => c?.isSample === true);
     const hit =
       stored &&
       String(filter?._id) === String(stored._id) &&
-      (matchesOwner || matchesCollab)
+      (matchesOwner || matchesCollab || matchesSample)
         ? stored
         : null;
     return { lean: async () => hit };
@@ -295,5 +297,31 @@ test("the tool in the URL does not have to equal the stored productKey", async (
       tokenFor(OWNER),
     );
     assert.equal(res.status, 200);
+  });
+});
+
+// Samples (seeded with userId null) are open to every subscriber, read only, and
+// their banner says they can be exported. The lookup used to match owner or
+// collaborator only, so it never found a sample: every format answered "not
+// found" unless the slow legacy scan happened to pick the document up.
+for (const [path, label] of EXPORTS) {
+  test(`any subscriber exports a sample project's ${label}`, async () => {
+    entitlements = []; // no RateGen: a sample's rates are open to everyone
+    stored = projectDoc({ userId: null, isSample: true });
+    await withServer(async (base) => {
+      const res = await get(base, `/projectsboq/planswift/${PROJECT_ID}${path}`, tokenFor(STRANGER));
+      const buf = Buffer.from(await res.arrayBuffer());
+      assert.equal(res.status, 200, `expected 200, got ${res.status}: ${buf.toString("utf8").slice(0, 300)}`);
+      assert.equal(buf.subarray(0, 2).toString(), "PK", "response is not a zip/xlsx");
+    });
+  });
+}
+
+test("the sample clause opens samples only: a stranger still cannot export someone's project", async () => {
+  entitlements = [];
+  stored = projectDoc(); // an ordinary project, owned by OWNER
+  await withServer(async (base) => {
+    const res = await get(base, `/projectsboq/planswift/${PROJECT_ID}/export/bill-budget`, tokenFor(STRANGER));
+    assert.equal(res.status, 404);
   });
 });
