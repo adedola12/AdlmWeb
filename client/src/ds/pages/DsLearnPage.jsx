@@ -253,7 +253,7 @@ export default function DsLearnPage({ d }) {
                     <svg viewBox="0 0 24 24">
                       <use href="#i-check" />
                     </svg>
-                    Revit MEP + clash detection in Navisworks
+                    SERVIQ + clash detection in Navisworks
                   </li>
                   {" "}
                   <li>
@@ -450,12 +450,12 @@ export default function DsLearnPage({ d }) {
             <h2>
               Thirty events,{" "}
               <span className="tone">
-                3,100+ trained
+                800+ trained
               </span>
             </h2>
             {" "}
             <p className="ds-lede">
-              Conferences, chapter workshops, university sessions and in-office programmes since 2022. Six are featured below, and every one of the thirty is listed underneath.
+              Conferences, chapter workshops, university sessions and in-office programmes since 2018. Six are featured below, and every one of the thirty is listed underneath.
             </p>
             {" "}
           </div>

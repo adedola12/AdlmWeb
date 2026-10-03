@@ -26,7 +26,7 @@ export default function DsMep() {
       d={{
         releases: <DsReleaseHistory slug="mep" />,
         // Free walkthroughs flagged for this product, above the releases.
-        videos: <DsRecommendedVideos product="mep" name="Revit MEP" />,
+        videos: <DsRecommendedVideos product="mep" name="SERVIQ" />,
         monthly: price.monthly,
         priceLine: price.priceLine,
       }}

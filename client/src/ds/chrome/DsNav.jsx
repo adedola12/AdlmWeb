@@ -2,8 +2,11 @@
 // Ported from RichardEnoch/adlm-studio-site index.html
 // Re-run the script to pick up his changes; hand edits here are lost.
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { linkFrom } from "../../lib/newBuildPaths.js";
+import { useAuth } from "../../store.jsx";
+import { isStaff } from "../../utils/roles.js";
+import { api } from "../../api.js";
 
 export default function DsNav() {
   // WHERE THIS IS MOUNTED DECIDES WHERE ITS LINKS GO.
@@ -16,6 +19,38 @@ export default function DsNav() {
   // link asks where it is rather than being repointed wholesale.
   const { pathname } = useLocation();
   const href = (to) => linkFrom(pathname, to);
+
+  // WHO IS LOOKING AT THIS.
+  //
+  // This nav used to say "Sign in" to everybody, because it was ported from
+  // a static build where there was nobody to be signed in AS. That was
+  // harmless while it only rendered on /privacy and /certificate. It stopped
+  // being harmless when his design took over the home page, /products,
+  // /about, /learn, /whats-new and /quote: App.jsx suppresses the classic nav
+  // on those paths, so this is the ONLY nav a visitor gets, and a paying
+  // customer was shown an invitation to sign in, with no route to their
+  // dashboard and no way to log out.
+  //
+  // The signed-in items mirror components/Nav.jsx rather than inventing a
+  // second answer: Overview, Time Log, Profile, Admin for staff, and a log
+  // out. Same destinations, same order, same logout call.
+  const { user, clear } = useAuth();
+  const navigate = useNavigate();
+  const [busy, setBusy] = React.useState(false);
+
+  async function logout() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api("/auth/logout", { method: "POST" });
+    } catch {
+      // Clear local auth even if the request fails, exactly as the classic
+      // nav does: a failed call must not leave somebody stuck signed in.
+    }
+    clear();
+    navigate("/login", { replace: true });
+    setTimeout(() => window.location.reload(), 0);
+  }
   return (
     <>
       <nav className="nav">
@@ -93,13 +128,48 @@ export default function DsNav() {
               {" "}
             </button>
             {" "}
-            <Link to={href("/login")} data-ds-page="login" className="ds-btn btn-o ds-btn-sm">
-              Sign in
-            </Link>
-            {" "}
-            <Link to={href("/contact")} data-ds-page="contact" className="ds-btn btn-p ds-btn-sm">
-              Book a demo
-            </Link>
+            {user ? (
+              <>
+                <Link to="/manage" className="ds-btn btn-o ds-btn-sm">
+                  Overview
+                </Link>
+                {" "}
+                <Link to="/profile" className="ds-btn btn-o ds-btn-sm">
+                  Profile
+                </Link>
+                {" "}
+                {isStaff(user) && (
+                  <>
+                    <Link to="/admin" className="ds-btn btn-o ds-btn-sm">
+                      Admin
+                    </Link>
+                    {" "}
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={logout}
+                  disabled={busy}
+                  className="ds-btn btn-p ds-btn-sm"
+                >
+                  {busy ? "…" : "Log out"}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to={href("/login")} data-ds-page="login" className="ds-btn btn-o ds-btn-sm">
+                  Sign in
+                </Link>
+                {" "}
+                <Link to={href("/signup")} data-ds-page="signup" className="ds-btn btn-o ds-btn-sm">
+                  Sign up
+                </Link>
+                {" "}
+                <Link to={href("/contact")} data-ds-page="contact" className="ds-btn btn-p ds-btn-sm">
+                  Book a demo
+                </Link>
+              </>
+            )}
             {" "}
           </div>
           {" "}
@@ -190,7 +260,7 @@ export default function DsNav() {
                             </span>
                             <span>
                               <b>
-                                Revit MEP
+                                SERVIQ
                               </b>
                               <span>
                                 Services takeoff
@@ -581,7 +651,7 @@ export default function DsNav() {
                                 Events &amp; training
                               </b>
                               <span>
-                                30 delivered, 3,100+ trained
+                                30 delivered, 800+ trained
                               </span>
                             </span>
                           </Link>

@@ -3,7 +3,7 @@
 // His pricing page stated the same numbers three times over: six plan cards
 // (monthly, yearly, saving, install), two course cards, and again in the
 // compare table. Twenty-nine figures typed into markup, and two of them were
-// already wrong — Revit MEP and CIVIQ both said "No install fee" while the
+// already wrong — SERVIQ and CIVIQ both said "No install fee" while the
 // catalogue charges ₦20,000 and ₦40,000.
 //
 // This is the page a customer decides on. So every figure comes from

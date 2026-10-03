@@ -55,7 +55,7 @@ export const RAIL = [
           // It sits beside RateGen because that is what it belongs to: the
           // rates are what work costs, these are what it takes.
           { id: "work-constants", label: "Constants", to: "/work/constants", icon: "wi-library", also: ["/rategen/material-constants"] },
-          { id: "tool-mep", label: "Revit MEP", to: "/work/tool/mep", product: "mep", img: "/ds/ic-mep.png", also: ["/projects/mep"] },
+          { id: "tool-mep", label: "SERVIQ", to: "/work/tool/mep", product: "mep", img: "/ds/ic-mep.png", also: ["/projects/mep"] },
           { id: "tool-civiq", label: "CIVIQ", to: "/work/tool/civiq", product: "civil3d", img: "/ds/ic-civiq.png", also: ["/projects/civil3d"] },
         ],
       },

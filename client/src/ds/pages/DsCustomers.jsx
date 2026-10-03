@@ -74,8 +74,8 @@ export default function DsCustomers() {
                 </svg>
               </div>
               {" "}
-              <b data-count="3100" data-suffix="+">
-                3,100+
+              <b data-count="800" data-suffix="+">
+                800+
               </b>
               <span>
                 Professionals trained

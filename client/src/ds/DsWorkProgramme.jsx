@@ -2,7 +2,7 @@
 //
 // His argument, which the port keeps: nothing gets measured twice. The screen
 // does not ask anybody to type a duration. It reads the quantities QUIV,
-// HERON, Revit MEP and CIVIQ already measured, divides each by the gang output
+// HERON, SERVIQ and CIVIQ already measured, divides each by the gang output
 // for that kind of work, and sequences the trades. Change the crews and the
 // bar moves; every bar is arithmetic on the bill, and the money beside it is
 // the bill's own money.
@@ -80,7 +80,7 @@ const when = (d) =>
 const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   civil3d: "CIVIQ",
   archicad: "ArchiCAD",
   "qs-takeoff": "Time Pro",
@@ -373,7 +373,7 @@ export default function DsWorkProgramme() {
         // products nobody had used. But a HERON schedule carries the real
         // trade, quantity and original wording on each labour line, and a
         // CIVIQ road carries its operation in the description — both are
-        // programmes. A Revit MEP schedule is a list of diffuser part numbers
+        // programmes. A SERVIQ schedule is a list of diffuser part numbers
         // with no trade anywhere, and is not.
         //
         // tradedItems is counted server-side in /me/projects-rollup, because
@@ -810,7 +810,7 @@ export default function DsWorkProgramme() {
           {schedules > 0 && (
             <p className="wk-note prg-aside">
               {schedules} project{schedules === 1 ? " is" : "s are"} not shown, because no line on
-              {schedules === 1 ? " it" : " them"} carries a trade — mostly Revit MEP equipment
+              {schedules === 1 ? " it" : " them"} carries a trade — mostly SERVIQ equipment
               schedules, which are lists of parts rather than work. A programme is a sequence of
               trades, and there is nothing in them to sequence.
             </p>

@@ -88,7 +88,7 @@ export default function DsFooter() {
                 {" "}
                 <li>
                   <Link to={href("/product/mep")} data-ds-page="mep">
-                    Revit MEP
+                    SERVIQ
                   </Link>
                 </li>
                 <li>

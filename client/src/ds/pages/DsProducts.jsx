@@ -204,7 +204,7 @@ export default function DsProducts() {
             <article className="gcard tilt rise">
               {" "}
               <div className="gcard-bg">
-                <img src="/ds/bg-mep.jpg" alt="Revit MEP" />
+                <img src="/ds/bg-mep.jpg" alt="SERVIQ" />
               </div>
               {" "}
               <span className="host">
@@ -213,7 +213,7 @@ export default function DsProducts() {
               {" "}
               <img className="picon" src="/ds/ic-mep.png" alt="" aria-hidden="true" />
               <h3>
-                Revit MEP
+                SERVIQ
               </h3>
               {" "}
               <p>
@@ -229,7 +229,7 @@ export default function DsProducts() {
               </p>
               {" "}
               <Link to="/product/mep" data-ds-page="mep" className="ds-btn btn-p ds-btn-sm">
-                Explore Revit MEP{" "}
+                Explore SERVIQ{" "}
                 <svg viewBox="0 0 24 24">
                   <use href="#i-arrow" />
                 </svg>
@@ -583,7 +583,7 @@ export default function DsProducts() {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes for QUIV, Revit MEP and HERON. They are plugins that dock into software you already run. RateGen and Time Pro are standalone and need nothing else.
+                Yes for QUIV, SERVIQ and HERON. They are plugins that dock into software you already run. RateGen and Time Pro are standalone and need nothing else.
               </div>
               {" "}
             </details>
