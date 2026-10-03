@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   projectTips,
-  productPageTip,
   lastProgressAt,
   progressPercent,
   isDismissed,
@@ -157,12 +156,6 @@ describe("helpers", () => {
   it("progressPercent weights by value", () => {
     expect(progressPercent([{ qty: 1, rate: 100, percentComplete: 50 }, { qty: 1, rate: 300, completed: true }])).toBe(87.5);
     expect(progressPercent([])).toBe(0);
-  });
-
-  it("productPageTip only speaks to somebody who owns the product", () => {
-    expect(productPageTip("rategen", { signedIn: false, owns: true })).toBeNull();
-    expect(productPageTip("rategen", { signedIn: true, owns: false })).toBeNull();
-    expect(productPageTip("rategen", { signedIn: true, owns: true }).action.kind).toBe("ada");
   });
 });
 

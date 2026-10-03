@@ -231,32 +231,6 @@ export function projectTips(project, { now = new Date(), tab = "", canEdit = tru
     .sort((a, b) => b.rank - a.rank);
 }
 
-/**
- * A light tip for a product page, where there is no project to read.
- *
- * Only for somebody signed in who owns the product: a visitor is being sold
- * to, and a tip there would be noise beside the price.
- */
-export function productPageTip(productKey, { signedIn = false, owns = false } = {}) {
-  if (!signedIn || !owns) return null;
-  const key = String(productKey || "").toLowerCase();
-  if (!key) return null;
-  return {
-    id: `product-${key}`,
-    tone: "info",
-    rank: 10,
-    title: "Ada knows your projects",
-    body: "Ask her to price unpriced lines from your RateGen rates, or for a report on any date range.",
-    tabs: [],
-    editOnly: false,
-    action: {
-      kind: "ada",
-      label: "Ask Ada",
-      prompt: "What should I do next on my projects?",
-    },
-  };
-}
-
 // ── Dismissal ──────────────────────────────────────────────────────────────
 // Remembered per project and per tip in this browser only. A tip that comes
 // back after being dismissed is the fastest way to teach somebody to ignore
