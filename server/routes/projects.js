@@ -686,7 +686,7 @@ import {
   buildBoqTemplateWorkbook,
 } from "../util/boqExcelImport.js";
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
-import { generateMlSchedule } from "../util/mlSchedule.js";
+import { generateMlSchedule, isGeneratedRow } from "../util/mlSchedule.js";
 import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
@@ -704,8 +704,15 @@ import { unitsAgree } from "../util/rateSuggestions.js";
 import {
   applyRateRows,
   buildRateBudgetRows,
+  isRateGenRow,
   whyRateCannotPrice,
 } from "../util/rateToBudget.js";
+import {
+  buildUserRateRows,
+  isUserRateLine,
+  resolveUserRate,
+  setUserRateOnItem,
+} from "../util/priceByArea.js";
 import {
   collectBudgetEdits,
   reapplyBudgetEdits,
@@ -723,6 +730,7 @@ import {
   sanitizeResourceItems,
   applyResourceRows,
   buildResourcesFromRate,
+  RESOURCE_SOURCE_RATE,
 } from "../util/projectResources.js";
 import {
   BOQ_IMPORT_PRODUCTS,
@@ -7170,6 +7178,14 @@ async function priceLineFromRate(req, res) {
 // that was itself priced from a rate on the web; a rate typed into a plugin
 // has no rate behind it to copy, and the line is skipped with that reason.
 //
+// A line can also carry a rate THE USER STATED to Ada and confirmed on her
+// card (3 Oct 2026): `{ code, userRate, unit?, split? }` for "set blockwork to
+// 9,500 per m2", or `{ code, ratePerM2, split? }` for "windows are 88,000 per
+// m2", where the server reads the opening's size off the bill line itself and
+// works the line's rate out (util/priceByArea.js). `split` is the material /
+// labour / overhead-and-profit percentages, 60/20/20 when absent. See
+// applyUserRate for what such a line writes.
+//
 // One save at the end, not one per line: a save per line on a 300-line bill
 // is 300 whole-project writes, and a failure half way would leave half a bill
 // priced with nothing to say which half. Lines that cannot be priced are
@@ -7207,10 +7223,12 @@ async function priceManyFromRates(req, res) {
       return refuseRateMaskedWrite(res, "price bill lines from rates");
     }
 
-    const [merged, ctx] = await Promise.all([
-      loadMergedRates(userId),
-      buildMlScheduleContext(userId),
-    ]);
+    // A stated rate needs neither the library nor the constants: only lines
+    // that name a Rate Gen rate pay for reading them.
+    const needsLibrary = lines.some((l) => !isUserRateLine(l));
+    const [merged, ctx] = needsLibrary
+      ? await Promise.all([loadMergedRates(userId), buildMlScheduleContext(userId)])
+      : [[], null];
 
     // The rate each `sameAs` line points at, read once for all of them.
     const sameAsCodes = [
@@ -7236,6 +7254,8 @@ async function priceManyFromRates(req, res) {
     const warnings = new Set();
     const used = [];
     const seen = new Set();
+    const stated = [];
+    let changed = false;
 
     for (const line of lines) {
       const code = String(line?.code || "").trim();
@@ -7246,6 +7266,20 @@ async function priceManyFromRates(req, res) {
       const item = findBillLine(project, code);
       if (!item) {
         skipped.push({ code, reason: "No bill line with that code" });
+        continue;
+      }
+
+      // A RATE THE USER STATED (Ada's "windows are 88,000 per m2", "set
+      // blockwork to 9,500"). See applyUserRate below.
+      if (isUserRateLine(line)) {
+        const r = resolveUserRate(item, line);
+        if (!r.ok) {
+          skipped.push({ code, reason: r.reason });
+          continue;
+        }
+        if (applyUserRate(project, item, r.rate, r.split)) changed = true;
+        priced.push(code);
+        stated.push({ code, rate: r.rate, split: r.split });
         continue;
       }
 
@@ -7284,19 +7318,38 @@ async function priceManyFromRates(req, res) {
       one.warnings.forEach((w) => warnings.add(String(w)));
       priced.push(code);
       used.push({ item, rate, convert });
+      changed = true;
     }
 
-    if (priced.length) {
+    // Applying the same stated rates twice changes nothing, so it writes
+    // nothing either: no save, no version bump, no activity entry.
+    if (priced.length && changed) {
+      if (stated.length && typeof project.markModified === "function") {
+        project.markModified("items");
+        project.markModified("budgetItems");
+      }
       settlePricedProject(project);
       await project.save();
-      recordActivity(
-        req,
-        project,
-        ACT.BUDGET_UPDATED,
-        `Priced ${priced.length} bill ${priced.length === 1 ? "line" : "lines"} from rates`,
-        { codes: priced.slice(0, 50), count: priced.length, via },
-      );
-      recordRateUsage(userId, project, used, via);
+      const fromLibrary = priced.length - stated.length;
+      if (fromLibrary) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Priced ${fromLibrary} bill ${fromLibrary === 1 ? "line" : "lines"} from rates`,
+          { codes: used.map((u) => String(u.item?.code || "")).slice(0, 50), count: fromLibrary, via },
+        );
+        recordRateUsage(userId, project, used, via);
+      }
+      if (stated.length) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Set ${stated.length} bill ${stated.length === 1 ? "line" : "lines"} to a stated rate`,
+          { codes: stated.map((x) => x.code).slice(0, 50), count: stated.length, via },
+        );
+      }
     }
 
     return res.json({
@@ -7309,6 +7362,62 @@ async function priceManyFromRates(req, res) {
     console.error("priceManyFromRates error:", err);
     return res.status(500).json({ error: "Server error" });
   }
+}
+
+/**
+ * Put a rate the USER stated on one bill line, in memory.
+ *
+ * The line gets the rate and its lock (rateLockedAt), so neither a plugin
+ * re-save (util/cloudRateLocks.js) nor the budget heal moves it. Its Budget
+ * gets ONE Material and ONE Labour row at the bill quantity, priced by the
+ * split, with the overhead/profit share as their overhead %. Those rows sit in
+ * the Rate Gen sn band, so they replace any automatic rows the line had (a
+ * previous pick, the constants generator) and a later Rate Gen pick replaces
+ * them; a row the QS typed survives. The gang a previous pick wrote is cleared:
+ * it described a rate that is no longer the line's.
+ *
+ * Row ids and procurement marks carry across a re-apply, so applying the same
+ * rate twice leaves the project exactly as it was.
+ *
+ * @returns {boolean} whether anything changed
+ */
+function applyUserRate(project, item, rate, split) {
+  const code = String(item?.code || "").trim();
+  const key = code.toLowerCase();
+  const mine = (b) => String(b?.billIdentity || "").trim().toLowerCase() === key;
+  const plain = (b) => (b?.toObject ? b.toObject() : b);
+  const before = (project.budgetItems || []).filter(mine).map(plain);
+  const rows = buildUserRateRows(item, rate, split).map((r) => {
+    const prior = before.find((b) => Number(b?.sn) === r.sn && isRateGenRow(b));
+    return prior?.lineId ? { ...r, lineId: prior.lineId } : r;
+  });
+
+  // What this line's Budget would hold afterwards: everything applyRateRows
+  // keeps (rows the QS typed, plugin rows, coverage rows) and the new rows.
+  const automatic = (b) => isRateGenRow(b) || isGeneratedRow(b);
+  const sig = (list) =>
+    JSON.stringify(
+      list.map((b) => [
+        b.sn, b.componentKind, b.description, b.unit, Number(b.qty), Number(b.rate),
+        Number(b.overheadPercent), Number(b.profitPercent), b.rateSource,
+      ]),
+    );
+  const budgetChanges = sig(before) !== sig(before.filter((b) => !automatic(b)).concat(rows));
+  const staleGang = (project.resourceItems || []).some(
+    (r) => mine(r) && r?.rateSource === RESOURCE_SOURCE_RATE,
+  );
+
+  // Only touch what changes, so a re-apply writes nothing at all.
+  if (budgetChanges) {
+    project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, rows));
+  }
+  if (staleGang) {
+    project.resourceItems = sanitizeResourceItems(
+      applyResourceRows(project.resourceItems, code, []),
+    );
+  }
+  const itemChanged = setUserRateOnItem(item, rate, split);
+  return itemChanged || budgetChanges || staleGang;
 }
 
 /** A bill line by its code, case-insensitively, the way every caller addresses it. */
