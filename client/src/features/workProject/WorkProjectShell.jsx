@@ -441,7 +441,7 @@ export default function WorkProjectShell({ productKey, id }) {
     if (tab !== "rates" || !accessToken || !saveId || !productKey) return undefined;
     let live = true;
     apiAuthed(
-      `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/rate-suggestions`,
+      `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/rate-suggestions?convert=1`,
       { token: accessToken },
     )
       .then((d) => {
@@ -505,7 +505,7 @@ export default function WorkProjectShell({ productKey, id }) {
       if (!code) return [];
       try {
         const d = await apiAuthed(
-          `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/bill/${encodeURIComponent(code)}/rate-suggestions`,
+          `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/bill/${encodeURIComponent(code)}/rate-suggestions?convert=1`,
           { token: accessToken },
         );
         return Array.isArray(d?.suggestions) ? d.suggestions : [];

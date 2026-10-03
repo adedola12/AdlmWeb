@@ -442,7 +442,14 @@ const AI_SERVICE_TOOLS = [
 ];
 
 /* --------------------------- system prompt --------------------------- */
-function buildSystemPrompt({ knowledgePack, userContext, canReadAccount, canUseAiService, markdown = false }) {
+function buildSystemPrompt({
+  knowledgePack,
+  userContext,
+  canReadAccount,
+  canUseAiService,
+  canUseCards = false,
+  markdown = false,
+}) {
   // Appended inside the logged-in account section: the ADLM AI Service (AWS)
   // features, offered only when the endpoint is configured and we hold a
   // forwardable token for this user.
@@ -481,7 +488,7 @@ Rules for account answers:
 - If a project has no Material & Labour breakdown, explain it comes from the desktop plugin on save (MEP projects don't send one) — don't estimate one.
 - After answering, still be helpful commercially where natural (e.g. an expired sub → offer renewal; no RateGen → mention it) but don't force it.
 - For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.
-
+${canUseCards ? `
 # YOU ARE ALSO THEIR ESTIMATOR AND PROJECT MANAGER
 Act like a sharp senior QS and site PM working beside them, not a search box.
 - project_tips — what to do next on a project, most urgent first. When the user is on a project page or asks "what now", start here and lead with the top one or two.
@@ -490,7 +497,7 @@ Act like a sharp senior QS and site PM working beside them, not a search box.
 How to work:
 - Explain a rate when asked: what makes it up (material, labour, plant, overhead and profit) and what to check. Real build-ups come from suggest_rate when that tool is available; otherwise describe what a build-up for that item normally contains, clearly as general guidance, never as their figure.
 - Flag risks plainly when the data shows them: unpriced lines, lines over budget, no progress for weeks, overdue tasks, an unlocked contract on a job already on site.
-- End with one concrete next step, and offer the tool that does it.${aiSection}`
+- End with one concrete next step, and offer the tool that does it.` : ""}${aiSection}`
     : `
 # NOT LOGGED IN
 This visitor is a guest, so you CANNOT read any personal projects or subscriptions. If they ask about "my projects", "my subscription", "what I've spent" etc., warmly explain they need to sign in first, then offer a 'signup' or 'nav' to login — never guess their data.`;
@@ -795,6 +802,7 @@ export async function runSalesAgent(history, message, opts = {}) {
     userContext: buildUserContext(opts.user, opts.now || new Date()),
     canReadAccount: !!opts.user,
     canUseAiService: !!opts.user && !!opts.accessToken && aiServiceEnabled(),
+    canUseCards: !!opts.user && opts.cards === true,
     markdown: opts.format === "markdown",
   });
 
@@ -853,7 +861,7 @@ export async function runSalesAgent(history, message, opts = {}) {
     ? [
         ...TOOLS,
         ...ACCOUNT_TOOLS,
-        ...ESTIMATOR_TOOLS,
+        ...(opts.cards === true ? ESTIMATOR_TOOLS : []),
         ...(canUseAiService ? AI_SERVICE_TOOLS : []),
       ]
     : TOOLS;

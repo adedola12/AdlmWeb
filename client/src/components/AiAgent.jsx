@@ -183,6 +183,9 @@ export default function AiAgent() {
           ...agentPageContext(location),
           // This chat renders light Markdown (lib/chatMarkdown.jsx).
           format: "markdown",
+          // ...and the pricing and report cards (features/ada), so the API
+          // may offer the estimator tools.
+          cards: true,
         }),
       });
 

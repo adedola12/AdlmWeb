@@ -6992,10 +6992,15 @@ async function rateSuggestionsForLine(req, res) {
     );
 
     const usage = await loadRateUsage(userId);
+    // Converted offers only for a screen that can show a conversion: the panel
+    // asks with ?convert=1. An older screen would show a converted figure as if
+    // it were the rate's own, and its Apply would be refused for want of the
+    // dimension.
+    const convert = String(req.query?.convert || "") === "1";
     const suggestions = suggestRatesForLine(item, merged, {
       limit: 5,
       usage,
-      convert: true,
+      convert,
     }).filter(worthOffering);
     res.json({
       ok: true,
@@ -7056,7 +7061,10 @@ async function rateSuggestionsForProject(req, res) {
     // Every rule — which lines, the lowercased key, the ceiling — is in
     // util/rateSuggestions.js, where it is tested without a database.
     const usage = await loadRateUsage(userId);
-    const found = suggestionMapForBill(project.items, merged, { usage, convert: true });
+    const found = suggestionMapForBill(project.items, merged, {
+      usage,
+      convert: String(req.query?.convert || "") === "1",
+    });
     res.json({ ok: true, ...found, libraryCount: merged.length });
   } catch (err) {
     console.error("GET project rate-suggestions error:", err);
