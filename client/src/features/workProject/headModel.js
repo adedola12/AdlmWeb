@@ -89,7 +89,7 @@ export function projectIdLabel(project) {
  * which way it will go.
  *
  * `classic` LEAVES for /projects/:tool, the older screen that still owns
- * uploading, linking, certificates and the Excel export. One used to do both
+ * uploading, linking and certificates (exports now have their own menu). One used to do both
  * jobs under the first name, which is why "Open the full workspace" navigated
  * away instead of filling the screen.
  */
