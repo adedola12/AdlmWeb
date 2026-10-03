@@ -435,7 +435,7 @@ export default function DsSolutionsProfessionals() {
               </summary>
               {" "}
               <div className="faq-a">
-                Only for QUIV and Revit MEP. HERON needs PlanSwift. RateGen and Time Pro need nothing else.
+                Only for QUIV and SERVIQ. HERON needs PlanSwift. RateGen and Time Pro need nothing else.
               </div>
               {" "}
             </details>

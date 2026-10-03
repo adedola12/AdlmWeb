@@ -20,6 +20,34 @@
 import React from "react";
 
 import App from "./App.jsx";
+
+// Richard's public pages, imported EAGERLY and deliberately so.
+//
+// main.jsx reaches these through ds/pages/manifest.js, which wraps each in
+// React.lazy. That is right in the browser and wrong here: renderToString does
+// not resolve a lazy component, it renders the Suspense FALLBACK. dsPublic()
+// uses `fallback={null}`, so server-rendering these through the manifest would
+// not throw and would not fall back to the client shell — it would return a
+// 200 with the full chrome and an empty page body, to every crawler and every
+// visitor on a slow first paint.
+//
+// So the server imports the components directly. They are safe to: none of the
+// five touches window or document at module scope (scripts/check-render-safety
+// .mjs enforces this for the whole server bundle at prebuild).
+import DsShell from "./ds/DsShell.jsx";
+import DsHome from "./ds/pages/DsHome.jsx";
+import DsProducts from "./ds/pages/DsProducts.jsx";
+import DsAbout from "./ds/pages/DsAbout.jsx";
+import DsLearn from "./ds/custom/DsLearn.jsx";
+import DsWhatsNew from "./ds/custom/DsWhatsNew.jsx";
+import DsQuote from "./ds/custom/DsQuote.jsx";
+
+// The same shape main.jsx mounts, minus the Suspense it does not need here.
+const dsPublic = (Page) => (
+  <DsShell>
+    <Page />
+  </DsShell>
+);
 import AppError from "./pages/AppError.jsx";
 
 import Home from "./pages/Home.jsx";
@@ -49,18 +77,18 @@ export const marketingRoutes = [
     element: <App />,
     errorElement: <AppError />,
     children: [
-      { index: true, element: <Home /> },
+      { index: true, element: dsPublic(DsHome) },
 
-      { path: "products", element: <Products /> },
+      { path: "products", element: dsPublic(DsProducts) },
       { path: "product/:key", element: <ProductDetail /> },
-      { path: "about", element: <AboutADLM /> },
-      { path: "learn", element: <Learn /> },
+      { path: "about", element: dsPublic(DsAbout) },
+      { path: "learn", element: dsPublic(DsLearn) },
       { path: "trainings", element: <Trainings /> },
       { path: "testimonials", element: <Testimonials /> },
-      { path: "whats-new", element: <WhatsNew /> },
+      { path: "whats-new", element: dsPublic(DsWhatsNew) },
       { path: "whats-new/:slug", element: <WhatsNewProduct /> },
       { path: "support", element: <Support /> },
-      { path: "quote", element: <Quote /> },
+      { path: "quote", element: dsPublic(DsQuote) },
 
       ...landingRoutes,
 

@@ -246,7 +246,7 @@ export default function DsProjectGallery({ projects, fixedTool = "" }) {
                 </p>
               ) : (
                 <p>
-                  Projects start in the plugins. Measure in QUIV, HERON or Revit MEP, then save to
+                  Projects start in the plugins. Measure in QUIV, HERON or SERVIQ, then save to
                   ADLM Cloud and the project appears here to price, plan and value.
                 </p>
               )}

@@ -31,7 +31,7 @@ import { toneFor } from "./adminKit.jsx";
 const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   civil3d: "CIVIQ",
   rategen: "RateGen",
   "qs-takeoff": "Time Pro",

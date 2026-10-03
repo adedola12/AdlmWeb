@@ -48,7 +48,7 @@ const PRODUCTS = [
   ["", "Not tied to a product"],
   ["revit", "QUIV (Revit)"],
   ["planswift", "HERON (PlanSwift)"],
-  ["mep", "SERVIQ (Revit MEP)"],
+  ["mep", "SERVIQ (SERVIQ)"],
   ["rategen", "Rate Gen"],
   ["qs-takeoff", "Time Pro"],
   ["civil3d", "CIVIQ (Civil 3D)"],

@@ -11,6 +11,7 @@ import CouponBanner from "./components/CouponBanner.jsx";
 import AiAgent from "./components/AiAgent.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import AnalyticsTracker from "./components/AnalyticsTracker.jsx";
+import { isDsPublicPath } from "./lib/dsPublicPaths.js";
 
 import { API_BASE } from "./config";
 import { initGA } from "./ga";
@@ -39,9 +40,19 @@ export default function App() {
   // nav and footer. /admin joins the list because the admin section now has
   // his rail: two sets of navigation over one page compete for the same job,
   // and "Book a demo" does not belong above a refund queue.
-  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-assignments|dash-course|projects|time-management|pm-tracker|revit-projects|portfolio|portfolio-dashboard|j|archicad|admin)(\/|$)/.test(
-    location.pathname,
-  );
+  //
+  // Richard's public marketing pages join it for the same reason: they carry
+  // his own nav and footer (ds/DsShell.jsx), and <main> must be full bleed
+  // rather than padded because his layouts run edge to edge. The list of
+  // those paths lives in lib/dsPublicPaths.js, beside the routes that mount
+  // them, so the two decisions cannot drift apart.
+  const dsPublicRoute = isDsPublicPath(location.pathname);
+
+  const appShellRoute =
+    dsPublicRoute ||
+    /^\/(manage|work|dash-learning|dash-certificates|dash-assignments|dash-course|projects|time-management|pm-tracker|revit-projects|portfolio|portfolio-dashboard|j|archicad|admin)(\/|$)/.test(
+      location.pathname,
+    );
 
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
@@ -49,8 +60,17 @@ export default function App() {
   const VIDEO_ID = "m3smR7ebia4";
   const MAX_SECONDS = 300;
 
+  // The welcome video opened itself over the home page. It belonged to the
+  // classic home page and is not part of Richard's design, and on his hero it
+  // is actively harmful: his opening line animates in word by word behind a
+  // modal that covers it, so the first thing a visitor sees is a video player
+  // over a page they have not been allowed to look at yet.
+  //
+  // Left mounted rather than deleted — it is still the right behaviour for a
+  // classic page that wants it, and the component is used nowhere else — but
+  // it no longer opens on a page carrying his chrome.
   React.useEffect(() => {
-    setShowVideo(location.pathname === "/");
+    setShowVideo(location.pathname === "/" && !isDsPublicPath(location.pathname));
   }, [location.pathname]);
 
   // A referral code arriving on any page, held until they actually sign up.

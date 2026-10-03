@@ -126,7 +126,7 @@ export default function DsPress() {
                     </small>
                   </th>
                   <td>
-                    QUIV · HERON · RateGen · Revit MEP · Time Pro · CIVIQ (in development)
+                    QUIV · HERON · RateGen · SERVIQ · Time Pro · CIVIQ (in development)
                   </td>
                 </tr>
                 <tr>
@@ -137,7 +137,7 @@ export default function DsPress() {
                     </small>
                   </th>
                   <td>
-                    30 events · 3,100+ professionals
+                    30 events · 800+ professionals
                   </td>
                 </tr>
                 <tr>
@@ -805,7 +805,7 @@ export default function DsPress() {
                 </h4>
                 {" "}
                 <p className="bkit-body">
-                  ADLM Studio builds quantity surveying software for the African construction market. Its products: QUIV, HERON, RateGen, Revit MEP and Time Pro: dock into Revit and PlanSwift so quantity surveyors can measure, price and programme work without leaving the drawing. Alongside the software, ADLM runs certificated BIM training: 30 events and more than 3,100 professionals trained since 2022, across NIQS chapters, universities, practices and government agencies. The company was founded in 2019 and works from Lagos, Nigeria.
+                  ADLM Studio builds quantity surveying software for the African construction market. Its products: QUIV, HERON, RateGen, SERVIQ and Time Pro: dock into Revit and PlanSwift so quantity surveyors can measure, price and programme work without leaving the drawing. Alongside the software, ADLM runs certificated BIM training: 30 events and more than 800 professionals trained across 30 events since 2018, across NIQS chapters, universities, practices and government agencies. The company was founded in 2018 and works from Lagos, Nigeria.
                 </p>
                 {" "}
                 <h4 className="bkit-h4">
@@ -827,7 +827,7 @@ export default function DsPress() {
                   </li>
                   {" "}
                   <li>
-                    Numbers stay honest: 3,100+ professionals, 30 events, 10+ countries. No rounding up.
+                    Numbers stay honest: 800+ professionals, 30 events, 10+ countries. No rounding up.
                   </li>
                   {" "}
                 </ul>
@@ -1071,9 +1071,9 @@ export default function DsPress() {
                   </a>
                   {" "}
                   <a className="bkit-prod" href="/ds/ic-mep.png" download="">
-                    <img src="/ds/ic-mep.png" alt="Revit MEP icon" />
+                    <img src="/ds/ic-mep.png" alt="SERVIQ icon" />
                     <b>
-                      Revit MEP
+                      SERVIQ
                     </b>
                     <span>
                       PNG · 512px
