@@ -52,8 +52,22 @@ describe("pricing card", () => {
         { code: "B1", rateId: "r1", description: "RC 1:2:4 columns", unit: "m3" },
         { code: "B2", rateId: "", description: "225mm blockwork", unit: "m2" },
       ],
+      via: "ada",
     });
     expect(JSON.stringify(body)).not.toMatch(/unitPrice|amount|220000/);
+  });
+
+  it("sends the dimension of a converted rate, never its factor", () => {
+    const body = priceManyBody([
+      { code: "W1", rateId: "c20", rateDescription: "Concrete", rateUnit: "m3", convert: { thickness: 0.23 }, unitPrice: 35630 },
+    ]);
+    expect(body.lines[0]).toEqual({
+      code: "W1",
+      rateId: "c20",
+      description: "Concrete",
+      unit: "m3",
+      convert: { thickness: 0.23 },
+    });
   });
 
   it("never sends more than the endpoint takes", () => {

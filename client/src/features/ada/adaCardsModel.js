@@ -68,7 +68,11 @@ export function priceManyBody(lines) {
       rateId: str(l?.rateId),
       description: str(l?.rateDescription || l?.description),
       unit: str(l?.rateUnit || l?.unit),
+      // A rate in another unit: the dimension it converts by. Never a factor;
+      // the server works that out.
+      ...(l?.convert && typeof l.convert === "object" ? { convert: l.convert } : {}),
     })),
+    via: "ada",
   };
 }
 

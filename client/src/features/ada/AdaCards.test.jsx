@@ -51,6 +51,7 @@ describe("AdaPricingCard", () => {
     expect(init.token).toBe("tok");
     expect(init.body).toEqual({
       lines: [{ code: "B1", rateId: "r1", description: "RC columns", unit: "m3" }],
+      via: "ada",
     });
     expect(seen).toHaveBeenCalledTimes(1);
     expect(seen.mock.calls[0][0].detail).toEqual({ id: "65f0c0ffee" });

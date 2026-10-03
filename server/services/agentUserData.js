@@ -18,6 +18,8 @@ import { ActivityLog } from "../models/ActivityLog.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
 import { resolveProjectAccess } from "../util/projectAccess.js";
 import { buildPricingProposal } from "../util/pricingProposal.js";
+import { RateUsage } from "../models/RateUsage.js";
+import { usageIndex } from "../util/rateSuggestions.js";
 import { parseReportRange, buildPeriodSummary } from "./reportPeriod.js";
 import { projectTips } from "../util/projectTips.js";
 
@@ -1106,7 +1108,19 @@ export async function getPricingProposal(userId, projectName, context = {}) {
     Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
     Array.isArray(lib?.customRates) ? lib.customRates : [],
   );
-  const p = buildPricingProposal(project.items, merged);
+  // What this QS chose before ranks first, as it does in the line panel.
+  let usage = null;
+  try {
+    const rows = await RateUsage.find({ userId: oid(userId) })
+      .sort({ createdAt: -1 })
+      .limit(3000)
+      .select("key unit rateId projectId projectName createdAt")
+      .lean();
+    usage = usageIndex(rows.map((r) => ({ ...r, at: r.createdAt })));
+  } catch {
+    usage = null;
+  }
+  const p = buildPricingProposal(project.items, merged, { usage, convert: true });
 
   if (!p.unpricedCount) {
     return `Every line on "${project.name}" already has a rate. Nothing to propose. Offer to check the rates against the market instead, if that tool is available.`;

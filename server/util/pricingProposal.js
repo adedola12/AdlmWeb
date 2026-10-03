@@ -47,12 +47,18 @@ const round2 = (v) => Math.round(num(v) * 100) / 100;
  *   libraryCount: number
  * }}
  */
-export function buildPricingProposal(items, rates, { max = MAX_PROPOSAL_LINES } = {}) {
+export function buildPricingProposal(
+  items,
+  rates,
+  { max = MAX_PROPOSAL_LINES, usage = null, convert = false } = {},
+) {
   const bill = Array.isArray(items) ? items : [];
   const unpriced = bill.filter(needsRate);
   // The map's own cap is a little above ours so `truncated` below reflects
   // what the CARD drops, not what the matcher skipped.
-  const found = suggestionMapForBill(bill, rates, { cap: Math.max(max, 600) });
+  // `usage` puts the rates this QS chose before first; `convert` offers a rate
+  // in another unit when the line names the dimension (util/unitConversion.js).
+  const found = suggestionMapForBill(bill, rates, { cap: Math.max(max, 600), usage, convert });
 
   const lines = [];
   const seen = new Set();
@@ -82,6 +88,9 @@ export function buildPricingProposal(items, rates, { max = MAX_PROPOSAL_LINES } 
       unitPrice: round2(best.unitPrice),
       amount: round2(qty * num(best.unitPrice)),
       why: str(best.why),
+      // The dimension a converted rate rests on, sent back with Apply so the
+      // server converts the same way. unitPrice above is already per line unit.
+      convert: best.conversion ? best.conversion.dims : null,
       own: Boolean(best.own),
       score: num(best.score),
     });
