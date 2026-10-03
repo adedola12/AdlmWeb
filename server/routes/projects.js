@@ -4190,12 +4190,11 @@ async function updateProject(req, res) {
           }
           budget = kept.rows.map((b) => ({ ...b, lineId: keepLineId(b.lineId) }));
         }
-        // What the QS owns on these rows (procurement, typed rates), read before
-        // the plugin's list replaces them - the same protection saveProjectFull
-        // has had since the resave-wipe fix. QUIV saves its budget through this
-        // PUT, so without it every QUIV re-save put the plugin's prices back over
-        // the website's and the bill rates followed.
-        const previousBudget = project.budgetItems || [];
+        // previousBudget (read at the top of this block, before anything
+        // replaced it) is what the QS owns on these rows: procurement and typed
+        // rates. QUIV saves its budget through this PUT, so without restoring
+        // it every QUIV re-save put the plugin's prices back over the website's
+        // and the bill rates followed.
         backfillBudgetLinks(project.items, budget);
         const freshBudget = ensureBillItemCoverage(project.items, budget);
         // After coverage, so the synthesised rows get their edits back too.
@@ -4208,7 +4207,6 @@ async function updateProject(req, res) {
             `[update] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
           );
         }
-        preserveBudgetUserEdits(previousBudget, freshBudget);
         project.budgetItems = freshBudget;
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
