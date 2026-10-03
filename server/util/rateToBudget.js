@@ -194,6 +194,9 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
 
   const priceFor = typeof opts.priceFor === "function" ? opts.priceFor : () => 0;
   const billUnit = String(item?.unit || "").trim();
+  // How many of the RATE's unit one BILL unit is (util/unitConversion.js); 1
+  // when they agree. The rate's own material lines are per one of ITS units.
+  const scale = num(opts.scale) > 0 ? num(opts.scale) : 1;
 
   // The rate per BILL unit. The caller converts when the rate's unit differs
   // from the item's, because only it knows the conversion it showed the QS.
@@ -244,7 +247,7 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
       rows.push({
         kind: kindLabel(c.kind === KIND.CONSUMABLE ? KIND.CONSUMABLE : KIND.MATERIAL),
         name: c.name || "Material",
-        qty: round(c.quantity * billQty, 3),
+        qty: round(c.quantity * billQty * scale, 3),
         unit: c.unit,
         rate: c.unitPrice,
       });
@@ -255,7 +258,7 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
         name: "Sundries and allowances",
         qty: billQty,
         unit: billUnit,
-        rate: round(split.unexplained),
+        rate: round(split.unexplained * scale),
         notes: "The part of this rate's net cost that its build-up does not itemise.",
       });
     }
