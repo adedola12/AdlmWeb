@@ -204,14 +204,15 @@ export function workTypeOf(item) {
  * Returns { rate, factor, workType, assumed, score }: factor converts the line's
  * quantity into the rate's unit.
  */
-export function matchWorkRate(item, rates = []) {
+export function matchWorkRate(item, rates = [], { usable = (r) => Boolean(r?.carbon) } = {}) {
   const t = lineText(item);
   if (!t || !item?.unit) return null;
   const work = workFor(t, item.unit);
   if (!work) return null;
 
+  // `usable`: for carbon, a rate with carbon; for pricing (services/pricePreview.js), a rate with a price
   const family = rates
-    .filter((r) => r?.carbon && work.rate.test(r.description || "") && !(work.not && work.not.test(r.description || "")))
+    .filter((r) => usable(r) && work.rate.test(r.description || "") && !(work.not && work.not.test(r.description || "")))
     .map((r) => ({ r, factor: unitFactor(item.unit, r.unit) }))
     .filter((x) => x.factor != null);
   if (!family.length) return null;
