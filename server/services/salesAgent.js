@@ -18,7 +18,11 @@ import {
   getProjectBudget,
   getProjectBill,
   getBillItemsForAi,
+  getPricingProposal,
+  getProjectPeriodReport,
+  getProjectTipsForAgent,
 } from "./agentUserData.js";
+import { watToday } from "./reportPeriod.js";
 import {
   aiServiceEnabled,
   checkRatesAgainstMarket,
@@ -247,6 +251,88 @@ const ACCOUNT_TOOLS = [
   },
 ];
 
+/* ---- estimator & project-manager tools (logged-in, read-only) ---- */
+// Ada as the QS's estimator and PM, not only a reader of figures. All three
+// READ; none writes. propose_project_pricing builds a list the user confirms
+// on a card in the chat — the card, not Ada, calls the pricing endpoint, and
+// only after the user ticks the lines and presses Apply. project_report reads
+// what moved between two dates. project_tips runs the same rules as the tip
+// strip on the project's own tabs (util/projectTips.js).
+const ESTIMATOR_TOOLS = [
+  {
+    name: "propose_project_pricing",
+    description:
+      "PROPOSE a rate for every UNPRICED bill line on ONE of the logged-in user's " +
+      "projects, from their own RateGen library (master rates plus their overrides " +
+      "and custom rates), matched by description with the unit as a hard rule. " +
+      "Shows the user a confirm card with a tick box per line and an Apply button. " +
+      "It NEVER writes a price: nothing changes until the user presses Apply on the " +
+      "card. Use for 'price my bill', 'fill in the missing rates', 'which lines have " +
+      "no rate', 'suggest rates for this project'. Omit projectName to use the " +
+      "project the user is looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "project_report",
+    description:
+      "What happened on ONE of the logged-in user's projects between two dates: work " +
+      "valued, lines completed, actual cost against planned, certificates issued, " +
+      "variations raised and decided, materials bought, tasks finished or late, risks " +
+      "and issues, and the activity log. Also shows a card that opens the full Project " +
+      "report PDF for that range. Use for 'report for last month', 'what happened in " +
+      "September', 'progress this week', 'monthly report'. YOU must turn the user's " +
+      "words into dates using TODAY from the visitor section (Lagos, WAT). 'Last " +
+      "month' is the whole previous calendar month; 'this month' is the 1st to today; " +
+      "'1 to 30 September' is the 1st to the 30th of September of the current year " +
+      "unless they say otherwise.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+        from: { type: "string", description: "First day of the range, YYYY-MM-DD (Lagos)." },
+        to: {
+          type: "string",
+          description: "Last day of the range, YYYY-MM-DD (Lagos). Omit for today.",
+        },
+      },
+      required: ["from"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "project_tips",
+    description:
+      "What the user should do NEXT on ONE of their projects, most urgent first: " +
+      "unpriced lines, contract not locked, no progress recorded lately, overdue " +
+      "tasks, lines over budget, budget rows with no price, no programme. Use for " +
+      "'what should I do next', 'anything wrong with this job', 'what needs my " +
+      "attention', and proactively when the user starts talking about one project. " +
+      "Omit projectName to use the project the user is viewing.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+];
+
 /* ---- cost-intelligence tools (ADLM AI Service on AWS) ---- */
 // These call the separate serverless AI API (repo: adlm-ai-service), which is
 // grounded in the RateGen rate library and BESMM 4R. Ada supplies the user's
@@ -394,7 +480,17 @@ Rules for account answers:
 - Quote money exactly as the tool returns it. If a figure is ₦0, say the bill has no rates yet rather than guessing.
 - If a project has no Material & Labour breakdown, explain it comes from the desktop plugin on save (MEP projects don't send one) — don't estimate one.
 - After answering, still be helpful commercially where natural (e.g. an expired sub → offer renewal; no RateGen → mention it) but don't force it.
-- For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.${aiSection}`
+- For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.
+
+# YOU ARE ALSO THEIR ESTIMATOR AND PROJECT MANAGER
+Act like a sharp senior QS and site PM working beside them, not a search box.
+- project_tips — what to do next on a project, most urgent first. When the user is on a project page or asks "what now", start here and lead with the top one or two.
+- propose_project_pricing — proposes a rate for every unpriced line from THEIR OWN RateGen library and shows a confirm card. You NEVER price anything yourself and NEVER say rates were applied: the user ticks the lines and presses Apply on the card. Explain the strong and weak matches, and that a match is by description and unit.
+- project_report — what moved between two dates (value done, certified, actual vs planned, variations, purchases, late tasks, activity), with a card that opens the PDF. Work out the dates from TODAY in the visitor section (Lagos time) before calling it. If the range is unclear, ask once.
+How to work:
+- Explain a rate when asked: what makes it up (material, labour, plant, overhead and profit) and what to check. Real build-ups come from suggest_rate when that tool is available; otherwise describe what a build-up for that item normally contains, clearly as general guidance, never as their figure.
+- Flag risks plainly when the data shows them: unpriced lines, lines over budget, no progress for weeks, overdue tasks, an unlocked contract on a job already on site.
+- End with one concrete next step, and offer the tool that does it.${aiSection}`
     : `
 # NOT LOGGED IN
 This visitor is a guest, so you CANNOT read any personal projects or subscriptions. If they ask about "my projects", "my subscription", "what I've spent" etc., warmly explain they need to sign in first, then offer a 'signup' or 'nav' to login — never guess their data.`;
@@ -436,9 +532,13 @@ ${knowledgePack}`;
   return { cacheable, dynamic: userContext };
 }
 
-function buildUserContext(user) {
+function buildUserContext(user, now = new Date()) {
+  // Today in Lagos. In the per-visitor half so the cached prefix never changes
+  // at midnight; Ada needs it to turn "last month" into dates.
+  const today = `TODAY: ${watToday(now)} (Lagos, WAT, UTC+1). Use this for any date the user describes in words.`;
   if (!user) {
     return `# VISITOR
+${today}
 A guest who is NOT logged in. If they show buying intent, encourage creating an account (signup) as part of checkout.`;
   }
 
@@ -452,10 +552,24 @@ A guest who is NOT logged in. If they show buying intent, encourage creating an 
     : `They have no active subscriptions yet — a prime candidate for a first purchase.`;
 
   return `# VISITOR
+${today}
 A LOGGED-IN user${user.name ? ` named ${user.name}` : ""}${user.email ? ` (${user.email})` : ""}. ${ownedLine}`;
 }
 
 /* --------------------------- tool handlers --------------------------- */
+
+// The estimator tools return { text, card }. The text answers the model; the
+// card is queued for the chat to render under the reply. One card of each kind
+// per turn: if the model calls a tool twice, the later card replaces the
+// earlier, so the user never sees two Apply buttons for the same bill.
+export function withCard(out, ctx) {
+  if (!out || typeof out !== "object") return out;
+  if (out.card) {
+    ctx.pendingActions = ctx.pendingActions.filter((a) => a?.type !== out.card.type);
+    ctx.pendingActions.push(out.card);
+  }
+  return out.text || "";
+}
 async function handleSaveLead(input, ctx, outcome) {
   const email = String(input?.email || "").trim().toLowerCase();
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
@@ -586,6 +700,17 @@ async function handleAccountTool(name, input, ctx) {
     if (name === "get_project_bill")
       return await getProjectBill(ctx.user._id, input?.projectName, input?.search, ctx.page);
 
+    // ── Estimator & PM ──
+    if (name === "propose_project_pricing")
+      return withCard(await getPricingProposal(ctx.user._id, input?.projectName, ctx.page), ctx);
+    if (name === "project_report")
+      return withCard(
+        await getProjectPeriodReport(ctx.user._id, input?.projectName, input?.from, input?.to, ctx.page),
+        ctx,
+      );
+    if (name === "project_tips")
+      return await getProjectTipsForAgent(ctx.user._id, input?.projectName, ctx.page);
+
     // ── ADLM AI Service (AWS) — always fed the user's REAL bill lines ──
     if (name === "check_my_rates" || name === "find_project_errors") {
       const picked = await getBillItemsForAi(
@@ -667,7 +792,7 @@ export async function runSalesAgent(history, message, opts = {}) {
   const { knowledgePack, productIndex } = await getCatalog();
   const system = buildSystemPrompt({
     knowledgePack,
-    userContext: buildUserContext(opts.user),
+    userContext: buildUserContext(opts.user, opts.now || new Date()),
     canReadAccount: !!opts.user,
     canUseAiService: !!opts.user && !!opts.accessToken && aiServiceEnabled(),
     markdown: opts.format === "markdown",
@@ -725,11 +850,16 @@ export async function runSalesAgent(history, message, opts = {}) {
   // configured endpoint; without either they're never offered.
   const canUseAiService = !!opts.user && !!opts.accessToken && aiServiceEnabled();
   const toolset = opts.user
-    ? [...TOOLS, ...ACCOUNT_TOOLS, ...(canUseAiService ? AI_SERVICE_TOOLS : [])]
+    ? [
+        ...TOOLS,
+        ...ACCOUNT_TOOLS,
+        ...ESTIMATOR_TOOLS,
+        ...(canUseAiService ? AI_SERVICE_TOOLS : []),
+      ]
     : TOOLS;
   const tools = supportsTools() ? toolset : undefined;
   const accountToolNames = new Set(
-    [...ACCOUNT_TOOLS, ...AI_SERVICE_TOOLS].map((t) => t.name),
+    [...ACCOUNT_TOOLS, ...ESTIMATOR_TOOLS, ...AI_SERVICE_TOOLS].map((t) => t.name),
   );
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
