@@ -112,7 +112,48 @@ function screedWants(t) {
 // called "Concrete, Cast In Situ" is not concrete work); `rate` picks the family
 // of RateGen rates; `not` keeps out rates that only share a word.
 const M2 = ["m2"], M3 = ["m3"], WEIGHT = ["kg", "t"], RUN = ["m"], EACH = ["nr"];
+
+// Sizes a services line and its rate both name: the nearest rate wins.
+const MM = /\b(\d{2,3})\s*mm\b/i;
+const HP = /(\d+(?:\.\d+)?)\s*hp\b/i;
+const LITRE = /(\d+)\s*(?:l|litres?|liters?|ltrs?)\b/i;
+const WAY = /(\d+)[\s-]*ways?\b/i;
+const KG = /(\d+(?:\.\d+)?)\s*kg\b/i;
+const MM2 = /(\d+(?:\.\d+)?)\s*mm(?:²|2)/i;
+
+// Building services, for SERVIQ (RateGen's services rates, util/servicesRates.js).
+// Before the building trades: a services line is specific, and "Power Points –
+// AC point" is an AC point, not a power point.
+const SERVICES = [
+  { id: "ppr-pipe", units: RUN, line: /\bppr\b|polypropylene/i, rate: /\bppr\b/i, size: MM },
+  { id: "upvc-pipe", units: RUN, line: /\bu?pvc\b.*\bpipes?\b|\bpipes?\b.*\bu?pvc\b|^plastic - plastic\b/i, notLine: /condensate|conduit/i, rate: /\bupvc soil/i, size: MM },
+  { id: "cable", units: RUN, line: /mm(²|2)/i, notLine: /[x×]\s*\d/i, rate: /single core copper cable/i, size: MM2 },
+  { id: "wc", units: EACH, line: /\b(wc|w\.c\.?|water[\s-]?closets?|toilets?)\b/i, rate: /\bwc suite\b/i },
+  { id: "basin", units: EACH, line: /\b(wash[\s-]?hand[\s-]?basins?|whb|basins?|lavator(y|ies))\b/i, rate: /\bwash hand basin\b/i },
+  { id: "shower", units: EACH, line: /\bshowers?\b/i, rate: /\bshower mixer\b/i },
+  { id: "sink", units: EACH, line: /\bsinks?\b/i, rate: /\bkitchen sink\b/i },
+  { id: "water-heater", units: EACH, line: /\bwater heaters?\b/i, rate: /\bwater heater\b/i, size: LITRE },
+  { id: "split-ac", units: EACH, line: /\bsplit\b|\bair[\s-]?condition(er|ing)? units?\b|\bair[\s-]?conditioners?\b/i, notLine: /\bpoints?\b/i, rate: /\bsplit air conditioner\b/i, size: HP },
+  { id: "ceiling-fan", units: EACH, line: /\bceiling fans?\b/i, rate: /\bceiling fan\b/i },
+  { id: "extractor-fan", units: EACH, line: /\b(extract(or)?|exhaust) fans?\b/i, rate: /\bextractor fan\b/i, size: MM },
+  { id: "ac-point", units: EACH, line: /\b(ac|a\/c|air[\s-]?con\w*) points?\b/i, rate: /^ac point\b/i },
+  { id: "lighting-point", units: EACH, line: /\blighting points?\b/i, rate: /^lighting point\b/i },
+  { id: "power-point", units: EACH, line: /\bpower points?\b|\bsocket outlets?\b|\btwin sockets?\b/i, rate: /^power point\b/i },
+  // Revit files switches under "Lighting Devices": a switch is not a luminaire
+  { id: "luminaire", units: EACH, line: /\b(led|luminaires?|light(ing)? fi(xture|tting)s?|lighting|panel lights?|downlights?|pendant|sconce)\b/i,
+    notLine: /\b(switch(es)?|receptacles?|sockets?|sensors?|points?)\b/i, rate: /\bled (panel|linear)\b/i },
+  // a transformer or a main switchboard is not a distribution board
+  { id: "db", units: EACH, line: /\b(distribution (board|equipment)s?|panelboards?|db|consumer units?)\b/i, notLine: /\b(transformer|kva|switchboard)\b/i,
+    rate: /\bdistribution board\b/i, size: WAY },
+  { id: "smoke-detector", units: EACH, line: /\bsmoke detectors?\b/i, rate: /\bsmoke detector\b/i },
+  { id: "heat-detector", units: EACH, line: /\bheat detectors?\b/i, rate: /\bheat detector\b/i },
+  { id: "extinguisher", units: EACH, line: /\bextinguishers?\b/i, rate: /\bfire extinguisher\b/i, size: KG },
+  { id: "diffuser", units: EACH, line: /\b(diffusers?|grilles?|registers?)\b/i, rate: /\b(diffuser|grille)\b/i, byArea: true },
+  { id: "ductwork", units: M2, line: /\bducts?\b|\bductwork\b/i, rate: /\bductwork\b/i },
+];
+
 const WORK = [
+  ...SERVICES,
   { id: "mesh", units: M2, line: /\b(brc|mesh|fabric reinforcement)\b/i, rate: /\b(mesh|fabric|brc)\b/i },
   { id: "reinforcement", units: WEIGHT, line: /\b(reinforc\w*|rebar|bars?|high yield|links?|stirrups?|[ty]\d{1,2})\b/i, notLine: /\bburgla?r|buglar\b/i,
     rate: /\breinforcement\b|\bbars?\b/i, not: /concrete \(|build rate for a gra/i, wants: barWants },
@@ -177,12 +218,25 @@ export function matchWorkRate(item, rates = []) {
 
   const spec = work.wants ? work.wants(t) : { wants: [], assumed: null };
   const wants = [...(spec.wants || []), ...(spec.fallbackWants || [])];
+  // a services size: the rate nearest the line's own (a 100mm uPVC line takes the 110mm rate)
+  const mine = work.size ? Number(t.match(work.size)?.[1]) || null : null;
+  const near = (d) => {
+    const theirs = Number(String(d).match(work.size)?.[1]) || null;
+    if (!mine || !theirs) return 0;
+    return mine === theirs ? 2 : 1 / (1 + Math.abs(Math.log(mine / theirs)) * 4);
+  };
   let best = null;
   for (const x of family) {
     const d = x.r.description || "";
     const hits = wants.filter((w) => w(d)).length;
-    const score = hits * 2 + similarityScore(stem(t), stem(d)) + (x.r.source && x.r.source !== "master" ? 0.01 : 0);
+    const score = hits * 2 + near(d) + similarityScore(stem(t), stem(d)) + (x.r.source && x.r.source !== "master" ? 0.01 : 0);
     if (!best || score > best.score) best = { ...x, hits, score };
+  }
+  if (work.size) {
+    const theirs = Number(String(best.r.description).match(work.size)?.[1]) || null;
+    if (!mine) spec.assumed = "Size not stated: the nearest rate used.";
+    else if (theirs && theirs !== mine) spec.assumed = `No ${mine} rate: the ${theirs} rate used.`;
+    if (spec.assumed) best.hits = 1; // said in `assumed`, not a miss
   }
   // when the line states a spec, a rate that meets none of it is not this work
   if ((spec.wants || []).length && best.hits === 0 && !spec.assumed) return null;

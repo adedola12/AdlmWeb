@@ -16,6 +16,7 @@ import { fetchMasterLabour, fetchMasterMaterials } from "../util/rategenMaster.j
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
 import { buildCarbonRates, prepareMaterialLibrary } from "../util/carbonRates.js";
 import { carbonMethod, carbonSources } from "../util/carbonEngine.js";
+import { SERVICES_RATES } from "../util/servicesRates.js";
 
 const TTL_MS = 5 * 60 * 1000;
 const _cache = new Map(); // `${userId}|${state}|${zone}` -> { at, value }
@@ -68,7 +69,11 @@ export async function carbonForUser(userId, { state = null, zone = null } = {}) 
     masterRates,
     Array.isArray(userLib?.rateOverrides) ? userLib.rateOverrides : [],
     Array.isArray(userLib?.customRates) ? userLib.customRates : [],
-  ).filter((r) => !isCarbonCopy(r));
+  )
+    .filter((r) => !isCarbonCopy(r))
+    // RateGen's building-services rates (unpriced drafts, not yet published to
+    // users): here for their carbon, so a SERVIQ bill has rates to take it from
+    .concat(SERVICES_RATES.map((r) => ({ ...r, rateId: null, customRateId: null, source: "adlm-services-draft" })));
   const results = buildCarbonRates(merged, lib, labour);
 
   const rates = merged.map((r, i) => {

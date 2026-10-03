@@ -45,6 +45,8 @@ function load() {
       // matched only against "<line> || <the rate's description>": a line that says
       // "Sheeting (975 x 2250)" is fibre cement or zinc only by what the rate says
       context: f.context === true,
+      // the factor is per item (an LED luminaire's EPD), not per kg; the mass is for transport and waste
+      perItem: f.perItem === true,
       mass: f.mass && typeof f.mass === "object" ? f.mass : {},
       rx: new RegExp(f.pattern || "", "i"),
     })),
@@ -68,12 +70,85 @@ export function matchFactor(category, name, { context = false } = {}) {
   return load().factors.find((f) => f.context === context && f.rx.test(key)) || null;
 }
 
+const SIZED = new Set(["opening", "pipe", "capacity", "cable", "duct"]);
+const EACH = new Set(["", "nr", "no", "ea", "each", "set", "unit", "pc", "pcs"]);
+
+/** Mass from a size the line names, or null. */
+function sizedMass(m, n, u) {
+  switch (m.rule) {
+    case "opening": {
+      // a door, window or grille by its size as named ("1800 x 1200mm"), at kg per m2 of face
+      if (u.startsWith("m2")) return m.density ?? null;
+      // Revit writes a grille "600x600", without the mm
+      const o = n.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})(?:\s*mm)?/);
+      return o ? ((Number(o[1]) * Number(o[2])) / 1e6) * (m.density ?? 20) : null;
+    }
+    case "pipe": {
+      // a pipe or conduit by the metre from its diameter: wall at D/SDR, or a stated wall
+      if (u !== "m") return null;
+      const d = n.match(/\b(\d{2,3})\s*mm\b/);
+      const D = (d ? Number(d[1]) : m.defaultMm ?? 0) / 1000;
+      if (!(D > 0)) return null;
+      const wall = m.wallMm ? m.wallMm / 1000 : D / (m.sdr ?? 26);
+      return Math.PI * D * wall * (m.density ?? 1400);
+    }
+    case "capacity": {
+      // equipment by its rating as named: "1.5HP", "50 litre", "12-way", "9kg"
+      if (!EACH.has(u)) return null;
+      const re = {
+        hp: /(\d+(?:\.\d+)?)\s*hp\b/,
+        litre: /(\d+(?:\.\d+)?)\s*(l|litres?|liters?|ltrs?)\b/,
+        way: /(\d+)[\s-]*ways?\b/,
+        kg: /(\d+(?:\.\d+)?)\s*kg\b/,
+      }[m.unit];
+      const c = re ? n.match(re) : null;
+      return c ? (m.base ?? 0) + (m.per ?? 0) * Number(c[1]) : null;
+    }
+    case "cable": {
+      // copper from the cores as named ("4x95 mm2 + 1x50 mm2"), plus half again for the insulation
+      if (u !== "m") return null;
+      let mm2 = 0;
+      for (const c of n.matchAll(/(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*mm/g)) mm2 += Number(c[1]) * Number(c[2]);
+      if (!mm2) {
+        const one = n.match(/(\d+(?:\.\d+)?)\s*mm(²|2)/);
+        if (one) mm2 = Number(one[1]);
+      }
+      return mm2 ? ((mm2 * 8.96) / 1000) * 1.5 : null;
+    }
+    case "duct": {
+      // sheet round the duct's perimeter, + 15% for seams; a fitting as 0.6 m of its duct
+      let perim = null;
+      // "450x475", or Revit's "300 mmx75 mm"
+      const r = n.match(/(\d{2,4})\s*(?:mm)?\s*[x×]\s*(\d{2,4})/);
+      const inch = n.match(/(\d{1,2})"\s*ø/);
+      const dia = n.match(/(\d{2,4})\s*(mm)?\s*ø/) || n.match(/ø\s*(\d{2,4})/) || n.match(/-\s*(\d{2,4})\s*$/);
+      // an open tray is its width and two sides, a duct all four
+      if (r) perim = (m.open ? Number(r[1]) + 2 * Number(r[2]) : 2 * (Number(r[1]) + Number(r[2]))) / 1000;
+      else if (inch) perim = Math.PI * Number(inch[1]) * 0.0254;
+      else if (dia) perim = (Math.PI * Number(dia[1])) / 1000;
+      if (!perim) return null;
+      const perMetre = perim * ((m.sheetMm ?? 0.6) / 1000) * (m.density ?? 7850) * 1.15;
+      if (u === "m") return perMetre;
+      return EACH.has(u) ? perMetre * 0.6 : null;
+    }
+    default:
+      return null;
+  }
+}
+
 /** kg (or litres of fuel) per library unit, or null when it cannot be read. */
 export function massPerUnit(f, name, unit, hint = "") {
   const u = String(unit || "").trim().toLowerCase().replace(/\.+$/, "");
   const n = String(name || "").toLowerCase();
   const h = String(hint || "").toLowerCase();
   const m = f.mass || {};
+
+  // a size named on the line ("150mm", "4x95 mm2", "1.5HP", "450x300") comes before
+  // a stated per-unit fallback mass
+  if (SIZED.has(m.rule)) {
+    const r = sizedMass(m, n, u);
+    if (r != null) return r;
+  }
 
   // a tile's thickness, where the line or the item names one ("600 x 600 x 10mm",
   // "1.3mm floor flex"), comes before the per-m2 fallback
@@ -87,6 +162,11 @@ export function massPerUnit(f, name, unit, hint = "") {
   // stated per unit
   if (m.perUnit && typeof m.perUnit === "object") {
     for (const [k, v] of Object.entries(m.perUnit)) if (k.toLowerCase() === u) return Number(v);
+    // "Nr", "No", "EA", "each": the same count, whichever a bill writes
+    if (EACH.has(u) && u !== "") {
+      const each = ["nr", "no", "ea", "each"].find((k) => m.perUnit[k] != null);
+      if (each) return Number(m.perUnit[each]);
+    }
     if (u.endsWith("litre") && m.perUnit.litre != null) {
       const lm = u.match(/^(\d+(?:\.\d+)?)\s*litre/);
       return (lm ? Number(lm[1]) : 1) * Number(m.perUnit.litre);
@@ -137,19 +217,12 @@ export function massPerUnit(f, name, unit, hint = "") {
       }
       return null;
     }
-    case "opening": {
-      // a door or window by its size as named ("1800 x 1200mm"), at kg per m2 of opening
-      if (u.startsWith("m2")) return m.density ?? null;
-      const o = n.match(/(\d{3,4})\s*x\s*(\d{3,4})\s*mm/);
-      return o ? ((Number(o[1]) * Number(o[2])) / 1e6) * (m.density ?? 20) : null;
-    }
-    case "pipe": {
-      // a pipe by the metre from its nominal diameter, wall at D/26 (SDR 26)
-      const d = n.match(/\b(\d{2,3})\s*mm\b/);
-      if (!d || u !== "m") return null;
-      const D = Number(d[1]) / 1000;
-      return Math.PI * D * (D / 26) * (m.density ?? 1400);
-    }
+    case "opening":
+    case "pipe":
+    case "capacity":
+    case "cable":
+    case "duct":
+      return sizedMass(m, n, u);
     case "aluminium": {
       if (n.includes("angle ridge")) return u === "m" ? 0.0007 * 0.6 * 2700 : null;
       const t = n.match(/(\d\.\d+)mm/);
@@ -184,6 +257,17 @@ export function assessCarbon(category, name, unit, qty, hint = "", { context = f
     return {
       factor: f, kg: 0, a13: 0, a4: 0, a5w: 0, a5a, total: a5a, totalLow: a5a,
       basis: `${f.label}: ${fmt(amount, 3)} x ${fmt(f.value, 5)} kgCO2e (site energy, A5a). ${f.source}.`,
+    };
+  }
+  if (f.perItem) {
+    // carbon per item from its EPD; transport and the wasted share by its mass
+    const a13 = qty * f.value;
+    const a4 = amount * f.a4;
+    const a5w = f.wf * (a13 + amount * (f.a4 + c2 + f.c34));
+    return {
+      factor: f, kg: amount, a13, a4, a5w, a5a: 0, total: a13 + a4 + a5w, totalLow: a13 + a4 + a5w,
+      basis: `${f.label}: ${fmt(qty, 3)} x ${fmt(f.value, 2)} kgCO2e per item. ${f.source}. ` +
+        `Transport ${fmt(f.a4, 3)} kgCO2e/kg on ${fmt(amount, 3)} kg (${f.massBasis}, assumed); waste: ${f.wasteBasis}.`,
     };
   }
   const a13 = amount * f.value;

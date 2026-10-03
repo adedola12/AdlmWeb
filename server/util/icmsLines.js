@@ -17,6 +17,7 @@
 import { icmsCode, mapBill, groupTitle, ICMS_GROUPS } from "./icmsMap.js";
 import { suggestRatesForLine, unitsAgree } from "./rateSuggestions.js";
 import { matchWorkRate } from "./icmsWorkCarbon.js";
+import { assessCarbon } from "./carbonEngine.js";
 
 const fold = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -36,7 +37,7 @@ function carbonIndex(rates = []) {
   return { byDesc, forMatching, all: withCarbon };
 }
 
-function findRate(item, index) {
+function findRate(item, index, opts = {}) {
   const unit = item?.unit;
   const sameUnit = (list) => (list || []).find((r) => unitsAgree(unit, r.unit));
   const applied = String(item?.appliedRateKey || "").trim();
@@ -51,6 +52,21 @@ function findRate(item, index) {
   if (work) {
     const assumed = [work.assumed, work.sized].filter(Boolean).join(" ") || null;
     return { rate: work.rate, source: "work", score: work.score, factor: work.factor, workType: work.workType, assumed };
+  }
+  // SERVIQ: a Revit family that names its own size ("XHHW - 4×95 mm² + 1×50 mm²",
+  // "Rectangular Duct Transition - 450x475") is weighed from the line itself
+  if (opts.direct) {
+    const desc = String(item?.description || "").replace(/\[[^\]]*\]/g, " ");
+    const c = assessCarbon("", desc, String(item?.unit || ""), 1, desc);
+    if (c && c.total > 0) {
+      return {
+        rate: { description: `${c.factor.label}, weighed from the line`, carbon: { total: c.total, low: c.totalLow, coverage: 1 } },
+        source: "direct",
+        score: 1,
+        workType: c.factor.id,
+        assumed: c.factor.massAssumed ? `Mass assumed: ${c.factor.massBasis}.` : null,
+      };
+    }
   }
   const [best] = suggestRatesForLine(item, index.forMatching, { limit: 1, minScore: CARBON_MATCH_MIN_SCORE });
   if (best) {
@@ -82,7 +98,7 @@ export function icmsLines(items = [], { productKey = "", carbonRates = [], overr
     const group = own?.group ?? m.group;
     const subGroup = own ? own.subGroup ?? null : m.subGroup;
 
-    const found = qty > 0 ? findRate(item, index) : null;
+    const found = qty > 0 ? findRate(item, index, { direct: /mep/i.test(String(productKey)) }) : null;
     const c = found?.rate.carbon;
     const f = found?.factor ?? 1; // the line's unit into the rate's (kg -> tonne)
     out.push({
@@ -119,7 +135,7 @@ export function icmsSummary(lines = []) {
   const groups = ICMS_GROUPS.map((g) => ({ code: g.code, title: groupTitle(g.code), icms: icmsCode({ group: g.code }), carbonReported: g.carbon, amount: 0, carbonKg: 0, carbonLowKg: 0, lines: 0 }));
   const byCode = new Map(groups.map((g) => [g.code, g]));
   let total = 0, unplaced = 0, unplacedLines = 0, withCarbon = 0;
-  const bySource = { applied: 0, same: 0, work: 0, matched: 0, none: 0 };
+  const bySource = { applied: 0, same: 0, work: 0, direct: 0, matched: 0, none: 0 };
   for (const l of lines) {
     total += l.amount;
     bySource[l.carbonSource] = (bySource[l.carbonSource] || 0) + l.amount;
