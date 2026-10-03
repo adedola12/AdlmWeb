@@ -40,6 +40,8 @@ import {
 } from "./WorkProjectSources.jsx";
 import WorkProjectLinePanel from "./WorkProjectLinePanel.jsx";
 import WorkProjectPanel from "./WorkProjectPanel.jsx";
+import TipChip from "../tips/TipChip.jsx";
+import { PROJECT_UPDATED_EVENT } from "../ada/adaCardsModel.js";
 // The full workspace. Lazy: it pulls the 3D viewer, and the tabbed page must
 // not carry three.js for a screen most visits never open.
 const WorkProjectFourD = React.lazy(() => import("./WorkProjectFourD.jsx"));
@@ -119,6 +121,24 @@ export default function WorkProjectShell({ productKey, id }) {
       alive = false;
     };
   }, [accessToken, productKey, id]);
+
+  // Ada's pricing card writes to this project from the chat panel. When it
+  // does, re-read the bill rather than go on showing the lines as unpriced.
+  React.useEffect(() => {
+    if (!accessToken || !id || !productKey) return undefined;
+    const onUpdated = (e) => {
+      const changed = String(e?.detail?.id || "");
+      const mine = String(full?._id || full?.id || "");
+      if (changed && mine && changed !== mine) return;
+      apiAuthed(`/projects/${encodeURIComponent(productKey)}/by-slug/${encodeURIComponent(id)}`, {
+        token: accessToken,
+      })
+        .then((d) => setFull(d?.project || d || null))
+        .catch(() => {});
+    };
+    window.addEventListener(PROJECT_UPDATED_EVENT, onUpdated);
+    return () => window.removeEventListener(PROJECT_UPDATED_EVENT, onUpdated);
+  }, [accessToken, productKey, id, full]);
 
   // The full document where we have it, the summary where we do not, so the
   // head still fills in while the bill is loading.
@@ -337,7 +357,14 @@ export default function WorkProjectShell({ productKey, id }) {
           {
             token: accessToken,
             method: "POST",
-            body: { rateId: pick.rateId, description: pick.description, unit: pick.unit },
+            body: {
+              rateId: pick.rateId,
+              description: pick.description,
+              unit: pick.unit,
+              // A rate in another unit: the dimension the QS confirmed. The
+              // server works the factor out itself.
+              ...(pick.convert ? { convert: pick.convert } : {}),
+            },
           },
         );
         const warnings = Array.isArray(wrote?._rateWarnings) ? wrote._rateWarnings : [];
@@ -414,7 +441,7 @@ export default function WorkProjectShell({ productKey, id }) {
     if (tab !== "rates" || !accessToken || !saveId || !productKey) return undefined;
     let live = true;
     apiAuthed(
-      `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/rate-suggestions`,
+      `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/rate-suggestions?convert=1`,
       { token: accessToken },
     )
       .then((d) => {
@@ -478,7 +505,7 @@ export default function WorkProjectShell({ productKey, id }) {
       if (!code) return [];
       try {
         const d = await apiAuthed(
-          `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/bill/${encodeURIComponent(code)}/rate-suggestions`,
+          `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/bill/${encodeURIComponent(code)}/rate-suggestions?convert=1`,
           { token: accessToken },
         );
         return Array.isArray(d?.suggestions) ? d.suggestions : [];
@@ -699,6 +726,19 @@ export default function WorkProjectShell({ productKey, id }) {
             );
           })}
         </div>
+
+        {/* One live tip for this tab (features/tips). Only on the full
+            document: the summary has no bill, and a tip read off it would
+            say "no programme" about a job that has one. Rule-based, so this
+            costs nothing per view. */}
+        {full && !fullFailed && ["overview", "bill", "rates", "pm"].includes(tab) ? (
+          <TipChip
+            project={project}
+            tab={tab}
+            canEdit={!viewOnly && project?._access?.canEdit !== false}
+            onGo={go}
+          />
+        ) : null}
 
         <div className="pj-body">
           {tab === "overview" && !fullFailed ? (

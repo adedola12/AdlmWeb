@@ -31,6 +31,11 @@ const RateUsageSchema = new mongoose.Schema(
     // The rate chosen.
     rateId: { type: String, trim: true, required: true },
     rateDescription: { type: String, trim: true, default: "" },
+    // The rate's own unit, and the dimensions that converted it to the line's
+    // (thickness, width, depth in metres; kgPerM; perItem). Kept so "price the
+    // lines like this one" can convert the same way.
+    rateUnit: { type: String, trim: true, default: "" },
+    convert: { type: mongoose.Schema.Types.Mixed, default: null },
 
     // "panel", "similar" (priced with a line the QS picked), "ada", "backfill".
     via: { type: String, trim: true, default: "panel" },

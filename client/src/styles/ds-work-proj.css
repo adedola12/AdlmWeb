@@ -956,6 +956,12 @@
 .ds .pn-similar .hint{margin-top:6px}
 .ds .pn-similar + .ds-btn{margin-top:8px}
 .ds .pn-done{margin-top:10px;font-size:12.5px;color:var(--ink)}
+/* a rate in another unit: the conversion, confirmed before it is applied */
+.ds .pn-conv{margin-top:12px;padding:11px 12px;border:1px solid var(--action);border-radius:11px;background:color-mix(in srgb,var(--action) 6%,var(--bg));display:grid;gap:8px}
+.ds .pn-conv p{margin:0;font-size:12.5px;color:var(--ink-2)}
+.ds .pn-conv p b{font-weight:500;color:var(--ink)}
+.ds .pn-conv .amt b{font-size:15px;font-variant-numeric:tabular-nums}
+.ds .pn-conv-act{display:flex;gap:8px;flex-wrap:wrap}
 .ds .pj-need-bad{margin:0 16px 10px;font-size:12px;color:var(--fb-bad,#b3261e)}
 .ds .pj-need-notes,.ds .pn-notes{margin:8px 0 0;padding-left:18px;list-style:disc}
 .ds .pj-need-notes{margin:0 16px 10px}
