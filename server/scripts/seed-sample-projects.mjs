@@ -1,7 +1,7 @@
 // Seeds the read-only sample projects (learning material) for every ADLM
 // product with a cloud project view:
 //   revit (QUIV), planswift (HERON)  four duplexes, one per foundation type
-//   mep (Revit MEP)                  the services for the same four duplexes
+//   mep (SERVIQ)                       the services for the same four duplexes
 //   civil3d (CIVIQ)                  four roads (asphalt, concrete, interlock, laterite)
 //   archicad (ArchiCAD)              the four duplexes, with their ArchiCAD BoQ versions
 // Each is a complete job: bill, budget, locked contract, certificates,
@@ -46,7 +46,7 @@ const REMOVE = flag("remove");
 const REGISTRY = {
   revit: { name: "QUIV", designs: DESIGNS, scheme: (d) => duplexScheme(d, "revit") },
   planswift: { name: "HERON", designs: DESIGNS, scheme: (d) => duplexScheme(d, "planswift") },
-  mep: { name: "Revit MEP", designs: DESIGNS, scheme: mepScheme },
+  mep: { name: "SERVIQ", designs: DESIGNS, scheme: mepScheme },
   civil3d: { name: "CIVIQ", designs: ROAD_DESIGNS, scheme: roadScheme },
   archicad: { name: "ArchiCAD", designs: DESIGNS, scheme: (d) => duplexScheme(d, "archicad") },
 };

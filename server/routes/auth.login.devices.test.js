@@ -339,7 +339,7 @@ test("MEP personal: old PC freed, the Hub bound this one: the app signs in (was 
     const old = await login(HUB_A, { productKey: "mep", headers: mepHeaders });
     assert.equal(old.status, 403);
     assert.equal(old.body.code, "DEVICE_MISMATCH");
-    assert.match(old.body.message, /^This ADLM MEP & HVAC licence is already in use on another computer: NEW-PC \(ADLM MEP & HVAC app, /);
+    assert.match(old.body.message, /^This SERVIQ licence is already in use on another computer: NEW-PC \(SERVIQ app, /);
 
     // Kill switch off: refused as before.
     await withSwitch("0", async () => {
