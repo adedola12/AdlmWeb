@@ -1410,6 +1410,25 @@ router.post("/social", authLimiter, async (req, res) => {
           lastName: identity.lastName,
           [field]: identity.subject,
           entitlements: [],
+          // THE PROVIDER HAS ALREADY VERIFIED THIS ADDRESS.
+          //
+          // util/socialIdentity.js refuses the sign-in outright when the
+          // provider reports email_verified false, so by the time we are here
+          // Google or Microsoft has confirmed the address — a stronger check
+          // than our own six-digit code, which only proves the person can read
+          // the inbox once.
+          //
+          // Omitting this was not harmless. util/emailGate.js refuses EVERY
+          // signed-in request from an unconfirmed account except the /auth
+          // ones, so a customer who signed up with Google was created
+          // unverified, never sent a code (only POST /auth/signup sends one),
+          // and then met the "confirm your email" screen asking for a code
+          // that had never been sent. They could press resend and escape, but
+          // the first thing the product did was block them. It is also why 270
+          // accounts sat unmailable: the broadcast audience requires a verified
+          // address, and on this site most sign-ups come through a provider.
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
         });
         created = true;
         // The SECOND place an account is made. A referral captured only in the
