@@ -29,7 +29,17 @@
 // leave somebody hunting for a rate they can see in RateGen; offering it would
 // let them price a line wrongly in one click.
 //
+// UNLESS IT CAN BE CONVERTED (opt-in, `convert: true`)
+//
+// With conversions on, a rate in another unit that unitConversion.js can turn
+// into the line's unit is applicable, flagged `convert` with the dimension it
+// needs (pre-filled from the line's description where it names one). The panel
+// then shows the converted figure and asks for that dimension before anything
+// is applied, and the server works the factor out again itself.
+//
 // Pure, so every rule is tested without a server.
+
+import { conversionFactor, guessDimensions } from "./unitConversion.js";
 
 /** Units agree when they normalise to the same thing. Mirrors the server's own
  *  table (server/util/rateSuggestions.js), including the spellings bills really
@@ -122,10 +132,15 @@ const haystack = (r) =>
  * @param {string} [opts.unit]  the bill line's unit; omit to skip the gate
  * @param {number} [opts.limit]
  */
-export function searchRates(items, query, { unit = "", limit = 8 } = {}) {
+export function searchRates(
+  items,
+  query,
+  { unit = "", limit = 8, convert = false, description = "" } = {},
+) {
   const q = low(query);
   const words = q.split(/\s+/).filter(Boolean);
   if (!words.length) return [];
+  const guessed = convert ? guessDimensions(description) : {};
 
   const out = [];
   for (const r of Array.isArray(items) ? items : []) {
@@ -141,6 +156,19 @@ export function searchRates(items, query, { unit = "", limit = 8 } = {}) {
     const own = isOwnRate(r);
     const rateUnit = String(r?.unit || "").trim();
     const agrees = !unit || unitsAgree(unit, rateUnit);
+    // Another unit that converts: m3 onto m2 by thickness, mm onto m, and so on.
+    let conv = null;
+    if (!agrees && convert && rateUnit) {
+      const c = conversionFactor(unit, rateUnit, guessed);
+      if (c.ok || c.code === "UNIT_NEEDS_DIMENSION") {
+        conv = {
+          rateUnit,
+          needs: c.needs || [],
+          dims: Object.fromEntries((c.needs || []).filter((n) => guessed[n]).map((n) => [n, guessed[n]])),
+          note: c.ok ? c.note : "",
+        };
+      }
+    }
     const name = nameOf(r);
     out.push({
       rateId: rateIdOf(r),
@@ -148,7 +176,8 @@ export function searchRates(items, query, { unit = "", limit = 8 } = {}) {
       unit: rateUnit,
       amount,
       own,
-      canApply: agrees,
+      canApply: agrees || Boolean(conv),
+      convert: conv,
       // Said on the row, so a rate that cannot be used explains itself rather
       // than looking broken or missing. A rate with NO unit is its own case:
       // "Measured in  — this line is m2" reads as a bug.
@@ -156,7 +185,9 @@ export function searchRates(items, query, { unit = "", limit = 8 } = {}) {
         ? own
           ? "Your own rate"
           : "ADLM library"
-        : rateUnit
+        : conv
+          ? `Converts to ${unit}${conv.note ? ` ${conv.note}` : ""}`
+          : rateUnit
           ? `Measured in ${rateUnit} — this line is ${unit}`
           : `No unit set on this rate — this line is ${unit}`,
       // Ranking only; not shown.
@@ -170,6 +201,8 @@ export function searchRates(items, query, { unit = "", limit = 8 } = {}) {
     (a, b) =>
       // A rate that can actually be applied always comes before one that cannot.
       Number(b.canApply) - Number(a.canApply) ||
+      // A rate already in the line's unit before one that needs converting.
+      Number(!b.convert) - Number(!a.convert) ||
       // A rate whose NAME says it beats one that merely sits in a section of
       // that name.
       b._inName - a._inName ||
@@ -190,6 +223,7 @@ export function searchRates(items, query, { unit = "", limit = 8 } = {}) {
       amount: r.amount,
       own: r.own,
       canApply: r.canApply,
+      convert: r.convert,
       why: r.why,
     }));
 }

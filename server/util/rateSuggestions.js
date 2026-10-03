@@ -24,6 +24,7 @@
 // Pure, so every rule is tested without a database.
 
 import { similarityScore } from "./fuzzyMatch.js";
+import { conversionFactor, guessDimensions } from "./unitConversion.js";
 
 const str = (v) => String(v || "").trim();
 const low = (v) => str(v).toLowerCase();
@@ -209,7 +210,7 @@ function describeUse(u) {
 export function suggestRatesForLine(
   item,
   rates,
-  { limit = 5, minScore = 0.45, usage = null } = {},
+  { limit = 5, minScore = 0.45, usage = null, convert = false } = {},
 ) {
   const text = billLineText(item);
   const unit = str(item?.unit);
@@ -228,17 +229,37 @@ export function suggestRatesForLine(
     if (!had || (u.exact && !had.exact) || u.uses > had.uses) used.set(u.rateId, u);
   }
 
+  // The dimensions this line's description names ("230mm", "Y12"), for a rate
+  // in another unit. Read once per line.
+  const dims = convert ? guessDimensions(text) : null;
+
   const out = [];
   for (const r of Array.isArray(rates) ? rates : []) {
     const desc = str(r?.description);
     if (!desc) continue;
 
-    // A unit mismatch is not a weaker match, it is a wrong answer.
-    if (!unitsAgree(unit, r?.unit)) continue;
-
-    const price = Number(r?.unitPrice ?? r?.totalCost ?? 0);
+    const ratePrice = Number(r?.unitPrice ?? r?.totalCost ?? 0);
     // A rate with no money in it prices nothing.
-    if (!Number.isFinite(price) || price <= 0) continue;
+    if (!Number.isFinite(ratePrice) || ratePrice <= 0) continue;
+
+    // A unit mismatch is not a weaker match, it is a wrong answer, UNLESS the
+    // caller asked for conversions and this line's own description gives the
+    // dimension that links the two units. Then the rate is offered converted,
+    // with the dimension shown, ranked below a rate in the line's own unit.
+    let conversion = null;
+    if (!unitsAgree(unit, r?.unit)) {
+      if (!dims) continue;
+      const c = conversionFactor(unit, r?.unit, dims);
+      if (!c.ok) continue;
+      conversion = {
+        rateUnit: str(r?.unit),
+        ratePrice,
+        factor: c.factor,
+        dims: Object.fromEntries(c.needs.map((n) => [n, dims[n]])),
+        note: c.note,
+      };
+    }
+    const price = conversion ? ratePrice * conversion.factor : ratePrice;
 
     const rateId = str(r?.rateId || r?.id || r?._id);
     const use = rateId ? used.get(rateId) : null;
@@ -247,16 +268,19 @@ export function suggestRatesForLine(
 
     // Used before on this exact item outranks any word match; on a near one it
     // ranks with a likely match.
-    const score = use
+    const scored = use
       ? Math.max(words, use.exact ? 0.9 + Math.min(use.uses, 9) / 100 : 0.7)
       : words;
+    // A converted rate rests on a guessed dimension, so it ranks a step lower.
+    const score = conversion ? scored * 0.9 : scored;
 
     const own = isOwnRate(r);
     out.push({
       rateId,
       description: desc,
       unit: str(r?.unit),
-      unitPrice: price,
+      unitPrice: Math.round(price * 100) / 100,
+      conversion,
       score: Math.round(score * 100) / 100,
       // The QS's own rate outranks a master one at the same score: they built
       // it, for their own prices, and it is the answer they already gave.
@@ -264,7 +288,12 @@ export function suggestRatesForLine(
       usedBefore: use
         ? { uses: use.uses, projects: use.projects?.size ?? 0, exact: use.exact }
         : null,
-      why: use ? describeUse(use) : describeMatch(words, own),
+      why: [
+        use ? describeUse(use) : describeMatch(words, own),
+        conversion ? `per ${conversion.rateUnit}, converted to ${unit} ${conversion.note}`.trim() : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
     });
   }
 
@@ -343,7 +372,11 @@ export const needsRate = (item) => !(Number(item?.rate) > 0);
  *                             hold a request open
  * @returns {{byCode: object, considered: number, unpriced: number, truncated: boolean}}
  */
-export function suggestionMapForBill(items, rates, { cap = 600, usage = null } = {}) {
+export function suggestionMapForBill(
+  items,
+  rates,
+  { cap = 600, usage = null, convert = false } = {},
+) {
   const needing = (Array.isArray(items) ? items : []).filter(needsRate);
   const lines = needing.slice(0, Math.max(0, cap));
 
@@ -354,7 +387,9 @@ export function suggestionMapForBill(items, rates, { cap = 600, usage = null } =
     // First match wins, which matters when two lines share a code: they are the
     // same line to the apply endpoint too, so a second answer would be noise.
     if (byCode[code]) continue;
-    const best = suggestRatesForLine(item, rates, { limit: 1, usage }).filter(worthOffering)[0];
+    const best = suggestRatesForLine(item, rates, { limit: 1, usage, convert }).filter(
+      worthOffering,
+    )[0];
     if (best) byCode[code] = best;
   }
 

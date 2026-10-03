@@ -99,3 +99,21 @@ test("the bill-wide map uses the history too", () => {
   const { byCode } = suggestionMapForBill(bill, rates, { usage });
   assert.equal(byCode["a.1"].rateId, "c20");
 });
+
+test("WITH CONVERSIONS ON, a rate in another unit is offered when the description gives the dimension", () => {
+  const wall = { code: "W.1", description: "Concrete grade 20 slab [L:01 GROUND | T:Generic - 230mm]", unit: "m2" };
+  const off = suggestRatesForLine(wall, rates);
+  assert.equal(off.length, 0, "conversions are opt-in; the old hard gate still holds without them");
+  const on = suggestRatesForLine(wall, rates, { convert: true });
+  const c20 = on.find((r) => r.rateId === "c20");
+  assert.ok(c20, "the m3 rate is offered against the m2 line");
+  assert.equal(c20.conversion.rateUnit, "m3");
+  assert.deepEqual(c20.conversion.dims, { thickness: 0.23 });
+  assert.equal(c20.unitPrice, Math.round(154916 * 0.23 * 100) / 100);
+  assert.match(c20.why, /per m3, converted to m2 at 230 mm thick/);
+});
+
+test("no dimension in the description, no converted offer", () => {
+  const out = suggestRatesForLine({ description: "Concrete in walls", unit: "m2" }, rates, { convert: true });
+  assert.equal(out.length, 0);
+});

@@ -337,7 +337,14 @@ export default function WorkProjectShell({ productKey, id }) {
           {
             token: accessToken,
             method: "POST",
-            body: { rateId: pick.rateId, description: pick.description, unit: pick.unit },
+            body: {
+              rateId: pick.rateId,
+              description: pick.description,
+              unit: pick.unit,
+              // A rate in another unit: the dimension the QS confirmed. The
+              // server works the factor out itself.
+              ...(pick.convert ? { convert: pick.convert } : {}),
+            },
           },
         );
         const warnings = Array.isArray(wrote?._rateWarnings) ? wrote._rateWarnings : [];

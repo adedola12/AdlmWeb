@@ -26,6 +26,7 @@ import { Bar } from "./workProjectBits.jsx";
 import { withLineElement, withLineProgress } from "./saveProject.js";
 import { applicableCount, searchRates } from "./rateSearch.js";
 import { pricedSentence, similarLines } from "./similarLines.js";
+import { conversionFactor } from "./unitConversion.js";
 import {
   actualAmountOf,
   actualQtyOf,
@@ -125,27 +126,64 @@ export default function WorkProjectLinePanel({
   // with everything ticked again.
   const [unticked, setUnticked] = React.useState(() => new Set());
   const [showAllSimilar, setShowAllSimilar] = React.useState(false);
+  // A rate in another unit, waiting for the QS to confirm its conversion.
+  const [converting, setConverting] = React.useState(null);
   React.useEffect(() => {
     setUnticked(new Set());
     setShowAllSimilar(false);
+    setConverting(null);
   }, [code]);
   const ticked = similar.filter((l) => !unticked.has(l.code));
 
   // One rate for this line and the ticked ones; one rate per line otherwise.
-  const applyRate = (r) => {
+  // `convert` carries the dimension for a rate in another unit; lines of one
+  // item share a type, so the ticked ones convert the same way.
+  const applyRate = (r, convert = null) => {
+    setConverting(null);
+    const pick = {
+      rateId: r.rateId,
+      description: r.description,
+      unit: r.unit,
+      ...(convert ? { convert } : {}),
+    };
     if (ticked.length && typeof onPriceMany === "function") {
-      const pick = { rateId: r.rateId, description: r.description, unit: r.unit };
       onPriceMany(
         [{ code, ...pick }, ...ticked.map((l) => ({ code: l.code, ...pick }))],
         "similar",
       );
       return;
     }
-    onApplyRate?.(code, r);
+    onApplyRate?.(code, { ...r, ...pick });
+  };
+
+  // A rate in another unit never applies on one click: the QS sees the
+  // conversion, and the dimension it rests on, first.
+  const choose = (r) => {
+    const conv = r.conversion || r.convert;
+    if (!conv) {
+      applyRate(r);
+      return;
+    }
+    const needs = conv.needs || Object.keys(conv.dims || {});
+    setConverting({
+      rate: r,
+      rateUnit: conv.rateUnit || r.unit,
+      ratePrice: Number(conv.ratePrice ?? r.amount ?? r.unitPrice) || 0,
+      needs,
+      values: Object.fromEntries(needs.map((n) => [n, shownDim(n, conv.dims?.[n])])),
+    });
   };
 
   const found = React.useMemo(
-    () => (library ? searchRates(library, query, { unit: unitOf(it), limit: 8 }) : []),
+    () =>
+      library
+        ? searchRates(library, query, {
+            unit: unitOf(it),
+            limit: 8,
+            convert: true,
+            description: it?.description,
+          })
+        : [],
     [library, query, it],
   );
 
@@ -311,6 +349,20 @@ export default function WorkProjectLinePanel({
             ) : null}
           </div>
         ) : null}
+        {canEdit && !priced && converting ? (
+          <ConvertBox
+            conv={converting}
+            lineUnit={unitOf(it)}
+            disabled={pricing || saving}
+            ticked={ticked.length}
+            onChange={(n, v) =>
+              setConverting((c) => (c ? { ...c, values: { ...c.values, [n]: v } } : c))
+            }
+            onApply={(dims) => applyRate(converting.rate, dims)}
+            onCancel={() => setConverting(null)}
+          />
+        ) : null}
+
         {canEdit && !priced && picks?.length ? (
           <div className="pn-rates">
             <span className="pn-rates-k">Price it from your own rates</span>
@@ -320,12 +372,12 @@ export default function WorkProjectLinePanel({
                 type="button"
                 className="pn-rate"
                 disabled={pricing || saving}
-                onClick={() => applyRate(r)}
+                onClick={() => choose(r)}
               >
                 <b>{money(r.unitPrice)}</b>
                 <span className="d">{r.description}</span>
                 <span className="w">
-                  per {r.unit} &middot; {r.why}
+                  per {r.conversion ? unitOf(it) : r.unit} &middot; {r.why}
                 </span>
               </button>
             ))}
@@ -377,7 +429,7 @@ export default function WorkProjectLinePanel({
                       // thickness and looks entirely reasonable on the bill.
                       disabled={!r.canApply || pricing || saving}
                       title={r.canApply ? undefined : r.why}
-                      onClick={() => applyRate(r)}
+                      onClick={() => choose(r)}
                     >
                       <b>{money(r.amount)}</b>
                       <span className="d">{r.description}</span>
@@ -577,6 +629,77 @@ export default function WorkProjectLinePanel({
         </button>
       </div>
     </>
+  );
+}
+
+// THE CONVERSION, SHOWN BEFORE IT IS APPLIED.
+//
+// Dimensions are typed in millimetres (what a drawing says) and sent in metres
+// (what unitConversion.js works in). The figure per line unit is recomputed
+// on every keystroke so the QS sees what a typo would do before it is applied.
+const MM_DIMS = new Set(["thickness", "width", "depth"]);
+const shownDim = (n, metres) =>
+  metres == null || metres === "" ? "" : String(MM_DIMS.has(n) ? Math.round(metres * 1000) : metres);
+const metresOf = (values) =>
+  Object.fromEntries(
+    Object.entries(values || {}).map(([n, v]) => [n, MM_DIMS.has(n) ? Number(v) / 1000 : Number(v)]),
+  );
+
+function dimLabel(n, lineUnit, rateUnit, lineIsCount) {
+  if (n === "thickness") return "Thickness (mm)";
+  if (n === "width") return "Width (mm)";
+  if (n === "depth") return "Depth (mm)";
+  if (n === "kgPerM") return "Weight (kg per metre)";
+  return lineIsCount ? `${rateUnit} in one ${lineUnit}` : `${lineUnit} in one ${rateUnit}`;
+}
+
+function ConvertBox({ conv, lineUnit, disabled, ticked, onChange, onApply, onCancel }) {
+  const dims = metresOf(conv.values);
+  const c = conversionFactor(lineUnit, conv.rateUnit, dims);
+  const lineIsCount = /^(nr|no|nos|each|ea|item|pc|pcs|piece)\.?$/i.test(String(lineUnit).trim());
+  return (
+    <div className="pn-conv" role="group" aria-label="Convert the rate">
+      <span className="pn-rates-k">Convert the rate</span>
+      <p>
+        <b>{conv.rate.description}</b> is {money(conv.ratePrice)} per {conv.rateUnit}. This line is
+        in {lineUnit}.
+      </p>
+      {conv.needs.map((n) => (
+        <label key={n} className="pn-num">
+          <span>{dimLabel(n, lineUnit, conv.rateUnit, lineIsCount)}</span>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            inputMode="decimal"
+            value={conv.values[n] ?? ""}
+            disabled={disabled}
+            onChange={(e) => onChange(n, e.target.value)}
+          />
+        </label>
+      ))}
+      {c.ok ? (
+        <p className="amt">
+          <b>{money(conv.ratePrice * c.factor)}</b> per {lineUnit}
+          {c.note ? <> &middot; {c.note}</> : null}
+        </p>
+      ) : (
+        <p className="hint">{c.message}</p>
+      )}
+      <div className="pn-conv-act">
+        <button
+          type="button"
+          className="ds-btn ds-btn-sm"
+          disabled={disabled || !c.ok}
+          onClick={() => onApply(c.needs.length ? dims : {})}
+        >
+          {ticked ? `Apply to this and ${ticked} more` : "Apply"}
+        </button>
+        <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 

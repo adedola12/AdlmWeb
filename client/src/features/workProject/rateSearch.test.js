@@ -186,3 +186,32 @@ describe("what the real library taught it", () => {
     expect(out[0].why).not.toMatch(/Measured in {2}/);
   });
 });
+
+describe("rates in another unit, with conversions on", () => {
+  const lib = [
+    { rateId: "c", description: "Concrete grade 20", unit: "m3", totalCost: 154_916 },
+    { rateId: "b", description: "Concrete blocks", unit: "m2", totalCost: 12_000 },
+    { rateId: "k", description: "Concrete reinforcement bars", unit: "kg", totalCost: 1_200 },
+  ];
+
+  it("makes a convertible rate applicable, with the dimension read off the line", () => {
+    const out = searchRates(lib, "concrete", {
+      unit: "m2",
+      convert: true,
+      description: "Lintel Concrete [L:01 | T:Generic - 230mm]",
+    });
+    const c = out.find((r) => r.rateId === "c");
+    expect(c.canApply).toBe(true);
+    expect(c.convert).toMatchObject({ rateUnit: "m3", needs: ["thickness"], dims: { thickness: 0.23 } });
+    expect(c.why).toBe("Converts to m2 at 230 mm thick");
+    // A rate already in the line's unit still comes first.
+    expect(out[0].rateId).toBe("b");
+    // kg cannot become m2.
+    expect(out.find((r) => r.rateId === "k").canApply).toBe(false);
+  });
+
+  it("leaves the old hard gate in place when conversions are off", () => {
+    const out = searchRates(lib, "concrete", { unit: "m2" });
+    expect(out.find((r) => r.rateId === "c").canApply).toBe(false);
+  });
+});

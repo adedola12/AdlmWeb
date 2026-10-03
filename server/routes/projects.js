@@ -699,6 +699,8 @@ import {
   worthOffering,
 } from "../util/rateSuggestions.js";
 import { RateUsage } from "../models/RateUsage.js";
+import { conversionFactor } from "../util/unitConversion.js";
+import { unitsAgree } from "../util/rateSuggestions.js";
 import {
   applyRateRows,
   buildRateBudgetRows,
@@ -6990,9 +6992,11 @@ async function rateSuggestionsForLine(req, res) {
     );
 
     const usage = await loadRateUsage(userId);
-    const suggestions = suggestRatesForLine(item, merged, { limit: 5, usage }).filter(
-      worthOffering,
-    );
+    const suggestions = suggestRatesForLine(item, merged, {
+      limit: 5,
+      usage,
+      convert: true,
+    }).filter(worthOffering);
     res.json({
       ok: true,
       suggestions,
@@ -7052,7 +7056,7 @@ async function rateSuggestionsForProject(req, res) {
     // Every rule — which lines, the lowercased key, the ceiling — is in
     // util/rateSuggestions.js, where it is tested without a database.
     const usage = await loadRateUsage(userId);
-    const found = suggestionMapForBill(project.items, merged, { usage });
+    const found = suggestionMapForBill(project.items, merged, { usage, convert: true });
     res.json({ ok: true, ...found, libraryCount: merged.length });
   } catch (err) {
     console.error("GET project rate-suggestions error:", err);
@@ -7100,7 +7104,8 @@ async function priceLineFromRate(req, res) {
 
     const ctx = await buildMlScheduleContext(userId);
     const unitCost = Number(req.body?.unitCost) || 0;
-    const one = priceBillLine(project, item, rate, ctx, { unitCost });
+    const convert = cleanConvert(req.body?.convert);
+    const one = priceBillLine(project, item, rate, ctx, { unitCost, convert });
     if (one.error) return res.status(422).json({ error: one.error.message, code: one.error.code });
 
     settlePricedProject(project);
@@ -7110,7 +7115,7 @@ async function priceLineFromRate(req, res) {
       code,
       rate: String(rate.description || "").slice(0, 200),
     });
-    recordRateUsage(userId, project, [{ item, rate }], "panel");
+    recordRateUsage(userId, project, [{ item, rate, convert }], "panel");
 
     return res.json({
       ...projectForClient(project, access),
@@ -7188,7 +7193,7 @@ async function priceManyFromRates(req, res) {
         code: { $in: sameAsCodes },
       })
         .sort({ createdAt: -1 })
-        .select("code rateId rateDescription unit")
+        .select("code rateId rateDescription rateUnit convert unit")
         .lean();
       for (const r of rows) {
         const k = String(r.code || "").toLowerCase();
@@ -7225,7 +7230,14 @@ async function priceManyFromRates(req, res) {
           });
           continue;
         }
-        pick = { rateId: from.rateId, description: from.rateDescription, unit: from.unit };
+        pick = {
+          rateId: from.rateId,
+          description: from.rateDescription,
+          unit: from.rateUnit || "",
+          // The same conversion the copied line was priced with. Lines of one
+          // item share a type, so they share its thickness.
+          convert: line?.convert || from.convert || null,
+        };
       }
 
       const rate = findPickedRate(merged, pick);
@@ -7233,14 +7245,15 @@ async function priceManyFromRates(req, res) {
         skipped.push({ code, reason: "That rate is not in your Rate Gen library" });
         continue;
       }
-      const one = priceBillLine(project, item, rate, ctx, {});
+      const convert = cleanConvert(pick?.convert);
+      const one = priceBillLine(project, item, rate, ctx, { convert });
       if (one.error) {
         skipped.push({ code, reason: one.error.message });
         continue;
       }
       one.warnings.forEach((w) => warnings.add(String(w)));
       priced.push(code);
-      used.push({ item, rate });
+      used.push({ item, rate, convert });
     }
 
     if (priced.length) {
@@ -7282,9 +7295,26 @@ function findBillLine(project, code) {
  * derived by summing budget rows, so filing them there would count labour
  * twice). The caller settles the project and saves it once.
  */
-function priceBillLine(project, item, rate, ctx, { unitCost = 0 } = {}) {
+function priceBillLine(project, item, rate, ctx, { unitCost = 0, convert = null } = {}) {
   const code = String(item?.code || "").trim();
-  const built = buildRateBudgetRows(item, rate, ctx.K, { priceFor: ctx.priceFor, unitCost });
+
+  // A RATE IN ANOTHER UNIT. The factor is worked out here from the two units
+  // and the dimension the QS confirmed; a factor is never taken from a client.
+  // Units that do not agree and cannot be converted are refused, because the
+  // alternative is a line priced wrong by a thickness, which looks right.
+  let scale = 1;
+  if (!unitsAgree(item?.unit, rate?.unit)) {
+    const c = conversionFactor(item?.unit, rate?.unit, convert || {});
+    if (!c.ok) return { error: { code: c.code, message: c.message } };
+    scale = c.factor;
+    if (!(Number(unitCost) > 0)) unitCost = Number(rate?.totalCost ?? rate?.unitPrice ?? 0) * scale;
+  }
+
+  const built = buildRateBudgetRows(item, rate, ctx.K, {
+    priceFor: ctx.priceFor,
+    unitCost,
+    scale,
+  });
   if (!built) {
     // Three unrelated causes used to share one message, so a line with no
     // quantity was told the RATE had no build-up, and the QS would go and
@@ -7298,9 +7328,9 @@ function priceBillLine(project, item, rate, ctx, { unitCost = 0 } = {}) {
   }
   project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, built.rows));
   project.resourceItems = sanitizeResourceItems(
-    applyResourceRows(project.resourceItems, code, buildResourcesFromRate(item, rate)),
+    applyResourceRows(project.resourceItems, code, buildResourcesFromRate(item, rate, { scale })),
   );
-  return { warnings: Array.isArray(built.warnings) ? built.warnings : [] };
+  return { warnings: Array.isArray(built.warnings) ? built.warnings : [], scale };
 }
 
 /** After one or many lines are priced: links, coverage, and the bill rates derived from the budget. */
@@ -7312,6 +7342,20 @@ function settlePricedProject(project) {
   deriveBillRatesFromBudget(project);
   reconcileItemsFromBudget(project);
   project.version = (Number(project.version) || 0) + 1;
+}
+
+/**
+ * The dimensions a client sent for a unit conversion, as plain numbers, and
+ * nothing else. conversionFactor() checks their range.
+ */
+function cleanConvert(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  for (const k of ["thickness", "width", "depth", "kgPerM", "perItem"]) {
+    const n = Number(raw[k]);
+    if (Number.isFinite(n) && n > 0) out[k] = n;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** The caller's merged rate set: master rates plus their overrides and custom rates. */
@@ -7371,7 +7415,7 @@ async function loadRateUsage(userId) {
 /** Record which rate priced which line. Fire-and-forget; never fails the pricing. */
 function recordRateUsage(userId, project, used, via) {
   const docs = (Array.isArray(used) ? used : [])
-    .map(({ item, rate }) => ({
+    .map(({ item, rate, convert }) => ({
       userId,
       projectId: project?._id || null,
       projectName: String(project?.name || "").slice(0, 200),
@@ -7381,6 +7425,8 @@ function recordRateUsage(userId, project, used, via) {
       unit: String(item?.unit || "").trim(),
       rateId: String(rate?.rateId || rate?.id || "").trim(),
       rateDescription: String(rate?.description || "").slice(0, 300),
+      rateUnit: String(rate?.unit || "").trim(),
+      convert: convert || null,
       via,
     }))
     .filter((d) => d.key && d.rateId);
