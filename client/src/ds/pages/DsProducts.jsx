@@ -4,6 +4,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import DsPromoLive from "../DsPromoLive.jsx";
+import DsGridPrice from "../DsGridPrice.jsx";
 
 export default function DsProducts() {
   const DsPromoSlot = <DsPromoLive />;
@@ -114,9 +115,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦50,000
-                </b>
+                <DsGridPrice productKey="revit" fallback={50000} />
                 {" "}/ month
               </p>
               {" "}
@@ -150,9 +149,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦12,000
-                </b>
+                <DsGridPrice productKey="planswift" fallback={12000} />
                 {" "}/ month
               </p>
               {" "}
@@ -186,9 +183,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦8,000
-                </b>
+                <DsGridPrice productKey="rategen" fallback={8000} />
                 {" "}/ month
               </p>
               {" "}
@@ -222,9 +217,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦18,000
-                </b>
+                <DsGridPrice productKey="mep" fallback={18000} />
                 {" "}/ month
               </p>
               {" "}
@@ -258,9 +251,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦2,000
-                </b>
+                <DsGridPrice productKey="qs-takeoff" fallback={2000} />
                 {" "}/ month
               </p>
               {" "}
