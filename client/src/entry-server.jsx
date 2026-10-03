@@ -67,12 +67,20 @@ async function fetchJson(url, ms = 2500) {
  * the page scores forty words and indexes as thin. Fetching the list here is
  * what turns those routes into pages about something. Each entry is
  * `path: [preloadKey, url]`, and all of them are fetched concurrently.
+ *
+ * Exported so a test can hold a server-rendered route to it. /pricing states a
+ * figure for every plan, and is only safe to render because of the entry
+ * below: without it the page would publish its hard-coded fallback figures.
  */
-const LIST_PRELOADS = {
+export const LIST_PRELOADS = {
   "/learn": ["learn:courses", `${API_BASE}/learn/courses`],
   "/trainings": ["trainings:list", `${API_BASE}/trainings`],
   "/quote": ["quote:products", `${API_BASE}/products?page=1&pageSize=200`],
   "/products": ["products:list", `${API_BASE}/products?page=1&pageSize=200`],
+  // /pricing states a figure for every plan. Rendering it without the
+  // catalogue would publish ds/custom/DsPricing's hard-coded fallback to
+  // crawlers as if it were the price list, which is worse than a thin page.
+  "/pricing": ["pricing:products", `${API_BASE}/products?page=1&pageSize=200`],
 };
 
 /**

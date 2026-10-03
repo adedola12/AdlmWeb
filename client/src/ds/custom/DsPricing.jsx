@@ -17,6 +17,7 @@ import DsPricingPage from "../pages/DsPricingPage.jsx";
 import DsCompareRow from "../DsCompareRow.jsx";
 import DsCourseLinks from "../DsCourseLinks.jsx";
 import { API_BASE } from "../../config.js";
+import { readPreloaded } from "../../lib/preload.js";
 
 const NGN = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -49,8 +50,39 @@ const PLANS = {
   civil3d: "civil3d",
 };
 
+/**
+ * GET /products -> the price map this page reads.
+ *
+ * Lifted out of the effect because the server now fetches the same payload
+ * before it renders (entry-server's LIST_PRELOADS) and has to turn it into the
+ * same map. Two copies of this loop would be two sets of prices on one page:
+ * the server's in the HTML, the browser's a moment later.
+ */
+function toPriceMap(raw) {
+  const all = Array.isArray(raw) ? raw : raw?.items || raw?.products || [];
+  const map = { ...FALLBACK };
+  for (const p of all) {
+    const q = p.price || {};
+    map[p.key] = {
+      mo: Number(q.monthlyNGN) || 0,
+      yr: Number(q.yearlyNGN) || 0,
+      // A zero install fee is a real value; only a missing field falls back.
+      install: q.installNGN == null ? FALLBACK[p.key]?.install ?? 0 : Number(q.installNGN),
+    };
+  }
+  return map;
+}
+
 export default function DsPricing() {
-  const [prices, setPrices] = React.useState(FALLBACK);
+  // What the server already fetched, when it rendered this page. Without it
+  // the first browser render would price the page from FALLBACK while the
+  // server HTML states the catalogue, React would throw the server HTML away,
+  // and the visitor would watch the prices change. Undefined on every route
+  // the server does not render, which is the normal case everywhere else.
+  const preloaded = readPreloaded("pricing:products");
+  const [prices, setPrices] = React.useState(() =>
+    preloaded ? toPriceMap(preloaded) : FALLBACK,
+  );
 
   React.useEffect(() => {
     let alive = true;
@@ -58,21 +90,9 @@ export default function DsPricing() {
       try {
         const res = await fetch(`${API_BASE}/products`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const raw = await res.json();
-        const all = Array.isArray(raw) ? raw : raw.items || raw.products || [];
-        const map = { ...FALLBACK };
-        for (const p of all) {
-          const q = p.price || {};
-          map[p.key] = {
-            mo: Number(q.monthlyNGN) || 0,
-            yr: Number(q.yearlyNGN) || 0,
-            // A zero install fee is a real value; only a missing field falls back.
-            install: q.installNGN == null ? FALLBACK[p.key]?.install ?? 0 : Number(q.installNGN),
-          };
-        }
-        if (alive) setPrices(map);
+        if (alive) setPrices(toPriceMap(await res.json()));
       } catch {
-        // Keep the fallback.
+        // Keep whatever is on screen: the preloaded catalogue, or the fallback.
       }
     })();
     return () => {

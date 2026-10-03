@@ -80,6 +80,70 @@ export const PAGE_META = {
       "Free templates and tools for quantity surveyors. Rate templates, bill of quantities formats and BIM starter files you can use on real projects.",
   },
 
+  // THE PAGES HIS NAV LINKS TO.
+  //
+  // These eleven were mounted on public paths in the same change that added
+  // them to lib/dsPublicPaths.js. Without an entry here each one falls back to
+  // the house title and the house sentence, so eleven different pages would
+  // share one search result and one WhatsApp card. src/api/meta.js reads this
+  // file for the server tags and <Seo> reads it in the browser, so one entry
+  // covers both.
+  "/pricing": {
+    title: "Software and training pricing",
+    description:
+      "What every ADLM plugin and course costs per month and per year, in naira. Install fees are listed, and multi-seat pricing is quoted on request.",
+  },
+  "/solutions/firms": {
+    title: "QS software for firms",
+    description:
+      "One rate library for every surveyor in the firm, so six people stop pricing the same item six ways. Multi-seat licensing for QS consultancies.",
+  },
+  "/solutions/professionals": {
+    title: "Software for individual surveyors",
+    description:
+      "Everything a practice has, without the practice. Buy a licence, install it, and be measuring the same afternoon. From ₦5,000 a month per tool.",
+  },
+  "/solutions/students": {
+    title: "BIM training for students",
+    description:
+      "A six-week certificated BIM and QS course, a free lesson library, and a capstone project you can show an employer. Self-paced, priced for students.",
+  },
+  "/solutions/institutions": {
+    title: "BIM training for institutions",
+    description:
+      "Chapter workshops, university programmes and departmental training, delivered on site and on your own projects. Thirty events run across Nigeria.",
+  },
+  "/how-it-works": {
+    title: "How ADLM works",
+    description:
+      "What you get when you buy an ADLM licence, and how it reaches the machines you work on. One account, the Installer Hub, and sync across products.",
+  },
+  "/ada": {
+    title: "Ada, the ADLM assistant",
+    description:
+      "Ada is the chat on this site and the assistant inside your account. She reads your own rates, gangs and projects, and nothing else on the internet.",
+  },
+  "/mobile": {
+    title: "ADLM on your phone",
+    description:
+      "The same ADLM account on your phone. Approvals, documents and your rate library, away from the desk. No second licence and nothing else to buy.",
+  },
+  "/contact": {
+    title: "Contact and support",
+    description:
+      "Reach ADLM Studio by WhatsApp or email for sales, support, training or press. Licence quotes, multi-seat pricing and demos on your own project.",
+  },
+  "/careers": {
+    title: "Careers at ADLM Studio",
+    description:
+      "Work on construction software that Nigerian quantity surveyors use every day. A small team in Lagos, building for a market we work in ourselves.",
+  },
+  "/press": {
+    title: "Press and brand assets",
+    description:
+      "Company facts, logos and brand assets for journalists and conference organisers, plus a direct press contact at ADLM Studio in Lagos, Nigeria.",
+  },
+
   // Search landing pages. Each targets one phrase and links to the product
   // that answers it.
   "/quantity-surveying-software-nigeria": {

@@ -47,6 +47,31 @@ export const DS_PUBLIC_PATHS = new Set([
   // has no trainings.html. It renders in DsShell like the rest, so the classic
   // nav and footer must not sit around it.
   "/trainings",
+
+  // THE PAGES HIS NAV ALREADY LINKED TO.
+  //
+  // His nav and footer have always offered these — Pricing, the four
+  // Solutions pages, How it works, Ada, Mobile, Contact, Careers, Press — and
+  // ds/pages/manifest.js has carried a ported page for every one of them since
+  // the port. They were never mounted on a public path, so each link resolved
+  // to nothing: the router's catch-all, on desktop and on mobile alike. On a
+  // phone that reads as a menu whose new sections do nothing, because the
+  // drawer is built from the same links (useDsBehaviours.initMobileNav) and
+  // inherits the same dead ends.
+  //
+  // Mounting them is the fix. Nothing is replaced — every path here had no
+  // route at all — so this only turns dead links live.
+  "/pricing",
+  "/solutions/firms",
+  "/solutions/professionals",
+  "/solutions/students",
+  "/solutions/institutions",
+  "/how-it-works",
+  "/ada",
+  "/mobile",
+  "/contact",
+  "/careers",
+  "/press",
 ]);
 
 /** The slug in ds/pages/manifest.js that serves a given public path. */
@@ -57,6 +82,19 @@ export const DS_PUBLIC_SLUGS = Object.freeze({
   "/learn": "learn",
   "/whats-new": "whats-new",
   "/quote": "quote",
+  // The pages his nav links to, newly mounted. The slug is his, from
+  // ds/pages/manifest.js; the path is the one his markup already writes.
+  "/pricing": "pricing",
+  "/solutions/firms": "solutions-firms",
+  "/solutions/professionals": "solutions-professionals",
+  "/solutions/students": "solutions-students",
+  "/solutions/institutions": "solutions-institutions",
+  "/how-it-works": "how-it-works",
+  "/ada": "ada",
+  "/mobile": "mobile",
+  "/contact": "contact",
+  "/careers": "careers",
+  "/press": "press",
   // login/signup are served by the WIRED pages in ds/custom, not by the
   // generated ones in ds/pages, so they have no manifest slug here.
 });

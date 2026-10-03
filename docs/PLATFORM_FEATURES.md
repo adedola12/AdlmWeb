@@ -57,6 +57,26 @@ aliases for convenience. See `server/index.js` for the full mount table.
 ## A. Marketing & company site
 
 - **Home, About, Testimonials, Support** pages; global **Nav** and **Footer**.
+- **The redesign's public pages.** Home, Products, About, Learn, What's new,
+  Quote and Trainings render Richard's design, and so do the eleven pages his
+  nav and footer link to: Pricing, the four Solutions pages (firms,
+  professionals, students, institutions), How it works, Ada, Mobile, Contact,
+  Careers and Press. Those eleven were ported with the rest but had no public
+  route until later, so every one of their links resolved to the router's
+  catch-all, on desktop and in the phone drawer alike.
+  - One list decides it: `client/src/lib/dsPublicPaths.js`. `main.jsx` mounts
+    the paths on the ported pages; `App.jsx` reads the same list to suppress
+    the classic nav and footer. A path in one and not the other stacks two
+    navigations or strips the chrome off entirely.
+  - A public marketing route is also three other files: `lib/ssrPaths.js` and
+    `routes.marketing.jsx` (server-rendered, or a crawler gets the empty
+    shell), `lib/pageMeta.js` (its own title and description, or it shares the
+    house card), and `scripts/seo-routes.mjs` (the sitemap and the IndexNow
+    ping). `src/ds/DsNavPagesSsr.test.jsx` holds all four together.
+  - `/pricing` states a figure for every plan, so `entry-server.jsx` fetches
+    the catalogue before rendering it and the page seeds from that. Without the
+    preload its hard-coded fallback figures would be published as the price
+    list.
 - **Showcase** content served from the DB: `industry-leaders`, partner
   `companies`, `testimonials`, and live `stats` counters (`/showcase/*`).
 - **Coupon banner** — a dismissible site-wide promo bar driven by the active

@@ -19,6 +19,27 @@ export const STATIC_ROUTES = [
   ["/whats-new", "weekly", "0.6"],
   ["/support", "monthly", "0.4"],
   ["/quote", "monthly", "0.4"],
+
+  // The pages the nav links to. These existed as ported pages from the day of
+  // the port and were only mounted on public paths later; until then every one
+  // of them resolved to the router's catch-all, so there was nothing to list.
+  // Now that they answer, leaving them out would be the familiar failure this
+  // file's header describes: live, absent from the sitemap, never submitted.
+  //
+  // Priorities follow what they are for. /pricing is a page a customer decides
+  // on and the four Solutions pages are the ones that carry the search phrases;
+  // /press and /careers are the two nobody searches for by name.
+  ["/pricing", "weekly", "0.9"],
+  ["/solutions/firms", "monthly", "0.8"],
+  ["/solutions/professionals", "monthly", "0.8"],
+  ["/solutions/students", "monthly", "0.8"],
+  ["/solutions/institutions", "monthly", "0.8"],
+  ["/how-it-works", "monthly", "0.7"],
+  ["/ada", "monthly", "0.6"],
+  ["/mobile", "monthly", "0.6"],
+  ["/contact", "monthly", "0.5"],
+  ["/careers", "monthly", "0.3"],
+  ["/press", "monthly", "0.3"],
 ];
 
 /** The search landing pages. Each targets one phrase and links to its product. */

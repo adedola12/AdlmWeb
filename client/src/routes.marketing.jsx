@@ -42,6 +42,29 @@ import DsLearn from "./ds/custom/DsLearn.jsx";
 import DsWhatsNew from "./ds/custom/DsWhatsNew.jsx";
 import DsTrainings from "./ds/custom/DsTrainings.jsx";
 
+// The eleven pages his nav has always linked to, mounted publicly in the same
+// change that added them to lib/dsPublicPaths.js. Ten of them are static copy:
+// no fetch, no effect, no window at module scope, which makes them the safest
+// thing in this file after the landing pages.
+//
+// /pricing is the one that needed more than a route. It states a figure for
+// every plan, so rendering it on ds/custom/DsPricing's fallback table would
+// publish those figures to crawlers as the price list. It seeds instead from
+// the catalogue the server fetches first (entry-server's LIST_PRELOADS), which
+// is also what stops hydration from replacing the prices a moment after the
+// page appears.
+import DsPricing from "./ds/custom/DsPricing.jsx";
+import DsHowItWorks from "./ds/pages/DsHowItWorks.jsx";
+import DsAda from "./ds/pages/DsAda.jsx";
+import DsMobile from "./ds/pages/DsMobile.jsx";
+import DsContact from "./ds/pages/DsContact.jsx";
+import DsCareers from "./ds/pages/DsCareers.jsx";
+import DsPress from "./ds/pages/DsPress.jsx";
+import DsSolutionsFirms from "./ds/pages/DsSolutionsFirms.jsx";
+import DsSolutionsProfessionals from "./ds/pages/DsSolutionsProfessionals.jsx";
+import DsSolutionsStudents from "./ds/pages/DsSolutionsStudents.jsx";
+import DsSolutionsInstitutions from "./ds/pages/DsSolutionsInstitutions.jsx";
+
 // The same shape main.jsx mounts, minus the Suspense it does not need here.
 const dsPublic = (Page) => (
   <DsShell>
@@ -88,6 +111,18 @@ export const marketingRoutes = [
       { path: "whats-new", element: dsPublic(DsWhatsNew) },
       { path: "whats-new/:slug", element: <WhatsNewProduct /> },
       { path: "support", element: <Support /> },
+
+      { path: "pricing", element: dsPublic(DsPricing) },
+      { path: "solutions/firms", element: dsPublic(DsSolutionsFirms) },
+      { path: "solutions/professionals", element: dsPublic(DsSolutionsProfessionals) },
+      { path: "solutions/students", element: dsPublic(DsSolutionsStudents) },
+      { path: "solutions/institutions", element: dsPublic(DsSolutionsInstitutions) },
+      { path: "how-it-works", element: dsPublic(DsHowItWorks) },
+      { path: "ada", element: dsPublic(DsAda) },
+      { path: "mobile", element: dsPublic(DsMobile) },
+      { path: "contact", element: dsPublic(DsContact) },
+      { path: "careers", element: dsPublic(DsCareers) },
+      { path: "press", element: dsPublic(DsPress) },
 
       ...landingRoutes,
 

@@ -40,6 +40,23 @@ export const SSR_PATHS = [
   // not depend on the route being server-rendered. Put it back when the builder
   // renders without touching a hook outside render.
 
+  // The pages his nav links to. Ten are static copy. The eleventh, "/pricing",
+  // states a figure for every plan, so it is only safe here because
+  // entry-server fetches the catalogue before rendering it (LIST_PRELOADS) and
+  // ds/custom/DsPricing seeds from that. Take the preload away and this line
+  // has to go with it, or the fallback figures become the published price list.
+  "/pricing",
+  "/solutions/firms",
+  "/solutions/professionals",
+  "/solutions/students",
+  "/solutions/institutions",
+  "/how-it-works",
+  "/ada",
+  "/mobile",
+  "/contact",
+  "/careers",
+  "/press",
+
   // Search landing pages
   "/quantity-surveying-software-nigeria",
   "/bim-software-nigeria",

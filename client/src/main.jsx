@@ -335,6 +335,31 @@ const router = createBrowserRouter([
       { path: "whats-new", element: dsPublic("whats-new") },
       { path: "whats-new/:slug", element: <WhatsNewProduct /> },
 
+      // THE REST OF HIS PUBLIC SITE.
+      //
+      // His nav and footer linked to all of these from the day they were
+      // ported, and manifest.js has had a page for each of them just as long —
+      // but only at /preview/<slug>, behind the staff gate. With no public
+      // route the links fell through to the catch-all, so Pricing, Solutions,
+      // How it works, Ada, Mobile, Contact, Careers and Press did nothing when
+      // tapped. The mobile drawer is built from those same links, which is why
+      // it looked like the phone menu had stopped pulling the new build.
+      //
+      // Paired with lib/dsPublicPaths.js, which has to list every one of these
+      // or his nav renders underneath the classic one. The comment in that file
+      // spells out why the two lists cannot drift.
+      { path: "pricing", element: dsPublic("pricing") },
+      { path: "solutions/firms", element: dsPublic("solutions-firms") },
+      { path: "solutions/professionals", element: dsPublic("solutions-professionals") },
+      { path: "solutions/students", element: dsPublic("solutions-students") },
+      { path: "solutions/institutions", element: dsPublic("solutions-institutions") },
+      { path: "how-it-works", element: dsPublic("how-it-works") },
+      { path: "ada", element: dsPublic("ada") },
+      { path: "mobile", element: dsPublic("mobile") },
+      { path: "contact", element: dsPublic("contact") },
+      { path: "careers", element: dsPublic("careers") },
+      { path: "press", element: dsPublic("press") },
+
       // Online trainings
       {
         path: "trainings",
