@@ -13,8 +13,9 @@ import { Link } from "react-router-dom";
 import { GUIDES } from "../data/guides.js";
 import { useFeedback } from "./feedback/feedbackContext.js";
 
-// His order: the whole suite first, then the Hub, then each product.
-const ORDER = ["suite", "installer-hub", "quiv", "rategen", "complete"];
+// His order: the whole suite first, then getting started and the Hub, then
+// each product.
+const ORDER = ["suite", "getting-started", "installer-hub", "quiv", "heron", "rategen", "mep", "timepro", "cloud"];
 const LIST = ORDER.map((id) => GUIDES.find((g) => g.id === id)).filter(Boolean);
 
 const icon = (name) => (
