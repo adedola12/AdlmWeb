@@ -22,6 +22,7 @@ import {
   getProjectPeriodReport,
   getProjectTipsForAgent,
 } from "./agentUserData.js";
+import { getRoomFinishes } from "./agentRoomFinishes.js";
 import { watToday } from "./reportPeriod.js";
 import {
   aiServiceEnabled,
@@ -247,6 +248,37 @@ const ACCOUNT_TOOLS = [
         },
       },
       required: ["projectName"],
+    },
+  },
+  {
+    name: "get_room_finishes",
+    description:
+      "Get the PER-ROOM finishes QUIV measured from the Revit rooms of ONE of the " +
+      "logged-in user's projects (their own or shared with them): each room's " +
+      "number, name, level, floor finish, floor area (m2) and skirting length (m), " +
+      "plus totals and a room count. Use for any room or location question: " +
+      "'floor area and skirting for the toilets', 'tiles in the bathrooms', " +
+      "'how much skirting on the ground floor', 'area of room G01'. Omit `project` " +
+      "when the user is asking about the project they have open.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project: {
+          type: "string",
+          description:
+            "The project name (or closest phrase) or id. Omit to use the project the user has open.",
+        },
+        room: {
+          type: "string",
+          description:
+            "Optional room filter matched against room name or number, e.g. 'toilet', 'bathrooms', 'G01', 'toilets and stores'. Omit for every room.",
+        },
+        level: {
+          type: "string",
+          description: "Optional level filter, e.g. 'Ground Floor', 'Level 1'. Omit for every level.",
+        },
+      },
+      additionalProperties: false,
     },
   },
 ];
@@ -480,6 +512,7 @@ This visitor is LOGGED IN, so you can also act as their account assistant using 
 - get_resource_quantity — the TOTAL QUANTITY and cost of one material, labour trade or resource (cement, sand, rebar, blocks, formwork, masons…) in one project or across all of them. This is the tool for ANY "how much / how many X do I need" question.
 - get_project_bill — the bill of quantities work items (qty, unit, rate, amount, % done), optionally filtered by a search phrase. Use for "what's in my bill", "rate for X", "biggest items".
 - get_project_budget — the whole Material & Labour breakdown for one project: total cost, Material vs Labour vs Plant split, procured vs still-to-buy, biggest resources. Use for "material budget", "what do I still need to buy".
+- get_room_finishes — per-room floor finish, floor area (m2) and skirting (m) measured from the Revit rooms in QUIV, with totals, filtered by room name/number and level. Use for ANY question about a room or location ("floor area and skirting for the toilets", "tiles in the bathrooms", "skirting on the ground floor"), NOT get_project_bill. Answer per room, then the totals. If it says the project has no room data, relay that it must be re-saved from QUIV 4.0.2 or later; never estimate room figures.
 Rules for account answers:
 - ALWAYS call the relevant tool and quote its numbers exactly — NEVER invent or estimate project figures, values, quantities or dates.
 - You CAN read their bill lines and their material & labour lines — never tell a user you have no access to them. If a tool finds nothing, say what was searched and ask how the item is worded in their bill.
@@ -706,6 +739,8 @@ async function handleAccountTool(name, input, ctx) {
       });
     if (name === "get_project_bill")
       return await getProjectBill(ctx.user._id, input?.projectName, input?.search, ctx.page);
+    if (name === "get_room_finishes")
+      return await getRoomFinishes(ctx.user._id, input, ctx.page);
 
     // ── Estimator & PM ──
     if (name === "propose_project_pricing")

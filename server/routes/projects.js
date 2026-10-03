@@ -718,6 +718,7 @@ import {
 } from "../util/finalAccountMath.js";
 import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
 import { carryCloudRateLocks } from "../util/cloudRateLocks.js";
+import { sanitizeRoomFinishes } from "../util/roomFinishes.js";
 import {
   sanitizeResourceItems,
   applyResourceRows,
@@ -886,6 +887,17 @@ function mapEntitlementParam(req, _res, next) {
 
 function requestedProductKey(req) {
   return normalizeProductKey(req.productKeyOriginal ?? req.params.productKey);
+}
+
+// QUIV's per-room finishes (QUIV 4.0.2+). Revit take-offs only: no other
+// plugin measures rooms, and the "-materials" twin never carries them.
+// Returns undefined when the body did not send the list, which every save
+// path reads as "keep what is stored" - an older QUIV, or a website save of
+// the bill, must not wipe the rooms.
+export function roomFinishesFromBody(productKey, body) {
+  if (productKey !== "revit") return undefined;
+  const list = body?.roomFinishes;
+  return Array.isArray(list) ? sanitizeRoomFinishes(list) : undefined;
 }
 
 // ── Collaborator access resolution ───────────────────────────────────────
@@ -2482,6 +2494,8 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
       project.valuationSettings || DEFAULT_VALUATION_SETTINGS,
     );
   }
+  const rooms = roomFinishesFromBody(productKey, payload);
+  if (rooms) project.roomFinishes = rooms;
 
   if (!created) project.version += 1;
   await project.save();
@@ -2587,6 +2601,7 @@ async function createProject(req, res) {
             : true,
       checklistCompositeKeys: normalizeChecklistKeys(checklistCompositeKeys),
       valuationSettings: normalizeValuationSettings(valuationSettings),
+      roomFinishes: roomFinishesFromBody(productKey, req.body) || [],
     });
 
     recordActivity(req, project, ACT.PROJECT_CREATED, "Created the project", {
@@ -2668,6 +2683,8 @@ async function saveProjectFull(req, res) {
         ...sharedMeta,
         items: Array.isArray(takeoffItems) ? takeoffItems : [],
         origin: origin || "",
+        // Rooms belong to the take-off only, never the materials twin.
+        roomFinishes: body.roomFinishes,
       },
     });
 
@@ -3938,6 +3955,11 @@ async function updateProject(req, res) {
     }
 
     if (name !== undefined) project.name = String(name).trim();
+
+    // Sent: replaced whole (QUIV sends every room on each save). Not sent:
+    // kept, so a website edit or an older QUIV never wipes the rooms.
+    const rooms = roomFinishesFromBody(productKey, req.body);
+    if (rooms) project.roomFinishes = rooms;
 
     if (Array.isArray(items)) {
       // A rate the QS set on the website keeps its lock through a plugin re-save
