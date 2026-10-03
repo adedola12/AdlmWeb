@@ -559,6 +559,7 @@ describe("pricing a line by searching for a rate by name", () => {
     { id: "m1", rateId: "m1", source: "master", description: "Reinforced concrete grade 25 in columns", unit: "m3", totalCost: 72_000 },
     { id: "c1", rateId: null, customRateId: "c1", source: "user-custom", description: "Reinforced concrete grade 25 in columns", unit: "m3", totalCost: 78_400 },
     { id: "m2", rateId: "m2", source: "master", description: "Reinforced concrete in slabs", unit: "m2", totalCost: 9_000 },
+    { id: "k1", rateId: "k1", source: "master", description: "High yield bars", unit: "kg", totalCost: 1_200 },
   ];
 
   const draw = (props = {}) =>
@@ -610,27 +611,41 @@ describe("pricing a line by searching for a rate by name", () => {
     expect(onApplyRate.mock.calls[0][1].rateId).toBe("c1");
   });
 
-  it("SHOWS a rate in another unit but will not apply it", async () => {
+  it("a rate in another unit asks for the dimension, shows the figure, then applies", async () => {
+    // An m2 slab rate on an m3 line converts by thickness. Nothing in "Reinforced
+    // concrete columns" names one, so the QS types it; nothing applies until then.
     const onApplyRate = vi.fn();
     const c = draw({ onApplyRate });
     fireEvent.change(box(c), { target: { value: "reinforced concrete" } });
     await waitFor(() => expect(within(c).getByText(/9,000/)).toBeTruthy());
-    const wrong = within(c).getByText(/9,000/).closest("button");
-    expect(wrong.disabled).toBe(true);
-    expect(wrong.textContent).toMatch(/Measured in m2 — this line is m3/);
-    fireEvent.click(wrong);
+    const other = within(c).getByText(/9,000/).closest("button");
+    expect(other.disabled).toBe(false);
+    expect(other.textContent).toMatch(/Converts to m3/);
+    fireEvent.click(other);
     expect(onApplyRate).not.toHaveBeenCalled();
+    const conv = c.querySelector(".pn-conv");
+    const apply = within(conv).getByText("Apply");
+    expect(apply.disabled).toBe(true);
+    fireEvent.change(within(conv).getByLabelText("Thickness (mm)"), { target: { value: "150" } });
+    // 9,000 per m2 at 150 mm is 60,000 per m3.
+    expect(conv.textContent).toMatch(/60,000/);
+    fireEvent.click(within(conv).getByText("Apply"));
+    expect(onApplyRate).toHaveBeenCalledTimes(1);
+    expect(onApplyRate.mock.calls[0][1]).toMatchObject({ rateId: "m2", convert: { thickness: 0.15 } });
   });
 
-  it("says when nothing matches, and when nothing matches IN THIS UNIT", async () => {
-    const c = draw();
+  it("still refuses a unit nothing converts to, and says so", async () => {
+    const onApplyRate = vi.fn();
+    const c = draw({ onApplyRate });
     fireEvent.change(box(c), { target: { value: "scaffolding" } });
     await waitFor(() => expect(within(c).getByText(/Nothing in your library matches/)).toBeTruthy());
 
-    fireEvent.change(box(c), { target: { value: "slabs" } });
-    await waitFor(() =>
-      expect(within(c).getByText(/None of these is in m3/)).toBeTruthy(),
-    );
+    // A rate per kg cannot price a line in m3: no single dimension links them.
+    fireEvent.change(box(c), { target: { value: "bars" } });
+    await waitFor(() => expect(within(c).getByText(/None of these is in m3/)).toBeTruthy());
+    const wrong = within(c).getByText(/1,200/).closest("button");
+    expect(wrong.disabled).toBe(true);
+    expect(wrong.textContent).toMatch(/Measured in kg — this line is m3/);
   });
 
   it("does NOT claim there are no rates when the library could not be read", async () => {
@@ -654,5 +669,128 @@ describe("pricing a line by searching for a rate by name", () => {
       <WorkProjectLinePanel project={project()} index={1} canEdit={false} onSearchRates={vi.fn()} />,
     ).container;
     expect(within(c).queryByPlaceholderText(/Search your rates/)).toBe(null);
+  });
+});
+
+describe("pricing the same item on every level at once", () => {
+  const lintel = (lv, over = {}) => ({
+    code: `L${lv}`,
+    description: `Blockwork - Lintel Concrete [L:0${lv} FLOOR ${lv} | T:Generic - 230mm]`,
+    qty: lv,
+    unit: "m3",
+    rate: 0,
+    category: "Frames",
+    ...over,
+  });
+  const bill = {
+    items: [lintel(1), lintel(2), lintel(3), lintel(4, { rate: 9000 }), lintel(5, { unit: "m2" })],
+  };
+  const pick = { rateId: "c20", description: "Concrete grade 20", unit: "m3", unitPrice: 154916, why: "You used this on 3 lines" };
+
+  it("lists the unpriced lines of the same item, all ticked", async () => {
+    const c = render(
+      <WorkProjectLinePanel project={bill} index={0} canEdit onFetchRates={vi.fn().mockResolvedValue([pick])} onPriceMany={vi.fn()} />,
+    ).container;
+    const boxes = [...c.querySelectorAll(".pn-similar input[type=checkbox]")];
+    // L2 and L3: L4 is priced and L5 is in m2.
+    expect(boxes).toHaveLength(2);
+    expect(boxes.every((b) => b.checked)).toBe(true);
+  });
+
+  it("prices this line and the ticked ones in one call", async () => {
+    const onPriceMany = vi.fn();
+    const onApplyRate = vi.fn();
+    const c = render(
+      <WorkProjectLinePanel
+        project={bill}
+        index={0}
+        canEdit
+        onFetchRates={vi.fn().mockResolvedValue([pick])}
+        onApplyRate={onApplyRate}
+        onPriceMany={onPriceMany}
+      />,
+    ).container;
+    // Untick L3.
+    fireEvent.click(c.querySelectorAll(".pn-similar input")[1]);
+    await waitFor(() => expect(c.querySelector(".pn-rate")).toBeTruthy());
+    fireEvent.click(c.querySelector(".pn-rate"));
+    expect(onApplyRate).not.toHaveBeenCalled();
+    const [lines, via] = onPriceMany.mock.calls[0];
+    expect(via).toBe("similar");
+    expect(lines.map((l) => l.code)).toEqual(["L1", "L2"]);
+    expect(lines[1]).toMatchObject({ rateId: "c20", unit: "m3" });
+  });
+
+  it("falls back to the single-line call when every line is unticked", async () => {
+    const onPriceMany = vi.fn();
+    const onApplyRate = vi.fn();
+    const c = render(
+      <WorkProjectLinePanel project={bill} index={0} canEdit onFetchRates={vi.fn().mockResolvedValue([pick])} onApplyRate={onApplyRate} onPriceMany={onPriceMany} />,
+    ).container;
+    c.querySelectorAll(".pn-similar input").forEach((b) => fireEvent.click(b));
+    await waitFor(() => expect(c.querySelector(".pn-rate")).toBeTruthy());
+    fireEvent.click(c.querySelector(".pn-rate"));
+    expect(onPriceMany).not.toHaveBeenCalled();
+    expect(onApplyRate).toHaveBeenCalledWith("L1", pick);
+  });
+
+  it("copies a priced line's rate to the rest with one button", () => {
+    const onPriceMany = vi.fn();
+    const priced = { items: [lintel(1, { rate: 154916 }), lintel(2), lintel(3)] };
+    const c = render(<WorkProjectLinePanel project={priced} index={0} canEdit onPriceMany={onPriceMany} />).container;
+    fireEvent.click(within(c).getByText("Price 2 similar lines at this rate"));
+    expect(onPriceMany).toHaveBeenCalledWith(
+      [
+        { code: "L2", sameAs: "L1" },
+        { code: "L3", sameAs: "L1" },
+      ],
+      "similar",
+    );
+  });
+
+  it("says how many were priced and why any were skipped", () => {
+    const c = render(
+      <WorkProjectLinePanel
+        project={bill}
+        index={0}
+        canEdit
+        onPriceMany={vi.fn()}
+        pricedNote={{ priced: ["L1", "L2"], skipped: [{ code: "L3", reason: "That rate is not in your Rate Gen library" }] }}
+      />,
+    ).container;
+    expect(within(c).getByText("Priced 2 lines. 1 line skipped.")).toBeTruthy();
+    expect(within(c).getByText("That rate is not in your Rate Gen library")).toBeTruthy();
+  });
+
+  it("offers a view-only reader nothing to tick", () => {
+    const c = render(<WorkProjectLinePanel project={bill} index={0} />).container;
+    expect(c.querySelector(".pn-similar")).toBe(null);
+  });
+});
+
+describe("a suggested rate in another unit", () => {
+  it("opens the conversion pre-filled from the description, and shows the line's unit on the card", async () => {
+    const onApplyRate = vi.fn();
+    const wall = {
+      items: [{ code: "W1", description: "Wall [L:01 | T:Generic - 230mm]", qty: 10, unit: "m2", rate: 0, category: "Frames" }],
+    };
+    const pick = {
+      rateId: "c20",
+      description: "Concrete grade 20",
+      unit: "m3",
+      unitPrice: 35630.68,
+      why: "per m3, converted to m2 at 230 mm thick",
+      conversion: { rateUnit: "m3", ratePrice: 154916, factor: 0.23, dims: { thickness: 0.23 }, note: "at 230 mm thick" },
+    };
+    const c = render(
+      <WorkProjectLinePanel project={wall} index={0} canEdit onFetchRates={vi.fn().mockResolvedValue([pick])} onApplyRate={onApplyRate} />,
+    ).container;
+    await waitFor(() => expect(c.querySelector(".pn-rate")).toBeTruthy());
+    expect(c.querySelector(".pn-rate").textContent).toMatch(/per m2/);
+    fireEvent.click(c.querySelector(".pn-rate"));
+    const conv = c.querySelector(".pn-conv");
+    expect(within(conv).getByLabelText("Thickness (mm)").value).toBe("230");
+    fireEvent.click(within(conv).getByText("Apply"));
+    expect(onApplyRate.mock.calls[0][1]).toMatchObject({ rateId: "c20", unit: "m3", convert: { thickness: 0.23 } });
   });
 });
