@@ -46,8 +46,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. PN rating not stated in any listing. Abuja price. The Lagos 25mm listing at N6,000 states a 14 m length, which looks like a typo; if it is a 4 m length it would be N1,500/m. Verify length with sellers."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 2100,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -81,8 +83,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Both Abuja sellers; PN rating not stated (3mm wall on 32mm is nearer PN16 than PN20). No Lagos 32mm pipe listing found."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 2300,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -128,8 +132,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single priced-per-length listing (Abuja). In Nigerian trade '2 inch' PPR usually means 63mm, so the Lagos N17,000 '2\"' listing is probably 63mm and is not used here."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 2368,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -170,8 +176,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Lagos and Abuja prices agree closely per length (N15,000-N16,000); the 'high' assumes the Lagos lengths are also 3.8 m, which is not stated."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 3947,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -217,8 +225,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Only two listings and a wide spread; N150 may be a bulk trade price. Check whether either price is per pack."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 475,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -245,8 +255,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 350,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -285,8 +297,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing, Port Harcourt."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 500,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -345,8 +359,10 @@
    "inMaster": true,
    "masterPrice": 1600,
    "researched": null,
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 1600,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -380,8 +396,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. The N25,000 Lagos item is a 'pressure' valve, probably heavier duty than a domestic isolating valve. Domestic brands may be cheaper."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 10000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -408,8 +426,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing; cheaper than the 1/2\" listing, so the two sizes are not consistent. Get a supplier price list."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 5000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -436,8 +456,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 10000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -478,8 +500,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Size not stated but these are the standard 1/2\" WC/basin angle stops. No Lagos listing seen."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 2500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -520,8 +544,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. 40cm length not confirmed for any listing."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 1900,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -548,8 +574,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing with stated length. Semi-thick grade costs more per metre than the thin 110mm waste pipe below; check which grade the rate library assumes."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 2115,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -602,8 +630,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Only the Abuja listing states a length. Lagos N4,000 and Ibadan N6,500 per length are in the same range. 110mm pressure-class pipes were listed at N36,000-N45,000 per length (Lagos), so this price is the thin drainage grade only."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 4000,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -637,8 +667,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Proxy: the listing is 150mm (Nigerian '6 inch'), not 160mm. Another Surulere 6\" listing was N7,500, also with no length."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 4375,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -696,8 +728,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Thin drainage grade; price is low, so it may be a trade/bulk price."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 3500,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -757,8 +791,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. No listing states 500ml. The 'small' Topgit tin's volume is unverified; scaling the 250ml (N2,500) and 1kg (N15,000) tins gives roughly N5,000-N7,500 for 500ml."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 6500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -792,8 +828,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. "
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 600,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -851,8 +889,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Plastic trap price is for the trap; whether the waste outlet is included is not stated. Chrome/designer traps list at N35,000-N86,000."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 3500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -900,8 +940,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. The higher prices are anti-snake/non-return types. A plain rigid connector is near the low end."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 5000,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -954,8 +996,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Entry-level Chinese imports. Complete sets that include a basin and pedestal list at N78,000-N86,000 (Vstar, Mersine Corine), and executive/one-piece sets at N200,000-N385,000."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 75000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -996,8 +1040,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Wide spread. Designer one-piece pedestal basins list at N220,000-N250,000 and are excluded."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 70000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1045,8 +1091,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Whether the flush valve is included is not stated."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 135000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1080,8 +1128,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Other plain tubs (size not stated) were N400,000-N500,000. These look like freestanding/premium tubs; a basic built-in panel bath may be cheaper, but no such listing was seen."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 440000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1129,8 +1179,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. "
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 47000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1178,8 +1230,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. "
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 50000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1227,8 +1281,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Derived: no listing sold a pair of hot/cold pillar taps, and several listings are single-lever basin taps rather than true pillar taps."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 25500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1276,8 +1332,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Jiji reports most of 1,509 basin mixer ads in the N30,000-N63,000 band; Lagos listings sit lower than Abuja ones. Consider about N50,000 for Lagos."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 67500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1325,8 +1383,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Jiji's price bands put more ads in N65,000-N160,000 (228) than N31,000-N65,000 (136), so N35,000 is an entry-level set. Pick a mid-range spec before using it."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 35000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1360,8 +1420,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Taken from Jiji search-results page. Lagos price N125,000. Older blog figures (N38,000-N60,000, nigerianqueries.com) are outdated and not used."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 102500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1395,8 +1457,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Both from Lagos Orile sellers."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 137500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1437,8 +1501,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. "
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 300000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1465,8 +1531,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Single listing. For scale: Ariston 80L was N280,000 and 150L N740,000 at the same market."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 450000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1507,8 +1575,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Blog list (nigerianqueries.com, dated 28 Aug 2026) still shows N33,500-N38,500, which is clearly stale and is not used. Delivery is extra."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 145000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1563,8 +1633,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Lagos is cheaper than Abuja and Port Harcourt."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 178000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1612,8 +1684,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Excludes the 'Geepee Robust' N880,000 premium line."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 520000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1661,8 +1735,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Chinese-brand pumps (Springdab, Oceandab, Interdab, Ingco). An Italian brand such as Pedrollo would cost more; none was listed."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 80000,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1703,8 +1779,10 @@
     ],
     "notes": "Jiji listings show only 'posted N hours ago' (boosted re-posts), so date is the access date. Brands not stated; Abuja prices. Lagos listings were AC/DC solar-hybrid pumps at N295,000-N480,000, which is a different spec. Cable and control box may not be included."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 229000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1745,8 +1823,10 @@
     ],
     "notes": "Two price bands: Jiji market sellers ~N300-350/m, Jumia ~N580-750/m. Jumia shows several near-duplicate N58,000 listings; counted once. Check the price is for a full-gauge 100 m coil."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 350,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1794,8 +1874,10 @@
     ],
     "notes": "A search snippet also showed a Jiji Coleman 2.5mm coil at N85,000 (included)."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 580,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1829,8 +1911,10 @@
     ],
     "notes": "Only two listings, far apart. Coil length assumed 100 m (standard pack); not stated on Jiji."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 1154,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1864,8 +1948,10 @@
     ],
     "notes": "Only two listings; the Jiji one is from Port Harcourt, not Lagos."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 1726,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1906,8 +1992,10 @@
     ],
     "notes": "Jumia has two near-identical N350,000 listings; counted once."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 2180,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1955,8 +2043,10 @@
     ],
     "notes": "The per-metre Alaba listing has since been removed; its price comes from the search-result snippet only."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 3825,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -1983,8 +2073,10 @@
     ],
     "notes": "SUSPECT: only one listing, titled \"26mm\" (taken to mean 25mm). It works out at about the same per metre as 16mm, which cannot be right. The copper in 100 m of 25mm2 alone is worth roughly this much. Needs a phone quote."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 3800,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2018,8 +2110,10 @@
     ],
     "notes": "Both listings have expired (404/410), so the prices come from search snippets only. These are flexible single core cables of unknown brand, not Coleman or Nigerchin."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 8000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2060,8 +2154,10 @@
     ],
     "notes": "These are flexible cables from a generic/C-Divine brand. Jiji does not show the unit clearly, so per metre is inferred from the price level."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 9700,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2095,8 +2191,10 @@
     ],
     "notes": "Only one current listing. The blog figure of N3,700-5,000/m is below the value of the copper in the cable, so it is treated as stale and excluded."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 17000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2137,8 +2235,10 @@
     ],
     "notes": "Excluded an aluminium (AL/XLPE) 25mm 4-core listing at N10,000. The listing bodies mention drum lengths, but the prices are per metre."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 26000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2172,8 +2272,10 @@
     ],
     "notes": ""
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 32500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2221,8 +2323,10 @@
     ],
     "notes": "The blog figure of N7,800-8,500/m (nigerianqueries, Aug 2026) is far below every listing and is excluded as stale."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 47000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2299,8 +2403,10 @@
     ],
     "notes": "No branded mid-range (Schneider/Legrand/MK) 1-gang 1-way plate switch was found with a price. The nigerianqueries blog lists N800-1,100, which is budget Chinese stock."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 3000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2341,8 +2447,10 @@
     ],
     "notes": "The price used is a Panasonic 2-gang 2-way switch, which also serves for 1-way wiring. No 2-gang 1-way listing was found."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 6500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2383,8 +2491,10 @@
     ],
     "notes": "There is a wide gap between generic stock (N1,800-2,000) and branded switches (N6,500-8,500). For a mid-range specification, about N6,500 (Panasonic) may be the better rate."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 4250,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2418,8 +2528,10 @@
     ],
     "notes": "The sources agree closely, with Schneider Vivace and Panasonic both around N10,000."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 9800,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2453,8 +2565,10 @@
     ],
     "notes": ""
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 5200,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2488,8 +2602,10 @@
     ],
     "notes": ""
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 9000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2523,8 +2639,10 @@
     ],
     "notes": "The nigerianqueries blog lists a 6x6 cooker unit at N6,500-8,500, which looks stale."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 18250,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2558,8 +2676,10 @@
     ],
     "notes": "Most listings do not say whether MCBs are included. We assumed they are empty boards and added MCBs (see the Single pole MCB item). The N15,000 listing does include MCBs. Schneider/ABB D4 boards at N115,000-120,000 were excluded as premium."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 46250,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2593,8 +2713,10 @@
     ],
     "notes": "Low and high are the board-only range. MCB inclusion is not stated, so we assumed the board is empty and added MCBs."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 77000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2621,8 +2743,10 @@
     ],
     "notes": "Two of the four listings are Schneider boards, which pushes the median up. Low and high are the board-only range. MCBs are assumed not included."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 128500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2663,8 +2787,10 @@
     ],
     "notes": "It is unclear whether \"12-way\" here means single-phase 12-way or D4 TPN. If it means a single-phase board, use the Schneider N195,000 as the upper bound."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 109000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2691,8 +2817,10 @@
     ],
     "notes": "Only two listings. It is not stated whether the Oxford board at N90,000 includes MCBs."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 130000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2726,8 +2854,10 @@
     ],
     "notes": "The listings do not say whether MCBs are included. If the Havells boards do include them, the rate is about N113,750. Low and high are the board-only range."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 221750,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2761,8 +2891,10 @@
     ],
     "notes": "Several listings are outside the 10-32A range but in the same price class. Very cheap branded listings on Jiji may be counterfeit."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 4500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2796,8 +2928,10 @@
     ],
     "notes": "The rate is the Hager 2-pole 63A listing. Schneider and ABB RCCBs list at N25,000-27,000."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 12000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2831,8 +2965,10 @@
     ],
     "notes": "Priced for the enclosed 4-pole switch normally used in building services. A 2-pole knife-type changeover costs only about N8,000-24,000. Confirm which type the rate is for."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 120000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2859,8 +2995,10 @@
     ],
     "notes": "Generic panels cost N13,500-19,000, branded ones (Ansell/Philips) N35,000-43,000. Wattage is not stated."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 35000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2894,8 +3032,10 @@
     ],
     "notes": "The range is very wide, from glass \"POP\" lights to adjustable anti-glare COB fittings."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 9500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2934,8 +3074,10 @@
     ],
     "notes": "The wattage is not stated on most listings (typically 18-20W). Powertec is the branded option at the top of the range."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 4500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2962,8 +3104,10 @@
     ],
     "notes": "Prices split into two groups: unbranded at N2,200-5,000 and branded/IP65 at N15,000-24,000. We used the lower end of the mid-range group. The price team should choose."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 15000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -2990,8 +3134,10 @@
     ],
     "notes": "Solar and UV floodlights were excluded."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 42000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3025,8 +3171,10 @@
     ],
     "notes": "AC/DC solar fans (N39,000-62,000) and Panasonic (N135,000) were excluded."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 35000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3060,8 +3208,10 @@
     ],
     "notes": "Xpelair at N170,000 was excluded as premium."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 30000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3095,8 +3245,10 @@
     ],
     "notes": "Includes both wall and ceiling-duct types."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 43000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3130,8 +3282,10 @@
     ],
     "notes": "Rods at N5,000-8,000 are probably thin copper-coated steel. A genuine 16mm copper-bonded rod may cost much more (one listing at N45,000). Check the specification."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 10400,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3158,8 +3312,10 @@
     ],
     "notes": "Price is for a plastic/polymer pit. A 400x400 concrete chamber costs about N75,000."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 15000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3205,8 +3361,10 @@
     ],
     "notes": "Priced as PVC trunking. If the specification is galvanised steel, use about N5,833/m. Only one listing for each material."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 1111,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3247,8 +3405,10 @@
     ],
     "notes": "Excludes installation. Some listings include an installation kit. naijatechguide's table (₦68k-₦210k, last updated 7 Jan 2025) is stale and was not used."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 400300,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3289,8 +3449,10 @@
     ],
     "notes": "A wide spread across brands; premium brands (Daikin, Panasonic) double the price."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 462000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3345,8 +3507,10 @@
     ],
     "notes": "Non-inverter mid-range is about ₦556,000-₦648,000. The median is pulled up by inverter models; the price team may prefer about ₦610,000 for a basic unit."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 780000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3373,8 +3537,10 @@
     ],
     "notes": "Only one current listing was found, and it is out of stock. Few retailers stock 2.5HP wall splits. naijatechguide's ₦205k-₦330k (Jan 2025) is stale. Get a dealer quote."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 990000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3455,8 +3621,10 @@
     ],
     "notes": "Mostly from one retailer. A mid-range non-inverter unit costs about ₦1.7m-₦2.4m."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 2400000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3502,8 +3670,10 @@
     ],
     "notes": "One seller. The tube length and wall thickness are not stated, and the 2 m assumption must be confirmed. Decide whether the rate is per single pipe or per pair."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 750,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3530,8 +3700,10 @@
     ],
     "notes": "Add a small amount for anchor bolts if they are not included."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 10000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3632,8 +3804,10 @@
     ],
     "notes": "The ₦300k listing is a premium brand (S&P). A generic unit costs ₦85k-₦105k."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 105000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3667,8 +3841,10 @@
     ],
     "notes": "nigerianqueries.com (19 Aug 2026) gives generic ranges of ₦5,000-₦15,000 for budget brands."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 18500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3702,8 +3878,10 @@
     ],
     "notes": ""
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 28250,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3730,8 +3908,10 @@
     ],
     "notes": "Lagos-only listings give ₦40k-₦55k; Port Harcourt listings are higher."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 55000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3758,8 +3938,10 @@
     ],
     "notes": "Most listings fall at ₦40k-₦55k."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 55000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3786,8 +3968,10 @@
     ],
     "notes": "Blog range only; no standalone bracket listing was found on jiji.ng. Many extinguishers come with a bracket."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 3000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3814,8 +3998,10 @@
     ],
     "notes": "Budget UK-brand heads cost ₦9k-₦22k; premium brands ₦49k-₦65k. It is unclear whether the prices include the base."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 16750,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3842,8 +4028,10 @@
     ],
     "notes": "Only 2 listings, both Chloride."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 10250,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3870,8 +4058,10 @@
     ],
     "notes": ""
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 12500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3898,8 +4088,10 @@
     ],
     "notes": "Includes sounder-strobe combos."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 18000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3926,8 +4118,10 @@
     ],
     "notes": "Brand-dependent: generic panels cost about ₦100k-₦130k; UK brands (C-Tec, Zeta) ₦260k-₦350k."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 240000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3954,8 +4148,10 @@
     ],
     "notes": "Not every listing states a 30 m hose. The 3/4 in 30 m with cabinet listing is ₦285,000. A jiji listing at ₦365,000 also appeared in web search results."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 240000,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -3982,8 +4178,10 @@
     ],
     "notes": "1.2 x 1.8 m size; generic brand."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 14999,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -4017,8 +4215,10 @@
     ],
     "notes": "Few listings. A simple non-maintained LED bulkhead (e.g. Ansell Kite) costs about ₦30,000; twin-spot units about ₦62k-₦65k. Choose the type the spec intends."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 61750,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "material",
@@ -4045,8 +4245,10 @@
     ],
     "notes": "Basic exit signs cost ₦15k-₦33k; branded maintained units ₦85k-₦125k."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 31500,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "labour",
@@ -4072,8 +4274,10 @@
     ],
     "notes": "Secondary aggregator; the underlying 30 April 2026 guide is not named or linked, so the primary could not be checked. Midpoint 19,000 is 1.9x RateGen's south_west Plumber (skilled) 10,000 and even the Lagos low (16,000) is above RateGen's 15,000 foreman. RateGen's plumber rate looks stale/low for Lagos (it sits at the bottom of the national band)."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 10000,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "labour",
@@ -4106,8 +4310,10 @@
     ],
     "notes": "Typical figure is a reasoned pick within quoted bands, not a single quoted Lagos number; price team should confirm. 1.8x RateGen's south_west Electrician (skilled) 10,000, which equals the national floor."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 10000,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "labour",
@@ -4140,8 +4346,10 @@
     ],
     "notes": "No credible published day rate found for AC installers; most AC work is priced per unit (N20,000-N50,000 per split install). The salaried-employee conversion understates what a site subcontractor charges per day, so treat 8,650 as a floor. It sits below RateGen's Skilled/Artisan 10,000. RateGen has no HVAC labour row in south_west; suggest pricing at least at the skilled plumber/electrician level pending a contractor quote."
    },
-   "checkedPrice": null,
-   "status": "researched"
+   "checkedPrice": 8650,
+   "status": "researched",
+   "checkedBy": "Adedolapo (owner, researched price accepted)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "labour",
@@ -4179,8 +4387,10 @@
     ],
     "notes": "National band for mason's labourers, not Lagos-specific and not specifically a plumber's/electrician's mate (Lagos likely toward the top, ~8,000). Sits between RateGen's Labourer 5,500 and its Plumber/Electrician mate 7,000, so RateGen's mate rate is broadly in line, unlike its skilled rates. Older Structville figure of N2,000-N4,000/day is pre-2024 and was ignored."
    },
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 7000,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "labour",
@@ -4191,8 +4401,10 @@
    "inMaster": true,
    "masterPrice": 7000,
    "researched": null,
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 7000,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   },
   {
    "kind": "labour",
@@ -4203,8 +4415,10 @@
    "inMaster": true,
    "masterPrice": 10000,
    "researched": null,
-   "checkedPrice": null,
-   "status": "in-master"
+   "checkedPrice": 10000,
+   "status": "in-master",
+   "checkedBy": "Adedolapo (owner, master price kept)",
+   "checkedAt": "2026-10-04"
   }
  ]
 }

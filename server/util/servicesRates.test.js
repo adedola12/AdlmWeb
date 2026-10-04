@@ -34,14 +34,20 @@ test("every line of every rate is an MEPF library item, on RateGen's own trades"
   assert.ok(servicesPriceList().length > 100);
 });
 
-test("a researched price is never published until the price team checks it", () => {
-  const researched = MEPF_ITEMS.find((i) => i.status === "researched");
-  assert.equal(mepfPrice(researched.name), null);
-  assert.equal(mepfPrice(researched.name, { basis: "preview" }), researched.researched.price);
+test("only a checked price is published, and a rate missing any price stays out", () => {
+  // signed off: the checked figure, never the raw research
+  const checked = MEPF_ITEMS.find((i) => i.status === "researched" && i.checkedPrice > 0);
+  assert.equal(mepfPrice(checked.name), checked.checkedPrice);
+  assert.ok(checked.checkedBy, "a checked price names who checked it");
+  // nothing to sign off: no published price, only the preview research (none here)
+  const unpriced = MEPF_ITEMS.find((i) => i.status === "needs-price");
+  assert.equal(mepfPrice(unpriced.name), null);
   const inMaster = MEPF_ITEMS.find((i) => i.status === "in-master" && i.kind === "material");
-  assert.equal(mepfPrice(inMaster.name), inMaster.masterPrice);
-  // nothing is checked yet, so nothing may publish
-  assert.equal(pricedServicesRates({ basis: "published" }).filter((r) => r.priced).length, 0);
+  assert.equal(mepfPrice(inMaster.name), inMaster.checkedPrice || inMaster.masterPrice);
+  // a rate that uses an unpriced item is never published half-priced
+  const rates = pricedServicesRates({ basis: "published" });
+  for (const r of rates) assert.equal(r.priced, r.missing.length === 0);
+  assert.ok(rates.some((r) => !r.priced && r.missing.includes(unpriced.name)) || !rates.some((r) => r.breakdown.some((b) => b.componentName === unpriced.name)));
 });
 
 test("labour is priced per hour from the library's day rate", () => {
