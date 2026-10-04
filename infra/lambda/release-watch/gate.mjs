@@ -45,9 +45,13 @@ export function landedOnMain(head, commits) {
   return line.reverse();
 }
 
-export async function approvedByApprover(repo, sha, approverLogin, get) {
+/**
+ * Whether the release approver approved a merged pull request into `branch`
+ * that `sha` belongs to. Each watched repo has its own release branch.
+ */
+export async function approvedByApprover(repo, sha, approverLogin, get, branch = "main") {
   const pulls = (await get(`repos/${repo}/commits/${sha}/pulls`)) || [];
-  const merged = pulls.filter((p) => p.merged_at && p.base?.ref === "main");
+  const merged = pulls.filter((p) => p.merged_at && p.base?.ref === branch);
   for (const pr of merged) {
     const reviews = (await get(`repos/${repo}/pulls/${pr.number}/reviews?per_page=100`)) || [];
     const ok = reviews.some(

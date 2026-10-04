@@ -67,3 +67,14 @@ test("a direct push and an unapproved merge are still flagged; an approved merge
   assert.deepEqual(await approvedByApprover("o/r", "d1", "richardenoch", get), { ok: false, pr: null });
   assert.deepEqual(await approvedByApprover("o/r", "m2", "richardenoch", get), { ok: false, pr: 11 });
 });
+
+test("a repo released from another branch checks pull requests into that branch", async () => {
+  const get = async (path) => {
+    if (path.endsWith("/commits/r1/pulls")) return [{ number: 7, merged_at: "t", base: { ref: "release" } }];
+    if (path.includes("/pulls/7/reviews")) return [{ state: "APPROVED", user: { login: "RichardEnoch" } }];
+    throw new Error(`unexpected ${path}`);
+  };
+  assert.deepEqual(await approvedByApprover("o/r", "r1", "richardenoch", get, "release"), { ok: true, pr: 7 });
+  // The same approved PR does not count for a different release branch.
+  assert.deepEqual(await approvedByApprover("o/r", "r1", "richardenoch", get), { ok: false, pr: null });
+});

@@ -7,12 +7,7 @@
 // (REPOS = "owner/name@branch,..."), it checks:
 //   1. the release branch is still protected
 //   2. it was not force-pushed (history rewritten)
-//   3. every new commit on it belongs to a merged pull request that the
-//      release approver approved
-// (Actions settings, secrets, tokens) can silence it. Checks:
-//   1. main is still a protected branch
-//   2. main was not force-pushed (history rewritten)
-//   3. every change that LANDED on main (each step of main's first-parent
+//   3. every change that LANDED on the branch (each step of its first-parent
 //      line: a pull request's merge or squash commit, or a direct push)
 //      belongs to a merged pull request that the release approver approved.
 //      Commits carried in by a merge are covered by that merge's approval;
@@ -129,28 +124,9 @@ async function mail(to, subject, lines) {
   }
 }
 
-async function approvedByApprover(repo, branch, sha, approverLogin) {
-  const pulls = (await gh(`repos/${repo}/commits/${sha}/pulls`)) || [];
-  const merged = pulls.filter((p) => p.merged_at && p.base?.ref === branch);
-  for (const pr of merged) {
-    const reviews = (await gh(`repos/${repo}/pulls/${pr.number}/reviews?per_page=100`)) || [];
-    const ok = reviews.some(
-      (r) => r.state === "APPROVED" && String(r.user?.login || "").toLowerCase() === approverLogin.toLowerCase(),
-    );
-    if (ok) return { ok: true, pr: pr.number };
-  }
-  return { ok: false, pr: merged[0]?.number || null };
-}
-
 async function watchRepo({ repo, branch }, approverLogin) {
   const stateKey = stateName(repo);
   const last = await param(stateKey);
-export async function handler() {
-  token = await param("github-token", true);
-  const approverEmail = await param("approver-email");
-  const approverLogin = await param("approver-github");
-  const last = await param("last-main-sha");
-  const to = [approverEmail, OWNER_EMAIL];
 
   let info;
   try {
@@ -176,8 +152,7 @@ export async function handler() {
   } else if (head && head !== last && approverLogin) {
     let cmp;
     try {
-      cmp = await gh(`repos/${repo}/compare/${last}...${head}`);
-      cmp = await newCommits(REPO, last, head, gh);
+      cmp = await newCommits(repo, last, head, gh);
     } catch (err) {
       console.warn(`[release-watch] ${repo}: compare failed, will retry:`, err.message);
       cmp = undefined;
@@ -188,13 +163,10 @@ export async function handler() {
       );
       vetted = head;
     } else if (cmp) {
-      try {
-        for (const c of (cmp.commits || []).slice(0, MAX_COMMITS_PER_REPO)) {
-          const verdict = await approvedByApprover(repo, branch, c.sha, approverLogin);
-      const commits = landedOnMain(head, cmp.commits || []).slice(0, MAX_COMMITS);
+      const commits = landedOnMain(head, cmp.commits || []).slice(0, MAX_COMMITS_PER_REPO);
       try {
         for (const c of commits) {
-          const verdict = await approvedByApprover(REPO, c.sha, approverLogin, gh);
+          const verdict = await approvedByApprover(repo, c.sha, approverLogin, gh, branch);
           if (!verdict.ok) {
             const title = String(c.commit?.message || "").split("\n")[0];
             const who = c.author?.login || c.commit?.author?.email || "unknown";
