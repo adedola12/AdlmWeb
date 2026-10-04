@@ -32,14 +32,13 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { useFeedback } from "./feedback/feedbackContext.js";
 import WkDropdown from "./WkDropdown.jsx";
-import CustomRateBuilder from "./rategen/CustomRateBuilder.jsx";
-import {
-  draftProblem,
-  draftToPayload,
-  draftTotals,
-  emptyDraft,
-  newCustomRateId,
-} from "./rategen/customRateDraft.js";
+// The custom-rate builder and its draft helpers are deliberately NOT imported.
+// A rate is built and edited in Rate Gen desktop and nowhere else (owner's
+// rule), so the button that opened the builder is gone and so is the code
+// behind it. ds/rategen/CustomRateBuilder.jsx and customRateDraft.js are left
+// on disk rather than deleted: the admin rate builder still uses that
+// machinery, and the server route it posted to is unchanged, so nothing that
+// Rate Gen desktop or an administrator relies on has moved.
 import { componentsOf, toNum, unexplainedNet } from "./rategen/rateMath.js";
 import { mergeRateRows } from "./rategen/mergeRateRows.js";
 import { fetchAllRates } from "./rategen/fetchRates.js";
@@ -486,73 +485,6 @@ export default function DsWorkLibrary() {
     }
   }
 
-  /* ── build a custom rate (RG-09) ───────────────────────────────────────── */
-
-  async function buildRate() {
-    if (!master && !masterFailed) await loadMaster();
-    const draftRef = { current: null };
-
-    const answer = await fb.card({
-      tone: "info",
-      noIcon: true,
-      title: "Build a custom rate",
-      msg: "Name it, set overhead and profit, and add what goes into it. It is saved to your own library.",
-      body: (
-        <CustomRateBuilder
-          draftRef={draftRef}
-          materials={master?.materials || []}
-          labour={master?.labour || []}
-          sections={sections}
-          initial={emptyDraft(
-            cat !== "all"
-              ? { sectionKey: cat, sectionLabel: sections.find((s) => s.key === cat)?.label || "" }
-              : {},
-          )}
-        />
-      ),
-      secondary: "Cancel",
-      primary: "Save rate",
-      validate: () => {
-        const problem = draftProblem(draftRef.current || {});
-        if (problem) {
-          fb.toast({ tone: "error", title: problem });
-          return false;
-        }
-        return true;
-      },
-    });
-    if (answer !== "primary") return;
-
-    const draft = draftRef.current;
-    const id = newCustomRateId(draft.name);
-    try {
-      await apiAuthed(`/rategen-v2/library/custom-rates/${encodeURIComponent(id)}`, {
-        method: "PUT",
-        token: accessToken,
-        body: draftToPayload(draft, id, mine?.customRatesVersion ?? 1),
-      });
-      await loadRates();
-      const t = draftTotals(draft);
-      const opened = await fb.card({
-        tone: "success",
-        title: "New rate saved",
-        msg: `${draft.name.trim()} · ${money(t.totalCost)} per ${draft.unit}`,
-        secondary: "Back to the library",
-        primary: "Open the build-up",
-      });
-      if (opened === "primary") navigate(`/work/rate/custom:${id}`);
-    } catch (e) {
-      const conflict = String(e?.message || "").toLowerCase().includes("conflict");
-      fb.toast({
-        tone: "error",
-        title: conflict ? "Your library moved underneath this" : "That did not save",
-        msg: conflict
-          ? "Refresh the page and build it again — nothing was written."
-          : String(e?.message || "Nothing was written."),
-      });
-    }
-  }
-
   /* ── render ────────────────────────────────────────────────────────────── */
 
   if (failed) {
@@ -601,19 +533,20 @@ export default function DsWorkLibrary() {
           <p>
             One library for the practice. Published rates, your own corrections to them and the
             rates you build yourself, in the same place — and Rate Gen, QUIV and HERON read the
-            same library through this account.
+            same library through this account. Rates are built and edited in{" "}
+            <b>Rate Gen desktop</b>; what you change there appears here.
           </p>
         </div>
-        <div className="wk-acts">
-          {tab === "rates" ? (
-            <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={buildRate}>
-              Build a custom rate
-            </button>
-          ) : null}
-          <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
-            Edit the library
-          </Link>
-        </div>
+        {/* NO BUILD, NO EDIT, HERE.
+            Owner's rule: a rate is built and edited in Rate Gen desktop and
+            nowhere else. This screen reads the library — published rates, your
+            corrections to them and your own rates — so you can see what QUIV
+            and HERON will price with. Two controls used to sit here, "Build a
+            custom rate" and "Edit the library", and both have gone with the
+            code behind them rather than being hidden behind a flag that would
+            quietly come back. The sentence above says where to do it instead,
+            because removing a button without saying where it went just makes
+            the screen look broken. */}
       </div>
 
       <div className="wk-bar">

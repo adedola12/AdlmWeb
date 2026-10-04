@@ -355,3 +355,48 @@ describe("what a bulk price change reports", () => {
     expect(said).toContain("1 came to the same figure once rounded");
   });
 });
+
+/* ──────── rates are built and edited in Rate Gen desktop ──────── */
+
+// The owner's rule: a rate is built and edited in Rate Gen desktop and nowhere
+// else. Two controls used to sit at the top of this screen — "Build a custom
+// rate", which opened a builder and POSTed a new rate, and "Edit the library",
+// which sent the reader to the classic editor.
+//
+// This is the guard, not a style preference. A button like that is exactly the
+// kind of thing that comes back: somebody restores it from an older file, or
+// re-adds it because the screen "looks empty" without an action. If it does,
+// the website becomes a second place rates can be created, and the desktop
+// library and the cloud copy start to disagree about what a rate is.
+describe("building and editing rates is not offered here", () => {
+  it("offers no way to build a rate", async () => {
+    stub();
+    const { findByText, queryByText } = mount();
+    await findByText(/Blockwork 225mm/);
+    expect(queryByText("Build a custom rate")).toBeNull();
+    expect(queryByText(/Build a custom/i)).toBeNull();
+  });
+
+  it("offers no way to edit the library", async () => {
+    stub();
+    const { findByText, queryByText, container } = mount();
+    await findByText(/Blockwork 225mm/);
+    expect(queryByText("Edit the library")).toBeNull();
+    // ...and no link out to the classic editor, which is where it went.
+    expect(container.querySelector('a[href="/rategen"]')).toBeNull();
+  });
+
+  it("says where rates ARE built, so the screen does not just look broken", async () => {
+    // Removing a control without saying where it went is how a screen reads as
+    // missing a feature rather than as deliberate.
+    stub();
+    const { findByText } = mount();
+    expect(await findByText(/Rate Gen desktop/)).toBeTruthy();
+  });
+
+  it("still shows the library, which is what the screen is for", async () => {
+    stub();
+    const { findByText } = mount();
+    expect(await findByText(/Blockwork 225mm/)).toBeTruthy();
+  });
+});
