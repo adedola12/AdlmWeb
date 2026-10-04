@@ -23,6 +23,7 @@ import { EN_DASH, compact, money } from "./workProjectFormat.js";
 // own guard as well: it is what makes each correct on its own, and it is what
 // the unit tests beside this file drive directly.
 import { Bar, StillLoading } from "./workProjectBits.jsx";
+import WorkProjectElementTrace from "./WorkProjectElementTrace.jsx";
 
 // three.js plus the IFC/fragments loader, which together are the heaviest thing
 // this client can pull. Lazy, so the Model tab costs nothing until somebody
@@ -67,6 +68,15 @@ export function WorkProjectModel({
     () => (Array.isArray(project?.items) ? project.items : []),
     [project],
   );
+  // The material and labour breakdown, for the element trace. Same field the
+  // classic project view hands the viewer (ProjectsGeneric.jsx: sel.materialItems).
+  const materialItems = React.useMemo(
+    () => (Array.isArray(project?.materialItems) ? project.materialItems : []),
+    [project],
+  );
+  // The element the viewer last reported a click on. 0 means nothing selected,
+  // which is what ModelViewer itself uses.
+  const [picked, setPicked] = React.useState(0);
 
   // Before the empty check, never after: the whole point is that an empty list
   // means nothing yet while the read is in flight.
@@ -100,47 +110,6 @@ export function WorkProjectModel({
 
   return (
     <>
-      {/* THE MODEL ITSELF.
-          The viewer has existed and worked all along (lib/ifcViewer.js +
-          features/projects/ModelViewer.jsx) and was mounted on the classic
-          project view, the work area and the 4D workspace — everywhere except
-          the tab actually called Model, which listed the files and drew none of
-          them. Somebody opening it to look at their model found a table.
-
-          `compact` deliberately. The viewer's full mode brings a side panel
-          written in the classic utility classes, and dropping that into a page
-          built from his design system would read as two products stitched
-          together. The 4D workspace made the same call. */}
-      {viewable ? (
-        <section className="wk-panel vs">
-          <div className="wk-ph">
-            <h2>The model</h2>
-            <span className="wk-locnote">Drag to orbit, scroll to zoom</span>
-          </div>
-          <React.Suspense
-            fallback={
-              // The heavy chunk is three.js. Saying so beats a blank rectangle,
-              // which on a slow connection is indistinguishable from a failure —
-              // and "it feels stuck" is the complaint this tab started with.
-              <div className="pj-empty" role="status" aria-live="polite">
-                <b>Loading the model{"…"}</b>
-                <p>The 3D viewer is a large download the first time.</p>
-              </div>
-            }
-          >
-            <ModelViewer
-              compact
-              height={480}
-              projectModels={project?.models || {}}
-              items={items}
-              productKey={productKey}
-              projectId={projectId}
-              accessToken={accessToken}
-            />
-          </React.Suspense>
-        </section>
-      ) : null}
-
       {warning ? (
         <div className="pj-note warn">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -156,6 +125,66 @@ export function WorkProjectModel({
         </div>
       ) : null}
 
+      {/* HIS LAYOUT, FINALLY WIRED UP.
+          .pj-model is a two-column grid in ds-work-proj.css:472 — a viewport on
+          the left and a side column on the right — and it was never used
+          anywhere in the client. Which meant .ds .pj-model .vv never matched,
+          so the model rows below had NO styling at all: the date, size and
+          element count rendered as a browser's default italic run-on instead of
+          his .vv grid. That is what the tab looked wrong about.
+
+          The viewer goes in the left column. Not inside his .vw figure — that
+          is built for a static image with a caption over it, and the live
+          viewer brings its own .wk-panel chrome, discipline switcher and
+          progress meter, all already in his classes. */}
+      <div className="pj-model">
+        {viewable ? (
+          <React.Suspense
+            fallback={
+              // A blank rectangle on a slow connection is indistinguishable
+              // from a failure, and "it feels stuck" is where this tab started.
+              <section className="wk-panel" role="status" aria-live="polite">
+                <div className="pj-empty">
+                  <b>Loading the model{"…"}</b>
+                  <p>The 3D viewer is a large download the first time.</p>
+                </div>
+              </section>
+            }
+          >
+            <ModelViewer
+              compact
+              height={420}
+              projectModels={project?.models || {}}
+              items={items}
+              materialItems={materialItems}
+              productKey={productKey}
+              projectId={projectId}
+              accessToken={accessToken}
+              onPickElement={setPicked}
+            />
+          </React.Suspense>
+        ) : (
+          // The grid has two columns either way: without this the model list
+          // would stretch across both and stop looking like his design.
+          <section className="wk-panel">
+            <div className="pj-empty">
+              <b>Nothing to draw</b>
+              <p>
+                This project&rsquo;s model was recorded by name but its file is not stored, so it
+                cannot be shown here.
+              </p>
+            </div>
+          </section>
+        )}
+
+        {picked ? (
+          <WorkProjectElementTrace
+            id={picked}
+            items={items}
+            materialItems={materialItems}
+            onClear={() => setPicked(0)}
+          />
+        ) : (
       <section className="wk-panel vs">
         <div className="wk-ph">
           <h2>Models</h2>
@@ -207,6 +236,8 @@ export function WorkProjectModel({
           ) : null}
         </p>
       </section>
+        )}
+      </div>
     </>
   );
 }
