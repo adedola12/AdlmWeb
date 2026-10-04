@@ -157,6 +157,7 @@ const ManageBilling = React.lazy(() => import("./pages/ManageBilling.jsx"));
 const ManageDownloads = React.lazy(() => import("./pages/ManageDownloads.jsx"));
 const ManageGuides = React.lazy(() => import("./pages/ManageGuides.jsx"));
 const ManageSettings = React.lazy(() => import("./pages/ManageSettings.jsx"));
+const ManageActivity = React.lazy(() => import("./pages/ManageActivity.jsx"));
 const WorkHome = React.lazy(() => import("./pages/WorkHome.jsx"));
 const WorkProjects = React.lazy(() => import("./pages/WorkProjects.jsx"));
 const WorkTool = React.lazy(() => import("./pages/WorkTool.jsx"));
@@ -441,6 +442,10 @@ const router = createBrowserRouter([
         { path: "manage/downloads", el: <ManageDownloads /> },
         { path: "manage/guides", el: <ManageGuides /> },
         { path: "manage/settings", el: <ManageSettings /> },
+        // The full activity trail. Without this route the overview's "All
+        // activity" link had nowhere in the new build to go and pointed at the
+        // classic Profile page instead.
+        { path: "manage/activity", el: <ManageActivity /> },
         // The Work group. Organised by project rather than by product, which
         // is the whole architectural point of the surface.
         { path: "work", el: <WorkHome /> },
