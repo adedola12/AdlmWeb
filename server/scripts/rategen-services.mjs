@@ -145,7 +145,10 @@ async function publish() {
     const db = client.db(process.env.RATEGEN_DB || "ADLMRateDB");
     const mats = db.collection(process.env.RATEGEN_MAT_COLLECTION || "Materials");
     const labs = db.collection(process.env.RATEGEN_LAB_COLLECTION || "labours");
+    let written = 0;
     for (const i of items) {
+      // a master item whose checked price is its master price has nothing to change
+      if (i.inMaster && i.checkedPrice === i.masterPrice) continue;
       const isLab = i.kind === "labour";
       const coll = isLab ? labs : mats;
       const key = isLab ? "LabourName" : "MaterialName";
@@ -154,10 +157,13 @@ async function publish() {
         : { MaterialName: i.name, MaterialUnit: i.unit, MaterialPrice: i.checkedPrice, MaterialCategory: i.category };
       // the zone row every state and zone falls back to; a state's own row is untouched
       await coll.updateOne(
-        { [key]: i.name, zone: "south_west", state: { $exists: false } },
+        // state: null matches the zone row whether `state` is null or absent (the
+        // master stores both); $exists:false missed the null ones and duplicated them
+        { [key]: i.name, zone: "south_west", state: null },
         { $set: { ...doc, zone: "south_west", updatedAt: new Date(), updatedBy: BY, checkedBy: i.checkedBy } },
         { upsert: true },
       );
+      written++;
     }
     await client.close();
 
@@ -176,7 +182,7 @@ async function publish() {
       );
     }
     if (ready.length) await bumpMeta("rates", BY, `MEPF services rates: ${ready.length}`);
-    console.log(`Published ${items.length} items and ${ready.length} rates.`);
+    console.log(`Published ${written} items (${items.length - written} master items unchanged) and ${ready.length} rates.`);
   } finally {
     await mongoose.disconnect();
   }
