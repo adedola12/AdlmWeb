@@ -1,7 +1,7 @@
 ---
 id: qs-handbook
 title: The ADLM QS handbook
-tagline: Key QS formulas, a formula library, constants, grade and unit conversions, and real use cases for every ADLM product.
+tagline: Key QS formulas, a formula library, constants, grade and unit conversions, ICMS 3 and carbon in cost planning, and real use cases for every ADLM product.
 version: "2026.10"
 updated: 2026-10-04
 platform: Reference for every ADLM product
@@ -18,6 +18,7 @@ Two kinds of figure appear in it, and each one is labelled:
 
 - **ADLM value.** A default held in ADLM software. The handbook names the product: Rate Gen **Material Constants** on the website, QUIV (the Revit plugin), or HERON. These are the figures your ADLM software will use unless you change them.
 - **Typical.** A widely used industry figure, with its assumption stated. Use it as a starting point and check it against your specification, your supplier and your site.
+- **Worked from ADLM values.** A figure this handbook calculates from ADLM's own constants and carbon factors, such as the carbon in a cubic metre of 1:2:4 concrete. Your software works it out from your own build-up, so its figure can differ a little.
 
 > **Important:** Nothing here replaces the contract documents. A specification, a structural engineer's bar schedule or a design mix always overrides a rule of thumb. Where a figure in this handbook and your drawings disagree, the drawings win.
 
@@ -558,6 +559,20 @@ One row for each formula in this handbook.
 | Prismoidal | L ÷ 6 × (A1 + 4Am + A2) | m³ | Am measured, not averaged |
 | Pipe lengths | run ÷ stock length, rounded up | nr | 6 m pipe, 3 m conduit |
 | Couplers | lengths − 1 | nr | Per straight run |
+| Material carbon, A1-A5 | kg × (factor + A4 + wf × (factor + A4 + 0.005 + 0.013)) | kgCO2e | Rate Gen method (IStructE 2020) |
+| Carbon waste factor | w ÷ (1 − w) | factor | 5% waste gives 0.053 |
+| Site fuel carbon (A5a) | litres × 2.66 | kgCO2e | Diesel; ADLM value |
+| Tonnes of carbon | kgCO2e ÷ 1,000 | tCO2e | |
+| Cement carbon | bags × 45.4 (low end 31.7) | kgCO2e | Worked from ADLM values, A1-A5 |
+| Rebar carbon | tonnes × 899 | kgCO2e | Worked from ADLM values, A1-A5 |
+| 225 mm block carbon | blocks × 2.31 | kgCO2e | Worked from ADLM values; assumed mass |
+| 1:2:4 concrete carbon | m³ × 317 (low end 230) | kgCO2e | Worked from ADLM values |
+| Carbon coverage | cost with a carbon figure ÷ total cost | % | ICMS export |
+| Cost per m² (ICMS 3) | total construction cost ÷ IPMS 2 (or IPMS 1) area | ₦/m² | State which area |
+| Carbon per m² (ICMS 3) | total kgCO2e ÷ IPMS 2 (or IPMS 1) area | kgCO2e/m² | State which area |
+| ICMS Group 08 | (measured + PC and provisional sums) × preliminaries % | ₦ | ADLM Cloud |
+| ICMS 09.020 | (measured + sums + preliminaries) × contingency % | ₦ | ADLM Cloud |
+| ICMS 10.020 | (subtotal + contingency) × VAT % | ₦ | ADLM Cloud |
 
 ## Constants
 
@@ -791,6 +806,326 @@ A level head pan holds about 20 L, so 20 ÷ 34.7 = 0.58 bag. Head pans vary, so 
 
 **Common mistake:** reading a 100% slope as vertical. A 100% slope is 45°: one metre up for every metre across.
 
+## ICMS 3: International Cost Management Standard
+
+ICMS is a standard way of grouping and reporting construction costs so that projects can be compared, wherever they were built and however their bills were laid out. The third edition, ICMS 3, came out in November 2021 and added carbon: the same codes now report a project's carbon emissions beside its cost.
+
+ICMS is published by the ICMS Coalition, a group of professional bodies from around the world that includes RICS. It does not replace your method of measurement. You still measure and bill to BESMM4 or NRM2. ICMS is a layer on top: a fixed set of headings that every bill can be sorted into for reporting.
+
+### Why it matters
+
+- **Comparing like with like.** Two Nigerian bills for similar duplexes can be laid out quite differently, and a bill from Accra or London differently again. Sorted into ICMS Groups, they line up heading by heading, so you can compare substructure with substructure and services with services.
+- **Clients and funders ask for it.** International clients, development banks and cost consultants increasingly want cost reports in ICMS form, and carbon beside the cost.
+- **Benchmarking.** A firm that reports every job in ICMS builds up its own cost and carbon per m² by building type, which is the start of a cost database.
+
+### How ICMS 3 is built
+
+ICMS 3 codes a cost by levels, joined with full points. **01.2.03.030** reads Buildings : Construction : Structure : Frames and slabs.
+
+| Level | What it is | Examples |
+|---|---|---|
+| 1 | Project type | 01 Buildings, 02 Roads and runways, 04 Bridges, 08 Pipelines (19 types in all) |
+| 2 | Cost category (life cycle stage) | 1 Acquisition, 2 Construction, 3 Renewal, 4 Operation, 5 Maintenance, 6 End of life |
+| 3 | Group | 01 to 13 (below) |
+| 4 | Sub-Group | 03.030 Frames and slabs, 05.020 Electrical services |
+
+Levels 1 to 3 are required. Level 4 is optional, and is where the detail of a bill goes.
+
+**Project and sub-project.** ICMS lets you report a project as a whole, or split it into sub-projects, each with its own project type. An estate could be reported as one project, or as each house type plus the estate road. ADLM's export reports each ADLM Cloud project as one project.
+
+**The 13 Groups of Construction (Level 2, category 2):**
+
+| Group | Title | Carbon reported? |
+|---|---|---|
+| 01 | Demolition, site preparation and formation | Yes |
+| 02 | Substructure | Yes |
+| 03 | Structure | Yes |
+| 04 | Architectural works, non-structural works | Yes |
+| 05 | Services and equipment | Yes |
+| 06 | Surface and underground drainage | Yes |
+| 07 | External and ancillary works | Yes |
+| 08 | Preliminaries, constructors' site overheads, general requirements | Yes |
+| 09 | Risk allowances | Yes |
+| 10 | Taxes and levies | Not used |
+| 11 | Work and utilities off-site | Not used |
+| 12 | Production and loose furniture, fittings and equipment | Yes |
+| 13 | Construction-related consultants and supervision | Not used |
+
+**Cost and carbon share the codes.** Construction Costs and Construction Carbon Emissions use the same Groups and Sub-Groups, so one table can carry both. Groups 10, 11 and 13 are not used for carbon: a tax or a consultant's fee has a cost but no material carbon in this sense.
+
+**Floor areas come from IPMS.** ICMS 3 pairs with the International Property Measurement Standards for the floor area that cost and carbon per m² are divided by:
+
+- **IPMS 1** is the external floor area, measured to the outer face of the external walls. It is close to a gross external area.
+- **IPMS 2** is the internal floor area, measured to the inside of the external walls (the "internal dominant face"). It is close to a gross internal area.
+
+Cost per m² = total construction cost ÷ floor area. Carbon per m² = total kgCO2e ÷ floor area. Always say which area you divided by, because the two give different answers for the same building.
+
+> **Note:** This section covers the parts of ICMS 3 that a cost report for a building uses. The standard itself has much more: other project types, life cycle costs, and detailed rules on what each Group includes. Read the standard before you issue an ICMS report you will be held to, and check with your client which edition and which level of detail they want.
+
+### Mapping a Nigerian bill into ICMS 3 Groups
+
+A BESMM4 or NRM2 bill is arranged by work section (excavation, concrete, blockwork, finishes). ICMS is arranged by part of the building (substructure, structure, architectural works). So mapping means reading each line and asking which part of the building it builds.
+
+Two rules settle most lines:
+
+- **Keep the parts of an item together.** The concrete, reinforcement and formwork of a column all go where the column goes, in 03.030. They are not split into a "concrete" heading and a "formwork" heading as a work-section bill does.
+- **The lowest floor slab is substructure.** ICMS 02.020 runs up to the top of the lowest floor slab. The ground floor slab, its hardcore, DPM and mesh are all Group 02, not Group 03.
+
+**Common bill sections against ICMS 3 Groups (typical; check every line):**
+
+| Bill section or item | ICMS 3 Group and Sub-Group |
+|---|---|
+| Preliminaries and general items | 08. Staff and supervision 08.010, hoarding and security 08.030, plant 08.040, scaffolding 08.050, temporary water, power and accommodation 08.060, insurances 08.110, testing 08.130 |
+| Site clearance, topsoil strip | 01.060 |
+| Demolition | 01.050 |
+| Soil investigation | 01.010 |
+| Dewatering | 01.090 |
+| Piling | 02.010 |
+| Excavation, disposal, anti-termite, blinding, foundation concrete, blockwork below DPC, hardcore, DPM, ground floor slab | 02.020 |
+| Basement walls and floor | 02.030 |
+| Columns, beams, suspended slabs, roof beams, staircases (concrete, reinforcement and formwork) | 03.030 |
+| Roof timbers: trusses, rafters, purlins, wall plates | 03.030 |
+| Roof covering, ridge, fascia, gutters, rainwater goods | 04.030 |
+| External blockwork walls | 04.020 |
+| Internal blockwork walls and partitions | 04.040 |
+| Windows and external doors | 04.020 |
+| Internal doors | 04.040 |
+| Ironmongery, burglar bars, balustrades, fitted cupboards | 04.050 |
+| Plaster, screed, tiling, ceilings, painting (inside) | 04.060 |
+| External render and external wall finishes | 04.020 |
+| Air conditioning and ventilation | 05.010 |
+| Electrical installation | 05.020 |
+| Light fittings | 05.030 |
+| CCTV, intercom, data | 05.040 |
+| Plumbing and water supply | 05.050 |
+| Sanitary fittings | 05.060 |
+| Fire services | 05.080 |
+| Lifts | 05.100 |
+| Generators | 05.130 |
+| Solar and inverters | 05.140 |
+| Septic tank, soakaway, manholes, foul drains | 06.030 |
+| Storm water drains and culverts | 06.020 |
+| Fencing, gates, boundary wall | 07.020 |
+| Paving, kerbs, driveways | 07.040 |
+| Landscaping | 07.050 |
+| External lighting, borehole, external services | 07.070 |
+| PC and provisional sums | The Group of the work the sum covers |
+| Contingency | 09.020 Construction contingencies |
+| VAT paid by the client on the contract | 10.020 |
+| Loose furniture | 12.010 |
+| Public utility connections beyond the site | 11.010 |
+| Consultants' fees | 13.010 (not usually in a contractor's bill) |
+
+> **Important:** ICMS says mapping needs a cost professional's judgement. A lintel, a parapet or a boundary wall can sit in different Groups depending on what it does. When a line is genuinely unclear, decide it yourself and note why, rather than forcing it into the nearest heading.
+
+### How ADLM does it: the ICMS 3 export on ADLM Cloud
+
+ADLM Cloud turns any priced QUIV, HERON or SERVIQ project into an ICMS 3 cost and carbon report. Open the project, click **Export**, and look for the **ICMS 3** group, described as "international cost and carbon report". It has two entries:
+
+| Entry | What you get |
+|---|---|
+| **ICMS 3 cost and carbon (Excel)** | Cost and upfront carbon (A1-A5) by ICMS 3 Group, with every line's code, where its carbon came from, and the lines not yet placed |
+| **ICMS 3 cost and carbon (JSON)** | The same report as data, for software that reads the RICS Data Standard 3.3.3 |
+
+It works on any project you can export, including the [sample projects](/guides/samples).
+
+**How each line is placed.** The export reads every bill line in this order and stops at the first thing that settles it:
+
+1. **Words that win anywhere.** Railings, balustrades, burglar bars and ironmongery go to 04.050, preliminaries to 08, contingency to 09.020 and VAT to 10.020, wherever they appear.
+2. **The QUIV element.** "Columns – Reinforcement" was measured on the Columns element, so it goes to 03.030 with the column's concrete and formwork.
+3. **The line's own words.** "WC", "septic tank", "interlocking paving", "clear site" and many more.
+4. **The HERON section heading** the line sits under, such as "--- Sub ---".
+5. **The bill category** the plugin gave the line, such as Substructure or Frames.
+
+A SERVIQ line is always a building service, so it goes to Group 05 unless its words say drainage or external works. A "Ditto" line follows the line above. A line that none of these settles is **left unplaced**. The export never guesses a Group, because the standard says that call belongs to a cost professional.
+
+**How the money is placed.** The report total is the contract sum, worked out the same way as the bill's own **Summary**:
+
+| Part of the contract sum | Where it goes |
+|---|---|
+| Measured lines | Their Group, as above |
+| PC and provisional sums | Their Group, read from their description like a bill line |
+| Preliminaries (**Preliminaries %** of measured work and the sums) | Group 08, shared between your preliminary items by their **Alloc %**. Each item's name picks its Sub-Group where it can, for example "Insurances" goes to 08.110. With no items, one line in 08. |
+| Contingency (on measured work, sums and preliminaries) | 09.020 Construction contingencies |
+| VAT (on the subtotal plus contingency) | 10.020 |
+
+Approved variations are not in the report. It follows the contract sum, not the estimated final cost.
+
+**Where the carbon comes from.** Each line's carbon comes from your own Rate Gen rates, firmest match first. The **Carbon from** column on the **Lines** sheet says which:
+
+| Carbon from | Meaning |
+|---|---|
+| **applied** | The Rate Gen rate the plugin priced the line with |
+| **same** | A rate with the line's own description and unit |
+| **work** | A rate for the work the line measures (concrete by mix, rebar by size, blockwork by thickness), with any unit converted and anything the bill does not say listed under **Assumed** |
+| **direct** | A SERVIQ line that names its own size, such as a cable "4×95 mm²", weighed from the line itself |
+| **matched** | Your closest rate for the wording, offered for you to check |
+| **none** | No rate fits. The line has no carbon figure and lowers the coverage |
+
+Preliminaries, contingency and VAT carry no carbon in the report.
+
+**The Excel workbook** has five sheets:
+
+| Sheet | What is on it |
+|---|---|
+| **ICMS 3 report** | The project details ICMS asks for (project type, country, currency, base date, price basis, status, floor areas, carbon boundary, factor sources), each marked **Stated** or **Assumed**, plus the carbon method, the carbon coverage and how much of the cost is placed |
+| **Cost by Group (G-2)** | Construction Costs by Group, % of total and cost per m² when a floor area is given, with any unplaced cost shown in red |
+| **Carbon by Group (H-1, H-2)** | Upfront carbon by Group in tCO2e, with the low end and kgCO2e per m². Groups 10, 11 and 13 read **Not used** |
+| **Lines** | Every line with its ICMS code, Sub-Group, quantity, rate, cost, kgCO2e, **Carbon from**, the Rate Gen rate used, **Assumed**, **Placed by** and **Why** |
+| **Not placed** | The lines you still need to place in a Group, largest first |
+
+**"Assumed" details.** Where a project does not state a detail, the report fills in a default and marks it **Assumed**: project type 01 Buildings, country NG, currency NGN, base date the day you export, carbon boundary A1-A5 and quantity source "Bills of quantities". Project status is taken from the project: Estimate, Tender, Contract awarded or Final account.
+
+> **Note:** The screen where you enter a project's ICMS details (floor areas, base date, location) and move a line to another Group is not on ADLM Cloud yet. Until it arrives, those details show as **Assumed**, the per-m² columns are blank, and you divide by the floor area yourself.
+
+**The JSON file** is the same report in the layout of the RICS Data Standard (RDS) 3.3.3, the data format RICS publishes for ICMS 3 cost and carbon. Cost and carbon go in one entry per Group and Sub-Group, carbon in kgCO2e with the low end beside it. The line detail, cost per m², the assumed details and the unplaced cost are kept in an extra ADLM section of the file. Send the JSON when a client or cost consultant has software that reads RDS. Send the Excel workbook to people.
+
+### Worked example: the raft duplex
+
+The **5-Bedroom Duplex - Raft Foundation** sample has a contract sum of about ₦209.0m: ₦161.4m of measured work, ₦10.9m of PC and provisional sums, 7.5% preliminaries, 5% contingency and 7.5% VAT. Exported from the QUIV sample, **Cost by Group (G-2)** reads:
+
+| Code | Group | Cost | % |
+|---|---|---|---|
+| 2.01 | Demolition, site preparation and formation | ₦0.24m | 0.1% |
+| 2.02 | Substructure | ₦52.98m | 25.3% |
+| 2.03 | Structure | ₦30.92m | 14.8% |
+| 2.04 | Architectural works | ₦77.22m | 36.9% |
+| 2.05 | Services and equipment | ₦8.30m | 4.0% |
+| 2.06 | Surface and underground drainage | ₦2.60m | 1.2% |
+| 2.08 | Preliminaries | ₦12.92m | 6.2% |
+| 2.09 | Risk allowances | ₦9.26m | 4.4% |
+| 2.10 | Taxes and levies | ₦14.58m | 7.0% |
+| 2 | Total Construction Costs | ₦209.03m | 100% |
+
+What to read from it:
+
+1. **The total equals the contract sum.** Nothing is lost or double counted.
+2. **Substructure is a quarter of the cost**, as you would expect for a raft on soft clay. On the strip foundation duplex it is about 12%.
+3. **Group 05 is the two PC sums**, electrical (₦4.5m) and plumbing (₦3.8m). The services are not measured in this bill. The SERVIQ sample of the same building carries them.
+4. **Group 06 is the soakaway and septic tank sum.**
+5. **Group 08 is shared between the 22 preliminary items**, so **Lines** shows 08.010 for supervision, 08.110 for insurances, 08.060 for site accommodation, and so on.
+6. **Check the Lines sheet before you issue it.** In this sample the export puts the roof beam lines (about ₦9.9m) and the roof carpentry (about ₦2.8m) under 04.030 Roof finishes, because their QUIV element is named "Roof Beams" and "Roofs". ICMS 3 puts roof beams and roof timbers in 03.030 Frames and slabs. Moved there, Structure becomes about ₦43.7m (20.9%), the same as the HERON sample of this duplex. This is exactly the judgement the standard leaves to you.
+
+**Per m².** The sample does not state a floor area. Suppose the gross internal area (IPMS 2) is 420 m², an assumed figure for this example only. Cost per m² = 209,030,000 ÷ 420 = **₦497,700 per m²** (IPMS 2). Do the same with the total tCO2e from **Carbon by Group** for carbon per m².
+
+The carbon figures depend on your own Rate Gen library, so they differ from one account to another. On the duplex samples, a subscriber with a Rate Gen library gets a carbon figure on about 90 to 98% of the cost.
+
+## Carbon in cost planning
+
+A cost plan says what a building will cost. A carbon figure beside it says how much greenhouse gas its materials and construction will release. Clients, banks and planners now ask for both, and the best time to cut carbon is the same as the best time to cut cost: at the design stage, while the specification can still change.
+
+### Upfront embodied carbon
+
+**Embodied carbon** is the carbon released in making, moving, building, maintaining and finally removing a building's materials, as opposed to the energy used to run it. Whole-life carbon assessments split it into stages, following EN 15978 and the RICS professional standard *Whole life carbon assessment for the built environment* (2nd edition, 2023):
+
+| Stage | What it covers |
+|---|---|
+| A1-A3 | Product: raw materials, transport to the factory and manufacture ("cradle to gate") |
+| A4 | Transport of the product to site |
+| A5 | Construction: site waste and fuel and energy used on site |
+| B1-B7 | Use: maintenance, repair, replacement and operational energy and water |
+| C1-C4 | End of life: demolition, transport, waste processing and disposal |
+
+**Upfront carbon** is A1 to A5: everything up to practical completion. It is what a bill of quantities can measure, because the bill already lists the materials. ADLM reports upfront carbon only.
+
+**Units.** Carbon is reported as carbon dioxide equivalent: other greenhouse gases are converted to the amount of CO2 that would warm the planet as much. **kgCO2e** is kilograms. **tCO2e** is tonnes: 1 tCO2e = 1,000 kgCO2e.
+
+**Carbon factors.** A factor is the carbon per kg of a material, cradle to gate (A1-A3). Multiply the mass of material by the factor, then add transport and site waste:
+
+carbon (kgCO2e) = mass (kg) × (factor + A4 + wf × (factor + A4 + C2 + C3-C4))
+
+- **A4** is transport per kg: 0.005 kgCO2e/kg for local materials (about 50 km by road) and 0.032 for national ones (about 300 km).
+- **wf** is the waste factor: the extra material bought to cover what is wasted. For a waste rate w, wf = w ÷ (1 − w), so 5% waste gives 0.053.
+- **C2** and **C3-C4** are the transport and disposal of that waste: 0.005 and 0.013 kgCO2e/kg (1.77 for timber).
+- Fuel burnt on site (A5a) is litres × the fuel's factor, for example 2.66 kgCO2e per litre of diesel.
+
+This is the calculation in the Institution of Structural Engineers' *How to calculate embodied carbon* (2020), and it is the one Rate Gen uses.
+
+### How Rate Gen 3.0.x gives every rate a carbon figure
+
+From Rate Gen 3.0.0, every built-up rate has a carbon figure, worked out from the same materials and quantities as its price. Open **Carbon & Others** in Rate Gen. The screen is titled **Carbon Computation**, and its table shows each rate's **TRADE**, **TOTAL COST**, **KGCO2E / UNIT** and **COVERAGE**.
+
+- **It follows the build-up.** Change a quantity in a rate's trade and its carbon changes with it. Open a rate to see each material's kgCO2e, and hover over a figure for its factor and source.
+- **Labour and plant hire carry no material carbon.** Site fuel in a build-up is counted as A5a.
+- **Cement gives a range.** A rate with cement shows a low end and a high end. The high end takes the full cradle-to-gate cement factor. The low end takes the Nigerian producers' own reported figure, which covers only the kiln and its fuel, so it is a floor.
+- **An asterisk (*) marks an assumed mass**, for example a sandcrete block weighed from its standard size rather than from a stated weight.
+- **Services cables and pipes, from Rate Gen 3.0.1.** Copper cable and earth conductor are weighed from the cores and size in their own names, counting the copper only. PP-R pressure pipe and 110 mm uPVC soil pipe are weighed from their standard sizes. Manufactured items such as air conditioners, pumps, sanitaryware and light fittings are left without carbon in Rate Gen, on purpose, because they need the maker's own figure.
+
+**The factor sources** Rate Gen names are: CIDB Malaysia (2021) *Embodied Carbon Inventory Data for Construction Materials*; IStructE (2020) Table 2.3 (from ICE v3.0 and product EPDs); the UK Government GHG Conversion Factors 2024 for fuels; CARES EPD 0060 (2026) for rebar; and the Dangote Cement and Lafarge Africa 2024 annual reports for the cement low end.
+
+**On ADLM Cloud**, the same calculation runs on every rate in your library, for the state you price in. ADLM Cloud also holds factors for building services that SERVIQ measures: air conditioners, pumps, distribution boards and similar products at the CIBSE TM65 (2021) figure of 9 kgCO2e per kg of product where the item has no EPD, LED light fittings at 43.1 kgCO2e each (the median of six panel EPDs), sanitaryware, ductwork, cable tray and more. These feed the ICMS export and the sample cards.
+
+### How the carbon flows into the ICMS export
+
+1. Rate Gen works out kgCO2e per unit for each rate in your library.
+2. The ICMS export finds the rate behind each bill line (see **Carbon from** above) and multiplies its kgCO2e per unit by the line's quantity, converting units where needed (rebar in kg against a rate in tonnes, for example).
+3. The lines add up to a carbon total for each Group, in tCO2e, with a low end from the cement range.
+4. The cover sheet states the **carbon coverage**: the share of the cost that has a carbon figure behind it.
+5. With a floor area, carbon per m² = total kgCO2e ÷ IPMS 2 (or IPMS 1) area.
+
+**Read the coverage first.** A report that covers 60% of the cost understates the building's carbon by roughly the carbon of the other 40%. Look at the lines with **Carbon from** "none" on the **Lines** sheet. They are usually PC sums, manufactured services items or lines with no matching rate.
+
+### Typical carbon factors
+
+**Factors per kg (ADLM values, from Rate Gen):**
+
+| Material | Factor, A1-A3 (kgCO2e/kg) | Source named in Rate Gen |
+|---|---|---|
+| Cement | 0.83 (low end 0.57) | CIDB 2021; low end from Dangote and Lafarge 2024 reports |
+| Reinforcement bar | 0.821 | CARES EPD 0060, scrap-based electric arc furnace steel |
+| Structural steel sections | 1.55 | IStructE 2020 |
+| Steel fabric mesh | 0.77 | CIDB 2021 |
+| Binding wire, nails | 2.27 | CIDB 2021 |
+| Sandcrete hollow blocks | 0.0781 (low end 0.0545) | CIDB 2021, concrete block 10 MPa |
+| Sand, hardcore, laterite | 0.0049 | CIDB 2021 |
+| Granite, crushed rock | 0.010 | CIDB 2021 |
+| Sawn softwood | 0.263 | IStructE 2020 |
+| Sawn hardwood | 0.31 | CIDB 2021 |
+| Plywood | 0.681 | IStructE 2020 |
+| Aluminium roofing sheet | 13.0 | IStructE 2020 |
+| Sheet glass | 1.44 | IStructE 2020 |
+| Ceramic and vitrified tiles | 0.78 | CIDB 2021 |
+| Emulsion paint | 2.54 | CIDB 2021 |
+| Diesel burnt on site | 2.66 per litre | UK GHG Conversion Factors 2024 |
+
+**Per unit you buy (worked from the ADLM values, A1-A5, including transport and site waste):**
+
+| Item | kgCO2e | Low end | Mass used |
+|---|---|---|---|
+| Cement, 50 kg bag | 45.4 | 31.7 | 50 kg |
+| Reinforcement, per tonne | 899 | | 1,000 kg |
+| Structural steel, per tonne | 1,598 | | 1,000 kg |
+| 225 mm sandcrete block | 2.31 | 1.66 | 27.5 kg (assumed) |
+| 150 mm sandcrete block | 1.53 | 1.10 | 18.2 kg (assumed) |
+| Sharp sand, per tonne | 11.4 | | 1,000 kg |
+| Granite, per tonne | 16.7 | | 1,000 kg |
+| A142 mesh, per m² | 1.88 | | 2.22 kg/m² |
+
+**Concrete has no single factor in Rate Gen.** Its carbon comes from the cement, sand and granite in its build-up. Using the mix quantities from the concrete section of this handbook:
+
+| Mix | kgCO2e per m³ | Low end |
+|---|---|---|
+| 1:1.5:3 | 393 | 283 |
+| 1:2:4 | 317 | 230 |
+| 1:3:6 | 232 | 171 |
+
+These are worked from ADLM values, not read from Rate Gen. Your own Rate Gen concrete rate can differ a little, because its build-up may include other items, such as fuel for plant.
+
+A few points about these figures:
+
+- **Cement does most of the work.** In 1:2:4 concrete, the cement is about 90% of the carbon. Cutting cement content, or using a lower grade where the design allows, is the biggest single lever on a Nigerian building's upfront carbon.
+- **The rebar factor is chosen for Nigeria.** Nigerian rebar mills melt scrap in electric furnaces, and much imported rebar comes from Turkish scrap-based mills, so Rate Gen uses a scrap-based EPD (0.821). The world-average figure in IStructE 2020, mostly from blast furnace steel, is 1.99. Using it would more than double the rebar carbon.
+- **Block masses are assumed.** They come from the NIS 87:2007 block sizes at 1,920 kg/m³. A block from your supplier may weigh more or less.
+
+**Worked example.** 100 m² of 225 mm sandcrete blockwork, using the ADLM block and mortar constants from this handbook:
+
+1. Blocks = 100 × 10 × 1.03 = 1,030 blocks × 2.31 = **2,383 kgCO2e**.
+2. Mortar cement = 100 × 0.20 = 20 bags × 45.4 = **909 kgCO2e**.
+3. Mortar sand = 100 × 0.055 = 5.5 t × 11.4 = **63 kgCO2e**.
+4. Total = 3,355 kgCO2e = **3.36 tCO2e**, or about **33.5 kgCO2e per m²** of wall. At the low end it is about 2.40 tCO2e.
+
+> **Important:** Upfront carbon is not whole-life carbon. It leaves out maintenance, replacement, the energy used to run the building and end of life. Say "upfront carbon (A1-A5)" on every report, and state the coverage and the factor sources, so nobody reads it as more than it is.
+
 This part of the handbook follows real jobs from start to finish. Each use case shows which ADLM products to use, in what order, and where one product hands over to the next. The button names are the ones you see on screen. For the full detail on any product, follow the link to its own guide.
 
 ## Which ADLM tool for which job
@@ -810,6 +1145,7 @@ Start here when you are not sure which product to open. Most jobs use two or thr
 | Value work and issue payment certificates | [ADLM Cloud](/guides/cloud): **Valuation** | Interim payment applications, certificates, variations and a final account |
 | Report to a client | [ADLM Cloud](/guides/cloud): **Share dashboard**, **Project report**, **Export** | A public read-only dashboard, PDF reports and Excel workbooks |
 | Work with a colleague on one project | [ADLM Cloud](/guides/cloud): **Collaborators** | Shared access at **View only** or **Full access** |
+| Report cost and carbon to ICMS 3 | ADLM Cloud: **Export**, then **ICMS 3 cost and carbon (Excel)** | Cost and upfront carbon by ICMS 3 Group, adding up to the contract sum |
 
 > **Note:** Each product is a separate subscription. QUIV does not include SERVIQ, and HERON does not include Rate Gen. Pricing from the rate library in any product needs a Rate Gen subscription on the same account.
 
@@ -987,9 +1323,8 @@ One library on your account, priced for your location, with your own build-ups a
 
 ### Tips
 
-> **Important:** Build each custom rate in one place. Rate Gen desktop keeps the cloud copy of your custom rates in step with its own **Saved Rates** list, and it does not download rates built elsewhere. So if you use the desktop app, build your custom rates there. A rate built on the website, or on another PC, can be removed from your account the next time the desktop app syncs.
+> **Important:** Rates are built only in the ADLM Rate Gen desktop app. The website shows your library and every rate's build-up, but it cannot build, edit or delete a rate or change a price. From Rate Gen 3.0.1 your custom rates download to every PC you sign in on, so a rate built on one PC appears on the others.
 
-- If your firm works only on the website, you can build custom rates there instead: open `/work/library` and click **Build a custom rate**. On the website a rate has a separate **Plant** group, where a plant line takes the machine's name and your price per hour.
 - Change prices in the library, and quantities in the build-up. A price is shared by every rate that uses it. A quantity belongs to one rate.
 - A project you have already priced keeps its rates. A library change reaches it only when the line is priced again, or when **Follow RateGen changes** is on.
 
@@ -1362,6 +1697,53 @@ A new estimator who has seen every stage of an ADLM job on a realistic project, 
 - **Hide samples** only hides them in that browser. Click **Show N samples** to bring them back.
 - Go through the [Rate Gen guide](/guides/rategen) section on reading a build-up together. An estimator who can read a rate's **Rate Composition** can defend every price on a bill.
 
+## Use case 11: An ICMS 3 cost and carbon report for a client
+
+### Scenario
+
+A client's development bank wants the cost plan for a four-bedroom duplex in ICMS 3 form, with its upfront carbon, so it can compare the project with others in its portfolio.
+
+| Who it is for | Tools used |
+|---|---|
+| Quantity surveyors reporting to international clients, funders and cost consultants | QUIV for Revit or ADLM HERON, ADLM Rate Gen, ADLM Cloud |
+
+### Steps
+
+Price the bill:
+
+1. Measure the building in QUIV or HERON and save it to ADLM Cloud.
+2. Price every line from your Rate Gen rates. The carbon comes from the same rates, so a line priced from a Rate Gen rate gets a firm carbon figure.
+3. In Rate Gen, open **Carbon & Others** and check that your main rates (concrete, reinforcement, blockwork, roofing, finishes) show a figure under **KGCO2E / UNIT**.
+
+Set the contract figures on ADLM Cloud:
+
+1. Open the project.
+2. On the **Contract** tab, set **Preliminaries %**.
+3. Under the bill, set each preliminary item's **Alloc %**, or click **Even split**. Each item becomes its own line in Group 08.
+4. In the **Summary** box at the foot of the bill, set the contingency and VAT percentages.
+5. Click **Save changes**.
+
+Export and check:
+
+1. Click **Export**. Under **ICMS 3**, click **ICMS 3 cost and carbon (Excel)**.
+2. On the **ICMS 3 report** sheet, read every detail marked **Assumed** and correct it in your covering letter, especially the base date and the floor area.
+3. Check the carbon coverage on the same sheet. If it is well below 90%, look at the lines with **Carbon from** "none" on the **Lines** sheet and price them from Rate Gen rates where you can.
+4. Open **Not placed** and decide a Group for each line it lists.
+5. Sort **Lines** by **ICMS code** and read down the **Why** column. Note any line you would place differently, such as roof beams placed under roof finishes, and adjust the Group totals in your report.
+6. Divide the totals by the floor area for cost and carbon per m², and say which IPMS area you used.
+7. If the bank's cost team uses software that reads the RICS Data Standard, export **ICMS 3 cost and carbon (JSON)** as well.
+
+### What you get at the end
+
+A cost report in the 13 ICMS 3 Groups that adds up to the contract sum, an upfront carbon figure (A1-A5) for each Group in tCO2e with its low end, cost and carbon per m², and a line-by-line record of where every figure came from.
+
+### Tips
+
+- The report follows the contract sum. Approved variations are not in it, so issue a fresh report when the final account is agreed.
+- Always quote carbon as "upfront carbon (A1-A5)" with the coverage and the factor sources from the cover sheet.
+- Quote the low end too where cement dominates. It shows how much depends on the cement figure.
+- Try it on a sample first. The [sample projects](/guides/samples) export to ICMS 3 just like your own.
+
 ## Good habits
 
 These habits save the most time across all the ADLM products.
@@ -1388,5 +1770,5 @@ These habits save the most time across all the ADLM products.
 
 - Keep one rate library for your firm, in Rate Gen, and price every job from it. Do not keep a second set of rates in a spreadsheet.
 - Set your **Pricing location (State)** on your profile, so every product prices for the right zone.
-- Build custom rates in one place only. If anyone in the firm uses Rate Gen desktop, build every custom rate there. A rate built on the website or on another PC can be removed from your account the next time the desktop app syncs.
+- Build and edit every rate in the Rate Gen desktop app. The website is read-only for rates; use it to read build-ups and to pick rates onto your projects.
 - Turn **Follow RateGen changes** off on a bill before it goes out, so the prices you issued do not move.

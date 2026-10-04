@@ -17,7 +17,7 @@ import { useFeedback } from "./feedback/feedbackContext.js";
 // each product. Sixteen guides in one panel is a wall, so they sit in three
 // of his panels (same dsh-panel / dsh-dl pattern), in that same order.
 const GROUPS = [
-  { title: "Start here", ids: ["suite", "qs-handbook", "getting-started", "installer-hub"] },
+  { title: "Start here", ids: ["suite", "qs-handbook", "ai-services", "getting-started", "installer-hub"] },
   { title: "Products", ids: ["quiv", "heron", "rategen", "mep", "timepro"] },
   {
     title: "ADLM Cloud",

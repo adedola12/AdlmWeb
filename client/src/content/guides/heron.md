@@ -1,9 +1,9 @@
 ---
 id: heron
 title: ADLM HERON
-tagline: Measure PDF drawings in PlanSwift with the ADLM templates, then turn the takeoff into a priced bill, a material and labour budget and a live Excel link.
-version: "2.9.6"
-updated: 2026-10-01
+tagline: Measure PDF drawings in PlanSwift with the ADLM template, then let HERON check the take-off, price the budget and hand a clean bill to Excel and ADLM Cloud.
+version: "3.0.1"
+updated: 2026-10-04
 platform: Windows desktop app that works alongside PlanSwift 10 or 11
 productKeys: [planswift, heron]
 pdf: ADLM-Heron-User-Guide.pdf
@@ -11,7 +11,31 @@ pdfAliases: [ADLM-Complete-User-Guide.pdf]
 order: 5
 ---
 
-ADLM HERON (formerly the ADLM PlanSwift Plugin) is a Windows app for quantity surveyors and estimators who take off from 2D drawings in PlanSwift. HERON adds the ADLM template library to PlanSwift, so every slab, wall, finish and service you measure already knows its unit and its formula. HERON then reads your takeoff live out of PlanSwift and gives you a billed takeoff, a material and labour budget priced from your Rate Gen library, a professional Excel bill of quantities and a live link into your own Excel workbooks. You can also save each job to your ADLM Cloud projects and open it on the website. This guide covers HERON 2.9.6.
+ADLM HERON is a Windows app for quantity surveyors and estimators who take off from 2D drawings in PlanSwift. You measure in PlanSwift with the ADLM template, so every slab, wall, finish and service already knows its unit and its formula. HERON then reads the job PlanSwift has open, tells you what is wrong with the take-off before it becomes a bill, prices a material and labour budget from your Rate Gen library, works out steel tonnage, and sends the bill to Excel and to ADLM Cloud. This guide covers HERON 3.0.1. HERON 3.0.0 is the version on the Installer Hub today; 3.0.1 is staged and adds the constants fixes listed in [What's new](#whats-new-in-301).
+
+## What's new in 3.0.1
+
+HERON 3.0 is a complete redesign. If you used HERON 2.9, the main changes are:
+
+- **A new shell.** A slim sidebar with **Take-offs**, then the open take-off's four screens: **Take-off**, **Budget**, **Steel tonnage** and **Excel**. **Dock** puts HERON in a narrow column beside PlanSwift.
+- **Take-offs, not projects.** Each PlanSwift job becomes a take-off card. Jobs you saved to ADLM Cloud earlier appear as cards too.
+- **Checks before the bill.** HERON flags items with **No quantity**, **No unit**, a **Dead form field**, **Not in a folder** or **Empty sub-items**, so silent zeros never reach the bill.
+- **Re-cut without touching PlanSwift.** View the take-off **By Folder**, **By Trade** or **By Element**, and search every item and sub-item in the job.
+- **Show in PlanSwift.** Jump from an item to the page it is drawn on.
+- **A simpler review.** **Review & save** opens one sheet, **Review before saving**, with **AI Review** and **Save to ADLM Cloud**.
+- **Fill a client's bill.** Put HERON's quantities into a client's own Excel bill, in their layout.
+- **Roof timber is billed again.** The Roof Covering works out its rafters, purlins, struts and ties, wall plate, fascia and barge boards, and they reach the bill, the budget and the export.
+- **Pile, beam, slab and staircase breakdowns** are calculated again.
+
+**HERON 3.0.1** (staged) aligns HERON's material constants with the other ADLM products:
+
+- Blockwork waste is now **1.03** (was 1.05).
+- Floor and wall tile waste is now **1.10** (was 1.12).
+- Rebar weight uses **d²/162** everywhere (0.00617 kg/m per mm²).
+- Paint is measured and labelled in **litres** (coverage 2.0 m² per litre, all coats).
+- HERON keeps **1.10** waste on rebar and formwork on purpose: rebar waste carries laps and offcuts, and formwork is bought in whole sheets.
+
+Constants you have edited yourself are kept. Only values still at the old default move to the new one.
 
 ## Before you start
 
@@ -20,652 +44,543 @@ ADLM HERON (formerly the ADLM PlanSwift Plugin) is a Windows app for quantity su
 | You need | Notes |
 |---|---|
 | A Windows PC | HERON is a Windows desktop app. |
-| PlanSwift 10 or 11 | HERON works alongside PlanSwift. It does not replace it. If you run both versions, the templates go into each one. |
+| PlanSwift 10 or 11 | HERON works alongside PlanSwift. It does not replace it. |
 | An ADLM account with a HERON subscription | The same email and password you use on the ADLM website. |
-| Rate Gen (optional) | Pricing from your rate library needs a Rate Gen subscription on the same account. Without it you can still measure, review and export quantities. |
-| Microsoft Excel (optional) | Needed for the Excel export and the Excel Takeoff Link. |
-| An internet connection | Needed for your first sign-in, for loading rates and for saving to the cloud. Measuring works offline. |
+| Rate Gen (optional) | Prices in the **Budget** come from the ADLM rate library, which is part of Rate Gen. Without it you get the budget as quantities only. |
+| Microsoft Excel (optional) | For the workbooks, the Excel Takeoff Link and **Fill a client's bill**. |
+| An internet connection | For your first sign-in, loading rates, AI Review and saving to ADLM Cloud. Reading and checking a take-off works offline. |
 
 ### Installing HERON
 
-HERON is installed from the ADLM Installer Hub, never from a loose download. See [ADLM Installer Hub](/guides/installer-hub) for the Hub itself.
+HERON is installed from the ADLM Installer Hub. See [ADLM Installer Hub](/guides/installer-hub).
 
-1. Close PlanSwift completely. The templates are written into PlanSwift's own folders, and Windows locks them while PlanSwift is open.
-2. Close Excel too, so the Excel add-in can be registered.
-3. Open the Installer Hub and sign in.
-4. Find **ADLM Heron** and click **Install** (or **Update** if you already have an older version).
-5. Wait for the Hub to report that the install has finished.
+1. Close PlanSwift and Excel completely.
+2. Open the Installer Hub and sign in.
+3. Find **ADLM Heron** and install or update it.
+4. Wait for the Hub to report that the install has finished.
 
-The Hub puts four things on your PC:
+The Hub installs the HERON app with an **ADLM HERON** shortcut, the ADLM template inside every PlanSwift it finds, a protected copy of the template, and the Excel add-in.
 
-- The HERON app, with an **ADLM HERON** shortcut on the desktop.
-- The ADLM template library, inside every PlanSwift installation it finds.
-- A protected copy of the templates, which HERON uses to put them back if PlanSwift ever loses them.
-- The Excel add-in (the ADLM Takeoff Link).
-
-> **Important:** If the Hub reports that access was denied while installing HERON, PlanSwift was still running. Check the notification area beside the clock, close PlanSwift, and click **Install** again.
+> **Important:** If the install fails with access denied, PlanSwift or Excel was still running. Close both and install again.
 
 ### One licence, one PC
 
-Your HERON licence is tied to the PC you first sign in on. If you sign in on a second PC, HERON tells you the subscription is bound to a different device. To move your licence to a new computer, contact ADLM support through [/support](/support) and ask for the device lock to be reset.
-
-### The order to do things in
-
-You only do steps 1 to 3 once. After that, your day starts at step 4.
-
-1. Install HERON from the Hub with PlanSwift closed.
-2. Open HERON and sign in. Signing in is what switches the ADLM templates on.
-3. Restart PlanSwift. PlanSwift only reads its template library when it starts.
-4. Open or create your job in PlanSwift and scale the drawings.
-5. Measure with the ADLM templates, then read, price and export the results in HERON.
+Your HERON licence is tied to the PC you first sign in on. To move it to a new computer, contact ADLM support through [/support](/support) and ask for the device lock to be reset.
 
 ## Signing in
 
-1. Open **ADLM HERON** from the desktop shortcut.
-2. On the **Sign in to ADLM Plugin** screen, type your email or username in **Username or Email**.
-3. Type your password in **Password**. Click the eye button if you want to check what you typed.
-4. Click **Sign In**.
+When HERON starts you see its splash card while it reads the ADLM template in PlanSwift.
 
-HERON checks your subscription and your device, switches the ADLM templates on in PlanSwift, and opens the **Dashboard**. You will see one of these messages:
+![The HERON splash window shown while the plugin starts and reads the ADLM template in PlanSwift.](shot:heron-splash.png)
 
-| Message | What it means |
-|---|---|
-| **ADLM Plugin activated successfully!** | The templates are in place. Carry on. |
-| **ADLM templates restored. Please restart PlanSwift to see them.** | The templates had gone missing (usually after signing out) and HERON put them back. Close PlanSwift completely and open it again. |
-| **Welcome, (your name)!** | You are signed in. If this is your first sign-in on this PC, restart PlanSwift before you look for the templates. |
+1. Open **ADLM HERON** from the Start menu or the desktop.
+2. Type your **Email** and **Password**. Click the eye to check what you typed.
+3. Click **Log in**.
 
-If sign-in fails, the message tells you why. The common ones are **Invalid username/email or password.**, **Your subscription has expired.**, **Device limit reached for this subscription.** and **Internet required for first sign-in (no valid offline license found).** See [Troubleshooting](#troubleshooting).
+If you have forgotten your password, click **Forgot password?** to reset it on the ADLM website, then sign in with the new one.
 
-> **Tip:** There is no password reset inside HERON. If you have forgotten your password, reset it on the ADLM website, then sign in to HERON with the new one.
+- HERON remembers you and signs you back in next time.
+- If it cannot reach the server, it signs you in from your saved licence and the top bar shows **Offline session: sign in again for cloud features**. You can still read and check take-offs. Loading rates, AI Review and saving to ADLM Cloud need a full sign-in.
+- **Sign out** is at the bottom of the sidebar. Signing out hides the ADLM template from PlanSwift at its next restart, because the template belongs to your licence. Sign back in and restart PlanSwift to get it back.
 
-### Staying signed in
+> **Tip:** The first time you sign in on a PC, restart PlanSwift afterwards. PlanSwift only reads its template library when it starts.
 
-- HERON remembers you. When you open it again it signs you back in from your saved session.
-- A session lasts 10 days. After that you see **Session Expired** and sign in again. This is normal.
-- If HERON starts without reaching the server, it signs you in from your saved licence. The header then shows an **Offline session** note. Measuring, reviewing and exporting to Excel all still work. Loading rates, cloud projects and saving to the cloud need a full sign-in: click **Sign Out**, then sign in again while you are connected.
-
-### Signing out
-
-Click **Sign Out** at the bottom of the sidebar. HERON tells you that PlanSwift templates will be hidden on next restart. That is deliberate: the templates belong to your licence. Sign back in and restart PlanSwift to get them back.
-
-> **Tip:** Do not sign out at the end of each day out of habit. It gains you nothing and costs you a PlanSwift restart the next morning. Just close the window.
-
-## A tour of the HERON window
-
-HERON runs in its own window beside PlanSwift. It never redraws your plans. It reads the job that is open in PlanSwift.
+## The HERON window
 
 ### The sidebar
 
-| Button | What it opens |
+| Item | What it does |
 |---|---|
-| **Dashboard** | Start a new project, see the units HERON detected and open projects saved to the cloud. |
-| **Quantity Take Off** | Your measured folders and items, their breakdown, and **Save / Export**. |
-| **Budget** | The material and labour schedule behind each item, with your margin. |
-| **Steel Tonnage** | Converts measured steel lengths into tonnes. |
-| **Connect Excel** | Checks and repairs the Excel add-in and starts the live link. |
-| **Feedback** | Opens WhatsApp with a message to ADLM support. |
-| **Sign Out** | Signs you out of HERON. |
+| **Take-offs** | All your take-offs, and the job PlanSwift has open. |
+| **Take-off** | The items read from PlanSwift and their checks. The badge shows how many need attention. |
+| **Budget** | Material and labour beneath every item. |
+| **Steel tonnage** | Measured steel lengths turned into tonnes. |
+| **Excel** | Workbooks, **Fill a client's bill** and the Excel Takeoff Link. |
+| **Settings** | Display units, the take-off time log, material constants and the beta programme. |
+| **Send feedback** | Opens WhatsApp with a message to ADLM support. |
+| **Sign out** | Signs you out of HERON. |
 
-**Quantity Take Off**, **Budget** and **Steel Tonnage** stay greyed out until you start or open a project from the **Dashboard**. The round button on the edge of the sidebar collapses it to icons when you need more room, and you can drag the sidebar edge to resize it.
+The four take-off screens appear under the name of the open take-off. Under **BETA** you will also see **Auto take-off** and **Auto-takeoff probe**, greyed out. They are switched off in this release (see [AI in HERON](#ai-in-heron)).
 
-### The header
+### The top bar
 
-Along the top right you will find:
+- **←** goes back to all take-offs.
+- The take-off name, with **Rename**, and a line saying which PlanSwift job it came from and when it was read. The dot turns green once the job has been read.
+- **Read this job** (before the first read) or **Re-read job**.
+- **Dock** and **Theme** (light or dark).
 
-- **The network signal.** Bars show how well you are connected to the ADLM Cloud: **Excellent**, **Good**, **Fair** or **Poor**. It shows **Offline** when you have no internet, and **No server** when your internet works but the ADLM server is not answering. Hover over it for details and click it to check again.
-- **The theme button.** Switches between light and dark mode.
-- **The gear.** Opens **Settings** (display units, the Takeoff Time Log and your material constants).
-- Your name and email.
+### Docking beside PlanSwift
 
-## The Dashboard
+Click **Dock** to shrink HERON into a narrow column on the right of your screen, so you can see PlanSwift and HERON together. The sidebar folds to icons and the tables drop their less important columns. Click **Full screen** to go back.
 
-The Dashboard is where every session starts.
+![HERON docked beside PlanSwift instead of full screen.](shot:heron-docked.jpg)
 
-- **The top strip** shows the PlanSwift job that is open, the date, your PlanSwift version and the unit system HERON is using, for example **Units: Metric**. HERON reads this from the Scale Units of your PlanSwift pages when you open a project. Check it each time you open a new job.
-- **New Project** starts a new takeoff from the job open in PlanSwift. Click **Start New**.
-- **Quick Actions** jump straight to **Quantity Take Off** or **Budget**, or **Refresh** the Dashboard.
-- **Recent Projects** lists the HERON projects saved to your ADLM Cloud account. Sort them with **Recent**, **A - Z** or **Most Items**, and use the search box to find one by name.
+## The ADLM template in PlanSwift
 
-### Opening a saved project
+The template is where your measurements get their meaning. Instead of drawing a shape and deciding later what it is, you pick what you are measuring first, and the template brings its own unit, form and formula.
 
-1. Open the matching job in PlanSwift first.
-2. On the Dashboard, find the project under **Recent Projects** and click **Open**.
-3. If the project was saved from a different PlanSwift job, HERON warns you with **Job Mismatch**. Click **Yes** only if you are sure it is the right job.
-4. HERON loads the project and asks whether to build the bill into PlanSwift now. Click **No** for a project you measured in HERON yourself. Click **Yes** only for a bill that came from the website and has no measurements behind it yet (see [Step 2: Build the bill in PlanSwift](#step-2-build-the-bill-in-planswift)).
-5. HERON opens **Quantity Take Off**. Your next **Save to Cloud** updates this same project.
+In PlanSwift's templates panel choose **Complete ADLM TakeOff Plugin**. It is grouped by trade: SUBSTRUCTURE, FRAME, SWIMMING POOL, STAIRCASE, BLOCKWORK AND OPENINGS, FINISHES, ROOFING, ELECTRICAL, PLUMBING, EXTERNAL WORKS, RAILING, HVAC, FIRE ALARM and ELV SYSTEMS. Expand a trade to find the tool you measure with.
 
-Click the small arrow on a project card to expand it and see the materials saved with it, with a **Materials total (material + labour)** at the bottom.
+HERON matches each item back to this template by its name, form and formula. That match gives the item its trade and element. Items drawn without the template are still read, but they show **Not matched to the ADLM template**.
 
-## Setting up the job in PlanSwift
+### Setting up the job
 
-Everything HERON reads comes from the job open in PlanSwift: its pages, its folders and its takeoff items. A tidy job gives you a tidy bill.
+1. Create the job in PlanSwift and set metric or imperial.
+2. Import your drawings and name every page properly, for example "Ground Floor Plan".
+3. Scale every page. The scale is set per page, not per job. Scale off a long dimension you trust, then check another dimension on the other axis.
+4. Measure with the ADLM tools, room by room or element by element.
+5. On each item's properties dialog, set the **Folder**. A folder becomes a heading in the bill. Name folders by storey, block or trade.
 
-1. Create a new job in PlanSwift and set its measurement system to metric or imperial. This drives the units your pages report, which HERON then reads.
-2. Import your drawings (PDF or image files) into the job.
-3. Rename every page you will measure on, for example "Ground Floor Plan" rather than "Page 7".
-4. Group pages into folders by drawing set, for example "Admin Struct" and "Admin Arch".
-5. Rotate any sideways sheet, and give each separate drawing on a sheet its own page, because the scale is set per page.
+> **Important:** An item with no folder is flagged **Not in a folder** and will not fall under any heading. HERON reads folders; it does not write them.
 
-> **Tip:** When revised drawings arrive mid-job, import the revision as a new page, measure it, then delete the old page. You never lose a takeoff you might want to compare against.
-
-## Scaling your drawings
-
-This is the step that decides whether every number after it is right. A PDF does not know how big the building is until you tell it.
-
-> **Important:** The scale is set for each page, not for the whole job. Every page you measure on needs its own scale.
-
-### Setting the scale
-
-1. Open the page in PlanSwift.
-2. Find a long dimension you trust, ideally an overall grid dimension of 6 metres or more. Avoid door and window sizes, which are often drawn roughly.
-3. Start PlanSwift's Scale tool.
-4. Type the real length in the units shown, for example 4425 for a 4425 mm grid, or 4.425 if you are working in metres.
-5. Zoom right in, then click the two ends of that dimension.
-6. Repeat on a dimension running the other way. Plots and scans are not always stretched equally in both directions.
-
-### Checking the scale
-
-1. Use PlanSwift's Dimension tool to measure a different dimension on the same page, ideally on the other axis.
-2. Compare the result with the figure printed on the drawing.
-3. If it is out by more than a few millimetres, the scale is wrong. Scale the page again.
-
-### Common scaling mistakes
-
-| What went wrong | What you see, and the fix |
-|---|---|
-| The page was never scaled | Quantities look far too big or too small. Scale the page. Existing measurements update to the new scale. |
-| Scaled off a wrong dimension | Everything is out by the same percentage. Check with the Dimension tool and scale again. |
-| Millimetres typed into a metre field | Quantities out by a factor of 1,000. Scale again, entering the length in the units shown. |
-| Clicked at low zoom | A small, steady error across the job. Zoom in until the line is several pixels thick before clicking. |
-| Two scales on one sheet | Give each part of the sheet its own page, and put the scale in the page name. |
-
-> **Note:** Scaling also decides which units HERON uses. HERON reads the page's Scale Units (for example M, MM, FT or IN). If your pages are unscaled, HERON may pick the wrong unit system. You can always set it yourself in **Settings**, under **Display Units**.
-
-> **Tip:** If you rescale a page after measuring, go back to HERON's **Quantity Take Off** and click **Reload** so HERON picks up the corrected numbers.
-
-## The ADLM template library
-
-The templates are the heart of HERON. Instead of drawing a shape and deciding later what it is, you pick what you are measuring first, and the template brings its own unit, colour and formula.
-
-In PlanSwift, open the templates panel and choose **Complete ADLM TakeOff Plugin** from the list at the top. The library is grouped by trade:
-
-- SUBSTRUCTURE
-- FRAME
-- SWIMMING POOL
-- STAIRCASE
-- BLOCKWORK AND OPENINGS
-- FINISHES (wall, floor and ceiling finishes)
-- ROOFING
-- ELECTRICAL
-- PLUMBING
-- EXTERNAL WORKS
-- RAILING
-- HVAC
-- FIRE ALARM
-- ELV SYSTEMS
-
-Expand a trade to see its folders, and expand a folder to see the templates you measure with. Many templates give you more than one quantity from one measurement. For example, a floor tile area also gives you its skirting, and a wall area gives you its rendering and perimeter.
-
-> **Note:** If the ADLM library is missing from PlanSwift, see [The ADLM templates are not in PlanSwift](#the-adlm-templates-are-not-in-planswift).
-
-## Measuring with the templates
-
-PlanSwift gives you four kinds of measurement. The template you pick decides which one you use.
-
-| Kind | Gives you | Use it for |
-|---|---|---|
-| Area | m² (or sq ft) | Slabs, wall elevations, floor and ceiling finishes, roof coverings, excavation footprints |
-| Linear | m (or ft) | Walls on plan, beams, skirting, kerbs, pipe and cable runs, railings |
-| Segment | m (or ft) | Single straight lengths where you want each leg recorded on its own |
-| Count | Nr | Columns, doors, windows, sanitary fittings, light points, sockets |
-
-### Measuring an item
-
-1. Open the page and check it is scaled.
-2. In the template library, expand down to the item you want, for example FINISHES, then FLOOR FINISH, then the floor tile template.
-3. Start the takeoff from that template (in PlanSwift, click the button that appears beside the template).
-4. Name the item after the room or element, for example "Offices" or "Sick bay", and adjust anything the template asks for, such as thickness or height. The name is what appears in your bill, so type it properly.
-5. Draw the measurement on the plan, then finish it.
-6. Check the running total in PlanSwift's takeoff summary.
-
-> **Tip:** Measure room by room, not one big shape per floor. Five separately named areas cost no more effort than one, and they give you a bill you can defend line by line.
-
-### Organising the takeoff so it bills well
-
-HERON reads your PlanSwift folders literally: each folder becomes a section of your bill, and item names become descriptions.
-
-- **By storey:** Admin Sub, Admin GF, Admin FF, Admin RF.
-- **By block:** prefix everything, for example Admin and Hostel, so you can export one block at a time.
-- **By package:** Admin Finishes, Admin Openings, where a trade is let separately.
-
-Some names carry meaning for HERON:
+### Names that carry meaning
 
 | Name it like this | Because |
 |---|---|
-| 225 Wall Area, 150 Wall Area | The leading figure is the wall thickness in millimetres, used for blocks, mortar and rendering. |
-| Concrete in Column, Concrete in slab | The element type drives the concrete, formwork and reinforcement breakdown. |
-| UKB 305x165x40, SHS 100x100x5 | Steel section sizes are read by **Steel Tonnage** and converted to tonnes. |
+| 225 Wall Area, 150 Wall Area | The leading figure is the wall thickness in millimetres. |
+| Concrete in Column, Concrete in slab | The element drives the concrete, formwork and reinforcement breakdown. |
+| UKB 305x165x40, SHS 100x100x5 | **Steel tonnage** reads the section from the name. |
 
-> **Important:** Avoid two items with the same name inside one folder. HERON merges them when it reads the job. If they are different, say so in the name or put them in different folders.
+## Take-offs
 
-## Quantity Take Off
+Click **Take-offs** in the sidebar. At the top, a card tells you **PlanSwift has a job open**, with the job's name. Below are your take-offs as cards.
 
-This is where your PlanSwift measurements become billable quantities. Click **Quantity Take Off** in the sidebar.
+![The HERON take-offs screen: the job PlanSwift has open and your saved take-offs as cards.](shot:heron-take-offs.png)
 
-The screen has three panels:
+Each card shows **ITEMS**, **TO CHECK** and **PRICED**, the PlanSwift job it came from, and when it was last read. Switch to **List** for a table with **TAKE-OFF**, **PLANSWIFT JOB**, **CLIENT**, **ITEMS**, **TO CHECK** and **READ**. **Grid** switches back.
 
-- **Take Off Folders:** the folders in your PlanSwift job.
-- **Take Off Items:** the items in the selected folder, with **Name**, **Qty** and **Unit**.
-- **Take Off Breakdown:** what the selected item resolves into, such as concrete, formwork, reinforcement and other sub-quantities.
+![The take-offs screen switched to List view.](shot:heron-take-offs-list.png)
 
-Click **Reload** at the top whenever you change something in PlanSwift: a new measurement, a renamed folder or a corrected scale. HERON reads a snapshot of the job, and **Reload** refreshes it.
+### Making a take-off from a job
 
-> **Tip:** Reload fixes most surprises. If PlanSwift was restarted while HERON was open, **Reload** also reconnects to it.
+1. Open the job in PlanSwift.
+2. In HERON, click **Make a project from this job** on the top card. (Or click **New take-off**, then **Bring that job across**.)
+3. HERON shows **Take-off created**. It is named after the PlanSwift file. Click **Rename it** to give it the job's real name, or **Leave the name**.
 
-### Editing an item's parameters
+![The New take-off dialog explaining that HERON brings across the job open in PlanSwift.](shot:heron-new-take-off.png)
 
-1. Double-click an item in **Take Off Items**.
-2. A detail window opens, with one block for each measured instance of that item (each **Instance** shows its size and parameters).
-3. Change the parameters the item offers, such as thickness, depth, height or spacing.
-4. Close the window. The breakdown recalculates.
+![The confirmation after Make a project from this job, offering to rename the new take-off.](shot:heron-project-created.png)
 
-### Adding reinforcement
+In **Rename this take-off**, type a **Name** and, if you like, a **Client (optional)**, then click **Save**. This is HERON's name for it. The PlanSwift file keeps its own name.
 
-For concrete items, the detail window has a **Reinforcement** section on each instance.
+![The Rename this take-off dialog with Name and optional Client.](shot:heron-rename.png)
 
-1. Click **+ Bars** for main and distribution bars, or **+ Links** for stirrups and links.
-2. Enter **Dia:** (bar diameter in mm), **Nr:** (number of bars) and **Spc:** (spacing). HERON works out the weight in kg.
-3. Use the ✕ on a row to remove it.
-4. Click **Apply Reinforcement** to keep your changes, or **Cancel** to discard them.
+> **Note:** HERON takes off nothing itself. It reads what the ADLM template collected in PlanSwift. If the job PlanSwift has open is already a take-off, **New take-off** says so.
 
-### Roofs
+### Renaming or deleting a take-off
 
-Roof items work from the plan area and the pitch, so you measure the plan, not the slope. If HERON shows **Invalid Roof Area.** or **Pitch value must be greater than zero.**, check the roof measurement and its pitch in PlanSwift, then click **Reload**.
+Click **⋯** (**More**) on a card. The details card shows the client, when it was created and read, and whether it is **On ADLM Cloud**. Click **Rename** or **Delete**.
 
-## Pricing and saving the bill
+![The take-off details dialog opened from the card menu, with Rename and Delete.](shot:heron-project-menu.png)
 
-When your takeoff is complete, click **Save / Export** at the bottom of **Quantity Take Off**. Nothing is saved yet. HERON opens the **Review Takeoff Before Saving** screen, where you check descriptions, set rates and order the bill.
+Deleting removes the take-off from HERON only. Nothing is deleted in PlanSwift, and anything already saved to ADLM Cloud stays there.
 
-### What is on the review screen
+### Take-offs from ADLM Cloud
 
-| Part | What it does |
-|---|---|
-| Status bar | How many items are ready, plus the rate status. With Rate Gen it also shows **Rates:** matched out of total, and the **Total** in your currency. |
-| **Project Name:** | The name the project is saved under in the cloud. Put the client or job name here. |
-| **Search Rate:** | Search your Rate Gen library and apply a rate to the selected row (Rate Gen accounts only). |
-| **Keep edited rates (uncheck to use the latest from your library)** | When ticked, the rates you typed come back next time you open this review. When unticked, HERON uses the latest rates from your library. |
-| The bill table | **Item**, **Description**, **Qty**, **Unit**, **Rate** and **Amount**, grouped into sections by folder. |
+Projects already saved to ADLM Cloud from HERON become take-off cards the first time HERON sees them, marked as from ADLM Cloud. Open the matching job in PlanSwift before you read one.
 
-### Loading rates
+## Reading the job
 
-Rates are never loaded on their own. The bill opens with every rate at 0, so you decide when a job is priced.
+Open a take-off. Before its first read, HERON asks you to **Read the job PlanSwift has open**, and shows the **JOB**, **UNITS** and **PLANSWIFT** version it found. Check the units each time you start a new job.
 
-1. Click **Load rates** at the bottom of the review screen. HERON prices the bill from your Rate Gen library and shows how many items matched.
-2. The button then reads **Reload rates**. Click it again whenever you want to pull the latest rates.
+![A new take-off before the job is read, with Read this job at the top.](shot:heron-not-read.png)
 
-Loading rates on the bill also prices the **Budget** behind it, so the two stay in step.
+1. Make sure the right job is open in PlanSwift.
+2. Click **Read this job**.
+3. HERON reports **Job read**: items read, folders, and how many have **No quantity**, **No unit** or are **Not in a folder**.
+4. Click **Check the take-off**.
 
-> **Note:** **Load rates** and **Search Rate:** appear only if your account has an active Rate Gen subscription. Without Rate Gen you can still type rates by hand.
+![The Job read summary: items read, folders, and how many have no quantity, no unit or no folder.](shot:heron-job-read.png)
 
-### Editing the bill
+Nothing is imported and PlanSwift is not changed. If a different job is open in PlanSwift, HERON warns you (**A different job is open in PlanSwift**) and asks before reading it into this take-off.
 
-| To do this | Do this |
-|---|---|
-| Change a description | Click the **Description** cell and type. Section headings and sub-items are locked. |
-| Set a rate by hand | Type into the **Rate** cell. **Amount** updates when you leave the cell. |
-| Pick a rate from your library | Select the row, type in **Search Rate:**, then double-click a result. |
-| Reorder the bill | Select a row and click **Up** or **Down**, or drag it. The order you set is the order it exports in. |
-| Remove a line | Click the ✕ at the end of the row. The line comes off this bill and is hidden from the **Budget** too. Your PlanSwift measurement is not touched. |
+After you measure more in PlanSwift, click **Re-read job** in the top bar (or **Reload** on the **Take-off** screen).
 
-> **Important:** A row shaded amber means its rate is lower than the material plus labour cost HERON worked out for it. You can still save. HERON lists those items when you save so you can raise the rates when it suits you.
+> **Tip:** A take-off read by an older version of HERON is read again automatically when you open it with that job open in PlanSwift, so new calculations such as roof timber show up.
 
-### Saving to the cloud
+## The take-off home
 
-1. Check the **Project Name:**.
-2. Click **Save to Cloud**.
-3. If a project with that name already exists on your account and you did not open it from the Dashboard, HERON tells you **Project name already exists**. Choose a different name, or open the existing project from the Dashboard to update it.
-4. Wait for **Takeoff saved to cloud!** with the project name. The bill and its material and labour budget are saved together.
+Once read, a take-off opens on its home screen. Four figures sit at the top: **Items read**, **Sub-items**, **Needs attention** and **Budget**.
 
-While a save is running you can click **Cancel Save**. If the bill saves but the budget does not, HERON tells you so rather than reporting success. Save again once your connection is steady.
+![A take-off's home screen: what needs checking and the next steps, Check the take-off, Price the budget and Work out steel tonnage.](shot:heron-job-home.png)
 
-Each save creates a new version of the project, so re-saving never wipes out an earlier one. The project then appears under **Recent Projects** on the Dashboard on any PC you sign in from, and on the website.
+- **What is wrong with this take-off** lists each check with a count and a plain explanation.
+- **Carry on** takes you to **Check the take-off**, **Price the budget**, **Work out steel tonnage** or **Review and save to ADLM Cloud**.
+- **Saved take-offs** lists each version saved to ADLM Cloud with **Open on the web**.
+- **Build this bill in PlanSwift** appears for a take-off that is on ADLM Cloud. See [Importing a bill from Excel](#importing-a-bill-from-excel).
 
-> **Note:** If your session is offline, HERON explains that the takeoff cannot be saved to the cloud. Your rows stay in the review window and **Export All** still works. Sign out, sign in again while connected, then save.
+## Checking the take-off
 
-### When the contract is locked
+Click **Take-off** in the sidebar. Folders are on the left, as you named them in PlanSwift, with **Everything** at the top. The table shows **REF**, **ITEM**, **TYPE**, **QUANTITY**, **UNIT**, **SUB-ITEMS** and **CHECK**.
 
-A project can be locked on the website once its bill becomes the contract. HERON then shows a red **CONTRACT LOCKED** chip on the review screen and on the **Budget**. You can still save. Your revised quantities and rates are recorded as actuals against the contract, and the contract sum does not change. The save confirmation says so.
+![The Take-off screen: folders on the left, the items read from PlanSwift and the checks that need attention.](shot:heron-take-off.png)
 
-## Exporting to Excel
+### The five checks
 
-You can export from the review screen at any time, even offline.
+| Check | What it means | What to do |
+|---|---|---|
+| **No quantity** | Traced, but the quantity came back 0.00, usually a form field left blank. | Fill the field on the item in PlanSwift, then re-read. |
+| **No unit** | The tool has no unit set in the template, so the bill cannot state one. | Set the result unit in PlanSwift, or correct the line on the web. |
+| **Dead form field** | A field on the tool points at a property that no longer exists, so it shows blank. | Tell ADLM support which tool; it is a template fault. |
+| **Not in a folder** | No folder was chosen on the properties dialog. | Click **Put it in a folder** for the steps, set the **Folder** in PlanSwift, then re-read. |
+| **Empty sub-items** | The tool measured, but some of its sub-items came back 0.00. | Check the tool's form in PlanSwift. |
 
-- **Export All** writes every folder to one workbook.
-- **Export Folder(s)** opens **Select Folders to Export**. Tick the folders you want and click **Export Selected**. Export one folder for a single worksheet, or several for a combined workbook.
+Click a check chip (for example **No unit**) to list only the items with that problem. **All items** shows everything again.
 
-Choose where to save the file. HERON confirms when the workbook is written.
+![The take-off filtered to one check so only the items with that problem are listed.](shot:heron-needs-attention.png)
 
-The workbook is laid out as a proper bill of quantities:
+> **Note:** Checks are warnings, not blocks. You can save a take-off with items still needing attention. They go across as they are.
 
-- One sheet per folder, with **ITEM**, **DESCRIPTION**, **QTY**, **UNIT**, **RATE** and **AMOUNT** columns.
-- QS item lettering (A, B, C and so on), a bold section heading and wrapped descriptions.
-- Sub-items shown under their parent line.
-- A **GEN SUMMARY** sheet that links to each folder's total.
+### Folders, trades and elements
 
-It is an ordinary .xlsx file, so you can restyle it or paste it into your own template.
+Click a folder to narrow the list to it. The segmented control re-cuts the whole take-off:
 
-> **Tip:** After an export, HERON may show a one-line note of how long the takeoff took. Click **Dismiss** to hide it. See [Settings](#settings) to turn the Takeoff Time Log off.
+- **By Folder**: your PlanSwift folders.
+- **By Trade**: the template trade each item came from, for example FRAME or FINISHES.
+- **By Element**: the element, for example COLUMN, BEAM or PAD FOUNDATION.
 
-## The Budget: material and labour
+Re-cutting changes nothing in PlanSwift.
 
-Where the bill answers "what will I charge?", the **Budget** answers "what will it cost me?". Click **Budget** in the sidebar.
+![The take-off narrowed to a single PlanSwift folder.](shot:heron-folder.png)
 
-1. Pick a folder under **Take-Off Folders** on the left. HERON builds the budget for every item in it: concrete, cement, sand, granite, blocks, reinforcement, formwork, labour and more, worked out from built-in QS recipes and your material constants.
-2. Click **Load rates** to price the budget from your Rate Gen library. Until then every price is 0. The button then reads **Reload rates**.
-3. Check each item. Under it you see **Material / Labour**, **Qty**, **Unit**, **Price** and **Amount**, with **Material**, **Labour** and **Total** for the item.
+![The take-off re-grouped by trade without changing anything in PlanSwift.](shot:heron-by-trade.png)
 
-The strip at the top shows the whole project at a glance: **Project cost (material + labour)**, **Take-off value (BoQ)**, **Overhead + profit** and **Margin** as a percentage.
+### Searching
+
+Type in **Search items and sub-items**. The search covers the whole job, not just the open folder, and also matches folder, trade, element and bill description.
+
+### An item's details
+
+Click a row to open it beside the list. You see its **Quantity**, **Folder** and **Measured as**, the checks that apply to it, and:
+
+- **BILL DESCRIPTION**: the wording that goes to the bill. Type to correct it; your wording is used when you save.
+- **THE FORM THE QS FILLED**: the values typed on the tool in PlanSwift. A missing field shows **field missing**.
+- **BREAKDOWN**: the sub-items the template (or HERON) calculated, with quantity and unit.
+
+### Showing an item in PlanSwift
+
+- In the item's details, click **Show in PlanSwift** to open the page it is drawn on, select it and zoom to it. Where it is drawn on several pages, use **‹** and **›** to step through them.
+- Tick **Follow in PlanSwift** above the table, and every item (or folder) you pick also opens in PlanSwift.
+
+### Roofs and roof timber
+
+Measure the roof plan with the Roof Covering tool and type its pitch. HERON works out the roof members from the plan area, perimeter and pitch:
+
+- rafters, purlins, ridge board and ridge cap, and hip rafters on a hip roof;
+- **Struts and Ties** (one line), wall plate, fascia and barge boards.
+
+Each member becomes timber pieces in the stock length with cutting waste, nails and wood preservative. These lines appear in the take-off, the **Budget** and the export, and are billed once. If the roof tool was left at pitch 0, HERON uses the angle between the sloped and plan areas, or else the default pitch in **Settings** (15°). Rafter spacing, purlin spacing, eaves overhang and timber waste are material constants under **Roof**.
+
+## The Budget
+
+Click **Budget** in the sidebar. Every item becomes a card with its materials and labour beneath it, worked out from QS recipes and your material constants. Totals for **Material**, **Labour** and **Total** sit at the top.
+
+![The Budget screen, with material and labour priced beneath every item and the totals.](shot:heron-budget.png)
+
+### Pricing the budget
+
+Rates never load on their own. A new budget opens with every price at 0.
+
+1. Click **Load rates**. HERON prices the budget from the ADLM rate library for your zone.
+2. The button becomes **Refresh rates**. Click it to pull the latest prices.
+3. Every **PRICE** cell stays editable. Type a price, or type a material or labour name to search Rate Gen and pick a rate.
+
+> **Note:** Prices come from Rate Gen. Without a Rate Gen licence the budget shows **Price this budget with RateGen**: you still see the materials and labour each item needs, without prices. Click **Get RateGen** to buy it, or **I have RateGen** if you already do. Rates themselves are built and edited only in [ADLM Rate Gen](/guides/rategen).
 
 ### Working with the budget
 
-| Button or action | What it does |
+| Button | What it does |
 |---|---|
-| Type in a **Price** cell | Type a price, or type a material or labour name to search Rate Gen and pick a rate. Totals and margins update as you type. |
-| **Recompute** | Rebuilds the budget, for example after you change quantities in PlanSwift. |
-| **BoQ rate ← budget** | Sets each item's bill rate from its budget: (material + labour) divided by quantity, plus the overhead and profit percentage from your material constants. |
-| **Export** | Saves the budget as a linked Excel workbook (see below). |
-| ✕ on an item | Hides the item from the budget. Your PlanSwift takeoff is not changed. |
-| **Restore hidden** | Appears when you have hidden items. Brings them back. |
+| **×** on an item or sub-item | Leaves it out of the budget. PlanSwift is not changed. |
+| **Restore hidden (n)** | Appears when you have left items out. Brings them back. |
+| **Bill rates from budget** | Sets each bill rate from its budget cost plus overhead and profit (from your material constants). |
+| **Export** | Saves the budget as an Excel workbook. |
 
-An item whose material and labour cost is higher than its rate shows **Over budget**. Raise the rate on the review screen, or use **BoQ rate ← budget**.
+If the project's contract is locked on ADLM Cloud, the budget says so: budget changes saved from HERON are recorded as actuals.
 
-### The budget workbook
+## Steel tonnage
 
-**Export** writes a workbook where everything except the measured quantities and your typed prices is a live formula:
+Steel is measured in metres but bought in tonnes. HERON reads the section designation from the item name (UB, UC, SHS, RHS, PFC and so on) and converts the measured length. A count item is multiplied by its height.
 
-- A **Basic Prices** sheet, the one place each material price is typed, plus an overhead and profit percentage cell.
-- A budget sheet for each folder, with material and labour totals and the rate they imply.
-- A bill sheet for each folder whose rates link to that budget.
-- A **BUDGET SUMMARY** sheet with material, labour, budget, overhead and profit, and contract total for each folder.
+![The Steel tonnage screen before scanning.](shot:heron-steel.png)
 
-Change a basic price in Excel and every rate and margin that depends on it recalculates.
+1. Click **Steel tonnage** in the sidebar.
+2. Set **Connections and fittings %** (default 7.5) and **Waste %** (default 0).
+3. Click **Scan job**.
+4. Read the table: **ITEM**, **TRADE**, **SECTION**, **KG/M**, **QTY**, **LENGTH M**, **NET T**, **ALLOWANCE T** and **GROSS T**, with a **Total** row.
+5. Where no section was found in the name, type in the section box to search the catalogue and pick one. Your choice is kept when you scan again.
 
-> **Note:** The budget saves to the cloud together with the bill when you click **Save to Cloud** on the review screen. There is no separate budget save.
+![Steel tonnage after a scan, listing each steel item by section with net and gross tonnage.](shot:heron-steel-scanned.png)
 
-## Steel Tonnage
+The ADLM steel frame columns and beams, and the weights the STEEL TRUSS tools already compute, are included. Click **Clear** to start again.
 
-Steel is measured in metres but bought in tonnes. **Steel Tonnage** reads the section size from your item names and does the conversion.
+> **Tip:** Name steel with its full designation, for example UKB 305x165x40. "Steel beam" cannot be read.
 
-1. Click **Steel Tonnage** in the sidebar.
-2. Set **Connection/fittings %** (default 7.5) for cleats, plates, bolts and welds, and **Waste %** (default 0) for offcuts.
-3. Click **Scan Job**.
-4. Check the table: **Item**, **Trade**, **Detected Section**, **kg/m**, **Length (m)**, **Net (t)**, **Allowance (t)** and **Gross (t)**.
-5. For any row where no section was found, use **Assign Section** and type to search the catalogue (UKB, UKC, PFC, UKA, SHS, RHS and CHS), or type a kg/m yourself. Your choice is kept when you scan again.
-6. Read the job totals at the bottom: **NET**, **ALLOWANCE** and **GROSS**.
+## Reviewing and saving to ADLM Cloud
 
-Roof and truss members (rafters, purlins, tie beams, king posts, struts, chords and bracing) are picked up even when their names carry no section size, so you can assign a section to them.
+When the take-off is right, click **Review & save** (on the **Take-off** screen) or **Review and save to ADLM Cloud** (on the home screen). HERON gathers the take-off from PlanSwift, folder by folder, and opens **Review before saving**.
 
-Where a column was measured as a count rather than a length, use the **Count × Ht?** column. The table shows the tonnage both ways, **Gross if metres (t)** and **Gross if count×ht (t)**, so you can use the one that matches how you measured.
+![The Review before saving sheet, listing every item and part with the take-off name and Save to ADLM Cloud.](shot:heron-review-sheet.png)
 
-Click **Clear** to empty the table and start again.
+The sheet lists every line grouped by folder, with **REF**, **DESCRIPTION**, **QTY**, **UNIT** and **AMOUNT**. Sub-items sit under their item (B1, B2 and so on). An amount shows where the line has a bill rate, for example after **Bill rates from budget**; otherwise it shows a dash. A bar at the top tells you how many items still need attention.
 
-> **Tip:** Name steel items with the full designation, for example UKB 305x165x40. "Steel beam" cannot be read.
+1. Check the lines. To change a description, close the sheet, correct the **BILL DESCRIPTION** on the item, and review again.
+2. Optionally click **AI Review** (see [AI in HERON](#ai-in-heron)).
+3. Type the **Take-off name**.
+4. Click **Save to ADLM Cloud**. Click **Stop saving** if you need to cancel.
+5. HERON shows **Saved to ADLM Cloud** with the bill lines and the version. Click **Open on ADLM Cloud** to open the bill on the website, or **Stay in HERON**.
 
-## Settings
+![The confirmation after saving a HERON take-off to ADLM Cloud.](shot:heron-saved-to-cloud.png)
 
-Click the gear at the top right to open **Settings**.
+What to know:
 
-### Display Units
+- The bill and its material and labour budget are saved together. A budget you never priced goes across with quantities and 0 prices.
+- Each save is a new version, so re-saving never wipes out an earlier one.
+- If the name is already used by another project on your account, HERON says **Project name already exists**. Choose another name, or open that take-off and save from it.
+- If the contract is locked on ADLM Cloud, the sheet says so. Changed quantities are recorded as actuals and the contract stays as it was.
+- If the budget did not save, or some items cost more than their rate, HERON tells you after saving.
 
-Choose **Metric (m, m², m³, mm, kg)** or **Imperial (ft, sqft, cuft, in, lb)**. HERON normally picks this for you from your PlanSwift pages. Change it here if it picked wrong.
+### On the website
 
-### Takeoff Time Log
+Saved take-offs appear on the ADLM website under your HERON projects (**HERON** in the side rail, or `/projects/planswift`). There you can price the bill from your Rate Gen rates, value it, share it and export it. See the [ADLM Cloud guide](/guides/cloud).
 
-HERON records how long each takeoff takes and how many items, folders and bill lines it produced, so ADLM can report the time its tools save. Only timings and counts are sent. Drawing content, item names, quantities and prices are never sent. Untick **Share takeoff timings with ADLM** to turn it off.
+From the project's **Export** menu on the website, the **ICMS 3** group ("international cost and carbon report") offers **ICMS 3 cost and carbon (Excel)**, with cost and upfront carbon (A1-A5) by ICMS 3 Group, and **ICMS 3 cost and carbon (JSON)**, the same report as data to the RICS Data Standard. Carbon per line comes from your Rate Gen rates, so price the HERON bill with Rate Gen rates first.
 
-### Material Constants
+## Excel
 
-The constants HERON uses to build your breakdowns and budgets: cement per cubic metre, blocks per square metre, mortar ratios, wastage, labour outputs, overhead and profit and so on.
+Click **Excel** in the sidebar.
 
-1. Search by name, category or key to find a constant.
-2. Edit its **Value**. The **Default** column shows the standard figure.
-3. Click **Save**. HERON confirms **Material constants saved and applied.**
-4. Click **Reset Defaults** to go back to the standard figures.
+### Send the bill out
 
-Set these once to match how you price, and every breakdown and budget follows.
-
-## The Excel Takeoff Link
-
-If your bill lives in your own spreadsheet, the Excel Takeoff Link pulls your takeoff, materials and rates straight into it and keeps them up to date. No copy and paste, and no re-export when a quantity changes.
-
-### Turning it on
-
-1. Close Excel completely.
-2. In HERON, click **Connect Excel** in the sidebar. HERON checks the add-in.
-3. If the add-in is missing, switched off or broken, HERON tells you and offers to install or repair it. Click **Yes**.
-4. When HERON reports that the Excel bridge is ready, open Excel and open (or create) a workbook.
-5. On the **ADLM** tab of the Excel ribbon, click **Takeoff Link**. The **ADLM Takeoff Link** pane opens.
-
-> **Note:** HERON must be open, signed in and showing your project for the pane to find data. If the pane says no data was found, open HERON, load the job, then click **Refresh** in the pane.
-
-### Using the pane
-
-At the top, pick a dataset:
-
-| Dataset | What it lists |
+| Button | What you get |
 |---|---|
-| **Quantity Takeoff** | Your billable takeoff: description, quantity, unit and level. |
-| **Material Takeoff** | The full material and labour breakdown from your **Budget**, with unit rate and amount. |
-| **Rates** | Each bill item's **Description**, **Unit**, **Rate** and **Amount** from your budget. |
+| **Bill of quantities** | ref, description, quantity, unit, rate, amount. The same lines HERON would save to ADLM Cloud; folders become headings and sub-items keep their reference. |
+| **Budget** | Material and labour beneath every item. Open **Budget** once first so HERON can build it. |
+| **Steel schedule** | Section, length, net and gross tonnage. |
 
-Type in **Search** to filter the list. Item names keep their original takeoff name in front, so you can still search for DPM or Topsoil after HERON has expanded them into full descriptions.
+Choose where to save. The files are ordinary .xlsx workbooks.
 
-To link figures into your sheet:
+### Fill a client's bill
 
-1. Click the cell in your workbook where the figure should go.
+The client sent their own bill format? **Fill a client's bill** puts HERON's quantities into a copy of their workbook, in their layout. Their file is never changed.
+
+1. Read the job first, so HERON has quantities.
+2. On the **Excel** screen, click **Import a bill format**.
+3. Click **Choose the bill** and pick their workbook (.xlsx, .xlsm, or an old .xls, which HERON converts to a working copy).
+4. Under **SHEETS IN THIS WORKBOOK**, tick the sheets to fill. If HERON read the wrong column, type the letter for **Description**, **Unit** or **Quantity** and click **Apply**. Summary sheets are left out unless you tick them.
+5. Click **Match with AI**. HERON's AI proposes which HERON lines make up each of their lines.
+6. Check the table: **THE CLIENT'S ITEM**, **IN THEIR FILE**, **HERON QTY**, **MEASURED FROM** and **STATUS**. Filter with **All**, **Matched**, **To review** and **Not measured**.
+7. Tick the lines that are right, or click **Tick all matched**. Type in **HERON QTY** to set a quantity yourself; the line is ticked for you.
+8. Optionally keep **Note on each cell**, so each filled cell lists the HERON lines behind it, and tick **Clear ... old quantities HERON did not replace** if their file held quantities from another job.
+9. Click **Write ... ticked lines to a copy** and choose where to save.
+10. HERON shows **The client's bill is filled**. Click **Open the filled bill**.
+
+Only ticked lines are written. Click **←** to go back to **Excel**.
+
+### Link Excel to this take-off
+
+The Takeoff Link pane pulls quantities, materials and rates from HERON into a workbook, and refreshes them when you re-read the job.
+
+1. Under **PANE ON**, choose **Right** or **Left** for where the pane docks in Excel.
+2. Pick where it opens: one of the workbooks open in Excel (listed by name), **A new workbook**, or **A workbook on this computer**. Click **Refresh** if a workbook you just opened is not listed.
+3. HERON opens Excel with the **ADLM Takeoff Link** pane. It installs the ADLM add-in first if it is missing.
+
+In the pane, pick a dataset: **Quantity Takeoff**, **Material Takeoff** (the budget's materials and labour) or **Rates**. Type in **Search** to filter it. Then:
+
+1. Click the cell in your workbook.
 2. Select one or more rows in the pane.
-3. Click **Link Cell**. The cell now holds the linked value (several rows are added together).
-4. To add more rows to the same cell as a running sum, select them and click **Add to Cell**.
-5. To take rows back out, select them and click **Remove from Cell**. The cell re-totals.
-6. To break the link on a cell, click it and click **Unlink Cell**.
+3. Click **Link Cell**. Several rows are added together.
+4. **Add to Cell** adds more rows to the same cell; **Remove from Cell** takes rows out; **Unlink Cell** breaks the link.
 
-The top of the pane shows how many cells and items are linked in this workbook.
+Linked cells update when you switch back to Excel after a change in HERON. You can also click **Refresh** in the pane or on the **ADLM** ribbon tab.
 
-### Keeping figures up to date
-
-Change a quantity or rate in HERON, switch back to Excel, and the linked cells update on their own. Cells that did not change are left alone, so your Undo history is kept. You can also click **Refresh** in the pane, or **Refresh** on the **ADLM** ribbon tab, at any time.
-
-> **Tip:** If the **ADLM** tab ever disappears from Excel (for example after an Office repair), close Excel and click **Connect Excel** in HERON. You can also double-click `Register-ExcelAddin.cmd` in `C:\ProgramData\Planswift Plugin`, then reopen Excel.
-
-## Your HERON projects on the ADLM website
-
-Everything you save to the cloud from HERON appears on the ADLM website under your HERON projects (`/projects/planswift`, or **HERON** in the side rail once you are signed in). Anyone on your account can read the bill there without PlanSwift. Opening a project on the website gives you the bill grouped by section, the budget beside it, Excel exports and sharing.
-
-### Learning samples
-
-Your HERON projects page shows a **Learning samples** strip: worked duplex projects, one per foundation type, measured from PDF drawings. Open one to see every tab filled in. Samples are read-only. Click **Hide samples** to fold the strip away, and **Show N samples** to bring it back.
+> **Tip:** If the **ADLM** tab disappears from Excel, close Excel and open the link again from HERON's **Excel** screen. You can also double-click `Register-ExcelAddin.cmd` in `C:\ProgramData\Planswift Plugin`.
 
 ## Importing a bill from Excel
 
-Sometimes the bill comes first: a client or another QS sends you their bill in Excel, and you need to price it or put real measurements behind it. Excel bill import is a HERON feature, done on the ADLM website, and then finished in HERON with **Build in PlanSwift**.
+Sometimes the bill comes first and you need real measurements behind it. Importing a bill as a new HERON project happens on the ADLM website; you then build it in PlanSwift from HERON. (To put HERON's quantities into a client's bill instead, use [Fill a client's bill](#fill-a-clients-bill).)
 
-> **Note:** Excel bill import is switched on for your account by ADLM. It is not bought on its own, and it also needs a live HERON subscription. If you do not see **Import Excel BoQ · HERON** on your HERON projects page, contact ADLM support through [/support](/support). There is no import button inside HERON itself.
+> **Note:** Excel bill import is switched on for your account by ADLM and needs a live HERON subscription. If you do not see **Import Excel BoQ · HERON** on your HERON projects page, contact [/support](/support).
 
-### Step 1: Import the bill on the website
+1. On the website, open your HERON projects and click **Import Excel BoQ · HERON**. Choose your bill (.xlsx or .xlsm) and click **Import project**.
+2. In PlanSwift, open the job you will measure in.
+3. In HERON, open the imported take-off from **Take-offs** (it is marked as from ADLM Cloud).
+4. On its home screen, click **Build this bill in PlanSwift**.
+5. In **Build Bill in PlanSwift**, check the **Template** for each line and, where needed, **Measured as**, **Depth/Height**, **Width** and **Thickness**. Choose lines with **Select all**, **Select none** or **Only lines not in the job**.
+6. Click **Build in PlanSwift**. Each work section becomes a folder and each bill line a measurable item.
+7. Scale the drawings, click **Measure** on a line to trace it, then read the job and save as usual.
 
-1. Sign in to the ADLM website and open your HERON projects (`/projects/planswift`).
-2. Click **Import Excel BoQ · HERON**.
-3. Optionally type a name in **Project name (optional)**. If you leave it blank, the file name is used.
-4. Under **Excel workbook (.xlsx)**, choose your bill (.xlsx or .xlsm).
-5. Click **Import project**.
+Building again is safe: matched lines are updated, never duplicated, and an existing measurement is never overwritten.
 
-The website reads the sections and lines of your bill and creates a HERON project from it. Where the workbook has no material and labour schedule, one is built for you (cement, sand, granite, blocks, formwork, rebar and labour), priced from your material constants and Rate Gen.
+## Settings
 
-> **Tip:** Click **Download the import template** if you want a workbook laid out the way the importer reads best.
+Click **Settings** at the bottom of the sidebar (it is hidden while docked). Pick a tab, make your changes, and click **Save**.
 
-> **Important:** Upload your own bill, not one exported from the ADLM website. An ADLM export is refused, because importing it would spend a project slot on a copy of a bill you already have.
+| Tab | What it holds |
+|---|---|
+| **Units** | **Display units**: **Metric (m, m², m³, mm, kg)** or **Imperial (ft, sqft, cuft, in, lb)**. HERON normally picks this from your PlanSwift pages. |
+| **Time log** | **Share take-off timings with ADLM**. Only timings and counts are sent, never drawings, names, quantities or prices. Untick to turn it off. |
+| **Material constants** | The factors HERON uses to turn quantities into materials: waste, mixes, laps and densities. |
+| **Beta** | **Join the beta programme**. Auto take-off is switched off in this release, beta or not. |
 
-### Step 2: Build the bill in PlanSwift
+### Material constants
 
-1. Open the matching job in PlanSwift.
-2. In HERON, go to the **Dashboard** and find the imported project under **Recent Projects**.
-3. Click **Build in PlanSwift** on the project card. (You can also click **Open** and answer **Yes** when HERON asks whether to build the bill now.)
-4. The **Build Bill in PlanSwift** window lists every bill line. Each work section becomes a take-off folder and each bill line becomes a measurable item.
-5. Check the **Template** chosen for each line and change it where the match is wrong. Lines with no match are built as plain measurable items. Where the template needs them, check **Measured as**, **Depth/Height**, **Width** and **Thickness**.
-6. Choose which lines to build with **Select all**, **Select none** or **Only lines not in the job** (useful on a second run).
-7. Click **Build in PlanSwift**.
+1. Search by name, category or key.
+2. Edit the **Value**. **Default** shows what ADLM ships.
+3. Click **Save**. **Reset Defaults** puts every constant back to ADLM's figures.
 
-HERON confirms what it built and opens **Quantity Take Off**. In PlanSwift, the new folders appear in the takeoff summary. If they do not show yet, refresh that panel in PlanSwift.
+Some defaults in 3.0.1:
 
-### What the build will and will not touch
+| Constant | Default |
+|---|---|
+| Blockwork waste factor | 1.03 |
+| Floor and wall tile waste factor | 1.10 |
+| Rebar unit weight | 0.00617 kg/m per mm² (d²/162) |
+| Rebar stock length | 12 m |
+| Rebar waste factor | 1.10 (kept on purpose) |
+| Formwork waste factor | 1.10 (kept on purpose) |
+| Paint coverage (all coats) | 2.0 m² per litre |
+| Sharp sand density | 1,440 kg/m³ |
+| Hardcore and laterite density | 1.6 t/m³ |
+| Roof pitch when the tool has none | 15° |
 
-- Lines that are missing are created.
-- Lines already in the job are updated, never duplicated. Building again is safe.
-- Lines that already have a measurement keep it. HERON never overwrites a measurement.
-- Section headings become folders, not items.
-- Costing rows (derived materials and labour) are skipped, because there is nothing on a drawing to measure for them.
+## AI in HERON
 
-### Step 3: Measure and save
+HERON has these AI features. For how ADLM AI works, the monthly allowance and what happens to your data, see [ADLM AI services](/guides/ai-services).
 
-1. Scale the drawings, exactly as for any job. The structure arrived ready-made, but scaling is still the step everything depends on.
-2. Click **Measure** on a line in the **Build Bill in PlanSwift** window to send that item to PlanSwift ready for you to trace it on the drawing, or measure the items from the takeoff summary in PlanSwift.
-3. Go to **Quantity Take Off**, click **Reload**, then **Save / Export** and **Save to Cloud**. Your measurements land on the same bill lines that came from the Excel file.
+| Feature | Where | Availability in 3.0 |
+|---|---|---|
+| **AI Review** (**AI Bill Review**) | **Review before saving**, at the foot | On for everyone signed in with an active licence |
+| **Match with AI** | **Excel**, **Fill a client's bill** | In the 3.0 release; needs a sign-in and a connection |
+| **Auto take-off** | Sidebar, under **BETA** | Switched off for everyone |
 
-## What's new in 2.9.6
+### AI Review
 
-**HERON 2.9.6**
+AI Review turns raw take-off names into proper bill descriptions, fixes units, finds duplicates, flags rates out of line with the rest of the job, and points out items a QS would expect (for example blockwork with no rendering).
 
-- **The ADLM templates stay put when HERON starts.** Opening HERON with a saved sign-in could hide the ADLM template library from PlanSwift. It no longer does.
+1. Click **Review & save** to open **Review before saving**.
+2. Click **AI Review**.
+3. In **AI Bill Review**, tick **Descriptions**, **Rate sanity** and **Missing items** as needed.
+4. Click **Run Review**.
+5. Accept the findings you agree with and click **Apply Accepted**.
+6. Check the sheet and click **Save to ADLM Cloud** as usual.
 
-**Earlier 2.9 updates**
+To ask a question, type in **Ask about this bill** (for example "why is substructure so large a share of this job?") and click **Ask**.
 
-- **Network signal in the header.** Bars show the quality of your connection to the ADLM Cloud, and tell you whether you are offline or the server is not answering.
-- **Takeoff Time Log.** HERON records how long each takeoff takes (timings and counts only) and can show the time after an export. You can turn it off in **Settings**.
-- **Rates load only when you ask.** The bill and the budget open with every rate at 0. Click **Load rates** to price them from your library, and **Reload rates** to refresh.
-- **Below-cost items no longer block a save.** Items whose cost is higher than their rate are shaded amber and listed when you save, but the takeoff always saves.
-- **Build in PlanSwift.** Turn a bill from your ADLM Cloud projects into take-off folders and measurable items in the open PlanSwift job.
-- **Excel bill import moved to the website.** Import an Excel bill from your HERON projects page on the ADLM website, then build it in PlanSwift from HERON.
-- **The Excel Takeoff Link is ready on install (2.9.2).** The add-in is registered as part of the install, so the **ADLM** tab is there the first time you open Excel.
-- **Sign-in that follows the service (2.9.1).** HERON finds the ADLM server through a setting the Installer Hub writes, so a server move never needs a new download.
+AI Review gives suggestions only. Nothing changes until you accept a finding and apply it, and quantities are never altered. HERON sends the lines' descriptions, units, quantities and rates, the project name, currency and pricing zone, never your drawings. When you accept or reject suggestions, the service learns your house style for your account alone. A HERON clean-up uses 2 units and a bill question 1 unit of your monthly AI allowance.
+
+### Match with AI
+
+In **Fill a client's bill**, **Match with AI** proposes which HERON lines make up each of the client's lines, with a confidence and a reason in the cell note. The AI proposes; you tick; only ticked lines are written. It sends the client's descriptions and units and HERON's measured lines, not the drawings.
+
+### Auto take-off
+
+**Auto take-off** and **Auto-takeoff probe** show under **BETA** in the sidebar, but they are greyed out for everyone in HERON 3.0 and 3.0.1: "Auto take-off is in beta and is not available in this release." Joining the beta programme does not turn them on.
+
+> **Note:** HERON's bill wording, its checks and its material breakdowns are not AI. They come from the ADLM template and fixed rules.
 
 ## Troubleshooting
 
-### The ADLM templates are not in PlanSwift
-
-Work through these in order:
+### The ADLM template is not in PlanSwift
 
 1. Make sure you are signed in to HERON.
-2. Close PlanSwift completely and open it again. PlanSwift only reads its templates when it starts.
-3. In PlanSwift's templates panel, check the list at the top reads **Complete ADLM TakeOff Plugin**.
-4. If it is still missing, sign out of HERON, sign in again, and restart PlanSwift. Signing in puts the templates back from the protected copy.
-5. If you run two PlanSwift versions, check you have the one open that HERON installed into. If not, reinstall HERON from the Installer Hub with PlanSwift closed.
+2. Close PlanSwift completely and open it again.
+3. In the templates panel, choose **Complete ADLM TakeOff Plugin**.
+4. Still missing? Sign out of HERON, sign in again, and restart PlanSwift.
+5. Still missing? Reinstall HERON from the Installer Hub with PlanSwift closed.
 
-### The templates disappeared after I signed out
+### "PlanSwift has no job open"
 
-That is expected. Signing out hides them at the next PlanSwift restart. Sign in again and restart PlanSwift.
+Open the job in PlanSwift, then click **Read this job** or **Re-read job**.
 
-### "Could not retrieve the Job from PlanSwift."
+### "ADLM template not found"
 
-No job is open in PlanSwift, or PlanSwift started after HERON. Open the job, then click **Reload** in **Quantity Take Off**.
-
-### "PlanSwift connection lost. Please restart PlanSwift and click Reload."
-
-PlanSwift closed or crashed while HERON was reading it. Restart PlanSwift, open the job, then click **Reload**. Nothing is lost: your takeoff lives in the PlanSwift job.
-
-### HERON says the PlanSwift installation folder was not found
-
-HERON could not find PlanSwift on this PC, so it cannot start. Install PlanSwift 10 or 11 (or repair it), then reinstall HERON from the Installer Hub.
+HERON read the items, but trade, element and the template's checks need the ADLM template installed in PlanSwift. See the first item above.
 
 ### Quantities are far too big or too small
 
-Almost always the scale. Check the page was scaled, check it with the Dimension tool, scale again if needed, then click **Reload** in HERON. If everything is out by about the same percentage, the page was scaled off a wrong dimension.
+Almost always the scale. Check the page's scale with PlanSwift's Dimension tool, scale again if needed, then **Re-read job**.
 
 ### HERON shows imperial units on a metric job
 
-No page carried a usable Scale Units value, so HERON fell back. Scale your pages properly, or open **Settings** and pick **Metric (m, m², m³, mm, kg)** under **Display Units**.
+Your pages had no usable scale units. Scale them properly, or choose metric in **Settings**, **Units**.
 
-### An item is missing from Quantity Take Off
+### An item is missing from the take-off
 
-Click **Reload**. If it is still missing, check for a second item with the same name in the same folder: HERON merges duplicates.
+Click **Reload**. Check the **Everything** folder and the **Not in a folder** group, and use the search, which covers the whole job.
 
-### No rates loaded, or Load rates is missing
+### Roof timber is missing
 
-- **Load rates** appears only with an active Rate Gen subscription. The status line tells you if no Rate Gen subscription was found.
-- You must be online and fully signed in (not in an offline session). Check the network signal in the header.
-- If HERON reports that no rates matched, add or check the rates in Rate Gen, then click **Reload rates**.
+Re-read the job with it open in PlanSwift. Check the Roof Covering has a plan area and a pitch.
 
-### Save to Cloud refuses to save
+### Review & save says "Nothing to save yet"
+
+Read the job first, so there is a take-off to review.
+
+### Load rates is missing or prices stay at 0
+
+Prices need a Rate Gen licence, a connection and a full sign-in (not an offline session). Click **I have RateGen** to check your licence again.
+
+### Save to ADLM Cloud refuses to save
 
 - **Offline session:** sign out, then sign in again while connected.
-- **Project name already exists:** choose another name, or open the existing project from the Dashboard and save from there.
-- **Version conflict:** the project was changed on another device. Open it again from the Dashboard and save again.
+- **Project name already exists:** choose another name.
+- **Version conflict:** the project was changed elsewhere. Open the take-off again and save again.
+
+### "The pane did not open" (Excel)
+
+Close Excel completely and open the link again from the **Excel** screen. A fresh Excel can take a few seconds.
+
+### "That workbook cannot be read" (Fill a client's bill)
+
+Check the file is a bill, not a price list, and that it is not open and locked in Excel. Type the column letters for **Description**, **Unit** and **Quantity** and click **Apply**.
+
+### "Monthly AI quota reached"
+
+Your account has used its AI allowance for the month. The rest of HERON keeps working. Ask [/support](/support) if you need more.
 
 ### "This PlanSwift subscription is bound to a different device."
 
-Your licence is tied to another PC. Contact ADLM support through [/support](/support) to have the device lock reset.
+Your licence is tied to another PC. Ask [/support](/support) to reset the device lock.
 
 ### "Internet required for first sign-in (no valid offline license found)."
 
-The first sign-in on a PC must be online. Connect to the internet and sign in again.
-
-### "Your subscription has expired." or "No active PlanSwift subscription was found on this account."
-
-Renew your HERON subscription from your account on the ADLM website (`/dashboard`), or check you signed in with the account that holds the licence.
-
-### The ADLM tab or the Takeoff Link pane is missing from Excel
-
-1. Close Excel completely.
-2. In HERON, click **Connect Excel** and let it install or repair the add-in.
-3. Open Excel and a workbook, then click **Takeoff Link** on the **ADLM** tab.
-
-If that does not work, run `Register-ExcelAddin.cmd` from `C:\ProgramData\Planswift Plugin`, or reinstall HERON from the Installer Hub.
-
-### The Takeoff Link pane shows no data
-
-HERON must be open with your project loaded. Open HERON, open or start the project, then click **Refresh** in the pane.
-
-### Build in PlanSwift says there is nothing to build
-
-The cloud project has only section headings or costing rows, with no measurable bill lines. Check the bill on the website first. If HERON says no PlanSwift job is open, open the job in PlanSwift and try again.
-
-### The Install button in the Hub fails with access denied
-
-PlanSwift (or Excel) was open while the Hub was installing. Close both and click **Install** again.
+The first sign-in on a PC must be online. Connect and sign in again.
 
 ## Frequently asked questions
 
 ### Does HERON replace PlanSwift?
 
-No. You still need PlanSwift 10 or 11. You measure in PlanSwift with the ADLM templates, and HERON reads, prices and exports what you measured.
+No. You measure in PlanSwift with the ADLM template, and HERON reads, checks, prices and exports what you measured.
+
+### Does HERON change my PlanSwift job?
+
+Reading never changes it. Only **Build this bill in PlanSwift** and **Measure** add items, and they never overwrite a measurement.
+
+### Where do I edit rates?
+
+In [ADLM Rate Gen](/guides/rategen). HERON picks rates from your library and lets you type a price on a budget line, but rates are built only in Rate Gen.
 
 ### Do I need Rate Gen?
 
-Only for pricing from a rate library. Without Rate Gen you can measure, review, type rates by hand, export to Excel and save to the cloud.
+Only for prices. Without it you can read, check, review, export quantities and save to ADLM Cloud.
 
 ### Can I work without the internet?
 
-Yes, once you have signed in online at least once on that PC. Measuring, the takeoff, the review screen and Excel export all work offline. Loading rates and saving to the cloud need a connection and a full sign-in.
+Yes, once you have signed in online on that PC. Loading rates, AI features and saving to ADLM Cloud need a connection.
 
 ### Where is my work stored?
 
-Your measurements live in the PlanSwift job file. Back that file up. HERON itself can always be reinstalled from the Hub. Projects you save to the cloud are also kept on your ADLM account, with a new version on every save.
+Your measurements live in the PlanSwift job file, so back it up. Take-offs saved to ADLM Cloud are kept on your account, with a new version on every save.
 
-### Can I use HERON on two computers?
+### Where did the 2.9 screens go?
 
-Your licence is tied to one PC at a time. To move it, ask ADLM support to reset the device lock, then sign in on the new PC.
-
-### Can I import an Excel bill from inside HERON?
-
-No. Excel bill import happens on the ADLM website, on your HERON projects page, and only if ADLM has switched it on for your account. You then use **Build in PlanSwift** in HERON to turn that bill into measurable items.
-
-### Does removing a line on the review screen delete my measurement?
-
-No. The ✕ on the review screen only removes the line from that bill and hides it from the **Budget**. Hiding an item in the **Budget** also leaves PlanSwift untouched. To change the takeoff itself, edit it in PlanSwift and click **Reload**.
+**Dashboard** became **Take-offs** and the take-off home. **Quantity Take Off** became **Take-off**. **Save / Export** became **Review & save** for the cloud and the **Excel** screen for workbooks. **Connect Excel** is now **Link Excel to this take-off** on the **Excel** screen.
 
 ### Does HERON send my drawings to ADLM?
 
-No. The Takeoff Time Log sends only timings and counts, and you can turn it off in **Settings**. A cloud save sends the bill and budget lines you chose to save.
+No. AI features send only bill lines, and the take-off time log sends only timings and counts.
 
 ### How do I get help?
 
-Click **Feedback** at the bottom of the HERON sidebar to message ADLM support on WhatsApp, or raise a ticket at [/support](/support). Tell us the job name, the folder and item affected, whether the page is scaled, the exact wording of any message and your PlanSwift version. A screenshot of PlanSwift's takeoff summary and HERON's **Quantity Take Off** answers most questions at once.
+Click **Send feedback** to message ADLM support on WhatsApp, or raise a ticket at [/support](/support). Tell us the take-off, the folder and item, whether the page is scaled, the exact message and your PlanSwift version.
