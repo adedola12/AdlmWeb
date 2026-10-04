@@ -259,8 +259,8 @@ export function preservePlantLines(incoming, stored, opts = {}) {
 
   // WHERE A WEBSITE-AUTHORED PLANT LINE ACTUALLY LIVES.
   //
-  // The rate builder files plant ONLY in breakdown[], with refKind "plant" —
-  // it says so itself (client/src/ds/rategen/customRateDraft.js): "Plant has no
+  // The website rate builder filed plant ONLY in breakdown[], with refKind "plant" —
+  // it said so itself (customRateDraft.js, removed 4 Oct 2026): "Plant has no
   // master library of its own (deferred), so a plant line lives in the
   // breakdown with refKind 'plant'." materials[] holds kind === "material" and
   // labour[] holds kind === "labour", and nothing else.
