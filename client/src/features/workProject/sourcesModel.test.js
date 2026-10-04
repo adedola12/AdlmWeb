@@ -262,3 +262,61 @@ describe("the services rolled into a project", () => {
     expect(linkedServices(null)).toEqual([]);
   });
 });
+
+/* ────────── "unchecked" is two different facts ────────── */
+
+// WHY THIS MATTERS
+//
+// The server writes status "unchecked" for a .frag upload because pre-converted
+// fragments carry no STEP tags, so the id gate CANNOT run — final, not pending.
+// It writes it WITH a checkedAt, because the check did run and concluded it
+// could not apply. A model stored before validation existed has no validation
+// object at all, so the status defaults and checkedAt is null — that one really
+// is "yet".
+//
+// Labelling both "Not checked yet" leaves whoever uploaded fragments waiting for
+// something that is never coming, which is what a stuck screen looks like.
+
+describe("a model that cannot be checked", () => {
+  const withModel = (validation, format = "ifc") => ({
+    models: { architectural: { sourceFile: "x", url: "u", format, validation } },
+  });
+
+  it("says fragments have no ids, not that the check is pending", () => {
+    const [m] = attachedModels(
+      withModel({ status: "unchecked", checkedAt: "2026-09-12T00:00:00Z" }, "frag"),
+    );
+    expect(m.statusLabel).toMatch(/no ids to check/i);
+    expect(m.statusLabel).not.toMatch(/yet/i);
+    expect(m.checkable).toBe(false);
+  });
+
+  it("still says 'yet' for a model nothing has looked at", () => {
+    // No validation object at all — the legacy case, where waiting IS reasonable.
+    const [m] = attachedModels({
+      models: { architectural: { sourceFile: "x", url: "u" } },
+    });
+    expect(m.statusLabel).toBe("Not checked yet");
+    expect(m.checkable).toBe(true);
+  });
+
+  it("does not colour it as a problem — it is not one", () => {
+    const [m] = attachedModels(
+      withModel({ status: "unchecked", checkedAt: "2026-09-12T00:00:00Z" }, "frag"),
+    );
+    expect(m.tone).toBe("");
+  });
+
+  it("leaves the statuses that mean what they say alone", () => {
+    const [ok] = attachedModels(
+      withModel({ status: "valid", requiredCount: 10, matchedCount: 10, checkedAt: "2026-09-12" }),
+    );
+    expect(ok.statusLabel).toBe("Matches the bill");
+    expect(ok.tone).toBe("ok");
+    expect(ok.checkable).toBe(true);
+
+    const [none] = attachedModels(withModel({ status: "no-quantities", checkedAt: "2026-09-12" }));
+    expect(none.statusLabel).toBe("Nothing measured from it yet");
+    expect(none.checkable).toBe(true);
+  });
+});

@@ -123,6 +123,17 @@ export function WorkProjectModel({ project, canEdit = false, onGo, loading = fal
         <p className="pj-foot">
           Export IFC from Revit, then upload it. The element ids the bill was measured from are
           checked against the model; anything missing is flagged here.
+          {/* Said once, beneath the list, rather than repeated on every row.
+              Without it the tag is a bare statement with no way to act on it —
+              and the action here is "upload the IFC instead", which is not
+              guessable from the words "no ids to check". */}
+          {models.some((m) => !m.checkable) ? (
+            <>
+              {" "}
+              Pre-converted fragments carry no element ids, so a model uploaded as .frag cannot be
+              checked against the bill at all — upload the IFC if you want that check.
+            </>
+          ) : null}
         </p>
       </section>
     </>
