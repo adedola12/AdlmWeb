@@ -870,7 +870,7 @@ export default function DsSettings() {
                 They stay here if a subscription lapses, and can be exported at any time.
               </p>
               <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-                <Link className="ds-btn btn-o ds-btn-sm" to="/profile">
+                <Link className="ds-btn btn-o ds-btn-sm" to="/manage/activity">
                   Activity log
                 </Link>
                 <Link className="ds-btn btn-o ds-btn-sm" to="/manage/support#ticket">

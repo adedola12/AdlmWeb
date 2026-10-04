@@ -1905,3 +1905,56 @@
 }
 .ds .auth2-linkbtn:hover { text-decoration: underline; }
 .ds .auth2-linkbtn:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+
+/* ── the activity trail (DsActivity) ──────────────────────────────────────
+ *
+ * His dashboard sheet has .dsh-feed for a six-item preview, which is all the
+ * overview needed. The full log is a screen rather than a panel: it filters, it
+ * pages, and it says when as well as how long ago. These three fill exactly that
+ * gap and nothing else — his .dsh-chips, button.dsh-chip.on and .dsh-feed are
+ * reused as they are. */
+
+/* A quiet line for "loading", "nothing yet" and the error. Matches the empty
+ * state his .dsh-body already uses for an empty panel rather than introducing a
+ * second voice for the same job. */
+.ds .dsh-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.ds .dsh-note.err { color: var(--bad, #C0362C); }
+
+/* The exact timestamp, under the description. .dsh-feed .ago in the corner is
+ * the glanceable form; this is the one somebody quotes in a dispute, which is
+ * what the log is for, so it is present but subordinate. */
+.ds .dsh-when {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Prev / position / next. His sheet has no pager because nothing in his
+ * dashboard pages; the buttons themselves are his .ds-btn so only the row
+ * needs describing. */
+.ds .dsh-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-weight: 300;
+}
+.ds .dsh-pager button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 520px) {
+  /* The position text is the least important of the three on a phone. */
+  .ds .dsh-pager { gap: 8px; }
+  .ds .dsh-pager span { font-size: 11.5px; text-align: center; }
+}
