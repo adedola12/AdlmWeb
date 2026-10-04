@@ -160,6 +160,21 @@ test("services lines are routed to the right discipline", () => {
   }
 });
 
+test("a services line priced from an all-in installed item gets no labour on top", () => {
+  const wc = item({ code: "BQ-wc", description: "Water closet with low level cistern", unit: "nr", qty: 2, rate: 150000 });
+  const serviceRateFor = (allIn) => ({
+    material: () => 112000,
+    labour: () => 5000,
+    allIn: () => allIn,
+  });
+  const labourOf = (rows) =>
+    rows.filter((r) => r.billIdentity === "BQ-wc" && r.componentKind === "Labour").reduce((s, r) => s + (r.qty || 0) * (r.rate || 0), 0);
+  const installed = generateMlSchedule([wc], [], K, { serviceRateFor: serviceRateFor(true) }).budgetItems;
+  const supplyOnly = generateMlSchedule([wc], [], K, { serviceRateFor: serviceRateFor(false) }).budgetItems;
+  assert.equal(labourOf(installed), 0);
+  assert.ok(labourOf(supplyOnly) > 0);
+});
+
 test("a bill sheet named Elect makes its lines electrical", () => {
   // Sheet-derived categories are how imported MEP bills carry their discipline.
   assert.equal(mepDiscipline(item({ description: "25mm dia.", category: "Elect" })), "electrical");

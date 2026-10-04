@@ -671,7 +671,7 @@ ${knowledgePack}`;
   return { cacheable, dynamic: userContext };
 }
 
-function buildUserContext(user, now = new Date()) {
+export function buildUserContext(user, now = new Date(), page = {}) {
   // Today in Lagos. In the per-visitor half so the cached prefix never changes
   // at midnight; Ada needs it to turn "last month" into dates.
   const today = `TODAY: ${watToday(now)} (Lagos, WAT, UTC+1). Use this for any date the user describes in words.`;
@@ -690,9 +690,19 @@ A guest who is NOT logged in. If they show buying intent, encourage creating an 
     ? `They ALREADY OWN (active): ${owned.join(", ")}. Do NOT try to re-sell these — instead upsell complementary products, trainings or courses they don't have.`
     : `They have no active subscriptions yet — a prime candidate for a first purchase.`;
 
+  // WHERE THEY ARE STANDING. The page reached the tools already, but nothing
+  // told the model, so on Project Aurora's own bill "price this project" was
+  // answered with "which project?". The reference is only ever a hint: every
+  // tool resolves it against the caller's OWN projects.
+  const ref = String(page?.projectRef || "").trim();
+  const onPage = ref
+    ? `
+ON A PROJECT PAGE: they are looking at one of their own projects right now (product: ${String(page?.productKey || "unknown")}, reference: ${ref}). When they say "this project", "this bill", "here", or name no project, it is THIS one: leave the project name out where a tool allows it (it then uses the page's project), and where a tool requires one, pass the reference above as the name. Do not ask which project.`
+    : "";
+
   return `# VISITOR
 ${today}
-A LOGGED-IN user${user.name ? ` named ${user.name}` : ""}${user.email ? ` (${user.email})` : ""}. ${ownedLine}`;
+A LOGGED-IN user${user.name ? ` named ${user.name}` : ""}${user.email ? ` (${user.email})` : ""}. ${ownedLine}${onPage}`;
 }
 
 /* --------------------------- tool handlers --------------------------- */
@@ -956,7 +966,7 @@ export async function runSalesAgent(history, message, opts = {}) {
   const { knowledgePack, productIndex } = await getCatalog();
   const system = buildSystemPrompt({
     knowledgePack,
-    userContext: buildUserContext(opts.user, opts.now || new Date()),
+    userContext: buildUserContext(opts.user, opts.now || new Date(), opts.page),
     canReadAccount: !!opts.user,
     canUseAiService: !!opts.user && !!opts.accessToken && aiServiceEnabled(),
     canUseCards: !!opts.user && opts.cards === true,

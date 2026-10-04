@@ -123,9 +123,12 @@ async function normalizeProjectDoc(doc) {
 // against anyway, so filtering on it only ever produced false "not found"s.
 async function findInTakeoffProjects(id, userId) {
   if (!mongoose.Types.ObjectId.isValid(String(id))) return null;
+  // Samples have no owner (userId null) and are open to every subscriber, read
+  // only. Their banner has always said they can be exported, but this filter
+  // never matched one, so an export depended on the slow legacy scan below.
   const doc = await TakeoffProject.findOne({
     _id: new mongoose.Types.ObjectId(String(id)),
-    $or: [{ userId }, { "collaborators.userId": userId }],
+    $or: [{ userId }, { "collaborators.userId": userId }, { isSample: true }],
   }).lean();
   return doc || null;
 }
@@ -177,6 +180,9 @@ async function findProjectDoc({ tool, id, userId }) {
   if (!userId) return null;
 
   const direct = await findInTakeoffProjects(id, userId);
+  // A sample is for looking at, rates and all, by anyone (util/projectAccess.js
+  // gives it canExport and canSeeRates): neither check below is about a sample.
+  if (direct?.isSample) return normalizeProjectDoc(direct);
   if (direct) {
     // Found and access-filtered by the query. A view-only collaborator can read
     // the project but must not export it.
