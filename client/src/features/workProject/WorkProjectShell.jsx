@@ -240,7 +240,26 @@ export default function WorkProjectShell({ productKey, id }) {
     [params, setParams],
   );
 
-  const viewOnly = project?.access === "view" || project?.readOnly === true;
+  // `_access`, with the underscore, is what the server actually sends
+  // (server/routes/projects.js, obj._access = access). This read was
+  // `project?.access === "view" || project?.readOnly === true`, and the payload
+  // carries neither of those keys — so both halves were permanently false and
+  // viewOnly was always false, whoever was looking.
+  //
+  // What that cost: canEdit went into the Bill and the line panel as true even
+  // for a collaborator with view access and on the read-only sample projects.
+  // The controls rendered enabled, and the refusal arrived as a failed save
+  // instead of a control that was never offered. Line 764 of this same file
+  // already read _access?.canEdit correctly, so the two disagreed about the
+  // same question a few hundred lines apart.
+  //
+  // The two old reads are kept as a fallback rather than deleted: a payload
+  // from an older server, or a shape this has not met, should still be able to
+  // say "view only" and be believed.
+  const viewOnly =
+    project?._access?.canEdit === false ||
+    project?.access === "view" ||
+    project?.readOnly === true;
 
   // His .pj-sync (work-proj.js:355): "Saved" at rest, "Saving…" while a write
   // is in flight, "Saved just now" after one lands. A failure says so rather
