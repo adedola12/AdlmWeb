@@ -2021,3 +2021,54 @@
 .ds .wk-undo:hover:not(:disabled) { background: var(--bg-alt); color: var(--ink); }
 .ds .wk-undo:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .ds .wk-undo:disabled { opacity: .4; cursor: not-allowed; }
+/* ── brightness, over the 3D view (ModelViewer) ───────────────────────────
+ *
+ * Sits on the canvas, so it has to be legible over whatever the model happens
+ * to be behind it — hence the blur and the translucent plate rather than a
+ * plain background colour. It is the only control of its kind in the product;
+ * his sheet has no pattern for something floating over a viewport. */
+.ds .mv-bright {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+.ds .mv-bright svg {
+  width: 15px; height: 15px; flex: none;
+  fill: none; stroke: var(--ink-3); stroke-width: 1.7; stroke-linecap: round;
+}
+.ds .mv-bright input[type="range"] {
+  width: 104px;
+  accent-color: var(--action);
+  cursor: pointer;
+}
+@media (max-width: 520px) {
+  /* The slider is the first thing to lose room on a phone, and a 60px one is
+   * not usable anyway — the icon alone still says what it is. */
+  .ds .mv-bright input[type="range"] { width: 72px; }
+}
+
+/* The bill line the 3D view is currently showing (WorkProjectFourD).
+ * His .fd-line has a hover state but nothing for "this is the one you picked",
+ * because until now clicking one only opened a panel. Now it drives the model,
+ * so which one is selected has to be visible after the pointer has moved away. */
+.ds .fd-line.on {
+  background: color-mix(in srgb, var(--action) 9%, transparent);
+  box-shadow: inset 2px 0 0 var(--action);
+}
+.ds .fd-line.on .ds b { color: var(--action); font-weight: 500; }
+
+/* The bill line the 3D view is currently showing (WorkProjectFourD).
+ * His .fd-line has a hover state but nothing for "this is the one you picked",
+ * because until now clicking one only opened a panel. Now it drives the model,
+ * so which one is selected has to be visible after the pointer has moved away. */
+.ds .fd-line.on {
+  background: color-mix(in srgb, var(--action) 9%, transparent);
+  box-shadow: inset 2px 0 0 var(--action);
+}
+.ds .fd-line.on .ds b { color: var(--action); font-weight: 500; }

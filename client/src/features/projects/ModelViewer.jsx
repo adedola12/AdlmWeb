@@ -8,7 +8,12 @@
 // from, and clicking an element traces back to the BoQ lines that measured it.
 
 import React from "react";
-import { IfcViewer } from "../../lib/ifcViewer.js";
+import {
+  IfcViewer,
+  DEFAULT_EXPOSURE,
+  MIN_EXPOSURE,
+  MAX_EXPOSURE,
+} from "../../lib/ifcViewer.js";
 import { deriveItemDiscipline } from "../../lib/boqCategory.js";
 // One home for the element arithmetic, shared with the Model tab in the
 // ported design — see lib/elementTrace.js for why it is not two copies.
@@ -85,6 +90,9 @@ export default function ModelViewer({
   const [error, setError] = React.useState("");
   const [selectedItemKey, setSelectedItemKey] = React.useState(null);
   const [pickedId, setPickedId] = React.useState(0);
+  // Per-view, not per-project: brightness depends on the screen somebody is
+  // sitting at and the room they are in, so it is not saved anywhere.
+  const [exposure, setExposure] = React.useState(DEFAULT_EXPOSURE);
   // The latest pick callback, read by the viewer without re-creating it.
   const pickRef = React.useRef(onPickElement);
   React.useEffect(() => {
@@ -303,6 +311,38 @@ export default function ModelViewer({
             >
               Clear highlight
             </button>
+          ) : null}
+
+          {/* BRIGHTNESS.
+              One slider, because tone mapping turned brightness into a single
+              number (renderer.toneMappingExposure) rather than a set of light
+              intensities to multiply. Not saved anywhere: it depends on the
+              screen and the room, so it is a per-view adjustment rather than a
+              property of the project. */}
+          {status === "ready" ? (
+            <label
+              className="mv-bright absolute left-2 bottom-2"
+              title="How bright the model looks. Nothing is saved; it is for this screen."
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="4.2" />
+                <path d="M12 2.6v2.4M12 19v2.4M21.4 12H19M5 12H2.6M18.6 5.4 16.9 7.1M7.1 16.9l-1.7 1.7M18.6 18.6l-1.7-1.7M7.1 7.1 5.4 5.4" />
+              </svg>
+              <input
+                type="range"
+                min={MIN_EXPOSURE}
+                max={MAX_EXPOSURE}
+                step="0.05"
+                value={exposure}
+                aria-label="Brightness"
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  // The viewer clamps and returns what it actually used, so the
+                  // control cannot drift away from what is on screen.
+                  setExposure(viewerRef.current?.setExposure(v) ?? v);
+                }}
+              />
+            </label>
           ) : null}
         </div>
 

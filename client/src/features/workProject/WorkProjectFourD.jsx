@@ -142,6 +142,31 @@ export default function WorkProjectFourD({
   const models = project?.models || {};
   const hasModel = ["architectural", "structural", "mep"].some((d) => models?.[d]?.url);
 
+  // WHICH LINE THE VIEWER IS SHOWING.
+  //
+  // Clicking a bill line used to open the line panel and nothing else, so the
+  // model went on showing every element running that day — the one question the
+  // click was asking, "where is THIS", was the one thing it did not answer. The
+  // whole point of this screen is that the programme, the money and the model
+  // are the same job seen three ways, and a click in one should move the others.
+  //
+  // Null means "no line picked", which is NOT the same as an empty array: null
+  // falls back to everything running today, an empty array would highlight
+  // nothing and dim the whole model.
+  const [pickedLine, setPickedLine] = React.useState(null);
+
+  // A picked line survives moving the date only while it is still running: on a
+  // date where it is not, falling back to that day's elements is the truer
+  // answer than holding a highlight for work that is not happening.
+  const lineIsRunning = pickedLine != null && snap.lineIndexes.includes(pickedLine);
+  const pickedIds = lineIsRunning
+    ? (items[pickedLine]?.elementIds || []).map(Number).filter(Boolean)
+    : null;
+  // An element id the model does not carry cannot be highlighted, and dimming
+  // the whole model to show nothing reads as a broken viewer. So a line with no
+  // ids keeps the day's highlight and says why underneath.
+  const highlightIds = pickedIds && pickedIds.length ? pickedIds : snap.elementIds;
+
   if (!range) {
     return (
       <div className="fd">
@@ -179,7 +204,7 @@ export default function WorkProjectFourD({
                 productKey={productKey}
                 projectId={projectId}
                 accessToken={accessToken}
-                highlightIds={snap.elementIds}
+                highlightIds={highlightIds}
                 onPickElement={null}
               />
             </React.Suspense>
@@ -191,9 +216,13 @@ export default function WorkProjectFourD({
                 workspace and the elements being built on the chosen date light up here.
               </p>
               <span>
-                {snap.elementIds.length
-                  ? `${snap.elementIds.length} elements are measured on the lines running today`
-                  : "This bill carries no model element ids"}
+                {!snap.elementIds.length
+                  ? "This bill carries no model element ids"
+                  : lineIsRunning && pickedIds?.length
+                    ? `Showing ${pickedIds.length} element${pickedIds.length === 1 ? "" : "s"} on ${items[pickedLine]?.description || "this line"}`
+                    : lineIsRunning
+                      ? "That line has no model element ids, so the day's work is shown"
+                      : `${snap.elementIds.length} elements are measured on the lines running today`}
               </span>
             </div>
           )}
@@ -344,13 +373,35 @@ export default function WorkProjectFourD({
               snap.lineIndexes.slice(0, 40).map((i) => (
                 <button
                   type="button"
-                  className="fd-line"
+                  className={`fd-line${pickedLine === i ? " on" : ""}`}
                   key={i}
-                  onClick={() => onOpenLine?.(i)}
+                  aria-pressed={pickedLine === i}
+                  // ONE click, both things. It shows the line in the model and
+                  // opens its panel — the panel is a drawer on the right and the
+                  // viewport is on the left, so neither covers the other, and
+                  // splitting them across two controls would mean putting a
+                  // second interactive element inside this button. That is
+                  // invalid markup, and it would need a third column in his
+                  // two-column .fd-line grid.
+                  //
+                  // Clicking the same line again lets go of it, which is the
+                  // only way back to the day's view without moving the date.
+                  onClick={() => {
+                    setPickedLine((p) => (p === i ? null : i));
+                    onOpenLine?.(i);
+                  }}
                 >
                   <span className="ds">
                     <b>{items[i]?.description || "Untitled line"}</b>
-                    <em>{items[i]?.category || "Uncategorized"}</em>
+                    <em>
+                      {items[i]?.category || "Uncategorized"}
+                      {/* Says up front whether clicking will show anything in
+                          the model, rather than letting somebody click a line
+                          that cannot be located and conclude it is broken. */}
+                      {(items[i]?.elementIds || []).length
+                        ? ` ${EN_DASH} ${items[i].elementIds.length} in the model`
+                        : ""}
+                    </em>
                   </span>
                   <span className="n">{money((items[i]?.qty || 0) * (items[i]?.rate || 0))}</span>
                 </button>
