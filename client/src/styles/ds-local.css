@@ -1958,3 +1958,66 @@
   .ds .dsh-pager { gap: 8px; }
   .ds .dsh-pager span { font-size: 11.5px; text-align: center; }
 }
+
+/* ── an editable number inside a table row (DsConstants) ──────────────────
+ *
+ * His .wk-tbl rows carry read-only figures in .wk-n, and every input he styles
+ * is a form field with a label above it (.ds-field, .adm-f, .ada-f) — none of
+ * which belongs inside a 5-column grid row. The Material Constants library is
+ * the one screen where the number in the row IS the control, so these three
+ * fill that gap and nothing else.
+ *
+ * Deliberately quiet: it borrows .wk-n's right alignment and tabular figures so
+ * a column of values still reads as a column, and only shows a border on hover
+ * or focus. A library of 122 rows each drawing a boxed input is a wall of
+ * boxes; the number should look like the figure it is until you go to change it. */
+.ds .wk-val {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  font: 400 13px var(--font);
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 150ms var(--e-out), background 150ms var(--e-out);
+}
+.ds .wk-val:hover:not(:disabled) { border-color: var(--line-2); }
+.ds .wk-val:focus {
+  outline: 0;
+  border-color: var(--action);
+  background: var(--bg);
+}
+/* Out of range. Uses --accent, the same colour .ds-field.bad uses, so an
+ * invalid figure here looks like an invalid figure anywhere else. */
+.ds .wk-val.bad { border-color: var(--accent); }
+.ds .wk-val-err {
+  display: block;
+  margin-top: 3px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--accent);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* The row's reset control, in the 26px .wk-go column his rates table ends with.
+ * Shown only on a row the firm has actually overridden. */
+.ds .wk-undo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 150ms var(--e-out), color 150ms var(--e-out);
+}
+.ds .wk-undo svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ds .wk-undo:hover:not(:disabled) { background: var(--bg-alt); color: var(--ink); }
+.ds .wk-undo:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.ds .wk-undo:disabled { opacity: .4; cursor: not-allowed; }
