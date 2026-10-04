@@ -221,6 +221,8 @@ Rates are layered so a shared catalogue can be personalised per user:
 
 **Precedence:** *user override > master*, with custom rates appended. The "effective rates" a user actually prices against is the merged result. All edits are version-guarded so concurrent edits don't clobber each other.
 
+**Custom rates are never deleted by omission** (`server/util/rategenCustomRateGuard.js`). Rate Gen desktop up to 2.9.x never downloads custom rates and used to delete every cloud custom rate missing from its local list, which erased rates built on the website or on another PC. Now a bulk `PUT /library/user-rates` (and the older `PUT /rategen/library`) is an upsert: omitted rates stay, except a desktop-made rate an old desktop left out of a non-empty list, which is archived. An old desktop's `DELETE` of a rate made elsewhere is answered `ok` with `kept: true` and does nothing. Each rate records its `origin` (desktop = Guid id, web = slug). A desktop that pulls before it pushes sends `X-ADLM-Rates-Sync: 2` and its `DELETE` is honoured. Every removal goes to `deletedCustomRates` (newest 200): `GET /library/custom-rates/deleted` lists it, `POST /library/custom-rates/:id/restore` puts one back.
+
 Rates are organised into canonical **sections**: Groundwork, Concrete Works, Blockwork, Finishes, Roofing, Windows & Doors, Painting, Steelwork, Carbon & Others. Underneath sits a shared **master component catalogue** of materials and labour (each with a serial number, name, unit, and default unit price) that the build-ups reference.
 
 ### 5.3 Guardrails & integrity
