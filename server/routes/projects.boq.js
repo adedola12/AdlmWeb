@@ -413,7 +413,8 @@ router.get(
 /**
  * GET /projectsboq/:tool/:id/export/icms?format=xlsx|json
  * The ICMS 3 cost and carbon report: a workbook (cover, cost by Group G-2,
- * carbon by Group H-1/H-2, lines, not placed) or the same as JSON.
+ * carbon by Group H-1/H-2, lines, not placed) or the same as JSON in the RICS
+ * Data Standard 3.3.3 shape, with the ADLM detail under rics:OtherData.adlm.
  */
 router.get(
   "/:tool/:id/export/icms",

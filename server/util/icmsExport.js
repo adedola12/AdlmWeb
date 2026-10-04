@@ -206,14 +206,187 @@ function extra(key, kind, description, amount, group, subGroup, why) {
   };
 }
 
-/** The report as a JSON document: ICMS 3 codes, cost and carbon by Group, attributes and lines. */
-export function icmsJson(report) {
+/* --------------------------- RICS Data Standard --------------------------- */
+//
+// The JSON export is a RICS Data Standard (RDS) 3.3.3 data transfer: RICS's own
+// MIT-licensed schema for ICMS 3 cost and carbon data, published at
+// https://github.com/RICS-Data-Standard/RDS (JSON/rics-3.3.3.json, kept verbatim
+// in assets/icms/rds-3.3.3.schema.json and validated against in the tests).
+// The schema is generated from RICS's XSD, so attributes are "@name", text is "$"
+// and every element is namespaced "rics:" or "xal:".
+//
+// Placement: rics:DataTransfer > rics:CostedProjects[0] > rics:Buildings[0] (or
+// the element for the ICMS project type) > rics:Costs and rics:Emissions, one
+// entry per ICMS Group and Sub-Group the bill reaches, @code at Level 3
+// ("01.2.02") and @subcode the Level 4 part ("020"). What RDS has no field for
+// (lines, cost per m2, which attributes were assumed, carbon coverage, cost not
+// yet placed) is kept under rics:OtherData.adlm on the costed project, the
+// schema's own extension point.
+
+export const RDS_VERSION = "3.3.3";
+
+// ICMS 3 Level 3 Group -> RDS KnownCostEmissionGroupEnum. Group 12 is "Production
+// and loose furniture, fittings and equipment" in ICMS 3; RDS 3.3.3 has only this
+// one value for it.
+const RDS_GROUP = {
+  "01": "demolitionSitePreparationAndFormation",
+  "02": "substructure",
+  "03": "structure",
+  "04": "architecturalWorks-NonStructuralWorks",
+  "05": "servicesAndEquipment",
+  "06": "surfaceAndUndergroundDrainage",
+  "07": "externalAndAncillaryWorks",
+  "08": "preliminariesConstructors-SiteOverheads-GeneralRequirements",
+  "09": "riskAllowances",
+  "10": "taxesAndLevies",
+  "11": "workAndUtilitiesOffsite",
+  "12": "postCompletionLooseFurnitureFittingsAndEquipment",
+  "13": "constructionRelatedConsultantsAndSupervision",
+};
+
+// ICMS 3 Level 1 project type -> RDS @mainProjectType, and the ProjectType element holding its costs.
+const RDS_PROJECT = {
+  "01": ["buildings", "rics:Buildings"],
+  "02": ["roadsRunwaysAndMotorway", "rics:RoadsRunwaysAndMotorways"],
+  "03": ["railways", "rics:Railways"],
+  "04": ["bridges", "rics:Bridges"],
+  "05": ["tunnels", "rics:Tunnels"],
+  "06": ["wasteWaterTreatmentWorks", "rics:WasteWaterTreatmentWorks"],
+  "07": ["waterTreatmentWorks", "rics:WaterTreatmentWorks"],
+  "08": ["pipelines", "rics:Pipelines"],
+  "09": ["wellsAndBoreholes", "rics:WellsAndBoreholes"],
+  "10": ["power-generatingPlants", "rics:Power-generatingPlants"],
+  "11": ["chemicalPlants", "rics:ChemicalPlants"],
+  "12": ["refineries", "rics:Refineries"],
+  "13": ["damsAndReservoirs", "rics:DamsAndReservoirs"],
+  "14": ["minesAndQuarries", "rics:MinesAndQuarries"],
+  "15": ["offshoreStructures", "rics:OffshoreStructures"],
+  "16": ["nearshoreWorks", "rics:NearshoreWorks"],
+  "17": ["ports", "rics:Ports"],
+  "18": ["waterwayWorks", "rics:WaterwayWorks"],
+  "19": ["landFormationAndReclamation", "rics:LandFormationAndReclamations"],
+};
+
+// Our project status -> RDS @costReportStatus and @projectStatus (both closed enums).
+// An Estimate says nothing certain about the design phase, so it sets no @projectStatus.
+const RDS_STATUS = {
+  Estimate: { costReportStatus: "pre-constructionForecast" },
+  Tender: { costReportStatus: "atTender", projectStatus: "designPhase" },
+  "Contract awarded": { costReportStatus: "duringConstruction", projectStatus: "constructionAndCommissioningPhase" },
+  "Final account": { costReportStatus: "actualCostsAnd/OrCarbonEmissionsOfConstructionPost-completion", projectStatus: "complete" },
+};
+const RDS_PROJECT_STATUS = ["initiationAndConceptPhase", "designPhase", "constructionAndCommissioningPhase", "complete"];
+const RDS_PRICE_BASIS = ["fixedUnitRates", "unitRatesSubjectToFluctuatingAdjustment"];
+
+/** Our carbon boundary words -> RDS KnownCarbonReportingBoundaryEnum, or the words as given. */
+export function rdsBoundary(text) {
+  const t = String(text || "");
+  if (/A0|B1|C1/.test(t)) return "Embodied carbon (EN 15978 stages A0-A5, B1-B5, C1-C4)";
+  if (/A1\s*-\s*A5/.test(t)) return "Up front carbon (EN 15978 stages A1-A5)";
+  if (/A1\s*-\s*A3/.test(t)) return "Products (EN 15978 stages A1-A3)";
+  if (/A4\s*-\s*A5/.test(t)) return "Construction (EN 15978 stages A4-A5)";
+  return t;
+}
+const rdsQuantitySource = (text) => (/bills? of quantities|boq/i.test(String(text || "")) ? "billsOfQuantities(BoQ)" : String(text || ""));
+
+/** kgCO2e as an RDS Complex Measurement. */
+const co2e = (kg, extra = {}) => ({ "@type": "absolute", "@item": "carbonDioxideEquivalent", "@unitOfMeasurement": "KGM", "@description": "kgCO2e", ...extra, "rics:Decimal": { $: r2(kg) } });
+
+/**
+ * The report as a RICS Data Standard 3.3.3 document (see the note above), with the
+ * ADLM detail under rics:OtherData.adlm.
+ * @param {object} report  from buildIcmsReport
+ * @param {object} opts    { reportDate } YYYY-MM-DD, defaults to today
+ */
+export function icmsJson(report, { reportDate = new Date().toISOString().slice(0, 10) } = {}) {
+  const A = report.attributes;
+  const pt = A.projectType.value;
+  const cur = A.currency.value;
+  const [mainProjectType, container] = RDS_PROJECT[pt] || RDS_PROJECT["01"];
+  const st = A.projectStatus.value;
+  const status = RDS_STATUS[st] || (RDS_PROJECT_STATUS.includes(st) ? { projectStatus: st } : {});
+  const notUsed = new Set(report.summary.groups.filter((g) => g.carbonReported === false).map((g) => g.code));
+
+  // one entry per Group / Sub-Group the bill reaches, so the Totals add up to the placed cost once
+  const buckets = new Map();
+  for (const l of report.lines.filter((x) => x.group)) {
+    const k = `${l.group}.${l.subGroup || ""}`;
+    const b = buckets.get(k) || { group: l.group, subGroup: l.subGroup || null, cost: 0, kg: 0, lowKg: 0, counted: false };
+    b.cost += l.amount;
+    b.counted ||= l.carbonKg != null;
+    b.kg += l.carbonKg || 0;
+    b.lowKg += l.carbonLowKg ?? l.carbonKg ?? 0;
+    buckets.set(k, b);
+  }
+  const placed = [...buckets.entries()].filter(([, b]) => b.cost > 0).sort(([a], [b]) => a.localeCompare(b)).map(([, b]) => b);
+  const ident = (b) => ({
+    "@category": "constructionCosts",
+    "@group": RDS_GROUP[b.group] || groupTitle(b.group),
+    "@code": `${pt}.2.${b.group}`,
+    ...(b.subGroup ? { "@subcode": b.subGroup.split(".")[1], "@subgroup": subGroupTitle(b.subGroup) } : {}),
+    "@description": b.subGroup ? subGroupTitle(b.subGroup) : groupTitle(b.group),
+  });
+  const costs = placed.map((b) => ({ ...ident(b), "rics:Total": { "@iso4217Code": cur, $: r2(b.cost) } }));
+  // carbon only where a rate gave one: an uncounted bucket is left out rather than reported as zero
+  const emissions = placed.filter((b) => notUsed.has(b.group) || b.counted).map((b) => (notUsed.has(b.group)
+    ? { ...ident(b), "@isNotApplicable": true } // ICMS 3: "not used" for carbon
+    : { ...ident(b), "rics:Forecast": [co2e(b.kg), co2e(b.lowKg, { "@isMinimum": true, "@description": "kgCO2e, low end" })] }));
+
+  const works = { "@title": A.projectName.value, "@element": "project", "rics:Costs": costs, "rics:Emissions": emissions };
+  if (container === "rics:Buildings") {
+    const q = {};
+    if (A.gfaIpms1.value) q["rics:ExternalFloorAreaAsIpms1"] = { "@unitOfMeasurement": "MTK", $: A.gfaIpms1.value };
+    if (A.gfaIpms2.value) q["rics:InternalFloorAreaAsIpms2"] = { "@unitOfMeasurement": "MTK", $: A.gfaIpms2.value };
+    if (Object.keys(q).length) works["rics:Quantities"] = q;
+  }
+
+  const address = {};
+  if (A.country.value) address["xal:Country"] = { "xal:CountryNameCode": { "@Scheme": "ISO 3166-1 alpha-2", $: A.country.value } };
+  if (A.location.value) address["xal:AddressLines"] = { "xal:AddressLine": [String(A.location.value)] };
+
+  const project = {
+    "@title": A.projectName.value,
+    "@element": "project",
+    "@mainProjectType": mainProjectType,
+    ...(status.costReportStatus ? { "@costReportStatus": status.costReportStatus } : {}),
+    ...(status.projectStatus ? { "@projectStatus": status.projectStatus } : {}),
+    ...(RDS_PRICE_BASIS.includes(A.priceBasis.value) ? { "@reportPriceBasis": A.priceBasis.value } : {}),
+    "rics:MetaData": { "rics:ReportDate": { "rics:Date": reportDate } },
+    ...(A.client.value ? { "rics:Client": [{ "@name": String(A.client.value) }] } : {}),
+    ...(Object.keys(address).length ? { "rics:Location": { "xal:AddressDetails": [address] } } : {}),
+    "rics:CostBaseDate": { "rics:Date": A.baseDate.value },
+    "rics:CarbonEmissions": {
+      "@boundary": rdsBoundary(A.carbonBoundary.value),
+      "@assessmentProcess": report.method,
+      "rics:AssessmentTools": ["ADLM RateGen"],
+      "rics:EmissionFactorSources": [String(A.emissionFactorSources.value)],
+      "rics:MaterialQuantitySources": [rdsQuantitySource(A.quantitySource.value)],
+    },
+    [container]: [works],
+    "rics:OtherData": { adlm: adlmDetail(report) },
+  };
+
+  return {
+    "@xmlns:rics": `urn:xsdschema:rics:${RDS_VERSION}`,
+    "@xmlns:xal": "urn:oasis:names:tc:ciq:xsdschema:xAL:2.0",
+    "rics:DataTransfer": {
+      "@description": `${report.edition} cost and carbon report, RICS Data Standard ${RDS_VERSION}`,
+      "rics:GeneratedBy": { "@name": "ADLM Studio" },
+      "rics:Currency": [{ "@iso4217Code": cur, "@isPrimaryCurrency": true }],
+      "rics:CostedProjects": [project],
+    },
+  };
+}
+
+/** What RDS has no field for: the line detail, cost per m2, which attributes were assumed, coverage. */
+function adlmDetail(report) {
   const attr = Object.fromEntries(Object.entries(report.attributes).map(([k, v]) => [k, v.value]));
   const pt = attr.projectType;
   return {
     standard: report.edition,
-    note: "ICMS 3 codes and groupings. Cost includes contractors' overheads and profit as billed; carbon is upfront A1-A5 in kgCO2e from RateGen. Groups 10, 11 and 13 are 'not used' for carbon.",
+    note: "ICMS 3 codes and groupings. Cost includes contractors' overheads and profit as billed; carbon is upfront A1-A5 in kgCO2e from RateGen. Groups 10, 11 and 13 are 'not used' for carbon. Cost not yet placed in an ICMS Group is in construction.unplacedCost and is not in rics:Costs.",
     attributes: { ...attr, projectTypeTitle: ICMS_PROJECT_TYPES.find((t) => t.code === pt)?.title || "" },
+    assumed: Object.entries(report.attributes).filter(([, v]) => !v.stated).map(([k]) => k),
     construction: {
       code: `${pt}.2`, // Level 2, Construction
       cost: report.summary.total,

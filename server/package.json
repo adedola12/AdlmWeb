@@ -57,6 +57,8 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-draft-04": "^1.0.0",
     "esbuild": "^0.28.1",
     "nodemon": "^3.1.10"
   }

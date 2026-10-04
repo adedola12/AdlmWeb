@@ -7,6 +7,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
+import Ajv04 from "ajv-draft-04";
+import { readFileSync } from "node:fs";
 
 import { buildIcmsReport, exportIcmsWorkbook, icmsDetailsFromBody, icmsJson } from "./icmsExport.js";
 
@@ -107,11 +109,99 @@ test("the workbook opens with its five sheets and the totals in them", async () 
   near(total, r.summary.total);
 });
 
-test("the JSON carries full ICMS codes, cost and carbon by Group", () => {
-  const j = icmsJson(buildIcmsReport(PROJECT, { productKey: "revit", carbonRates: RATES }));
-  assert.equal(j.construction.code, "01.2");
-  const sub = j.construction.groups.find((g) => g.code === "01.2.02");
-  assert.equal(sub.carbonKgCO2e, 3000);
-  assert.equal(j.construction.groups.find((g) => g.code === "01.2.10").carbonKgCO2e, null); // "not used"
-  assert.ok(j.lines.some((l) => l.code === "01.2.02.020"));
+/* ---------------- the JSON is a RICS Data Standard 3.3.3 document ---------------- */
+// assets/icms/rds-3.3.3.schema.json is RICS's own JSON schema, verbatim from
+// https://github.com/RICS-Data-Standard/RDS/blob/main/JSON/rics-3.3.3.json (MIT).
+// It is draft-04 and generated from XSD, whose patterns escape ":" (a unicode-mode
+// JS RegExp refuses that), so the validator un-escapes it; nothing else is relaxed.
+const RDS = JSON.parse(readFileSync(new URL("../assets/icms/rds-3.3.3.schema.json", import.meta.url), "utf8"));
+let rdsValidate;
+const validRds = (doc) => {
+  if (!rdsValidate) {
+    const regExp = (src, flags) => new RegExp(src.split("\\:").join(":"), flags);
+    regExp.code = "xsdRegExp";
+    rdsValidate = new Ajv04({ strict: false, allErrors: true, code: { regExp } }).compile(RDS);
+  }
+  const ok = rdsValidate(doc);
+  return ok ? null : rdsValidate.errors.slice(0, 5).map((e) => `${e.instancePath} ${e.message} ${JSON.stringify(e.params)}`).join("\n");
+};
+// RDS's enums are open (any string passes), so the known vocabulary is pinned separately
+const known = (name) => RDS.definitions[`rics:Known${name}`].enum;
+const rdsProject = (j) => j["rics:DataTransfer"]["rics:CostedProjects"][0];
+
+test("RDS: the JSON validates against RICS's own schema, for buildings and other project types", () => {
+  const full = { ...PROJECT, clientName: "Mr A", icms: { gfaIpms1: 230, gfaIpms2: 200, location: "Lekki, Lagos", baseDate: "2026-09-01" } };
+  for (const projectType of ["01", "04", "19"]) {
+    const j = icmsJson(buildIcmsReport({ ...full, icms: { ...full.icms, projectType } }, { productKey: "revit", carbonRates: RATES }));
+    assert.equal(validRds(j), null, `project type ${projectType}`);
+  }
+  // and the check is real: a stray field fails it
+  const bad = icmsJson(buildIcmsReport(full, { productKey: "revit" }));
+  bad["rics:DataTransfer"].notRds = 1;
+  assert.notEqual(validRds(bad), null);
+});
+
+test("RDS: project attributes sit where the standard puts them", () => {
+  const p = { ...PROJECT, clientName: "Mr A", icms: { gfaIpms1: 230, gfaIpms2: 200, location: "Lekki, Lagos", baseDate: "2026-09-01", currency: "NGN", country: "NG" } };
+  const j = icmsJson(buildIcmsReport(p, { productKey: "revit", carbonRates: RATES }), { reportDate: "2026-10-04" });
+  const dt = j["rics:DataTransfer"];
+  assert.deepEqual(dt["rics:Currency"], [{ "@iso4217Code": "NGN", "@isPrimaryCurrency": true }]);
+  const cp = rdsProject(j);
+  assert.equal(cp["@mainProjectType"], "buildings");
+  assert.ok(known("ProjectDescriptionEnum").includes(cp["@mainProjectType"]));
+  assert.equal(cp["@costReportStatus"], "pre-constructionForecast"); // an Estimate
+  assert.equal(cp["@projectStatus"], undefined);
+  assert.deepEqual(cp["rics:CostBaseDate"], { "rics:Date": "2026-09-01" });
+  assert.deepEqual(cp["rics:MetaData"], { "rics:ReportDate": { "rics:Date": "2026-10-04" } });
+  assert.deepEqual(cp["rics:Client"], [{ "@name": "Mr A" }]);
+  assert.equal(cp["rics:Location"]["xal:AddressDetails"][0]["xal:Country"]["xal:CountryNameCode"].$, "NG");
+  assert.deepEqual(cp["rics:Location"]["xal:AddressDetails"][0]["xal:AddressLines"]["xal:AddressLine"], ["Lekki, Lagos"]);
+  const ce = cp["rics:CarbonEmissions"];
+  assert.equal(ce["@boundary"], "Up front carbon (EN 15978 stages A1-A5)");
+  assert.ok(known("CarbonReportingBoundaryEnum").includes(ce["@boundary"]));
+  assert.deepEqual(ce["rics:MaterialQuantitySources"], ["billsOfQuantities(BoQ)"]);
+  assert.ok(known("MaterialQuantitySourceEnum").includes(ce["rics:MaterialQuantitySources"][0]));
+  const b = cp["rics:Buildings"][0];
+  assert.deepEqual(b["rics:Quantities"], {
+    "rics:ExternalFloorAreaAsIpms1": { "@unitOfMeasurement": "MTK", $: 230 },
+    "rics:InternalFloorAreaAsIpms2": { "@unitOfMeasurement": "MTK", $: 200 },
+  });
+  // a final account is reported as actual, complete
+  const fin = rdsProject(icmsJson(buildIcmsReport({ ...p, finalAccount: { finalized: true } }, { productKey: "revit" })));
+  assert.equal(fin["@costReportStatus"], "actualCostsAnd/OrCarbonEmissionsOfConstructionPost-completion");
+  assert.equal(fin["@projectStatus"], "complete");
+});
+
+test("RDS: cost and carbon by ICMS Group and Sub-Group, coded as the standard codes them", () => {
+  const r = buildIcmsReport(PROJECT, { productKey: "revit", carbonRates: RATES });
+  const b = rdsProject(icmsJson(r))["rics:Buildings"][0];
+  const codes = known("CostEmissionCodeEnum"), groups = known("CostEmissionGroupEnum");
+  for (const c of [...b["rics:Costs"], ...b["rics:Emissions"]]) {
+    assert.equal(c["@category"], "constructionCosts");
+    assert.ok(codes.includes(c["@code"]), c["@code"]);
+    assert.ok(groups.includes(c["@group"]), c["@group"]);
+    if (c["@subcode"] !== undefined) assert.match(c["@subcode"], /^\d{3}$/);
+  }
+  const found = b["rics:Costs"].find((c) => c["@code"] === "01.2.02" && c["@subcode"] === "020");
+  assert.equal(found["@group"], "substructure");
+  near(found["rics:Total"].$, 1_000_000);
+  assert.equal(found["rics:Total"]["@iso4217Code"], "NGN");
+  // the Totals add up once to the placed cost: nothing counted at two levels
+  near(b["rics:Costs"].reduce((s, c) => s + c["rics:Total"].$, 0), r.summary.total - r.summary.unplaced);
+  // carbon: the concrete in kgCO2e, with its low end; tax "not used"; no zero where nothing was counted
+  const e = b["rics:Emissions"].find((x) => x["@code"] === "01.2.02");
+  assert.deepEqual(e["rics:Forecast"].map((f) => [f["@item"], f["@unitOfMeasurement"], f["rics:Decimal"].$]), [["carbonDioxideEquivalent", "KGM", 3000], ["carbonDioxideEquivalent", "KGM", 2150]]);
+  assert.equal(e["rics:Forecast"][1]["@isMinimum"], true);
+  assert.equal(b["rics:Emissions"].find((x) => x["@code"] === "01.2.10")["@isNotApplicable"], true);
+  assert.equal(b["rics:Emissions"].some((x) => x["@code"] === "01.2.08"), false); // preliminaries carry no carbon figure
+});
+
+test("RDS: the ADLM detail is kept apart under rics:OtherData.adlm", () => {
+  const adlm = rdsProject(icmsJson(buildIcmsReport(PROJECT, { productKey: "revit", carbonRates: RATES })))["rics:OtherData"].adlm;
+  assert.equal(adlm.construction.code, "01.2");
+  assert.equal(adlm.construction.groups.find((g) => g.code === "01.2.02").carbonKgCO2e, 3000);
+  assert.equal(adlm.construction.groups.find((g) => g.code === "01.2.10").carbonKgCO2e, null); // "not used"
+  near(adlm.construction.unplacedCost, 500_000);
+  assert.ok(adlm.lines.some((l) => l.code === "01.2.02.020"));
+  assert.ok(adlm.assumed.includes("currency"));
 });
