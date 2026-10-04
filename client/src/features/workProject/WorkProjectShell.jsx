@@ -147,6 +147,15 @@ export default function WorkProjectShell({ productKey, id }) {
     [full, summary],
   );
 
+  // Letting the head fill in early is right; letting the TABS read the rollup
+  // as though it were the whole project is not. The rollup has no models, no
+  // linked services and no bill lines, so the Model, Services and Drawings tabs
+  // each announce that a project has none of a thing it does have, and then
+  // change their minds when the fetch lands. Those three take this and say they
+  // are still reading instead. Deliberately not `!full` alone: once the read has
+  // failed, fullFailed owns the screen and nothing below is rendered at all.
+  const loadingFull = !full && !fullFailed;
+
   const tabs = tabsFor(productKey);
   const tab = resolveTab(params.get("tab"), productKey);
   // His Rates tab has three views behind a segmented control. The chosen one
@@ -801,11 +810,32 @@ export default function WorkProjectShell({ productKey, id }) {
               onGo={go}
             />
           ) : tab === "model" && !fullFailed ? (
-            <WorkProjectModel project={project} canEdit={!viewOnly} onGo={go} />
+            <WorkProjectModel
+              project={project}
+              canEdit={!viewOnly}
+              onGo={go}
+              loading={loadingFull}
+              classicHref={classicWorkspaceHref}
+            />
           ) : tab === "drawings" && !fullFailed ? (
-            <WorkProjectDrawings project={project} onOpenPlace={openPlace} />
+            <WorkProjectDrawings
+              project={project}
+              onOpenPlace={openPlace}
+              loading={loadingFull}
+            />
           ) : tab === "services" && !fullFailed ? (
-            <WorkProjectServices project={project} canEdit={!viewOnly} />
+            <WorkProjectServices
+              project={project}
+              canEdit={!viewOnly}
+              loading={loadingFull}
+              classicHref={classicWorkspaceHref}
+              productKey={productKey}
+              projectId={full?._id || full?.id || ""}
+              accessToken={accessToken}
+              // The link POST answers with the updated project, so the screen
+              // takes it straight rather than refetching what it was just sent.
+              onLinked={(updated) => setFull(updated?.project || updated || null)}
+            />
           ) : null}
         </div>
         </>

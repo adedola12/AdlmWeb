@@ -8,6 +8,7 @@
 // which we do not, and what stands in where we do not.
 
 import React from "react";
+import { apiAuthed } from "../../http.js";
 import {
   attachedModels,
   formatSize,
@@ -29,9 +30,44 @@ const short = (d) => {
 
 /* ───────────────────────────── Model ───────────────────────────── */
 
-export function WorkProjectModel({ project, canEdit = false, onGo }) {
+/**
+ * "Still reading this" — NOT "there is nothing here".
+ *
+ * WHY THIS COMPONENT EXISTS
+ *
+ * The shell holds two documents: a rollup that arrives with the projects list,
+ * and the full project fetched per id (WorkProjectShell.jsx:111). Until the
+ * second lands it renders `project` as the rollup, and the rollup carries the
+ * head — name, client, tool — but no models and no linked services.
+ *
+ * So for the whole of that fetch these tabs read an empty array off a project
+ * that is not empty, and announce "No model attached" / "No services linked"
+ * about a job that has both. Then the fetch lands and the screen changes its
+ * mind. That is what "it feels stuck" is: not slowness, but the screen stating
+ * the wrong thing confidently while it waits.
+ *
+ * Reuses his .pj-empty rather than introducing a skeleton, because the box is
+ * already the right shape and the only thing that was wrong was the words.
+ */
+function StillLoading({ what }) {
+  return (
+    <div className="pj-empty">
+      {/* An ellipsis, not the en dash. EN_DASH is the house placeholder for a
+          value that is absent; this is a value that is on its way, and the two
+          must not look the same. */}
+      <b>Loading{"…"}</b>
+      <p>Reading this project{"’"}s {what}.</p>
+    </div>
+  );
+}
+
+export function WorkProjectModel({ project, canEdit = false, onGo, loading = false, classicHref = "" }) {
   const models = React.useMemo(() => attachedModels(project), [project]);
   const warning = React.useMemo(() => modelWarning(project), [project]);
+
+  // Before the empty check, never after: the whole point is that an empty list
+  // means nothing yet while the read is in flight.
+  if (loading && !models.length) return <StillLoading what="model" />;
 
   if (!models.length) {
     return (
@@ -42,7 +78,18 @@ export function WorkProjectModel({ project, canEdit = false, onGo }) {
           it — anything that moved is flagged here.
         </p>
         {canEdit ? (
-          <p className="ds-sub">Uploading is done in the classic workspace.</p>
+          <p className="ds-sub">
+            {/* A sentence naming a place the reader cannot get to is a dead end.
+                The shell already builds this href for the Collaborators panel
+                (WorkProjectShell.jsx:283); it costs nothing to pass it here. */}
+            Uploading is done in{" "}
+            {classicHref ? (
+              <a href={classicHref}>the classic workspace</a>
+            ) : (
+              "the classic workspace"
+            )}
+            .
+          </p>
         ) : null}
       </div>
     );
@@ -111,7 +158,7 @@ export function WorkProjectModel({ project, canEdit = false, onGo }) {
 
 /* ─────────────────────────── Drawings ─────────────────────────── */
 
-export function WorkProjectDrawings({ project, onOpenPlace }) {
+export function WorkProjectDrawings({ project, onOpenPlace, loading = false }) {
   // Its own memo: the `: []` would hand a new array to the memos below on
   // every render, and they would all recompute.
   const items = React.useMemo(
@@ -120,6 +167,11 @@ export function WorkProjectDrawings({ project, onOpenPlace }) {
   );
   const places = React.useMemo(() => measuredPlaces(items), [items]);
   const unplaced = React.useMemo(() => unplacedCount(items), [items]);
+
+  // The rollup has no bill lines, so this reads "0 places" on a fully measured
+  // job until the full document lands — and the count in the header makes that
+  // read as fact rather than as a screen that has not finished.
+  if (loading && !items.length) return <StillLoading what="drawings" />;
 
   return (
     <section className="wk-panel">
@@ -175,9 +227,162 @@ export function WorkProjectDrawings({ project, onOpenPlace }) {
 
 /* ─────────────────────────── Services ─────────────────────────── */
 
-export function WorkProjectServices({ project, canEdit = false }) {
+/**
+ * Which projects could be linked into this one, and may this user do it?
+ *
+ * "If it's available" is three conditions, not one, and the server enforces all
+ * three (server/routes/projects.js, addLinkedProject around :7990):
+ *
+ *   * the PARENT must be a QUIV or HERON project — the route refuses any other
+ *     productKey outright;
+ *   * the parent must not be BoQ-imported — linking merges by model element and
+ *     a BoQ import has no model behind it, so the route answers 403;
+ *   * there must be at least one MEP project THIS user owns that is not linked
+ *     already.
+ *
+ * A button that leads to any of those refusals is worse than no button, so the
+ * first two are checked before asking and the third is what the ask answers.
+ *
+ * The candidates read happens on the Services tab only, and only for somebody
+ * who could act on it — not on every tab and never for a viewer. That is one
+ * request on the screen where it is the point, which is the cheapest honest
+ * answer to "is one available".
+ */
+function useLinkableMep({ project, productKey, projectId, accessToken, canEdit, linkedIds }) {
+  const eligible =
+    canEdit &&
+    !!accessToken &&
+    !!projectId &&
+    ["revit", "planswift"].includes(String(productKey || "").toLowerCase()) &&
+    String(project?.origin || "") !== "boq-import";
+
+  const [candidates, setCandidates] = React.useState(null);
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!eligible) return undefined;
+    let alive = true;
+    setFailed(false);
+    apiAuthed(`/projects/${encodeURIComponent(productKey)}/${encodeURIComponent(projectId)}/linked-candidates`, {
+      token: accessToken,
+    })
+      .then((d) => alive && setCandidates(Array.isArray(d?.candidates) ? d.candidates : []))
+      // A failed read is NOT "none available". It leaves candidates null, which
+      // renders nothing — the screen simply does not offer an action it cannot
+      // stand behind, rather than claiming the user has no MEP projects.
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [eligible, productKey, projectId, accessToken]);
+
+  // Already-linked ones are not candidates. The server would answer 409, which
+  // is a correct refusal and a pointless thing to show somebody.
+  const open = React.useMemo(
+    () => (candidates || []).filter((c) => !linkedIds.has(String(c.projectId))),
+    [candidates, linkedIds],
+  );
+
+  return { eligible, candidates, open, failed };
+}
+
+export function WorkProjectServices({
+  project,
+  canEdit = false,
+  loading = false,
+  classicHref = "",
+  productKey = "",
+  projectId = "",
+  accessToken = "",
+  onLinked,
+}) {
   const services = React.useMemo(() => linkedServices(project), [project]);
   const total = React.useMemo(() => linkedServicesTotal(project), [project]);
+  const linkedIds = React.useMemo(
+    () => new Set(services.map((s) => String(s.id))),
+    [services],
+  );
+
+  const { open, failed: candidatesFailed } = useLinkableMep({
+    project,
+    productKey,
+    projectId,
+    accessToken,
+    canEdit,
+    linkedIds,
+  });
+
+  const [picking, setPicking] = React.useState(false);
+  const [pick, setPick] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [linkError, setLinkError] = React.useState("");
+
+  async function link() {
+    if (!pick || busy) return;
+    setBusy(true);
+    setLinkError("");
+    try {
+      const updated = await apiAuthed(
+        `/projects/${encodeURIComponent(productKey)}/${encodeURIComponent(projectId)}/linked-projects`,
+        { method: "POST", token: accessToken, data: { targetProjectId: pick } },
+      );
+      onLinked?.(updated);
+      setPicking(false);
+      setPick("");
+    } catch (e) {
+      setLinkError(e?.message || "That could not be linked just now.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Same reason as the Model tab: the rollup has no linked services, so until
+  // the full document lands this would say a project with M&E has none.
+  if (loading && !services.length) return <StillLoading what="services" />;
+
+  const canOffer = open.length > 0;
+
+  const picker = picking ? (
+    <div className="pj-note">
+      <div>
+        <b>Which services bill?</b>
+        <p className="ds-sub">
+          Its total joins this project{"’"}s. You can unlink it again at any time.
+        </p>
+        <select
+          className="ds-field"
+          value={pick}
+          onChange={(e) => setPick(e.target.value)}
+          aria-label="MEP project to link"
+        >
+          <option value="">Choose a project{"…"}</option>
+          {open.map((c) => (
+            <option key={c.projectId} value={c.projectId}>
+              {c.name || "Untitled"}
+              {c.total ? ` — ${money(c.total)}` : ""}
+            </option>
+          ))}
+        </select>
+        <div className="b">
+          <button type="button" className="ds-btn" disabled={!pick || busy} onClick={link}>
+            {busy ? "Linking…" : "Link it"}
+          </button>
+          <button
+            type="button"
+            className="ds-btn btn-o"
+            disabled={busy}
+            onClick={() => {
+              setPicking(false);
+              setLinkError("");
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+        {linkError ? <p className="ds-sub">{linkError}</p> : null}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -185,12 +390,21 @@ export function WorkProjectServices({ project, canEdit = false }) {
         <span className="pj-by">
           Services measured in Revit MEP roll into this project&rsquo;s estimated total.
         </span>
+        {/* Offered here as well as in the empty state, so a project that
+            already has one linked can gain another without going anywhere. */}
+        {services.length && canOffer && !picking ? (
+          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => setPicking(true)}>
+            Link another
+          </button>
+        ) : null}
         {services.length ? (
           <span className="tot">
             Adds <b>{money(total)}</b>
           </span>
         ) : null}
       </div>
+
+      {picker}
 
       {services.length ? (
         <div className="pj-grid">
@@ -229,8 +443,33 @@ export function WorkProjectServices({ project, canEdit = false }) {
             If the M&amp;E is measured in Revit MEP — by you or a consultant — link it and its
             total joins this project&rsquo;s.
           </p>
-          {canEdit ? (
-            <p className="ds-sub">Linking is done in the classic workspace.</p>
+          {/* The action itself, where somebody looking at an empty tab is
+              actually standing. Only when there IS an MEP bill of theirs to
+              link — see useLinkableMep for the three conditions. */}
+          {canOffer && !picking ? (
+            <div className="b">
+              <button type="button" className="ds-btn" onClick={() => setPicking(true)}>
+                Link MEP bill
+              </button>
+            </div>
+          ) : null}
+          {canEdit && !canOffer ? (
+            <p className="ds-sub">
+              {/* Was a flat sentence naming a place with no way to get there.
+                  The shell already builds this href (WorkProjectShell.jsx:283).
+                  Still here because uploading an MEP bill in the first place,
+                  and everything else about a services project, remains classic. */}
+              {candidatesFailed
+                ? "We could not check for services projects just now. "
+                : "Nothing of yours is measured in Revit MEP yet. "}
+              Linking is done in{" "}
+              {classicHref ? (
+                <a href={classicHref}>the classic workspace</a>
+              ) : (
+                "the classic workspace"
+              )}
+              .
+            </p>
           ) : null}
         </div>
       )}

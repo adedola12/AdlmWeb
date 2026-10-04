@@ -206,3 +206,90 @@ describe("the Services tab", () => {
     expect(within(c).queryByText(/Linking is done in the full workspace/)).toBe(null);
   });
 });
+
+/* ───────────────── Loading, as distinct from empty ───────────────── */
+
+// WHY THESE EXIST
+//
+// WorkProjectShell holds two documents: a rollup that arrives with the projects
+// list, and the full project fetched per id. Until the second lands it renders
+// `project` as the rollup — which carries the head but NO models, NO linked
+// services and NO bill lines. So for the whole of that fetch these three tabs
+// read an empty array off a project that is not empty and announce "No model
+// attached" / "No services linked" / "0 places", then change their minds.
+//
+// That is what the owner meant by a tab feeling stuck: not slowness, but the
+// screen stating the wrong thing confidently while it waits. The fix is one
+// `loading` prop, and the thing that can silently regress is the ORDER — put the
+// check after the empty-list branch and it never runs.
+
+describe("while the full project is still loading", () => {
+  it("the Model tab says it is reading, not that there is no model", () => {
+    const { getByText, queryByText } = render(<WorkProjectModel project={{}} loading />);
+    expect(getByText(/Loading/)).toBeTruthy();
+    expect(queryByText("No model attached")).toBeNull();
+  });
+
+  it("the Services tab says it is reading, not that nothing is linked", () => {
+    const { getByText, queryByText } = render(<WorkProjectServices project={{}} loading />);
+    expect(getByText(/Loading/)).toBeTruthy();
+    expect(queryByText("No services linked")).toBeNull();
+  });
+
+  it("the Drawings tab does not claim zero places", () => {
+    const { getByText, queryByText } = render(<WorkProjectDrawings project={{}} loading />);
+    expect(getByText(/Loading/)).toBeTruthy();
+    expect(queryByText(/0 places/)).toBeNull();
+  });
+
+  it("does not hide content it already has", () => {
+    // The rollup can be superseded mid-flight by a cached full document. If
+    // loading hid real rows the screen would flicker backwards.
+    const { getByText, queryByText } = render(<WorkProjectModel project={modelled()} loading />);
+    expect(getByText(/ikoyi-arch\.ifc/)).toBeTruthy();
+    expect(queryByText(/Loading/)).toBeNull();
+  });
+});
+
+describe("once loading is done", () => {
+  it("a genuinely empty project still says so", () => {
+    // The loading state must not swallow the real empty state — somebody with
+    // no model needs to be told how to add one.
+    const { getByText } = render(<WorkProjectModel project={{}} loading={false} />);
+    expect(getByText("No model attached")).toBeTruthy();
+  });
+
+  it("a genuinely empty services list still says so", () => {
+    const { getByText } = render(<WorkProjectServices project={{}} loading={false} />);
+    expect(getByText("No services linked")).toBeTruthy();
+  });
+});
+
+describe("the classic workspace is reachable, not just named", () => {
+  it("the Model tab links it rather than only mentioning it", () => {
+    const href = "/projects/revit?project=abc&classic=1";
+    const { getByText } = render(
+      <WorkProjectModel project={{}} canEdit classicHref={href} />,
+    );
+    const link = getByText("the classic workspace");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe(href);
+  });
+
+  it("the Services tab does too", () => {
+    const href = "/projects/revit?project=abc&classic=1";
+    const { getByText } = render(
+      <WorkProjectServices project={{}} canEdit classicHref={href} />,
+    );
+    const link = getByText("the classic workspace");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe(href);
+  });
+
+  it("without an href it is still a sentence, not a broken link", () => {
+    const { queryByText, getByText } = render(<WorkProjectModel project={{}} canEdit />);
+    expect(getByText(/Uploading is done in/)).toBeTruthy();
+    const maybe = queryByText("the classic workspace");
+    if (maybe) expect(maybe.tagName).not.toBe("A");
+  });
+});
