@@ -93,10 +93,9 @@ export function normaliseRollup(list) {
  *
  * `newBuild` sends it to Richard's project page instead of the classic
  * workspace. It is a parameter rather than a global because the answer differs
- * per VIEWER, not per project: until 1 October only staff may open /work/*, and
- * a customer linked there would be bounced straight back to the classic
- * workspace by NewBuildGate — the right destination, but an extra hop for the
- * one journey they make most.
+ * per VIEWER, not per project: callers ask lib/newBuildAccess.js (through
+ * useProjectHref) whether this viewer is sent to /work/*. Since go-live that is
+ * everyone signed in; before it, only staff.
  *
  * ArchiCAD and RateGen are unchanged either way: neither has a page under
  * /work/project, and both had their own home before this.
