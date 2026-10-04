@@ -343,7 +343,7 @@ QUIV uses (2h + w) × L for beams and 2 × (w + d) × h for columns.
 | Item | Value |
 |---|---|
 | Board coverage | 2.88 m² per sheet (2.4 × 1.2 m) |
-| Nails | 0.0576 bag per sheet, about 0.02 bag per m² (QUIV, Rate Gen); 0.0524 bag per sheet (HERON) |
+| Nails | 0.0576 bag per sheet, about 0.02 bag per m² (QUIV, HERON, Rate Gen). HERON stores 0.0524 per sheet because it already adds 10% board waste, which comes to the same 0.02 bag per m². |
 | Bracing timber | 6.3 m per sheet (QUIV, Rate Gen); 0.60 piece per m² (HERON) |
 | Formwork waste | 1.10 (HERON) |
 
@@ -431,8 +431,7 @@ The span is measured between wall plates.
 
 | Item | Value | Product |
 |---|---|---|
-| Tiles per m² of floor or wall | 1.10 m² (10% cutting waste) | QUIV, Rate Gen Material Constants |
-| Floor and wall tile waste | 1.12 | HERON |
+| Tiles per m² of floor or wall | 1.10 m² (10% cutting waste) | QUIV, HERON, Rate Gen Material Constants |
 | Tile pack coverage | 1.44 m² per pack | QUIV, HERON |
 | Bed (cement) | 0.40 bag per m² | QUIV, Rate Gen Material Constants |
 | Bed (sharp sand) | 0.057 t per m² | QUIV, Rate Gen Material Constants |
@@ -599,7 +598,7 @@ One row for each formula in this handbook.
 | Reinforcement bar | 12 m | ADLM |
 | Roof timber | 3.6 m | ADLM |
 | Conduit, trunking | 3 m | ADLM (Rate Gen) |
-| Pipe | 6 m (Service Constants); 5.8 m (Material Constants) | ADLM (Rate Gen) |
+| Pipe | 6 m | ADLM (Rate Gen) |
 | Cable drum | 100 m | ADLM (Rate Gen) |
 
 ### Wastage allowances
@@ -608,16 +607,14 @@ One row for each formula in this handbook.
 |---|---|---|
 | Concrete (on top of 1.54) | 1.00 | ADLM (QUIV, HERON, Rate Gen Material Constants) |
 | Blinding | 1.05 | ADLM |
-| Blockwork | 1.03 | ADLM (QUIV, Rate Gen Material Constants) |
-| Blockwork | 1.05 | ADLM (HERON) |
+| Blockwork | 1.03 | ADLM (QUIV, HERON, Rate Gen Material Constants) |
 | Reinforcement | 1.05 | ADLM (QUIV, Rate Gen Material Constants) |
-| Reinforcement | 1.10 | ADLM (HERON) |
+| Reinforcement (on the number of 12 m bars, covering laps and offcuts) | 1.10 | ADLM (HERON) |
 | Beam main bars, laps and waste | 1.15 | ADLM (QUIV) |
 | Staircase bars, laps and waste | 1.10 | ADLM (QUIV) |
 | Finishes (render, screed) | 1.05 | ADLM |
-| Formwork | 1.10 | ADLM (HERON) |
-| Tiles | 1.10 | ADLM (QUIV, Rate Gen Material Constants) |
-| Tiles | 1.12 | ADLM (HERON) |
+| Formwork (whole plywood sheets, cutting and striking loss) | 1.10 | ADLM (HERON) |
+| Tiles | 1.10 | ADLM (QUIV, HERON, Rate Gen Material Constants) |
 | Paint and primer | 1.05 | ADLM (HERON) |
 | Roofing sheets, laps | 1.10 to 1.15 | Typical |
 | Timber | 1.10 | Typical |
