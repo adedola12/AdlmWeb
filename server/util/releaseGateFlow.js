@@ -4,6 +4,7 @@
 // files so admin.deployments.js (which stages) and admin.releases.js (which
 // approves) share one implementation of "apply".
 import { ProductDeployment } from "../models/ProductDeployment.js";
+import { applySettingCandidate } from "./releaseGateSetting.js";
 import { ReleaseCandidate } from "../models/ReleaseCandidate.js";
 import { cancelEarlyNotices, recordDeploymentRelease, widenReleaseNotice } from "./releaseNotifier.js";
 import {
@@ -96,6 +97,13 @@ export async function stageRelease({ productKey, normalized, previous, body, act
  * Returns { item, releaseNotice, appliedTo }.
  */
 export async function applyCandidate(candidate, { actor, demoMode = false, rollout, now = new Date() }) {
+  // A gated SETTING (installerHubUrl) is not a package: it writes the
+  // Setting and reaches every customer at once. No rollout stages apply.
+  if (candidate.kind === "setting") {
+    const out = await applySettingCandidate(candidate, { actor });
+    return { item: out.setting, releaseNotice: { created: false, reason: "setting-change" }, appliedTo: "everyone" };
+  }
+
   const productKey = candidate.productKey;
   const live = await ProductDeployment.findOne({ productKey })
     .select("version enabled packageUri earlyAccess")
