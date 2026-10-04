@@ -180,9 +180,9 @@ export const SEED = [
     products: ["rategen"],
     kind: "feature",
     stage: "proposed",
-    progress: "Business case filed 26 Sep. Not started.",
-    pending: "Richard's approval. About 2 days of WPF: the card, wiring to ADLM.Auth in App.xaml.cs, and sign-in error paths.",
-    refs: "ADLMRateGenPublicBuild SplashWindow.xaml, SignInWindow.xaml. Design: adlm-studio-site splash-rategen.html (ca0e6c3).",
+    progress: "Built into RateGen 3.0.0 (owner's instruction, 1 Oct 2026): SplashCard is the sign-in, named loading steps. Staged on the Installer Hub for Richard; on the RateGen 3.0 test sheet (cards Splash and Install).",
+    pending: "Richard's approval of this proposal, and his verdict on the RateGen 3.0 test sheet. Forgot-password card not built yet.",
+    refs: "ADLMRateGen-SingleUser PR #4 (feat/rategen-suite-ui): Controls/SplashCard.xaml, SplashWindow.xaml, View/SignInUserControl.xaml. Test sheet https://claude.ai/artifact/WN7viscRd8mRzSya2ZSPNs. Design: adlm-studio-site splash-rategen.html (ca0e6c3).",
     design: { status: "needed", link: "https://adlm-studio.vercel.app/splash-rategen", surfaces: "Rate Gen splash and sign-in windows, replaced by one card; forgot-password card." },
   },
   {
