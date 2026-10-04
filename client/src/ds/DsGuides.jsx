@@ -14,12 +14,18 @@ import { GUIDES } from "../data/guides.js";
 import { useFeedback } from "./feedback/feedbackContext.js";
 
 // His order: the whole suite first, then getting started and the Hub, then
-// each product.
-const ORDER = [
-  "suite", "qs-handbook", "getting-started", "installer-hub", "quiv", "heron", "rategen", "mep", "timepro",
-  "cloud", "cloud-projects", "cloud-bill-budget", "cloud-valuation", "cloud-pm", "cloud-sharing", "samples",
-];
-const LIST = ORDER.map((id) => GUIDES.find((g) => g.id === id)).filter(Boolean);
+// each product. Sixteen guides in one panel is a wall, so they sit in three
+// of his panels (same dsh-panel / dsh-dl pattern), in that same order.
+const GROUPS = [
+  { title: "Start here", ids: ["suite", "qs-handbook", "getting-started", "installer-hub"] },
+  { title: "Products", ids: ["quiv", "heron", "rategen", "mep", "timepro"] },
+  {
+    title: "ADLM Cloud",
+    ids: ["cloud", "cloud-projects", "cloud-bill-budget", "cloud-valuation", "cloud-pm", "cloud-sharing", "samples"],
+  },
+].map((grp) => ({ ...grp, guides: grp.ids.map((id) => GUIDES.find((g) => g.id === id)).filter(Boolean) }));
+const LIST = GROUPS.flatMap((grp) => grp.guides);
+const CHANNEL = "https://www.youtube.com/@ADLMStudio";
 
 const icon = (name) => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -89,34 +95,49 @@ export default function DsGuides() {
 
       <div className="dsh-two">
         <div>
-          <section className="dsh-panel">
-            <div className="dsh-ph">
-              <h2>User guides</h2>
-              <span className="when">{LIST.length} guides</span>
-            </div>
-            <div className="dsh-body">
-              {LIST.map((g) => (
-                <div className="dsh-dl" key={g.id}>
-                  <span className="ic">{icon("doc")}</span>
-                  <div className="nm">
-                    <b>{g.title}</b>
-                    <span>
-                      PDF · {g.pages} pages{sizes[g.id] ? ` · ${mb(sizes[g.id])}` : ""}
-                    </span>
-                    <p className="gd-d">{g.blurb}</p>
+          {GROUPS.map((grp) => (
+            <section className="dsh-panel" key={grp.title}>
+              <div className="dsh-ph">
+                <h2>{grp.title}</h2>
+                <span className="when">
+                  {grp.guides.length} {grp.guides.length === 1 ? "guide" : "guides"}
+                </span>
+              </div>
+              <div className="dsh-body">
+                {grp.guides.map((g) => (
+                  <div className="dsh-dl" key={g.id}>
+                    <span className="ic">{icon("doc")}</span>
+                    <div className="nm">
+                      <b>{g.title}</b>
+                      <span>
+                        PDF · {g.pages} pages{sizes[g.id] ? ` · ${mb(sizes[g.id])}` : ""}
+                      </span>
+                      <p className="gd-d">{g.blurb}</p>
+                    </div>
+                    <div className="gd-a">
+                      <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => setViewing(g)}>
+                        Read
+                      </button>
+                      {g.video && (
+                        <a
+                          className="ds-btn btn-o ds-btn-sm"
+                          href={g.video.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={g.video.label}
+                        >
+                          Watch
+                        </a>
+                      )}
+                      <a className="ds-btn btn-p ds-btn-sm" href={g.file} download="" onClick={() => started(g)}>
+                        Download
+                      </a>
+                    </div>
                   </div>
-                  <div className="gd-a">
-                    <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => setViewing(g)}>
-                      Read
-                    </button>
-                    <a className="ds-btn btn-p ds-btn-sm" href={g.file} download="" onClick={() => started(g)}>
-                      Download
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
 
         <div>
@@ -135,6 +156,25 @@ export default function DsGuides() {
                 </button>
                 <Link className="ds-btn btn-o ds-btn-sm" to="/manage/support">
                   Contact support
+                </Link>
+              </div>
+            </div>
+          </section>
+          <section className="dsh-panel">
+            <div className="dsh-ph">
+              <h2>Video tutorials</h2>
+            </div>
+            <div className="dsh-body">
+              <p className="gd-p">
+                Every guide with a <b>Watch</b> button has walkthroughs on the ADLM Studio YouTube channel. The
+                free lessons are also on the Learn page, no sign-in needed.
+              </p>
+              <div className="gd-a" style={{ marginTop: 14 }}>
+                <a className="ds-btn btn-o ds-btn-sm" href={CHANNEL} target="_blank" rel="noopener noreferrer">
+                  Open the YouTube channel
+                </a>
+                <Link className="ds-btn btn-o ds-btn-sm" to="/learn#library">
+                  Free lessons
                 </Link>
               </div>
             </div>

@@ -13,6 +13,8 @@ export const GUIDES = [
   // scripts/build-guide-pdfs.mjs. Each book keeps the file name of the
   // September book it replaces, so links already sent in emails still open.
   // `pages` is what the builder printed; update it when a guide is rebuilt.
+  // `video` is the YouTube playlist for the product where one exists (the
+  // same links the plugins open), otherwise a search of the ADLM channel.
   {
     id: "getting-started",
     title: "Getting started with ADLM Studio",
@@ -22,6 +24,7 @@ export const GUIDES = [
     pages: 25,
     productKeys: [],
     changelogSlugs: [],
+    video: { url: "https://www.youtube.com/@ADLMStudio/search?query=Installer%20Hub", label: "Getting started videos" },
   },
   {
     id: "installer-hub",
@@ -33,6 +36,7 @@ export const GUIDES = [
     productKeys: [],
     changelogSlugs: ["hub"],
     alwaysShow: true,
+    video: { url: "https://www.youtube.com/@ADLMStudio/search?query=Installer%20Hub", label: "Installer Hub videos" },
   },
   {
     id: "quiv",
@@ -43,6 +47,7 @@ export const GUIDES = [
     pages: 18,
     productKeys: ["revit"],
     changelogSlugs: ["quiv"],
+    video: { url: "https://www.youtube.com/@ADLMStudio/search?query=QUIV", label: "QUIV videos" },
   },
   {
     id: "rategen",
@@ -53,6 +58,7 @@ export const GUIDES = [
     pages: 22,
     productKeys: ["rategen"],
     changelogSlugs: ["rategen"],
+    video: { url: "https://www.youtube.com/playlist?list=PLk1KkUNE9ZrO5IPh7p3-5zxfDFs1Dl9b-", label: "RateGen playlist" },
   },
   {
     id: "heron",
@@ -63,6 +69,7 @@ export const GUIDES = [
     pages: 27,
     productKeys: ["planswift", "heron"],
     changelogSlugs: ["heron"],
+    video: { url: "https://www.youtube.com/@ADLMStudio/search?query=HERON", label: "HERON videos" },
   },
   {
     id: "mep",
@@ -73,6 +80,7 @@ export const GUIDES = [
     pages: 20,
     productKeys: ["mep"],
     changelogSlugs: ["mep"],
+    video: { url: "https://www.youtube.com/playlist?list=PLk1KkUNE9ZrPCA0Xd0gc7SubdFKagRPog", label: "SERVIQ playlist" },
   },
   {
     id: "timepro",
@@ -83,6 +91,7 @@ export const GUIDES = [
     pages: 20,
     productKeys: ["qs-takeoff"],
     changelogSlugs: ["timepro"],
+    video: { url: "https://www.youtube.com/@ADLMStudio/search?query=Time%20Pro", label: "Time Pro videos" },
   },
   {
     id: "cloud",
@@ -93,6 +102,7 @@ export const GUIDES = [
     pages: 5,
     productKeys: [],
     changelogSlugs: ["cloud"],
+    video: { url: "https://www.youtube.com/@ADLMStudio/search?query=ADLM%20Cloud", label: "ADLM Cloud videos" },
   },
   {
     id: "cloud-projects",
