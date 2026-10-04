@@ -52,6 +52,8 @@ import { getPrivateKey, getKid } from "../util/jwks.js";
 import { isGodUser, isGodEmail } from "../util/godAccount.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
 import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import { checkAddressReachable } from "../util/emailReachable.js";
+import { isPlausiblePhone } from "../util/phonePlausible.js";
 import {
   verifySocialIdentity,
   configuredProviders,
@@ -335,6 +337,17 @@ router.post("/signup", async (req, res) => {
         .json({ error: "firstName, lastName and whatsapp are required" });
     }
 
+    // Required and then unchecked is barely required at all: normalizeWhatsApp
+    // strips to digits and `+` without a length check, so 15 accounts in the
+    // list have a one-digit telephone number. See util/phonePlausible.js for
+    // where the threshold comes from.
+    if (!isPlausiblePhone(whatsapp)) {
+      return res.status(400).json({
+        error: "Enter a WhatsApp number we can actually reach you on, including the country or network code.",
+        code: "IMPLAUSIBLE_PHONE",
+      });
+    }
+
     const pwError = validatePasswordStrength(password);
     if (pwError) {
       return res.status(400).json({ error: pwError, code: "WEAK_PASSWORD" });
@@ -347,6 +360,19 @@ router.post("/signup", async (req, res) => {
     if (!emailRx.test(normalizedEmail)) {
       return res.status(400).json({ error: "Invalid email format" });
     }
+
+    // Matching that pattern only proves the string has an @ in it. `gmail.con`
+    // matches it, and three people who typed exactly that were given accounts,
+    // sent a code that evaporated, and then locked out by util/emailGate.js
+    // waiting for a code they could never receive. Telling them now is the fix.
+    // Fails open if DNS is unreachable — see util/emailReachable.js.
+    const reach = await checkAddressReachable(normalizedEmail, { log: console });
+    if (!reach.ok) {
+      return res
+        .status(400)
+        .json({ error: reach.message, code: "EMAIL_UNREACHABLE", reason: reach.reason });
+    }
+
     const normalizedUsername = String(
       username || normalizedEmail.split("@")[0],
     ).trim();

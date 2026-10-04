@@ -157,3 +157,22 @@ test("the host category counts less than the item: lintel concrete is not blockw
   assert.equal(best("Blockwork – Lintel Concrete [L:01 | T:Generic - 230mm]", "m3"), undefined);
   assert.ok(lineMatchScore("Blockwork – Wall Area", "150mm blockwall in cement and sand mortar (1:6)") > 0.85);
 });
+
+test("Revit's type field, repeated outside the brackets, does not steer the match", () => {
+  // Live on 4 Oct: the type "WT2 _ 150mm Blockwork _ Paint/Paint" was scored as
+  // part of the item, so a wall ranked a paint rate first and lintel formwork
+  // found nothing.
+  const paint = { rateId: "paint", description: "Prepare and apply one undercoat anti-fungal paint and one finish coat paint to wall", unit: "m2", unitPrice: 2825 };
+  const wall = {
+    description: "Blockwork – Wall Area [L:** Site Level | T:WT2 _ 150mm Blockwork _ Paint/Paint]",
+    type: "WT2 _ 150mm Blockwork _ Paint/Paint",
+    unit: "m2",
+  };
+  assert.equal(suggestRatesForLine(wall, [...LIB, paint], { limit: 1 })[0].rateId, "bw150");
+  const lintel = {
+    description: "Blockwork – Lintel Formwork [L:** Site Level | T:WT3 _ 230mm Blockwork _ Paint/Paint]",
+    type: "WT3 _ 230mm Blockwork _ Paint/Paint",
+    unit: "m2",
+  };
+  assert.equal(suggestRatesForLine(lintel, LIB, { limit: 1 })[0]?.rateId, "formwork");
+});
