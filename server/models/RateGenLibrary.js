@@ -101,6 +101,19 @@ const UserCustomRateSchema = new mongoose.Schema(
     totalCost: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
+    // "desktop" or "web": where the rate was first made. An old Rate Gen
+    // desktop may only delete desktop-made rates (util/rategenCustomRateGuard.js).
+    origin: { type: String, trim: true, default: "" },
+  },
+  { _id: false }
+);
+
+// A custom rate removed by a sync or a delete, kept so it can be restored.
+const DeletedCustomRateSchema = new mongoose.Schema(
+  {
+    ...UserCustomRateSchema.obj,
+    deletedAt: { type: Date, default: Date.now },
+    deletedReason: { type: String, trim: true, default: "" },
   },
   { _id: false }
 );
@@ -141,6 +154,7 @@ const RateGenLibrarySchema = new mongoose.Schema(
     version: { type: Number, default: 1 },
     rateOverrides: { type: [UserRateOverrideSchema], default: [] },
     customRates: { type: [UserCustomRateSchema], default: [] },
+    deletedCustomRates: { type: [DeletedCustomRateSchema], default: [] },
     priceOverrides: { type: [UserPriceOverrideSchema], default: [] },
     ratesVersion: { type: Number, default: 1 },
     customRatesVersion: { type: Number, default: 1 },

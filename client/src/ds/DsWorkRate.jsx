@@ -15,16 +15,12 @@
 // .wk-grp per group, .wk-bl per line, and .wk-sub / .wk-tot for the closing
 // rows.
 //
-// EDITING (S18, RG-05). The percentages and quantities are now live, and
-// "Save to my library" writes the result to the CUSTOMER's own copy of the
-// rate (PUT /rategen-v2/library/user-rates/override/:id). It never touches the
-// master rate: master material, labour and rate prices are published from Rate
-// Gen desktop and the server refuses a master write from here. What is saved
-// is the user's own override, which the desktop picks up on its next sync.
-// Projects already priced keep the figure they were priced with — nothing on
-// this screen can move money that has already been certified — and the copy on
-// the page says exactly that rather than the prototype's "every project using
-// this rate has moved with it".
+// READ ONLY. The S18 editor ("Save to my library", which wrote the customer's
+// own copy through PUT /rategen-v2/library/user-rates/override/:id) is gone:
+// rates are built and edited only in Rate Gen (owner's rule, 4 Oct 2026), and
+// the server refuses a browser's write to the rate library
+// (server/middleware/rateGenOnlyWrites.js). "Open in Rate Gen" hands the rate
+// to the desktop instead.
 //
 // THE REMAINDER IS CARRIED, NEVER DROPPED (S18 review, finding 1)
 //
@@ -38,13 +34,6 @@
 // afterwards cheaper than the library said. The footer also states the rate
 // before and after, so nothing about the saved figure is a surprise.
 //
-// PERCENTAGES ARE SAVED AS TYPED (S18 review, findings 2 and 4)
-//
-// Overhead and profit used to be clamped to 60% here while the input still
-// showed the typed figure, and the custom-rate builder did not clamp at all.
-// The clamp is gone — see percentProblem() in rategen/rateMath.js, which both
-// screens now share.
-
 import React from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiAuthed } from "../api.js";
