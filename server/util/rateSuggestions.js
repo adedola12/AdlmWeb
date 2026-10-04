@@ -335,6 +335,13 @@ export function suggestRatesForLine(
   { limit = 5, minScore = 0.45, usage = null, convert = false } = {},
 ) {
   const text = billLineText(item);
+  // WHAT THE MATCH IS SCORED ON: the bill's own wording. billLineText adds the
+  // takeoff line, material and type, and on a Revit line the type repeats the
+  // bracketed level/type OUTSIDE the brackets ("WT3 _ 230mm Blockwork _
+  // Paint/Paint"), so "blockwork paint paint" counted as the item: live, a 150mm
+  // wall ranked a paint rate first and lintel formwork found nothing. The other
+  // fields are kept for a line with no description, and for reading thickness.
+  const matchText = str(item?.description) || text;
   const unit = str(item?.unit);
   if (!text || !unit) return [];
 
@@ -388,7 +395,7 @@ export function suggestRatesForLine(
 
     const rateId = str(r?.rateId || r?.id || r?._id);
     const use = rateId ? used.get(rateId) : null;
-    let words = lineMatchScore(text, desc);
+    let words = lineMatchScore(matchText, desc);
     if (words < minScore && !use) continue;
 
     // A rate whose own figure matches the line's thickness (225mm against a
