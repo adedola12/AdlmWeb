@@ -222,7 +222,7 @@ export default function DsTeam() {
           </p>
         </div>
         <div className="dsh-acts">
-          <Link className="ds-btn btn-o ds-btn-sm" to="/purchase">
+          <Link className="ds-btn btn-o ds-btn-sm" to="/products">
             Buy more seats
           </Link>
         </div>
@@ -377,7 +377,7 @@ export default function DsTeam() {
                     <>
                       No machine has activated a licence yet, because there is no licence on
                       this account to activate. A seat is what a machine activates against.{" "}
-                      <Link to="/purchase">See the plans</Link>.
+                      <Link to="/products">See the plans</Link>.
                     </>
                   )}
                 </p>
@@ -403,7 +403,7 @@ export default function DsTeam() {
           <section className="dsh-panel">
             <div className="dsh-ph">
               <h2>Seats per product</h2>
-              <Link className="more" to="/purchase">
+              <Link className="more" to="/products">
                 Buy more
               </Link>
             </div>
@@ -434,7 +434,7 @@ export default function DsTeam() {
                 <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
                   No licensed products yet. This meter shows how many seats each product has
                   and how many of them are installed, so it fills the moment a subscription
-                  starts. <Link to="/purchase">See the plans</Link>.
+                  starts. <Link to="/products">See the plans</Link>.
                 </p>
               )}
               <p

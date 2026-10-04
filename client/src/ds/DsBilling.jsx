@@ -459,7 +459,7 @@ export default function DsBilling() {
                         <Link className="ds-btn btn-o ds-btn-sm" to="/manage/team">
                           Who holds them
                         </Link>
-                        <Link className="ds-btn btn-o ds-btn-sm" to="/purchase">
+                        <Link className="ds-btn btn-o ds-btn-sm" to="/products">
                           Add a product
                         </Link>
                       </>

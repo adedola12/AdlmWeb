@@ -490,7 +490,7 @@ export default function DsWorkHome() {
               <Link className="ds-btn btn-p ds-btn-sm" to="/manage/downloads">
                 Install the plugins
               </Link>
-              <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
+              <Link className="ds-btn btn-o ds-btn-sm" to="/work/library">
                 Open the rate library
               </Link>
             </div>
