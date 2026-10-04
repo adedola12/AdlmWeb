@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from "vitest";
 import { AFTER_SIGN_IN } from "./afterSignIn.js";
-import { GATE_NEW_BUILD } from "../components/NewBuildGate.jsx";
+import { GATE_NEW_BUILD } from "./newBuildAccess.js";
 
 describe("where a signed-in customer lands", () => {
   it("is the Manage overview, now that the new build is the build", () => {

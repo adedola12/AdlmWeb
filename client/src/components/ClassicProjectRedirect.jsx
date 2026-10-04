@@ -2,8 +2,10 @@
 //
 // The classic workspace lives at /projects/:tool and opens one project when the
 // URL carries ?project=<slug>. Richard's project page lives at
-// /work/project/:productKey/:id. Both are real, and until 1 October only staff
-// see the new one.
+// /work/project/:productKey/:id. Both are real. Until 1 October only staff saw
+// the new one; since go-live everyone signed in does (lib/newBuildAccess.js) —
+// this file was still asking canViewPreview after launch, so a customer's
+// bookmark or share link kept opening classic.
 //
 // The card links already decide this per viewer (lib/useProjectHref.js), but
 // links are not the only way into a project: the classic gallery's own cards,
@@ -35,7 +37,7 @@
 import React from "react";
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { canViewPreview } from "../utils/roles.js";
+import { seesNewBuild } from "../lib/newBuildAccess.js";
 import { CLASSIC_PARAM, classicProjectTarget } from "../lib/classicProjectTarget.js";
 
 export default function ClassicProjectRedirect({ children }) {
@@ -43,16 +45,17 @@ export default function ClassicProjectRedirect({ children }) {
   const [params] = useSearchParams();
   const { user, accessToken } = useAuth();
 
-  // AuthProvider withholds `user` for one hydration frame. Deciding during that
-  // frame would read a signed-in staff member as a customer and leave them on
-  // the classic screen, so hold rather than guess.
+  // AuthProvider withholds `user` for one hydration frame. While the go-live
+  // switch is up, deciding during that frame would read a signed-in staff
+  // member as a customer and leave them on the classic screen, so hold rather
+  // than guess. With it down the hold costs one frame and changes nothing.
   if (accessToken && !user) return null;
 
   const to = classicProjectTarget({
     tool,
     project: params.get("project"),
     wantsClassic: params.get(CLASSIC_PARAM) === "1",
-    newBuild: canViewPreview(user),
+    newBuild: seesNewBuild(user),
   });
 
   // replace, not push: the classic URL should not sit in the history for Back

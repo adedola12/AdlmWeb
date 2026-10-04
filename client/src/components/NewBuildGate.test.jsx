@@ -32,7 +32,8 @@ import path from "node:path";
 let auth = { accessToken: null, user: null };
 vi.mock("../store.jsx", () => ({ useAuth: () => auth }));
 
-const { default: NewBuildGate, GATE_NEW_BUILD } = await import("./NewBuildGate.jsx");
+const { default: NewBuildGate } = await import("./NewBuildGate.jsx");
+const { GATE_NEW_BUILD } = await import("../lib/newBuildAccess.js");
 
 // Render the gate at a given URL, with stand-ins for the classic screens it
 // would redirect to if it were raised, so a redirect would be observable as
