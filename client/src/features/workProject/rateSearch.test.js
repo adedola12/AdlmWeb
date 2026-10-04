@@ -215,3 +215,37 @@ describe("rates in another unit, with conversions on", () => {
     expect(out.find((r) => r.rateId === "c").canApply).toBe(false);
   });
 });
+
+describe("rates that convert are not crowded out", () => {
+  // Seen on preview: "concrete" on an m2 lintel line found eight m2 rates, and
+  // the m3 concrete rates never appeared.
+  const many = Array.from({ length: 10 }, (_, i) => ({
+    rateId: `m2-${i}`,
+    description: `Concrete thing number ${i}`,
+    unit: "m2",
+    totalCost: 1000 + i,
+  }));
+  const m3 = [
+    { rateId: "c20", description: "Concrete (1:2:4) grade 20", unit: "m3", totalCost: 155_469 },
+    { rateId: "c25", description: "Concrete (1:2:4) grade 25", unit: "m3", totalCost: 170_000 },
+  ];
+  const opts = { unit: "m2", limit: 8, convert: true, description: "Lintel [T:Generic - 230mm]" };
+
+  it("keeps places for them after the rates in the line's own unit", () => {
+    const out = searchRates([...many, ...m3], "concrete", opts);
+    expect(out).toHaveLength(8);
+    expect(out.slice(0, 6).every((r) => r.unit === "m2" && !r.convert)).toBe(true);
+    expect(out.slice(6).map((r) => r.rateId).sort()).toEqual(["c20", "c25"]);
+  });
+
+  it("gives the places back when nothing converts", () => {
+    const out = searchRates(many, "concrete", opts);
+    expect(out).toHaveLength(8);
+    expect(out.every((r) => r.unit === "m2")).toBe(true);
+  });
+
+  it("lets converting rates fill places the line's own unit cannot", () => {
+    const out = searchRates([many[0], ...m3], "concrete", opts);
+    expect(out.map((r) => r.rateId)).toEqual(["m2-0", "c20", "c25"]);
+  });
+});
