@@ -3,7 +3,7 @@ id: timepro
 title: ADLM Time Pro
 tagline: Record what your gangs really produce on site, then turn a bill quantity into a duration, a crew size and a Microsoft Project programme.
 version: "1.1.1"
-updated: 2026-10-01
+updated: 2026-10-04
 platform: Windows 10 and 11 desktop app
 productKeys: [qs-takeoff]
 pdf: ADLM-TimePro-User-Guide.pdf
@@ -11,6 +11,24 @@ order: 9
 ---
 
 ADLM Time Pro is a Windows app for quantity surveyors, site engineers and project managers who need durations they can defend. You log what each gang actually produced on site, day by day. Time Pro averages those records for every item of work. Then you type in a quantity from your bill, and it tells you how many days the work will take and how many skilled and unskilled hands you need to finish in the time you want. When you are happy, you send the result to Excel or to Microsoft Project.
+
+## What's new in 1.1.1
+
+Version 1.1.1, released in August 2026, is the current version. The Installer Hub installs it for every subscriber.
+
+- **Dark mode on every screen.** Follows your Windows setting at first, then remembers your choice. Switch from the bottom of the side menu.
+- **Sign out from the side menu.** **Sign Out** now sits under the theme switch.
+- **Choose your currency for Microsoft Project.** Thirteen currencies, starting from your Windows region. Costs show in Project in the same currency you typed.
+- **Microsoft Project files now open.** The exported file previously could be rejected by Project. It now opens straight from **File**, then **Open**.
+- **Tasks chain in Microsoft Project.** Each item is linked finish-to-start to the one before it.
+- **Labour and equipment cost correctly.** Labour is now an hourly resource and equipment a per-use resource, so rates land in the right place.
+- **Rates accept normal money formats** such as `1,500.00` and `₦1500`.
+- **Clearer messages when an item cannot be exported.** Time Pro names the items with no duration and tells you what they need.
+- **A readable side menu.** Every button shows its icon and name, with the current screen in ADLM orange.
+
+Version 1.0.1 made Time Pro a paid subscription: you sign in with your ADLM account, Time Pro checks for an active subscription, and your licence is tied to your computer.
+
+> **Note:** The keyboard shortcuts and the connection signal indicator added to other ADLM products in September 2026 are not in Time Pro 1.1.1. Nothing newer than 1.1.1 has been released for Time Pro.
 
 ## Before you start
 
@@ -35,14 +53,17 @@ If you do not yet have an ADLM account, create one first with **Sign up** on the
 
 ### Install Time Pro
 
-Time Pro is installed through the ADLM Installer Hub, the same way as the other ADLM products.
+Time Pro is installed through the ADLM Installer Hub, the same way as the other ADLM products. If you have not used the Hub before, see the [ADLM Installer Hub](/guides/installer-hub) guide.
 
 1. Open the **ADLM Installer Hub** and sign in with your ADLM account.
-2. Find **ADLM Time Pro** in your subscriptions. It only appears once your subscription is active.
-3. Click install and approve the Windows administrator prompt.
-4. When it finishes, open Time Pro from the **ADLM Time Pro** shortcut on your desktop.
+2. Click **Installation Center** in the sidebar.
+3. Find the **ADLM Time Pro** card. With an active subscription it reads **Ready to install**.
+4. Click **Install**.
+5. Click **Yes** when Windows asks for permission to make changes.
+6. Wait until the card shows **Installed**.
+7. Open Time Pro from the **ADLM Time Pro** shortcut on your desktop.
 
-> **Note:** Updates also come through the Installer Hub. Updating Time Pro does not delete your Task Log.
+> **Note:** Updates come through the Hub too. When a new version is out, the card reads **Update available**: close Time Pro and click the update button on the card. Updating does not delete your Task Log.
 
 ### Sign in
 
@@ -364,26 +385,24 @@ From here, use Microsoft Project for everything Time Pro does not do:
 - The Duration Summary figures you type (quantities, planned durations, scenarios) are not saved. See "Enter quantities and export in one sitting" above.
 - Excel and Microsoft Project files are snapshots. Changing them does not change Time Pro.
 
-## What's new in 1.1.1
+## AI in Time Pro
 
-Version 1.1.1 was released in August 2026.
+Time Pro 1.1.1 has no AI features. Every figure it shows is arithmetic on your own Task Log, and nothing is sent to an AI service. For the AI features in other ADLM products, see [ADLM AI services](/guides/ai-services).
 
-- **Dark mode on every screen.** Follows your Windows setting at first, then remembers your choice. Switch from the bottom of the side menu.
-- **Sign out from the side menu.** **Sign Out** now sits under the theme switch.
-- **Choose your currency for Microsoft Project.** Thirteen currencies, starting from your Windows region. Costs show in Project in the same currency you typed.
-- **Microsoft Project files now open.** The exported file previously could be rejected by Project. It now opens straight from **File**, then **Open**.
-- **Tasks chain in Microsoft Project.** Each item is linked finish-to-start to the one before it.
-- **Labour and equipment cost correctly.** Labour is now an hourly resource and equipment a per-use resource, so rates land in the right place.
-- **Rates accept normal money formats** such as `1,500.00` and `₦1500`.
-- **Clearer messages when an item cannot be exported.** Time Pro now names the items with no duration and tells you what they need.
-- **A readable side menu.** Every button shows its icon and name, with the current screen in ADLM orange.
-- **The Project Start Date** now shows clearly in the export window.
-- **The ADLM logo** now shows in dark mode.
+### How this relates to "Estimate the outputs" on ADLM Cloud
 
-### Version 1.0.1
+ADLM Cloud is gaining a web **Programme** for cloud projects, built on Time Pro's idea: it divides each quantity on a project's bill by a gang output per day and sequences the trades. Under **Where the time comes from**, an **Estimate the outputs** button asks ADLM AI to propose an output per trade from the wording of your bill lines. You then check and edit the **Output** column, or click **Estimate again**. It does not change your bill.
 
-- Time Pro became a paid subscription. You now sign in with your ADLM username or email and password, and Time Pro checks for an active subscription.
-- Your licence is tied to your computer, and Time Pro can sign you in without internet on a PC where you have signed in before.
+Keep in mind how it differs from Time Pro:
+
+| | Time Pro (desktop) | Estimate the outputs (web) |
+|---|---|---|
+| Where outputs come from | Your own site records in the Task Log | An AI estimate from the bill's wording, which you edit |
+| Uses AI | No | Yes, within your monthly AI allowance |
+| Reads your Task Log | Yes | No. Time Pro's records stay on your computer |
+| Exports | Excel and Microsoft Project | On the web page |
+
+> **Note:** At the time of writing, the web Programme with **Estimate the outputs** is part of ADLM Cloud's new workspace, which is still being opened up to customers. If your account opens the older programme page, you will not see the button yet. An estimated output is a starting point; an output measured on your own site, as Time Pro records it, is the stronger evidence.
 
 ## Troubleshooting
 
@@ -402,8 +421,8 @@ You are offline and the licence saved on this PC has run out, or it belongs to a
 ### "Session expired. Please sign in again."
 Time Pro keeps you signed in for about a day and a half. Sign in again. Your Task Log is still there.
 
-### Time Pro is not in my Installer Hub
-Time Pro only appears once your subscription is active. Sign out of the Installer Hub and sign back in so it reads your subscriptions again. If it still does not appear, contact [support](/support).
+### Time Pro is not in my Installer Hub, or reads "Not on your plan"
+The card only reads **Ready to install** once your subscription is active. If it reads **Not on your plan**, your account has no active Time Pro subscription: subscribe on the website, then click **Refresh** in the Hub. If you have just paid and it still does not change, sign out of the Hub and back in. If it still does not appear, contact [support](/support).
 
 ### Every Expected Duration shows 0
 The item has no output recorded in the Task Log, or its rows have an output of 0. Log some tasks for that exact item of work, spelled exactly the same way. If you need to export it before you have records, type a number of days into **Planned Duration (days)**.
@@ -463,6 +482,12 @@ No. Time Pro records the weather so you can see it, but applies no adjustment. U
 
 ### Where do my BOQ quantities come from?
 From your bill. You can measure them with [QUIV for Revit](/guides/quiv) or another ADLM takeoff tool, or take them from any bill of quantities, and type them into **BOQ Qty (Requested)**. Keep the unit the same as the unit you recorded output in.
+
+### Does Time Pro have keyboard shortcuts or a connection indicator?
+Not in version 1.1.1. Those arrived in other ADLM products in September 2026 but have not been released for Time Pro.
+
+### Does Time Pro use AI?
+No. See [AI in Time Pro](#ai-in-time-pro) for how it relates to the AI output estimate on ADLM Cloud.
 
 ### How much does Time Pro cost?
 See the Time Pro page on [adlmstudio.net](/products) for current monthly and yearly prices.

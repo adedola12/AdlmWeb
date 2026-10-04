@@ -21,7 +21,7 @@ export const GUIDES = [
     blurb:
       "Your account, buying and renewing, the dashboard, licences and devices, team seats and getting help.",
     file: "/docs/ADLM-Getting-Started-Guide.pdf",
-    pages: 25,
+    pages: 26,
     productKeys: [],
     changelogSlugs: [],
     video: { url: "https://www.youtube.com/@ADLMStudio/search?query=Installer%20Hub", label: "Getting started videos" },
@@ -32,7 +32,7 @@ export const GUIDES = [
     blurb:
       "Signing in, installing your products, applying updates, freeing a machine, and fixing the things that go wrong.",
     file: "/docs/ADLM-Installer-Hub-User-Guide.pdf",
-    pages: 19,
+    pages: 30,
     productKeys: [],
     changelogSlugs: ["hub"],
     alwaysShow: true,
@@ -42,9 +42,9 @@ export const GUIDES = [
     id: "quiv",
     title: "QUIV for Revit",
     blurb:
-      "The Model Checker, taking off every element, auto take-off, linked models, pricing with Rate Gen and saving to ADLM Cloud.",
+      "QUIV 4.0: the new panel, the take-off list, item by item or auto take-off, Review, room finishes and saving to ADLM Cloud.",
     file: "/docs/ADLM-QUIV-Revit-User-Guide.pdf",
-    pages: 18,
+    pages: 30,
     productKeys: ["revit"],
     changelogSlugs: ["quiv"],
     video: { url: "https://www.youtube.com/@ADLMStudio/search?query=QUIV", label: "QUIV videos" },
@@ -53,9 +53,9 @@ export const GUIDES = [
     id: "rategen",
     title: "ADLM Rate Gen",
     blurb:
-      "Rate build-ups, the material, labour and plant libraries, custom rates, and how rates reach QUIV and HERON.",
+      "Rate Gen 3.0: building rates, custom rates, carbon on every rate, Build with AI, and how rates reach QUIV, HERON and SERVIQ.",
     file: "/docs/ADLM-RateGen-User-Guide.pdf",
-    pages: 22,
+    pages: 24,
     productKeys: ["rategen"],
     changelogSlugs: ["rategen"],
     video: { url: "https://www.youtube.com/playlist?list=PLk1KkUNE9ZrO5IPh7p3-5zxfDFs1Dl9b-", label: "RateGen playlist" },
@@ -64,9 +64,9 @@ export const GUIDES = [
     id: "heron",
     title: "ADLM HERON",
     blurb:
-      "Scaling drawings, measuring with the ADLM templates, pricing, the budget, Excel export and the Excel Takeoff Link.",
+      "HERON 3.0: the new take-off screens, ADLM templates, review and save, the budget, roof timber, steel, Excel and AI Review.",
     file: "/docs/ADLM-Heron-User-Guide.pdf",
-    pages: 27,
+    pages: 35,
     productKeys: ["planswift", "heron"],
     changelogSlugs: ["heron"],
     video: { url: "https://www.youtube.com/@ADLMStudio/search?query=HERON", label: "HERON videos" },
@@ -77,7 +77,7 @@ export const GUIDES = [
     blurb:
       "Taking off ducts, pipes, fittings, fixtures and cables in Revit, the take-off database, pricing and Excel export.",
     file: "/docs/ADLM-Revit-MEP-User-Guide.pdf",
-    pages: 20,
+    pages: 21,
     productKeys: ["mep"],
     changelogSlugs: ["mep"],
     video: { url: "https://www.youtube.com/playlist?list=PLk1KkUNE9ZrPCA0Xd0gc7SubdFKagRPog", label: "SERVIQ playlist" },
@@ -88,7 +88,7 @@ export const GUIDES = [
     blurb:
       "Logging daily gang output, turning bill quantities into durations and crew sizes, and exporting to Excel and Microsoft Project.",
     file: "/docs/ADLM-TimePro-User-Guide.pdf",
-    pages: 20,
+    pages: 21,
     productKeys: ["qs-takeoff"],
     changelogSlugs: ["timepro"],
     video: { url: "https://www.youtube.com/@ADLMStudio/search?query=Time%20Pro", label: "Time Pro videos" },
@@ -99,7 +99,7 @@ export const GUIDES = [
     blurb:
       "Where everything is on the ADLM Cloud, what is new, and which of the five Cloud guides to read.",
     file: "/docs/ADLM-Cloud-User-Guide.pdf",
-    pages: 5,
+    pages: 8,
     productKeys: [],
     changelogSlugs: ["cloud"],
     video: { url: "https://www.youtube.com/@ADLMStudio/search?query=ADLM%20Cloud", label: "ADLM Cloud videos" },
@@ -110,7 +110,7 @@ export const GUIDES = [
     blurb:
       "Finding your way around, your project list, the project dashboard, the 3D model and the work area.",
     file: "/docs/ADLM-Cloud-Projects-Guide.pdf",
-    pages: 11,
+    pages: 13,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -120,7 +120,7 @@ export const GUIDES = [
     blurb:
       "Pricing the Bill of Quantity, picking Rate Gen rates, the materials and labour budget, constants and exports.",
     file: "/docs/ADLM-Cloud-Bill-and-Budget-Guide.pdf",
-    pages: 8,
+    pages: 13,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -130,7 +130,7 @@ export const GUIDES = [
     blurb:
       "Interim valuations, payment certificates, variations, the final account and the contract lock.",
     file: "/docs/ADLM-Cloud-Valuation-Guide.pdf",
-    pages: 6,
+    pages: 8,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -140,7 +140,7 @@ export const GUIDES = [
     blurb:
       "The PM Dashboard, the PM Tracker and the Portfolio dashboard.",
     file: "/docs/ADLM-Cloud-PM-Guide.pdf",
-    pages: 6,
+    pages: 9,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -150,7 +150,17 @@ export const GUIDES = [
     blurb:
       "Sharing a dashboard with your client, collaborators and what they can see, your team, and Ada.",
     file: "/docs/ADLM-Cloud-Sharing-Guide.pdf",
-    pages: 7,
+    pages: 10,
+    productKeys: [],
+    changelogSlugs: [],
+  },
+  {
+    id: "ai-services",
+    title: "ADLM AI services",
+    blurb:
+      "Every AI feature in every ADLM product, how each works, who can use it, and Ada as your project and cost manager with ready-made prompts.",
+    file: "/docs/ADLM-AI-Services-Guide.pdf",
+    pages: 19,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -160,7 +170,7 @@ export const GUIDES = [
     blurb:
       "All 20 read-only learning samples: what each one is, what it teaches, and five exercises to work through.",
     file: "/docs/ADLM-Sample-Projects-Guide.pdf",
-    pages: 16,
+    pages: 18,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -170,7 +180,7 @@ export const GUIDES = [
     blurb:
       "Key QS formulas with worked examples, a formula library, constants, grade and unit conversion, and use cases for every ADLM product.",
     file: "/docs/ADLM-QS-Handbook.pdf",
-    pages: 47,
+    pages: 61,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -183,7 +193,7 @@ export const GUIDES = [
     blurb:
       "Every guide above in one book: getting started, the Hub, QUIV, HERON, Rate Gen, SERVIQ, Time Pro, the ADLM Cloud, the sample projects and the QS handbook.",
     file: "/docs/ADLM-Software-Complete-Guide.pdf",
-    pages: 186,
+    pages: 264,
     productKeys: [],
     changelogSlugs: [],
   },

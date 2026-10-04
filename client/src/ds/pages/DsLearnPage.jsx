@@ -1536,7 +1536,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  19 pages · PDF
+                  30 pages · PDF
                 </span>
                 {" "}
                 <h4>
@@ -1576,7 +1576,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  18 pages · PDF
+                  30 pages · PDF
                 </span>
                 {" "}
                 <h4>
@@ -1618,7 +1618,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  22 pages · PDF
+                  24 pages · PDF
                 </span>
                 {" "}
                 <h4>
@@ -1658,7 +1658,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  186 pages · PDF
+                  264 pages · PDF
                 </span>
                 {" "}
                 <h4>

@@ -2,24 +2,32 @@
 id: cloud-projects
 title: ADLM Cloud: projects and your workspace
 tagline: Find your way around the ADLM Cloud, open your projects, and use the project dashboard, 3D model and work area.
-version: "2026.09"
-updated: 2026-10-01
+version: "2026.10"
+updated: 2026-10-04
 platform: Web, any browser (adlmstudio.net)
 productKeys: []
 pdf: ADLM-Cloud-Projects-Guide.pdf
 order: 10.1
 ---
 
-This is one part of the [ADLM Cloud guide](/guides/cloud). It covers the workspace as it is on the live site at the start of October 2026.
+This is one part of the [ADLM Cloud guide](/guides/cloud). It shows you how to find your way around the signed-in website, open a project and use its screens. It covers the live site on 4 October 2026.
+
+## What's new in 2026.10
+
+- **One menu on every signed-in page.** Since 1 October the left-hand menu has three groups, **Work**, **Learn** and **Manage**, with **Ask Ada** at the top. Signing in takes you to your **Overview**.
+- **Carbon footprint on sample cards.** Each learning sample card shows its upfront carbon (A1-A5) in tCO2e, and how much of the bill's cost that figure covers.
+- **Price with my RateGen rates** on an open sample: see the sample's bill priced with your own Rate Gen rates, without saving anything.
+- **ICMS 3 cost and carbon export** on every project you can export, samples included. See [Exports](#exports-from-the-project-screen).
+- **QUIV budgets priced on save.** For accounts with Rate Gen, a QUIV 4 save arrives with its material and labour schedule already priced.
 
 ## Before you start
 
 ### What you need
 
-- **An ADLM account.** Use the same email and password you use in the desktop products. Sign in at adlmstudio.net.
-- **A licence for the product the project came from.** To open a QUIV project you need an active QUIV licence; a HERON project needs HERON, and so on. Projects a colleague shares with you also need the matching product licence.
-- **A Rate Gen licence (optional but recommended).** Without one you can still see and value a project, but you cannot pull rates from the Rate Gen library, and on projects shared with you the rates stay hidden. See [ADLM Rate Gen](/guides/rategen).
-- **A browser.** Any up-to-date browser works. The 3D model viewer needs a browser with WebGL, which every modern desktop browser has.
+- **An ADLM account.** Use the same email and password you use in the desktop products.
+- **A licence for the product the project came from.** A QUIV project needs an active QUIV licence; a HERON project needs HERON, and so on. A project a colleague shares with you also needs the matching product licence.
+- **A Rate Gen licence (optional but recommended).** Without one you can still see and value a project, but you cannot pick rates from your Rate Gen library, and on projects shared with you the rates stay hidden. See [ADLM Rate Gen](/guides/rategen).
+- **A browser.** Any up-to-date browser. The 3D model needs WebGL, which every modern desktop browser has.
 
 ### How a project gets here
 
@@ -27,78 +35,60 @@ You do not create projects on the website. A project starts in a desktop product
 
 | Product | Where you measure | How it reaches the cloud |
 |---|---|---|
-| QUIV | Revit | **Run QUIV and extract**, then **Save to ADLM Cloud** |
+| QUIV | Revit | Measure, then **Save to ADLM Cloud** |
 | HERON | PlanSwift | **Take off with HERON**, then **Save to ADLM Cloud** |
-| Revit MEP (shown on the website as SERVIQ) | Revit | **Run SERVIQ and extract**, then **Save to ADLM Cloud** |
-| CIVIQ | Civil 3D | **Run CIVIQ and extract**, then **Save to ADLM Cloud** |
+| Revit MEP (shown on the website as SERVIQ) | Revit | Extract, then **Save to ADLM Cloud** |
+| CIVIQ | Civil 3D | Extract, then **Save to ADLM Cloud** |
 
 Every save from the plugin creates a new version of the project. Re-saving does not throw away the rates, purchase marks or supplier notes you added on the website.
 
 > **Note:** The steps for each plugin are in its own guide: [QUIV for Revit](/guides/quiv), [HERON](/guides/heron) and [Revit MEP](/guides/mep).
 
-### Finding your way around
+## Finding your way around
 
-The signed-in pages have a menu down the left side. On a phone, open it with the menu button at the top.
+### The menu
 
-- **Work**
-  - **Overview** (`/work`): what needs you today, across all your projects.
-  - **My tools**: one page each for **QUIV**, **HERON**, **RateGen**, **Constants**, **SERVIQ** (the website's name for Revit MEP) and **CIVIQ**. A tool you have no licence for is greyed out and marked **Add**.
-  - **Projects** (`/work/projects`): every project on your account, whichever tool it came from.
-- **Learn**: your courses, assignments, certificates and guides.
-- **Manage**: **Overview**, **Products & seats**, **Team**, **Billing & invoices**, **Downloads** and **Support**.
-- **Account settings** and **Sign out** sit at the bottom.
+Every signed-in page has a menu down the left side. On a phone, open it with the menu button at the top left. The search box at the top (**Search projects, rates and programmes**) jumps to a page by its name.
 
-The search box at the top (**Search projects, rates and programmes**) jumps to a page by name. The bell next to it shows assignment reminders.
+At the top of the menu is **Ask Ada** (**Your library, answered**). Click it to open Ada, ADLM's assistant. See [Ada, your assistant](/guides/cloud-sharing#ada-your-assistant).
 
-Signing in takes you to **Overview** under Manage (`/manage`). The old `/dashboard` address now opens the same page.
+Below it are three groups:
 
-## Your work overview
+- **Work**: **Overview**, **My tools** and **Projects**.
+- **Learn**: **My learning**, **Assignments**, **Certificates**, **Lessons & events** and **Guides & docs**.
+- **Manage** (marked **Installer Hub**): **Overview**, **Products & seats**, **Team**, **Billing & invoices**, **Downloads** and **Support**.
 
-**Overview** (`/work`) is one page, read from top to bottom, that answers "what am I in the middle of?".
+**Account settings** and **Sign out** sit at the bottom. The Learn and Manage groups are covered in [Getting started](/guides/getting-started#your-account-area).
 
-The headline figures across the top:
+### What the Work items open
 
-| Figure | What it shows |
-|---|---|
-| **Measured work, all projects** | The value of measured work across every project (quantity times rate). |
-| **Certified to date** | The total of your approved and paid interim certificates. |
-| **Items waiting for a rate** | Bill lines that have no rate yet. Click to go to the rate library. |
-| **Needs a decision** | How many things are waiting on you, and how many are urgent. |
+| Menu item | Opens | Address |
+|---|---|---|
+| **Overview** | Your account **Overview**, the page you land on after signing in | `/manage` |
+| **My tools** > **QUIV** | **QUIV projects** | `/projects/revit` |
+| **My tools** > **HERON** | **HERON projects** | `/projects/planswift` |
+| **My tools** > **RateGen** | Your Rate Gen library on the web | `/rategen` |
+| **My tools** > **Constants** | **Material Constants** | `/rategen/material-constants` |
+| **My tools** > **SERVIQ** | **Revit MEP projects** | `/projects/mep` |
+| **My tools** > **CIVIQ** | **CIVIQ projects** | `/projects/civil3d` |
+| **Projects** | **All Projects**, every project on your account | `/portfolio` |
 
-Below the figures are these panels:
+A tool you have no licence for is marked **Add**. Click it to see the product and buy it.
 
-- **Needs a decision**: one table of things to act on, such as lines to price, variations to decide or overdue tasks. Each row has a button that opens the exact place where you deal with it (for example **Price**, **Decide** or **See task**). When the table is clear it says **Nothing is waiting on you.**
-- **Continue where you left off**: the projects you last had open in this browser, reopening on the tab you were using.
-- **Projects**: every project with its source, stage, how much is priced and complete, the measured value and the certified value. **All projects** opens the full gallery.
-- **Valuations and variations**: your latest certificates and variations, most recent first, with their status (**Draft**, **Approved**, **Paid**, **Pending** or **Rejected**).
-- **Programme**: tasks that are overdue, due in the next two weeks, or under way.
-- **RateGen**: rates you changed recently and where they are used.
-- **Learning**: assignments due.
+## Your projects
 
-If your account has no projects yet, the page says so and offers **Install the plugins** and **Open the rate library**.
+### All Projects
 
-## Projects
+Click **Projects** in the menu to open **All Projects** ("Projects synced from your ADLM desktop plugins"). Projects are grouped by product. Each card shows the project name, the product, the number of items and when it was last updated. A card marked **Shared** has a public dashboard link turned on.
 
-### The projects gallery
+1. Find the project under its product.
+2. Click the card. The project opens in that product's workspace.
 
-**Projects** (`/work/projects`) shows every project on your account as cards.
-
-1. Type in **Search projects** to find a project by name.
-2. Use **Source** (**All tools** or one product) to show one product's projects.
-3. Use **Stage** to show projects at one stage: **Takeoff**, **Priced**, **Tendered**, **Contract locked**, **Valuations** or **Final account**.
-4. Sort by **Recently updated**, **Estimated value**, **Name** or **Stage**.
-5. Switch between **Grid** and **List** with the layout buttons. Your choice is remembered in this browser.
-6. Click a card to open the project.
-
-Each card shows the product, the stage, whether the project is **Yours** or **Shared with you**, its version, how much is valued, the estimated value and when it was last updated. Flags tell you when a **Share link on** is active, when a project carries a **Material schedule**, or when **Money hidden** applies (see [Sharing and collaborators](/guides/cloud-sharing#sharing-and-collaborators)).
-
-### A tool's page
-
-Click a tool under **My tools**, for example **QUIV**, to see only that tool's projects. The page shows **Projects**, **Estimated** and **Last saved**, and a short **How a project starts** section with the three steps for that plugin. If you do not have that product, the page says so and offers a link to add it. Projects a consultant shares with you still open here.
+If you have QUIV, a note at the top links to the **PM Tracker**. **Back to Dashboard** returns you to your Overview.
 
 ### A product's project list
 
-Each product also has a full project list:
+Click a tool under **My tools**, for example **QUIV**, to open that product's full project list:
 
 | Product | Page title | Address |
 |---|---|---|
@@ -107,22 +97,22 @@ Each product also has a full project list:
 | Revit MEP | **Revit MEP projects** | `/projects/mep` |
 | CIVIQ | **CIVIQ projects** | `/projects/civil3d` |
 
-At the top of the list are summary tiles: the combined value of the visible projects, **Completed to date** with the share of lines marked, and **Outstanding balance**.
+At the top are summary tiles: the combined value of the projects shown, **Completed to date** with the share of lines marked, and **Outstanding balance**.
 
-Under the tiles, **Cloud Storage** shows how many project slots you have used, for example "12 of 30 projects". At 80% you see **Upgrade storage**. When you reach the limit you see **Buy more storage**, and you must delete a project or buy more slots before you can save another. Extra slots are sold in blocks of ten on the purchase page.
+**Cloud Storage** shows how many project slots you have used, for example "12 of 30 projects". Near the limit you see **Upgrade storage**. At the limit you see **Buy more storage**, and you must delete a project or buy more slots before you can save another. Extra slots are sold in blocks of ten.
 
-The header buttons on this page:
+The header buttons:
 
 - **Refresh projects** reloads the list, for example straight after a save from the plugin.
-- **Portfolio Dashboard** opens the roll-up of all your projects (see [Portfolio dashboard](/guides/cloud-pm#portfolio-dashboard)).
-- **PM Tracker · QUIV** (QUIV list only) opens the standalone [PM Tracker](/guides/cloud-pm#pm-tracker).
+- **Portfolio Dashboard** opens the roll-up of all your projects (see [Portfolio dashboard](/guides/cloud-pm#the-portfolio-dashboard)).
+- **PM Tracker · QUIV** (QUIV list only) opens the standalone [PM Tracker](/guides/cloud-pm#the-pm-tracker).
 - **Add shared project** adds a project a colleague shared with you by code.
 
 ### Selecting, merging and deleting
 
 1. Click **Select** on each project card you want, or **Select all** for every project shown. **Clear** empties the selection.
-2. Click **Delete selected** to delete them, or **Delete all** to delete every project in the list. You are asked to confirm, and this cannot be undone.
-3. To delete one project, click **Delete** on its card. Only the owner sees this button; shared projects cannot be deleted by collaborators.
+2. Click **Delete selected** to delete them. You are asked to confirm, and this cannot be undone.
+3. To delete one project, click **Delete** on its card. Only the owner sees this button.
 
 **Merge selected** combines two or more projects into one, for example the architectural and structural models of one building, or several buildings on one job.
 
@@ -131,17 +121,42 @@ The header buttons on this page:
 3. Answer the first question: click **OK** if they are separate buildings on one job (each gets its own sheet in the exported bill), or **Cancel** if they are disciplines of one structure.
 4. Type a name for the merged project and confirm.
 
-The originals are kept and still open on their own in the plugin. Inside the merged project you can change the order of the buildings or disciplines with the up and down arrows.
+The originals are kept. Inside the merged project you can change the order of the buildings or disciplines with the up and down arrows.
 
-### Sample projects
+### Learning samples
 
-Above your own projects you may see **Learning samples**: worked projects with every tab filled in, so you can see what a priced, valued and certified job looks like before your own gets there. QUIV and HERON samples are worked duplex jobs, one per foundation type. Revit MEP samples cover the services for those duplexes, and CIVIQ samples are road jobs (asphalt, concrete, interlock and laterite).
+Above your own projects you may see **Learning samples**: worked projects with every view filled in, so you can see a priced, valued and certified job before your own gets there. QUIV and HERON samples are worked duplex jobs, one per foundation type. Revit MEP samples cover the services for those duplexes, and CIVIQ samples are road jobs.
 
-- Click a sample card to open it. A banner reads **Sample project · Read-only learning material**, and **What to look at in this sample** lists the things worth looking at.
-- You can open every tab, filter and export, but nothing can be changed.
-- Click **Hide samples** to fold the strip away, or **Show N samples** to bring it back. This only hides them in this browser.
+Each sample card shows its value, progress and certificates. New in October, a card can also show:
 
-Samples appear for products you have an active licence for.
+- **Carbon footprint**: the bill's upfront embodied carbon (A1-A5), in tonnes of CO2e, worked out from your own Rate Gen rates.
+- **Covers**: how much of the bill's cost that carbon figure covers, for example "94% of cost". Hover over the figure to see the basis.
+
+The carbon figure appears only when your account has a Rate Gen library to work it out from.
+
+To use a sample:
+
+1. Click a sample card. A banner reads **Sample project** and **Read-only learning material**.
+2. Open **What to look at in this sample** for the things worth looking at.
+3. Open any view, filter or export. Nothing can be changed.
+4. Click **Hide samples** on the list to fold the strip away, or **Show N samples** to bring it back. This only hides them in this browser.
+
+Samples appear for products you have an active licence for. More on samples is in [Sample projects](/guides/samples).
+
+### Price a sample with your own Rate Gen rates
+
+An open sample has a **Price with my RateGen rates** panel: "See this bill priced with your own RateGen rates for" your state. Nothing is saved.
+
+1. Open a sample.
+2. Click **Price with my rates**. The button reads **Pricing…** while it works.
+3. Read the three tiles:
+   - **Bill as priced (lines your rates cover)**: the sample's own total for the lines your library could price.
+   - **With your RateGen rates**: the same lines at your rates, with the difference as a percentage.
+   - **Lines priced**: how many lines your rates priced, for example "212 of 240", and the share of the bill's cost they make up.
+4. Read the table: **Item**, **Qty**, **Unit**, **Bill rate**, **Your rate** and **From**. **From** says how each line was priced: **Same item**, **By the work** (matched by the work the line measures, marked **assumed** where it assumed something), **Services pricing** (SERVIQ lines) or **Not priced**.
+5. Click **Show all N lines** to see every line. Click **Price again** after changing your rates in Rate Gen.
+
+Lines no rate fits are listed as not priced rather than guessed. A CIVIQ sample tells you Rate Gen has no civil rates instead of pricing a road from building rates. The panel needs a Rate Gen licence.
 
 ## Inside a project
 
@@ -155,12 +170,12 @@ When you open a project, the bar at the top holds:
 - **Collaborators**: invite colleagues (owner only).
 - **Delete**: delete the project (owner only).
 - **Project report**: preview and download a PDF progress report. On the PM Dashboard this button reads **PM report**.
-- **Export** (**Workbooks**): Excel exports, described in [Exports and reports](/guides/cloud-bill-budget#exports-and-reports).
+- **Export** (**Workbooks**): the Excel and ICMS 3 exports.
 - **Save changes**: saves your rates, progress and settings. It reads **Saved** when there is nothing new to save.
 
 > **Important:** Changes to rates, progress and valuation settings are not kept until you click **Save changes**. Save before you leave the page.
 
-Down the side is **Views**, the list of the project's screens in three groups. Click **Hide** to give the bill the full width, and **Views** to bring the list back.
+Down the side is **Views**, the project's screens in three groups. Click **Hide** to give the bill the full width, and **Views** to bring the list back. The project reopens on the view you last used.
 
 | Group | View | What it is for |
 |---|---|---|
@@ -174,6 +189,8 @@ Down the side is **Views**, the list of the project's screens in three groups. C
 
 **3D Model** does not appear for HERON projects or for projects imported from an Excel bill, because they are measured from drawings rather than a model.
 
+The Bill of Quantity and Budget are covered in [The bill and the budget](/guides/cloud-bill-budget). Valuation is in [Valuations and contract administration](/guides/cloud-valuation), and the PM Dashboard in [Programme and project management](/guides/cloud-pm).
+
 ### Dashboard
 
 The Dashboard answers three questions: what is the job worth, how much is done, and what is left.
@@ -185,7 +202,11 @@ The Dashboard answers three questions: what is the job worth, how much is done, 
 
 **Progress overview** counts completed, remaining and total work items. If you record actual quantities or rates, **Actual vs planned performance** compares them with the plan. Switch the chart between **Donut**, **Bars** and **Trend**.
 
-On QUIV and HERON projects, **Linked Services & Works** lets you link another project, such as the Revit MEP services for the same building, so the **Linked total** shows the whole job. Click **+ Link a project**, choose it from **Select a project…**, then click **Link**. **Unlink** removes it.
+On QUIV and HERON projects, **Linked Services & Works** lets you link another project, such as the Revit MEP services for the same building, so the **Linked total** shows the whole job.
+
+1. Click **+ Link a project**.
+2. Choose it from **Select a project…**.
+3. Click **Link**. **Unlink** removes it later.
 
 On Revit MEP projects, **Price services from RateGen** prices the services bill from your Rate Gen library. Click **Price services**. The lengths, joints and fittings it allows for come from your Services Constants (see [Material and Services Constants](/guides/cloud-bill-budget#material-and-services-constants)).
 
@@ -200,17 +221,62 @@ The 3D Model view opens the attached model in your browser.
 3. **Material breakdown** shows the material lines behind the selection.
 4. Click **Clear highlight** to start again.
 
+The model is attached automatically when you save from QUIV. See **BIM models** in [Valuations and contract administration](/guides/cloud-valuation#bim-models).
+
 ### Work area
 
-The Work area puts the model, the priced bill and the construction schedule on one screen. Pick a bill line and its elements light up. Pick a task and the lines it builds light up. Click an element and the lines and tasks behind it are found.
+The Work area puts the model, the priced bill (**Bill of Quantities**) and the **Construction schedule** on one screen, with Ada beside them.
 
-Ada sits beside them. Type a question in **Ask about this project**, or click **Ask Ada to explain** on the duration, time, cost and material summary. Ada only uses items that exist in your account; she proposes and you decide.
+1. Click **Work area** in **Views**.
+2. Pick a bill line: its elements light up and the tasks that build it are marked.
+3. Pick a task: the lines it builds light up.
+4. Click an element: the lines and tasks behind it are found.
+
+Use **Filter bill lines** and **Filter tasks** to narrow the lists. With nothing picked, the screen says "Pick a bill line, a task or an element to see how they join up."
+
+The **Ada** panel reads **Answering from** your project. It has an **Ask about this project** box and these buttons:
+
+| Button | What it does | AI? |
+|---|---|---|
+| **Check duration, time, cost & material** | A health check worked out on the page: schedule against the project finish, actual cost, material | No |
+| **Check my rates against the market** (or **Check N selected line(s)**) | Compares your priced lines with the Rate Gen library for your zone | Yes |
+| **Scan the bill for errors** | Duplicates, wrong units, implausible quantities, rate outliers | Yes |
+| **Build up a rate for the selected line** | One line's rate from material, labour and plant | Yes |
+| **What is this project worth?** | Asks Ada for the value and work done | Yes |
+
+After the health check, **Ask Ada to explain** asks her to talk you through it. The panel reminds you: "Ada only uses items that exist in this account. She proposes; you decide."
+
+To run a market check:
+
+1. Tick lines in **Bill of Quantities** to check only those, or tick nothing to check them all.
+2. Click **Check my rates against the market**.
+3. Read the answer in the Ada panel. Each line gets a chip in the **Check** column: above market, below market, in range or unit mismatch.
+
+No rate is ever changed by a check. To use a better rate, pick it from your Rate Gen library on the bill.
+
+## Exports from the project screen
+
+Click **Export** in the top bar. The groups are **Bill & Budget**, **Generic BoQ**, **Elemental BoQ**, **Trade BoQ**, **Milestone BoQ** and **ICMS 3** ("international cost and carbon report"). Each is described in [Exports and reports](/guides/cloud-bill-budget#exports-and-reports).
+
+The ICMS 3 group has two exports:
+
+- **ICMS 3 cost and carbon (Excel)**: cost and upfront carbon (A1-A5) by ICMS 3 Group, with every line's code, where its carbon came from, and the lines not yet placed.
+- **ICMS 3 cost and carbon (JSON)**: the same report as data, with full ICMS 3 codes, in the RICS Data Standard 3.3.3 format.
+
+The export menu is on every project you can export, including learning samples. Collaborators with **View only** access, and collaborators without Rate Gen on priced exports, cannot download.
+
+## AI in this part of ADLM Cloud
+
+- **Work area checks**: market check, error scan and rate build-up, as above. On for everyone with an active licence. Each draws on your monthly AI allowance.
+- **Ada**: ask about any of your projects from **Ask Ada**. Signed in, she reads only your own account. On a sample, **Ask about this project** in the Work area can comment on the lines you selected, but cannot read the rest of the sample.
+
+See [ADLM AI services](/guides/ai-services) for how each feature works and what it costs.
 
 ## Troubleshooting
 
 ### My project is not on the website
 
-Check that the plugin's save finished. The plugin confirms when a project is saved to the cloud. Then click **Refresh projects** on the product's list. Make sure you are signed in to the website with the same account as the plugin. If the plugin started offline, sign out and back in with a connection, then save again.
+Check that the plugin's save finished; the plugin confirms when a project is saved to the cloud. Then click **Refresh projects** on the product's list. Make sure you are signed in to the website with the same account as the plugin. If the plugin started offline, sign out and back in with a connection, then save again.
 
 ### I cannot save another project: storage is full
 
@@ -220,20 +286,32 @@ The **Cloud Storage** bar shows you are at your limit. Delete projects you no lo
 
 Rates, progress and settings are only kept when you click **Save changes**. Make your edits again and save before leaving the project.
 
+### The sample card shows no carbon footprint
+
+The figure is worked out from your own Rate Gen rates. Without a Rate Gen library on your account, the card leaves it out.
+
+### Price with my rates says nothing could be priced
+
+Your library has no rate for that kind of work in your state, or the sample is a CIVIQ road job, which Rate Gen does not price. Check your state under **Pricing location (State)** on your Profile.
+
 ## Frequently asked questions
 
 ### Do I need Revit or PlanSwift to use ADLM Cloud?
 
-No. You need the plugin to measure and save a project, but once it is on the cloud you can price, value, programme and share it from any browser, on any computer or phone.
+No. You need the plugin to measure and save a project, but once it is on the cloud you can price, value, programme and share it from any browser.
 
 ### Can I delete a sample project?
 
 No. Samples are read-only and cannot be deleted. Click **Hide samples** to fold them away.
 
+### Does Price with my rates change the sample?
+
+No. Nothing is saved. It only shows what your rates would make of that bill.
+
 ### Why is the 3D Model view missing?
 
-HERON projects are measured from 2D drawings, so they have no model to show.
+HERON projects and Excel imports are measured from 2D drawings or a spreadsheet, so they have no model to show.
 
 ### Where do I get help?
 
-Ask Ada, chat with us on WhatsApp, or raise a ticket from **Support** (`/manage/support`).
+Ask Ada, chat with us on WhatsApp on +234 810 650 3524, or raise a ticket from **Support** in the menu.

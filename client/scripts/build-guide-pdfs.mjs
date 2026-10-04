@@ -14,7 +14,7 @@
 // different browser executable.
 //
 // Screenshots written as ![alt](shot:name.png) are read from
-// ADLMInstallerHub/Docs/shots (GUIDE_SHOTS overrides) and embedded, so each
+// src/content/guides/shots (GUIDE_SHOTS overrides) and embedded, so each
 // PDF is one self-contained file.
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, rmSync, copyFileSync } from "node:fs";
@@ -28,7 +28,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLIENT = resolve(__dirname, "..");
 const SRC = process.env.GUIDE_SRC || join(CLIENT, "src/content/guides");
 const OUT = process.env.GUIDE_OUT || join(CLIENT, "public/docs");
-const SHOTS = process.env.GUIDE_SHOTS || resolve(CLIENT, "../../ADLMInstallerHub/Docs/shots");
+const SHOTS = process.env.GUIDE_SHOTS || join(CLIENT, "src/content/guides/shots");
 const PUB = join(CLIENT, "public");
 
 const args = process.argv.slice(2);

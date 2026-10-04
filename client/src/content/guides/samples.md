@@ -14,7 +14,7 @@ Sample projects are complete, worked jobs that ADLM Studio has put on ADLM Cloud
 
 There are four samples for each product that has a cloud project screen: QUIV for Revit, HERON for PlanSwift, SERVIQ for Revit MEP, CIVIQ for Civil 3D and QUIV for ArchiCAD. Every sample is read-only. You can open it, read it, filter it and export it, but nobody can change it, save over it or delete it.
 
-This guide lists every sample, says what is in it and what it teaches, and ends with five short exercises.
+This guide lists every sample, says what is in it and what it teaches, shows how to price a sample with your own Rate Gen rates and export it as an ICMS 3 cost and carbon report, and ends with six short exercises.
 
 ## Before you start
 
@@ -63,6 +63,8 @@ Each card shows:
 | **Lines** | How many priced lines are in the bill |
 | **Certificates** | How many interim certificates have been issued |
 | **3D model** | Shown when the sample has a model you can open |
+| **Carbon footprint** | The upfront carbon (A1-A5) of the sample's bill in tCO2e, worked out from your own Rate Gen rates |
+| **Covers** | The share of the bill's cost that the carbon footprint is worked out on |
 
 ### Hiding and showing the strip
 
@@ -80,7 +82,8 @@ When a sample opens, an orange banner across the top reads **Sample project · R
 | Open every view: **Dashboard**, **Bill of Quantity**, **Budget**, **Valuation**, **Work area**, **3D Model** (where there is one) and **PM Dashboard** | Change a rate, a quantity, a percentage done or a setting |
 | Search and filter the bill and the budget | Save changes. The server refuses with "Sample projects are read-only learning material." |
 | See every rate and every money total, with or without Rate Gen | Delete the sample, merge it with another project or select it for bulk actions |
-| Download the Excel workbooks and reports | Add certificates, variations, tasks, risks or issues |
+| Price the bill with your own Rate Gen rates, without saving anything | Save the new prices to the sample |
+| Download the Excel workbooks and reports, including the ICMS 3 cost and carbon report | Add certificates, variations, tasks, risks or issues |
 | Open the 3D model and pick elements | Invite collaborators or share it with a code |
 
 A few more points:
@@ -89,6 +92,47 @@ A few more points:
 - **Samples never reach the desktop plugins.** The project list the plugins read never includes samples, so you cannot open a sample in Revit or PlanSwift and save your work over it.
 
 > **Tip:** Because you cannot break a sample, it is the safest place to try things. Click every tab, open every certificate, and download every export. Then do the same on your own project.
+
+## Pricing and carbon on a sample
+
+From October 2026, a sample can show you what your own Rate Gen rates make of its bill, and its carbon footprint. None of this changes the sample.
+
+### Price with my RateGen rates
+
+Under the orange banner of an open sample is a panel called **Price with my RateGen rates**. It re-prices the sample's bill with the Rate Gen rates your account prices with, for the state on your profile: ADLM's rates for that state, with your own changes and custom rates on top. Nothing is saved.
+
+1. Open a sample.
+2. In the **Price with my RateGen rates** panel, click **Price with my rates**.
+3. Read the three tiles: **Bill as priced (lines your rates cover)**, **With your RateGen rates** with the percentage difference, and **Lines priced**, which shows how many lines your rates covered and what share of the bill's cost that is.
+4. Read the table under them. Each line shows the **Bill rate** beside **Your rate**, and **From** says how your rate was found (see the table below).
+5. The table shows 25 lines. Click **Show all** and the number of lines to see the rest.
+6. After changing your rates, click **Price again**.
+
+| From | Meaning |
+|---|---|
+| **Same item** | Your rate with the line's own description and unit |
+| **By the work** | Your rate for the work the line measures, such as concrete of that mix or blockwork of that thickness, with the unit converted. "assumed" after it means the bill did not say something and it was assumed: hover over it to see what |
+| **Services pricing** | A SERVIQ line priced from the services rates |
+| **Not priced** | No rate of yours fits. The line is left out rather than guessed |
+
+On the building samples, your rates usually cover most of a bill's cost (87 to 98% on the live samples). The CIVIQ road samples cannot be priced this way: the panel says "RateGen has no civil works rates yet", because pricing roads from building rates would give a confident wrong answer.
+
+> **Tip:** A large difference on one trade is worth a look in [ADLM Rate Gen](/guides/rategen). Rates are built and edited there, not on the website.
+
+### The carbon footprint on a sample card
+
+Sample cards show a **Carbon footprint** in tCO2e and how much of the cost it **Covers**. It is the upfront embodied carbon (A1-A5) of the bill: the materials, their transport to site and site waste. It is worked out from your own Rate Gen rates, the same way as the ICMS 3 export, so two accounts can see slightly different figures. If you have no Rate Gen library of your own, ADLM's rates for your state are used.
+
+On the duplex samples the footprint usually covers 90 to 98% of the cost. The PC and provisional sums, and services items with no carbon factor, make up most of the rest. See Carbon in cost planning in the [QS handbook](/guides/qs-handbook) for what the figure means.
+
+### Export a sample as an ICMS 3 report
+
+Every sample can be exported as an ICMS 3 cost and carbon report:
+
+1. Open the sample and click **Export**.
+2. Under **ICMS 3**, click **ICMS 3 cost and carbon (Excel)** or **ICMS 3 cost and carbon (JSON)**.
+
+The report sorts the bill's cost and upfront carbon into the 13 ICMS 3 Groups and adds up to the contract sum. A sample states no floor area, base date or location, so those details show as **Assumed** and the per-m² columns are blank. The [QS handbook](/guides/qs-handbook) explains ICMS 3 and works through the raft duplex.
 
 ## How samples relate to your own projects
 
@@ -251,7 +295,7 @@ ArchiCAD bills have fewer lines than QUIV for the same building, because they co
 
 ## Exercises
 
-These five exercises take ten to fifteen minutes each. Any product's samples work, but the steps below use the QUIV samples. On HERON the steps are the same without the 3D model.
+These six exercises take ten to fifteen minutes each. Any product's samples work, but the steps below use the QUIV samples. On HERON the steps are the same without the 3D model.
 
 ### Exercise 1: Open a sample
 
@@ -300,11 +344,22 @@ These five exercises take ten to fifteen minutes each. Any product's samples wor
 5. Click **View Details** and open **WBS / Tasks**. See how the Substructure phase is split into trades.
 6. Open **Risk Register** and **Issue Log**. Find the risk about the high water table (closed) and the issue about window frames out of square (in progress).
 
+### Exercise 6: Export a sample as an ICMS 3 cost and carbon report
+
+1. Open **5-Bedroom Duplex - Raft Foundation**.
+2. Click **Export**, and under **ICMS 3** click **ICMS 3 cost and carbon (Excel)**.
+3. Open the workbook. On **ICMS 3 report**, see which details are **Stated** and which are **Assumed**, and read the carbon coverage.
+4. Open **Cost by Group (G-2)**. Check that the total is the contract sum, about ₦209.0m. Substructure (2.02) is about a quarter of it, because the raft sits on soft clay.
+5. Find preliminaries in 2.08, contingency in 2.09 and VAT in 2.10.
+6. Open **Carbon by Group (H-1, H-2)**. Note which Group carries the most carbon, and that 2.10 reads **Not used**.
+7. Open **Lines** and find the roof beam lines. Read **Placed by** and **Why**, and decide whether you agree with the Group they were given.
+
 ## What's new in 2026.10
 
 - **September 2026:** sample projects arrived for QUIV and HERON, four duplexes each.
 - **Late September 2026:** samples added for Revit MEP, CIVIQ and QUIV for ArchiCAD, and the **Learning samples** strip added to each tool's page under **My tools**.
 - **End of September 2026:** the sample programmes now show each phase broken into trades (formwork, reinforcement, pours and so on), the way a real programme of works is drawn, instead of one bar per phase.
+- **October 2026:** **Price with my RateGen rates** on an open sample, a **Carbon footprint** on each sample card, and the **ICMS 3** cost and carbon export on every sample. Exports from samples now open reliably.
 
 ## Troubleshooting
 
@@ -328,6 +383,10 @@ You cannot copy a sample. Download its workbooks from **Export** if you want a r
 
 HERON samples are measured from PDF drawings and have no model. QUIV, Revit MEP and CIVIQ samples do. ArchiCAD samples open on the ArchiCAD bill page instead of the project screen.
 
+### There is no carbon footprint on a sample card
+
+The card shows a footprint only when your Rate Gen rates give the bill a carbon figure. Check the state on your profile, then reload the page. The figure is refreshed every few minutes, so a change to your rates can take a short while to show.
+
 ### I cannot find a sample from inside the plugin
 
 Samples are kept out of the desktop plugins on purpose, so nobody can save over them. Open them on the website.
@@ -347,7 +406,11 @@ Yes. Every customer with the product sees the same samples. Because nobody can c
 Yes. Samples show every rate and money total to everyone. On your own projects and shared projects, the normal Rate Gen rules apply. See [ADLM Rate Gen](/guides/rategen).
 
 **Can I download a sample?**
-Yes. The Excel workbooks and reports work on samples just as they do on your projects.
+Yes. The Excel workbooks and reports work on samples just as they do on your projects, including the ICMS 3 cost and carbon report.
+
+**Does Price with my RateGen rates change the sample?**
+No. It shows your prices beside the bill's own and saves nothing. The sample is the same for everyone afterwards.
+
 
 **Are the clients and sites real?**
 No. The names, sites and suppliers are made up. The quantities are measured from real models of the four duplexes and four roads, and the money is worked out the same way the website works out your own jobs.
