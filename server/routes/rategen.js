@@ -21,6 +21,7 @@ import {
 import { normalizeZone, ZONES } from "../util/zones.js";
 import { STATES, normalizeState, zoneForState } from "../util/states.js";
 import { ensureDb } from "../db.js";
+import { clientIsSyncAware, mergeBulkCustomRates } from "../util/rategenCustomRateGuard.js";
 
 const router = express.Router();
 
@@ -45,7 +46,9 @@ function mapUserCustomRate(item) {
 }
 
 function toLibraryResponse(lib) {
-  const plain = lib?.toObject ? lib.toObject() : { ...(lib || {}) };
+  const { deletedCustomRates: _archive, ...plain } = lib?.toObject
+    ? lib.toObject()
+    : { ...(lib || {}) };
   return {
     ...plain,
     rateOverrides: (plain.rateOverrides || []).map(mapUserRateOverride),
@@ -410,7 +413,13 @@ router.put("/library", async (req, res) => {
     lib.ratesVersion += 1;
   }
   if (Array.isArray(customRates)) {
-    lib.customRates = customRates.map((item) => normalizeCustomRate(item));
+    // A rate the payload left out is not a deletion; see
+    // util/rategenCustomRateGuard.js.
+    lib.customRates = mergeBulkCustomRates(
+      lib,
+      customRates.map((item) => normalizeCustomRate(item)),
+      { syncAware: clientIsSyncAware(req) },
+    ).customRates;
     lib.customRatesVersion += 1;
   }
 
