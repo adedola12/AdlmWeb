@@ -184,7 +184,7 @@ async function watchRepo({ repo, branch }, approverLogin) {
       );
       vetted = head;
     } else if (cmp) {
-      const commits = landedOnMain(head, cmp.commits || []).slice(0, MAX_COMMITS);
+      const commits = landedOnMain(head, cmp.commits || []).slice(0, MAX_COMMITS_PER_REPO);
       try {
         for (const c of commits) {
           const verdict = await approvedOnBranch(repo, branch, c.sha, approverLogin);
