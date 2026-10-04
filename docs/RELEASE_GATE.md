@@ -98,6 +98,20 @@ a batch.
 To make it binding: Settings > Branches > main > Require status checks, add
 **approved batch**, keep **Include administrators** ticked, and (only then)
 drop the code-owner review requirement.
+## Settings that are releases
+
+Some settings reach customers by themselves. `installerHubUrl` is the file
+every customer's **Download the Installer Hub** button fetches, so saving it
+used to repoint the whole fleet with no sign-off: the one way round the gate.
+
+Changing it on `POST /admin/settings/installer-hub` is now **staged** like a
+plugin release (202, pending on the release desk). Customers keep the current
+Hub until the approver approves. The candidate keeps the OLD url, so a
+rollback is a fact rather than a memory. The video and guide links are not
+what customers download, so they save as they always did, and CLEARING the
+link is never gated: taking a download away is the safety action.
+
+The list lives in `server/util/releaseGateSetting.js` (`GATED_SETTINGS`).
 ## The locked audit trail
 
 Stack `AdlmReleaseGate` (eu-west-1) owns an S3 bucket with **Object Lock in
