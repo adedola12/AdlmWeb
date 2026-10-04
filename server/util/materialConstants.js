@@ -17,6 +17,8 @@
 //   • "Markup"            — the overhead/profit applied when an UNPRICED bill
 //     is priced from the build-up.
 
+import { SERVICE_TYPE_DEFAULTS } from "./serviceCompute.js";
+
 /** @typedef {{key:string,label:string,unit:string,group:string,def:number,min:number,max:number}} ConstantDef */
 
 const D = (key, label, unit, group, def, min, max) => ({
@@ -236,6 +238,8 @@ export const MATERIAL_CONSTANTS = [
   D(MC.PaintDrumsPerM2, "Emulsion paint (20L drum)", "drums/m²", "Finishes", 0.026, 0, 5),
 
   // ── Ceiling & roof ───────────────────────────────────────────────────────
+  // A 1.2 × 1.2 m board. Bills price POP ceiling boards as area × 1.3 / 1.44
+  // (41 workbooks, 14 job folders); QUIV now uses the same 1.44 (was 4.32).
   D(MC.CeilingPopBoardFactor, "POP ceiling board coverage", "m²/board", "Ceiling & Roof", 1.44, 0.1, 100),
   D(MC.CeilingBoardCoverage, "Ceiling board coverage", "m²/board", "Ceiling & Roof", 2.88, 0.1, 50),
   D(MC.RoofSheetM2PerM2, "Roof sheet per covered area", "m²/m²", "Ceiling & Roof", 1, 0, 5),
@@ -293,9 +297,12 @@ export const MATERIAL_CONSTANTS = [
   D(MC.MepFireMaterialShare, "Fire services: material share", "factor", "MEP – Cost Split", 0.63, 0, 1),
   D(MC.MepFireLabourShare, "Fire services: installation labour share", "factor", "MEP – Cost Split", 0.22, 0, 1),
   D(MC.MepFireAccessoryShare, "Fire services: accessories share", "factor", "MEP – Cost Split", 0.05, 0, 1),
-  D(MC.MepCableDrumLengthM, "Cable drum length", "m/drum", "MEP – Cost Split", 100, 1, 5000),
-  D(MC.MepConduitLengthM, "Conduit stock length", "m/length", "MEP – Cost Split", 3, 0.5, 50),
-  D(MC.MepPipeLengthM, "Pipe stock length", "m/length", "MEP – Cost Split", 5.8, 0.5, 50),
+  // The same purchase lengths the services engine bundles runs into
+  // (SERVICE_TYPE_DEFAULTS standardLength), so the two defaults cannot drift:
+  // pipe was 5.8 here and 6 there.
+  D(MC.MepCableDrumLengthM, "Cable drum length", "m/drum", "MEP – Cost Split", SERVICE_TYPE_DEFAULTS.cable.standardLength, 1, 5000),
+  D(MC.MepConduitLengthM, "Conduit stock length", "m/length", "MEP – Cost Split", SERVICE_TYPE_DEFAULTS.conduit.standardLength, 0.5, 50),
+  D(MC.MepPipeLengthM, "Pipe stock length", "m/length", "MEP – Cost Split", SERVICE_TYPE_DEFAULTS.pipe.standardLength, 0.5, 50),
 
   // ── Plant ────────────────────────────────────────────────────────────────
   // All zero by default — see the note on the keys above.
