@@ -841,6 +841,9 @@ export default function WorkProjectShell({ productKey, id }) {
               onGo={go}
               loading={loadingFull}
               classicHref={classicWorkspaceHref}
+              productKey={productKey}
+              projectId={full?._id || full?.id || ""}
+              accessToken={accessToken}
             />
           ) : tab === "drawings" && !fullFailed ? (
             <WorkProjectDrawings

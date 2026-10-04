@@ -24,6 +24,15 @@ import { EN_DASH, compact, money } from "./workProjectFormat.js";
 // the unit tests beside this file drive directly.
 import { Bar, StillLoading } from "./workProjectBits.jsx";
 
+// three.js plus the IFC/fragments loader, which together are the heaviest thing
+// this client can pull. Lazy, so the Model tab costs nothing until somebody
+// opens it and nothing at all on the other eight — WorkProjectFourD imports it
+// the same way for the same reason.
+const ModelViewer = React.lazy(() => import("../projects/ModelViewer.jsx"));
+
+/** The disciplines the viewer can draw. Matches WorkProjectFourD. */
+const VIEWABLE = ["architectural", "structural", "mep"];
+
 const short = (d) => {
   const t = new Date(d);
   return Number.isFinite(t.getTime())
@@ -34,9 +43,30 @@ const short = (d) => {
 /* ───────────────────────────── Model ───────────────────────────── */
 
 
-export function WorkProjectModel({ project, canEdit = false, onGo, loading = false, classicHref = "" }) {
+export function WorkProjectModel({
+  project,
+  canEdit = false,
+  onGo,
+  loading = false,
+  classicHref = "",
+  productKey = "",
+  projectId = "",
+  accessToken = "",
+}) {
   const models = React.useMemo(() => attachedModels(project), [project]);
   const warning = React.useMemo(() => modelWarning(project), [project]);
+
+  // The viewer needs a URL to fetch, which the list does not carry — a row can
+  // be "attached" on the strength of a filename alone. Read from the raw models
+  // object for the same reason WorkProjectFourD does.
+  const viewable = React.useMemo(
+    () => VIEWABLE.some((d) => project?.models?.[d]?.url),
+    [project],
+  );
+  const items = React.useMemo(
+    () => (Array.isArray(project?.items) ? project.items : []),
+    [project],
+  );
 
   // Before the empty check, never after: the whole point is that an empty list
   // means nothing yet while the read is in flight.
@@ -70,6 +100,47 @@ export function WorkProjectModel({ project, canEdit = false, onGo, loading = fal
 
   return (
     <>
+      {/* THE MODEL ITSELF.
+          The viewer has existed and worked all along (lib/ifcViewer.js +
+          features/projects/ModelViewer.jsx) and was mounted on the classic
+          project view, the work area and the 4D workspace — everywhere except
+          the tab actually called Model, which listed the files and drew none of
+          them. Somebody opening it to look at their model found a table.
+
+          `compact` deliberately. The viewer's full mode brings a side panel
+          written in the classic utility classes, and dropping that into a page
+          built from his design system would read as two products stitched
+          together. The 4D workspace made the same call. */}
+      {viewable ? (
+        <section className="wk-panel vs">
+          <div className="wk-ph">
+            <h2>The model</h2>
+            <span className="wk-locnote">Drag to orbit, scroll to zoom</span>
+          </div>
+          <React.Suspense
+            fallback={
+              // The heavy chunk is three.js. Saying so beats a blank rectangle,
+              // which on a slow connection is indistinguishable from a failure —
+              // and "it feels stuck" is the complaint this tab started with.
+              <div className="pj-empty" role="status" aria-live="polite">
+                <b>Loading the model{"…"}</b>
+                <p>The 3D viewer is a large download the first time.</p>
+              </div>
+            }
+          >
+            <ModelViewer
+              compact
+              height={480}
+              projectModels={project?.models || {}}
+              items={items}
+              productKey={productKey}
+              projectId={projectId}
+              accessToken={accessToken}
+            />
+          </React.Suspense>
+        </section>
+      ) : null}
+
       {warning ? (
         <div className="pj-note warn">
           <svg viewBox="0 0 24 24" aria-hidden="true">

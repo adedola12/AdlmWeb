@@ -247,7 +247,11 @@ describe("while the full project is still loading", () => {
     // loading hid real rows the screen would flicker backwards.
     const { getByText, queryByText } = render(<WorkProjectModel project={modelled()} loading />);
     expect(getByText(/ikoyi-arch\.ifc/)).toBeTruthy();
-    expect(queryByText(/Loading/)).toBeNull();
+    // Matched on StillLoading's own words, not on /Loading/: this fixture has a
+    // model url, so the 3D viewer below also renders and its Suspense fallback
+    // says "Loading the model…" quite legitimately. A loose matcher here would
+    // fail on that and look like a regression in the tab.
+    expect(queryByText(/Reading this project/)).toBeNull();
   });
 });
 
@@ -291,5 +295,70 @@ describe("the classic workspace is reachable, not just named", () => {
     expect(getByText(/Uploading is done in/)).toBeTruthy();
     const maybe = queryByText("the classic workspace");
     if (maybe) expect(maybe.tagName).not.toBe("A");
+  });
+});
+
+/* ───────────────── The model, drawn ───────────────── */
+
+// The viewer (lib/ifcViewer.js + features/projects/ModelViewer.jsx) worked and
+// was mounted on the classic project view, the work area and the 4D workspace —
+// everywhere except the tab called Model, which listed the files and drew none
+// of them. Somebody opening it to look at their model found a table.
+//
+// It is lazy, so these assert the SUSPENSE BOUNDARY and the conditions, not the
+// three.js canvas: pulling the real viewer into jsdom would test WebGL, not this
+// decision. What can regress here is mounting it when there is nothing to draw
+// (a row is "attached" on a filename alone, with no url to fetch) and paying the
+// three.js download on a tab that cannot use it.
+
+describe("the 3D viewer on the Model tab", () => {
+  const withUrl = () => ({
+    models: {
+      architectural: {
+        sourceFile: "ikoyi-arch.ifc",
+        url: "https://r2/x.ifc",
+        format: "ifc",
+        validation: { status: "valid", requiredCount: 5, matchedCount: 5 },
+      },
+    },
+  });
+  const noUrl = () => ({
+    models: {
+      architectural: {
+        sourceFile: "ikoyi-arch.ifc",
+        format: "ifc",
+        validation: { status: "valid", requiredCount: 5, matchedCount: 5 },
+      },
+    },
+  });
+
+  it("is mounted when there is a model to draw", () => {
+    const { getByText } = render(<WorkProjectModel project={withUrl()} />);
+    expect(getByText("The model")).toBeTruthy();
+    // The lazy chunk has not resolved in this tick, so the boundary is showing.
+    expect(getByText(/Loading the model/)).toBeTruthy();
+  });
+
+  it("is NOT mounted when the row has no url to fetch", () => {
+    // A model row counts as attached on a filename alone. Mounting the viewer
+    // for one would download three.js to render nothing.
+    const { queryByText, getByText } = render(<WorkProjectModel project={noUrl()} />);
+    expect(queryByText("The model")).toBeNull();
+    expect(queryByText(/Loading the model/)).toBeNull();
+    // ...and the list is still there, so the tab has not lost anything.
+    expect(getByText(/ikoyi-arch\.ifc/)).toBeTruthy();
+  });
+
+  it("says what is downloading, not just that something is", () => {
+    // A bare rectangle on a slow connection is indistinguishable from a failure,
+    // which is the complaint this tab started with.
+    const { getByText } = render(<WorkProjectModel project={withUrl()} />);
+    expect(getByText(/large download/i)).toBeTruthy();
+  });
+
+  it("is not mounted on a project with no models at all", () => {
+    const { queryByText, getByText } = render(<WorkProjectModel project={{}} />);
+    expect(queryByText("The model")).toBeNull();
+    expect(getByText("No model attached")).toBeTruthy();
   });
 });
