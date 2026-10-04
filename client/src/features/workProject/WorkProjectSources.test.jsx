@@ -333,10 +333,31 @@ describe("the 3D viewer on the Model tab", () => {
   });
 
   it("is mounted when there is a model to draw", () => {
+    // No heading of our own: the viewer is itself a .wk-panel with his .wk-ph
+    // and a discipline switcher, so wrapping it in a second header would give
+    // the column two. The lazy chunk has not resolved in this tick, so what is
+    // on screen is the suspense boundary.
     const { getByText } = render(<WorkProjectModel project={withUrl()} />);
-    expect(getByText("The model")).toBeTruthy();
-    // The lazy chunk has not resolved in this tick, so the boundary is showing.
     expect(getByText(/Loading the model/)).toBeTruthy();
+  });
+
+  it("uses his two-column layout, which was never wired up", () => {
+    // .pj-model (ds-work-proj.css:472) is the grid his design defines for this
+    // tab, and nothing in the client referenced it — so .ds .pj-model .vv never
+    // matched and every model row rendered unstyled. This is the assertion that
+    // keeps the wrapper there.
+    const { container } = render(<WorkProjectModel project={withUrl()} />);
+    const grid = container.querySelector(".pj-model");
+    expect(grid).toBeTruthy();
+    // Two children: the viewport column and the side column. His grid defines
+    // exactly two tracks, so a third child would wrap onto a new row.
+    expect(grid.children.length).toBe(2);
+  });
+
+  it("fills the second column even when there is nothing to draw", () => {
+    const { container, getByText } = render(<WorkProjectModel project={noUrl()} />);
+    expect(container.querySelector(".pj-model").children.length).toBe(2);
+    expect(getByText("Nothing to draw")).toBeTruthy();
   });
 
   it("is NOT mounted when the row has no url to fetch", () => {
