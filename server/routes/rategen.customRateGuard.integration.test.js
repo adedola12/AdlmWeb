@@ -97,13 +97,34 @@ after(async () => {
   if (mongod) await mongod.stop();
 });
 
-async function call(method, path, body, { syncAware = false } = {}) {
-  const headers = { authorization: `Bearer ${token}`, accept: "application/json" };
+async function call(method, path, body, { syncAware = false, headers: extra = {} } = {}) {
+  const headers = { authorization: `Bearer ${token}`, accept: "application/json", ...extra };
   if (body) headers["content-type"] = "application/json";
   if (syncAware) headers["x-adlm-rates-sync"] = "2";
-  const res = await fetch(`${base}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  const json = await res.json().catch(() => ({}));
-  return { status: res.status, json };
+  // node:http, not fetch: Node's fetch adds Sec-Fetch-Mode to every request,
+  // which the rate write guard rightly reads as a browser. Rate Gen desktop's
+  // HttpClient sends no Sec-Fetch-* and no Origin, and neither does this.
+  const payload = body ? JSON.stringify(body) : null;
+  if (payload) headers["content-length"] = Buffer.byteLength(payload);
+  return new Promise((resolve, reject) => {
+    const req = http.request(`${base}${path}`, { method, headers }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (text += c));
+      res.on("end", () => {
+        let json = {};
+        try {
+          json = JSON.parse(text);
+        } catch {
+          json = {};
+        }
+        resolve({ status: res.statusCode, json });
+      });
+    });
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
 }
 
 // The cloud as a QS with two PCs and the website would have it.
@@ -207,4 +228,112 @@ test("the older /rategen/library bulk PUT keeps website rates too, and does not 
   const ids = put.json.customRates.map((r) => r.customRateId);
   assert.ok(ids.includes(WEB));
   assert.ok(ids.includes(DESKTOP_A));
+});
+
+// -- Rates are built in Rate Gen: the website reads, it does not write --------
+// (middleware/rateGenOnlyWrites.js). What a browser on adlmstudio.net sends.
+const BROWSER = { origin: "https://adlmstudio.net", "sec-fetch-site": "same-site" };
+
+test("a browser cannot build, edit or delete a custom rate", async (t) => {
+  if (skip) return t.skip(skip);
+  await seedCloud();
+  const before = await cloudIds();
+
+  const put = await call(
+    "PUT",
+    "/rategen-v2/library/custom-rates/web-built-k9",
+    rate("web-built-k9", "From a browser"),
+    { headers: BROWSER },
+  );
+  assert.equal(put.status, 403);
+  assert.equal(put.json.code, "RATES_BUILT_IN_RATEGEN");
+  assert.match(put.json.error, /Rate Gen/);
+
+  const del = await call("DELETE", `/rategen-v2/library/custom-rates/${DESKTOP_A}`, null, { headers: BROWSER });
+  assert.equal(del.status, 403);
+
+  const bulk = await call("PUT", "/rategen-v2/library/user-rates", { customRates: [] }, { headers: BROWSER });
+  assert.equal(bulk.status, 403);
+  const legacy = await call("PUT", "/rategen/library", { customRates: [] }, { headers: BROWSER });
+  assert.equal(legacy.status, 403);
+
+  assert.deepEqual(await cloudIds(), before, "a refused write must change nothing");
+});
+
+test("a browser cannot edit its copy of a published rate", async (t) => {
+  if (skip) return t.skip(skip);
+  const path = "/rategen-v2/library/user-rates/override/64b000000000000000000001";
+  const put = await call("PUT", path, { overheadPercent: 20 }, { headers: BROWSER });
+  assert.equal(put.status, 403);
+  const del = await call("DELETE", path, null, { headers: BROWSER });
+  assert.equal(del.status, 403);
+});
+
+test("a browser cannot change material or labour prices; it can still read them", async (t) => {
+  if (skip) return t.skip(skip);
+  await RateGenLibrary.deleteMany({ userId });
+  const cement = { kind: "material", name: "Cement", unit: "bag", price: 9000 };
+  const one = await call("PUT", "/rategen/price-overrides", cement, { headers: BROWSER });
+  assert.equal(one.status, 403);
+  const bulk = await call("PUT", "/rategen/price-overrides/bulk", { kind: "material", percent: 5 }, { headers: BROWSER });
+  assert.equal(bulk.status, 403);
+  const restore = await call("PUT", "/rategen/price-overrides/restore", { items: [] }, { headers: BROWSER });
+  assert.equal(restore.status, 403);
+
+  const read = await call("GET", "/rategen/price-overrides", null, { headers: BROWSER });
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.json.items, []);
+});
+
+test("Rate Gen desktop (no Origin) still writes prices and rates", async (t) => {
+  if (skip) return t.skip(skip);
+  await RateGenLibrary.deleteMany({ userId });
+  const cement = { kind: "material", name: "Cement", unit: "bag", price: 9000 };
+  const price = await call("PUT", "/rategen/price-overrides", cement);
+  assert.equal(price.status, 200, JSON.stringify(price.json));
+  const put = await call("PUT", `/rategen-v2/library/custom-rates/${DESKTOP_A}`, rate(DESKTOP_A, "Desktop A rate"));
+  assert.equal(put.status, 200, JSON.stringify(put.json));
+  const named = await call(
+    "PUT",
+    `/rategen-v2/library/custom-rates/${DESKTOP_B}`,
+    rate(DESKTOP_B, "Desktop B rate"),
+    { headers: { "x-adlm-client": "rategen" } },
+  );
+  assert.equal(named.status, 200, JSON.stringify(named.json));
+});
+
+test("a browser that sets X-ADLM-Client itself is still refused", async (t) => {
+  if (skip) return t.skip(skip);
+  await RateGenLibrary.deleteMany({ userId });
+  const put = await call(
+    "PUT",
+    `/rategen-v2/library/custom-rates/${DESKTOP_A}`,
+    rate(DESKTOP_A, "Spoofed"),
+    { headers: { origin: "https://adlmstudio.net", "x-adlm-client": "rategen" } },
+  );
+  assert.equal(put.status, 403);
+  assert.equal(put.json.code, "RATES_BUILT_IN_RATEGEN");
+  assert.deepEqual(await cloudIds(), []);
+});
+
+test("a browser can still read the library and restore an archived rate (#116)", async (t) => {
+  if (skip) return t.skip(skip);
+  await seedCloud();
+  const del = await call("DELETE", `/rategen-v2/library/custom-rates/${DESKTOP_B}`);
+  assert.equal(del.status, 200);
+
+  const list = await call("GET", "/rategen-v2/library/user-rates", null, { headers: BROWSER });
+  assert.equal(list.status, 200);
+  const archived = await call("GET", "/rategen-v2/library/custom-rates/deleted", null, { headers: BROWSER });
+  assert.equal(archived.status, 200);
+  assert.equal(archived.json.items[0].customRateId, DESKTOP_B);
+
+  const restore = await call(
+    "POST",
+    `/rategen-v2/library/custom-rates/${DESKTOP_B}/restore`,
+    null,
+    { headers: BROWSER },
+  );
+  assert.equal(restore.status, 200);
+  assert.ok((await cloudIds()).includes(DESKTOP_B));
 });
