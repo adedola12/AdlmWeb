@@ -86,13 +86,83 @@ export const GUIDES = [
   },
   {
     id: "cloud",
-    title: "ADLM Cloud workspace",
+    title: "ADLM Cloud: overview",
     blurb:
-      "Your projects on the website: the bill, budget, valuations, the PM dashboard, sharing, collaborators and sample projects.",
+      "Where everything is on the ADLM Cloud, what is new, and which of the five Cloud guides to read.",
     file: "/docs/ADLM-Cloud-User-Guide.pdf",
-    pages: 24,
+    pages: 5,
     productKeys: [],
     changelogSlugs: ["cloud"],
+  },
+  {
+    id: "cloud-projects",
+    title: "ADLM Cloud: projects and your workspace",
+    blurb:
+      "Finding your way around, your project list, the project dashboard, the 3D model and the work area.",
+    file: "/docs/ADLM-Cloud-Projects-Guide.pdf",
+    pages: 11,
+    productKeys: [],
+    changelogSlugs: [],
+  },
+  {
+    id: "cloud-bill-budget",
+    title: "ADLM Cloud: the bill and the budget",
+    blurb:
+      "Pricing the Bill of Quantity, picking Rate Gen rates, the materials and labour budget, constants and exports.",
+    file: "/docs/ADLM-Cloud-Bill-and-Budget-Guide.pdf",
+    pages: 8,
+    productKeys: [],
+    changelogSlugs: [],
+  },
+  {
+    id: "cloud-valuation",
+    title: "ADLM Cloud: valuations and the contract",
+    blurb:
+      "Interim valuations, payment certificates, variations, the final account and the contract lock.",
+    file: "/docs/ADLM-Cloud-Valuation-Guide.pdf",
+    pages: 6,
+    productKeys: [],
+    changelogSlugs: [],
+  },
+  {
+    id: "cloud-pm",
+    title: "ADLM Cloud: programme and project management",
+    blurb:
+      "The PM Dashboard, the PM Tracker and the Portfolio dashboard.",
+    file: "/docs/ADLM-Cloud-PM-Guide.pdf",
+    pages: 6,
+    productKeys: [],
+    changelogSlugs: [],
+  },
+  {
+    id: "cloud-sharing",
+    title: "ADLM Cloud: sharing, team and Ada",
+    blurb:
+      "Sharing a dashboard with your client, collaborators and what they can see, your team, and Ada.",
+    file: "/docs/ADLM-Cloud-Sharing-Guide.pdf",
+    pages: 7,
+    productKeys: [],
+    changelogSlugs: [],
+  },
+  {
+    id: "samples",
+    title: "Sample projects",
+    blurb:
+      "All 20 read-only learning samples: what each one is, what it teaches, and five exercises to work through.",
+    file: "/docs/ADLM-Sample-Projects-Guide.pdf",
+    pages: 16,
+    productKeys: [],
+    changelogSlugs: [],
+  },
+  {
+    id: "qs-handbook",
+    title: "The ADLM QS handbook",
+    blurb:
+      "Key QS formulas with worked examples, a formula library, constants, grade and unit conversion, and use cases for every ADLM product.",
+    file: "/docs/ADLM-QS-Handbook.pdf",
+    pages: 47,
+    productKeys: [],
+    changelogSlugs: [],
   },
   // Every guide above in one book. productKeys is empty and alwaysShow is off
   // ON PURPOSE: either would put it into ownedGuidesFor, which feeds the
@@ -101,9 +171,9 @@ export const GUIDES = [
     id: "suite",
     title: "ADLM Complete User Guide",
     blurb:
-      "Every guide above in one book: getting started, the Hub, QUIV, HERON, Rate Gen, SERVIQ, Time Pro and the ADLM Cloud.",
+      "Every guide above in one book: getting started, the Hub, QUIV, HERON, Rate Gen, SERVIQ, Time Pro, the ADLM Cloud, the sample projects and the QS handbook.",
     file: "/docs/ADLM-Software-Complete-Guide.pdf",
-    pages: 141,
+    pages: 186,
     productKeys: [],
     changelogSlugs: [],
   },

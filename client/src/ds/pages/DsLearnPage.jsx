@@ -1658,7 +1658,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  141 pages · PDF
+                  186 pages · PDF
                 </span>
                 {" "}
                 <h4>
@@ -1666,7 +1666,7 @@ export default function DsLearnPage({ d }) {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "46ch" }}>
-                  Every product in one book: getting started, the Hub, QUIV, HERON, Rate Gen, SERVIQ, Time Pro and the ADLM Cloud.
+                  Every product in one book, plus the sample projects and the QS handbook of formulas, constants and conversions.
                 </p>
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>

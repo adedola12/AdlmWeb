@@ -15,7 +15,10 @@ import { useFeedback } from "./feedback/feedbackContext.js";
 
 // His order: the whole suite first, then getting started and the Hub, then
 // each product.
-const ORDER = ["suite", "getting-started", "installer-hub", "quiv", "heron", "rategen", "mep", "timepro", "cloud"];
+const ORDER = [
+  "suite", "qs-handbook", "getting-started", "installer-hub", "quiv", "heron", "rategen", "mep", "timepro",
+  "cloud", "cloud-projects", "cloud-bill-budget", "cloud-valuation", "cloud-pm", "cloud-sharing", "samples",
+];
 const LIST = ORDER.map((id) => GUIDES.find((g) => g.id === id)).filter(Boolean);
 
 const icon = (name) => (

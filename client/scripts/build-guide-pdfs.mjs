@@ -306,7 +306,7 @@ async function main() {
       html: bookHtml({
         title: "The complete ADLM user guide",
         kicker: "ADLM Studio · Every product",
-        tagline: "Every ADLM product in one book: getting started, the Installer Hub, QUIV, HERON, Rate Gen, SERVIQ for Revit MEP, Time Pro and the ADLM Cloud.",
+        tagline: "Every ADLM product in one book: getting started, the Installer Hub, QUIV, HERON, Rate Gen, SERVIQ for Revit MEP, Time Pro, the ADLM Cloud, the sample projects and the QS handbook.",
         updated: all.map((g) => g.updated).filter(Boolean).sort().pop(),
         chapters: all.map((g) => ({ guide: g, ...chapterHtml(g, ids) })),
         multi: true,
