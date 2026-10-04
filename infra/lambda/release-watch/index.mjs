@@ -129,7 +129,11 @@ async function mail(to, subject, lines) {
   }
 }
 
-async function approvedByApprover(repo, branch, sha, approverLogin) {
+// gate.mjs's approvedByApprover assumes the base branch is main. Two of the
+// watched repos ship from another branch, so this asks the same question
+// with the branch that repo actually releases from.
+async function approvedOnBranch(repo, branch, sha, approverLogin) {
+  if (branch === "main") return approvedByApprover(repo, sha, approverLogin, gh);
   const pulls = (await gh(`repos/${repo}/commits/${sha}/pulls`)) || [];
   const merged = pulls.filter((p) => p.merged_at && p.base?.ref === branch);
   for (const pr of merged) {
@@ -145,13 +149,6 @@ async function approvedByApprover(repo, branch, sha, approverLogin) {
 async function watchRepo({ repo, branch }, approverLogin) {
   const stateKey = stateName(repo);
   const last = await param(stateKey);
-export async function handler() {
-  token = await param("github-token", true);
-  const approverEmail = await param("approver-email");
-  const approverLogin = await param("approver-github");
-  const last = await param("last-main-sha");
-  const to = [approverEmail, OWNER_EMAIL];
-
   let info;
   try {
     info = await gh(`repos/${repo}/branches/${encodeURIComponent(branch)}`);
@@ -176,8 +173,7 @@ export async function handler() {
   } else if (head && head !== last && approverLogin) {
     let cmp;
     try {
-      cmp = await gh(`repos/${repo}/compare/${last}...${head}`);
-      cmp = await newCommits(REPO, last, head, gh);
+      cmp = await newCommits(repo, last, head, gh);
     } catch (err) {
       console.warn(`[release-watch] ${repo}: compare failed, will retry:`, err.message);
       cmp = undefined;
@@ -188,13 +184,10 @@ export async function handler() {
       );
       vetted = head;
     } else if (cmp) {
-      try {
-        for (const c of (cmp.commits || []).slice(0, MAX_COMMITS_PER_REPO)) {
-          const verdict = await approvedByApprover(repo, branch, c.sha, approverLogin);
       const commits = landedOnMain(head, cmp.commits || []).slice(0, MAX_COMMITS);
       try {
         for (const c of commits) {
-          const verdict = await approvedByApprover(REPO, c.sha, approverLogin, gh);
+          const verdict = await approvedOnBranch(repo, branch, c.sha, approverLogin);
           if (!verdict.ok) {
             const title = String(c.commit?.message || "").split("\n")[0];
             const who = c.author?.login || c.commit?.author?.email || "unknown";
