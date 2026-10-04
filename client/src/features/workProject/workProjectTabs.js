@@ -81,3 +81,28 @@ export function tabNeedsAttention(tabKey, project) {
   if (tabKey === "pm") return Number(project.overdueTasks) > 0;
   return false;
 }
+
+/**
+ * What each tab is waiting for, in words, for the loading state.
+ *
+ * Here rather than passed in per tab so that a tab added to tabsFor() above has
+ * exactly one place to name itself — and the test beside this file fails if it
+ * does not, which is the only reason this cannot silently rot.
+ */
+const LOADING_NOUN = Object.freeze({
+  overview: "figures",
+  bill: "bill",
+  rates: "rates and budget",
+  pm: "programme",
+  activity: "labour schedule",
+  valuations: "valuations",
+  model: "model",
+  drawings: "drawings",
+  services: "services",
+});
+
+/** The noun for a tab, falling back to something true rather than blank. */
+export const loadingNoun = (tabKey) => LOADING_NOUN[String(tabKey || "")] || "details";
+
+/** Exported for the test that pins every tab to a noun. */
+export { LOADING_NOUN };

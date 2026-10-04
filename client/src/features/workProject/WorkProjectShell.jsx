@@ -19,7 +19,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useProjects } from "../../ds/useProjects.js";
 import { apiAuthed } from "../../api.js";
 import { useAuth } from "../../store.jsx";
-import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectTabs.js";
+import { tabsFor, resolveTab, tabCount, tabNeedsAttention, loadingNoun } from "./workProjectTabs.js";
+import { StillLoading } from "./workProjectBits.jsx";
 import { STAGES, stageIndex } from "./overviewModel.js";
 import { attachedModels } from "./sourcesModel.js";
 import { linePanelTitle } from "./billModel.js";
@@ -107,20 +108,37 @@ export default function WorkProjectShell({ productKey, id }) {
   // address the classic workspace loads a project from
   // (ProjectsGeneric.jsx:278), so there is one way in, not two.
   const [full, setFull] = React.useState(null);
-  const [fullFailed, setFullFailed] = React.useState(false);
+  // A TRI-STATE, not two booleans.
+  //
+  // "idle" and "loading" are different facts and the difference is load-bearing:
+  // the effect below BAILS when there is no token or no id yet, so a flag
+  // derived as `!full && !fullFailed` would read as loading before the effect
+  // has run, and would stay that way for good in the bail case — pinning a
+  // "Loading…" on a screen that is not loading anything. That is the same
+  // complaint as the one this whole change set is fixing, arrived at from the
+  // other direction.
+  const [fullState, setFullState] = React.useState("idle"); // idle|loading|ready|failed
   React.useEffect(() => {
     if (!accessToken || !id || !productKey) return undefined;
     let alive = true;
-    setFullFailed(false);
+    setFullState("loading");
     apiAuthed(`/projects/${encodeURIComponent(productKey)}/by-slug/${encodeURIComponent(id)}`, {
       token: accessToken,
     })
-      .then((d) => alive && setFull(d?.project || d || null))
-      .catch(() => alive && setFullFailed(true));
+      .then((d) => {
+        if (!alive) return;
+        setFull(d?.project || d || null);
+        setFullState("ready");
+      })
+      .catch(() => alive && setFullState("failed"));
     return () => {
       alive = false;
     };
   }, [accessToken, productKey, id]);
+
+  // Derived so every existing use below keeps reading the same way.
+  const fullFailed = fullState === "failed";
+  const loadingFull = fullState === "loading";
 
   // Ada's pricing card writes to this project from the chat panel. When it
   // does, re-read the bill rather than go on showing the lines as unpriced.
@@ -147,14 +165,13 @@ export default function WorkProjectShell({ productKey, id }) {
     [full, summary],
   );
 
-  // Letting the head fill in early is right; letting the TABS read the rollup
-  // as though it were the whole project is not. The rollup has no models, no
-  // linked services and no bill lines, so the Model, Services and Drawings tabs
-  // each announce that a project has none of a thing it does have, and then
-  // change their minds when the fetch lands. Those three take this and say they
-  // are still reading instead. Deliberately not `!full` alone: once the read has
-  // failed, fullFailed owns the screen and nothing below is rendered at all.
-  const loadingFull = !full && !fullFailed;
+  // Letting the HEAD fill in early from the rollup is right and stays — the
+  // name, client and tool are in it and are true. Letting the TABS read the
+  // rollup as though it were the whole project is not: see StillLoading in
+  // workProjectBits.jsx for what each of them says while it waits. The gate is
+  // in front of the tab switch, once, rather than a flag threaded through nine
+  // components, because a tab added later cannot forget a gate it never had to
+  // remember.
 
   const tabs = tabsFor(productKey);
   const tab = resolveTab(params.get("tab"), productKey);
@@ -750,7 +767,15 @@ export default function WorkProjectShell({ productKey, id }) {
         ) : null}
 
         <div className="pj-body">
-          {tab === "overview" && !fullFailed ? (
+          {/* ONE gate for every tab.
+              Loading first, so no tab answers from the rollup and announces
+              that a project has none of something it has. The `&& !fullFailed`
+              that used to sit on each branch is gone: it is this condition, and
+              having it nine times meant a failed read rendered an entirely
+              blank body under the note above. */}
+          {loadingFull ? (
+            <StillLoading what={loadingNoun(tab)} />
+          ) : tab === "overview" && !fullFailed ? (
             <WorkProjectOverview
               project={project}
               toolName={toolName(productKey)}

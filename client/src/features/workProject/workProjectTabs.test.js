@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectTabs.js";
+import {
+  tabsFor,
+  resolveTab,
+  tabCount,
+  tabNeedsAttention,
+  loadingNoun,
+  LOADING_NOUN,
+} from "./workProjectTabs.js";
 
 const keys = (k) => tabsFor(k).map((t) => t.key);
 
@@ -110,5 +117,38 @@ describe("the bill count against a real project", () => {
 
   it("still uses itemCount when the bill itself has not been loaded", () => {
     expect(tabCount("bill", { itemCount: 65 })).toBe(65);
+  });
+});
+
+/* ───────────────── Loading nouns ───────────────── */
+
+// Every tab has to be able to say what it is waiting for. This is the only
+// thing that stops the loading state rotting: add a tab to tabsFor() and forget
+// its noun, and this fails rather than shipping a screen that says it is
+// "Reading this project's details" where it could have said "bill".
+describe("what each tab says it is loading", () => {
+  const ALL_PRODUCTS = ["revit", "planswift", "mep", "civil3d", "qs-takeoff"];
+
+  it("names every tab any product can show", () => {
+    const seen = new Set();
+    for (const p of ALL_PRODUCTS) for (const t of tabsFor(p)) seen.add(t.key);
+    const missing = [...seen].filter((k) => !LOADING_NOUN[k]);
+    expect(missing).toEqual([]);
+    // And it is a real sentence fragment, not the key echoed back.
+    for (const k of seen) expect(LOADING_NOUN[k].length).toBeGreaterThan(2);
+  });
+
+  it("falls back to something true rather than a blank", () => {
+    // A tab that somehow is not in the map must still read as English.
+    expect(loadingNoun("nonesuch")).toBe("details");
+    expect(loadingNoun("")).toBe("details");
+    expect(loadingNoun(undefined)).toBe("details");
+  });
+
+  it("gives the tabs their own words, not one generic one", () => {
+    expect(loadingNoun("bill")).toBe("bill");
+    expect(loadingNoun("model")).toBe("model");
+    expect(loadingNoun("services")).toBe("services");
+    expect(loadingNoun("overview")).not.toBe(loadingNoun("bill"));
   });
 });

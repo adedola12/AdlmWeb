@@ -19,7 +19,10 @@ import {
   unplacedCount,
 } from "./sourcesModel.js";
 import { EN_DASH, compact, money } from "./workProjectFormat.js";
-import { Bar } from "./workProjectBits.jsx";
+// The shell gates every tab on this now, but the three source tabs keep their
+// own guard as well: it is what makes each correct on its own, and it is what
+// the unit tests beside this file drive directly.
+import { Bar, StillLoading } from "./workProjectBits.jsx";
 
 const short = (d) => {
   const t = new Date(d);
@@ -30,36 +33,6 @@ const short = (d) => {
 
 /* ───────────────────────────── Model ───────────────────────────── */
 
-/**
- * "Still reading this" — NOT "there is nothing here".
- *
- * WHY THIS COMPONENT EXISTS
- *
- * The shell holds two documents: a rollup that arrives with the projects list,
- * and the full project fetched per id (WorkProjectShell.jsx:111). Until the
- * second lands it renders `project` as the rollup, and the rollup carries the
- * head — name, client, tool — but no models and no linked services.
- *
- * So for the whole of that fetch these tabs read an empty array off a project
- * that is not empty, and announce "No model attached" / "No services linked"
- * about a job that has both. Then the fetch lands and the screen changes its
- * mind. That is what "it feels stuck" is: not slowness, but the screen stating
- * the wrong thing confidently while it waits.
- *
- * Reuses his .pj-empty rather than introducing a skeleton, because the box is
- * already the right shape and the only thing that was wrong was the words.
- */
-function StillLoading({ what }) {
-  return (
-    <div className="pj-empty">
-      {/* An ellipsis, not the en dash. EN_DASH is the house placeholder for a
-          value that is absent; this is a value that is on its way, and the two
-          must not look the same. */}
-      <b>Loading{"…"}</b>
-      <p>Reading this project{"’"}s {what}.</p>
-    </div>
-  );
-}
 
 export function WorkProjectModel({ project, canEdit = false, onGo, loading = false, classicHref = "" }) {
   const models = React.useMemo(() => attachedModels(project), [project]);
