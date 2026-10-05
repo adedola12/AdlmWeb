@@ -228,3 +228,49 @@ describe("a project that has not loaded", () => {
     expect(container.querySelector(".pj-lock")).toBeTruthy();
   });
 });
+
+/* ───────── a button that names a place must go there ───────── */
+
+// It read "Lock the contract on the classic workspace" and called
+// onGo("overview") — the Overview tab of THIS workspace, which cannot lock
+// anything. Somebody who had worked through the checklist pressed it, landed on
+// a summary of their own project, and had no way to find the lock.
+//
+// Worse than a missing control, because it looks like the product did the thing
+// and went somewhere odd, rather than like the thing is elsewhere.
+describe("the lock control goes where it says", () => {
+  it("links to the classic workspace, not to another tab here", () => {
+    const atTender = unlockedProject({ stage: "tendered" });
+    const href = "/projects/revit?project=abc&classic=1";
+    const onGo = vi.fn();
+    const c = render(
+      <WorkProjectValuations project={atTender} canEdit classicHref={href} onGo={onGo} />,
+    ).container;
+
+    const link = within(c).getByText(/Lock the contract/);
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe(href);
+    // And it does not quietly move the reader somewhere else as well.
+    expect(onGo).not.toHaveBeenCalled();
+  });
+
+  it("says the same thing when there is no address to send them to", () => {
+    // The wording must not depend on whether we happen to have a URL — the
+    // reader needs telling either way.
+    const atTender = unlockedProject({ stage: "tendered" });
+    const c = render(<WorkProjectValuations project={atTender} canEdit />).container;
+    expect(within(c).getByText(/Lock the contract on the classic workspace/)).toBeTruthy();
+  });
+
+  it("never renders a lock control that does nothing when pressed", () => {
+    // The shape of the original bug: a <button> whose only job was to navigate
+    // somewhere that cannot lock. Any button here must carry a handler.
+    const atTender = unlockedProject({ stage: "tendered" });
+    const c = render(<WorkProjectValuations project={atTender} canEdit />).container;
+    for (const b of c.querySelectorAll("button")) {
+      if (/Lock the contract/.test(b.textContent || "")) {
+        throw new Error("the lock is a button again; it must be a link to where locking happens");
+      }
+    }
+  });
+});

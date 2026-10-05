@@ -30,6 +30,21 @@ export default function WorkProjectOverview({ project, toolName, canEdit = false
   const p = project || {};
   const si = stageIndex(p);
   const next = nextStage(p);
+  // What actually moves this project on, and the tab where it is done.
+  //
+  // Keyed on the stage the project is AT, not the one it is going to. Only the
+  // steps with a real destination in this build are listed: "Mark as tendered"
+  // is deliberately absent because the new build has nowhere to do it, and
+  // offering it here would put back the dead button this replaced. A stage with
+  // no entry simply shows no link, which is honest — the strip still says where
+  // the project has got to.
+  const NEXT_STEP = {
+    takeoff: { label: "Price the bill", tab: "rates" },
+    tendered: { label: "Lock the contract", tab: "valuations" },
+    locked: { label: "Issue a valuation", tab: "valuations" },
+    valuing: { label: "Agree the final account", tab: "valuations" },
+  };
+  const nextStep = NEXT_STEP[STAGES[si]?.id];
   const split = pricedSplit(p.items);
   const t = totalsFor(p);
   const sections = valueBySection(p.items);
@@ -46,9 +61,21 @@ export default function WorkProjectOverview({ project, toolName, canEdit = false
             <span>{s.name}</span>
           </div>
         ))}
-        {next && canEdit ? (
-          <button type="button" className="ds-btn btn-o ds-btn-sm">
-            Move to {next.name}
+        {/* THERE IS NO "MOVE TO NEXT STAGE", AND THERE SHOULD NOT BE.
+            This was a button reading "Move to <stage>" with no onClick at all —
+            it did nothing when pressed, which is worse than not being there,
+            because somebody clicks it and concludes the product is broken
+            rather than that the action is elsewhere.
+            It could not have been wired either: nothing in the codebase writes
+            project.stage. No server route accepts it and no client sets it,
+            because, as valuationsModel.js puts it, the stage is a label and the
+            lock is the fact. A project reaches "Contract locked" by the
+            contract being locked, not by somebody announcing it.
+            So the dead button is replaced by the thing that actually moves it
+            on, pointing at the tab where that is done. */}
+        {next && canEdit && nextStep ? (
+          <button type="button" className="pj-lnk" onClick={() => onGo?.(nextStep.tab)}>
+            {nextStep.label} {EN_DASH} reaches {next.name}
           </button>
         ) : null}
       </section>

@@ -39,19 +39,18 @@ export default function WorkProjectValuations({
   view = "certs",
   onView,
   onGo,
-  drift = null,
-}) {
+  drift = null, classicHref = "" }) {
   const locked = contractIsLocked(project);
 
   if (!locked) {
-    return <LockedOut project={project} canEdit={canEdit} drift={drift} onGo={onGo} />;
+    return <LockedOut project={project} canEdit={canEdit} drift={drift} onGo={onGo} classicHref={classicHref} />;
   }
 
   return <Unlocked project={project} canEdit={canEdit} view={view} onView={onView} />;
 }
 
 /** His .pj-lock — the gate, and the checklist that explains it. */
-function LockedOut({ project, canEdit, drift, onGo }) {
+function LockedOut({ project, canEdit, drift, onGo, classicHref = "" }) {
   const checks = lockChecklist(project, { drift });
   const ready = readyToLock(project);
 
@@ -80,14 +79,34 @@ function LockedOut({ project, canEdit, drift, onGo }) {
           </li>
         ))}
       </ul>
+      {/* THE BUTTON USED TO NAME ONE PLACE AND GO TO ANOTHER.
+          It read "Lock the contract on the classic workspace" and called
+          onGo("overview") — the Overview tab of THIS workspace, which cannot
+          lock anything. Somebody who had worked through the checklist pressed
+          it, arrived at a summary of their own project, and had no idea where
+          the lock actually was.
+          Locking needs a step-up re-authentication and exists only on the
+          classic workspace today, so the honest fix is to go there. When the
+          lock is built here, this becomes the control rather than a link, and
+          the checklist above it is already the right gate for it. */}
       {canEdit ? (
-        <button
-          type="button"
-          className={ready ? "ds-btn btn-p ds-btn-sm" : "ds-btn btn-o ds-btn-sm"}
-          onClick={() => onGo?.("overview")}
-        >
-          {ready ? "Lock the contract on the classic workspace" : "See the project stages"}
-        </button>
+        ready ? (
+          classicHref ? (
+            <a className="ds-btn btn-p ds-btn-sm" href={classicHref}>
+              Lock the contract on the classic workspace
+            </a>
+          ) : (
+            // Same sentence, not a link. Without an href there is nowhere to
+            // send anybody, and a dead button is what this change exists to
+            // remove — but the reader still needs to be told the same thing, so
+            // the wording does not change with whether we happen to have a URL.
+            <p className="ds-sub">Lock the contract on the classic workspace.</p>
+          )
+        ) : (
+          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => onGo?.("overview")}>
+            See the project stages
+          </button>
+        )
       ) : null}
     </div>
   );

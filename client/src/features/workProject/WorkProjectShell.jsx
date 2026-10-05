@@ -852,6 +852,9 @@ export default function WorkProjectShell({ productKey, id }) {
               view={rateView}
               onView={setRateView}
               onGo={go}
+              // The lock lives on the classic workspace and needs a step-up,
+              // so the button that says so now actually goes there.
+              classicHref={classicWorkspaceHref}
             />
           ) : tab === "model" && !fullFailed ? (
             <WorkProjectModel
