@@ -119,10 +119,28 @@ describe("the route a staff member actually lands on", () => {
     expect(screen.getByText("new project page")).toBeTruthy();
   });
 
-  it("leaves a customer on the classic workspace", () => {
+  it("sends a CUSTOMER to the new project page too, not only staff", () => {
+    // Changed on 5 Oct 2026 (owner). This read canViewPreview(user), so the new
+    // project page was staff-only and every paying customer opening a project
+    // landed on the classic workspace — the largest remaining route into the
+    // old build, and not one a sweep of links would ever have found.
+    //
+    // This is the assertion that would fail if the gate were quietly put back,
+    // which is the way a change like this gets reverted: somebody restores a
+    // role check while fixing something nearby.
     auth.user = { email: "customer@example.com", role: "user" };
     auth.accessToken = "t";
     at("/projects/planswift?project=ysa");
+    expect(screen.getByText("new project page")).toBeTruthy();
+  });
+
+  it("still lets anyone ask for the classic workspace on purpose", () => {
+    // The escape hatch matters more now, not less: until the new workspace can
+    // upload an IFC, lock a contract and take an actual rate, ?classic=1 is the
+    // only route a customer has to any of them.
+    auth.user = { email: "customer@example.com", role: "user" };
+    auth.accessToken = "t";
+    at("/projects/planswift?project=ysa&classic=1");
     expect(screen.getByText("classic workspace")).toBeTruthy();
   });
 
