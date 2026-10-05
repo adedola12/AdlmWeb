@@ -1658,7 +1658,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  264 pages · PDF
+                  280 pages · PDF
                 </span>
                 {" "}
                 <h4>

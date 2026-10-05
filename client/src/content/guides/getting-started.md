@@ -3,18 +3,19 @@ id: getting-started
 title: Getting started with ADLM Studio
 tagline: Create your account, buy a licence, install your software and find your way around your account, billing, seats and support.
 version: "October 2026"
-updated: 2026-10-04
+updated: 2026-10-05
 platform: Web, any browser
 productKeys: []
 pdf: ADLM-Getting-Started-Guide.pdf
 order: 0
 ---
 
-This guide is for everyone who uses ADLM Studio software, whether you have just heard of us or you are renewing for the third year. It walks you through creating your account, paying for a product, installing it, and looking after your licence, devices, invoices and support requests on adlmstudio.net. It describes the website as it is on 4 October 2026, after the new design went live on 1 October. At the end there is a table of every ADLM product with a link to its own guide.
+This guide is for everyone who uses ADLM Studio software, whether you have just heard of us or you are renewing for the third year. It walks you through creating your account, paying for a product, installing it, and looking after your licence, devices, invoices and support requests on adlmstudio.net. It describes the website as it is on 5 October 2026, after the new design went live on 1 October. At the end there is a table of every ADLM product with a link to its own guide.
 
 ## What's new in October 2026
 
 - **A new website design.** The public pages, sign-in and sign-up have a new look. Once you sign in you land on your **Overview** (`/manage`), with one menu down the left side of every signed-in page. The old `/dashboard` address opens the Overview too.
+- **Every menu item opens its own page.** Since 4 October, **Products & seats**, **Team**, **Billing & invoices**, **Downloads**, **Support**, **Guides & docs** and **Account settings** each open their own page under `/manage`. Before that, some of them opened older pages such as your Profile.
 - **Sign in and sign up in one place.** **Sign in** and **Sign up** sit at the top right of every public page, with **Continue with Google**, **Continue with Microsoft** or **Continue with Autodesk** under each form.
 - **Software comes from the Installer Hub only.** The only file you download from the website is the ADLM Installer Hub. The Hub installs every product your licence covers.
 - **WhatsApp verification.** Confirm your WhatsApp number with a six-digit code sent on WhatsApp, from **Account settings**.
@@ -119,14 +120,29 @@ On your **Profile**, under **Security & Admin**, tick **Require an email code fo
 Every signed-in page has a menu down the left side. On a phone, open it with the menu button at the top left.
 
 - **Ask Ada** (**Your library, answered**) at the top opens Ada.
-- **Work**: **Overview**, **My tools** (QUIV, HERON, RateGen, Constants, SERVIQ, CIVIQ) and **Projects**. These are your project workspaces, covered in the [ADLM Cloud guide](/guides/cloud). A tool you have no licence for is marked **Add**.
+- **Work**: **Overview**, **My tools** (QUIV, HERON, RateGen, Constants, SERVIQ, CIVIQ) and **Projects**. These are your project workspaces, covered in the [ADLM Cloud guide](/guides/cloud). A tool you have no licence for is greyed and marked **Add**; clicking it opens that product's page.
 - **Learn**: **My learning**, **Assignments**, **Certificates**, **Lessons & events** and **Guides & docs**.
 - **Manage** (marked **Installer Hub**): **Overview**, **Products & seats**, **Team**, **Billing & invoices**, **Downloads** and **Support**.
 - **Account settings** and **Sign out** at the bottom.
 
 The bar at the top has a search box that jumps to a page by its name, and a bell for reminders.
 
-> **Note:** A few menu items still open the older page that does the same job. **Billing & invoices** and **Account settings** open your **Profile**, **Support** opens **Request technical help**, **Guides & docs** opens **What's New**, and **Products & seats**, **Team** and **Downloads** open your **Overview**. To reach those three pages, use the links on the Overview described below, or type their address.
+Under the top bar, the pages of the group you are in also show as tabs, so you can move between them without opening the menu.
+
+| Menu item | Opens | Address |
+|---|---|---|
+| **Manage** > **Overview** | Your account **Overview** | `/manage` |
+| **Products & seats** | **Products** | `/manage/products` |
+| **Team** | **Team & seats** | `/manage/team` |
+| **Billing & invoices** | **Billing & invoices** | `/manage/billing` |
+| **Downloads** | **Downloads** | `/manage/downloads` |
+| **Support** | **Support** | `/manage/support` |
+| **Guides & docs** | **Guides & docs** | `/manage/guides` |
+| **Account settings** | **Account settings** | `/manage/settings` |
+
+### The account menu
+
+Click your name at the top right to open the account menu. It shows your name and email, then **Dashboard** (your **Overview**), **Account settings**, **Billing & invoices** and **Sign out**.
 
 ### Overview
 
@@ -142,33 +158,35 @@ Your **Overview** (`/manage`) is where you land after signing in. It greets you 
 
 ### Products and seats
 
-The **Products** page (`/manage/products`) lists every ADLM product, split into **Covered by the account** and **Available to add**. Open it with **All products** on your Overview.
+The **Products** page (`/manage/products`) lists every ADLM product. Click **Products & seats** in the menu, or **All products** on your Overview. Filter it with **All products**, **Covered by the account** or **Available to add**.
 
-![The Products page: what your account covers and what you can add.](shot:dash-products.png)
-
-- For products you own: click **Download** to go to **Downloads**, or **Seats** to see who holds them on the **Team** page.
+- For products you own: click **Download** to go to **Downloads**, or **Seats** to see who holds them on the **Team** page. If a seat is free, the button reads **Assign the spare seat**.
 - For products you do not own: click **What it does** to read about it, **Add to subscription** to buy it, or **Join the waitlist** for one not yet on sale.
 - **See pricing** opens the price list. **Talk to us about seats** opens a support ticket.
 
 ### Team
 
-**Team** (`/manage/team`, titled **Team & seats**) shows your seats and the machines they are on. See [Licences, seats and devices](#licences-seats-and-devices).
+Click **Team** in the menu to open **Team & seats** (`/manage/team`). It shows your seats and the machines they are on, with **Free the seat** beside each machine and **Buy more seats** at the top. See [Licences, seats and devices](#licences-seats-and-devices).
 
 ### Downloads
 
-**Downloads** (`/manage/downloads`) has the **ADLM Installer Hub** with **Download the Installer Hub**, **Your products**, **Not in the subscription**, **User guides** and **Before you install**, short answers to the most common installation problems. Open it from **Download** on the Products page.
+Click **Downloads** in the menu (`/manage/downloads`). It has the **ADLM Installer Hub** with **Download the Installer Hub**, **Your products**, **Not in the subscription**, **User guides** and **Before you install**, short answers to the most common installation problems.
+
+![The Downloads page with the Installer Hub and the installers for your products.](shot:dash-downloads.png)
 
 The Installer Hub is the only software you download from the website. It signs in with your account and installs only what your licences cover.
 
 ### Billing and invoices
 
-Your orders, invoices, receipts and saved card are on your **Profile** (`/profile`), which is where **Billing & invoices** in the menu takes you. See [Invoices and receipts](#invoices-and-receipts) and [Saved card and auto-renewal](#saved-card-and-auto-renewal).
+Click **Billing & invoices** in the menu, or in the account menu, to open the **Billing & invoices** page (`/manage/billing`). The button in a renewal email opens it too.
 
-There is also a **Billing & invoices** page at `/manage/billing`, which the button in a renewal email opens. **Next charge** shows what your next renewal comes to; change the seats with the minus and plus buttons and click **Buy the change** to go to checkout. **Switch to yearly** appears when yearly would cost less. **Invoices** lists every invoice with **PDF** and **Receipt** links, **Billing details** has **Edit details**, and **Talk to us first** opens a ticket if you are thinking of cancelling. A licence runs to the end of the period you paid for, and your rate library and projects stay in your account either way.
+**Next charge** shows what your next renewal comes to; change the seats with the minus and plus buttons and click **Buy the change** to go to checkout. **Switch to yearly** appears when yearly would cost less. **Invoices** lists every invoice with **PDF** and **Receipt** links, **Billing details** has **Edit details**, and **Talk to us first** opens a ticket if you are thinking of cancelling. **Payment method** shows your saved card, if any. A licence runs to the end of the period you paid for, and your rate library and projects stay in your account either way.
+
+Your orders, the full invoice history and auto-renewal for each product are also on your **Profile** (`/profile`). See [Invoices and receipts](#invoices-and-receipts) and [Saved card and auto-renewal](#saved-card-and-auto-renewal).
 
 ### Account settings
 
-**Account settings** (`/manage/settings`) has these panels:
+Click **Account settings** at the bottom of the menu, or in the account menu, to open `/manage/settings`. It has these panels:
 
 - **Your profile**: **First name**, **Last name**, **Phone** (your WhatsApp number) and an optional display name. **Work email** cannot be changed here. Click **Save profile**.
 - **Rates and currency**: **Where you work** (your state). The **Geopolitical zone** fills itself in. **Currency** switches how prices are shown between NGN and USD. Click **Save location**.
@@ -184,7 +202,7 @@ There is also a **Billing & invoices** page at `/manage/billing`, which the butt
 
 ### Your Profile
 
-Your **Profile** (`/profile`) is also reachable from **Profile** at the top right of the public pages. It has:
+Your **Profile** (`/profile`) is reachable from **Profile** at the top right of the public pages, and from the **Recent activity** link on your Overview. It has:
 
 - **Account details**: **Upload new photo**, **Username**, **First Name**, **Last Name**, firm name and **Location (Geopolitical Zone)**, and **Pricing location (State)**. Your Rate Gen prices, and projects you price afterwards, use the zone your state belongs to. Click **View Prices** to see them, and **Save** to keep your changes.
 - **Change your password** (or **Set a password for the desktop software** after a social sign-in).
@@ -197,9 +215,19 @@ Your **Profile** (`/profile`) is also reachable from **Profile** at the top righ
 
 ### My learning
 
-**My learning** (`/dash-learning`) shows your courses and progress, with **Free lessons** and **Enrol someone else**. **Assignments** and **Certificates** sit beside it under **Learn**.
+**My learning** (`/dash-learning`) shows **Your courses** and progress, your **Certificates** and **Free lessons watched**, with **Free lessons** and **Enrol someone else** at the top. **Assignments** and **Certificates** sit beside it under **Learn**.
 
-![My learning: your courses and progress.](shot:dash-learning.png)
+### Guides & docs
+
+Click **Guides & docs** under **Learn** to open `/manage/guides`: the user guides for every ADLM product.
+
+![Guides & docs: the user guides to read online or download.](shot:dash-guides.png)
+
+1. Find the guide for your product.
+2. Click **Read** to open it on the page, or **Download** to save the PDF. **Download everything** saves them all.
+3. Where a guide has a video, click **Watch**.
+
+**Still stuck?** has **Ask Ada** and **Contact support**. **Installers are elsewhere** reminds you that the Installer Hub and installers are on **Downloads**.
 
 ## Your WhatsApp number
 
@@ -429,28 +457,19 @@ Click **Ask Ada** at the top of the menu or the round button in the corner of an
 
 ### Open a support ticket
 
-**From Request technical help** (where **Support** in the menu takes you, `/support/request`)
-
-1. Enter a **Title**, for example "Can't open RateGen after update".
-2. Describe the problem in **What's happening?**, including any error message.
-3. Choose a **Category**: **Technical issue**, **Account / login**, **Billing / subscription**, **Feature request**, **General question** or **Other / not sure**.
-4. Choose the product under **Select a product…**.
-5. Optionally click **Add images** to attach screenshots.
-6. If you would like us to fix it on your computer, paste your AnyDesk address (for remote support).
-7. Click **Submit request**.
-
-Your tickets and their status are listed under **Your requests**. We reply by email.
-
-**From the Support page** (`/manage/support`, linked from **Needs your attention** on your Overview and from the Team and Guides pages)
+Click **Support** in the menu to open the **Support** page (`/manage/support`).
 
 ![The Support page: open a ticket, your tickets, answers and how to reach a person.](shot:dash-support.png)
 
-1. Under **Open a ticket**, choose **Which product** and, if it is about one computer, **Which machine**.
-2. Enter a **Summary** and describe what happens and what you expected.
-3. Optionally add your AnyDesk address.
-4. Click **Send to support**.
+1. Under **Open a ticket**, choose **Which product** (or **Account, seats or billing**) and, if it is about one computer, **Which machine**.
+2. Enter a **Summary**, for example "The Revit panel does not appear after installing".
+3. Under **What happens, and what you expected**, give the steps, the exact message if there is one, and when it started.
+4. Optionally add your AnyDesk address, only if you want somebody to take a look on your machine.
+5. Click **Send to support**. The page says "Sent. Support has your licences, versions and machines with it."
 
-A ticket opened here already carries your licences and machines. Your tickets appear under **Your tickets**, with any reply. **Answers first** has short answers to common questions, and **Reach a human** has WhatsApp.
+Your tickets appear under **Your tickets**, with their status (**Open**, **In progress**, **Scheduled**, **Resolved** or **Closed**) and any reply **From support:**. **Answers first** has short answers to common questions, such as moving a licence to a new laptop or a missing panel after installing. **Reach a human** has WhatsApp, email and our hours. We reply by email.
+
+> **Note:** The older **Request technical help** form at `/support/request` still works, and your tickets from it are kept.
 
 > **Tip:** The two things that shorten a ticket most are the exact wording of any message you saw, and what you had just done when it appeared. A screenshot helps.
 
@@ -517,9 +536,9 @@ Sign in at adlmstudio.net, enter the six-digit code on the **Confirm your email*
 
 The Windows products need an email and a password. Open your **Profile** and use **Set a password for the desktop software**, then sign in to the product with your email and that password.
 
-### A menu item opened a page I did not expect
+### I cannot find my orders or auto-renewal settings
 
-Some menu items still open the older page that does the same job. See the note under [The menu](#the-menu) for where each one goes and how to reach the other pages.
+Invoices and the next charge are on **Billing & invoices** in the menu. Your full order history and the **Auto-renew** tick boxes for each product are on your **Profile** (`/profile`), under **Orders, Invoices & Installations** and **Billing & auto-renewal**.
 
 ### My card was debited but my licence is not active
 

@@ -3,16 +3,19 @@ id: cloud-sharing
 title: ADLM Cloud: sharing, team and Ada
 tagline: Share a dashboard with your client, invite collaborators, control what they see, and get answers from Ada.
 version: "2026.10"
-updated: 2026-10-04
+updated: 2026-10-05
 platform: Web, any browser (adlmstudio.net)
 productKeys: []
 pdf: ADLM-Cloud-Sharing-Guide.pdf
 order: 10.5
 ---
 
-This is one part of the [ADLM Cloud guide](/guides/cloud). It covers sharing a project with your client or colleagues, who sees the money on a shared project, your team and seats, and Ada, ADLM's assistant. It describes the live site on 4 October 2026.
+This is one part of the [ADLM Cloud guide](/guides/cloud). It covers sharing a project with your client or colleagues, who sees the money on a shared project, your team and seats, and Ada, ADLM's assistant. It describes the live site on 5 October 2026.
 
 ## What's new in 2026.10
+
+- **Sharing from the new project page.** Projects now open on the new project page. **More actions** > **Collaborators** shows who is on the project and how many share codes are live. Making codes, changing access and the public dashboard link are in the classic workspace, one click away.
+- **Team is on the menu.** **Team** sits in the **Manage** group of the left-hand menu.
 
 - **Ada proposes rates you confirm.** Ask Ada "Price my bill" on a project you own and she shows a **Proposed rates** card. Nothing is priced until you press **Apply N rates**.
 - **Ada reports for a period.** Ask for "a report for September" and a **Project report** card opens the PDF for that window. You check it and send it yourself.
@@ -38,22 +41,29 @@ There are two ways to let someone else see a project. They are not the same.
 
 ### Sharing a dashboard with your client
 
-1. Open the project's **Dashboard**.
-2. Click **Share dashboard**.
+The public link is set in the classic workspace.
+
+1. Open the project and click **More actions** > **Open the classic workspace**.
+2. Click **Dashboard** in **Views**, then **Share dashboard**.
 3. Tick **Enable public link**.
 4. Click **Copy link** and send it to your client.
 
-The button then reads **Shared · link on**, and the project's card on **All Projects** is marked **Shared**. Your client sees a read-only Project Dashboard: overall status, progress, the contract sum and its make-up, cost to date and forecast, interim certificate totals, and the planned and actual spend. They cannot edit anything.
+The button then reads **Shared · link on**, and the project is marked **Share link on** on the **Projects** list. Your client sees a read-only Project Dashboard: overall status, progress, the contract sum and its make-up, cost to date and forecast, interim certificate totals, and the planned and actual spend. They cannot edit anything.
 
 > **Important:** Anyone who has the link can open the dashboard, and it shows money. When you no longer want it shared, untick **Enable public link**. Ticking it again brings back the same link.
 
 ### Inviting collaborators
 
-1. Open the project and click **Collaborators**.
-2. Under **Access level**, choose **View only** or **Full access**.
-3. Optionally fill in **Label (optional)** (for example the firm's name), **Restrict to emails (optional)** and **Max uses (0 = unlimited)**.
-4. Click **Generate code**.
-5. Under **Active codes**, click **Copy** to copy the code, or **Link & QR** for a join link and QR code. **Copy link** copies the link and **Download QR** saves the QR image.
+On the new project page, click **More actions** > **Collaborators** (owner only). The panel lists everyone **On this project**, with their access, and how many **Share codes** can still be used. "Nobody else yet" means no one has joined.
+
+To make a code or change someone's access:
+
+1. In the **Collaborators** panel, click **Manage codes and access**. The project opens in the classic workspace.
+2. Click **Collaborators**.
+3. Under **Access level**, choose **View only** or **Full access**.
+4. Optionally fill in **Label (optional)** (for example the firm's name), **Restrict to emails (optional)** and **Max uses (0 = unlimited)**.
+5. Click **Generate code**.
+6. Under **Active codes**, click **Copy** to copy the code, or **Link & QR** for a join link and QR code. **Copy link** copies the link and **Download QR** saves the QR image.
 
 Send the code or link to your colleague. **People with access** lists everyone who has joined. You can change each person between **View only** and **Full access**, or click **Remove**. **Revoke** stops a code being used again.
 
@@ -64,11 +74,11 @@ Send the code or link to your colleague. **People with access** lists everyone w
 You can use either a link or a code.
 
 - **With a link or QR code:** open it. Sign in if asked. The page shows **Joining project…** and then opens the project.
-- **With a code:** open the product under **My tools** (for example **HERON**), click **Add shared project**, type the **Share code** and click **Add project**.
+- **With a code:** click the product under **My tools** (for example **HERON**), then **Open the HERON workspace**. Click **Add shared project**, type the **Share code** and click **Add project**.
 
 If you do not have the matching product, you see **Subscription required** and a button to get it. A code that has been revoked, has reached its use limit or is restricted to other emails is refused.
 
-A shared project opens with a note: **Shared project · Full access** or **Shared project · View only**. At View only it adds "You can view this project but can't edit or download it."
+A shared project opens on the project page. If you can only view it, a note reads **Shared with you.** "You can see everything and follow progress. Editing needs a seat on the owner's account." In the classic workspace the note reads **Shared project · Full access** or **Shared project · View only**.
 
 ## Who sees the money
 
@@ -92,7 +102,7 @@ The owner always sees everything. A public dashboard link shows the summary mone
 
 ## Team and seats
 
-**Team** (`/manage/team`) shows your account's seats and the machines they are activated on. Open it from **Seats** on the **Products** page, or by typing the address.
+**Team** (`/manage/team`) shows your account's seats and the machines they are activated on. Click **Team** in the **Manage** group of the menu.
 
 - **Members** lists the account holder. Adding colleagues to one account is not available yet, so each person signs in with their own ADLM account. To work together on a project, use [collaborators](#inviting-collaborators).
 - **Machines** lists the computers holding a seat. To move a seat to a new computer, click **Free the seat** on the old one and then sign in on the new one. Nothing is deleted.
