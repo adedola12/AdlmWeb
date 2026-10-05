@@ -99,7 +99,7 @@ export const GUIDES = [
     blurb:
       "Where everything is on the ADLM Cloud, what is new, and which of the five Cloud guides to read.",
     file: "/docs/ADLM-Cloud-User-Guide.pdf",
-    pages: 8,
+    pages: 10,
     productKeys: [],
     changelogSlugs: ["cloud"],
     video: { url: "https://www.youtube.com/@ADLMStudio/search?query=ADLM%20Cloud", label: "ADLM Cloud videos" },
@@ -110,7 +110,7 @@ export const GUIDES = [
     blurb:
       "Finding your way around, your project list, the project dashboard, the 3D model and the work area.",
     file: "/docs/ADLM-Cloud-Projects-Guide.pdf",
-    pages: 13,
+    pages: 21,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -120,7 +120,7 @@ export const GUIDES = [
     blurb:
       "Pricing the Bill of Quantity, picking Rate Gen rates, the materials and labour budget, constants and exports.",
     file: "/docs/ADLM-Cloud-Bill-and-Budget-Guide.pdf",
-    pages: 13,
+    pages: 17,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -130,7 +130,7 @@ export const GUIDES = [
     blurb:
       "Interim valuations, payment certificates, variations, the final account and the contract lock.",
     file: "/docs/ADLM-Cloud-Valuation-Guide.pdf",
-    pages: 8,
+    pages: 12,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -140,7 +140,7 @@ export const GUIDES = [
     blurb:
       "The PM Dashboard, the PM Tracker and the Portfolio dashboard.",
     file: "/docs/ADLM-Cloud-PM-Guide.pdf",
-    pages: 9,
+    pages: 12,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -193,7 +193,7 @@ export const GUIDES = [
     blurb:
       "Every guide above in one book: getting started, the Hub, QUIV, HERON, Rate Gen, SERVIQ, Time Pro, the ADLM Cloud, the sample projects and the QS handbook.",
     file: "/docs/ADLM-Software-Complete-Guide.pdf",
-    pages: 264,
+    pages: 280,
     productKeys: [],
     changelogSlugs: [],
   },
