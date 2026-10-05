@@ -418,8 +418,8 @@ const router = createBrowserRouter([
         // lands. Added alongside rather than over it: /dashboard keeps working
         // and keeps its data until this one is proven on real accounts.
         //
-        // NewBuildGate is what "alongside" means until 1 Oct: staff see this,
-        // a customer is sent to the classic screen that does the same job.
+        // NewBuildGate held it to staff until 1 Oct; since go-live it is a
+        // pass-through and everyone signed in lands here (lib/newBuildAccess.js).
         path: "manage",
         element: (
           <ProtectedRoute>
@@ -462,9 +462,10 @@ const router = createBrowserRouter([
         { path: "dash-course/:sku", el: <LearningCourse /> },
       ].map(({ path, el }) => ({
         path,
-        // The Manage and Work screens are the unfinished new build and are held
-        // back to staff until launch; a customer reaching one lands on the
-        // classic equivalent (lib/classicPaths.js).
+        // The Manage and Work screens sit behind NewBuildGate, which held them
+        // back to staff until launch and has been a pass-through since go-live
+        // (1 Oct 2026). Raise GATE_NEW_BUILD and a customer reaching one lands
+        // on the classic equivalent again (lib/classicPaths.js).
         //
         // The four dash-* learning routes below are in this same list and are
         // deliberately NOT gated: they are the only learning surface there is,

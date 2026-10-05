@@ -17,7 +17,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { GATE_NEW_BUILD } from "./NewBuildGate.jsx";
+import { GATE_NEW_BUILD } from "../lib/newBuildAccess.js";
 import { AFTER_SIGN_IN } from "../lib/afterSignIn.js";
 
 const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
