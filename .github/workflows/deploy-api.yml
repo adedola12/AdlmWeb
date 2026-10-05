@@ -167,3 +167,33 @@ jobs:
           code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://api.adlmstudio.net/health)
           echo "GET /health -> $code"
           test "$code" = "200"
+
+      # A Lambda that cannot start looks identical to a healthy one from
+      # CloudFormation's side. On 4 Oct the watcher shipped with an undefined
+      # constant and died on every run for twenty minutes; CI cannot catch that
+      # and only invoking it does. So invoke it once, here, and fail the deploy
+      # if it comes back with an error instead of a result.
+      - name: Smoke test the release-gate watcher
+        run: |
+          set -uo pipefail
+          fn=$(aws cloudformation describe-stacks --stack-name AdlmReleaseGate \
+            --query "Stacks[0].Outputs[?OutputKey=='WatchFnName'].OutputValue" --output text 2>/dev/null)
+          if [ -z "$fn" ] || [ "$fn" = "None" ]; then
+            echo "::warning::AdlmReleaseGate has no WatchFnName output; skipping."
+            exit 0
+          fi
+          echo "invoking $fn"
+          aws lambda invoke --function-name "$fn" --cli-read-timeout 120 out.json >/dev/null
+          cat out.json
+          if jq -e '.errorType' out.json >/dev/null 2>&1; then
+            etype=$(jq -r ".errorType" out.json)
+            emsg=$(jq -r ".errorMessage" out.json)
+            echo "::error::The release-gate watcher is broken: $etype: $emsg"
+            exit 1
+          fi
+          jq -e '.ok == true' out.json >/dev/null || {
+            echo "::error::The watcher ran but did not report ok."
+            exit 1
+          }
+          echo "watcher ok"
+
