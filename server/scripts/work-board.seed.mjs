@@ -452,9 +452,9 @@ export const SEED = [
     decision: "grandfathered",
     summary: "A standalone take-off app that works on drawings without PlanSwift, with templates, formulas, markups, reports and bill and budget builders. It is a separate product from Time Pro.",
     progress: "Resuming: Adedolapo decided on 6 Oct 2026 that the app goes ahead. The last commit was on 30 Jun: saved take-off markups persist and redraw, and PlanSwift tokens are mapped. There is work from 2 Jul on reports, the bill builder, the budget builder and estimating. A new feature, an IFC engine that imports, merges and aligns IFC models for QUIV-style take-off, is proposed as its own item (qs-takeoff-ifc-engine) and waits for approval.",
-    pending: "20 commits have never been pushed, and 27 files are uncommitted. Push them so the work cannot be lost. Write the app's business case here: price, who buys it instead of HERON, and what it costs to support. The IFC engine is not built until Richard approves qs-takeoff-ifc-engine.",
+    pending: "Review and merge github.com/adedola12/QSApp/pull/1, which brings master up to date (branch feat/bill-budget-reports). The bill and budget work has not yet been tried in the running app. Write the app's business case here: price, who buys it instead of HERON, and what it costs to support. The IFC engine is not built until Richard approves qs-takeoff-ifc-engine.",
     blockedOn: "Richard: approve or decline the IFC engine proposal (qs-takeoff-ifc-engine)",
-    refs: "source/repos/QSApp (master, 20 commits not pushed since 30 Jun) · proposed shared library source/repos/ADLM.IfcEngine",
+    refs: "github.com/adedola12/QSApp branch feat/bill-budget-reports (pushed 6 Oct 2026, 21 commits ahead of master) · proposed shared library source/repos/ADLM.IfcEngine",
     design: { status: "needed", surfaces: "The whole app: workspace, measurement setup, templates, reports" },
   },
   {
