@@ -26,25 +26,54 @@ import { EN_DASH, safeNum } from "../projects/lib/projectTotals.js";
 import { compact, initials, money } from "./workProjectFormat.js";
 import { Bar, Donut } from "./workProjectBits.jsx";
 
-export default function WorkProjectOverview({ project, toolName, canEdit = false, onGo }) {
+export default function WorkProjectOverview({
+  project,
+  toolName,
+  canEdit = false,
+  onGo,
+  onTender,
+}) {
   const p = project || {};
   const si = stageIndex(p);
   const next = nextStage(p);
   // What actually moves this project on, and the tab where it is done.
   //
-  // Keyed on the stage the project is AT, not the one it is going to. Only the
-  // steps with a real destination in this build are listed: "Mark as tendered"
-  // is deliberately absent because the new build has nowhere to do it, and
-  // offering it here would put back the dead button this replaced. A stage with
+  // Keyed on the stage the project is AT, not the one it is going to. A stage with
   // no entry simply shows no link, which is honest — the strip still says where
   // the project has got to.
+  //
+  // "Mark as tendered" used to be absent on the grounds that the new build had
+  // nowhere to do it. It does now: the route records a date and moves no money, so
+  // it carries no step-up, and it is the thing standing in front of the lock —
+  // lockChecklist wants a tender date and nothing here could set one, so a project
+  // that had only ever been opened in this build could never reach the stage where
+  // locking is offered at all. It is an ACT rather than a destination, so it runs
+  // here instead of sending the reader to a tab.
   const NEXT_STEP = {
     takeoff: { label: "Price the bill", tab: "rates" },
+    priced: { label: "Mark as tendered", act: "tender" },
     tendered: { label: "Lock the contract", tab: "valuations" },
     locked: { label: "Issue a valuation", tab: "valuations" },
     valuing: { label: "Agree the final account", tab: "valuations" },
   };
   const nextStep = NEXT_STEP[STAGES[si]?.id];
+  const [tendering, setTendering] = React.useState(false);
+  const [tenderFailed, setTenderFailed] = React.useState("");
+  const runTender = async () => {
+    if (tendering) return;
+    setTendering(true);
+    setTenderFailed("");
+    try {
+      await onTender?.(true);
+    } catch (err) {
+      // The server's own sentence. "This contract is already locked, which is past
+      // the tender stage." is the one that matters, and it means the copy on screen
+      // is behind — so it is said rather than swallowed.
+      setTenderFailed(String(err?.message || "The tender mark could not be recorded."));
+    } finally {
+      setTendering(false);
+    }
+  };
   const split = pricedSplit(p.items);
   const t = totalsFor(p);
   const sections = valueBySection(p.items);
@@ -74,9 +103,27 @@ export default function WorkProjectOverview({ project, toolName, canEdit = false
             So the dead button is replaced by the thing that actually moves it
             on, pointing at the tab where that is done. */}
         {next && canEdit && nextStep ? (
-          <button type="button" className="pj-lnk" onClick={() => onGo?.(nextStep.tab)}>
-            {nextStep.label} {EN_DASH} reaches {next.name}
-          </button>
+          nextStep.act === "tender" ? (
+            onTender ? (
+              <button
+                type="button"
+                className="pj-lnk"
+                disabled={tendering}
+                onClick={runTender}
+              >
+                {tendering ? "Recording…" : `${nextStep.label} ${EN_DASH} reaches ${next.name}`}
+              </button>
+            ) : null
+          ) : (
+            <button type="button" className="pj-lnk" onClick={() => onGo?.(nextStep.tab)}>
+              {nextStep.label} {EN_DASH} reaches {next.name}
+            </button>
+          )
+        ) : null}
+        {tenderFailed ? (
+          <p className="pn-bad" role="status">
+            {tenderFailed}
+          </p>
         ) : null}
       </section>
 

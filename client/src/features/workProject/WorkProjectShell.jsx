@@ -29,7 +29,7 @@ import {
 } from "./workProjectTabs.js";
 import { rememberPlace } from "../../lib/lastPlace.js";
 import { StillLoading } from "./workProjectBits.jsx";
-import { STAGES, stageIndex } from "./overviewModel.js";
+import { STAGES, stageIndex, totalsFor } from "./overviewModel.js";
 import { attachedModels } from "./sourcesModel.js";
 import { linePanelTitle } from "./billModel.js";
 import { saveProjectPatch, writeIdFor } from "./saveProject.js";
@@ -39,6 +39,14 @@ import WorkProjectPeople from "./WorkProjectPeople.jsx";
 import WorkProjectExports from "./WorkProjectExports.jsx";
 import WorkProjectIssueCert from "./WorkProjectIssueCert.jsx";
 import { withIssuedCertificate } from "./certificateDraft.js";
+import { withVariationWrite } from "./variationDraft.js";
+import { withContractWrite } from "./contractWrite.js";
+import WorkProjectLockContract from "./WorkProjectLockContract.jsx";
+import { useStepUp } from "../security/useStepUp.jsx";
+import {
+  WorkProjectRaiseVariation,
+  WorkProjectDecideVariation,
+} from "./WorkProjectVariationPanels.jsx";
 import WorkProjectOverview from "./WorkProjectOverview.jsx";
 import WorkProjectBill from "./WorkProjectBill.jsx";
 import WorkProjectRates from "./WorkProjectRates.jsx";
@@ -106,7 +114,7 @@ function findProject(projects, productKey, id) {
 }
 export default function WorkProjectShell({ productKey, id }) {
   const { projects, failed } = useProjects();
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [params, setParams] = useSearchParams();
 
   const summary = React.useMemo(
@@ -129,6 +137,13 @@ export default function WorkProjectShell({ productKey, id }) {
   // complaint as the one this whole change set is fixing, arrived at from the
   // other direction.
   const [fullState, setFullState] = React.useState("idle"); // idle|loading|ready|failed
+  // Bumped to ask for the project again. Needed because some writes are answered
+  // with a REFUSAL that proves the held copy is out of date — a 409 on deciding a
+  // variation means somebody has already decided it, so the row on screen still
+  // says Pending and still invites another click. Showing the message without
+  // re-reading leaves the screen contradicting what it has just been told.
+  const [reloadAt, setReloadAt] = React.useState(0);
+  const reload = React.useCallback(() => setReloadAt((n) => n + 1), []);
   React.useEffect(() => {
     if (!accessToken || !id || !productKey) return undefined;
     let alive = true;
@@ -145,7 +160,7 @@ export default function WorkProjectShell({ productKey, id }) {
     return () => {
       alive = false;
     };
-  }, [accessToken, productKey, id]);
+  }, [accessToken, productKey, id, reloadAt]);
 
   // Derived so every existing use below keeps reading the same way.
   const fullFailed = fullState === "failed";
@@ -644,6 +659,217 @@ export default function WorkProjectShell({ productKey, id }) {
     [accessToken, saveId, productKey, fb],
   );
 
+  /* ── LOCKING THE CONTRACT ──────────────────────────────────────────────
+   *
+   * The only act in this workspace behind a step-up re-authentication, and the
+   * three pieces below are the classic build's gate (ProjectsGeneric.jsx:
+   * 1112-1140) rather than a second reading of the same rules.
+   *
+   * requireStepUp passes straight through for anybody who never opted in, so for
+   * most accounts acquireStepUp returns undefined and the request runs as any
+   * other. The 428 retry is not belt-and-braces: the flag can be switched on from
+   * another device, so our copy of it goes stale and the server is the one that
+   * knows.
+   *
+   * panel.close() BEFORE awaiting the prompt. The OTP modal renders at z-index 120
+   * and the side panel at 150 (ds-work-proj.css:315 against StepUpModal.jsx:35),
+   * so a panel held open across it would hide the prompt entirely and read as a
+   * hang — and the panel's own Escape handler would close the panel instead of the
+   * prompt. It is safe to close because the two authorisations are mutually
+   * exclusive: a reader who gets the OTP has no PIN field to lose.
+   */
+  // `|| {}` is for a test that renders this shell without the provider, not for
+  // production: StepUpProvider wraps the entire router (main.jsx:1510), so
+  // ensureVerified is always there in the app. Without it a step-up reader's lock
+  // would send no token and the server would answer 428 — refused, not silently
+  // allowed, which is the right way round for a guard to fail.
+  const { ensureVerified } = useStepUp() || {};
+  // Flat on the user, which is how the classic build reads it
+  // (ProjectsGeneric.jsx:1103) — not under `security`, which is the SERVER's
+  // shape. A wrong read here is silent in the worst direction: the form would
+  // show a PIN field to somebody whose authorisation is an OTP, and the lock
+  // would then be refused for a PIN the server never wanted.
+  const stepUpEnabled = !!user?.stepUpEnabled;
+
+  const acquireStepUp = React.useCallback(
+    async ({ force = false } = {}) => {
+      if (!stepUpEnabled && !force) return undefined;
+      if (!ensureVerified) return undefined;
+      panel.close();
+      const token = await ensureVerified();
+      return { "X-Step-Up": token };
+    },
+    [stepUpEnabled, ensureVerified, panel],
+  );
+
+  const runGated = React.useCallback(
+    async (doRequest) => {
+      let headers = await acquireStepUp();
+      try {
+        return await doRequest(headers);
+      } catch (e) {
+        if (e?.data?.code === "STEP_UP_REQUIRED") {
+          headers = await acquireStepUp({ force: true });
+          return await doRequest(headers);
+        }
+        throw e;
+      }
+    },
+    [acquireStepUp],
+  );
+
+  /**
+   * Lock it: the estimate becomes the contract sum.
+   *
+   * The server takes every figure itself, against the resolved scope, so the body
+   * carries only the PIN — and only when there is no OTP. It answers with
+   * { ok, contract, version }, a fragment, which withContractWrite folds in: left
+   * out, the tab would still show the lock gate on a locked contract and the next
+   * bill save would go out against a stale version.
+   */
+  const lockContract = React.useCallback(
+    async (lockPin) => {
+      if (!accessToken || !saveId || !productKey) {
+        throw new Error("This project is still loading.");
+      }
+      const url = `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/contract/lock`;
+      const body = lockPin ? { lockPin } : {};
+      try {
+        const out = await runGated((headers) =>
+          apiAuthed(url, {
+            token: accessToken,
+            method: "POST",
+            headers: { ...(headers || {}), "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }),
+        );
+        setFull((prev) => withContractWrite(prev, out));
+        fb.toast({
+          tone: "success",
+          title: "Contract locked",
+          msg: "Progress on the bill is what gets valued from here.",
+        });
+        return out;
+      } catch (err) {
+        // A dismissed OTP is a deliberate back-out. The classic build treats it as
+        // a silent abort and so does this: a red toast for somebody who pressed
+        // cancel is the product arguing with them.
+        if (err?.message === "Verification cancelled") return null;
+        fb.toast({ tone: "error", title: "The contract was not locked", msg: err?.message });
+        throw err;
+      }
+    },
+    [accessToken, saveId, productKey, runGated, fb],
+  );
+
+  /**
+   * Mark the bill as tendered, or take the mark back.
+   *
+   * It records a date; it moves no money, which is why the route carries no
+   * step-up (projects.js:8625). Small, and it is the thing standing in front of
+   * the lock: the lock's own checklist requires a tender date, and nothing in this
+   * build could set one — so a project that has only ever been opened here could
+   * never reach the stage where locking is offered.
+   */
+  const setTendered = React.useCallback(
+    async (tendered = true) => {
+      if (!accessToken || !saveId || !productKey) {
+        throw new Error("This project is still loading.");
+      }
+      const out = await apiAuthed(
+        `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/contract/tendered`,
+        {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tendered }),
+        },
+      );
+      setFull((prev) => withContractWrite(prev, out));
+      fb.toast({
+        tone: "success",
+        title: tendered ? "Marked as tendered" : "Tendered mark taken back",
+      });
+      return out;
+    },
+    [accessToken, saveId, productKey, fb],
+  );
+
+  const variationUrl = React.useCallback(
+    (suffix = "") =>
+      `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(saveId)}/variations${suffix}`,
+    [productKey, saveId],
+  );
+
+  /**
+   * Raise a variation, pending approval.
+   *
+   * saveId, not the route's id: the /work address carries a SLUG and both
+   * variation routes run isValidObjectId on the param, so the URL's id would 400
+   * on every project opened by slug. Same reason save() and issueCertificate()
+   * use it.
+   */
+  const raiseVariation = React.useCallback(
+    async (body) => {
+      if (!accessToken || !saveId || !productKey) {
+        throw new Error("This project is still loading.");
+      }
+      const out = await apiAuthed(variationUrl(), {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      setFull((prev) => withVariationWrite(prev, out));
+      fb.toast({
+        tone: "success",
+        title: `V${Number(out?.index ?? 0) + 1} raised, pending approval`,
+        msg: "It counts once it is approved.",
+      });
+      return out;
+    },
+    [accessToken, saveId, productKey, variationUrl, fb],
+  );
+
+  /**
+   * Approve or reject one.
+   *
+   * The 409 is the interesting path. VARIATION_ALREADY_DECIDED means somebody got
+   * there first, so the copy on screen is out of date — and the classic build's
+   * handler surfaces the message and does NOT re-read, leaving the row still
+   * saying Pending and still inviting another click. Re-reading on that one code
+   * means the message and the list agree by the time either is looked at.
+   */
+  const decideVariation = React.useCallback(
+    async (index, status) => {
+      if (!accessToken || !saveId || !productKey) {
+        throw new Error("This project is still loading.");
+      }
+      try {
+        const out = await apiAuthed(variationUrl(`/${encodeURIComponent(index)}`), {
+          token: accessToken,
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        setFull((prev) => withVariationWrite(prev, out));
+        fb.toast({
+          tone: "success",
+          title: status === "approved" ? "Variation approved" : "Variation rejected",
+        });
+        return out;
+      } catch (err) {
+        // err.data.code, not err.code: http.js puts the server's payload on
+        // `data` and the HTTP status on `status`, and sets no `code` of its own
+        // (http.js:150-153). Reading err.code would have been a condition that
+        // never fired, with the status check quietly carrying it.
+        if (err?.status === 409 || err?.data?.code === "VARIATION_ALREADY_DECIDED") reload();
+        throw err;
+      }
+    },
+    [accessToken, saveId, productKey, variationUrl, fb, reload],
+  );
+
   const clientName = String(project?.clientName || project?.client || "").trim();
   // The file his line names is the model the take-off came from.
   const sourceFileName = attachedModels(project)[0]?.sourceFile || "";
@@ -887,6 +1113,7 @@ export default function WorkProjectShell({ productKey, id }) {
               toolName={toolName(productKey)}
               canEdit={!viewOnly}
               onGo={go}
+              onTender={setTendered}
             />
           ) : tab === "bill" && !fullFailed ? (
             <WorkProjectBill
@@ -940,6 +1167,10 @@ export default function WorkProjectShell({ productKey, id }) {
               onView={setRateView}
               onGo={go}
               onIssueCert={() => panel.show({ kind: "cert" })}
+              onLock={() => panel.show({ kind: "lock" })}
+              onRaiseVariation={() => panel.show({ kind: "variation-add" })}
+              onOpenVariation={(i) => panel.show({ kind: "variation", index: i })}
+              ratesMasked={ratesMasked}
               // The lock lives on the classic workspace and needs a step-up,
               // so the button that says so now actually goes there.
               classicHref={classicWorkspaceHref}
@@ -982,6 +1213,52 @@ export default function WorkProjectShell({ productKey, id }) {
         {panel.content?.kind === "people" ? (
           <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>
             <WorkProjectPeople project={project} classicWorkspaceHref={classicWorkspaceHref} />
+          </WorkProjectPanel>
+        ) : null}
+
+        {panel.content?.kind === "lock" ? (
+          <WorkProjectPanel
+            title="Lock the contract"
+            visible={panel.visible}
+            onClose={panel.close}
+          >
+            {/* `full`, not `project`: the checklist counts unpriced lines and the
+                base is the measured work, neither of which the rollup carries. */}
+            <WorkProjectLockContract
+              project={full}
+              stepUpEnabled={stepUpEnabled}
+              onLock={lockContract}
+              onDone={panel.close}
+            />
+          </WorkProjectPanel>
+        ) : null}
+
+        {panel.content?.kind === "variation-add" ? (
+          <WorkProjectPanel
+            title="Raise a variation"
+            visible={panel.visible}
+            onClose={panel.close}
+          >
+            <WorkProjectRaiseVariation onRaise={raiseVariation} onDone={panel.close} />
+          </WorkProjectPanel>
+        ) : null}
+
+        {panel.content?.kind === "variation" ? (
+          <WorkProjectPanel
+            title="Variation"
+            visible={panel.visible}
+            onClose={panel.close}
+          >
+            {/* `full`, not `project`: the rollup summary carries no variations, so
+                off `project` this would say the variation is gone. */}
+            <WorkProjectDecideVariation
+              project={full}
+              index={panel.content.index}
+              canEdit={!viewOnly}
+              estimatedTotal={totalsFor(full).total}
+              onDecide={decideVariation}
+              onDone={panel.close}
+            />
           </WorkProjectPanel>
         ) : null}
 

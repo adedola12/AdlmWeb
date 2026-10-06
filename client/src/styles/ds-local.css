@@ -2158,3 +2158,21 @@
  * hover, honest cursor.
  */
 .ds .pj-bill .rnm{cursor:pointer;touch-action:auto}
+
+/* The lock checklist, inside the side panel.
+ *
+ * His own checklist is styled under .pj-lock (ds-work-proj.css:448-451), and
+ * .pj-lock is a 560px centred card with 34px of padding — right for the gate that
+ * fills the Valuations tab, wrong inside a 380px panel. These are the same list
+ * rules without the card, so the reader sees the identical ticks and warnings in
+ * both places and does not have to work out whether they mean the same thing.
+ *
+ * In ds-local.css because ds-work-proj.css is generated from Richard's own
+ * stylesheet and this list is ours.
+ */
+.ds .pn-checks{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:8px;text-align:left}
+.ds .pn-checks li{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink-2);line-height:1.45}
+.ds .pn-checks li svg{width:16px;height:16px;flex:none;margin-top:1px;fill:none;
+  stroke:var(--fb-warn);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ds .pn-checks li.ok svg{stroke:var(--fb-ok)}
+.ds .pn-checks li.ok{color:var(--ink-3)}

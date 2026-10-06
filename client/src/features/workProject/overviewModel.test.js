@@ -238,3 +238,64 @@ describe("linked services in the project's total", () => {
     expect(totalsFor({ items: [] }).linked).toBe(0);
   });
 });
+
+describe("the stage, when nothing sends one", () => {
+  // NOTHING SENDS project.stage. Not the project GET, not the list, not the
+  // rollup — the server emits contractLocked / tenderedAt / finalized /
+  // certificateCount instead. So the lookup missed on every real project and the
+  // fallback answered Takeoff: the header pill read "Takeoff" on a locked
+  // contract with four certificates, and progressPercent (0 below stage 3) was 0
+  // for everybody.
+  //
+  // It passed because every fixture in this file injects `stage` by hand — the
+  // same way worksBaseFor kept its coverage while reading a field that does not
+  // exist.
+
+  it("reads a locked contract as locked, from the document", () => {
+    expect(stageIndex({ contract: { locked: true } })).toBe(3);
+  });
+
+  it("reads it from the rollup's flat flags too", () => {
+    // The workspace holds both shapes: the rollup summary under the full
+    // document. A project opened by a direct link may have only one.
+    expect(stageIndex({ contractLocked: true })).toBe(3);
+    expect(stageIndex({ tenderedAt: "2026-08-01" })).toBe(2);
+    expect(stageIndex({ certificateCount: 2 })).toBe(4);
+    expect(stageIndex({ finalized: true })).toBe(5);
+  });
+
+  it("reads certificates and a final account off the document", () => {
+    expect(stageIndex({ certificates: [{ number: 1 }] })).toBe(4);
+    expect(stageIndex({ finalAccount: { finalized: true } })).toBe(5);
+  });
+
+  it("answers with the LATEST thing that is true", () => {
+    // A locked contract with certificates against it is valuing, not locked, and
+    // a finalised one is final whatever else also holds.
+    const busy = {
+      contract: { locked: true, tenderedAt: "2026-08-01" },
+      certificates: [{ number: 1 }],
+    };
+    expect(stageIndex(busy)).toBe(4);
+    expect(stageIndex({ ...busy, finalAccount: { finalized: true } })).toBe(5);
+  });
+
+  it("reads a priced bill as priced, and an unpriced one as takeoff", () => {
+    expect(stageIndex({ items: [{ rate: 1000 }] })).toBe(1);
+    expect(stageIndex({ items: [{ rate: 0 }] })).toBe(0);
+    expect(stageIndex({ items: [] })).toBe(0);
+    expect(stageIndex({ totalCost: 5_000_000 })).toBe(1);
+  });
+
+  it("does not read a WITHHELD total as an unpriced bill", () => {
+    // A masked row carries `priced` instead of a figure. Reading the zeroed
+    // totalCost would label a fully priced job somebody else owns "takeoff".
+    expect(stageIndex({ priced: true, totalCost: 0 })).toBe(1);
+    expect(stageIndex({ priced: false, totalCost: 0 })).toBe(0);
+  });
+
+  it("still lets an explicit stage win, so nothing that sends one changes", () => {
+    expect(stageIndex({ stage: "final", items: [] })).toBe(5);
+    expect(stageIndex({ stage: "takeoff", contract: { locked: true } })).toBe(0);
+  });
+});
