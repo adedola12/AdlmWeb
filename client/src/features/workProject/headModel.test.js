@@ -98,9 +98,30 @@ describe("what the overflow offers", () => {
     expect(shared).not.toContain("people");
   });
 
-  it("offers both reports and both workspaces to everyone", () => {
+  it("offers both reports, the exports and both workspaces to everyone", () => {
     const keys = overflowActions({ isOwner: false }).map((a) => a.key);
-    expect(keys).toEqual(["id", "report", "pm-report", "full", "classic"]);
+    expect(keys).toEqual(["id", "report", "pm-report", "export", "full", "classic"]);
+  });
+
+  it("offers Export to Excel, which is on his list and was left off ours", () => {
+    // It was dropped because "the export is ~400 lines of workbook building in
+    // ProjectsGeneric". True of the generic BoQ, which SheetJS builds in the
+    // browser — and of nothing else. Seven of the ten documents are built by the
+    // SERVER and served from authenticated GETs, so their whole client side is
+    // one fetch. The premise was wrong about six of them.
+    for (const who of [{ isOwner: true }, { isOwner: false }, { canSeePm: false }]) {
+      const menu = overflowActions(who);
+      expect(menu.map((a) => a.key)).toContain("export");
+      expect(menu.find((a) => a.key === "export").label).toBe("Export to Excel");
+    }
+  });
+
+  it("puts it above the two entries that leave this page", () => {
+    // His order. Export is work you do here; full screen and the classic
+    // workspace are both ways of going somewhere else.
+    const keys = overflowActions({ isOwner: true }).map((a) => a.key);
+    expect(keys.indexOf("export")).toBeLessThan(keys.indexOf("full"));
+    expect(keys.indexOf("export")).toBeLessThan(keys.indexOf("classic"));
   });
 
   // The two used to be one entry, and it navigated away — which is not what

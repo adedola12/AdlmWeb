@@ -36,6 +36,7 @@ import { saveProjectPatch, writeIdFor } from "./saveProject.js";
 import WorkProjectHead from "./WorkProjectHead.jsx";
 import { projectIdLabel } from "./headModel.js";
 import WorkProjectPeople from "./WorkProjectPeople.jsx";
+import WorkProjectExports from "./WorkProjectExports.jsx";
 import WorkProjectOverview from "./WorkProjectOverview.jsx";
 import WorkProjectBill from "./WorkProjectBill.jsx";
 import WorkProjectRates from "./WorkProjectRates.jsx";
@@ -589,6 +590,10 @@ export default function WorkProjectShell({ productKey, id }) {
         panel.show({ kind: "people" });
         return;
       }
+      if (action === "export") {
+        panel.show({ kind: "export" });
+        return;
+      }
       if (action === "id") {
         const label = projectIdLabel(project);
         if (!label) {
@@ -913,6 +918,24 @@ export default function WorkProjectShell({ productKey, id }) {
         {panel.content?.kind === "people" ? (
           <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>
             <WorkProjectPeople project={project} classicWorkspaceHref={classicWorkspaceHref} />
+          </WorkProjectPanel>
+        ) : null}
+
+        {panel.content?.kind === "export" ? (
+          <WorkProjectPanel title="Export to Excel" visible={panel.visible} onClose={panel.close}>
+            {/* `full`, not `project`. The documents offered depend on the
+                certificates, the final account and _access — none of which are
+                in the rollup summary the head fills itself from, so offering
+                them off `project` would show a QS no certificates on a contract
+                that has four until the full load lands. */}
+            <WorkProjectExports
+              project={full}
+              productKey={productKey}
+              saveId={saveId}
+              accessToken={accessToken}
+              classicHref={classicWorkspaceHref}
+              onToast={fb.toast}
+            />
           </WorkProjectPanel>
         ) : null}
 
