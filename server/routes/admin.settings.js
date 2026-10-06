@@ -60,6 +60,32 @@ router.post("/mobile-app-url", async (req, res) => {
   if (typeof mobileAppUrl !== "string")
     return res.status(400).json({ error: "mobileAppUrl must be a string" });
 
+  // RELEASE GATE: the APK link is what every customer downloads, so changing
+  // it is a release, staged for the approver (docs/RELEASE_GATE.md). Clearing
+  // it is never gated: taking a download away is the safety action.
+  const wanted = mobileAppUrl.trim();
+  if (!req.demoMode && !req.designMode && wanted) {
+    const live = await Setting.findOne({ key: "global" }).select("mobileAppUrl").lean();
+    const previous = String(live?.mobileAppUrl || "").trim();
+    if (wanted !== previous) {
+      const candidate = await stageSettingChange({
+        field: "mobileAppUrl",
+        value: wanted,
+        previous,
+        actor: String(req.user?.email || "admin").trim().toLowerCase(),
+        req,
+      });
+      return res.status(202).json({
+        ok: true,
+        pendingApproval: true,
+        candidateId: String(candidate._id),
+        mobileAppUrl: previous,
+        proposedMobileAppUrl: wanted,
+        message:
+          "Staged for sign-off. Customers keep the current app download until the release approver approves it on /admin/releases.",
+      });
+    }
+  }
   const s = await Setting.findOneAndUpdate(
     { key: "global" },
     { mobileAppUrl: mobileAppUrl.trim() },
