@@ -167,6 +167,9 @@ export function classicFallbackFor(pathname) {
     }
     // A storage key we do not recognise is not worth guessing at.
     if (!SOURCES[key]) return CLASSIC_HOME;
+    // RateGen's tool page is its rates library, but a RateGen project (a priced
+    // bill) opens in the classic project workspace like the others.
+    if (key === "rategen" && id) return `/projects/rategen?project=${encodeURIComponent(id)}`;
     // Products whose classic screen is not /projects/:tool at all go through the
     // same table as the tool pages — otherwise this branch quietly reinvents the
     // /projects/qs-takeoff dead end that classicToolPath exists to avoid. Those
