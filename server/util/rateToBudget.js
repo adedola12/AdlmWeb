@@ -79,7 +79,7 @@ export function isRateGenRow(b) {
 
 // Deterministic per (bill code, index) so a re-pick lands on the same sn and
 // the QS's procurement marks merge back on, exactly as mlSchedule does it.
-function rateGenSn(code, index) {
+export function rateGenSn(code, index) {
   let h = 0;
   const s = String(code || "");
   for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) % 1000000;
