@@ -670,8 +670,10 @@ function deriveServiceRows(item, discipline, K, opts) {
   const c =
     opts.serviceConstants?.[type] || SERVICE_TYPE_DEFAULTS[type] || SERVICE_TYPE_DEFAULTS.pipe;
 
-  const libMaterial = num(opts.serviceRateFor?.material?.(name));
-  const libLabour = num(opts.serviceRateFor?.labour?.(name));
+  const libMaterial = num(opts.serviceRateFor?.material?.(name, unit));
+  // an "(installed)" library item is supply-and-fix: its labour is already in it
+  const allIn = libMaterial > 0 && Boolean(opts.serviceRateFor?.allIn?.(name, unit));
+  const libLabour = allIn ? 0 : num(opts.serviceRateFor?.labour?.(name, unit));
   const priced = libMaterial > 0;
 
   const buildup = computeServiceBuildup({
@@ -689,8 +691,8 @@ function deriveServiceRows(item, discipline, K, opts) {
     },
     rates: {
       materialRate: priced ? libMaterial : rate * mShare,
-      labourRate: libLabour > 0 ? libLabour : rate * lShare,
-      connectorRate: priced ? num(opts.serviceRateFor?.material?.("connector")) : 0,
+      labourRate: allIn ? 0 : libLabour > 0 ? libLabour : rate * lShare,
+      connectorRate: priced ? num(opts.serviceRateFor?.material?.("connector", "nr")) : 0,
     },
   });
 

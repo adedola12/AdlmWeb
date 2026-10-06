@@ -463,6 +463,46 @@ const ESTIMATOR_TOOLS = [
   },
 ];
 
+/* ---- what the chat says it can show ---- */
+// A chat declares the cards it renders in `capabilities` (strings) on
+// /agent/chat, next to `cards: true`. The API ships before the screens, so a
+// tool whose card an older chat cannot draw is only offered to a chat that
+// names it; otherwise Ada would show an Apply button that does nothing.
+//
+// "ada-user-rate-card": the confirm card for a rate the USER stated
+// (propose_price_by_area, propose_set_rates, 3 Oct 2026).
+export const CAP_USER_RATE_CARD = "ada-user-rate-card";
+const USER_RATE_TOOL_NAMES = new Set(["propose_price_by_area", "propose_set_rates"]);
+
+/** The declared capabilities, cleaned: short lowercase strings, at most 20. */
+export function agentCapabilities(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = new Set();
+  for (const c of raw) {
+    if (typeof c !== "string") continue;
+    const s = c.trim().toLowerCase().slice(0, 40);
+    if (s) out.add(s);
+    if (out.size >= 20) break;
+  }
+  return [...out];
+}
+
+/** Whether this chat can show the stated-rate card (and so get its tools). */
+export function canUseUserRateCard(opts = {}) {
+  return (
+    !!opts.user &&
+    opts.cards === true &&
+    agentCapabilities(opts.capabilities).includes(CAP_USER_RATE_CARD)
+  );
+}
+
+/** The estimator tools a chat may be offered, given what it can show. */
+export function estimatorToolsFor(opts = {}) {
+  if (opts.cards !== true) return [];
+  const userRates = agentCapabilities(opts.capabilities).includes(CAP_USER_RATE_CARD);
+  return ESTIMATOR_TOOLS.filter((t) => userRates || !USER_RATE_TOOL_NAMES.has(t.name));
+}
+
 /* ---- cost-intelligence tools (ADLM AI Service on AWS) ---- */
 // These call the separate serverless AI API (repo: adlm-ai-service), which is
 // grounded in the RateGen rate library and BESMM 4R. Ada supplies the user's
@@ -578,6 +618,7 @@ function buildSystemPrompt({
   canReadAccount,
   canUseAiService,
   canUseCards = false,
+  canUseUserRates = false,
   markdown = false,
 }) {
   // Appended inside the logged-in account section: the ADLM AI Service (AWS)
@@ -619,13 +660,14 @@ Rules for account answers:
 - If a project has no Material & Labour breakdown, explain it comes from the desktop plugin on save (MEP projects don't send one) — don't estimate one.
 - After answering, still be helpful commercially where natural (e.g. an expired sub → offer renewal; no RateGen → mention it) but don't force it.
 - For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.
-${canUseCards ? `
+${canUseUserRates ? "" : `- When the user STATES a cost or a rate for their own lines ("windows are 88,000 per sqm", "set blockwork to 9,500 per m2"): this chat cannot set rates from a message yet. Say plainly, in text, that pricing by message is coming soon, and that for now they can type the rate on the line in the project's Bill tab. Do not offer to do it, and NEVER say a rate was applied, set or saved.
+`}${canUseCards ? `
 # YOU ARE ALSO THEIR ESTIMATOR AND PROJECT MANAGER
 Act like a sharp senior QS and site PM working beside them, not a search box.
 - project_tips — what to do next on a project, most urgent first. When the user is on a project page or asks "what now", start here and lead with the top one or two.
 - propose_project_pricing — proposes a rate for every unpriced line from THEIR OWN RateGen library and shows a confirm card. You NEVER price anything yourself and NEVER say rates were applied: the user ticks the lines and presses Apply on the card. Explain the strong and weak matches, and that a match is by description and unit.
-- propose_price_by_area — when the user STATES a cost per m² for windows or doors ("windows are 88,000 per sqm"), propose every window (or door) priced from its own size. propose_set_rates — when the user STATES a rate for lines ("set blockwork to 9,500 per m2", "rate line 14 at 2,000"). Whenever the user states a cost or a rate, call one of these straight away to PROPOSE it; do not just acknowledge it. Pass their figure exactly as a plain number (88k = 88000) and the unit they said. The split is 60% material, 20% labour, 20% overhead and profit unless they give another; pass theirs when they do. Never invent a rate they did not state, never convert units, and NEVER say a rate is applied, set or saved: the card applies it only when they press Apply.
-- project_report — what moved between two dates (value done, certified, actual vs planned, variations, purchases, late tasks, activity), with a card that opens the PDF. Work out the dates from TODAY in the visitor section (Lagos time) before calling it. If the range is unclear, ask once.
+${canUseUserRates ? `- propose_price_by_area — when the user STATES a cost per m² for windows or doors ("windows are 88,000 per sqm"), propose every window (or door) priced from its own size. propose_set_rates — when the user STATES a rate for lines ("set blockwork to 9,500 per m2", "rate line 14 at 2,000"). Whenever the user states a cost or a rate, call one of these straight away to PROPOSE it; do not just acknowledge it. Pass their figure exactly as a plain number (88k = 88000) and the unit they said. The split is 60% material, 20% labour, 20% overhead and profit unless they give another; pass theirs when they do. Never invent a rate they did not state, never convert units, and NEVER say a rate is applied, set or saved: the card applies it only when they press Apply.
+` : ""}- project_report — what moved between two dates (value done, certified, actual vs planned, variations, purchases, late tasks, activity), with a card that opens the PDF. Work out the dates from TODAY in the visitor section (Lagos time) before calling it. If the range is unclear, ask once.
 How to work:
 - Explain a rate when asked: what makes it up (material, labour, plant, overhead and profit) and what to check. Real build-ups come from suggest_rate when that tool is available; otherwise describe what a build-up for that item normally contains, clearly as general guidance, never as their figure.
 - Flag risks plainly when the data shows them: unpriced lines, lines over budget, no progress for weeks, overdue tasks, an unlocked contract on a job already on site.
@@ -671,7 +713,7 @@ ${knowledgePack}`;
   return { cacheable, dynamic: userContext };
 }
 
-function buildUserContext(user, now = new Date()) {
+export function buildUserContext(user, now = new Date(), page = {}) {
   // Today in Lagos. In the per-visitor half so the cached prefix never changes
   // at midnight; Ada needs it to turn "last month" into dates.
   const today = `TODAY: ${watToday(now)} (Lagos, WAT, UTC+1). Use this for any date the user describes in words.`;
@@ -690,9 +732,19 @@ A guest who is NOT logged in. If they show buying intent, encourage creating an 
     ? `They ALREADY OWN (active): ${owned.join(", ")}. Do NOT try to re-sell these — instead upsell complementary products, trainings or courses they don't have.`
     : `They have no active subscriptions yet — a prime candidate for a first purchase.`;
 
+  // WHERE THEY ARE STANDING. The page reached the tools already, but nothing
+  // told the model, so on Project Aurora's own bill "price this project" was
+  // answered with "which project?". The reference is only ever a hint: every
+  // tool resolves it against the caller's OWN projects.
+  const ref = String(page?.projectRef || "").trim();
+  const onPage = ref
+    ? `
+ON A PROJECT PAGE: they are looking at one of their own projects right now (product: ${String(page?.productKey || "unknown")}, reference: ${ref}). When they say "this project", "this bill", "here", or name no project, it is THIS one: leave the project name out where a tool allows it (it then uses the page's project), and where a tool requires one, pass the reference above as the name. Do not ask which project.`
+    : "";
+
   return `# VISITOR
 ${today}
-A LOGGED-IN user${user.name ? ` named ${user.name}` : ""}${user.email ? ` (${user.email})` : ""}. ${ownedLine}`;
+A LOGGED-IN user${user.name ? ` named ${user.name}` : ""}${user.email ? ` (${user.email})` : ""}. ${ownedLine}${onPage}`;
 }
 
 /* --------------------------- tool handlers --------------------------- */
@@ -847,6 +899,10 @@ async function handleAccountTool(name, input, ctx) {
     // ── Estimator & PM ──
     if (name === "propose_project_pricing")
       return withCard(await getPricingProposal(ctx.user._id, input?.projectName, ctx.page), ctx);
+    // Only offered to a chat that draws their card; refused again here so a
+    // tool call the model makes up anyway never reaches an older chat.
+    if ((name === "propose_price_by_area" || name === "propose_set_rates") && !ctx.userRates)
+      return "Pricing by message is not available in this chat yet. Tell the user it is coming soon and that for now they can type the rate on the line in the project's Bill tab. Do not say any rate was set.";
     if (name === "propose_price_by_area")
       return withCard(
         await getAreaPricingProposal(
@@ -956,10 +1012,11 @@ export async function runSalesAgent(history, message, opts = {}) {
   const { knowledgePack, productIndex } = await getCatalog();
   const system = buildSystemPrompt({
     knowledgePack,
-    userContext: buildUserContext(opts.user, opts.now || new Date()),
+    userContext: buildUserContext(opts.user, opts.now || new Date(), opts.page),
     canReadAccount: !!opts.user,
     canUseAiService: !!opts.user && !!opts.accessToken && aiServiceEnabled(),
     canUseCards: !!opts.user && opts.cards === true,
+    canUseUserRates: canUseUserRateCard(opts),
     markdown: opts.format === "markdown",
   });
 
@@ -990,6 +1047,8 @@ export async function runSalesAgent(history, message, opts = {}) {
     },
     productIndex,
     pendingActions: [],
+    // The chat can show the stated-rate card (see CAP_USER_RATE_CARD).
+    userRates: canUseUserRateCard(opts),
   };
 
   // Seed messages from prior history (text only), then the new user turn.
@@ -1018,7 +1077,7 @@ export async function runSalesAgent(history, message, opts = {}) {
     ? [
         ...TOOLS,
         ...ACCOUNT_TOOLS,
-        ...(opts.cards === true ? ESTIMATOR_TOOLS : []),
+        ...estimatorToolsFor(opts),
         ...(canUseAiService ? AI_SERVICE_TOOLS : []),
       ]
     : TOOLS;

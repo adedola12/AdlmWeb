@@ -4,6 +4,7 @@ import { Setting } from "../models/Setting.js";
 import { User } from "../models/User.js";
 import { MAX_PLAUSIBLE_NGN_USD } from "../util/fx.js";
 import { isPublicHubCopy, PUBLIC_HUB_COPY_REFUSED } from "../util/hubStorage.js";
+import { isGatedSetting, stageSettingChange } from "../util/releaseGateSetting.js";
 
 function requireAdminOrMiniAdmin(req, res, next) {
   // See server/middleware/demoMode.js — read-only, masked demo sessions view only.
@@ -109,6 +110,40 @@ router.post("/installer-hub", async (req, res) => {
     }
   }
 
+  // RELEASE GATE (docs/RELEASE_GATE.md). installerHubUrl is what every
+  // customer downloads, so changing it IS a release: it is staged for the
+  // approver instead of saved, and customers keep the current Hub until he
+  // approves it. The video and guide links are not the Hub itself and save
+  // as they always did. Demo and design sessions are simulated upstream.
+  if (!req.demoMode && !req.designMode && isGatedSetting("installerHubUrl") && typeof update.installerHubUrl === "string") {
+    const live = await Setting.findOne({ key: "global" }).select("installerHubUrl").lean();
+    const previous = String(live?.installerHubUrl || "").trim();
+    if (update.installerHubUrl && update.installerHubUrl !== previous) {
+      const staged = { ...update };
+      delete staged.installerHubUrl;
+      const other = Object.keys(staged).length
+        ? await Setting.findOneAndUpdate({ key: "global" }, staged, { upsert: true, new: true })
+        : live;
+      const candidate = await stageSettingChange({
+        field: "installerHubUrl",
+        value: update.installerHubUrl,
+        previous,
+        actor: String(req.user?.email || "admin").trim().toLowerCase(),
+        req,
+      });
+      return res.status(202).json({
+        ok: true,
+        pendingApproval: true,
+        candidateId: String(candidate._id),
+        installerHubUrl: previous,
+        proposedInstallerHubUrl: update.installerHubUrl,
+        installerHubVideoUrl: other?.installerHubVideoUrl,
+        installerHubGuideUrl: other?.installerHubGuideUrl,
+        message:
+          "Staged for sign-off. Customers keep the current Installer Hub until the release approver approves it on /admin/releases.",
+      });
+    }
+  }
   const s = await Setting.findOneAndUpdate(
     { key: "global" },
     update,

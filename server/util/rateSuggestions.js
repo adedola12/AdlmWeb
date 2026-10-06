@@ -105,6 +105,128 @@ export function billLineText(item) {
     .join(" ");
 }
 
+// ── matching a bill line to a rate ─────────────────────────────────────────
+//
+// WHY NOT similarityScore ALONE
+//
+// Measured on a real QUIV bill (Project Aurora, 3 Oct 2026): 1 of 363 unpriced
+// lines got a suggestion from a 150-rate library that plainly held answers for
+// dozens of them. Three things sank the score:
+//
+//   - A Revit line carries its level and type in brackets, a host-category
+//     prefix and model codes: "Blockwork – Lintel Formwork [L:** Site Level |
+//     T:WT3 _ 230mm Blockwork _ Paint/Paint]", "Door Doors_IntSgl_1 : TD02 -
+//     TIMBER DOOR - 850mmW". Every one of those words counts against a match.
+//   - A RateGen description is a full specification sentence, and Jaccard
+//     punishes a long rate however exactly it covers the line.
+//   - QS wording varies: "Disposal of Surplus Excavated Material" is the rate
+//     "Remove excess excavated material from site"; "Backfilling" is "Backfill".
+//
+// So a bill line is scored by how much of ITS item the rate covers, on stems,
+// with codes, dimensions, bracket text and measurement filler removed, and a
+// short list of QS synonyms. similarityScore stays as a floor, so nothing that
+// matched before can stop matching.
+
+const MATCH_STOP = new Set([
+  "the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "at", "by", "with", "from",
+  "as", "is", "are", "be", "all", "any", "etc", "item", "items", "general", "other", "others",
+  // how a quantity was measured, not what the work is
+  "area", "areas", "length", "lengths", "volume", "quantity", "qty", "net", "gross", "total",
+  "count", "number", "nr", "no", "sum", "type", "level", "generic", "default", "standard",
+  // how a rate sentence opens and closes, not what the work is
+  "supply", "install", "procure", "provide", "complete", "size", "high", "wide", "thick",
+  "including", "measured", "separately", "approved", "similar", "per",
+]);
+
+/** QS words that mean the same thing in a bill and a rate library. */
+const SYNONYMS = new Map(
+  Object.entries({
+    surplus: "excess", disposal: "remove", removal: "remove", cart: "remove",
+    rebar: "reinforcement", reinforcing: "reinforcement", blockwall: ["blockwork", "wall"],
+    blocks: "blockwork", block: "blockwork", plaster: "render", plastering: "render",
+    shuttering: "formwork", tiles: "tile", tiling: "tile",
+  }),
+);
+
+/** A rough stem, so "excavated", "excavation" and "excavate" are one word. */
+function stem(w) {
+  for (const suf of ["ation", "ion", "ing", "ed", "es", "e", "s"]) {
+    if (w.length - suf.length >= 4 && w.endsWith(suf)) return w.slice(0, -suf.length);
+  }
+  return w;
+}
+
+/** The words of a description that say what the work is. */
+export function matchWords(text) {
+  const out = new Set();
+  const plain = String(text || "")
+    .toLowerCase()
+    // Level and type in Revit's brackets say where and which, not what.
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ");
+  for (const raw of plain.split(/\s+/)) {
+    // Codes and dimensions (td02, 850mmw, 230mm, 1500x3000) are not words.
+    if (!raw || raw.length < 3 || /\d/.test(raw) || MATCH_STOP.has(raw)) continue;
+    const w = SYNONYMS.get(raw) || raw;
+    for (const one of Array.isArray(w) ? w : [w]) out.add(stem(one));
+  }
+  return out;
+}
+
+/**
+ * A bill line's words, split into the item and the category in front of it.
+ *
+ * "Blockwork – Lintel Concrete": Blockwork is Revit's host category, Lintel
+ * Concrete is the work. The category counts half: lintel concrete is concrete,
+ * not blockwork, and counting "blockwork" in full is what offered "Concrete
+ * filling in blockwall" for it.
+ */
+function lineWords(text) {
+  const plain = String(text || "").replace(/\[[^\]]*\]/g, " ");
+  const cut = plain.match(/^([^–—]{2,40}?)\s+[–—-]\s+(.+)$/);
+  if (cut && cut[1].trim().split(/\s+/).length <= 3) {
+    return { item: matchWords(cut[2]), cat: matchWords(cut[1]) };
+  }
+  return { item: matchWords(plain), cat: new Set() };
+}
+
+/**
+ * How well a rate covers a bill line, 0..1.
+ *
+ * Mostly coverage OF THE LINE (a rate is a longer sentence than a bill item,
+ * and that is not a mismatch), with a little overlap so that, between two
+ * rates covering the line equally, the tighter one wins, and a nudge for a
+ * rate that OPENS with the line's work ("225mm blockwall in mortar" for a
+ * blockwork wall, over "Concrete filling in 225mm blockwall").
+ */
+export function lineMatchScore(lineText, rateText) {
+  const { item, cat } = lineWords(lineText);
+  const rate = matchWords(rateText);
+  const floor = similarityScore(lineText, rateText);
+  for (const w of item) cat.delete(w);
+  if (!item.size || !rate.size) return floor;
+  let inItem = 0;
+  let inCat = 0;
+  for (const w of item) if (rate.has(w)) inItem += 1;
+  for (const w of cat) if (rate.has(w)) inCat += 1;
+  if (!inItem) return floor;
+  const coverage = (inItem + 0.5 * inCat) / (item.size + 0.5 * cat.size);
+  const all = item.size + cat.size;
+  const both = inItem + inCat;
+  const overlap = both / (all + rate.size - both);
+  const first = rate.values().next().value;
+  const opens = first && (item.has(first) || cat.has(first)) ? 0.04 : 0;
+  return Math.max(floor, Math.min(1, 0.75 * coverage + 0.25 * overlap + opens));
+}
+
+/** Does a rate's own mm figure sit within 10% of the line's thickness? */
+function sameThickness(named, rateText) {
+  const t = Number(named?.thickness) * 1000;
+  if (!(t > 0)) return false;
+  const figures = [...String(rateText || "").matchAll(/(\d{2,4})\s*mm\b/gi)].map((m) => Number(m[1]));
+  return figures.some((f) => Math.abs(f - t) / t <= 0.1);
+}
+
 /**
  * The same item, whichever level or type of it this line happens to be.
  *
@@ -213,6 +335,13 @@ export function suggestRatesForLine(
   { limit = 5, minScore = 0.45, usage = null, convert = false } = {},
 ) {
   const text = billLineText(item);
+  // WHAT THE MATCH IS SCORED ON: the bill's own wording. billLineText adds the
+  // takeoff line, material and type, and on a Revit line the type repeats the
+  // bracketed level/type OUTSIDE the brackets ("WT3 _ 230mm Blockwork _
+  // Paint/Paint"), so "blockwork paint paint" counted as the item: live, a 150mm
+  // wall ranked a paint rate first and lintel formwork found nothing. The other
+  // fields are kept for a line with no description, and for reading thickness.
+  const matchText = str(item?.description) || text;
   const unit = str(item?.unit);
   if (!text || !unit) return [];
 
@@ -229,9 +358,12 @@ export function suggestRatesForLine(
     if (!had || (u.exact && !had.exact) || u.uses > had.uses) used.set(u.rateId, u);
   }
 
-  // The dimensions this line's description names ("230mm", "Y12"), for a rate
-  // in another unit. Read once per line.
-  const dims = convert ? guessDimensions(text) : null;
+  // The dimensions this line's description names ("230mm", "Y12"): for a rate
+  // in another unit, and to prefer the 225mm blockwall over the 100mm one for
+  // a 230mm wall. Read once per line, off the FULL text (the type in Revit's
+  // brackets is where the thickness lives).
+  const named = guessDimensions(text);
+  const dims = convert ? named : null;
 
   const out = [];
   for (const r of Array.isArray(rates) ? rates : []) {
@@ -263,8 +395,16 @@ export function suggestRatesForLine(
 
     const rateId = str(r?.rateId || r?.id || r?._id);
     const use = rateId ? used.get(rateId) : null;
-    const words = similarityScore(text, desc);
+    let words = lineMatchScore(matchText, desc);
     if (words < minScore && !use) continue;
+
+    // A rate whose own figure matches the line's thickness (225mm against a
+    // 230mm wall) is the closer answer among rates that read alike.
+    if (words >= minScore && sameThickness(named, desc)) words = Math.min(1, words + 0.06);
+    // A rate in another unit rests on a guessed dimension, so its words must
+    // agree strongly: "Lintel Concrete" is not "Concrete filling in blockwall"
+    // just because both mention concrete and blocks.
+    if (conversion && !use && words < 0.65) continue;
 
     // Used before on this exact item outranks any word match; on a near one it
     // ranks with a likely match.

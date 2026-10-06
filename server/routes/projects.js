@@ -725,6 +725,7 @@ import {
 } from "../util/finalAccountMath.js";
 import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
 import { carryCloudRateLocks } from "../util/cloudRateLocks.js";
+import { priceBudgetFromCloud } from "../util/cloudBudgetPricing.js";
 import { sanitizeRoomFinishes } from "../util/roomFinishes.js";
 import {
   sanitizeResourceItems,
@@ -922,6 +923,26 @@ async function userHasActiveEntitlement(userId, key) {
   if (!e) return false;
   if (e.expiresAt && new Date(e.expiresAt).getTime() < Date.now()) return false;
   return true;
+}
+
+// QUIV measures, ADLM Cloud prices (owner, 1 and 4 Oct 2026). QUIV sends its
+// material and labour schedule as quantities; for an account with RateGen the
+// cloud prices the unpriced rows and builds the lines QUIV did not cover (see
+// util/cloudBudgetPricing.js). Without RateGen the budget stays quantities only,
+// the 24 Sep rule. Runs after preserveBudgetUserEdits, so anything the QS priced
+// is already back and is never changed. Never fails the save.
+async function cloudPriceQuivBudget(project, productKey, userId, tag) {
+  if (productKey !== "revit" || !project) return;
+  try {
+    if (!(await userHasActiveEntitlement(userId, "rategen"))) return;
+    const ctx = await buildMlScheduleContext(userId);
+    const r = priceBudgetFromCloud(project.items, project.budgetItems, ctx);
+    if (!r.priced && !r.generated) return;
+    project.budgetItems = ensureBillItemCoverage(project.items, sanitizeBudgetItems(r.budgetItems));
+    console.log(`[${tag}] cloud priced the QUIV budget: ${r.priced} rows priced, ${r.covered} lines built (${r.generated} rows)`);
+  } catch (e) {
+    console.error(`[${tag}] cloud pricing failed:`, e?.message || e);
+  }
 }
 
 // Mongo filter matching a project the requester may READ: they own it OR are a
@@ -2754,6 +2775,7 @@ async function saveProjectFull(req, res) {
           );
         }
         takeoffRes.project.budgetItems = freshBudget;
+        await cloudPriceQuivBudget(takeoffRes.project, takeoffKey, userId, "full");
         deriveBillRatesFromBudget(takeoffRes.project);
         reconcileItemsFromBudget(takeoffRes.project);
         await takeoffRes.project.save();
@@ -4247,6 +4269,9 @@ async function updateProject(req, res) {
           );
         }
         project.budgetItems = freshBudget;
+        // A viewer who cannot see rates never gets prices added on his save.
+        if (access?.canSeeRates !== false)
+          await cloudPriceQuivBudget(project, productKey, userId, "update");
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
       }

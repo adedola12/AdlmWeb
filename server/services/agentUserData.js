@@ -282,7 +282,11 @@ async function resolveProject(userId, projectName, context = {}) {
   // already knew. The client now sends its own address with every message and
   // it is used ONLY when no name was given — naming a project still wins, so
   // "and what about Lekki Mall" works from any page.
-  if (!query) {
+  // Ada is told the page's reference and passes it as the name where a tool
+  // requires one; a database id or slug never matches a project NAME, so it is
+  // read as "this page" too.
+  const ref = String(context.projectRef || "").trim();
+  if (!query || (ref && query === ref)) {
     const here = await projectFromRef(uid, context.projectRef, context.productKey);
     if (here) return { project: here };
     return { error: "Ask the user which project they mean (by name)." };

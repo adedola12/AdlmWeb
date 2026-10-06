@@ -147,3 +147,33 @@ test("windows and doors proposed in one reply keep both cards", () => {
     ],
   );
 });
+
+// The API ships before the chat that draws the stated-rate card. An older chat
+// (no capability declared) must never be offered the tools, or Ada would show
+// an Apply button that does nothing.
+test("the stated-rate tools are offered only to a chat that declares the card", async () => {
+  const { estimatorToolsFor, canUseUserRateCard, agentCapabilities, CAP_USER_RATE_CARD } =
+    await import("./salesAgent.js");
+  const names = (opts) => estimatorToolsFor(opts).map((t) => t.name);
+  const RATE_TOOLS = ["propose_price_by_area", "propose_set_rates"];
+
+  assert.equal(CAP_USER_RATE_CARD, "ada-user-rate-card");
+  // No cards at all: no estimator tools.
+  assert.deepEqual(names({}), []);
+  assert.deepEqual(names({ capabilities: [CAP_USER_RATE_CARD] }), []);
+  // Cards but no capability (the chat live today): the rest, not these two.
+  const today = names({ cards: true });
+  assert.ok(today.includes("propose_project_pricing"));
+  for (const t of RATE_TOOLS) assert.ok(!today.includes(t), t);
+  // Cards and the capability: all of them.
+  const next = names({ cards: true, capabilities: ["Ada-User-Rate-Card "] });
+  for (const t of RATE_TOOLS) assert.ok(next.includes(t), t);
+
+  assert.equal(canUseUserRateCard({ user: {}, cards: true, capabilities: [CAP_USER_RATE_CARD] }), true);
+  assert.equal(canUseUserRateCard({ user: null, cards: true, capabilities: [CAP_USER_RATE_CARD] }), false);
+  assert.equal(canUseUserRateCard({ user: {}, cards: true }), false);
+  assert.equal(canUseUserRateCard({ user: {}, capabilities: [CAP_USER_RATE_CARD] }), false);
+
+  assert.deepEqual(agentCapabilities("ada-user-rate-card"), []);
+  assert.deepEqual(agentCapabilities([1, null, " A ", "a", ""]), ["a"]);
+});

@@ -160,6 +160,9 @@ router.post("/chat", rateLimit, optionalAuth, async (req, res) => {
       // chat would show "Apply N rates" as a button that does nothing, so the
       // estimator tools are only offered to one that asks.
       cards: req.body?.cards === true,
+      // The cards it can draw beyond those, by name (CAP_USER_RATE_CARD in
+      // services/salesAgent.js). A tool whose card is not named is not offered.
+      capabilities: Array.isArray(req.body?.capabilities) ? req.body.capabilities.slice(0, 20) : [],
       // The page the question was asked from. Only ever a hint: every tool
       // resolves it against the caller's OWN projects, so a reference to
       // somebody else's finds nothing rather than leaking a name.
