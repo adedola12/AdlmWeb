@@ -19,7 +19,15 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useProjects } from "../../ds/useProjects.js";
 import { apiAuthed } from "../../api.js";
 import { useAuth } from "../../store.jsx";
-import { tabsFor, resolveTab, tabCount, tabNeedsAttention, loadingNoun } from "./workProjectTabs.js";
+import {
+  tabsFor,
+  resolveTab,
+  tabCount,
+  tabNeedsAttention,
+  loadingNoun,
+  placeToRemember,
+} from "./workProjectTabs.js";
+import { rememberPlace } from "../../lib/lastPlace.js";
 import { StillLoading } from "./workProjectBits.jsx";
 import { STAGES, stageIndex } from "./overviewModel.js";
 import { attachedModels } from "./sourcesModel.js";
@@ -203,6 +211,17 @@ export default function WorkProjectShell({ productKey, id }) {
     },
     [params, setParams],
   );
+
+  // WHERE THIS READER LAST WAS, for "Pick up where you left off" on Work home.
+  // The reasoning, and what was broken, is with placeToRemember.
+  //
+  // `tabs` above is deliberately not a dependency: tabsFor returns a fresh array
+  // every render, so depending on it would rewrite storage on every render
+  // rather than when the reader actually moves.
+  React.useEffect(() => {
+    const place = placeToRemember({ productKey, id, name: project?.name, tab });
+    if (place) rememberPlace(place);
+  }, [productKey, id, project?.name, tab]);
 
   // His layer L5: a line, a rate build-up or the model changes open OVER the
   // tab, never as a new page (WORK.md §13). WorkProjectPanel owns the DOM, the

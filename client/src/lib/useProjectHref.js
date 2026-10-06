@@ -1,31 +1,28 @@
-// Where a project card should go, for the viewer looking at it.
+// Where a project card should go.
 //
-// Until 1 October only staff may open Richard's project page; a customer linked
-// there is bounced straight back to the classic workspace by NewBuildGate. That
-// is the right destination, but it is an extra hop on the journey a QS makes
-// more than any other — so the link is decided per viewer instead, the same way
-// the rail's destinations are (lib/railGate.js).
+// It used to depend on who was looking. While /work/* was staff-only, a
+// customer linked there was bounced straight back by NewBuildGate, so the card
+// was decided per reader to save them a hop on the journey a QS makes more than
+// any other.
 //
-// One hook rather than four copies of `canViewPreview(user)`, because a card
-// that disagrees with the gate is how somebody ends up in a redirect they
-// cannot explain.
+// Since 5 Oct 2026 the new project page is everybody's (owner's decision), and
+// this hook was the last thing still reading canViewPreview to answer the
+// question — so a paying customer's project cards, on the gallery, the Work
+// home, the programme and the sample strip, all still pointed at the classic
+// workspace, while the route they would have landed on was already sending them
+// the other way. One extra redirect per project opened, and the cards and the
+// route disagreeing about where a project lives.
+//
+// It stays a hook rather than collapsing into four direct projectWorkspaceHref
+// calls, so there is still ONE place to change if the answer ever depends on
+// the reader again.
 
 import React from "react";
-import { useAuth } from "../store.jsx";
-import { canViewPreview } from "../utils/roles.js";
 import { projectWorkspaceHref } from "./projectLinks.js";
 
-/**
- * Returns `href(project)` — the new project page for staff, the classic
- * workspace for everybody else.
- */
+/** Returns `href(project)` — the new project page. */
 export function useProjectHref() {
-  const { user } = useAuth();
-  const newBuild = canViewPreview(user);
-  return React.useCallback(
-    (project) => projectWorkspaceHref(project, { newBuild }),
-    [newBuild],
-  );
+  return React.useCallback((project) => projectWorkspaceHref(project, { newBuild: true }), []);
 }
 
 export default useProjectHref;

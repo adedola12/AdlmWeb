@@ -106,3 +106,34 @@ export const loadingNoun = (tabKey) => LOADING_NOUN[String(tabKey || "")] || "de
 
 /** Exported for the test that pins every tab to a noun. */
 export { LOADING_NOUN };
+
+/**
+ * What to store as "where this reader last was", for the Work home's first
+ * three rows (lib/lastPlace.js).
+ *
+ * Out here rather than inline in the shell for one reason: this was DEAD. Only
+ * the classic workspace ever wrote a place (ProjectOpenView.jsx), and since the
+ * 5 Oct flip a customer never opens the classic workspace — so the Work home's
+ * "Pick up where you left off" froze on whatever that build last recorded, and
+ * for anybody who has only ever used this one it was never populated at all. The
+ * section fell back to "Recently updated" for everybody and looked perfectly
+ * fine doing it. A feature that dies silently should not be able to die again
+ * without a test noticing.
+ *
+ * The tab is stored under THIS build's name for it; placeHref translates in the
+ * reading direction and passes both builds' names through unchanged, so a place
+ * written here and one written there are read the same way.
+ *
+ * @returns {null} when there is nothing worth storing yet.
+ */
+export function placeToRemember({ productKey, id, name = "", tab = "" } = {}) {
+  if (!id || !productKey) return null;
+  const key = String(productKey).trim().toLowerCase();
+  return {
+    productKey: key,
+    key: String(id),
+    name: name || "",
+    tab,
+    tabLabel: tabsFor(key).find((t) => t.key === tab)?.label || "",
+  };
+}

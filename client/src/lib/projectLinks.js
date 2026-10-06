@@ -92,11 +92,16 @@ export function normaliseRollup(list) {
  * The workspace address for a project (by slug).
  *
  * `newBuild` sends it to Richard's project page instead of the classic
- * workspace. It is a parameter rather than a global because the answer differs
- * per VIEWER, not per project: until 1 October only staff may open /work/*, and
- * a customer linked there would be bounced straight back to the classic
- * workspace by NewBuildGate — the right destination, but an extra hop for the
- * one journey they make most.
+ * workspace. It was a parameter rather than a global because the answer once
+ * differed per VIEWER: while /work/* was staff-only, a customer linked there
+ * was bounced straight back by NewBuildGate, so the link was decided per
+ * reader to save them the hop.
+ *
+ * Since 5 Oct 2026 the new page is everybody's (owner's decision), so every
+ * caller in the app passes true and the parameter survives only for the two
+ * places that genuinely still want the old address: the "Open the classic
+ * workspace" links the new build offers for what it cannot do yet, and the
+ * classic build's own internal navigation.
  *
  * ArchiCAD and RateGen are unchanged either way: neither has a page under
  * /work/project, and both had their own home before this.
@@ -114,4 +119,68 @@ export function projectWorkspaceHref(p, { newBuild = false } = {}) {
     return `/work/project/${encodeURIComponent(k)}/${encodeURIComponent(key)}`;
   }
   return key ? `/projects/${k}?project=${encodeURIComponent(key)}` : `/projects/${k}`;
+}
+
+/**
+ * The new project page's name for a tab the classic workspace calls `tab`.
+ *
+ * The two builds do not name the same tab the same thing, and resolveTab()
+ * answers a name it does not know with Overview — silently. So a link to the
+ * classic "valuation" tab, translated by nobody, does not land on Valuations:
+ * it lands on the project summary, where a QS with a certificate waiting sees
+ * a summary, finds nothing to decide, and concludes there is nothing to decide.
+ * Of the names the app actually emits, only "bill" and "pm" matched as spelt.
+ *
+ * "work" is the one with no equivalent: the classic Work area put the model,
+ * the bill, the schedule and Ada on one screen, and the new build has no such
+ * tab. Overview is the honest answer there, not a mistranslation.
+ *
+ * A name already in the new build's own spelling passes straight through, so
+ * this is safe to apply to either build's tab names.
+ */
+const NEW_BUILD_TAB = {
+  dashboard: "overview",
+  budget: "rates",
+  valuation: "valuations",
+  work: "overview",
+};
+
+export function newBuildTab(tab) {
+  const t = String(tab || "").trim().toLowerCase();
+  return NEW_BUILD_TAB[t] || t;
+}
+
+/**
+ * Where a project opens AT A TAB on the new build — and, on the Bill, at a line.
+ *
+ * Returns a /work/project/ address with ?tab= on it, or, for the products that
+ * have no page there, whatever projectWorkspaceHref answers for them: ArchiCAD
+ * goes to its own BoQ screen and RateGen to /rategen, and a tab on the end
+ * would be a parameter neither screen reads. Callers that must know which they
+ * got can test the answer for "/work/project/".
+ *
+ * Two translations happen here and both are load-bearing:
+ *
+ *   the tab   through newBuildTab above. Overview is the ABSENCE of ?tab=,
+ *             which is how the shell itself writes it, so a link to it reads
+ *             the same as the address a reader would get by clicking.
+ *
+ *   the line  the new Bill searches by text (?q=) and has no notion of a line
+ *             key, so a remembered line is only worth carrying when we kept
+ *             its label too. Handing the search box an internal key would
+ *             filter the bill down to nothing, and an empty bill reads as a
+ *             project whose lines are gone rather than as a missed jump.
+ */
+export function newBuildPlaceHref(place) {
+  const base = projectWorkspaceHref(
+    { productKey: place?.productKey, slug: place?.key },
+    { newBuild: true },
+  );
+  if (!base.startsWith("/work/project/")) return base;
+  const tab = newBuildTab(place?.tab);
+  const q = new URLSearchParams();
+  if (tab && tab !== "overview") q.set("tab", tab);
+  if (tab === "bill" && place?.lineLabel) q.set("q", place.lineLabel);
+  const s = q.toString();
+  return s ? `${base}?${s}` : base;
 }

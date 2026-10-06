@@ -287,7 +287,12 @@ export default function DsWorkHome() {
       const hit = byKey.get(String(pl.key));
       if (!hit || used.has(String(hit.id))) continue;
       used.add(String(hit.id));
-      rows.push({ project: hit, href: placeHref(pl), eyebrow: pl.tabLabel || "Project", tab: pl.tab });
+      rows.push({
+        project: hit,
+        href: placeHref(pl, { newBuild: true }),
+        eyebrow: pl.tabLabel || "Project",
+        tab: pl.tab,
+      });
       if (rows.length >= 3) break;
     }
     for (const p of projects) {
