@@ -112,11 +112,29 @@ describe("why it cannot be issued yet", () => {
     ).toBe("");
   });
 
-  it("does not police a release when nothing is known to be held", () => {
-    // totalRetained 0 can mean "nothing retained" or "we have not been told".
-    // Refusing on the second would block a legitimate release; the server is the
-    // backstop either way.
-    expect(certDraftProblem({ ...ok, retentionReleased: "500000" }, { totalRetained: 0 })).toBe("");
+  it("REFUSES a release when nothing has been retained, and says that", () => {
+    // This test used to assert the opposite, on two premises that were both wrong:
+    // that 0 might mean "we have not been told" (the form only renders off a
+    // loaded project, whose certificates is an array from the server), and that
+    // "the server is the backstop either way" (issueCertificate reads
+    // safeNum(req.body.retentionReleased) at projects.js:5064 with no ceiling
+    // anywhere, and adds it back before tax). So the check was switched off in the
+    // one case it was written for — a first certificate, where a mis-key does the
+    // most damage — and nothing behind it would have caught the result.
+    expect(certDraftProblem({ ...ok, retentionReleased: "500000" }, { totalRetained: 0 })).toMatch(
+      /Nothing has been retained/,
+    );
+  });
+
+  it("says which of the two it is, because the fix differs", () => {
+    // "more than has been retained" tells a QS to lower the figure. "nothing has
+    // been retained yet" tells them this is not the certificate for it.
+    expect(
+      certDraftProblem({ ...ok, retentionReleased: "3000000" }, { totalRetained: 2_000_000 }),
+    ).toMatch(/more than has been retained/);
+    expect(certDraftProblem({ ...ok, retentionReleased: "1" }, { totalRetained: 0 })).toMatch(
+      /Nothing has been retained/,
+    );
   });
 
   it("complains about one thing at a time, most basic first", () => {

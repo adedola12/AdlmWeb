@@ -1,7 +1,11 @@
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent, within, waitFor } from "@testing-library/react";
+import { render as rtlRender, cleanup, fireEvent, within, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import WorkProjectIssueCert from "./WorkProjectIssueCert.jsx";
+
+// The form links to where a draft is approved, so every render needs a router.
+const render = (ui) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 // certificateDraft.test.js pins the rules. These pin what the form does with
 // them — and the one state that matters most: when the server refuses, its own
@@ -143,6 +147,45 @@ describe("the certificate form", () => {
     // The server stores status "draft" unless the body asks for approved or paid,
     // and this form never asks. Approving is PUT .../certificates/:number.
     expect(within(form()).getByText(/issued as a draft/)).toBeTruthy();
+  });
+
+  it("does not offer retention release to a reader whose rates are hidden", () => {
+    // issueCertificate reads the body's money only when the caller can see rates
+    // (moneyFromClient), so the figure would be dropped and the certificate would
+    // store 0 while the toast said it had been issued. And the ceiling could not be
+    // checked for them anyway: retentionHeld reads retentionAmount off
+    // certificates maskCertForClient has already zeroed.
+    const c = form(job({ certificates: [{ number: 1, retentionAmount: 1_000_000 }] }), {
+      ratesMasked: true,
+    });
+    expect(within(c).queryByLabelText(/Release/)).toBe(null);
+    expect(within(c).getByText(/Retention cannot be released here/)).toBeTruthy();
+    // The certificate itself is still issuable — the server works every figure out.
+    expect(within(c).getByText("Issue certificate 2")).toBeTruthy();
+  });
+
+  it("still offers it to everybody else", () => {
+    expect(within(form()).getByLabelText(/Release/)).toBeTruthy();
+  });
+
+  it("sends a masked reader's certificate with no retention key at all", () => {
+    const onIssue = vi.fn().mockResolvedValue({});
+    const c = form(job(), { onIssue, ratesMasked: true });
+    fireEvent.click(within(c).getByText("Issue certificate 1"));
+    return waitFor(() => {
+      expect(onIssue).toHaveBeenCalled();
+      expect("retentionReleased" in onIssue.mock.calls[0][0]).toBe(false);
+    });
+  });
+
+  it("links to where a draft is actually approved", () => {
+    // It said "Approving it is a separate step" and gave nowhere to do it. The step
+    // is real on the server and the control lives only on the classic workspace —
+    // promising a step with no link is the shape this very screen just fixed, and a
+    // draft counts as nothing certified until somebody finds it.
+    const c = form(job(), { classicHref: "/projects/revit?project=x&classic=1" });
+    const link = within(c).getByText("classic workspace");
+    expect(link.getAttribute("href")).toBe("/projects/revit?project=x&classic=1");
   });
 
   it("does not throw before the project has loaded", () => {

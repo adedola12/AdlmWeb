@@ -67,15 +67,40 @@ describe("what this reader is allowed", () => {
     expect(noExportsReason(p, { productKey: "revit", saveId: "x" })).toBe("rates-hidden");
   });
 
-  it("gives a view-only reader the bill but not a payment certificate", () => {
-    // Two different server questions: the bill routes never ask canExport, the
-    // priced documents do (VIEW_ONLY, projects.js:5604).
+  it("offers a view-only reader NOTHING, bill workbooks included", () => {
+    // This test used to assert the opposite, and it was encoding a bug. The claim
+    // was that "the bill routes never ask canExport" — which is what reading
+    // loadProjectForExport alone tells you. The check is two calls down:
+    // loadProjectForExport -> findProjectDoc -> canExportProject, which throws
+    // 403 VIEW_ONLY at projects.boq.js:189. So the four bill workbooks were being
+    // offered to a reader the server always refuses.
     const p = job({
       _access: { canSeeRates: true, canExport: false, canEdit: false },
       certificates: [{ number: 1 }],
       finalAccount: { finalized: true },
     });
-    expect(keys(p)).toEqual(["boq-elemental", "boq-trade", "bill-budget", "bill-budget-trade"]);
+    expect(at(p)).toEqual([]);
+    expect(noExportsReason(p, { productKey: "revit", saveId: "x" })).toBe("view-only");
+  });
+
+  it("tells view-only and rates-hidden apart, because the remedy differs", () => {
+    // "An active RateGen subscription lifts this" is true of one and false of the
+    // other: buying RateGen flips canSeeRates, and canExport still refuses
+    // everything. Selling a subscription that cannot unblock the reader is worse
+    // than saying nothing.
+    const viewOnly = job({ _access: { canSeeRates: true, canExport: false } });
+    const masked = job({ _access: { canSeeRates: false, canExport: true } });
+    expect(noExportsReason(viewOnly, { productKey: "revit", saveId: "x" })).toBe("view-only");
+    expect(noExportsReason(masked, { productKey: "revit", saveId: "x" })).toBe("rates-hidden");
+  });
+
+  it("says the read FAILED rather than that it is still loading", () => {
+    // A failed read leaves the project null exactly as a pending one does, so
+    // without being told, the panel said "still loading" under the shell's own
+    // banner saying the read had failed — and told the reader to wait for
+    // something that would never arrive.
+    expect(noExportsReason(null, { productKey: "revit", saveId: "x", failed: true })).toBe("failed");
+    expect(noExportsReason(null, { productKey: "revit", saveId: "x" })).toBe("loading");
   });
 
   it("treats a missing _access as an owner, the way the server does", () => {

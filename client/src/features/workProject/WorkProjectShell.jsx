@@ -283,6 +283,22 @@ export default function WorkProjectShell({ productKey, id }) {
     project?.access === "view" ||
     project?.readOnly === true;
 
+  // RATES HIDDEN IS NOT READ-ONLY, AND THE DIFFERENCE HAS A FACE.
+  //
+  // A project shared at "full" with a collaborator who has no active RateGen
+  // subscription comes back canEdit TRUE and canSeeRates FALSE. They may measure,
+  // tick progress and move a line; they may not see or write a price. Every money
+  // field they send is restored from the stored row before the save is applied
+  // (guardMaskedWrite -> preserveMaskedMoney, projects.js:458-500), and the
+  // response is a perfectly ordinary 200.
+  //
+  // So a money input offered to that reader is a box that takes a figure, says
+  // "Saved", and keeps nothing — while the amount beside it keeps showing the
+  // figure the server actually holds. Two numbers on one row that cannot both be
+  // true. Nothing in this folder read canSeeRates before this.
+  const ratesMasked =
+    project?._ratesMasked === true || project?._access?.canSeeRates === false;
+
   // His .pj-sync (work-proj.js:355): "Saved" at rest, "Saving…" while a write
   // is in flight, "Saved just now" after one lands. A failure says so rather
   // than going quiet, because a silent failure on a bill is how somebody
@@ -592,10 +608,14 @@ export default function WorkProjectShell({ productKey, id }) {
    * through the project PUT would make the certificate list something the client
    * writes, which is how two of them end up numbered the same.
    *
-   * It answers with the updated project, so the tab takes that straight rather
-   * than refetching what it was just sent — and throws its own message up to the
-   * form, where there is room to read it. "Final account is finalized. Reopen it
-   * before issuing new certificates." is an instruction, not a status code.
+   * It answers with { ok, certificate, version } — NOT the project — which is why
+   * withIssuedCertificate exists; see the note below and in certificateDraft.js.
+   * (This sentence used to claim the opposite, directly above code that said so,
+   * which is the precise shape of comment that caused the bug it describes.)
+   *
+   * It throws the server's own message up to the form, where there is room to
+   * read it. "Final account is finalized. Reopen it before issuing new
+   * certificates." is an instruction, not a status code.
    */
   const issueCertificate = React.useCallback(
     async (body) => {
@@ -977,6 +997,8 @@ export default function WorkProjectShell({ productKey, id }) {
                 that has three. */}
             <WorkProjectIssueCert
               project={full}
+              ratesMasked={ratesMasked}
+              classicHref={classicWorkspaceHref}
               onIssue={issueCertificate}
               onDone={panel.close}
             />
@@ -996,6 +1018,9 @@ export default function WorkProjectShell({ productKey, id }) {
               saveId={saveId}
               accessToken={accessToken}
               classicHref={classicWorkspaceHref}
+              // A failed read leaves `full` null exactly as a pending one does,
+              // and only the shell can tell them apart.
+              failed={fullFailed}
               onToast={fb.toast}
             />
           </WorkProjectPanel>
@@ -1023,6 +1048,7 @@ export default function WorkProjectShell({ productKey, id }) {
               project={project}
               index={panel.content.index}
               canEdit={!viewOnly}
+              ratesMasked={ratesMasked}
               contractLocked={Boolean(project?.contract?.locked)}
               onSave={save}
               saving={saveState === "saving"}

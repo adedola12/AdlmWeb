@@ -2133,3 +2133,28 @@
   .ds .pj-budline .hd .pj-stage, .ds .pj-budline .hd .tag{grid-column:2;justify-self:start}
   .ds .pj-budline .hd .ds b{white-space:normal}
 }
+
+/* A ROW THAT IS NOT A CONTROL MUST NOT LOOK LIKE ONE.
+ *
+ * .pj-vars .vr is his variations row and it is styled as a button —
+ * cursor:pointer, and a border that lifts on hover. That is right while the row
+ * opens something. WorkProjectValuations renders the variations list with no
+ * handler, because there is nowhere to open yet, so those rows render as plain
+ * divs; the element changed and the affordance did not, which left a QS mousing
+ * over twenty rows that lit up under the hand cursor and did nothing when
+ * clicked. Exactly the complaint the change set out to answer.
+ *
+ * In ds-local.css because ds-work-proj.css is generated from Richard's own
+ * stylesheet and .vr-flat is ours.
+ */
+.ds .pj-vars .vr.vr-flat{cursor:default}
+.ds .pj-vars .vr.vr-flat:hover{border-color:var(--line)}
+
+/* The section RENAME control, which is not the drag handle beside it.
+ *
+ * It borrowed .grip to avoid writing any CSS, and .grip sets cursor:grab and
+ * touch-action:none because it was written for dragging a section. So the pencil
+ * invited a drag it cannot do, two inches from a handle that can. Same box, same
+ * hover, honest cursor.
+ */
+.ds .pj-bill .rnm{cursor:pointer;touch-action:auto}

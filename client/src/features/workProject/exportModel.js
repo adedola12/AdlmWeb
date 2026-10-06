@@ -15,16 +15,22 @@
 // always and let the server refuse — is the pattern this codebase has just spent
 // a day removing: a control that does nothing tells a QS the product is broken.
 //
-// Two different permissions, because the server asks two different questions:
+// Two permissions, and BOTH gate EVERYTHING. This was wrong in the first version
+// of this file and the mistake is worth recording, because it was made by reading
+// one function and not the one it calls:
 //
-//   canSeeRates   every export. A bill without its rates is not a bill, so a
-//                 full collaborator without RateGen is refused the lot
-//                 (RATES_NOT_VISIBLE, projects.boq.js:263). This used to be
-//                 unasked on that route, and a masked reader saw zeroed rates on
-//                 screen and downloaded the real ones.
-//   canExport     the priced documents only. A view-only reader may take the
-//                 bill but not a payment certificate (VIEW_ONLY,
-//                 projects.js:5604).
+//   canSeeRates   A bill without its rates is not a bill, so a full collaborator
+//                 without RateGen is refused the lot (RATES_NOT_VISIBLE,
+//                 projects.boq.js:263).
+//   canExport     A view-only reader is refused the lot too. The priced documents
+//                 say so where you would look for it (VIEW_ONLY,
+//                 projects.js:5604) — but the four BILL exports refuse it as
+//                 well, two calls down: loadProjectForExport calls
+//                 findProjectDoc, and findProjectDoc throws 403 VIEW_ONLY from
+//                 canExportProject at projects.boq.js:189. Reading
+//                 loadProjectForExport alone says there is no such check, and
+//                 that reading put four workbooks in front of a reader the server
+//                 always refuses.
 //
 // Both default to TRUE when _access is absent, which is what the server itself
 // does for an owner (projects.js:617) — the field only appears on a project
@@ -53,7 +59,10 @@ export function exportsFor(project, { productKey = "", saveId = "" } = {}) {
   const access = project._access || null;
   const canSeeRates = access ? access.canSeeRates !== false : true;
   const canExport = access ? access.canExport !== false : true;
-  if (!canSeeRates) return [];
+  // Either one refuses everything. canExport used to gate only the priced
+  // documents, which offered a view-only collaborator four bill workbooks that
+  // findProjectDoc refuses with 403 VIEW_ONLY before an exporter ever runs.
+  if (!canSeeRates || !canExport) return [];
 
   const name = sanitizeFilename(project.name || "Project");
   const items = Array.isArray(project.items) ? project.items : [];
@@ -100,8 +109,6 @@ export function exportsFor(project, { productKey = "", saveId = "" } = {}) {
     });
   }
 
-  if (!canExport) return rows;
-
   // Newest first, like the Valuations tab lists them, so the one a QS almost
   // always wants is the one at the top.
   for (const c of certificatesNewestFirst(project)) {
@@ -136,12 +143,22 @@ export function exportsFor(project, { productKey = "", saveId = "" } = {}) {
 /**
  * Why there is nothing to export, in the reader's terms.
  *
- * An empty list has three quite different causes and a panel that said "nothing
- * to export" for all of them would be wrong twice.
+ * Four different causes, and a panel that said "nothing to export" for all of
+ * them would be wrong three times. The two refusals in particular must not be
+ * confused: telling a VIEW-ONLY reader that "an active RateGen subscription lifts
+ * this" sells them a subscription that would not — canExport would still refuse
+ * every document, including the four bill workbooks.
+ *
+ * `failed` is passed by the caller because the project being null has two
+ * meanings and only the caller knows which: still loading, or the load failed.
+ * Saying "still loading" under a banner that says the read failed tells a reader
+ * to wait for something that will never arrive.
  */
-export function noExportsReason(project, { productKey = "", saveId = "" } = {}) {
+export function noExportsReason(project, { productKey = "", saveId = "", failed = false } = {}) {
+  if (failed) return "failed";
   if (!project || !productKey || !saveId) return "loading";
   const access = project._access || null;
+  if (access && access.canExport === false) return "view-only";
   if (access && access.canSeeRates === false) return "rates-hidden";
   if (!(Array.isArray(project.items) ? project.items : []).length) return "no-bill";
   return "";

@@ -110,6 +110,23 @@ describe("the Variations view", () => {
     }
   });
 
+  it("does not LOOK clickable either, which was half the bug", () => {
+    // .vr carries cursor:pointer and a hover border because it was written for a
+    // row that IS a button. Turning the element into a div took the focus and the
+    // keyboard away and left the hand cursor and the hover lift behind — so a QS
+    // still moused over a row, still saw it light up, still clicked, still got
+    // nothing. .vr-flat (ds-local.css) puts both back.
+    for (const row of vars().querySelectorAll(".pj-vars .vr")) {
+      expect(row.className).toContain("vr-flat");
+    }
+  });
+
+  it("drops the flat class when it is a control again", () => {
+    for (const row of vars({ onOpenVariation: vi.fn() }).querySelectorAll(".pj-vars .vr")) {
+      expect(row.className).not.toContain("vr-flat");
+    }
+  });
+
   it("is a button again the moment there is somewhere to go", () => {
     for (const row of vars({ onOpenVariation: vi.fn() }).querySelectorAll(".pj-vars .vr")) {
       expect(row.tagName).toBe("BUTTON");
