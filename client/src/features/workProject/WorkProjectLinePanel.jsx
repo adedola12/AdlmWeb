@@ -36,6 +36,7 @@ import {
   showActuals as actualsShowing,
   varianceOf,
   withActualQty,
+  withActualRate,
 } from "./actualsModel.js";
 
 /** His progress steps (work-proj.js:920). */
@@ -93,6 +94,11 @@ export default function WorkProjectLinePanel({
   const [looking, setLooking] = React.useState(false);
   // Why a measurement was not taken. Cleared on the next good one.
   const [refused, setRefused] = React.useState("");
+  // The progress box needs its own, because `refused` is rendered inside the
+  // "Measured on site" section — which is not there at all on an unlocked
+  // project, where this box still is. A shared one would put a refused
+  // percentage either in the wrong section or nowhere.
+  const [pctRefused, setPctRefused] = React.useState("");
   // FINDING A RATE BY NAME.
   //
   // The suggestions answer "what would price this line?". This answers "I know
@@ -225,6 +231,13 @@ export default function WorkProjectLinePanel({
   const showActuals =
     contractLocked && isLocked(project) && actualsShowing(project);
   const actualQty = actualQtyOf(it);
+  // The RAW stored rate, not actualRateOf — that one falls back to the contract
+  // rate when nothing is measured, which is right for working out an amount and
+  // wrong for a box. Pre-filled with the contract rate, an unmeasured line would
+  // read as "measured, and it came in exactly on the rate", and the blur
+  // comparison below would treat typing that very figure as no change and never
+  // save it.
+  const actualRateRaw = actualsOf(it?.actualRate);
   const actualAmount = actualAmountOf(it);
   const variance = varianceOf(it);
   const measured = measuredWhen(it);
@@ -540,6 +553,48 @@ export default function WorkProjectLinePanel({
               placeholder={`${num(it.qty)} in the contract`}
             />
           </label>
+          {/* THE RATE THAT WAS ACTUALLY PAID.
+              withActualRate has existed, exported and unit-tested, since the
+              actuals shipped, and nothing called it — so a QS could record that
+              100m3 was dug and not that it cost more per cubic metre than the
+              bill says, which is half of what a measured variance is made of.
+              Below the quantity because the quantity is the commoner edit, and
+              because a rate against an unmeasured quantity says less. */}
+          <label className="pn-num">
+            <span>Actual rate</span>
+            <input
+              // Keyed on the line for the same reason as the box above: the panel
+              // keeps its place in the tree, so defaultValue would otherwise
+              // carry one line's rate onto the next.
+              key={`${code}-rate`}
+              type="number"
+              min="0"
+              step="any"
+              inputMode="decimal"
+              disabled={!canEdit || saving}
+              defaultValue={actualRateRaw === null ? "" : actualRateRaw}
+              onBlur={(e) => {
+                const typed = e.target.value;
+                const next = actualsOf(typed);
+                if (next === actualRateRaw) {
+                  setRefused("");
+                  return;
+                }
+                const patch = withActualRate(project, index, typed);
+                if (patch) {
+                  setRefused("");
+                  onSave?.(patch);
+                  return;
+                }
+                setRefused(
+                  next !== null && next < 0
+                    ? "A rate that was paid cannot be negative. Record a credit as a variation, not as a negative rate."
+                    : "That rate could not be recorded.",
+                );
+              }}
+              placeholder={`${money(it.rate)} in the contract`}
+            />
+          </label>
           <p className="amt">
             {actualQty === null ? (
               // Not the same as agreeing. Said plainly so an empty row is not
@@ -602,6 +657,58 @@ export default function WorkProjectLinePanel({
             ))}
           </div>
         ) : null}
+
+        {/* HIS FIVE STEPS CANNOT SAY 60.
+            A QS valuing monthly measures what is actually built, and this figure
+            is the multiplier in valuationFactor — so it is the basis of the
+            interim certificate, the earned value and the PM dashboard. Rounding a
+            measured 60% to 50 or 75 is not a rounding of the display; it changes
+            what the client is asked to pay. The steps stay, because most lines
+            really are at one of them and a tap beats typing. */}
+        {canEdit ? (
+          <label className="pn-num">
+            <span>Or type the measured figure</span>
+            <input
+              // Keyed on the line, like the two boxes above: the panel keeps its
+              // place in the tree, so defaultValue would carry one line's figure
+              // onto the next.
+              key={`${code}-pct`}
+              type="number"
+              min="0"
+              max="100"
+              step="any"
+              inputMode="decimal"
+              disabled={saving}
+              defaultValue={done}
+              onBlur={(e) => {
+                const typed = e.target.value.trim();
+                // Empty is not 0 here. withLineProgress reads a blank as 0, and
+                // "I cleared the box" is not "none of it is built" — 0% is a
+                // claim, and it drops the line out of the next valuation.
+                if (typed === "") {
+                  setPctRefused("");
+                  return;
+                }
+                const next = Number(typed);
+                if (!Number.isFinite(next)) {
+                  setPctRefused("That is not a figure. Type a percentage between 0 and 100.");
+                  return;
+                }
+                if (next < 0 || next > 100) {
+                  // Held rather than clamped, so the box can never show one figure
+                  // while the line stands at another.
+                  setPctRefused("Progress is a percentage between 0 and 100.");
+                  return;
+                }
+                setPctRefused("");
+                if (next === done) return;
+                onSave?.(withLineProgress(project, index, next));
+              }}
+            />
+          </label>
+        ) : null}
+
+        {pctRefused ? <p className="pn-bad">{pctRefused}</p> : null}
 
         <p className="hint">
           {contractLocked

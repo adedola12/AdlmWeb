@@ -197,6 +197,46 @@ describe("recording a measurement", () => {
     expect(withActualRate(project(), 0, -1)).toBe(null);
   });
 
+  it("sends a recorded-at WITH the rate, or the server destroys the measurement", () => {
+    // sanitizeItems (server/routes/projects.js:1457) carries an accommodation for
+    // the QUIV plugin, whose DTO has no rate field: "rate is 0, actualRate has a
+    // value, nothing says when it was recorded" means promote actualRate into
+    // rate and clear the actuals. updateProject runs that at :3998, BEFORE
+    // applyValuationTracking stamps the date at :4078 — so a measured rate sent
+    // without a date, on the unpriced line where somebody is most likely to
+    // record one, is moved into the contract rate and lost.
+    const unpriced = { items: [line({ rate: 0 })] };
+    const patch = withActualRate(unpriced, 0, 4_800);
+    expect(patch.items[0].actualRate).toBe(4_800);
+    expect(patch.items[0].actualRecordedAt).toBeTruthy();
+    expect(Number.isNaN(new Date(patch.items[0].actualRecordedAt).getTime())).toBe(false);
+  });
+
+  it("keeps the recorded-at the line already had rather than restamping it", () => {
+    // It is when the line was FIRST measured, and it is the provenance a measured
+    // variation is defended with. The server would keep its own copy either way;
+    // this means nothing here depends on that.
+    const already = { items: [line({ actualRate: 4_000, actualRecordedAt: "2026-09-28T09:00:00Z" })] };
+    expect(withActualRate(already, 0, 4_800).items[0].actualRecordedAt).toBe(
+      "2026-09-28T09:00:00Z",
+    );
+  });
+
+  it("drops the recorded-at when the last measurement on the line goes", () => {
+    // A line with no measurement has no date on which it was measured. Leaving
+    // one behind would also stop the plugin promotion ever firing on that line.
+    const only = { items: [line({ actualRate: 4_000, actualRecordedAt: "2026-09-28T09:00:00Z" })] };
+    expect(withActualRate(only, 0, "").items[0].actualRecordedAt).toBe(null);
+  });
+
+  it("keeps the recorded-at when a measured QUANTITY is still on the line", () => {
+    // Clearing the rate is not un-measuring the line if the quantity stands.
+    const both = {
+      items: [line({ actualQty: 134, actualRate: 4_000, actualRecordedAt: "2026-09-28T09:00:00Z" })],
+    };
+    expect(withActualRate(both, 0, "").items[0].actualRecordedAt).toBe("2026-09-28T09:00:00Z");
+  });
+
   it("refuses a line that does not exist", () => {
     expect(withActualQty(project(), 9, 1)).toBe(null);
     expect(withActualQty(project(), -1, 1)).toBe(null);
