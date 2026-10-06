@@ -39,6 +39,7 @@ export default function WorkProjectValuations({
   view = "certs",
   onView,
   onGo,
+  onIssueCert,
   drift = null, classicHref = "" }) {
   const locked = contractIsLocked(project);
 
@@ -46,7 +47,15 @@ export default function WorkProjectValuations({
     return <LockedOut project={project} canEdit={canEdit} drift={drift} onGo={onGo} classicHref={classicHref} />;
   }
 
-  return <Unlocked project={project} canEdit={canEdit} view={view} onView={onView} />;
+  return (
+    <Unlocked
+      project={project}
+      canEdit={canEdit}
+      view={view}
+      onView={onView}
+      onIssueCert={onIssueCert}
+    />
+  );
 }
 
 /** His .pj-lock — the gate, and the checklist that explains it. */
@@ -112,7 +121,7 @@ function LockedOut({ project, canEdit, drift, onGo, classicHref = "" }) {
   );
 }
 
-function Unlocked({ project, canEdit, view, onView }) {
+function Unlocked({ project, canEdit, view, onView, onIssueCert }) {
   const mode = resolveValuationView(view);
   const totals = React.useMemo(() => totalsFor(project), [project]);
   // completePercent is value-weighted and returns 0 before the contract is
@@ -201,10 +210,25 @@ function Unlocked({ project, canEdit, view, onView }) {
           Retention {Number(settings.retentionPct) || 0}% · VAT {Number(settings.vatPct) || 0}% ·
           WHT {Number(settings.withholdingPct) || 0}%
         </span>
+
+        {/* The monthly act, and until now the one thing this tab could not do.
+            Only on the certificates view: raising one from the variations list or
+            the final account would be a button about something else. */}
+        {canEdit && mode === "certs" && onIssueCert ? (
+          <button type="button" className="pj-lnk" onClick={onIssueCert}>
+            Issue a certificate
+          </button>
+        ) : null}
       </div>
 
       {mode === "certs" ? (
-        <Certificates bars={bars} certs={certs} contractSum={contractSum} canEdit={canEdit} />
+        <Certificates
+          bars={bars}
+          certs={certs}
+          contractSum={contractSum}
+          canEdit={canEdit}
+          onIssueCert={onIssueCert}
+        />
       ) : mode === "variations" ? (
         <WorkProjectVariationsView project={project} />
       ) : (
@@ -219,7 +243,7 @@ function Unlocked({ project, canEdit, view, onView }) {
   );
 }
 
-function Certificates({ bars, certs, contractSum, canEdit }) {
+function Certificates({ bars, certs, contractSum, canEdit, onIssueCert }) {
   return (
     <div className="pj-vals">
       <div className="ch" aria-hidden="true">
@@ -258,9 +282,17 @@ function Certificates({ bars, certs, contractSum, canEdit }) {
             <b>No valuations yet</b>
             <p>
               {canEdit
-                ? "Record progress on the bill, then raise the first certificate in the classic workspace."
+                ? "Record progress on the bill, then certify what has been built."
                 : "Nothing has been certified on this contract yet."}
             </p>
+            {/* It said "raise the first certificate in the classic workspace",
+                and gave no link — so the one instruction on an empty Valuations
+                tab was to leave, with nowhere to go. It can be done here now. */}
+            {canEdit && onIssueCert ? (
+              <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={onIssueCert}>
+                Issue the first certificate
+              </button>
+            ) : null}
           </div>
         )}
       </div>

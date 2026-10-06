@@ -37,6 +37,8 @@ import WorkProjectHead from "./WorkProjectHead.jsx";
 import { projectIdLabel } from "./headModel.js";
 import WorkProjectPeople from "./WorkProjectPeople.jsx";
 import WorkProjectExports from "./WorkProjectExports.jsx";
+import WorkProjectIssueCert from "./WorkProjectIssueCert.jsx";
+import { withIssuedCertificate } from "./certificateDraft.js";
 import WorkProjectOverview from "./WorkProjectOverview.jsx";
 import WorkProjectBill from "./WorkProjectBill.jsx";
 import WorkProjectRates from "./WorkProjectRates.jsx";
@@ -581,6 +583,47 @@ export default function WorkProjectShell({ productKey, id }) {
     [productKey, saveId, accessToken],
   );
 
+  /**
+   * Issue an interim certificate.
+   *
+   * POST, not a patch through save(): a certificate is a new document with its
+   * own number, and the server decides that number (max + 1) precisely so two
+   * people issuing at once cannot both believe they issued IPC 4. Sending it
+   * through the project PUT would make the certificate list something the client
+   * writes, which is how two of them end up numbered the same.
+   *
+   * It answers with the updated project, so the tab takes that straight rather
+   * than refetching what it was just sent — and throws its own message up to the
+   * form, where there is room to read it. "Final account is finalized. Reopen it
+   * before issuing new certificates." is an instruction, not a status code.
+   */
+  const issueCertificate = React.useCallback(
+    async (body) => {
+      if (!accessToken || !saveId || !productKey) {
+        throw new Error("This project is still loading.");
+      }
+      const out = await apiAuthed(
+        `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/certificates`,
+        {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        },
+      );
+      // It answers with { ok, certificate, version }, not the project, so the two
+      // things that changed are folded in by hand. withIssuedCertificate says
+      // which two and why — and it is a function rather than three lines here
+      // because getting either of them wrong is silent: the tab keeps saying "No
+      // valuations yet", or the next bill save goes out against a version the
+      // server has already moved past.
+      setFull((prev) => withIssuedCertificate(prev, out));
+      fb.toast({ tone: "success", title: "Certificate issued as a draft" });
+      return out?.certificate || out;
+    },
+    [accessToken, saveId, productKey, fb],
+  );
+
   const clientName = String(project?.clientName || project?.client || "").trim();
   // The file his line names is the model the take-off came from.
   const sourceFileName = attachedModels(project)[0]?.sourceFile || "";
@@ -876,6 +919,7 @@ export default function WorkProjectShell({ productKey, id }) {
               view={rateView}
               onView={setRateView}
               onGo={go}
+              onIssueCert={() => panel.show({ kind: "cert" })}
               // The lock lives on the classic workspace and needs a step-up,
               // so the button that says so now actually goes there.
               classicHref={classicWorkspaceHref}
@@ -918,6 +962,24 @@ export default function WorkProjectShell({ productKey, id }) {
         {panel.content?.kind === "people" ? (
           <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>
             <WorkProjectPeople project={project} classicWorkspaceHref={classicWorkspaceHref} />
+          </WorkProjectPanel>
+        ) : null}
+
+        {panel.content?.kind === "cert" ? (
+          <WorkProjectPanel
+            title="Issue a certificate"
+            visible={panel.visible}
+            onClose={panel.close}
+          >
+            {/* `full`, not `project`: the next number and the retention held are
+                read off the certificates, which the rollup summary does not
+                carry — so off `project` the form would offer IPC 1 on a contract
+                that has three. */}
+            <WorkProjectIssueCert
+              project={full}
+              onIssue={issueCertificate}
+              onDone={panel.close}
+            />
           </WorkProjectPanel>
         ) : null}
 
