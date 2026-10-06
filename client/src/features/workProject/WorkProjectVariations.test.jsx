@@ -95,6 +95,28 @@ describe("the Variations view", () => {
     expect(onOpenVariation).toHaveBeenCalledWith(3);
   });
 
+  it("is not a button when there is nowhere for it to go", () => {
+    // WorkProjectValuations renders this view with no handler, and the row was a
+    // <button> regardless — so a real contract showed twenty rows that took
+    // focus, lit up on hover and did nothing. A control that does nothing reads
+    // as a broken product; a plain row reads as "the action is elsewhere",
+    // which is the truth until the raise/decide form exists.
+    const c = vars();
+    const rows = c.querySelectorAll(".pj-vars .vr");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.tagName).toBe("DIV");
+      expect(row.getAttribute("type")).toBe(null);
+    }
+  });
+
+  it("is a button again the moment there is somewhere to go", () => {
+    for (const row of vars({ onOpenVariation: vi.fn() }).querySelectorAll(".pj-vars .vr")) {
+      expect(row.tagName).toBe("BUTTON");
+      expect(row.getAttribute("type")).toBe("button");
+    }
+  });
+
   it("says there are none rather than drawing four zeros", () => {
     const c = render(<WorkProjectVariationsView project={{ variations: [] }} />).container;
     expect(within(c).getByText("No variations yet")).toBeTruthy();

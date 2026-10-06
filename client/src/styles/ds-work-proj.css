@@ -644,14 +644,20 @@
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ds .pj-budline .hd .ds em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3)}
 .ds .pj-budline .pj-bud{max-height:none}
+/* Scoped to .pj-budline, like the frame above it. These three were left behind
+   on .pj-vars .vr when the card was given its own class: the frame moved and the
+   material rows did not, so swapping the markup alone would have dropped them
+   back to the three-column .pj-bud .br at :399 and taken the quantity column
+   with it. The only .pj-bud inside a .pj-vars .vr in the whole client was this
+   card, so nothing else loses them. */
 /* One line per material: what it is, how much, what it costs.
    It read as three stacked lines, which is three eye movements for one fact and
    makes two materials impossible to compare. Quantity gets its own column so the
    figures line up down the card; the NAME is what gives when there is not enough
    room, because a QS scanning a budget is comparing the numbers. */
-.ds .pj-vars .vr .pj-bud .br{grid-template-columns:20px minmax(0,1fr) auto auto;gap:14px}
-.ds .pj-vars .vr .pj-bud .br .ds b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ds .pj-vars .vr .pj-bud .br .q{font-size:12px;color:var(--ink-3);white-space:nowrap;
+.ds .pj-budline .pj-bud .br{grid-template-columns:20px minmax(0,1fr) auto auto;gap:14px}
+.ds .pj-budline .pj-bud .br .ds b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .pj-budline .pj-bud .br .q{font-size:12px;color:var(--ink-3);white-space:nowrap;
   font-variant-numeric:tabular-nums;text-align:right}
 .ds .pj-final{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:14px}
 .ds .pj-card2 .brk .t{border-top:1px solid var(--line-2)}
