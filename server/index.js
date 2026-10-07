@@ -26,7 +26,7 @@ import { ensureRolesSeededOnce } from "./util/rbac.js";
 import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
-import { buildCorsOptions } from "./util/corsPolicy.js";
+import { buildCorsOptions, corsRejectionHandler } from "./util/corsPolicy.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
@@ -55,6 +55,7 @@ import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
+import projectsOpenIntentRoutes from "./routes/projects.openIntent.js";
 import projectsPmRoutes from "./routes/projects.pm.js";
 import reportsRoutes from "./routes/reports.js";
 import archicadRoutes from "./routes/archicad.routes.js";
@@ -95,6 +96,7 @@ import adminRateGenLibrary from "./routes/admin.rategen.library.js";
 import adminRateGenRates from "./routes/admin.rategen.rates.js";
 import adminRateGenCompute from "./routes/admin.rategen.compute.js";
 import adminRateGenMaster from "./routes/admin.rategen.master.js";
+import adminRateGenPlant from "./routes/admin.rategen.plant.js";
 import adminEmails from "./routes/admin.emails.js";
 import adminBroadcast from "./routes/admin.broadcast.js";
 import adminCampaigns from "./routes/admin.campaigns.js";
@@ -112,6 +114,7 @@ import releaseGatePublic from "./routes/releaseGatePublic.js";
 import adminWork from "./routes/admin.work.js";
 
 import freebiesPublic from "./routes/freebies.js";
+import templateKeysRoutes from "./routes/templateKeys.js";
 import adminFreebies from "./routes/admin.freebies.js";
 import adminFlyers from "./routes/admin.flyers.js";
 import entitlementsRouter from "./routes/entitlements.js";
@@ -294,6 +297,11 @@ import { getPublicDashboard } from "./routes/projects.js";
 app.get("/projects/public/:token", getPublicDashboard);
 app.get("/api/projects/public/:token", getPublicDashboard);
 
+// "Open in QUIV / HERON" tickets. Ahead of the projects router so
+// "open-intent" is never captured as a :productKey.
+app.use("/projects/open-intent", projectsOpenIntentRoutes);
+app.use("/api/projects/open-intent", projectsOpenIntentRoutes);
+
 app.use("/projects", projectRoutes);
 app.use("/api/projects", projectRoutes);
 
@@ -401,6 +409,7 @@ app.use("/rategen-v2", servicesRouter);
 
 app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
+app.use("/admin/rategen-v2", adminRateGenPlant);
 app.use("/admin/emails", adminEmails);
 app.use("/admin/certificates", adminCertificates);
 // Public on purpose: an employer checking a certificate has no account here.
@@ -456,6 +465,8 @@ app.use("/api/telemetry", telemetryTakeoff);
 app.use("/admin/takeoff", adminTakeoff);
 
 app.use("/freebies", freebiesPublic);
+// Content keys for encrypted desktop templates; licence-gated (util/templateKeys.js).
+app.use("/templates", templateKeysRoutes);
 app.use("/admin/freebies", adminFreebies);
 app.use("/admin/flyers", adminFlyers);
 app.use("/admin/training-locations", adminTrainingLocations);
@@ -485,6 +496,7 @@ import meDemoModels from "./routes/me.demoModels.js";
 import adminDocuments from "./routes/admin.documents.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
+import adminProspecting from "./routes/admin.prospecting.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
 app.use("/admin/referrals", adminReferrals);
@@ -506,6 +518,8 @@ app.use("/admin/demo-models", adminDemoModels);
 app.use("/me/demo-models", meDemoModels);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);
+// Outbound prospecting review queue (docs: util/prospecting/review.js).
+app.use("/admin/prospecting", adminProspecting);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin
@@ -572,6 +586,11 @@ if (SERVE_CLIENT && hasClientBuild) {
 }
 
 /* -------- helpful error handling -------- */
+// A refused browser origin: 403 "Not allowed by CORS: <origin>", plus one
+// rate-limited "cors_rejected" log line, because the request never reached
+// morgan above. A malformed or oversized body goes on to the 400 and 413
+// below, whatever it says. See util/corsPolicy.js.
+app.use(corsRejectionHandler());
 app.use((err, _req, res, next) => {
   if (err?.type === "entity.too.large") {
     return res.status(413).json({
@@ -581,9 +600,6 @@ app.use((err, _req, res, next) => {
   }
   if (err?.type === "entity.parse.failed") {
     return res.status(400).json({ error: "Invalid JSON body." });
-  }
-  if (err && /Not allowed by CORS/.test(err.message)) {
-    return res.status(403).json({ error: err.message });
   }
   next(err);
 });

@@ -14,6 +14,7 @@ import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
 import { User } from "../models/User.js";
+import { collaboratorShowsMoney } from "../util/ownerMoney.js";
 import { computePmDashboard, rescheduleTasks, computeProjectScope, _itemIdentity } from "../services/pmCompute.js";
 import { parseMsProjectFile } from "../util/msProjectParser.js";
 import { generateIcs, suggestedIcsFilename } from "../util/icsExporter.js";
@@ -317,6 +318,17 @@ async function loadProject(req, res, { requireEdit = false } = {}) {
       res.status(403).json({
         error: "View-only access cannot edit this project.",
         code: "VIEW_ONLY",
+      });
+      return null;
+    }
+    // The dashboard is cost and schedule throughout, so the owner's money
+    // switch (R4b) closes it the same way a missing RateGen does, whatever
+    // the reader subscribes to.
+    if (collab && !collaboratorShowsMoney(collab)) {
+      res.status(403).json({
+        error:
+          "The project owner has hidden this project's money from you, so the schedule & cost dashboard is not available.",
+        code: "MONEY_HIDDEN_BY_OWNER",
       });
       return null;
     }

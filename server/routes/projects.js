@@ -542,7 +542,7 @@ function maskFinalAccountForClient(fa) {
 //   • shareCodes / collaborators → owner-only (shaped, no hashes)
 //   • rate/amount fields → masked unless access.canSeeRates
 //   • attaches `_access` so the client can gate edit/export/manage + rates
-function projectForClient(project, access) {
+export function projectForClient(project, access) {
   if (!project) return project;
   const obj = project?.toObject ? project.toObject() : { ...project };
   if (obj?.contract && obj.contract.lockPinHash !== undefined) {
@@ -599,6 +599,14 @@ function projectForClient(project, access) {
   // desktop plugin calls.
   delete obj.resourceItems;
 
+  // Model drift: the badge's summary only. The modelRef, signature and event
+  // link are the server's bookkeeping, not something any reader needs.
+  if (obj.modelDrift !== undefined) {
+    const d = driftForClient(obj.modelDrift);
+    if (d) obj.modelDrift = d;
+    else delete obj.modelDrift;
+  }
+
   if (!canSeeRates) {
     maskRates(obj);
     obj._ratesMasked = true;
@@ -612,6 +620,10 @@ function projectForClient(project, access) {
         canExport: !!access.canExport,
         canManage: !!access.canManage,
         canSeeRates: !!access.canSeeRates,
+        // True when the OWNER switched money off for this collaborator (R4b),
+        // as opposed to the reader lacking RateGen, so the screen can say who
+        // to ask. Never true for the owner.
+        moneyHiddenByOwner: !!access.moneyHiddenByOwner,
       }
     : {
         role: "owner",
@@ -620,6 +632,7 @@ function projectForClient(project, access) {
         canExport: true,
         canManage: true,
         canSeeRates: true,
+        moneyHiddenByOwner: false,
       };
   return obj;
 }
@@ -651,9 +664,13 @@ import {
   maySeeMoney,
 } from "../util/contractLockNotice.js";
 import {
+  collaboratorShowsMoney,
   maskSharedMoney,
+  ownerAllowsMoney,
+  ownerHidesMoneyExpr,
   readerMaySeeRates,
   PROJECT_LIST_MONEY_FIELDS,
+  SHOW_MONEY_DEFAULT,
 } from "../util/sharedMoney.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
@@ -679,6 +696,8 @@ import {
 } from "../util/billBudgetCascade.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
 import { rejectSampleWrites, sampleSummary } from "../util/sampleProjects.js";
+import { sampleCarbon } from "../services/sampleCarbon.js";
+import { pricePreview } from "../services/pricePreview.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
 import {
@@ -686,7 +705,7 @@ import {
   buildBoqTemplateWorkbook,
 } from "../util/boqExcelImport.js";
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
-import { generateMlSchedule } from "../util/mlSchedule.js";
+import { generateMlSchedule, isGeneratedRow } from "../util/mlSchedule.js";
 import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
@@ -704,8 +723,15 @@ import { unitsAgree } from "../util/rateSuggestions.js";
 import {
   applyRateRows,
   buildRateBudgetRows,
+  isRateGenRow,
   whyRateCannotPrice,
 } from "../util/rateToBudget.js";
+import {
+  buildUserRateRows,
+  isUserRateLine,
+  resolveUserRate,
+  setUserRateOnItem,
+} from "../util/priceByArea.js";
 import {
   collectBudgetEdits,
   reapplyBudgetEdits,
@@ -719,10 +745,12 @@ import {
 import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
 import { carryCloudRateLocks } from "../util/cloudRateLocks.js";
 import { priceBudgetFromCloud } from "../util/cloudBudgetPricing.js";
+import { sanitizeRoomFinishes } from "../util/roomFinishes.js";
 import {
   sanitizeResourceItems,
   applyResourceRows,
   buildResourcesFromRate,
+  RESOURCE_SOURCE_RATE,
 } from "../util/projectResources.js";
 import {
   BOQ_IMPORT_PRODUCTS,
@@ -730,6 +758,23 @@ import {
   canImportBoqFor,
   isBoqImportProduct,
 } from "../util/boqImportAccess.js";
+import {
+  DRIFT_PRODUCTS,
+  applyDriftReport,
+  clearDriftOnTakeoffSave,
+  dismissDrift,
+  driftForClient,
+  isTakeoffSaveFromModel,
+  modelRefFor,
+  normalizeDriftReport,
+} from "../services/modelDrift.js";
+import {
+  closeDriftAfterTakeoffSave,
+  closeDriftEvent,
+  noteCertificateWhileDriftOpen,
+  persistDriftDecision,
+} from "../services/modelDriftStore.js";
+import { notifyOwnerOfDrift } from "../services/modelDriftNotify.js";
 import {
   normalizeVariationStatus,
   isApprovedVariation,
@@ -889,6 +934,17 @@ function requestedProductKey(req) {
   return normalizeProductKey(req.productKeyOriginal ?? req.params.productKey);
 }
 
+// QUIV's per-room finishes (QUIV 4.0.2+). Revit take-offs only: no other
+// plugin measures rooms, and the "-materials" twin never carries them.
+// Returns undefined when the body did not send the list, which every save
+// path reads as "keep what is stored" - an older QUIV, or a website save of
+// the bill, must not wipe the rooms.
+export function roomFinishesFromBody(productKey, body) {
+  if (productKey !== "revit") return undefined;
+  const list = body?.roomFinishes;
+  return Array.isArray(list) ? sanitizeRoomFinishes(list) : undefined;
+}
+
 // ── Collaborator access resolution ───────────────────────────────────────
 // True when `userId` holds an active, unexpired entitlement for `key`. Mirrors
 // requireEntitlement() — used for the RateGen rate-mask decision and the
@@ -933,7 +989,7 @@ async function cloudPriceQuivBudget(project, productKey, userId, tag) {
 // uses this filter sits behind requireEntitlementParam, so "anyone" here means
 // an active subscriber of the product. resolveProjectAccess() makes them
 // read-only and rejectSampleWrites() refuses every write before a handler runs.
-function accessFilter(id, userId, productKey) {
+export function accessFilter(id, userId, productKey) {
   return {
     _id: id,
     productKey,
@@ -941,16 +997,33 @@ function accessFilter(id, userId, productKey) {
   };
 }
 
+// The 403 body for a route that needs money the reader may not see. Says WHY,
+// because the fix differs: RateGen is something the reader can buy, while the
+// owner's switch is something only the owner can change.
+function moneyBlocked(access, what) {
+  return access?.moneyHiddenByOwner
+    ? {
+        error: `The project owner has hidden this project's money from you, so you cannot ${what}.`,
+        code: "MONEY_HIDDEN_BY_OWNER",
+      }
+    : {
+        error: `A RateGen subscription is required to ${what}.`,
+        code: "RATEGEN_REQUIRED",
+      };
+}
+
 // Resolve what the requester may do with an already-loaded project document.
 //   role:        owner | full | view | none
 //   canEdit:     owner or full  (mutations)
 //   canExport:   owner or full  (xlsx / model download)
 //   canManage:   owner only     (codes, collaborators, delete project)
-//   canSeeRates: owner always; collaborator only with active rategen
+//   canSeeRates: owner always; collaborator only when the owner left money on
+//                for them (showMoney, R4b) AND they hold an active rategen
+//   moneyHiddenByOwner: the owner's switch is what hid it (not RateGen)
 // The rule itself moved to util/projectAccess.js so the ArchiCAD routes can
 // ask the same question — they were not asking it at all. Behaviour here is
 // unchanged; this is the same function with its body shared.
-async function resolveProjectAccess(req, project) {
+export async function resolveProjectAccess(req, project) {
   return resolveSharedProjectAccess(getUserObjectId(req), project, {
     hasRateGen: (uid) => userHasActiveEntitlement(uid, "rategen"),
   });
@@ -1911,46 +1984,100 @@ function applyValuationTracking({
       statusUpdatedAt: previousStatus !== nextStatus ? now : previousUpdatedAt,
     };
 
-    // Emit a valuation event whenever the line's "earned" position changes
-    // — either a binary status flip OR a percent-complete movement. The
-    // event captures the SIGNED value delta so summing positive amounts
-    // gives a daily "value of work done" rollup.
+    // Emit a valuation event whenever the line's "earned" position changes.
+    //
+    // TWO THINGS CAN MOVE IT, AND BOTH HAVE TO BE RECORDED.
+    //
+    //   progress   the percent complete, or a binary status flip
+    //   the price  actualQty or actualRate — a re-measure or a re-rate
+    //
+    // Only the first used to emit anything, and the amount was computed from
+    // the CONTRACT qty x rate. Both were wrong in the same direction, and
+    // together they meant the per-line log could not be reconciled against the
+    // certificate sitting above it:
+    //
+    //   * The certificate values work at the ACTUAL figures when they are
+    //     recorded (earnedLineValue, util/certificateMaths.js:148, which the
+    //     certificate reaches through computeValueToDate). The event valued the
+    //     same transition at the contract rate, so on any re-measured line the
+    //     two documents disagreed — the exact divergence earnedLineValue's own
+    //     docblock claims to have removed.
+    //   * A change to actualQty/actualRate emitted NOTHING, while the
+    //     certificate total absorbed it in full. A QS could record a rate, see
+    //     a real certificate move, and find the period's line log empty.
+    //
+    // So the delta is split in two, and the pair of them always sums to the
+    // true change in this line's cumulative value:
+    //
+    //   progress  earned(new figures, new %) - earned(new figures, old %)
+    //   re-rate   earned(new figures, old %) - earned(old figures, old %)
+    //   -------------------------------------------------------------------
+    //   together  earned(new figures, new %) - earned(old figures, old %)
+    //
+    // which is exactly what the certificate's cumulative-less-previous reads.
+    // The old isPureBinary special case is gone: expressing a status flip as
+    // 0% -> 100% gives the same signed full-line amount it used to, through the
+    // same arithmetic as everything else.
     const previousFactor = previousStatus ? 1 : previousPct / 100;
     const nextFactor = nextStatus ? 1 : nextPct / 100;
-    const factorDelta = nextFactor - previousFactor;
     // Guard against floating-point noise where pct didn't actually change.
     const PCT_EPSILON = 0.001;
     const pctChanged = Math.abs(nextPct - previousPct) > PCT_EPSILON;
     const statusChanged = previousStatus !== nextStatus;
+    const isPureBinary =
+      statusChanged && !pctChanged && previousPct === 0 && nextPct === 0;
+
+    // The percentages the two sides are valued at, so a status flip and a
+    // percent move go through one path.
+    const oldPct = previousFactor * 100;
+    const newPct = nextFactor * 100;
+    const earnedNow = earnedLineValue(nextItem, newPct);
+    const earnedAtOldPct = earnedLineValue(nextItem, oldPct);
+    const earnedBefore = earnedLineValue(previousItem, oldPct);
+    const progressDelta = earnedNow - earnedAtOldPct;
+    const reRateDelta = earnedAtOldPct - earnedBefore;
+
+    // The figures the log prints beside the money, so the columns and the
+    // amount cannot describe different rates.
+    const shownQty = nextActualQty != null ? nextActualQty : safeNum(item?.qty);
+    const shownRate = nextActualRate != null ? nextActualRate : safeNum(item?.rate);
+    const lineIdentity = {
+      itemKey: key,
+      itemSn: safeNum(item?.sn) || index + 1,
+      description: String(item?.description || ""),
+      takeoffLine: String(item?.takeoffLine || ""),
+      materialName: String(item?.materialName || ""),
+      qty: shownQty,
+      unit: String(item?.unit || ""),
+      rate: shownRate,
+      statusField,
+      markedAt: now,
+      markedDay: isoDay(now),
+    };
 
     if (pctChanged || statusChanged) {
-      const lineAmount = safeNum(item?.qty) * safeNum(item?.rate);
-      // For pure binary flips with no percent change recorded, fall back to
-      // the historical behaviour (amount = full line value when ratified,
-      // signed negative when un-ratified) so old reports stay readable.
-      const isPureBinary =
-        statusChanged && !pctChanged && previousPct === 0 && nextPct === 0;
-      const deltaAmount = isPureBinary
-        ? lineAmount * (nextStatus ? 1 : -1)
-        : lineAmount * factorDelta;
-
       valuationEvents.push({
-        itemKey: key,
-        itemSn: safeNum(item?.sn) || index + 1,
-        description: String(item?.description || ""),
-        takeoffLine: String(item?.takeoffLine || ""),
-        materialName: String(item?.materialName || ""),
-        qty: safeNum(item?.qty),
-        unit: String(item?.unit || ""),
-        rate: safeNum(item?.rate),
-        amount: deltaAmount,
-        statusField,
+        ...lineIdentity,
+        amount: progressDelta,
         markedValue: nextStatus || nextFactor > previousFactor,
         previousPercent: previousPct,
         nextPercent: nextPct,
         eventType: pctChanged && !isPureBinary ? "partial" : "binary",
-        markedAt: now,
-        markedDay: isoDay(now),
+      });
+    }
+
+    // A re-rate is not work done, so markedValue is false and the percentages
+    // do not move. Emitted only when it actually changes the money: a recorded
+    // actual that happens to equal the contract figure moves nothing and should
+    // not put a zero row in anybody's valuation.
+    if (Math.abs(reRateDelta) > 0.005) {
+      valuationEvents.push({
+        ...lineIdentity,
+        amount: reRateDelta,
+        markedValue: false,
+        previousPercent: previousPct,
+        nextPercent: previousPct,
+        eventType: "rerate",
       });
     }
 
@@ -1994,14 +2121,26 @@ function buildValuationLogs(project, productKey) {
     if (!day) continue;
 
     const eventKey = String(event?.itemKey || "");
-    const eventType = event?.eventType === "partial" ? "partial" : "binary";
+    // A stored type this reader does not know falls back to "binary", which is
+    // what every event written before these three existed was. "rerate" has to be
+    // named here or it is coerced to binary at the door and nothing below can
+    // tell a re-rate from a ratification.
+    const raw = String(event?.eventType || "");
+    const eventType = raw === "partial" || raw === "rerate" ? raw : "binary";
 
     // Staleness filter — different rule per event type:
     //   • binary: drop unless the item is still ratified
     //   • partial: drop unless the item still has progress (any %)
+    //   • rerate:  same test as partial. It is not progress, but a re-rate on a
+    //     line since zeroed is as stale as the progress that earned it, and
+    //     leaving it in would show money against a line showing none.
     if (eventKey) {
       if (eventType === "binary" && !currentlyMarked.has(eventKey)) continue;
-      if (eventType === "partial" && !currentlyInProgress.has(eventKey)) continue;
+      if (
+        (eventType === "partial" || eventType === "rerate") &&
+        !currentlyInProgress.has(eventKey)
+      )
+        continue;
     }
 
     const byItem = logsByDay.get(day) || new Map();
@@ -2019,22 +2158,48 @@ function buildValuationLogs(project, productKey) {
       // Multiple updates to the same line in one day: aggregate the value
       // delta and span the full % range across the day.
       existing.amount += eventAmount;
-      existing.previousPercent = Math.min(existing.previousPercent, eventPrevPct);
-      existing.nextPercent = Math.max(existing.nextPercent, eventNextPct);
+      // A rerate claims no progress, so it must not drag the row's span down to
+      // its own flat previousPercent === nextPercent. It contributes money only.
+      if (eventType !== "rerate") {
+        existing.previousPercent = Math.min(existing.previousPercent, eventPrevPct);
+        existing.nextPercent = Math.max(existing.nextPercent, eventNextPct);
+      }
       // Latest-event-wins for the markedAt timestamp; if any event in the
       // day ratified the item, the row's eventType escalates to 'binary'
       // so the UI shows the ratified badge.
       existing.markedAt = eventMarkedAtIso;
       existing.markedValue = existing.markedValue || eventMarked;
-      if (eventType === "binary" || eventMarked || eventNextPct >= 100) {
+      existing.reRated = existing.reRated || eventType === "rerate";
+      // Same rule as the first-time branch below, but tested against the row's
+      // AGGREGATED span rather than this one event's. Two moves on one line in one
+      // day — 0% to 60%, then 60% to 100% — are between them a line taken from
+      // nothing to finished, and read as one Completed row; testing the incoming
+      // event alone (60 -> 100) would never see that.
+      if (
+        eventType === "binary" ||
+        (existing.previousPercent <= 0 && existing.nextPercent >= 100)
+      ) {
         existing.eventType = "binary";
       }
     } else {
-      // First time this item appears in this day's log. Escalate the
-      // display type to "binary" when the move lands at 100% (ratified)
-      // so the UI shows a single 'Completed' badge instead of "0 → 100%".
+      // First time this item appears in this day's log.
+      //
+      // `eventMarked` USED TO BE IN THIS CONDITION, AND IT HID EVERY TRANSITION.
+      //
+      // markedValue is set to `nextStatus || nextFactor > previousFactor`
+      // (applyValuationTracking), so it is true for ANY forward move. With it in
+      // the test, every progress row collapsed to the flat "ratified" badge and
+      // the "60% → 100%" chip the client renders for a partial row was
+      // unreachable — the only row that ever showed its percentages was a
+      // REVERSAL, which is the one case where markedValue is false.
+      //
+      // The comment it carried said the escalation was so a move landing at 100%
+      // reads as "Completed" rather than "0 → 100%". That intent is kept, and
+      // narrowed to what it describes: a line taken straight from nothing to
+      // finished. A line that was already part-earned keeps its transition,
+      // which is the whole point of a partial valuation.
       const displayType =
-        eventType === "binary" || eventMarked || eventNextPct >= 100
+        eventType === "binary" || (eventPrevPct <= 0 && eventNextPct >= 100)
           ? "binary"
           : "partial";
       byItem.set(key, {
@@ -2049,6 +2214,10 @@ function buildValuationLogs(project, productKey) {
         nextPercent: eventNextPct,
         eventType: displayType,
         markedValue: eventMarked,
+        // So a screen can say "includes a re-rate" on this row. Nothing renders
+        // it yet; the row's AMOUNT is already right either way, because the two
+        // events for one line on one day aggregate above.
+        reRated: eventType === "rerate",
         markedAt: eventMarkedAtIso,
       });
     }
@@ -2503,6 +2672,8 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
       project.valuationSettings || DEFAULT_VALUATION_SETTINGS,
     );
   }
+  const rooms = roomFinishesFromBody(productKey, payload);
+  if (rooms) project.roomFinishes = rooms;
 
   if (!created) project.version += 1;
   await project.save();
@@ -2608,6 +2779,7 @@ async function createProject(req, res) {
             : true,
       checklistCompositeKeys: normalizeChecklistKeys(checklistCompositeKeys),
       valuationSettings: normalizeValuationSettings(valuationSettings),
+      roomFinishes: roomFinishesFromBody(productKey, req.body) || [],
     });
 
     recordActivity(req, project, ACT.PROJECT_CREATED, "Created the project", {
@@ -2689,8 +2861,16 @@ async function saveProjectFull(req, res) {
         ...sharedMeta,
         items: Array.isArray(takeoffItems) ? takeoffItems : [],
         origin: origin || "",
+        // Rooms belong to the take-off only, never the materials twin.
+        roomFinishes: body.roomFinishes,
       },
     });
+
+    // Model drift: this is a take-off saved from the model, so it closes any
+    // open drift on the bill. Never awaited, never fails the save.
+    if (DRIFT_PRODUCTS.has(takeoffKey) && isTakeoffSaveFromModel(body) && !takeoffRes.created) {
+      closeDriftAfterTakeoffSave(takeoffRes.project._id);
+    }
 
     // 2) Derived-materials project (only when material lines are supplied).
     let materialsRes = null;
@@ -2921,6 +3101,17 @@ async function listProjects(req, res) {
           // additive fields on a row the desktop plugins parse as a bare
           // array, alongside shared/accessLevel/mergedPartCount, which those
           // parsers already ignore.
+          // Model drift badge (r2-model-drift-alerts): only whether the model
+          // has changed since the last take-off, and since when. Additive,
+          // like the S18 fields below.
+          modelDriftOpen: { $eq: [{ $ifNull: ["$modelDrift.status", "none"] }, "open"] },
+          modelDriftDetectedAt: {
+            $cond: [
+              { $eq: [{ $ifNull: ["$modelDrift.status", "none"] }, "open"] },
+              { $ifNull: ["$modelDrift.detectedAt", null] },
+              null,
+            ],
+          },
           contractLocked: { $ifNull: ["$contract.locked", false] },
           tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
           finalized: { $ifNull: ["$finalAccount.finalized", false] },
@@ -2979,6 +3170,9 @@ async function listProjects(req, res) {
           taxPercent: { $ifNull: ["$contract.taxPercent", 7.5] },
           // Ownership badge: true when this row was shared with the requester.
           shared: { $ne: ["$userId", userId] },
+          // The owner switched money off for this reader (R4b). Internal:
+          // maskSharedMoney() reads it and strips it before the response.
+          ownerHidesMoney: ownerHidesMoneyExpr(userId),
           accessLevel: {
             $let: {
               vars: {
@@ -3147,10 +3341,18 @@ async function listProjects(req, res) {
     //
     // Own rows are never masked, so a user's own list is untouched, and the
     // lookup is skipped entirely unless a shared row is actually present.
+    //
+    // R4b: a row whose owner switched money off for this reader is masked
+    // whatever the reader subscribes to (maskSharedMoney).
+    // The row keeps its shape: the fields stay, as numbers, so the plugins
+    // that parse this bare array read a zero exactly as they already do for a
+    // masked project GET.
     const shared = list.some((p) => p?.shared);
-    const out = shared
-      ? maskSharedMoney(list, await readerMaySeeRates(userId), PROJECT_LIST_MONEY_FIELDS)
-      : list;
+    const out = maskSharedMoney(
+      list,
+      shared ? await readerMaySeeRates(userId) : true,
+      PROJECT_LIST_MONEY_FIELDS,
+    );
 
     res.json(out);
   } catch (err) {
@@ -3172,6 +3374,13 @@ async function listSampleProjects(req, res) {
         sample: 1,
         "items.qty": 1,
         "items.rate": 1,
+        // what the card's carbon footprint is worked out from (services/sampleCarbon.js)
+        "items.description": 1,
+        "items.unit": 1,
+        "items.takeoffLine": 1,
+        "items.type": 1,
+        "items.category": 1,
+        "items.appliedRateKey": 1,
         "contract.contractSum": 1,
         "certificates.number": 1,
         "models.architectural.key": 1,
@@ -3182,10 +3391,37 @@ async function listSampleProjects(req, res) {
     )
       .sort({ "sample.order": 1 })
       .lean();
-    res.json(samples.map(sampleSummary));
+    // the footprint by the viewer's own RateGen rates (services/sampleCarbon.js)
+    const viewerId = getUserObjectId(req);
+    const viewer = viewerId ? await User.findById(viewerId, { state: 1, zone: 1 }).lean() : null;
+    const carbon = await Promise.all(samples.map((s) => sampleCarbon(s, viewerId, viewer || {})));
+    res.json(samples.map((s, i) => ({ ...sampleSummary(s), carbon: carbon[i] })));
   } catch (err) {
     console.error("GET sample projects error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+}
+
+// GET /:productKey/:id/price-preview: what the viewer's RateGen rates would make
+// of this bill. Read-only on every project, including the samples it was built for.
+async function getPricePreview(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey), { items: 1, productKey: 1, userId: 1, isSample: 1, collaborators: 1 }).lean();
+    if (!project) return res.status(404).json({ error: "Not found" });
+    // the bill's own rates are on the page only for someone allowed to see them
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) return refuseRateMaskedWrite(res, "compare this bill's rates");
+
+    return res.json({ ok: true, ...(await pricePreview(project, userId)) });
+  } catch (err) {
+    console.error("GET price-preview error:", err);
+    return res.status(500).json({ error: "Could not price this bill with your RateGen rates." });
   }
 }
 
@@ -3961,6 +4197,11 @@ async function updateProject(req, res) {
 
     if (name !== undefined) project.name = String(name).trim();
 
+    // Sent: replaced whole (QUIV sends every room on each save). Not sent:
+    // kept, so a website edit or an older QUIV never wipes the rooms.
+    const rooms = roomFinishesFromBody(productKey, req.body);
+    if (rooms) project.roomFinishes = rooms;
+
     if (Array.isArray(items)) {
       // A rate the QS set on the website keeps its lock through a plugin re-save
       // (QUIV's PUT has no rateLockedAt; see util/cloudRateLocks.js).
@@ -4295,8 +4536,18 @@ async function updateProject(req, res) {
     deriveBillRatesFromBudget(project);
     reconcileItemsFromBudget(project);
 
+    // Model drift: a take-off re-saved FROM THE MODEL re-measures the bill, so
+    // it closes an open drift. Only the plugins send modelFingerprint; a web
+    // rate or progress edit leaves the drift open.
+    let driftClosed = null;
+    if (DRIFT_PRODUCTS.has(productKey) && isTakeoffSaveFromModel(req.body)) {
+      driftClosed = clearDriftOnTakeoffSave(project.modelDrift);
+      if (driftClosed) project.modelDrift = driftClosed;
+    }
+
     project.version += 1;
     await project.save();
+    if (driftClosed?.eventId) closeDriftEvent(driftClosed);
 
     // ── Bill → Budget cascade (one-way) ───────────────────────────────
     // When a bill line's qty changed, scale the sibling budget (materials)
@@ -4751,7 +5002,10 @@ async function notifyContractLocked(project, lockedByUserId, contractSum) {
     // RateGen sees contractSum: 0 and _ratesMasked: true on every read of this
     // project; posting the real figure to them would hand over in writing the
     // one number the product withholds. They still get the message, without it.
-    const showMoney = await maySeeMoney(r, (uid) => userHasActiveEntitlement(uid, "rategen"));
+    // R4b: nor what the owner switched off for this person.
+    const showMoney =
+      ownerAllowsMoney(project, r.userId) &&
+      (await maySeeMoney(r, (uid) => userHasActiveEntitlement(uid, "rategen")));
     const { subject, html } = contractLocked({
       firstName: r.firstName,
       projectName: String(project.name || "your project"),
@@ -5007,6 +5261,119 @@ function computeValueToDate(project) {
   };
 }
 
+// ── Model drift (work-board item r2-model-drift-alerts) ───────────────────
+// The desktop plugin compares the open model with this project's saved
+// element IDs and quantities and reports a summary here. Rules and privacy:
+// services/modelDrift.js. Only the owner or a full collaborator can report or
+// dismiss (the same people who can save a take-off to it).
+
+async function loadDriftProject(req, res) {
+  const productKey = requestedProductKey(req);
+  const id = String(req.params.id || "").trim();
+  if (!isValidObjectId(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return null;
+  }
+  if (!DRIFT_PRODUCTS.has(productKey)) {
+    res.status(400).json({ error: "Model drift is reported by QUIV and QUIV for ArchiCAD only", code: "DRIFT_UNSUPPORTED_PRODUCT" });
+    return null;
+  }
+  const userId = getUserObjectId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Invalid user id in token" });
+    return null;
+  }
+  const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey), {
+    name: 1,
+    userId: 1,
+    productKey: 1,
+    collaborators: 1,
+    isSample: 1,
+    mergeContainer: 1,
+    modelFingerprint: 1,
+    modelDrift: 1,
+    "items.code": 1,
+  });
+  if (!project) {
+    res.status(404).json({ error: "Not found" });
+    return null;
+  }
+  if (isMergeContainer(project)) {
+    res.status(409).json({ error: "A merged project has no model of its own. Report drift on its source project.", code: "MERGED_PROJECT" });
+    return null;
+  }
+  const access = await resolveProjectAccess(req, project);
+  if (!access.canEdit) {
+    res.status(403).json({ error: "View-only access cannot change this project.", code: "VIEW_ONLY" });
+    return null;
+  }
+  return { project, productKey, userId };
+}
+
+// POST /projects/:productKey/:id/model-drift
+//   { modelRef, checkedAt, basisVersion, productVersion,
+//     counts: { added, removed, changed, elementsChecked },
+//     lines: [ { code, added, removed, changed } ] }
+// → { ok, action: open | refresh | clear | ignore, modelDrift }
+async function reportModelDrift(req, res) {
+  try {
+    const ctx = await loadDriftProject(req, res);
+    if (!ctx) return;
+    const { project, productKey, userId } = ctx;
+
+    const expected = modelRefFor(project.modelFingerprint);
+    if (!expected) {
+      return res.status(409).json({
+        error: "This project has no model identity yet. Save the take-off from the model once, then check again.",
+        code: "NO_MODEL_IDENTITY",
+      });
+    }
+
+    const now = new Date();
+    const billCodes = new Set((project.items || []).map((i) => String(i?.code || "").trim()).filter(Boolean));
+    const { report, error } = normalizeDriftReport(req.body, billCodes, now);
+    if (error) return res.status(400).json({ error, code: "BAD_DRIFT_REPORT" });
+    // Another copy of the model (another fingerprint) is not this project's
+    // model; its differences say nothing about this bill.
+    if (report.modelRef !== expected) {
+      return res.status(409).json({ error: "This model is not the one this project was taken off.", code: "MODEL_MISMATCH" });
+    }
+
+    const decision = applyDriftReport(project.modelDrift, report, now);
+    let drift = project.modelDrift;
+    if (decision.drift) {
+      drift = await persistDriftDecision(project, decision, { userId, productKey, now });
+    }
+    if (decision.notify) {
+      notifyOwnerOfDrift(project._id).catch((err) =>
+        console.error("[model-drift] owner email failed:", err?.message || err),
+      );
+    }
+    return res.json({ ok: true, action: decision.action, modelDrift: driftForClient(drift) });
+  } catch (err) {
+    console.error("[model-drift report] error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// POST /projects/:productKey/:id/model-drift/dismiss   { reason? }
+// "Not a real change": closes the drift, and the same change reported again
+// stays closed (see applyDriftReport). Counted as a false alarm.
+async function dismissModelDrift(req, res) {
+  try {
+    const ctx = await loadDriftProject(req, res);
+    if (!ctx) return;
+    const { project, productKey, userId } = ctx;
+    const next = dismissDrift(project.modelDrift, req.body?.reason);
+    if (!next) return res.status(409).json({ error: "There is no open model change on this project.", code: "NO_OPEN_DRIFT" });
+    const drift = await persistDriftDecision(project, { action: "dismiss", drift: next }, { userId, productKey });
+    return res.json({ ok: true, action: "dismiss", modelDrift: driftForClient(drift) });
+  } catch (err) {
+    console.error("[model-drift dismiss] error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
 async function issueCertificate(req, res) {
   try {
     const productKey = requestedProductKey(req);
@@ -5137,6 +5504,8 @@ async function issueCertificate(req, res) {
     project.certificates = [...(project.certificates || []), cert];
     project.version += 1;
     await project.save();
+    // Success metric for model drift: certificates issued from a stale bill.
+    noteCertificateWhileDriftOpen(project);
 
     recordActivity(
       req,
@@ -5616,12 +5985,10 @@ async function exportCertificateXlsx(req, res) {
       });
     }
     // Priced documents (certificate / final-account workbooks) carry rates —
-    // a collaborator without an active RateGen subscription may not export them.
+    // a collaborator without an active RateGen subscription may not export
+    // them, and nor may one the owner has hidden the money from (R4b).
     if (!access.canSeeRates) {
-      return res.status(403).json({
-        error: "A RateGen subscription is required to export priced documents.",
-        code: "RATEGEN_REQUIRED",
-      });
+      return res.status(403).json(moneyBlocked(access, "export priced documents"));
     }
 
     const certs = project.certificates || [];
@@ -5631,19 +5998,46 @@ async function exportCertificateXlsx(req, res) {
     const previous = certs.filter((c) => Number(c.number) < number);
     const { exportCertificate } = await import("../util/certificateExporter.js");
 
-    // Rebuild the value-to-date breakdown so the cert workbook can show it.
+    // THE BREAKDOWN IS ONLY PRINTED WHEN IT EXPLAINS *THIS* CERTIFICATE.
+    //
+    // computeValueToDate reads the project as it stands TODAY. The certificate
+    // is a stored document from the day it was issued. Handing the first to the
+    // second produced a workbook that contradicted itself: row A, "Gross value
+    // of work done to date", printed the certificate's own stored
+    // cumulativeValue, while the "Cumulative value breakdown" block beneath it
+    // printed today's figures. Export June's certificate after a July valuation
+    // and the two halves of one page disagreed — on a document that goes to a
+    // client.
+    //
+    // cumulativeValue is exactly measured + variations + provisional +
+    // preliminaryDone (computeValueToDate), so the four parts either add up to
+    // the certificate's own total or they are describing a different day. When
+    // they add up, the breakdown is a true explanation of row A and is printed.
+    // When they do not, it is omitted: the certificate's own totals are
+    // untouched and still correct, and a missing explanation is a great deal
+    // better than a contradictory one.
+    //
+    // Reconstructing the breakdown as it stood at issue needs a per-line
+    // snapshot on the certificate, which it does not carry. That is the next
+    // piece of work, not something to guess at here.
     const rollup = computeValueToDate(project);
+    const stored = cert.toObject ? cert.toObject() : cert;
+    // A tenth of a kobo, to absorb floating-point drift rather than a real move.
+    const explainsThisCertificate =
+      Math.abs(safeNum(rollup.cumulativeValue) - safeNum(stored.cumulativeValue)) < 0.001;
 
     const out = await exportCertificate({
       projectName: project.name || "Project",
-      certificate: cert.toObject ? cert.toObject() : cert,
+      certificate: stored,
       previousCerts: previous.map((c) => (c.toObject ? c.toObject() : c)),
-      breakdown: {
-        measured: rollup.measured,
-        variations: rollup.variationsAmount,
-        provisional: rollup.provisionalAmount,
-        preliminaryDone: rollup.preliminaryDone,
-      },
+      breakdown: explainsThisCertificate
+        ? {
+            measured: rollup.measured,
+            variations: rollup.variationsAmount,
+            provisional: rollup.provisionalAmount,
+            preliminaryDone: rollup.preliminaryDone,
+          }
+        : null,
     });
     return sendXlsx(res, out);
   } catch (err) {
@@ -5673,12 +6067,10 @@ async function exportFinalAccountXlsx(req, res) {
       });
     }
     // Priced documents (certificate / final-account workbooks) carry rates —
-    // a collaborator without an active RateGen subscription may not export them.
+    // a collaborator without an active RateGen subscription may not export
+    // them, and nor may one the owner has hidden the money from (R4b).
     if (!access.canSeeRates) {
-      return res.status(403).json({
-        error: "A RateGen subscription is required to export priced documents.",
-        code: "RATEGEN_REQUIRED",
-      });
+      return res.status(403).json(moneyBlocked(access, "export priced documents"));
     }
 
     if (!project.finalAccount?.finalized) {
@@ -7135,7 +7527,9 @@ async function priceLineFromRate(req, res) {
       });
     }
 
-    const ctx = await buildMlScheduleContext(userId);
+    // Prices and constants only: this path writes the picked rate's own
+    // build-up and never generates, so it skips the rate plant lookup (R2).
+    const ctx = await buildMlScheduleContext(userId, { ratePlant: false });
     const unitCost = Number(req.body?.unitCost) || 0;
     const convert = cleanConvert(req.body?.convert);
     const one = priceBillLine(project, item, rate, ctx, { unitCost, convert });
@@ -7172,6 +7566,14 @@ async function priceLineFromRate(req, res) {
 // line got". That reads the rate from RateUsage, so it only works for a line
 // that was itself priced from a rate on the web; a rate typed into a plugin
 // has no rate behind it to copy, and the line is skipped with that reason.
+//
+// A line can also carry a rate THE USER STATED to Ada and confirmed on her
+// card (3 Oct 2026): `{ code, userRate, unit?, split? }` for "set blockwork to
+// 9,500 per m2", or `{ code, ratePerM2, split? }` for "windows are 88,000 per
+// m2", where the server reads the opening's size off the bill line itself and
+// works the line's rate out (util/priceByArea.js). `split` is the material /
+// labour / overhead-and-profit percentages, 60/20/20 when absent. See
+// applyUserRate for what such a line writes.
 //
 // One save at the end, not one per line: a save per line on a 300-line bill
 // is 300 whole-project writes, and a failure half way would leave half a bill
@@ -7210,10 +7612,12 @@ async function priceManyFromRates(req, res) {
       return refuseRateMaskedWrite(res, "price bill lines from rates");
     }
 
-    const [merged, ctx] = await Promise.all([
-      loadMergedRates(userId),
-      buildMlScheduleContext(userId),
-    ]);
+    // A stated rate needs neither the library nor the constants: only lines
+    // that name a Rate Gen rate pay for reading them.
+    const needsLibrary = lines.some((l) => !isUserRateLine(l));
+    const [merged, ctx] = needsLibrary
+      ? await Promise.all([loadMergedRates(userId), buildMlScheduleContext(userId)])
+      : [[], null];
 
     // The rate each `sameAs` line points at, read once for all of them.
     const sameAsCodes = [
@@ -7239,6 +7643,8 @@ async function priceManyFromRates(req, res) {
     const warnings = new Set();
     const used = [];
     const seen = new Set();
+    const stated = [];
+    let changed = false;
 
     for (const line of lines) {
       const code = String(line?.code || "").trim();
@@ -7249,6 +7655,20 @@ async function priceManyFromRates(req, res) {
       const item = findBillLine(project, code);
       if (!item) {
         skipped.push({ code, reason: "No bill line with that code" });
+        continue;
+      }
+
+      // A RATE THE USER STATED (Ada's "windows are 88,000 per m2", "set
+      // blockwork to 9,500"). See applyUserRate below.
+      if (isUserRateLine(line)) {
+        const r = resolveUserRate(item, line);
+        if (!r.ok) {
+          skipped.push({ code, reason: r.reason });
+          continue;
+        }
+        if (applyUserRate(project, item, r.rate, r.split)) changed = true;
+        priced.push(code);
+        stated.push({ code, rate: r.rate, split: r.split });
         continue;
       }
 
@@ -7287,19 +7707,38 @@ async function priceManyFromRates(req, res) {
       one.warnings.forEach((w) => warnings.add(String(w)));
       priced.push(code);
       used.push({ item, rate, convert });
+      changed = true;
     }
 
-    if (priced.length) {
+    // Applying the same stated rates twice changes nothing, so it writes
+    // nothing either: no save, no version bump, no activity entry.
+    if (priced.length && changed) {
+      if (stated.length && typeof project.markModified === "function") {
+        project.markModified("items");
+        project.markModified("budgetItems");
+      }
       settlePricedProject(project);
       await project.save();
-      recordActivity(
-        req,
-        project,
-        ACT.BUDGET_UPDATED,
-        `Priced ${priced.length} bill ${priced.length === 1 ? "line" : "lines"} from rates`,
-        { codes: priced.slice(0, 50), count: priced.length, via },
-      );
-      recordRateUsage(userId, project, used, via);
+      const fromLibrary = priced.length - stated.length;
+      if (fromLibrary) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Priced ${fromLibrary} bill ${fromLibrary === 1 ? "line" : "lines"} from rates`,
+          { codes: used.map((u) => String(u.item?.code || "")).slice(0, 50), count: fromLibrary, via },
+        );
+        recordRateUsage(userId, project, used, via);
+      }
+      if (stated.length) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Set ${stated.length} bill ${stated.length === 1 ? "line" : "lines"} to a stated rate`,
+          { codes: stated.map((x) => x.code).slice(0, 50), count: stated.length, via },
+        );
+      }
     }
 
     return res.json({
@@ -7312,6 +7751,62 @@ async function priceManyFromRates(req, res) {
     console.error("priceManyFromRates error:", err);
     return res.status(500).json({ error: "Server error" });
   }
+}
+
+/**
+ * Put a rate the USER stated on one bill line, in memory.
+ *
+ * The line gets the rate and its lock (rateLockedAt), so neither a plugin
+ * re-save (util/cloudRateLocks.js) nor the budget heal moves it. Its Budget
+ * gets ONE Material and ONE Labour row at the bill quantity, priced by the
+ * split, with the overhead/profit share as their overhead %. Those rows sit in
+ * the Rate Gen sn band, so they replace any automatic rows the line had (a
+ * previous pick, the constants generator) and a later Rate Gen pick replaces
+ * them; a row the QS typed survives. The gang a previous pick wrote is cleared:
+ * it described a rate that is no longer the line's.
+ *
+ * Row ids and procurement marks carry across a re-apply, so applying the same
+ * rate twice leaves the project exactly as it was.
+ *
+ * @returns {boolean} whether anything changed
+ */
+function applyUserRate(project, item, rate, split) {
+  const code = String(item?.code || "").trim();
+  const key = code.toLowerCase();
+  const mine = (b) => String(b?.billIdentity || "").trim().toLowerCase() === key;
+  const plain = (b) => (b?.toObject ? b.toObject() : b);
+  const before = (project.budgetItems || []).filter(mine).map(plain);
+  const rows = buildUserRateRows(item, rate, split).map((r) => {
+    const prior = before.find((b) => Number(b?.sn) === r.sn && isRateGenRow(b));
+    return prior?.lineId ? { ...r, lineId: prior.lineId } : r;
+  });
+
+  // What this line's Budget would hold afterwards: everything applyRateRows
+  // keeps (rows the QS typed, plugin rows, coverage rows) and the new rows.
+  const automatic = (b) => isRateGenRow(b) || isGeneratedRow(b);
+  const sig = (list) =>
+    JSON.stringify(
+      list.map((b) => [
+        b.sn, b.componentKind, b.description, b.unit, Number(b.qty), Number(b.rate),
+        Number(b.overheadPercent), Number(b.profitPercent), b.rateSource,
+      ]),
+    );
+  const budgetChanges = sig(before) !== sig(before.filter((b) => !automatic(b)).concat(rows));
+  const staleGang = (project.resourceItems || []).some(
+    (r) => mine(r) && r?.rateSource === RESOURCE_SOURCE_RATE,
+  );
+
+  // Only touch what changes, so a re-apply writes nothing at all.
+  if (budgetChanges) {
+    project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, rows));
+  }
+  if (staleGang) {
+    project.resourceItems = sanitizeResourceItems(
+      applyResourceRows(project.resourceItems, code, []),
+    );
+  }
+  const itemChanged = setUserRateOnItem(item, rate, split);
+  return itemChanged || budgetChanges || staleGang;
 }
 
 /** A bill line by its code, case-insensitively, the way every caller addresses it. */
@@ -7561,6 +8056,17 @@ function normalizeShareCode(s) {
   return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+// The owner's money switch (R4b) as sent by a form: a real boolean, or the
+// strings a form field can carry. Anything unrecognised keeps the fallback, so
+// a malformed request can never flip a share's money on by accident.
+function parseShowMoney(input, fallback) {
+  if (input === true || input === false) return input;
+  const v = String(input ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(v)) return true;
+  if (["false", "0", "no", "off"].includes(v)) return false;
+  return fallback;
+}
+
 function parseAllowedEmails(input) {
   const arr = Array.isArray(input)
     ? input
@@ -7615,6 +8121,7 @@ async function createShareCode(req, res) {
     const label = String(req.body?.label || "").trim().slice(0, 80);
     const maxUses = Math.max(parseInt(req.body?.maxUses, 10) || 0, 0);
     const allowedEmails = parseAllowedEmails(req.body?.allowedEmails);
+    const showMoney = parseShowMoney(req.body?.showMoney, SHOW_MONEY_DEFAULT);
 
     const code = generateShareCode();
     const norm = normalizeShareCode(code);
@@ -7627,15 +8134,19 @@ async function createShareCode(req, res) {
       allowedEmails,
       maxUses,
       uses: 0,
+      showMoney,
       revoked: false,
       createdBy: userId,
     });
     await project.save();
 
-    recordActivity(req, project, ACT.SHARE_TOGGLED, `Created a ${accessLevel} share code`, {
-      accessLevel,
-      label,
-    });
+    recordActivity(
+      req,
+      project,
+      ACT.SHARE_TOGGLED,
+      `Created a ${accessLevel} share code${showMoney ? "" : " (money hidden)"}`,
+      { accessLevel, label, showMoney },
+    );
     const created = project.shareCodes[project.shareCodes.length - 1];
     return res.json({
       ok: true,
@@ -7645,6 +8156,7 @@ async function createShareCode(req, res) {
       label,
       allowedEmails,
       maxUses,
+      showMoney,
     });
   } catch (err) {
     console.error("create share code error:", err);
@@ -7663,6 +8175,7 @@ async function listCollab(req, res) {
       userId: String(c.userId),
       email: c.email || "",
       accessLevel: c.accessLevel,
+      showMoney: collaboratorShowsMoney(c),
       addedAt: c.addedAt,
     }));
     const codes = (project.shareCodes || [])
@@ -7676,6 +8189,7 @@ async function listCollab(req, res) {
         allowedEmails: c.allowedEmails || [],
         maxUses: c.maxUses || 0,
         uses: c.uses || 0,
+        showMoney: collaboratorShowsMoney(c),
         createdAt: c.createdAt,
       }));
     return res.json({ ok: true, collaborators, codes });
@@ -7685,35 +8199,67 @@ async function listCollab(req, res) {
   }
 }
 
-// PATCH /:productKey/:id/collab/:userId — owner changes a collaborator's level.
+// PATCH /:productKey/:id/collab/:userId — owner changes a collaborator's level
+// and/or whether they see money (R4b). Body: { accessLevel?, showMoney? }; a
+// field left out is left as it is, so the money switch can be flipped without
+// touching the level and vice versa.
 async function updateCollabLevel(req, res) {
   try {
     const targetUserId = String(req.params.userId || "").trim();
     if (!isValidObjectId(targetUserId)) {
       return res.status(400).json({ error: "Invalid user id" });
     }
+    const body = req.body || {};
+    const hasLevel = body.accessLevel !== undefined && body.accessLevel !== null;
+    const hasMoney = body.showMoney !== undefined && body.showMoney !== null;
+    if (!hasLevel && !hasMoney) {
+      return res.status(400).json({ error: "Nothing to change: send accessLevel or showMoney." });
+    }
     const owned = await loadOwnedProject(req, res);
     if (!owned) return;
     const { project } = owned;
 
-    const accessLevel =
-      String(req.body?.accessLevel || "").toLowerCase() === "full"
-        ? "full"
-        : "view";
     const collab = (project.collaborators || []).find(
       (c) => String(c.userId) === targetUserId,
     );
     if (!collab) return res.status(404).json({ error: "Collaborator not found" });
-    collab.accessLevel = accessLevel;
+
+    const who = collab.email || "a collaborator";
+    if (hasLevel) {
+      const accessLevel =
+        String(body.accessLevel).toLowerCase() === "full" ? "full" : "view";
+      collab.accessLevel = accessLevel;
+    }
+    if (hasMoney) {
+      collab.showMoney = parseShowMoney(body.showMoney, collaboratorShowsMoney(collab));
+    }
     await project.save();
-    recordActivity(
-      req,
-      project,
-      ACT.COLLABORATOR_ADDED,
-      `Changed ${collab.email || "a collaborator"}'s access to ${accessLevel}`,
-      { email: collab.email || "", accessLevel },
-    );
-    return res.json({ ok: true, userId: targetUserId, accessLevel });
+
+    const showMoney = collaboratorShowsMoney(collab);
+    if (hasLevel) {
+      recordActivity(
+        req,
+        project,
+        ACT.COLLABORATOR_ADDED,
+        `Changed ${who}'s access to ${collab.accessLevel}`,
+        { email: collab.email || "", accessLevel: collab.accessLevel },
+      );
+    }
+    if (hasMoney) {
+      recordActivity(
+        req,
+        project,
+        ACT.SHARE_TOGGLED,
+        showMoney ? `Showed the project's money to ${who}` : `Hid the project's money from ${who}`,
+        { email: collab.email || "", showMoney },
+      );
+    }
+    return res.json({
+      ok: true,
+      userId: targetUserId,
+      accessLevel: collab.accessLevel,
+      showMoney,
+    });
   } catch (err) {
     console.error("update collab level error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -7867,6 +8413,9 @@ async function claimProject(req, res) {
       userId,
       email: myEmail,
       accessLevel: level,
+      // The owner's money choice travels with the code (R4b). A code made
+      // before the switch has no field and reads as on, as it always did.
+      showMoney: collaboratorShowsMoney(sc),
       addedViaCode: sc._id,
     });
     sc.uses = (sc.uses || 0) + 1;
@@ -8432,6 +8981,18 @@ router.delete(
   dissolveMergedProject,
 );
 
+router.post(
+  "/:productKey/:id/model-drift",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  reportModelDrift,
+);
+router.post(
+  "/:productKey/:id/model-drift/dismiss",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  dismissModelDrift,
+);
 router.post("/claim", claimProject);
 
 router.post(
@@ -8752,6 +9313,16 @@ router.get(
   getProject,
 );
 
+// "Price with my RateGen rates": the bill re-priced with the viewer's own rates,
+// nothing saved (services/pricePreview.js). A GET, so the read-only sample guard
+// (rejectSampleWrites refuses every non-GET on a sample) leaves it open.
+router.get(
+  "/:productKey/:id/price-preview",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  getPricePreview,
+);
+
 router.put(
   "/:productKey/:id",
   mapEntitlementParam,
@@ -8766,6 +9337,18 @@ router.delete(
   requireStepUp,
   deleteProject,
 );
+
+// Exported for tests only, following the convention in routes/me.js and
+// routes/admin.broadcast.js. These three carry the valuation arithmetic a
+// certificate and its per-line log both depend on, and until now neither could
+// be exercised without standing up a database and a signed-in session — which is
+// why a divergence between them survived as long as it did.
+export const __test = {
+  applyValuationTracking,
+  buildValuationLogs,
+  computeValueToDate,
+  valuationFactor,
+};
 
 export default router;
 

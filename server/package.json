@@ -48,7 +48,6 @@
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
-    "nodemailer": "^7.0.10",
     "openai": "^6.13.0",
     "pdfkit": "^0.17.2",
     "qrcode": "^1.5.4",
@@ -57,6 +56,8 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-draft-04": "^1.0.0",
     "esbuild": "^0.28.1",
     "nodemon": "^3.1.10"
   }

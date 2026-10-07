@@ -95,6 +95,30 @@ export const AI_FEATURES = [
     guestAllowed: false,
   },
   {
+    // Outbound prospecting's daily finder (util/prospecting/research.js).
+    // Calls the Anthropic API directly, not AGENT_PROVIDER, because it needs
+    // the server-side web search tool, and its rows are always billed to the
+    // Anthropic account. Each row's cost includes the searches it ran. A
+    // scheduled job, so its calls belong to nobody.
+    key: "prospect-research",
+    label: "Prospect research (web search)",
+    desc: "One research call per ideal customer profile per day: finds matching firms on the web and cites where each came from.",
+    provider: "anthropic",
+    metered: true,
+    guestAllowed: false,
+  },
+  {
+    // Outbound prospecting's email writer (util/prospecting/writer.js): three
+    // emails per prospect, with at most one rewrite when a rule is broken.
+    // Goes through the shared transport, so it follows AGENT_PROVIDER.
+    key: "prospect-email-draft",
+    label: "Prospect email drafts",
+    desc: "Writes the first email and two follow-ups for one prospect, for a reviewer to approve.",
+    provider: "agent",
+    metered: true,
+    guestAllowed: false,
+  },
+  {
     key: "ai-boq-check",
     label: "BoQ market rate check",
     desc: "Per-line verdict vs the RateGen benchmarks (AWS AI service).",
@@ -158,6 +182,10 @@ export function billingAccountFor(provider) {
 const BASE_PRICES = {
   // Anthropic / Bedrock Claude
   "claude-haiku-4-5": { in: 1.0, out: 5.0 },
+  // Matching is longest-prefix, so "claude-opus-5-5" never falls through to
+  // Opus 5's price.
+  "claude-opus-5-5": { in: 4.0, out: 20.0 },
+  "claude-opus-5": { in: 5.0, out: 25.0 },
   "claude-sonnet-4-5": { in: 3.0, out: 15.0 },
   "claude-sonnet-4": { in: 3.0, out: 15.0 },
   "claude-opus-4": { in: 15.0, out: 75.0 },

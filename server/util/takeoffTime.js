@@ -15,7 +15,7 @@ import { DEFAULT_BASELINE_RATES } from "../config/takeoffBaselineDefaults.js";
 // A gap between two activity ticks longer than this is idle and is not counted.
 export const IDLE_GAP_SECONDS = 120;
 
-export const PRODUCTS = Object.freeze(["HERON", "QUIV", "RATEGEN"]);
+export const PRODUCTS = Object.freeze(["HERON", "QUIV", "RATEGEN", "QSTAKEOFF"]);
 
 // productKey values the plugins authenticate with -> product label stored on
 // the session. Both spellings are accepted from clients.
@@ -28,6 +28,8 @@ const PRODUCT_BY_KEY = Object.freeze({
   "revit-materials": "QUIV",
   revitmep: "QUIV",
   rategen: "RATEGEN",
+  // ADLM QS Takeoff (standalone: drawings, CAD, scans and IFC). Not "qs-takeoff", which is Time Pro.
+  qstakeoff: "QSTAKEOFF",
 });
 
 export function normalizeProduct(v) {

@@ -1,0 +1,958 @@
+{
+  "_readme": "ICMS 3 (International Cost Management Standard, 3rd edition, ICMS Coalition, Nov 2021) code tables, copied from the standard's text: Table 1 / I-1 (Level 1), Table 2 / I-2 (Level 2), Table 2 / I-3 to I-6 (Level 3), Appendix B (Level 4, buildings). Codes join levels with a full point: 01.2.03.030 = Buildings : Construction : Structure : Frames and slabs. Levels 1-3 are mandatory; Level 4 is discretionary. Costs and carbon share the codes.",
+  "edition": "ICMS 3rd edition (2021)",
+  "projectTypes": [
+    {
+      "code": "01",
+      "title": "Buildings"
+    },
+    {
+      "code": "02",
+      "title": "Roads and runways"
+    },
+    {
+      "code": "03",
+      "title": "Railways"
+    },
+    {
+      "code": "04",
+      "title": "Bridges"
+    },
+    {
+      "code": "05",
+      "title": "Tunnels"
+    },
+    {
+      "code": "06",
+      "title": "Wastewater treatment works"
+    },
+    {
+      "code": "07",
+      "title": "Water treatment works"
+    },
+    {
+      "code": "08",
+      "title": "Pipelines"
+    },
+    {
+      "code": "09",
+      "title": "Wells and boreholes"
+    },
+    {
+      "code": "10",
+      "title": "Power-generating plants"
+    },
+    {
+      "code": "11",
+      "title": "Chemical plants"
+    },
+    {
+      "code": "12",
+      "title": "Refineries"
+    },
+    {
+      "code": "13",
+      "title": "Dams and reservoirs"
+    },
+    {
+      "code": "14",
+      "title": "Mines and quarries"
+    },
+    {
+      "code": "15",
+      "title": "Offshore structures"
+    },
+    {
+      "code": "16",
+      "title": "Near shore works"
+    },
+    {
+      "code": "17",
+      "title": "Ports"
+    },
+    {
+      "code": "18",
+      "title": "Waterway works"
+    },
+    {
+      "code": "19",
+      "title": "Land formation and reclamation"
+    }
+  ],
+  "categories": [
+    {
+      "code": "1",
+      "cost": "Acquisition Costs (AC)",
+      "carbon": "Acquisition Carbon Emissions (AE)"
+    },
+    {
+      "code": "2",
+      "cost": "Construction Costs (CC)",
+      "carbon": "Construction Carbon Emissions (CE)"
+    },
+    {
+      "code": "3",
+      "cost": "Renewal Costs (RC)",
+      "carbon": "Renewal Carbon Emissions (RE)"
+    },
+    {
+      "code": "4",
+      "cost": "Operation Costs (OC)",
+      "carbon": "Operation Carbon Emissions (OE)"
+    },
+    {
+      "code": "5",
+      "cost": "Maintenance Costs (MC)",
+      "carbon": "Maintenance Carbon Emissions (ME)"
+    },
+    {
+      "code": "6",
+      "cost": "End of Life Costs (EC)",
+      "carbon": "End of Life Carbon Emissions (EE)"
+    },
+    {
+      "code": "7",
+      "cost": null,
+      "carbon": "Benefits and loads beyond the system boundary"
+    }
+  ],
+  "constructionGroups": [
+    {
+      "code": "01",
+      "title": "Demolition, site preparation and formation",
+      "carbon": true
+    },
+    {
+      "code": "02",
+      "title": "Substructure",
+      "carbon": true
+    },
+    {
+      "code": "03",
+      "title": "Structure",
+      "carbon": true
+    },
+    {
+      "code": "04",
+      "title": "Architectural works | Non-structural works",
+      "carbon": true
+    },
+    {
+      "code": "05",
+      "title": "Services and equipment",
+      "carbon": true
+    },
+    {
+      "code": "06",
+      "title": "Surface and underground drainage",
+      "carbon": true
+    },
+    {
+      "code": "07",
+      "title": "External and ancillary works",
+      "carbon": true
+    },
+    {
+      "code": "08",
+      "title": "Preliminaries | Constructors' site overheads | general requirements",
+      "carbon": true
+    },
+    {
+      "code": "09",
+      "title": "Risk Allowances",
+      "carbon": true
+    },
+    {
+      "code": "10",
+      "title": "Taxes and Levies",
+      "carbon": false
+    },
+    {
+      "code": "11",
+      "title": "Work and utilities off-site",
+      "carbon": false
+    },
+    {
+      "code": "12",
+      "title": "Production and loose furniture, fittings and equipment",
+      "carbon": true
+    },
+    {
+      "code": "13",
+      "title": "Construction-related consultants and supervision",
+      "carbon": false
+    }
+  ],
+  "buildingSubGroups": [
+    {
+      "code": "01.010",
+      "group": "01",
+      "title": "Site survey and ground investigation",
+      "scope": []
+    },
+    {
+      "code": "01.020",
+      "group": "01",
+      "title": "Environmental treatment",
+      "scope": []
+    },
+    {
+      "code": "01.030",
+      "group": "01",
+      "title": "Sampling of hazardous or useful materials or conditions",
+      "scope": []
+    },
+    {
+      "code": "01.040",
+      "group": "01",
+      "title": "Temporary fencing",
+      "scope": []
+    },
+    {
+      "code": "01.050",
+      "group": "01",
+      "title": "Demolition of existing buildings and support to adjacent structures",
+      "scope": []
+    },
+    {
+      "code": "01.060",
+      "group": "01",
+      "title": "Site surface clearance (clearing, grubbing, topsoil stripping, tree felling, minor earthwork, removal)",
+      "scope": []
+    },
+    {
+      "code": "01.070",
+      "group": "01",
+      "title": "Tree transplant",
+      "scope": []
+    },
+    {
+      "code": "01.080",
+      "group": "01",
+      "title": "Site formation and slope treatment",
+      "scope": []
+    },
+    {
+      "code": "01.090",
+      "group": "01",
+      "title": "Temporary surface drainage and dewatering",
+      "scope": []
+    },
+    {
+      "code": "01.100",
+      "group": "01",
+      "title": "Temporary protection, diversion and relocation of public utilities",
+      "scope": []
+    },
+    {
+      "code": "01.110",
+      "group": "01",
+      "title": "Erosion control",
+      "scope": []
+    },
+    {
+      "code": "02.010",
+      "group": "02",
+      "title": "Foundation piling and underpinning",
+      "scope": [
+        "mobilisation and demobilisation",
+        "trial piles and caisson",
+        "permanent piles and caisson",
+        "pile and caisson testing",
+        "underpinning"
+      ]
+    },
+    {
+      "code": "02.020",
+      "group": "02",
+      "title": "Foundations up to top of lowest floor slabs",
+      "scope": [
+        "excavation and disposal",
+        "lateral supports",
+        "raft footings, pile caps, column bases, wall footings, strap beams, tie beams",
+        "substructure walls and columns",
+        "lowest floor slabs and beams (excluding and beyond basement bottom slabs)",
+        "lift pits",
+        "composite or prefabricated work"
+      ]
+    },
+    {
+      "code": "02.030",
+      "group": "02",
+      "title": "Basement sides and bottom",
+      "scope": [
+        "excavation and disposal",
+        "lateral supports",
+        "bottom slabs and blinding",
+        "sides",
+        "vertical waterproof tanking, drainage blanket, drains and skin wall",
+        "horizontal waterproof tanking, drainage blanket, drains and topping slab",
+        "insulation",
+        "lift pits, sump pits, sleeves",
+        "composite or prefabricated work"
+      ]
+    },
+    {
+      "code": "03.010",
+      "group": "03",
+      "title": "Structural removal and alterations",
+      "scope": []
+    },
+    {
+      "code": "03.020",
+      "group": "03",
+      "title": "Basement suspended floors (up to top of ground floor slabs)",
+      "scope": [
+        "structural walls and columns",
+        "beams and slabs",
+        "staircases"
+      ]
+    },
+    {
+      "code": "03.030",
+      "group": "03",
+      "title": "Frames and slabs (above top of ground floor slabs)",
+      "scope": [
+        "structural walls and columns",
+        "upper floor beams and slabs",
+        "roof beams and slabs",
+        "staircases",
+        "fireproofing to steel structure"
+      ]
+    },
+    {
+      "code": "03.040",
+      "group": "03",
+      "title": "Tanks, pools, sundries",
+      "scope": []
+    },
+    {
+      "code": "03.050",
+      "group": "03",
+      "title": "Composite or prefabricated work",
+      "scope": []
+    },
+    {
+      "code": "04.010",
+      "group": "04",
+      "title": "Non-structural removal and alterations",
+      "scope": []
+    },
+    {
+      "code": "04.020",
+      "group": "04",
+      "title": "External elevations",
+      "scope": [
+        "non-structural external walls and features",
+        "external wall finishes except cladding",
+        "facade cladding and curtain walls",
+        "external windows",
+        "external doors",
+        "external shop fronts",
+        "roller shutters and fire shutters"
+      ]
+    },
+    {
+      "code": "04.030",
+      "group": "04",
+      "title": "Roof finishes, skylights and landscaping (including waterproofing and insulation)",
+      "scope": [
+        "roof finishes",
+        "skylights",
+        "other roof features",
+        "roof landscaping (hard and soft)"
+      ]
+    },
+    {
+      "code": "04.040",
+      "group": "04",
+      "title": "Internal divisions",
+      "scope": [
+        "non-structural internal walls and partitions",
+        "shop fronts",
+        "toilet cubicles",
+        "moveable partitions",
+        "cold rooms",
+        "internal doors",
+        "internal windows",
+        "roller shutters and fire shutters",
+        "sundry concrete work"
+      ]
+    },
+    {
+      "code": "04.050",
+      "group": "04",
+      "title": "Fittings and sundries",
+      "scope": [
+        "balustrades, railings and handrails",
+        "staircases and catwalk not forming part of the structure, cat ladders",
+        "cabinets, cupboards, shelves, counters, benches, notice boards, blackboards",
+        "exit signs, directory signs",
+        "window and door dressings",
+        "decorative features",
+        "interior landscaping",
+        "access panels, fire service cabinets",
+        "sundries"
+      ]
+    },
+    {
+      "code": "04.060",
+      "group": "04",
+      "title": "Finishes under cover",
+      "scope": [
+        "floor finishes (internal and external)",
+        "internal wall finishes and cladding",
+        "ceiling finishes and false ceilings (internal or external)"
+      ]
+    },
+    {
+      "code": "04.070",
+      "group": "04",
+      "title": "Builder's work in connection with services",
+      "scope": [
+        "plinth, bases",
+        "fire-proofing enclosure",
+        "hoisting beams, lift pit separation screens, lift shaft separator beams",
+        "suspended manholes",
+        "cable trenches, trench covers",
+        "sleeves, openings and the like not allowed for in ‘Fittings and sundries'"
+      ]
+    },
+    {
+      "code": "04.080",
+      "group": "04",
+      "title": "Composite or prefabricated work",
+      "scope": []
+    },
+    {
+      "code": "05.010",
+      "group": "05",
+      "title": "Heating, ventilating and air-conditioning systems/air conditioners",
+      "scope": [
+        "seawater system",
+        "cooling water system",
+        "chilled water system",
+        "heating water system",
+        "steam and condensate system",
+        "fuel oil system",
+        "water treatment",
+        "air handling and distribution system",
+        "condensate drain system",
+        "unitary air-conditioning system",
+        "mechanical ventilation system",
+        "kitchen ventilation system",
+        "fume and smoke extraction system",
+        "anaesthetic gas-extraction system",
+        "window and split-type air conditioners",
+        "air-curtains",
+        "fans",
+        "related electrical and control systems",
+        "submissions, testing and commissioning"
+      ]
+    },
+    {
+      "code": "05.020",
+      "group": "05",
+      "title": "Electrical services",
+      "scope": [
+        "high-voltage transformers and switchboards",
+        "incoming mains, low-voltage transformers and switchboards",
+        "mains and submains",
+        "standby system",
+        "lighting and power",
+        "uninterruptible power supply",
+        "electric underfloor heating",
+        "local electrical heating units",
+        "earthing/lightning protection and bonding",
+        "submissions, testing and commissioning"
+      ]
+    },
+    {
+      "code": "05.030",
+      "group": "05",
+      "title": "Fitting out lighting fittings",
+      "scope": []
+    },
+    {
+      "code": "05.040",
+      "group": "05",
+      "title": "Extra low voltage electrical services",
+      "scope": [
+        "information and communications technology system",
+        "staff paging/location",
+        "public address system",
+        "building automation",
+        "security and alarm",
+        "close circuit television",
+        "communal aerial broadcast distribution and the like",
+        "submissions, testing and commissioning"
+      ]
+    },
+    {
+      "code": "05.050",
+      "group": "05",
+      "title": "Water supply and drainage above ground or inside basement",
+      "scope": [
+        "cold water supply",
+        "hot water supply",
+        "flushing water supply",
+        "grey water supply",
+        "cleansing water supply",
+        "irrigation water supply",
+        "rainwater disposal",
+        "soil and waste disposal",
+        "planter drainage disposal",
+        "kitchen drainage disposal",
+        "related electrical and control systems",
+        "submissions, testing and commissioning"
+      ]
+    },
+    {
+      "code": "05.060",
+      "group": "05",
+      "title": "Supply of sanitary fittings and fixtures (installation included in ‘Water supply and above ground drainage' unless not separable from costs of ‘Fittings and sundries')",
+      "scope": []
+    },
+    {
+      "code": "05.070",
+      "group": "05",
+      "title": "Disposal systems",
+      "scope": [
+        "refuse",
+        "laboratory waste",
+        "industrial waste",
+        "incinerator",
+        "submissions, testing and commissioning"
+      ]
+    },
+    {
+      "code": "05.080",
+      "group": "05",
+      "title": "Fire services",
+      "scope": [
+        "fire hydrant and hose reel system",
+        "wet risers",
+        "sprinkler system",
+        "deluge system",
+        "gaseous extinguishing system",
+        "foam extinguishing system",
+        "audio/visual advisory system",
+        "automatic fire alarm and detection system",
+        "portable hand-operated appliances and sundries",
+        "related electrical and control systems",
+        "submissions, testing and commissioning"
+      ]
+    },
+    {
+      "code": "05.090",
+      "group": "05",
+      "title": "Gas services",
+      "scope": [
+        "coal gas",
+        "natural gas",
+        "liquid petroleum gas",
+        "medical gas/laboratory gas",
+        "industrial gas/compressed air/instrument air",
+        "vacuum",
+        "steam",
+        "submissions, testing and commissioning"
+      ]
+    },
+    {
+      "code": "05.100",
+      "group": "05",
+      "title": "Movement systems",
+      "scope": [
+        "lifts | elevators",
+        "platform lifts",
+        "escalators",
+        "travellators | moving walkways",
+        "conveyors",
+        "submissions, testing and commissioning"
+      ]
+    },
+    {
+      "code": "05.110",
+      "group": "05",
+      "title": "Gondolas",
+      "scope": []
+    },
+    {
+      "code": "05.120",
+      "group": "05",
+      "title": "Turntables",
+      "scope": []
+    },
+    {
+      "code": "05.130",
+      "group": "05",
+      "title": "Generators",
+      "scope": []
+    },
+    {
+      "code": "05.140",
+      "group": "05",
+      "title": "Energy-saving features",
+      "scope": []
+    },
+    {
+      "code": "05.150",
+      "group": "05",
+      "title": "Water and wastewater treatment equipment",
+      "scope": []
+    },
+    {
+      "code": "05.160",
+      "group": "05",
+      "title": "Fountains, pools and filtration plant",
+      "scope": []
+    },
+    {
+      "code": "05.170",
+      "group": "05",
+      "title": "Powered building signage",
+      "scope": []
+    },
+    {
+      "code": "05.175",
+      "group": "05",
+      "title": "Audio/visual entertainment system",
+      "scope": []
+    },
+    {
+      "code": "05.180",
+      "group": "05",
+      "title": "Kitchen equipment",
+      "scope": []
+    },
+    {
+      "code": "05.190",
+      "group": "05",
+      "title": "Cold room equipment",
+      "scope": []
+    },
+    {
+      "code": "05.200",
+      "group": "05",
+      "title": "Laboratory equipment",
+      "scope": []
+    },
+    {
+      "code": "05.210",
+      "group": "05",
+      "title": "Medical equipment",
+      "scope": []
+    },
+    {
+      "code": "05.220",
+      "group": "05",
+      "title": "Hotel equipment",
+      "scope": []
+    },
+    {
+      "code": "05.230",
+      "group": "05",
+      "title": "Car park or entrances access control",
+      "scope": []
+    },
+    {
+      "code": "05.240",
+      "group": "05",
+      "title": "Domestic appliances",
+      "scope": []
+    },
+    {
+      "code": "05.250",
+      "group": "05",
+      "title": "Other specialist services",
+      "scope": []
+    },
+    {
+      "code": "05.260",
+      "group": "05",
+      "title": "Builder's profit and attendance on services",
+      "scope": []
+    },
+    {
+      "code": "06.010",
+      "group": "06",
+      "title": "Surface water drainage",
+      "scope": []
+    },
+    {
+      "code": "06.020",
+      "group": "06",
+      "title": "Storm water drainage",
+      "scope": []
+    },
+    {
+      "code": "06.030",
+      "group": "06",
+      "title": "Foul and wastewater drainage",
+      "scope": []
+    },
+    {
+      "code": "06.040",
+      "group": "06",
+      "title": "Drainage disconnections and connections",
+      "scope": []
+    },
+    {
+      "code": "06.050",
+      "group": "06",
+      "title": "CCTV inspection of existing or new drains",
+      "scope": []
+    },
+    {
+      "code": "06.060",
+      "group": "06",
+      "title": "Buried Process Pipe",
+      "scope": []
+    },
+    {
+      "code": "07.010",
+      "group": "07",
+      "title": "Permanent retaining structures",
+      "scope": []
+    },
+    {
+      "code": "07.020",
+      "group": "07",
+      "title": "Site enclosures and divisions",
+      "scope": []
+    },
+    {
+      "code": "07.030",
+      "group": "07",
+      "title": "Ancillary structures",
+      "scope": []
+    },
+    {
+      "code": "07.040",
+      "group": "07",
+      "title": "Roads and paving",
+      "scope": []
+    },
+    {
+      "code": "07.050",
+      "group": "07",
+      "title": "Landscaping (hard and soft)",
+      "scope": []
+    },
+    {
+      "code": "07.060",
+      "group": "07",
+      "title": "Fittings and equipment",
+      "scope": []
+    },
+    {
+      "code": "07.070",
+      "group": "07",
+      "title": "External services",
+      "scope": [
+        "water supply",
+        "gas supply",
+        "power supply",
+        "communications supply",
+        "external lighting",
+        "utility disconnections and connections"
+      ]
+    },
+    {
+      "code": "08.010",
+      "group": "08",
+      "title": "Construction management including site management staff and support labour",
+      "scope": []
+    },
+    {
+      "code": "08.020",
+      "group": "08",
+      "title": "Temporary access roads and storage areas, traffic management and diversion (at the Constructors' discretion)",
+      "scope": []
+    },
+    {
+      "code": "08.030",
+      "group": "08",
+      "title": "Temporary site fencing and securities",
+      "scope": []
+    },
+    {
+      "code": "08.040",
+      "group": "08",
+      "title": "Commonly shared construction plant",
+      "scope": []
+    },
+    {
+      "code": "08.050",
+      "group": "08",
+      "title": "Commonly shared scaffolding",
+      "scope": []
+    },
+    {
+      "code": "08.060",
+      "group": "08",
+      "title": "Other temporary facilities and services",
+      "scope": []
+    },
+    {
+      "code": "08.070",
+      "group": "08",
+      "title": "Technology and communications: telephone, broadband, hardware, software",
+      "scope": []
+    },
+    {
+      "code": "08.080",
+      "group": "08",
+      "title": "Constructor's submissions, reports and as-built documentation",
+      "scope": []
+    },
+    {
+      "code": "08.090",
+      "group": "08",
+      "title": "Quality monitoring, recording and inspections",
+      "scope": []
+    },
+    {
+      "code": "08.100",
+      "group": "08",
+      "title": "Safety, health and environmental management",
+      "scope": []
+    },
+    {
+      "code": "08.110",
+      "group": "08",
+      "title": "Insurances, bonds, guarantees and warranties",
+      "scope": []
+    },
+    {
+      "code": "08.120",
+      "group": "08",
+      "title": "Constructor's statutory fees and charges",
+      "scope": []
+    },
+    {
+      "code": "08.130",
+      "group": "08",
+      "title": "Testing and commissioning",
+      "scope": []
+    },
+    {
+      "code": "08.140",
+      "group": "08",
+      "title": "Extras for extreme climatic or working conditions (if priced separately according to local pricing practice)",
+      "scope": []
+    },
+    {
+      "code": "09.010",
+      "group": "09",
+      "title": "Design development allowance",
+      "scope": []
+    },
+    {
+      "code": "09.020",
+      "group": "09",
+      "title": "Construction contingencies",
+      "scope": []
+    },
+    {
+      "code": "09.030",
+      "group": "09",
+      "title": "Price Level Adjustments",
+      "scope": [
+        "until tendering",
+        "during construction"
+      ]
+    },
+    {
+      "code": "09.040",
+      "group": "09",
+      "title": "Exchange rate fluctuation adjustments",
+      "scope": []
+    },
+    {
+      "code": "10.010",
+      "group": "10",
+      "title": "Paid by the Constructor",
+      "scope": []
+    },
+    {
+      "code": "10.020",
+      "group": "10",
+      "title": "Paid by the Client in relation to the construction contract payments",
+      "scope": []
+    },
+    {
+      "code": "11.010",
+      "group": "11",
+      "title": "Connections to, diversion of and capacity enhancement of public utility mains or sources off-site up to mains connections on-site",
+      "scope": [
+        "electricity",
+        "transformers",
+        "water",
+        "sewer",
+        "gas",
+        "telecommunications"
+      ]
+    },
+    {
+      "code": "11.020",
+      "group": "11",
+      "title": "Public access roads and footpaths",
+      "scope": []
+    },
+    {
+      "code": "12.010",
+      "group": "12",
+      "title": "Loose production, process and operating furniture, fittings and equipment not normally provided before completion of construction",
+      "scope": []
+    },
+    {
+      "code": "12.020",
+      "group": "12",
+      "title": "Fixed production, process and operating furniture, fittings and equipment installed before completion of construction",
+      "scope": [
+        "production (including process and operating) equipment (including furniture and fittings)",
+        "related instrument and control systems",
+        "related safety and environmental control systems",
+        "related storage and transfer systems",
+        "services and equipment as described in Group 05 but dedicated to serve production equipment",
+        "surface and underground drainage as described in Group 06 but dedicated to serve production equipment",
+        "testing and commissioning",
+        "licences and certifications to start production",
+        "risks allowances",
+        "taxes and levies"
+      ]
+    },
+    {
+      "code": "13.010",
+      "group": "13",
+      "title": "Consultants' fees and reimbursable",
+      "scope": [
+        "architects (architectural, landscape, interior design, technical, etc.)",
+        "engineers (geotechnical, civil, structural, mechanical, electrical and plumbing, technical, etc.)",
+        "project managers",
+        "surveyors (quantity surveying, land surveying, building surveying, cost engineering, etc.)",
+        "specialist consultants (environmental, traffic, acoustic, facade, BIM, etc.)",
+        "value management studies"
+      ]
+    },
+    {
+      "code": "13.020",
+      "group": "13",
+      "title": "Charges and levies payable to statutory bodies or their appointed agencies (in connection with planning, design, tender and contract approvals, supervision and acceptance inspections)",
+      "scope": []
+    },
+    {
+      "code": "13.030",
+      "group": "13",
+      "title": "Site supervision charges (including their accommodation and travels)",
+      "scope": []
+    },
+    {
+      "code": "13.040",
+      "group": "13",
+      "title": "Payments to testing authorities or laboratories",
+      "scope": []
+    }
+  ]
+}

@@ -67,6 +67,11 @@ export default function DsAdminRateBuilder() {
   const [sectionKey, setSectionKey] = React.useState("blockwork");
   const [overheadPercent, setOverheadPercent] = React.useState(10);
   const [profitPercent, setProfitPercent] = React.useState(25);
+  // ADLM's default overhead and profit per trade (R2). A new rate starts from
+  // its trade's figure, else 10 / 25, until the admin types their own; after
+  // that, changing the trade leaves the typed figure alone.
+  const [adlmTrades, setAdlmTrades] = React.useState([]);
+  const typedPercent = React.useRef({ overhead: false, profit: false });
   const [lines, setLines] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
   const [saved, setSaved] = React.useState(null);
@@ -108,6 +113,25 @@ export default function DsAdminRateBuilder() {
       clearTimeout(t);
     };
   }, [accessToken, zone, q, say]);
+
+  React.useEffect(() => {
+    if (!accessToken) return undefined;
+    let alive = true;
+    apiAuthed("/admin/rategen-v2/trade-margins", { token: accessToken })
+      .then((r) => alive && setAdlmTrades(Array.isArray(r?.trades) ? r.trades : []))
+      // No table: the built-in 10 / 25 stays, exactly as before.
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [accessToken]);
+
+  React.useEffect(() => {
+    const m = adlmTrades.find((t) => t.sectionKey === sectionKey)?.master;
+    if (!m) return;
+    if (!typedPercent.current.overhead) setOverheadPercent(m.overheadPercent);
+    if (!typedPercent.current.profit) setProfitPercent(m.profitPercent);
+  }, [adlmTrades, sectionKey]);
 
   // Keys were built from the list length, which repeats: add a component twice,
   // remove the first, add it again, and the new row collides with the surviving
@@ -205,7 +229,11 @@ export default function DsAdminRateBuilder() {
   const total = net + overhead + profit;
 
   const matNet = lines.filter((l) => l.refKind === "material").reduce((t, l) => t + lineNet(l), 0);
-  const labNet = lines.filter((l) => l.refKind === "labour").reduce((t, l) => t + lineNet(l), 0);
+  // "Labour and plant", as the strip says: a plant line from the plant
+  // library counts here, so the two subtotals still add up to Net.
+  const labNet = lines
+    .filter((l) => l.refKind === "labour" || l.refKind === "plant")
+    .reduce((t, l) => t + lineNet(l), 0);
 
   const ready = description.trim() && unit.trim() && lines.length > 0 && net > 0;
 
@@ -251,7 +279,13 @@ export default function DsAdminRateBuilder() {
     }
   }
 
-  const items = lib ? (tab === "material" ? lib.materials : lib.labour) : [];
+  const items = lib
+    ? tab === "material"
+      ? lib.materials
+      : tab === "plant"
+        ? lib.plant || []
+        : lib.labour
+    : [];
 
   return (
     <>
@@ -315,6 +349,7 @@ export default function DsAdminRateBuilder() {
               {[
                 ["material", "Materials", lib?.counts.materials],
                 ["labour", "Labour and plant", lib?.counts.labour],
+                ["plant", "Plant, by the hour", lib?.counts.plant],
               ].map(([k, label, n]) => (
                 <button
                   key={k}
@@ -514,7 +549,10 @@ export default function DsAdminRateBuilder() {
                     min="0"
                     max="100"
                     value={overheadPercent}
-                    onChange={(e) => setOverheadPercent(e.target.value)}
+                    onChange={(e) => {
+                      typedPercent.current.overhead = true;
+                      setOverheadPercent(e.target.value);
+                    }}
                     aria-label="Overhead percent"
                   />
                   %
@@ -529,7 +567,10 @@ export default function DsAdminRateBuilder() {
                     min="0"
                     max="100"
                     value={profitPercent}
-                    onChange={(e) => setProfitPercent(e.target.value)}
+                    onChange={(e) => {
+                      typedPercent.current.profit = true;
+                      setProfitPercent(e.target.value);
+                    }}
                     aria-label="Profit percent"
                   />
                   %

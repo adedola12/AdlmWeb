@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { PlantPartSchema } from "./RateGenPlant.js";
 
 const BreakdownLineSchema = new mongoose.Schema(
   {
@@ -146,6 +147,45 @@ const UserPriceOverrideSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/**
+ * A customer's own overhead and profit default for one trade.
+ *
+ * Fills a percentage only where a rate this customer writes arrives without
+ * one; never rewrites a stored rate (util/tradeMargins.js). Either half may be
+ * null, meaning "no default of mine for this half".
+ */
+const TradeMarginSchema = new mongoose.Schema(
+  {
+    sectionKey: { type: String, required: true, trim: true, lowercase: true },
+    overheadPercent: { type: Number, default: null, min: 0 },
+    profitPercent: { type: Number, default: null, min: 0 },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+/**
+ * A customer's own machine, or their own version of one of ADLM's.
+ *
+ * With baseSn it stands in for that ADLM machine for this customer only
+ * (their own diesel price, their own working day); without, it is a machine
+ * ADLM does not list. ADLM's row is never changed by it.
+ */
+const UserPlantSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true, trim: true },
+    baseSn: { type: Number, default: null },
+    name: { type: String, required: true, trim: true },
+    category: { type: String, trim: true, default: "" },
+    hoursPerDay: { type: Number, default: 8, min: 0, max: 24 },
+    parts: { type: [PlantPartSchema], default: [] },
+    notes: { type: String, trim: true, default: "" },
+    priceAsOf: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const RateGenLibrarySchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -156,6 +196,10 @@ const RateGenLibrarySchema = new mongoose.Schema(
     customRates: { type: [UserCustomRateSchema], default: [] },
     deletedCustomRates: { type: [DeletedCustomRateSchema], default: [] },
     priceOverrides: { type: [UserPriceOverrideSchema], default: [] },
+    tradeMargins: { type: [TradeMarginSchema], default: [] },
+    tradeMarginsVersion: { type: Number, default: 1 },
+    plant: { type: [UserPlantSchema], default: [] },
+    plantVersion: { type: Number, default: 1 },
     ratesVersion: { type: Number, default: 1 },
     customRatesVersion: { type: Number, default: 1 },
     priceOverridesVersion: { type: Number, default: 1 },

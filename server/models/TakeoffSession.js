@@ -72,7 +72,7 @@ const TakeoffSessionSchema = new mongoose.Schema(
     firmId: { type: String, trim: true, default: null, index: true },
     firmName: { type: String, trim: true, default: "" },
 
-    product: { type: String, enum: ["HERON", "QUIV", "RATEGEN"], required: true, index: true },
+    product: { type: String, enum: ["HERON", "QUIV", "RATEGEN", "QSTAKEOFF"], required: true, index: true },
     productKey: { type: String, trim: true, lowercase: true, default: "" },
     productVersion: { type: String, trim: true, default: "" },
     mode: { type: String, enum: ["auto", "assisted"], default: "auto" },

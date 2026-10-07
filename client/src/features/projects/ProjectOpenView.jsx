@@ -9,10 +9,13 @@ import ProjectContractPanel from "./ProjectContractPanel.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
 import LinkedProjectsCard from "./LinkedProjectsCard.jsx";
 import ServicesPricingPanel from "./ServicesPricingPanel.jsx";
+import PricePreviewPanel from "./PricePreviewPanel.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
+import OpenInDesktopButton from "./OpenInDesktopButton.jsx";
 import { projectTotals } from "./lib/projectTotals.js";
+import { driftTitle } from "./lib/modelDrift.js";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
 const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
@@ -149,6 +152,7 @@ function ExportMenu({
   onExportGenericBoQ,
   onExportGenericTradeBoQ,
   onExportElementalBoQ,
+  onExportIcms,
 }) {
   const ref = React.useRef(null);
   const close = React.useCallback(() => {
@@ -268,6 +272,20 @@ function ExportMenu({
             "One bill per storey, in the order the building goes up: the basis for a payment schedule",
             () => onExportElementalBoQ?.("multistorey", undefined, "milestone"),
           )}
+
+          {onExportIcms ? (
+            <>
+              {group("ICMS 3", "international cost and carbon report")}
+              {item(
+                "icms-x",
+                "ICMS 3 cost and carbon (Excel)",
+                "Cost and upfront carbon (A1-A5) by ICMS 3 Group, with every line's code, where its carbon came from, and the lines not yet placed",
+                () => onExportIcms("xlsx"),
+                "Cost by Group · carbon by Group · every line",
+              )}
+              {item("icms-j", "ICMS 3 cost and carbon (JSON)", "The same report as data, with full ICMS 3 codes", () => onExportIcms("json"))}
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -395,6 +413,9 @@ export default function ProjectOpenView({
   // Sample project descriptor (project.sample) when this is read-only learning
   // material; null for real projects.
   sampleInfo = null,
+  // Model drift (r2-model-drift-alerts): the plugin found the model has
+  // changed since this bill's last take-off. Null when nothing is open.
+  modelDrift = null,
   linkedGroupsCount = 0,
   // Cross-project links (MEP services → this general bill). Feature P1.
   linkedSummaries = [],
@@ -412,6 +433,7 @@ export default function ProjectOpenView({
   onExportBillBudget,
   onExportGenericBoQ,
   onExportGenericTradeBoQ,
+  onExportIcms,
   onItemQueryChange,
   onMoveItem,
   onPickCandidate,
@@ -803,6 +825,10 @@ export default function ProjectOpenView({
           </p>
         </div>
       ) : null}
+      {isSample && canSeeRates ? (
+        // see what the viewer's own RateGen rates make of this bill; nothing is saved
+        <PricePreviewPanel productKey={productKey} projectId={projectId} accessToken={accessToken} />
+      ) : null}
       {isShared ? (
         <p className="mk-note" style={{ margin: 0 }}>
           <b>Shared project · {canEdit ? "Full access" : "View only"}</b>
@@ -811,7 +837,9 @@ export default function ProjectOpenView({
             <>
               <br />
               <span style={{ color: "var(--pal-orange-key)" }}>
-                Rates hidden. A RateGen subscription is required to view rates.
+                {access?.moneyHiddenByOwner
+                  ? "Money hidden by the project owner. Rates, totals and priced exports are not shared with you."
+                  : "Rates hidden. A RateGen subscription is required to view rates."}
               </span>
             </>
           ) : null}
@@ -855,6 +883,15 @@ export default function ProjectOpenView({
             </span>
           )}
 
+          {/* Model drift. A placeholder in his existing amber status chip
+              until Richard designs the badge (design track on the work
+              board); the plugin panel is where the change is acted on. */}
+          {modelDrift?.status === "open" ? (
+            <span className="wk-dirty" role="status" title={driftTitle(modelDrift)}>
+              Model changed since last take-off
+            </span>
+          ) : null}
+
           {/* Project ID stays one click away for the Windows plugin
               "Open from Cloud" flow. */}
           <button
@@ -865,6 +902,16 @@ export default function ProjectOpenView({
           >
             {copiedId ? "✓ Copied" : "Copy project ID"}
           </button>
+
+          {/* "Open in QUIV / HERON": hands the project to the desktop
+              product through the Installer Hub. Samples stay on the web. */}
+          {!isSample ? (
+            <OpenInDesktopButton
+              productKey={productKey}
+              projectId={selectedId}
+              accessToken={accessToken}
+            />
+          ) : null}
 
           {canManage ? (
             <button
@@ -912,6 +959,7 @@ export default function ProjectOpenView({
               onExportGenericBoQ={onExportGenericBoQ}
               onExportGenericTradeBoQ={onExportGenericTradeBoQ}
               onExportElementalBoQ={onExportElementalBoQ}
+              onExportIcms={onExportIcms}
             />
           ) : null}
 

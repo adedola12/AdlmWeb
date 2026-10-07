@@ -21,6 +21,8 @@ import React from "react";
 import { FaFolder, FaObjectGroup, FaTrash } from "../../components/icons.jsx";
 import ProjectSectionSummary from "./ProjectSectionSummary.jsx";
 import StorageBar from "../../components/StorageBar.jsx";
+import OpenInDesktopButton from "./OpenInDesktopButton.jsx";
+import { driftRowTitle } from "./lib/modelDrift.js";
 
 function rowId(row) {
   return row?._id || row?.id || null;
@@ -71,6 +73,10 @@ export default function ProjectExplorerGrid({
   sourceName = "",
   hostName = "",
   isMaterials = false,
+  // "Open in QUIV / HERON" on each card. The button renders nothing for
+  // products without a desktop entry point.
+  productKey = "",
+  accessToken = "",
 }) {
   return (
     <div style={{ marginTop: 20 }}>
@@ -197,7 +203,12 @@ export default function ProjectExplorerGrid({
             let amber = false;
             if (row?.mergeContainer) stage = "Merged project";
             else if (row?.mergedInto) stage = "Part of a merge";
-            else if (row?.shared) {
+            else if (row?.modelDriftOpen) {
+              // r2-model-drift-alerts: placeholder wording in his amber chip
+              // until the badge is designed.
+              stage = "Model changed";
+              amber = true;
+            } else if (row?.shared) {
               stage = sharedText;
               amber = true;
             } else if (!itemCount) stage = "Empty";
@@ -226,7 +237,9 @@ export default function ProjectExplorerGrid({
                 title={
                   row?.mergedInto && !row?.mergeContainer
                     ? "This project is part of a merged project. It still opens on its own in the plugin."
-                    : undefined
+                    : row?.modelDriftOpen
+                      ? driftRowTitle(row)
+                      : undefined
                 }
                 onClick={() => id && onOpenProject?.(id)}
                 onKeyDown={(e) => {
@@ -286,6 +299,22 @@ export default function ProjectExplorerGrid({
                   >
                     {checked ? "✓ Selected" : "Select"}
                   </button>
+                  {/* A combined project has no single model to open. The wrapper
+                      keeps clicks in the button and its note off the card. */}
+                  {id && !row?.mergeContainer && !isMaterials ? (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <OpenInDesktopButton
+                        productKey={productKey}
+                        projectId={id}
+                        accessToken={accessToken}
+                        disabled={bulkBusy}
+                        align="left"
+                      />
+                    </div>
+                  ) : null}
                   {/* Only the owner can delete; shared projects hide this. */}
                   {!row?.shared ? (
                     <button

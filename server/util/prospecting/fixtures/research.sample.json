@@ -1,0 +1,204 @@
+{
+ "_note": "RECORDED-SHAPE SAMPLE DATA. Every firm, person and domain here is invented (.example is a reserved TLD). Used when PROSPECT_FINDER_MODE=sample.",
+ "responses": {
+  "qs-consultancies-lagos-abuja": {
+   "id": "msg_sample",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-opus-5",
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 41250,
+    "output_tokens": 2380,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "server_tool_use": {
+     "web_search_requests": 2
+    }
+   },
+   "content": [
+    {
+     "type": "server_tool_use",
+     "id": "srvtoolu_sample_quanti_0",
+     "name": "web_search",
+     "input": {
+      "query": "quantity surveying firms Lagos NIQS"
+     }
+    },
+    {
+     "type": "web_search_tool_result",
+     "tool_use_id": "srvtoolu_sample_quanti_0",
+     "content": [
+      {
+       "type": "web_search_result",
+       "url": "https://adeyemi-qs.example/about",
+       "title": "About us - Adeyemi & Partners (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      },
+      {
+       "type": "web_search_result",
+       "url": "https://adeyemi-qs.example/projects/ikeja-mall",
+       "title": "Ikeja retail mall cost plan (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      }
+     ]
+    },
+    {
+     "type": "server_tool_use",
+     "id": "srvtoolu_sample_costc_1",
+     "name": "web_search",
+     "input": {
+      "query": "cost consultancy Abuja bill of quantities"
+     }
+    },
+    {
+     "type": "web_search_tool_result",
+     "tool_use_id": "srvtoolu_sample_costc_1",
+     "content": [
+      {
+       "type": "web_search_result",
+       "url": "https://kaduna-cost.example/",
+       "title": "Kaduna Road Cost Consultants (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      },
+      {
+       "type": "web_search_result",
+       "url": "https://news.example/abuja-hospital-tender",
+       "title": "Abuja hospital tender shortlist (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": "Here is what I found.\n<companies>[\n {\n  \"companyName\": \"Adeyemi & Partners Quantity Surveyors (sample)\",\n  \"website\": \"https://www.adeyemi-qs.example\",\n  \"location\": \"Ikeja, Lagos\",\n  \"whatTheyDo\": \"Quantity surveying consultancy preparing bills of quantities and cost plans for commercial buildings.\",\n  \"recentProjects\": [\n   \"Cost plan for a retail mall in Ikeja\"\n  ],\n  \"sourceUrls\": [\n   \"https://adeyemi-qs.example/about\",\n   \"https://adeyemi-qs.example/projects/ikeja-mall/\"\n  ]\n },\n {\n  \"companyName\": \"Kaduna Road Cost Consultants (sample)\",\n  \"website\": \"kaduna-cost.example\",\n  \"location\": \"Wuse II, Abuja\",\n  \"whatTheyDo\": \"Cost consultancy for public buildings and healthcare projects.\",\n  \"recentProjects\": [\n   \"Shortlisted for an Abuja hospital tender\"\n  ],\n  \"sourceUrls\": [\n   \"https://kaduna-cost.example/\",\n   \"https://news.example/abuja-hospital-tender#top\"\n  ]\n },\n {\n  \"companyName\": \"Unverified QS Ltd (sample)\",\n  \"website\": \"https://unverified-qs.example\",\n  \"location\": \"Lagos\",\n  \"whatTheyDo\": \"Planted entry: its source was never returned by a search, so it must be dropped.\",\n  \"recentProjects\": [],\n  \"sourceUrls\": [\n   \"https://unverified-qs.example/about\"\n  ]\n },\n {\n  \"companyName\": \"Social Only QS (sample)\",\n  \"website\": \"https://www.linkedin.com/company/social-only-qs\",\n  \"location\": \"Lagos\",\n  \"whatTheyDo\": \"Planted entry: only a LinkedIn page, so it must be skipped.\",\n  \"recentProjects\": [],\n  \"sourceUrls\": [\n   \"https://adeyemi-qs.example/about\"\n  ]\n }\n]</companies>"
+    }
+   ]
+  },
+  "contractors-nigeria": {
+   "id": "msg_sample",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-opus-5",
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 41250,
+    "output_tokens": 2380,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "server_tool_use": {
+     "web_search_requests": 2
+    }
+   },
+   "content": [
+    {
+     "type": "server_tool_use",
+     "id": "srvtoolu_sample_buildi_0",
+     "name": "web_search",
+     "input": {
+      "query": "building contractors Nigeria estimating department"
+     }
+    },
+    {
+     "type": "web_search_tool_result",
+     "tool_use_id": "srvtoolu_sample_buildi_0",
+     "content": [
+      {
+       "type": "web_search_result",
+       "url": "https://harbourbuild.example/company",
+       "title": "Harbour Build Contractors (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      },
+      {
+       "type": "web_search_result",
+       "url": "https://savannah-structures.example/news/kano-flyover",
+       "title": "Kano flyover works begin (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      }
+     ]
+    },
+    {
+     "type": "server_tool_use",
+     "id": "srvtoolu_sample_design_1",
+     "name": "web_search",
+     "input": {
+      "query": "design and build contractor Lagos tender"
+     }
+    },
+    {
+     "type": "web_search_tool_result",
+     "tool_use_id": "srvtoolu_sample_design_1",
+     "content": [
+      {
+       "type": "web_search_result",
+       "url": "https://adeyemi-qs.example/about",
+       "title": "About us - Adeyemi & Partners (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": "<companies>[\n {\n  \"companyName\": \"Harbour Build Contractors (sample)\",\n  \"website\": \"https://harbourbuild.example\",\n  \"location\": \"Port Harcourt, Rivers\",\n  \"whatTheyDo\": \"Building and civil contractor pricing its own tenders for commercial and industrial work.\",\n  \"recentProjects\": [\n   \"Warehouse complex at Onne\"\n  ],\n  \"sourceUrls\": [\n   \"https://harbourbuild.example/company\"\n  ]\n },\n {\n  \"companyName\": \"Savannah Structures Nigeria (sample)\",\n  \"website\": \"https://savannah-structures.example\",\n  \"location\": \"Kano\",\n  \"whatTheyDo\": \"Civil engineering contractor on roads and bridges.\",\n  \"recentProjects\": [\n   \"Kano flyover works\"\n  ],\n  \"sourceUrls\": [\n   \"https://savannah-structures.example/news/kano-flyover\"\n  ]\n },\n {\n  \"companyName\": \"Adeyemi & Partners (sample, seen again)\",\n  \"website\": \"http://ADEYEMI-QS.example/contact\",\n  \"location\": \"Lagos\",\n  \"whatTheyDo\": \"Planted duplicate: already found under the QS profile, so it must not be added twice.\",\n  \"recentProjects\": [],\n  \"sourceUrls\": [\n   \"https://adeyemi-qs.example/about\"\n  ]\n }\n]</companies>"
+    }
+   ]
+  },
+  "university-qs-departments": {
+   "id": "msg_sample",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-opus-5",
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 41250,
+    "output_tokens": 2380,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "server_tool_use": {
+     "web_search_requests": 1
+    }
+   },
+   "content": [
+    {
+     "type": "server_tool_use",
+     "id": "srvtoolu_sample_depart_0",
+     "name": "web_search",
+     "input": {
+      "query": "department of quantity surveying Nigeria university BIM"
+     }
+    },
+    {
+     "type": "web_search_tool_result",
+     "tool_use_id": "srvtoolu_sample_depart_0",
+     "content": [
+      {
+       "type": "web_search_result",
+       "url": "https://qs.samplefed-uni.example/",
+       "title": "Department of Quantity Surveying - Sample Federal University (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      },
+      {
+       "type": "web_search_result",
+       "url": "https://qs.sample-poly.example/programmes",
+       "title": "QS programmes - Sample Polytechnic (sample)",
+       "encrypted_content": "SAMPLE",
+       "page_age": "2026-08"
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": "<companies>[\n {\n  \"companyName\": \"Department of Quantity Surveying, Sample Federal University (sample)\",\n  \"website\": \"https://qs.samplefed-uni.example\",\n  \"location\": \"Zaria, Kaduna\",\n  \"whatTheyDo\": \"Accredited BSc and MSc quantity surveying programmes.\",\n  \"recentProjects\": [\n   \"New BIM studio for final-year students\"\n  ],\n  \"sourceUrls\": [\n   \"https://qs.samplefed-uni.example/\"\n  ]\n },\n {\n  \"companyName\": \"Department of Quantity Surveying, Sample Polytechnic (sample)\",\n  \"website\": \"https://qs.sample-poly.example\",\n  \"location\": \"Ibadan, Oyo\",\n  \"whatTheyDo\": \"ND and HND quantity surveying programmes.\",\n  \"recentProjects\": [],\n  \"sourceUrls\": [\n   \"https://qs.sample-poly.example/programmes\"\n  ]\n }\n]</companies>"
+    }
+   ]
+  }
+ }
+}

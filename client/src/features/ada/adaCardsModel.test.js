@@ -12,6 +12,11 @@ import {
   openAda,
   ADA_OPEN_EVENT,
   MAX_APPLY_LINES,
+  isUserRateLine,
+  isUserRateCard,
+  splitLabel,
+  sizeLabel,
+  userRateHeading,
 } from "./adaCardsModel.js";
 
 // The confirm card under Ada's pricing proposal, and the report card. The
@@ -92,6 +97,71 @@ describe("pricing card", () => {
     expect(applyErrorMessage({ status: 404 })).toMatch(/could not be found/);
     expect(applyErrorMessage({ message: "Too many lines" })).toBe("Too many lines");
     expect(applyErrorMessage(null)).toMatch(/Nothing was changed/);
+  });
+});
+
+// A rate the USER stated to Ada: windows by area, or a figure on named lines.
+const SPLIT = { material: 60, labour: 20, overheadProfit: 20 };
+const AREA_LINES = [
+  { code: "W1", description: "Window W1 (1200×1500)", qty: 4, unit: "nr", sizeLabel: "1200×1500", areaM2: 1.8, ratePerM2: 88000, userRate: 158400, amount: 633600, split: SPLIT, splitAmounts: { material: 95040, labour: 31680, overheadProfit: 31680 } },
+  { code: "W2", description: "Window W2 (600x600)", qty: 2, unit: "nr", sizeLabel: "600×600", areaM2: 0.36, ratePerM2: 88000, userRate: 31680, amount: 63360, split: SPLIT, currentRate: 30000 },
+];
+const RATE_LINES = [
+  { code: "B14", description: "225mm blockwork", qty: 120, unit: "m2", userRate: 9500, rateUnit: "m2", amount: 1140000, split: { material: 70, labour: 30, overheadProfit: 0 } },
+];
+
+describe("stated-rate card", () => {
+  it("tells a stated-rate line from a library one", () => {
+    expect(isUserRateLine(AREA_LINES[0])).toBe(true);
+    expect(isUserRateLine(RATE_LINES[0])).toBe(true);
+    expect(isUserRateLine(LINES[0])).toBe(false);
+    expect(isUserRateCard({ mode: "user-rate" })).toBe(true);
+    expect(isUserRateCard({ type: "price-proposal" })).toBe(false);
+  });
+
+  it("an opening sends the rate per m2 and the split, never its own figure or size", () => {
+    const body = priceManyBody(AREA_LINES);
+    expect(body).toEqual({
+      lines: [
+        { code: "W1", ratePerM2: 88000, split: SPLIT },
+        { code: "W2", ratePerM2: 88000, split: SPLIT },
+      ],
+      via: "ada",
+    });
+    expect(JSON.stringify(body)).not.toMatch(/158400|areaM2|amount|1200/);
+  });
+
+  it("a named line sends the stated rate, its unit and the split", () => {
+    expect(priceManyBody(RATE_LINES).lines).toEqual([
+      { code: "B14", userRate: 9500, unit: "m2", split: { material: 70, labour: 30, overheadProfit: 0 } },
+    ]);
+    // No unit stated, no split: neither is invented.
+    expect(priceManyBody([{ code: "B9", userRate: 2000 }]).lines).toEqual([{ code: "B9", userRate: 2000 }]);
+  });
+
+  it("totals and ticks work the same as for library rates", () => {
+    expect(totalOf(tickedLines(AREA_LINES, { W1: true }))).toBe(633600);
+    expect(allTicked(AREA_LINES)).toEqual({ W1: true, W2: true });
+  });
+
+  it("labels the split, the size and the heading", () => {
+    expect(splitLabel(SPLIT)).toBe("60% material · 20% labour · 20% overhead & profit");
+    expect(splitLabel({ material: 33.333, labour: 33.333, overheadProfit: 33.334 })).toBe(
+      "33.33% material · 33.33% labour · 33.33% overhead & profit",
+    );
+    expect(splitLabel(null)).toBe("");
+    expect(sizeLabel(AREA_LINES[0])).toBe("1200×1500 mm · 1.8 m²");
+    expect(sizeLabel(RATE_LINES[0])).toBe("");
+    const naira = (v) => `N${v}`;
+    expect(userRateHeading({ basis: "area", category: "windows", ratePerM2: 88000 }, naira)).toBe(
+      "Windows at N88000 per m²",
+    );
+    expect(userRateHeading({ basis: "area", category: "doors", ratePerM2: 65000 }, naira)).toBe(
+      "Doors at N65000 per m²",
+    );
+    expect(userRateHeading({ basis: "rate", rate: 9500, unit: "m2" }, naira)).toBe(
+      "N9500 per m2 on the lines you named",
+    );
   });
 });
 

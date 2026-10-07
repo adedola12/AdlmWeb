@@ -7,6 +7,8 @@
 //   programme         tasks overdue, due within a fortnight, or under way
 //   decisions         the drafts and pending variations that need a person
 //   rate usage        how many bill lines each RateGen rate is actually on
+//   model drift       projects whose model changed since the last take-off
+//                     (r2-model-drift-alerts), also a "needs a decision" row
 //
 // All four are a single aggregate with a $facet, so one trip answers the whole
 // dashboard. Nothing here writes, and nothing here computes money that any
@@ -16,6 +18,8 @@
 // The shaping is split out from the pipeline so it can be tested without a
 // database: buildWorkOverviewPipeline() makes the stages, shapeWorkOverview()
 // turns the raw facet result into the JSON the client reads.
+
+import { ownerHidesMoneyExpr } from "./ownerMoney.js";
 
 /**
  * The product a stored project key BELONGS to, as a Mongo expression.
@@ -282,6 +286,9 @@ const ROW_IDENTITY = {
   // Somebody else's project, reached as a collaborator. Money on these rows is
   // masked unless the reader may see rates — see shapeWorkOverview().
   shared: "$shared",
+  // The owner switched money off for this reader (R4b). Read by
+  // shapeWorkOverview() and never sent on.
+  ownerHidesMoney: "$ownerHidesMoney",
 };
 
 // What a $facet branch keeps BEFORE it unwinds and sorts.
@@ -300,6 +307,7 @@ const scope = (field) => ({
     productKey: 1,
     baseProductKey: 1,
     shared: 1,
+    ownerHidesMoney: 1,
     [field]: 1,
   },
 });
@@ -411,9 +419,24 @@ export function buildWorkOverviewPipeline(userId, opts = {}) {
         productKey: 1,
         baseProductKey: baseProductKeyExpr(),
         shared: { $ne: ["$userId", userId] },
+        ownerHidesMoney: ownerHidesMoneyExpr(userId),
         certificates: { $ifNull: ["$certificates", []] },
         variations: { $ifNull: ["$variations", []] },
         tasks: { $ifNull: ["$projectManagement.tasks", []] },
+        // Only the badge's summary, and only when it is open.
+        modelDrift: {
+          $cond: [
+            { $eq: [{ $ifNull: ["$modelDrift.status", "none"] }, "open"] },
+            {
+              detectedAt: "$modelDrift.detectedAt",
+              linesAffected: { $ifNull: ["$modelDrift.counts.linesAffected", 0] },
+              added: { $ifNull: ["$modelDrift.counts.added", 0] },
+              removed: { $ifNull: ["$modelDrift.counts.removed", 0] },
+              changed: { $ifNull: ["$modelDrift.counts.changed", 0] },
+            },
+            null,
+          ],
+        },
         // Only the applied rate key, never the whole item: carrying every
         // item through a $facet on a 48-project account is the difference
         // between a fast dashboard and a slow one.
@@ -475,6 +498,25 @@ export function buildWorkOverviewPipeline(userId, opts = {}) {
           { $sort: { endDate: 1 } },
           { $limit: limit },
         ],
+        // "Needs a decision": the model behind the bill has changed since the
+        // take-off, so pricing, valuing or certifying from it is a risk.
+        modelDrift: [
+          scope("modelDrift"),
+          { $match: { modelDrift: { $ne: null } } },
+          {
+            $project: {
+              _id: 0,
+              ...ROW_IDENTITY,
+              detectedAt: "$modelDrift.detectedAt",
+              linesAffected: "$modelDrift.linesAffected",
+              added: "$modelDrift.added",
+              removed: "$modelDrift.removed",
+              changed: "$modelDrift.changed",
+            },
+          },
+          { $sort: { detectedAt: -1 } },
+          { $limit: limit },
+        ],
         // How many bill lines carry each RateGen rate. appliedRateKey is the
         // rate's description text, so a renamed rate simply stops matching —
         // which is why the client says "N lines" and never "Unused".
@@ -516,6 +558,7 @@ export function buildWorkOverviewPipeline(userId, opts = {}) {
               overdueTasks: {
                 $size: { $filter: { input: "$tasks", as: "t", cond: taskIsOverdue } },
               },
+              modelDrift: { $cond: [{ $ne: ["$modelDrift", null] }, 1, 0] },
             },
           },
           {
@@ -524,6 +567,7 @@ export function buildWorkOverviewPipeline(userId, opts = {}) {
               draftCertificates: { $sum: "$draftCertificates" },
               pendingVariations: { $sum: "$pendingVariations" },
               overdueTasks: { $sum: "$overdueTasks" },
+              modelDrift: { $sum: "$modelDrift" },
             },
           },
           { $project: { _id: 0 } },
@@ -583,6 +627,15 @@ const task = (r) => ({
   status: str(r.status) || "not-started",
 });
 
+const drift = (r) => ({
+  ...identity(r),
+  detectedAt: iso(r.detectedAt),
+  linesAffected: countOf(r.linesAffected),
+  added: countOf(r.added),
+  removed: countOf(r.removed),
+  changed: countOf(r.changed),
+});
+
 /**
  * Money on a project the reader does not own, when the reader may not see
  * rates, is hidden exactly as the project API hides it.
@@ -614,11 +667,19 @@ export function shapeWorkOverview(raw, opts = {}) {
   const facet = Array.isArray(raw) ? raw[0] || {} : raw || {};
   const list = (k) => (Array.isArray(facet[k]) ? facet[k] : []);
   const canSeeRates = opts.canSeeRates === true;
-  const hidden = (r) => r.shared === true && !canSeeRates;
+  // Read off the RAW row: the shaped row does not carry ownerHidesMoney. A row
+  // is hidden when the reader lacks RateGen OR its owner switched money off
+  // for them (R4b), and `moneyHiddenBy` says which.
+  const byOwner = (r) => r.shared === true && r.ownerHidesMoney === true;
+  const hidden = (r) => r.shared === true && (!canSeeRates || byOwner(r));
+  const why = (r) => ({ moneyHiddenBy: byOwner(r) ? "owner" : "rategen" });
 
-  const certs = (k) => list(k).map(certificate).map((c) => (hidden(c) ? hideCertMoney(c) : c));
+  const certs = (k) =>
+    list(k).map((r) => (hidden(r) ? { ...hideCertMoney(certificate(r)), ...why(r) } : certificate(r)));
   const vars = (k) =>
-    list(k).map(variation).map((v) => (hidden(v) ? hideVariationMoney(v) : v));
+    list(k).map((r) =>
+      hidden(r) ? { ...hideVariationMoney(variation(r)), ...why(r) } : variation(r),
+    );
 
   const counts = list("counts")[0] || {};
 
@@ -628,6 +689,8 @@ export function shapeWorkOverview(raw, opts = {}) {
     variations: vars("variations"),
     pendingVariations: vars("pendingVariations"),
     tasks: list("tasks").map(task),
+    // Counts only, no money, so never masked.
+    modelDrift: list("modelDrift").map(drift),
     rateUsage: list("rateUsage")
       .filter((r) => str(r.key))
       .map((r) => ({ key: str(r.key), lines: Number(r.lines) || 0 })),
@@ -638,6 +701,7 @@ export function shapeWorkOverview(raw, opts = {}) {
       draftCertificates: countOf(counts.draftCertificates),
       pendingVariations: countOf(counts.pendingVariations),
       overdueTasks: countOf(counts.overdueTasks),
+      modelDrift: countOf(counts.modelDrift),
     },
   };
 }

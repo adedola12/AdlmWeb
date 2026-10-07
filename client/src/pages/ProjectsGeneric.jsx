@@ -82,6 +82,7 @@ const TITLES = {
   mep: "Revit MEP projects",
   planswift: "HERON projects",
   civil3d: "CIVIQ projects",
+  rategen: "RateGen projects",
   "revit-materials": "QUIV",
   "revit-material": "QUIV",
   "planswift-materials": "HERON",
@@ -5590,6 +5591,30 @@ export default function ProjectsGeneric() {
       "Failed to export the bill & budget",
     );
   }
+  // The ICMS 3 cost and carbon report (server/util/icmsExport.js): the workbook,
+  // or the same report as JSON with full ICMS codes.
+  async function exportIcmsFromBackend(format = "xlsx") {
+    if (!selectedId) return;
+    const path = `/projectsboq/${toolNorm}/${selectedId}/export/icms`;
+    const name = sanitizeFilename(sel?.name || "Project");
+    if (format !== "json") {
+      await downloadWorkbook(path, `${name} - ICMS 3.xlsx`, "Failed to export the ICMS 3 report");
+      return;
+    }
+    const res = await fetch(new URL(`${path}?format=json`, API_BASE || window.location.origin).toString(), {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(await errorMessageFrom(res, "Failed to export the ICMS 3 report"));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = filenameFromDisposition(res.headers.get("content-disposition"), `${name} - ICMS 3.json`);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
+
   React.useEffect(() => {
     load({ keepSelection: true });
     // eslint-disable-next-line
@@ -5844,6 +5869,8 @@ export default function ProjectsGeneric() {
               <>
               <SampleProjectsStrip samples={samples} onOpenProject={view} productKey={normTool(tool)} />
               <ProjectExplorerGrid
+                productKey={toolNorm}
+                accessToken={accessToken}
                 rowsShown={rowsShown}
                 selectedIdsCount={selectedIds.length}
                 bulkBusy={bulkBusy}
@@ -5973,6 +6000,14 @@ export default function ProjectsGeneric() {
                     setErr(e?.message || "Failed to export BoQ");
                   }
                 }}
+                onExportIcms={async (format) => {
+                  setExportOpen(false);
+                  try {
+                    await exportIcmsFromBackend(format);
+                  } catch (e) {
+                    setErr(e?.message || "Failed to export the ICMS 3 report");
+                  }
+                }}
                 itemQuery={itemQuery}
                 onItemQueryChange={setItemQuery}
                 onClearItemQuery={() => setItemQuery("")}
@@ -6032,6 +6067,7 @@ export default function ProjectsGeneric() {
                 accessToken={accessToken}
                 access={sel?._access}
                 sampleInfo={sel?.isSample ? sel?.sample || {} : null}
+                modelDrift={sel?.modelDrift || null}
                 linkedSummaries={sel?.linkedSummaries || []}
                 onLinkedChange={(updated) => setSel(updated)}
                 onDeleteItem={deleteItem}

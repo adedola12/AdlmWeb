@@ -5,6 +5,9 @@ import { requireEntitlement } from "../middleware/requireEntitlement.js";
 
 import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
 import { computeRate } from "../services/rategen.computeEngine.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { getUserId } from "../util/rategenUserRates.js";
+import { marginMap } from "../util/tradeMargins.js";
 
 const router = express.Router();
 
@@ -98,7 +101,16 @@ router.post("/compute", async (req, res, next) => {
       return res.status(400).json({ error: "section and name are required" });
     }
 
+    // The caller's own default for this trade, used only for a half the
+    // request does not state.
+    const lib = await RateGenLibrary.findOne(
+      { userId: getUserId(req) },
+      { tradeMargins: 1 },
+    ).lean();
+    const tradeDefaults = marginMap(lib?.tradeMargins).get(sec) || null;
+
     const result = await computeRate({
+      tradeDefaults,
       section: sec,
       name: nm,
       overheadPercent:

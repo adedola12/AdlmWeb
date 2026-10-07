@@ -33,6 +33,8 @@ import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { User } from "../models/User.js";
 import { SECTION_LABELS, normalizeSectionKey } from "./admin.rategen.rates.js";
+import { RateGenPlant } from "../models/RateGenPlant.js";
+import { PLANT_UNIT, plantCosting } from "../util/plantCosting.js";
 import { fetchMasterMaterials, fetchMasterLabour } from "../util/rategenMaster.js";
 import { normalizeZone } from "../util/zones.js";
 import { getEffectivePrices } from "../util/pricing.js";
@@ -656,9 +658,10 @@ router.get("/library", requireAuth, requirePermission("rategen"), async (req, re
     const zone = normalizeZone(req.query.zone) || "south_west";
     const q = String(req.query.q || "").trim().toLowerCase();
 
-    const [materials, labour] = await Promise.all([
+    const [materials, labour, plantDocs] = await Promise.all([
       fetchMasterMaterials(zone),
       fetchMasterLabour(zone),
+      RateGenPlant.find({ enabled: true }).sort({ name: 1 }).lean(),
     ]);
 
     const shape = (rows, kind) =>
@@ -678,14 +681,29 @@ router.get("/library", requireAuth, requirePermission("rategen"), async (req, re
 
     const mats = shape(materials, "material");
     const labs = shape(labour, "labour");
+    // ADLM's plant library, by the hour. Only a machine with an hourly rate
+    // can be dragged into a rate: an unpriced one would enter it at ₦0.
+    const plant = plantDocs
+      .map((p) => ({ p, c: plantCosting(p) }))
+      .filter(({ p, c }) => c.priced && (!q || `${p.name} ${p.category}`.toLowerCase().includes(q)))
+      .map(({ p, c }) => ({
+        kind: "plant",
+        sn: p.sn,
+        name: p.name,
+        unit: PLANT_UNIT,
+        price: c.hourlyRate,
+        category: p.category || "",
+      }));
 
     res.json({
       zone,
       materials: mats.slice(0, 300),
       labour: labs.slice(0, 300),
+      plant,
       counts: {
         materials: mats.length,
         labour: labs.length,
+        plant: plant.length,
         allMaterials: materials.length,
         allLabour: labour.length,
       },
