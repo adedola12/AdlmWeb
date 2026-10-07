@@ -61,3 +61,22 @@ describe("an empty project grid", () => {
     expect(screen.getByText(/Projects start in the plugins/)).toBeTruthy();
   });
 });
+
+// Model drift (r2-model-drift-alerts): the card's chip says the model moved on.
+describe("a project whose model changed", () => {
+  it("reads 'Model changed' on its card", () => {
+    mount({
+      totalCount: 1,
+      rowsShown: [
+        { id: "p1", name: "Tower Block", itemCount: 4, markedCount: 1, modelDriftOpen: true, modelDriftDetectedAt: "2026-09-27T10:00:00Z" },
+      ],
+    });
+    expect(screen.getByText("Model changed")).toBeTruthy();
+    expect(screen.queryByText("25% complete")).toBeNull();
+  });
+
+  it("keeps its usual stage when nothing is open", () => {
+    mount({ totalCount: 1, rowsShown: [{ id: "p1", name: "Tower Block", itemCount: 4, markedCount: 1 }] });
+    expect(screen.queryByText("Model changed")).toBeNull();
+  });
+});

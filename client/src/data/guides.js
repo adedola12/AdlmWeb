@@ -53,9 +53,9 @@ export const GUIDES = [
     id: "rategen",
     title: "ADLM Rate Gen",
     blurb:
-      "Rate Gen 3.0: building rates, custom rates, carbon on every rate, Build with AI, and how rates reach QUIV, HERON and SERVIQ.",
+      "Rate Gen 3.0: building rates, custom rates, carbon on every rate, Build with AI, Price a bill, and how rates reach QUIV, HERON and SERVIQ.",
     file: "/docs/ADLM-RateGen-User-Guide.pdf",
-    pages: 24,
+    pages: 29,
     productKeys: ["rategen"],
     changelogSlugs: ["rategen"],
     video: { url: "https://www.youtube.com/playlist?list=PLk1KkUNE9ZrO5IPh7p3-5zxfDFs1Dl9b-", label: "RateGen playlist" },
@@ -160,7 +160,7 @@ export const GUIDES = [
     blurb:
       "Every AI feature in every ADLM product, how each works, who can use it, and Ada as your project and cost manager with ready-made prompts.",
     file: "/docs/ADLM-AI-Services-Guide.pdf",
-    pages: 19,
+    pages: 20,
     productKeys: [],
     changelogSlugs: [],
   },
@@ -193,7 +193,7 @@ export const GUIDES = [
     blurb:
       "Every guide above in one book: getting started, the Hub, QUIV, HERON, Rate Gen, SERVIQ, Time Pro, the ADLM Cloud, the sample projects and the QS handbook.",
     file: "/docs/ADLM-Software-Complete-Guide.pdf",
-    pages: 280,
+    pages: 285,
     productKeys: [],
     changelogSlugs: [],
   },

@@ -2,8 +2,8 @@
 id: mobile
 title: ADLM Cloud mobile app
 tagline: Check your licences, keep them renewed and follow your projects, trainings and support tickets from your phone.
-version: "1.0.0"
-updated: 2026-10-01
+version: "1.0"
+updated: 2026-10-07
 platform: Android phone (direct download); iPhone version not yet available
 productKeys: []
 order: 11
@@ -313,9 +313,9 @@ To stay on top of renewals:
 - Open the app now and then and look at **Home**. Anything expiring within 14 days without auto-renew, and any failed renewal, appears at the top.
 - Turn on auto-renew for the products you rely on every day.
 
-## What's new in 1.0.0
+## What's new in 1.0
 
-Version 1.0.0 is the first version of the ADLM Cloud mobile app. It includes:
+Version 1.0 is the first version of the ADLM Cloud mobile app. It includes:
 
 - Sign-in with your ADLM account, including two-step sign-in codes.
 - **Home** with every licence, days left, device counts, and attention cards for anything about to lapse or with a failed renewal.

@@ -55,6 +55,7 @@ import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
+import projectsOpenIntentRoutes from "./routes/projects.openIntent.js";
 import projectsPmRoutes from "./routes/projects.pm.js";
 import reportsRoutes from "./routes/reports.js";
 import archicadRoutes from "./routes/archicad.routes.js";
@@ -95,6 +96,7 @@ import adminRateGenLibrary from "./routes/admin.rategen.library.js";
 import adminRateGenRates from "./routes/admin.rategen.rates.js";
 import adminRateGenCompute from "./routes/admin.rategen.compute.js";
 import adminRateGenMaster from "./routes/admin.rategen.master.js";
+import adminRateGenPlant from "./routes/admin.rategen.plant.js";
 import adminEmails from "./routes/admin.emails.js";
 import adminBroadcast from "./routes/admin.broadcast.js";
 import adminCampaigns from "./routes/admin.campaigns.js";
@@ -295,6 +297,11 @@ import { getPublicDashboard } from "./routes/projects.js";
 app.get("/projects/public/:token", getPublicDashboard);
 app.get("/api/projects/public/:token", getPublicDashboard);
 
+// "Open in QUIV / HERON" tickets. Ahead of the projects router so
+// "open-intent" is never captured as a :productKey.
+app.use("/projects/open-intent", projectsOpenIntentRoutes);
+app.use("/api/projects/open-intent", projectsOpenIntentRoutes);
+
 app.use("/projects", projectRoutes);
 app.use("/api/projects", projectRoutes);
 
@@ -402,6 +409,7 @@ app.use("/rategen-v2", servicesRouter);
 
 app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
+app.use("/admin/rategen-v2", adminRateGenPlant);
 app.use("/admin/emails", adminEmails);
 app.use("/admin/certificates", adminCertificates);
 // Public on purpose: an employer checking a certificate has no account here.
@@ -488,6 +496,7 @@ import meDemoModels from "./routes/me.demoModels.js";
 import adminDocuments from "./routes/admin.documents.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
+import adminProspecting from "./routes/admin.prospecting.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
 app.use("/admin/referrals", adminReferrals);
@@ -509,6 +518,8 @@ app.use("/admin/demo-models", adminDemoModels);
 app.use("/me/demo-models", meDemoModels);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);
+// Outbound prospecting review queue (docs: util/prospecting/review.js).
+app.use("/admin/prospecting", adminProspecting);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin

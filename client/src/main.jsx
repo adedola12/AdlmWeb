@@ -38,7 +38,7 @@ import AppError from "./pages/AppError.jsx";
 import Home from "./pages/Home.jsx";
 import Products from "./pages/Products.jsx";
 import Quote from "./pages/Quote.jsx";
-import ProductDetail from "./pages/ProductDetail.jsx";
+import DsProductRoute from "./ds/DsProductRoute.jsx";
 import Login from "./pages/Login.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 const AdminToday = lazyScreen(() => import("./pages/AdminToday.jsx"));
@@ -48,6 +48,7 @@ const AdminPeople = lazyScreen(() => import("./pages/AdminPeople.jsx"));
 const AdminEnrolments = lazyScreen(() => import("./pages/AdminEnrolments.jsx"));
 const AdminSubmissions = lazyScreen(() => import("./pages/AdminSubmissions.jsx"));
 const AdminFollowUpsDesk = lazyScreen(() => import("./pages/AdminFollowUpsDesk.jsx"));
+const DsAdminProspecting = lazyScreen(() => import("./ds/DsAdminProspecting.jsx"));
 const AdminReferrals = lazyScreen(() => import("./pages/AdminReferrals.jsx"));
 const AdminDemoModels = lazyScreen(() => import("./pages/AdminDemoModels.jsx"));
 const AdminDsOrganisations = lazyScreen(() => import("./pages/AdminDsOrganisations.jsx"));
@@ -264,6 +265,13 @@ const dsPublic = (slug) => (
     <DsShellLazy>{dsPage(slug)}</DsShellLazy>
   </React.Suspense>
 );
+// His six product pages, by slug, for /product/:key.
+const DS_PRODUCT_PAGES = Object.fromEntries(
+  ["quiv", "heron", "rategen", "mep", "timepro", "civiq"].map((slug) => [
+    slug,
+    DS_PAGES.find((p) => p.slug === slug)?.Component,
+  ]),
+);
 const BEYOND_BIM_SOON = (
   <DsComingSoon
     eyebrow="Beyond BIM · coming soon"
@@ -303,7 +311,22 @@ const router = createBrowserRouter([
 
       { path: "products", element: dsPublic("products") },
       { path: "quote", element: dsPublic("quote") },
-      { path: "product/:key", element: <ProductDetail /> },
+      // Retired the classic ProductDetail on 7 Oct 2026: his product pages
+      // for the six products, courses to /learn, anything else to /products.
+      // See ds/DsProductRoute.jsx.
+      {
+        path: "product/:key",
+        element: (
+          <DsProductRoute
+            pages={DS_PRODUCT_PAGES}
+            wrap={(page) => (
+              <React.Suspense fallback={null}>
+                <DsShellLazy>{page}</DsShellLazy>
+              </React.Suspense>
+            )}
+          />
+        ),
+      },
 
       ...landingRoutes,
 
@@ -1286,6 +1309,17 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="followups">
             <AdminFollowUpsDesk />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Outbound prospecting review — staff-grantable ("prospecting" area);
+      // the admin-only parts inside check "prospecting_admin" themselves
+      {
+        path: "admin/prospecting",
+        element: (
+          <AdminRoute permission="prospecting">
+            <DsAdminProspecting />
           </AdminRoute>
         ),
       },

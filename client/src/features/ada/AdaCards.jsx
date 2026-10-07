@@ -22,6 +22,10 @@ import {
   summariseResult,
   applyErrorMessage,
   rangeLabel,
+  isUserRateCard,
+  splitLabel,
+  sizeLabel,
+  userRateHeading,
   PROJECT_UPDATED_EVENT,
 } from "./adaCardsModel.js";
 
@@ -45,7 +49,12 @@ const foot = {
 
 /**
  * The pricing confirm card. Every line starts ticked; Apply posts only the
- * ticked ones, by rate id, and reports how many were priced or skipped.
+ * ticked ones and reports how many were priced or skipped.
+ *
+ * Two kinds: rates Ada matched from the user's Rate Gen library (posted by
+ * rate id), and a rate the USER stated ("windows are 88,000 per m2", "set
+ * blockwork to 9,500"), card.mode "user-rate", which shows each line's size,
+ * area, rate, amount and the material / labour / overhead split.
  */
 export function AdaPricingCard({ card, token }) {
   const lines = React.useMemo(() => (Array.isArray(card?.lines) ? card.lines : []), [card]);
@@ -58,6 +67,7 @@ export function AdaPricingCard({ card, token }) {
   const total = totalOf(picked);
   const path = priceManyPath(card?.project);
   const done = Boolean(result);
+  const stated = isUserRateCard(card);
 
   async function apply() {
     if (busy || done || !picked.length || !path) return;
@@ -91,11 +101,23 @@ export function AdaPricingCard({ card, token }) {
   return (
     <div style={box} aria-label="Proposed rates">
       <div style={head}>
-        <b>Proposed rates for {card?.project?.name || "this project"}</b>
-        <div style={small}>
-          {lines.length} of {card?.unpricedCount ?? lines.length} unpriced lines matched your RateGen
-          rates. Nothing is saved until you apply.
-        </div>
+        {stated ? (
+          <>
+            <b>{userRateHeading(card, money)}</b>
+            <div style={small}>
+              {card?.project?.name || "This project"}: {lines.length} line{lines.length === 1 ? "" : "s"},{" "}
+              {splitLabel(card?.split)}. Nothing is saved until you apply.
+            </div>
+          </>
+        ) : (
+          <>
+            <b>Proposed rates for {card?.project?.name || "this project"}</b>
+            <div style={small}>
+              {lines.length} of {card?.unpricedCount ?? lines.length} unpriced lines matched your RateGen
+              rates. Nothing is saved until you apply.
+            </div>
+          </>
+        )}
       </div>
 
       <ul
@@ -127,19 +149,42 @@ export function AdaPricingCard({ card, token }) {
                 <div style={{ fontSize: 12.5, color: "var(--ink)" }}>
                   <b style={{ fontWeight: 500 }}>{l.code}</b> {l.description || EN_DASH}
                 </div>
-                <div style={small}>
-                  {num(l.qty)} {l.unit || ""} × {money(l.unitPrice)} = <b>{money(l.amount)}</b>
-                </div>
-                <div style={small}>
-                  {l.rateDescription || EN_DASH}. {l.why}
-                </div>
+                {stated ? (
+                  <>
+                    {sizeLabel(l) ? <div style={small}>{sizeLabel(l)}</div> : null}
+                    <div style={small}>
+                      {num(l.qty)} {l.unit || ""} × {money(l.userRate)} = <b>{money(l.amount)}</b>
+                      {Number(l.currentRate) > 0 ? ` (now ${money(l.currentRate)})` : ""}
+                    </div>
+                    <div style={small}>
+                      Material {money(l.splitAmounts?.material)} · Labour {money(l.splitAmounts?.labour)} ·
+                      O&amp;P {money(l.splitAmounts?.overheadProfit)}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={small}>
+                      {num(l.qty)} {l.unit || ""} × {money(l.unitPrice)} = <b>{money(l.amount)}</b>
+                    </div>
+                    <div style={small}>
+                      {l.rateDescription || EN_DASH}. {l.why}
+                    </div>
+                  </>
+                )}
               </label>
             </li>
           );
         })}
       </ul>
 
-      {(card?.unmatchedCount || card?.noCodeCount || card?.truncated) && !done ? (
+      {stated && card?.repricedCount && !done ? (
+        <div style={{ ...small, padding: "8px 12px", borderBottom: "1px solid var(--line)" }}>
+          {card.repricedCount} line{card.repricedCount === 1 ? " already has a rate" : "s already have a rate"}; applying
+          replaces it and keeps your figure when the plugin saves again.
+        </div>
+      ) : null}
+
+      {!stated && (card?.unmatchedCount || card?.noCodeCount || card?.truncated) && !done ? (
         <div style={{ ...small, padding: "8px 12px", borderBottom: "1px solid var(--line)" }}>
           {card.unmatchedCount ? `${card.unmatchedCount} line(s) had no rate in the same unit. ` : ""}
           {card.noCodeCount ? `${card.noCodeCount} line(s) have no code and must be priced on the line. ` : ""}

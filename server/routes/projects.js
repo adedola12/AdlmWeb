@@ -542,7 +542,7 @@ function maskFinalAccountForClient(fa) {
 //   • shareCodes / collaborators → owner-only (shaped, no hashes)
 //   • rate/amount fields → masked unless access.canSeeRates
 //   • attaches `_access` so the client can gate edit/export/manage + rates
-function projectForClient(project, access) {
+export function projectForClient(project, access) {
   if (!project) return project;
   const obj = project?.toObject ? project.toObject() : { ...project };
   if (obj?.contract && obj.contract.lockPinHash !== undefined) {
@@ -599,6 +599,14 @@ function projectForClient(project, access) {
   // desktop plugin calls.
   delete obj.resourceItems;
 
+  // Model drift: the badge's summary only. The modelRef, signature and event
+  // link are the server's bookkeeping, not something any reader needs.
+  if (obj.modelDrift !== undefined) {
+    const d = driftForClient(obj.modelDrift);
+    if (d) obj.modelDrift = d;
+    else delete obj.modelDrift;
+  }
+
   if (!canSeeRates) {
     maskRates(obj);
     obj._ratesMasked = true;
@@ -612,6 +620,10 @@ function projectForClient(project, access) {
         canExport: !!access.canExport,
         canManage: !!access.canManage,
         canSeeRates: !!access.canSeeRates,
+        // True when the OWNER switched money off for this collaborator (R4b),
+        // as opposed to the reader lacking RateGen, so the screen can say who
+        // to ask. Never true for the owner.
+        moneyHiddenByOwner: !!access.moneyHiddenByOwner,
       }
     : {
         role: "owner",
@@ -620,6 +632,7 @@ function projectForClient(project, access) {
         canExport: true,
         canManage: true,
         canSeeRates: true,
+        moneyHiddenByOwner: false,
       };
   return obj;
 }
@@ -651,9 +664,13 @@ import {
   maySeeMoney,
 } from "../util/contractLockNotice.js";
 import {
+  collaboratorShowsMoney,
   maskSharedMoney,
+  ownerAllowsMoney,
+  ownerHidesMoneyExpr,
   readerMaySeeRates,
   PROJECT_LIST_MONEY_FIELDS,
+  SHOW_MONEY_DEFAULT,
 } from "../util/sharedMoney.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
@@ -679,6 +696,8 @@ import {
 } from "../util/billBudgetCascade.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
 import { rejectSampleWrites, sampleSummary } from "../util/sampleProjects.js";
+import { sampleCarbon } from "../services/sampleCarbon.js";
+import { pricePreview } from "../services/pricePreview.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
 import {
@@ -739,6 +758,23 @@ import {
   canImportBoqFor,
   isBoqImportProduct,
 } from "../util/boqImportAccess.js";
+import {
+  DRIFT_PRODUCTS,
+  applyDriftReport,
+  clearDriftOnTakeoffSave,
+  dismissDrift,
+  driftForClient,
+  isTakeoffSaveFromModel,
+  modelRefFor,
+  normalizeDriftReport,
+} from "../services/modelDrift.js";
+import {
+  closeDriftAfterTakeoffSave,
+  closeDriftEvent,
+  noteCertificateWhileDriftOpen,
+  persistDriftDecision,
+} from "../services/modelDriftStore.js";
+import { notifyOwnerOfDrift } from "../services/modelDriftNotify.js";
 import {
   normalizeVariationStatus,
   isApprovedVariation,
@@ -953,7 +989,7 @@ async function cloudPriceQuivBudget(project, productKey, userId, tag) {
 // uses this filter sits behind requireEntitlementParam, so "anyone" here means
 // an active subscriber of the product. resolveProjectAccess() makes them
 // read-only and rejectSampleWrites() refuses every write before a handler runs.
-function accessFilter(id, userId, productKey) {
+export function accessFilter(id, userId, productKey) {
   return {
     _id: id,
     productKey,
@@ -961,16 +997,33 @@ function accessFilter(id, userId, productKey) {
   };
 }
 
+// The 403 body for a route that needs money the reader may not see. Says WHY,
+// because the fix differs: RateGen is something the reader can buy, while the
+// owner's switch is something only the owner can change.
+function moneyBlocked(access, what) {
+  return access?.moneyHiddenByOwner
+    ? {
+        error: `The project owner has hidden this project's money from you, so you cannot ${what}.`,
+        code: "MONEY_HIDDEN_BY_OWNER",
+      }
+    : {
+        error: `A RateGen subscription is required to ${what}.`,
+        code: "RATEGEN_REQUIRED",
+      };
+}
+
 // Resolve what the requester may do with an already-loaded project document.
 //   role:        owner | full | view | none
 //   canEdit:     owner or full  (mutations)
 //   canExport:   owner or full  (xlsx / model download)
 //   canManage:   owner only     (codes, collaborators, delete project)
-//   canSeeRates: owner always; collaborator only with active rategen
+//   canSeeRates: owner always; collaborator only when the owner left money on
+//                for them (showMoney, R4b) AND they hold an active rategen
+//   moneyHiddenByOwner: the owner's switch is what hid it (not RateGen)
 // The rule itself moved to util/projectAccess.js so the ArchiCAD routes can
 // ask the same question — they were not asking it at all. Behaviour here is
 // unchanged; this is the same function with its body shared.
-async function resolveProjectAccess(req, project) {
+export async function resolveProjectAccess(req, project) {
   return resolveSharedProjectAccess(getUserObjectId(req), project, {
     hasRateGen: (uid) => userHasActiveEntitlement(uid, "rategen"),
   });
@@ -2813,6 +2866,12 @@ async function saveProjectFull(req, res) {
       },
     });
 
+    // Model drift: this is a take-off saved from the model, so it closes any
+    // open drift on the bill. Never awaited, never fails the save.
+    if (DRIFT_PRODUCTS.has(takeoffKey) && isTakeoffSaveFromModel(body) && !takeoffRes.created) {
+      closeDriftAfterTakeoffSave(takeoffRes.project._id);
+    }
+
     // 2) Derived-materials project (only when material lines are supplied).
     let materialsRes = null;
     const mats = Array.isArray(materialItems) ? materialItems : [];
@@ -3042,6 +3101,17 @@ async function listProjects(req, res) {
           // additive fields on a row the desktop plugins parse as a bare
           // array, alongside shared/accessLevel/mergedPartCount, which those
           // parsers already ignore.
+          // Model drift badge (r2-model-drift-alerts): only whether the model
+          // has changed since the last take-off, and since when. Additive,
+          // like the S18 fields below.
+          modelDriftOpen: { $eq: [{ $ifNull: ["$modelDrift.status", "none"] }, "open"] },
+          modelDriftDetectedAt: {
+            $cond: [
+              { $eq: [{ $ifNull: ["$modelDrift.status", "none"] }, "open"] },
+              { $ifNull: ["$modelDrift.detectedAt", null] },
+              null,
+            ],
+          },
           contractLocked: { $ifNull: ["$contract.locked", false] },
           tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
           finalized: { $ifNull: ["$finalAccount.finalized", false] },
@@ -3100,6 +3170,9 @@ async function listProjects(req, res) {
           taxPercent: { $ifNull: ["$contract.taxPercent", 7.5] },
           // Ownership badge: true when this row was shared with the requester.
           shared: { $ne: ["$userId", userId] },
+          // The owner switched money off for this reader (R4b). Internal:
+          // maskSharedMoney() reads it and strips it before the response.
+          ownerHidesMoney: ownerHidesMoneyExpr(userId),
           accessLevel: {
             $let: {
               vars: {
@@ -3268,10 +3341,18 @@ async function listProjects(req, res) {
     //
     // Own rows are never masked, so a user's own list is untouched, and the
     // lookup is skipped entirely unless a shared row is actually present.
+    //
+    // R4b: a row whose owner switched money off for this reader is masked
+    // whatever the reader subscribes to (maskSharedMoney).
+    // The row keeps its shape: the fields stay, as numbers, so the plugins
+    // that parse this bare array read a zero exactly as they already do for a
+    // masked project GET.
     const shared = list.some((p) => p?.shared);
-    const out = shared
-      ? maskSharedMoney(list, await readerMaySeeRates(userId), PROJECT_LIST_MONEY_FIELDS)
-      : list;
+    const out = maskSharedMoney(
+      list,
+      shared ? await readerMaySeeRates(userId) : true,
+      PROJECT_LIST_MONEY_FIELDS,
+    );
 
     res.json(out);
   } catch (err) {
@@ -3293,6 +3374,13 @@ async function listSampleProjects(req, res) {
         sample: 1,
         "items.qty": 1,
         "items.rate": 1,
+        // what the card's carbon footprint is worked out from (services/sampleCarbon.js)
+        "items.description": 1,
+        "items.unit": 1,
+        "items.takeoffLine": 1,
+        "items.type": 1,
+        "items.category": 1,
+        "items.appliedRateKey": 1,
         "contract.contractSum": 1,
         "certificates.number": 1,
         "models.architectural.key": 1,
@@ -3303,10 +3391,37 @@ async function listSampleProjects(req, res) {
     )
       .sort({ "sample.order": 1 })
       .lean();
-    res.json(samples.map(sampleSummary));
+    // the footprint by the viewer's own RateGen rates (services/sampleCarbon.js)
+    const viewerId = getUserObjectId(req);
+    const viewer = viewerId ? await User.findById(viewerId, { state: 1, zone: 1 }).lean() : null;
+    const carbon = await Promise.all(samples.map((s) => sampleCarbon(s, viewerId, viewer || {})));
+    res.json(samples.map((s, i) => ({ ...sampleSummary(s), carbon: carbon[i] })));
   } catch (err) {
     console.error("GET sample projects error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+}
+
+// GET /:productKey/:id/price-preview: what the viewer's RateGen rates would make
+// of this bill. Read-only on every project, including the samples it was built for.
+async function getPricePreview(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey), { items: 1, productKey: 1, userId: 1, isSample: 1, collaborators: 1 }).lean();
+    if (!project) return res.status(404).json({ error: "Not found" });
+    // the bill's own rates are on the page only for someone allowed to see them
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) return refuseRateMaskedWrite(res, "compare this bill's rates");
+
+    return res.json({ ok: true, ...(await pricePreview(project, userId)) });
+  } catch (err) {
+    console.error("GET price-preview error:", err);
+    return res.status(500).json({ error: "Could not price this bill with your RateGen rates." });
   }
 }
 
@@ -4421,8 +4536,18 @@ async function updateProject(req, res) {
     deriveBillRatesFromBudget(project);
     reconcileItemsFromBudget(project);
 
+    // Model drift: a take-off re-saved FROM THE MODEL re-measures the bill, so
+    // it closes an open drift. Only the plugins send modelFingerprint; a web
+    // rate or progress edit leaves the drift open.
+    let driftClosed = null;
+    if (DRIFT_PRODUCTS.has(productKey) && isTakeoffSaveFromModel(req.body)) {
+      driftClosed = clearDriftOnTakeoffSave(project.modelDrift);
+      if (driftClosed) project.modelDrift = driftClosed;
+    }
+
     project.version += 1;
     await project.save();
+    if (driftClosed?.eventId) closeDriftEvent(driftClosed);
 
     // ── Bill → Budget cascade (one-way) ───────────────────────────────
     // When a bill line's qty changed, scale the sibling budget (materials)
@@ -4877,7 +5002,10 @@ async function notifyContractLocked(project, lockedByUserId, contractSum) {
     // RateGen sees contractSum: 0 and _ratesMasked: true on every read of this
     // project; posting the real figure to them would hand over in writing the
     // one number the product withholds. They still get the message, without it.
-    const showMoney = await maySeeMoney(r, (uid) => userHasActiveEntitlement(uid, "rategen"));
+    // R4b: nor what the owner switched off for this person.
+    const showMoney =
+      ownerAllowsMoney(project, r.userId) &&
+      (await maySeeMoney(r, (uid) => userHasActiveEntitlement(uid, "rategen")));
     const { subject, html } = contractLocked({
       firstName: r.firstName,
       projectName: String(project.name || "your project"),
@@ -5133,6 +5261,119 @@ function computeValueToDate(project) {
   };
 }
 
+// ── Model drift (work-board item r2-model-drift-alerts) ───────────────────
+// The desktop plugin compares the open model with this project's saved
+// element IDs and quantities and reports a summary here. Rules and privacy:
+// services/modelDrift.js. Only the owner or a full collaborator can report or
+// dismiss (the same people who can save a take-off to it).
+
+async function loadDriftProject(req, res) {
+  const productKey = requestedProductKey(req);
+  const id = String(req.params.id || "").trim();
+  if (!isValidObjectId(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return null;
+  }
+  if (!DRIFT_PRODUCTS.has(productKey)) {
+    res.status(400).json({ error: "Model drift is reported by QUIV and QUIV for ArchiCAD only", code: "DRIFT_UNSUPPORTED_PRODUCT" });
+    return null;
+  }
+  const userId = getUserObjectId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Invalid user id in token" });
+    return null;
+  }
+  const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey), {
+    name: 1,
+    userId: 1,
+    productKey: 1,
+    collaborators: 1,
+    isSample: 1,
+    mergeContainer: 1,
+    modelFingerprint: 1,
+    modelDrift: 1,
+    "items.code": 1,
+  });
+  if (!project) {
+    res.status(404).json({ error: "Not found" });
+    return null;
+  }
+  if (isMergeContainer(project)) {
+    res.status(409).json({ error: "A merged project has no model of its own. Report drift on its source project.", code: "MERGED_PROJECT" });
+    return null;
+  }
+  const access = await resolveProjectAccess(req, project);
+  if (!access.canEdit) {
+    res.status(403).json({ error: "View-only access cannot change this project.", code: "VIEW_ONLY" });
+    return null;
+  }
+  return { project, productKey, userId };
+}
+
+// POST /projects/:productKey/:id/model-drift
+//   { modelRef, checkedAt, basisVersion, productVersion,
+//     counts: { added, removed, changed, elementsChecked },
+//     lines: [ { code, added, removed, changed } ] }
+// → { ok, action: open | refresh | clear | ignore, modelDrift }
+async function reportModelDrift(req, res) {
+  try {
+    const ctx = await loadDriftProject(req, res);
+    if (!ctx) return;
+    const { project, productKey, userId } = ctx;
+
+    const expected = modelRefFor(project.modelFingerprint);
+    if (!expected) {
+      return res.status(409).json({
+        error: "This project has no model identity yet. Save the take-off from the model once, then check again.",
+        code: "NO_MODEL_IDENTITY",
+      });
+    }
+
+    const now = new Date();
+    const billCodes = new Set((project.items || []).map((i) => String(i?.code || "").trim()).filter(Boolean));
+    const { report, error } = normalizeDriftReport(req.body, billCodes, now);
+    if (error) return res.status(400).json({ error, code: "BAD_DRIFT_REPORT" });
+    // Another copy of the model (another fingerprint) is not this project's
+    // model; its differences say nothing about this bill.
+    if (report.modelRef !== expected) {
+      return res.status(409).json({ error: "This model is not the one this project was taken off.", code: "MODEL_MISMATCH" });
+    }
+
+    const decision = applyDriftReport(project.modelDrift, report, now);
+    let drift = project.modelDrift;
+    if (decision.drift) {
+      drift = await persistDriftDecision(project, decision, { userId, productKey, now });
+    }
+    if (decision.notify) {
+      notifyOwnerOfDrift(project._id).catch((err) =>
+        console.error("[model-drift] owner email failed:", err?.message || err),
+      );
+    }
+    return res.json({ ok: true, action: decision.action, modelDrift: driftForClient(drift) });
+  } catch (err) {
+    console.error("[model-drift report] error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// POST /projects/:productKey/:id/model-drift/dismiss   { reason? }
+// "Not a real change": closes the drift, and the same change reported again
+// stays closed (see applyDriftReport). Counted as a false alarm.
+async function dismissModelDrift(req, res) {
+  try {
+    const ctx = await loadDriftProject(req, res);
+    if (!ctx) return;
+    const { project, productKey, userId } = ctx;
+    const next = dismissDrift(project.modelDrift, req.body?.reason);
+    if (!next) return res.status(409).json({ error: "There is no open model change on this project.", code: "NO_OPEN_DRIFT" });
+    const drift = await persistDriftDecision(project, { action: "dismiss", drift: next }, { userId, productKey });
+    return res.json({ ok: true, action: "dismiss", modelDrift: driftForClient(drift) });
+  } catch (err) {
+    console.error("[model-drift dismiss] error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
 async function issueCertificate(req, res) {
   try {
     const productKey = requestedProductKey(req);
@@ -5263,6 +5504,8 @@ async function issueCertificate(req, res) {
     project.certificates = [...(project.certificates || []), cert];
     project.version += 1;
     await project.save();
+    // Success metric for model drift: certificates issued from a stale bill.
+    noteCertificateWhileDriftOpen(project);
 
     recordActivity(
       req,
@@ -5742,12 +5985,10 @@ async function exportCertificateXlsx(req, res) {
       });
     }
     // Priced documents (certificate / final-account workbooks) carry rates —
-    // a collaborator without an active RateGen subscription may not export them.
+    // a collaborator without an active RateGen subscription may not export
+    // them, and nor may one the owner has hidden the money from (R4b).
     if (!access.canSeeRates) {
-      return res.status(403).json({
-        error: "A RateGen subscription is required to export priced documents.",
-        code: "RATEGEN_REQUIRED",
-      });
+      return res.status(403).json(moneyBlocked(access, "export priced documents"));
     }
 
     const certs = project.certificates || [];
@@ -5826,12 +6067,10 @@ async function exportFinalAccountXlsx(req, res) {
       });
     }
     // Priced documents (certificate / final-account workbooks) carry rates —
-    // a collaborator without an active RateGen subscription may not export them.
+    // a collaborator without an active RateGen subscription may not export
+    // them, and nor may one the owner has hidden the money from (R4b).
     if (!access.canSeeRates) {
-      return res.status(403).json({
-        error: "A RateGen subscription is required to export priced documents.",
-        code: "RATEGEN_REQUIRED",
-      });
+      return res.status(403).json(moneyBlocked(access, "export priced documents"));
     }
 
     if (!project.finalAccount?.finalized) {
@@ -7288,7 +7527,9 @@ async function priceLineFromRate(req, res) {
       });
     }
 
-    const ctx = await buildMlScheduleContext(userId);
+    // Prices and constants only: this path writes the picked rate's own
+    // build-up and never generates, so it skips the rate plant lookup (R2).
+    const ctx = await buildMlScheduleContext(userId, { ratePlant: false });
     const unitCost = Number(req.body?.unitCost) || 0;
     const convert = cleanConvert(req.body?.convert);
     const one = priceBillLine(project, item, rate, ctx, { unitCost, convert });
@@ -7815,6 +8056,17 @@ function normalizeShareCode(s) {
   return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+// The owner's money switch (R4b) as sent by a form: a real boolean, or the
+// strings a form field can carry. Anything unrecognised keeps the fallback, so
+// a malformed request can never flip a share's money on by accident.
+function parseShowMoney(input, fallback) {
+  if (input === true || input === false) return input;
+  const v = String(input ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(v)) return true;
+  if (["false", "0", "no", "off"].includes(v)) return false;
+  return fallback;
+}
+
 function parseAllowedEmails(input) {
   const arr = Array.isArray(input)
     ? input
@@ -7869,6 +8121,7 @@ async function createShareCode(req, res) {
     const label = String(req.body?.label || "").trim().slice(0, 80);
     const maxUses = Math.max(parseInt(req.body?.maxUses, 10) || 0, 0);
     const allowedEmails = parseAllowedEmails(req.body?.allowedEmails);
+    const showMoney = parseShowMoney(req.body?.showMoney, SHOW_MONEY_DEFAULT);
 
     const code = generateShareCode();
     const norm = normalizeShareCode(code);
@@ -7881,15 +8134,19 @@ async function createShareCode(req, res) {
       allowedEmails,
       maxUses,
       uses: 0,
+      showMoney,
       revoked: false,
       createdBy: userId,
     });
     await project.save();
 
-    recordActivity(req, project, ACT.SHARE_TOGGLED, `Created a ${accessLevel} share code`, {
-      accessLevel,
-      label,
-    });
+    recordActivity(
+      req,
+      project,
+      ACT.SHARE_TOGGLED,
+      `Created a ${accessLevel} share code${showMoney ? "" : " (money hidden)"}`,
+      { accessLevel, label, showMoney },
+    );
     const created = project.shareCodes[project.shareCodes.length - 1];
     return res.json({
       ok: true,
@@ -7899,6 +8156,7 @@ async function createShareCode(req, res) {
       label,
       allowedEmails,
       maxUses,
+      showMoney,
     });
   } catch (err) {
     console.error("create share code error:", err);
@@ -7917,6 +8175,7 @@ async function listCollab(req, res) {
       userId: String(c.userId),
       email: c.email || "",
       accessLevel: c.accessLevel,
+      showMoney: collaboratorShowsMoney(c),
       addedAt: c.addedAt,
     }));
     const codes = (project.shareCodes || [])
@@ -7930,6 +8189,7 @@ async function listCollab(req, res) {
         allowedEmails: c.allowedEmails || [],
         maxUses: c.maxUses || 0,
         uses: c.uses || 0,
+        showMoney: collaboratorShowsMoney(c),
         createdAt: c.createdAt,
       }));
     return res.json({ ok: true, collaborators, codes });
@@ -7939,35 +8199,67 @@ async function listCollab(req, res) {
   }
 }
 
-// PATCH /:productKey/:id/collab/:userId — owner changes a collaborator's level.
+// PATCH /:productKey/:id/collab/:userId — owner changes a collaborator's level
+// and/or whether they see money (R4b). Body: { accessLevel?, showMoney? }; a
+// field left out is left as it is, so the money switch can be flipped without
+// touching the level and vice versa.
 async function updateCollabLevel(req, res) {
   try {
     const targetUserId = String(req.params.userId || "").trim();
     if (!isValidObjectId(targetUserId)) {
       return res.status(400).json({ error: "Invalid user id" });
     }
+    const body = req.body || {};
+    const hasLevel = body.accessLevel !== undefined && body.accessLevel !== null;
+    const hasMoney = body.showMoney !== undefined && body.showMoney !== null;
+    if (!hasLevel && !hasMoney) {
+      return res.status(400).json({ error: "Nothing to change: send accessLevel or showMoney." });
+    }
     const owned = await loadOwnedProject(req, res);
     if (!owned) return;
     const { project } = owned;
 
-    const accessLevel =
-      String(req.body?.accessLevel || "").toLowerCase() === "full"
-        ? "full"
-        : "view";
     const collab = (project.collaborators || []).find(
       (c) => String(c.userId) === targetUserId,
     );
     if (!collab) return res.status(404).json({ error: "Collaborator not found" });
-    collab.accessLevel = accessLevel;
+
+    const who = collab.email || "a collaborator";
+    if (hasLevel) {
+      const accessLevel =
+        String(body.accessLevel).toLowerCase() === "full" ? "full" : "view";
+      collab.accessLevel = accessLevel;
+    }
+    if (hasMoney) {
+      collab.showMoney = parseShowMoney(body.showMoney, collaboratorShowsMoney(collab));
+    }
     await project.save();
-    recordActivity(
-      req,
-      project,
-      ACT.COLLABORATOR_ADDED,
-      `Changed ${collab.email || "a collaborator"}'s access to ${accessLevel}`,
-      { email: collab.email || "", accessLevel },
-    );
-    return res.json({ ok: true, userId: targetUserId, accessLevel });
+
+    const showMoney = collaboratorShowsMoney(collab);
+    if (hasLevel) {
+      recordActivity(
+        req,
+        project,
+        ACT.COLLABORATOR_ADDED,
+        `Changed ${who}'s access to ${collab.accessLevel}`,
+        { email: collab.email || "", accessLevel: collab.accessLevel },
+      );
+    }
+    if (hasMoney) {
+      recordActivity(
+        req,
+        project,
+        ACT.SHARE_TOGGLED,
+        showMoney ? `Showed the project's money to ${who}` : `Hid the project's money from ${who}`,
+        { email: collab.email || "", showMoney },
+      );
+    }
+    return res.json({
+      ok: true,
+      userId: targetUserId,
+      accessLevel: collab.accessLevel,
+      showMoney,
+    });
   } catch (err) {
     console.error("update collab level error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -8121,6 +8413,9 @@ async function claimProject(req, res) {
       userId,
       email: myEmail,
       accessLevel: level,
+      // The owner's money choice travels with the code (R4b). A code made
+      // before the switch has no field and reads as on, as it always did.
+      showMoney: collaboratorShowsMoney(sc),
       addedViaCode: sc._id,
     });
     sc.uses = (sc.uses || 0) + 1;
@@ -8686,6 +8981,18 @@ router.delete(
   dissolveMergedProject,
 );
 
+router.post(
+  "/:productKey/:id/model-drift",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  reportModelDrift,
+);
+router.post(
+  "/:productKey/:id/model-drift/dismiss",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  dismissModelDrift,
+);
 router.post("/claim", claimProject);
 
 router.post(
@@ -9004,6 +9311,16 @@ router.get(
   mapEntitlementParam,
   requireEntitlementParam,
   getProject,
+);
+
+// "Price with my RateGen rates": the bill re-priced with the viewer's own rates,
+// nothing saved (services/pricePreview.js). A GET, so the read-only sample guard
+// (rejectSampleWrites refuses every non-GET on a sample) leaves it open.
+router.get(
+  "/:productKey/:id/price-preview",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  getPricePreview,
 );
 
 router.put(

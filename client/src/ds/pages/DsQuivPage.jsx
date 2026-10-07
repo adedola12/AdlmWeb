@@ -74,7 +74,7 @@ export default function DsQuivPage({ d }) {
           <p className="phero-note">
             <span className="pulse">
             </span>
-            Latest v3.1.7 · Revit 2024, 2026 &amp; 2027
+            {d.latest} · Revit 2024, 2026 &amp; 2027
           </p>
           {" "}
         </div>

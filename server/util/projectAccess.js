@@ -15,13 +15,17 @@
 //   canEdit     owner or full   — mutations
 //   canExport   owner or full   — xlsx / pdf / model download
 //   canManage   owner only      — share codes, collaborators, deleting
-//   canSeeRates owner always; a collaborator only with active RateGen
+//   canSeeRates owner always; a collaborator only when the owner left money
+//               on for them (showMoney, R4b) AND they hold an active RateGen
+//   moneyHiddenByOwner  the owner's switch is what hid it (not RateGen), so a
+//               refusal can say who can change it
 //
 // The entitlement check is injected rather than imported so this file stays
 // free of route and model wiring, and so a caller that has already resolved
 // it does not pay for a second lookup.
 
 import mongoose from "mongoose";
+import { collaboratorShowsMoney } from "./ownerMoney.js";
 
 /** The requester's id as an ObjectId, or null. */
 export function userObjectId(req) {
@@ -38,6 +42,7 @@ export const NO_ACCESS = Object.freeze({
   canExport: false,
   canManage: false,
   canSeeRates: false,
+  moneyHiddenByOwner: false,
 });
 
 /**
@@ -70,15 +75,23 @@ export async function resolveProjectAccess(uid, project, deps = {}) {
   if (!collab) return out; // not owner, not collaborator → nothing
 
   const role = collab.accessLevel === "full" ? "full" : "view";
-  const hasRateGen = typeof deps.hasRateGen === "function" ? deps.hasRateGen : async () => false;
-  return {
+  const base = {
     ...out,
     role,
     accessLevel: role,
     canEdit: role === "full",
     canExport: role === "full",
-    canSeeRates: await hasRateGen(uid),
   };
+  // The owner's choice first (R4b): when they switched money off for this
+  // person, no subscription of the reader's can turn it back on, and the
+  // entitlement lookup is not worth making. Everything downstream that reads
+  // canSeeRates (maskRates, the masked-save guard, priced exports, certificates,
+  // variations, the final account, the ArchiCAD routes) honours it unchanged.
+  if (!collaboratorShowsMoney(collab)) {
+    return { ...base, canSeeRates: false, moneyHiddenByOwner: true };
+  }
+  const hasRateGen = typeof deps.hasRateGen === "function" ? deps.hasRateGen : async () => false;
+  return { ...base, canSeeRates: await hasRateGen(uid) };
 }
 
 /** Is this an active, unexpired entitlement for `key`? */

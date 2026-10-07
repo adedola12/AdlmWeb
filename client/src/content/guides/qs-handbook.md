@@ -3,7 +3,7 @@ id: qs-handbook
 title: The ADLM QS handbook
 tagline: Key QS formulas, a formula library, constants, grade and unit conversions, ICMS 3 and carbon in cost planning, and real use cases for every ADLM product.
 version: "2026.10"
-updated: 2026-10-04
+updated: 2026-10-07
 platform: Reference for every ADLM product
 productKeys: []
 pdf: ADLM-QS-Handbook.pdf
@@ -920,7 +920,7 @@ Two rules settle most lines:
 
 ### How ADLM does it: the ICMS 3 export on ADLM Cloud
 
-ADLM Cloud turns any priced QUIV, HERON or SERVIQ project into an ICMS 3 cost and carbon report. Open the project, click **Export**, and look for the **ICMS 3** group, described as "international cost and carbon report". It has two entries:
+ADLM Cloud turns any priced QUIV, HERON or SERVIQ project into an ICMS 3 cost and carbon report. Open the project, click **More actions** > **Open the classic workspace**, click **Export**, and look for the **ICMS 3** group, described as "international cost and carbon report". The project page's own **Export** menu does not have it. It has two entries:
 
 | Entry | What you get |
 |---|---|
@@ -1043,13 +1043,13 @@ This is the calculation in the Institution of Structural Engineers' *How to calc
 
 ### How Rate Gen 3.0.x gives every rate a carbon figure
 
-From Rate Gen 3.0.0, every built-up rate has a carbon figure, worked out from the same materials and quantities as its price. Open **Carbon & Others** in Rate Gen. The screen is titled **Carbon Computation**, and its table shows each rate's **TRADE**, **TOTAL COST**, **KGCO2E / UNIT** and **COVERAGE**.
+From Rate Gen 3.0, every built-up rate has a carbon figure, worked out from the same materials and quantities as its price. Open **Carbon & Others** in Rate Gen. The screen is titled **Carbon Computation**, and its table shows each rate's **TRADE**, **TOTAL COST**, **KGCO2E / UNIT** and **COVERAGE**.
 
 - **It follows the build-up.** Change a quantity in a rate's trade and its carbon changes with it. Open a rate to see each material's kgCO2e, and hover over a figure for its factor and source.
 - **Labour and plant hire carry no material carbon.** Site fuel in a build-up is counted as A5a.
 - **Cement gives a range.** A rate with cement shows a low end and a high end. The high end takes the full cradle-to-gate cement factor. The low end takes the Nigerian producers' own reported figure, which covers only the kiln and its fuel, so it is a floor.
 - **An asterisk (*) marks an assumed mass**, for example a sandcrete block weighed from its standard size rather than from a stated weight.
-- **Services cables and pipes, from Rate Gen 3.0.1.** Copper cable and earth conductor are weighed from the cores and size in their own names, counting the copper only. PP-R pressure pipe and 110 mm uPVC soil pipe are weighed from their standard sizes. Manufactured items such as air conditioners, pumps, sanitaryware and light fittings are left without carbon in Rate Gen, on purpose, because they need the maker's own figure.
+- **Services cables and pipes, from Rate Gen 3.0, build 3.0.2610.1.** Copper cable and earth conductor are weighed from the cores and size in their own names, counting the copper only. PP-R pressure pipe and 110 mm uPVC soil pipe are weighed from their standard sizes. Manufactured items such as air conditioners, pumps, sanitaryware and light fittings are left without carbon in Rate Gen, on purpose, because they need the maker's own figure.
 
 **The factor sources** Rate Gen names are: CIDB Malaysia (2021) *Embodied Carbon Inventory Data for Construction Materials*; IStructE (2020) Table 2.3 (from ICE v3.0 and product EPDs); the UK Government GHG Conversion Factors 2024 for fuels; CARES EPD 0060 (2026) for rebar; and the Dangote Cement and Lafarge Africa 2024 annual reports for the cement low end.
 
@@ -1145,7 +1145,7 @@ Start here when you are not sure which product to open. Most jobs use two or thr
 | Value work and issue payment certificates | [ADLM Cloud](/guides/cloud): **Valuation** | Interim payment applications, certificates, variations and a final account |
 | Report to a client | [ADLM Cloud](/guides/cloud): **Share dashboard**, **Project report**, **Export** | A public read-only dashboard, PDF reports and Excel workbooks |
 | Work with a colleague on one project | [ADLM Cloud](/guides/cloud): **Collaborators** | Shared access at **View only** or **Full access** |
-| Report cost and carbon to ICMS 3 | ADLM Cloud: **Export**, then **ICMS 3 cost and carbon (Excel)** | Cost and upfront carbon by ICMS 3 Group, adding up to the contract sum |
+| Report cost and carbon to ICMS 3 | ADLM Cloud, classic workspace: **Export**, then **ICMS 3 cost and carbon (Excel)** | Cost and upfront carbon by ICMS 3 Group, adding up to the contract sum |
 
 > **Note:** Each product is a separate subscription. QUIV does not include SERVIQ, and HERON does not include Rate Gen. Pricing from the rate library in any product needs a Rate Gen subscription on the same account.
 
@@ -1323,7 +1323,7 @@ One library on your account, priced for your location, with your own build-ups a
 
 ### Tips
 
-> **Important:** Rates are built only in the ADLM Rate Gen desktop app. The website shows your library and every rate's build-up, but it cannot build, edit or delete a rate or change a price. From Rate Gen 3.0.1 your custom rates download to every PC you sign in on, so a rate built on one PC appears on the others.
+> **Important:** Rates are built only in the ADLM Rate Gen desktop app. The website shows your library and every rate's build-up, but it cannot build, edit or delete a rate or change a price. From Rate Gen 3.0, build 3.0.2610.1 your custom rates download to every PC you sign in on, so a rate built on one PC appears on the others.
 
 - Change prices in the library, and quantities in the build-up. A price is shared by every rate that uses it. A quantity belongs to one rate.
 - A project you have already priced keeps its rates. A library change reaches it only when the line is priced again, or when **Follow RateGen changes** is on.
@@ -1489,7 +1489,7 @@ Durations and crew sizes based on what your own gangs produce, a Microsoft Proje
 
 ### Tips
 
-> **Important:** In Time Pro 1.1.1 the figures you type on the **Duration Summary** clear when you leave that screen, change the Task Log or close the app. Enter your quantities and export in one sitting.
+> **Important:** In Time Pro 1.1 the figures you type on the **Duration Summary** clear when you leave that screen, change the Task Log or close the app. Enter your quantities and export in one sitting.
 
 - Keep the output unit the same as the bill unit. Blockwork recorded in m2 must be forecast against a quantity in m2.
 - If you only need a quick programme without site records, use **Generate from BoQ** on the **PM Dashboard**, which creates one task per bill item, and set the dates yourself.
@@ -1725,7 +1725,7 @@ Set the contract figures on ADLM Cloud:
 
 Export and check:
 
-1. Click **Export**. Under **ICMS 3**, click **ICMS 3 cost and carbon (Excel)**.
+1. Click **More actions** > **Open the classic workspace**, then **Export**. Under **ICMS 3**, click **ICMS 3 cost and carbon (Excel)**.
 2. On the **ICMS 3 report** sheet, read every detail marked **Assumed** and correct it in your covering letter, especially the base date and the floor area.
 3. Check the carbon coverage on the same sheet. If it is well below 90%, look at the lines with **Carbon from** "none" on the **Lines** sheet and price them from Rate Gen rates where you can.
 4. Open **Not placed** and decide a Group for each line it lists.

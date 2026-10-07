@@ -27,3 +27,16 @@ only thing left to do by hand, just before that pull request merges.
 3. Classic pages that the new build no longer routes stay in the tree only
    until the tag exists; after that they may be removed from main, because the
    tag keeps them.
+
+## 7 Oct 2026: the classic product page retired
+
+`/product/:key` was the last public page still on the classic build: the new
+home and products pages, and every post we shared (LinkedIn's "See QUIV"),
+linked to it. It now renders Richard's product page for the six products
+(`client/src/ds/DsProductRoute.jsx`); course keys go to `/learn`, any other
+key to `/products`. `pages/ProductDetail.jsx` stays in the tree, unrouted.
+
+The classic site as it stood on production that day (main at the commit named
+in the archive's README) is archived as a source zip in Google Drive, ADLM
+Studio > Archive, "ADLM Website - Classic build (retired 7 Oct 2026)". The
+`classic-build-final` tag remains the git archive of the 1 Oct workspace.

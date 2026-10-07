@@ -1253,6 +1253,35 @@ export default function DsAdminAiUsage() {
             ]}
           />
 
+          {/* QUIV auto take-off review (r2-ai-auto-takeoff). Not AI spend: a run is
+              charged once as quiv-handover; this is how much of it was kept. */}
+          {ov.handoverReview?.runs ? (
+            <Panel
+              title="QUIV auto take-off, as reviewed"
+              note="Steps kept or rejected after a run, in this period"
+            >
+              <Facts
+                items={[
+                  [
+                    ov.handoverReview.keptShare == null
+                      ? "–"
+                      : `${Math.round(ov.handoverReview.keptShare * 100)}%`,
+                    `of saved steps kept · ${num(ov.handoverReview.stepsKept)} of ${num(
+                      ov.handoverReview.stepsSaved,
+                    )}`,
+                  ],
+                  [num(ov.handoverReview.runs), "runs reviewed"],
+                  [
+                    num(ov.handoverReview.stepsRejected),
+                    `steps rejected · ${num(ov.handoverReview.linesRejected)} lines`,
+                    ov.handoverReview.stepsRejected > 0,
+                  ],
+                  [num(ov.handoverReview.undoneWhole), "runs undone whole"],
+                ]}
+              />
+            </Panel>
+          ) : null}
+
           <Panel title="Daily spend" note={`Last ${days} days`}>
             <DailySpend daily={ov.daily} days={days} />
           </Panel>

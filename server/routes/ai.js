@@ -21,6 +21,8 @@ import { requireAuth } from "../middleware/auth.js";
 import { aiServiceEnabled, callAiService } from "../services/adlmAiService.js";
 import { checkAiAllowance, recordAiUsage } from "../services/aiUsage.js";
 import { AI_FEATURES } from "../config/aiPricing.js";
+import { HandoverReview } from "../models/HandoverReview.js";
+import { normaliseReview } from "../services/handoverReview.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -244,6 +246,35 @@ router.post("/quiv/usage", async (req, res, next) => {
       limit: gate?.limits?.calls || 0,
       window: gate?.limits?.window || "month",
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /ai/quiv/handover-review
+ * How a finished auto take-off run was reviewed: steps saved, kept, rejected.
+ * Body: { stepsPlanned, stepsSaved, stepsKept, stepsRejected, linesKept,
+ *         linesRejected, undoneWhole, seconds, pluginVersion }
+ *
+ * Not a meter. The run was charged once as quiv-handover when it started, and
+ * reviewing it costs nothing. This is the "share of auto take-off kept without
+ * edit" figure the r2-ai-auto-takeoff scope is judged on
+ * (docs/AI-AUTO-TAKEOFF-SCOPE.md). Counts only; see models/HandoverReview.js.
+ */
+router.post("/quiv/handover-review", async (req, res, next) => {
+  try {
+    const review = normaliseReview(req.body || {});
+    if (review.error) return res.status(400).json({ error: review.error });
+
+    await HandoverReview.create({
+      ...review,
+      userId: req.user?._id || req.user?.id || null,
+      email: req.user?.email || "",
+      product: "quiv",
+    });
+
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

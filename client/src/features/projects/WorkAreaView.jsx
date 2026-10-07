@@ -407,7 +407,16 @@ export default function WorkAreaView({
         method: "POST",
         credentials: "include",
         headers,
-        body: JSON.stringify({ message, history, sessionId: sessionRef.current, format: "markdown" }),
+        // The open project, so Ada's project tools default to it when the
+        // question names none. The server checks it against the caller's own
+        // projects; it is a hint, never an authority.
+        body: JSON.stringify({
+          message,
+          history,
+          sessionId: sessionRef.current,
+          format: "markdown",
+          ...(projectId ? { projectId: String(projectId), productKey: String(productKey || "") } : {}),
+        }),
       });
       const json = await res.json().catch(() => ({}));
       say({ who: "ada", text: json?.reply || json?.error || "I couldn't answer that just now. Please try again." });

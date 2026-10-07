@@ -1,7 +1,7 @@
 # Pull-request checks: lint, tests and build for the client, tests for the
-# server, and a type check for the CDK app. Nothing here deploys and nothing
-# needs a secret or AWS credentials: tests that need live secrets already skip
-# themselves when the env var is missing.
+# server, and a type check and synth of the CDK app. Nothing here deploys and
+# nothing needs a secret or AWS credentials: tests that need live secrets
+# already skip themselves when the env var is missing.
 #
 # Making these checks REQUIRED before merge is a branch-protection setting on
 # main, done by the repo owner in GitHub settings, not in this file.
@@ -69,7 +69,7 @@ jobs:
 
   infra:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: infra
@@ -79,8 +79,25 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: infra/package-lock.json
+          cache-dependency-path: |
+            infra/package-lock.json
+            server/package-lock.json
       - run: npm ci
-      # Type check only (tsconfig has noEmit). No synth, no AWS credentials.
+      # Type check only (tsconfig has noEmit).
       - name: Type check
         run: npx tsc --noEmit
+      # The API Lambdas are bundled from server/, so synth needs its packages.
+      - name: Install server dependencies
+        run: npm ci --prefix ../server
+      # Synth bundles every Lambda with esbuild exactly as Deploy API does, so
+      # a Lambda that cannot be bundled fails here, before it merges, instead
+      # of at deploy time (run 37221301539 on 4 Oct 2026 failed at synth on a
+      # bad merge in release-watch/index.mjs that type-checked fine). No AWS
+      # credentials: the app makes no lookups, and the account is a
+      # placeholder. esbuild does not catch an undefined name (the
+      # MAX_COMMITS slip fixed in #135); only running the code does.
+      - name: Synth (bundles every Lambda)
+        env:
+          CDK_DEFAULT_ACCOUNT: "000000000000"
+          CDK_DEFAULT_REGION: eu-west-1
+        run: npx cdk synth --quiet

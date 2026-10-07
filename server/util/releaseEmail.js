@@ -29,7 +29,7 @@
 // util/emailLayout.js is left alone, because every other message uses it.
 
 import { wrapEmail } from "./emailLayout.js";
-import { sameVersion } from "./releaseVersion.js";
+import { displayVersion, sameVersion } from "./releaseVersion.js";
 
 export const LEGAL_LINE =
   "Academy for Digital Learning &amp; Mastery Studios (ADLM Studio) · RC 7440343 · Lagos, Nigeria";
@@ -283,7 +283,8 @@ export function buildReleaseMessage({
   replyTo = "",
 }) {
   const name = product.name;
-  const v = String(version || "").trim();
+  // "QUIV 4.0.0 · build 2610.1", not "QUIV 4.0.2610.1" (2026 versions are frozen).
+  const v = displayVersion(String(version || "").trim()) || String(version || "").trim();
   const n = notes || genericNotes(product);
   const more = whatsNewUrl(product.slug);
   const { groups, hidden } = capGroups(n.groups);

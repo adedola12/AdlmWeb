@@ -15,7 +15,12 @@ import {
 } from "../util/exportAccess.js";
 import { readerMaySeeRates } from "../util/sharedMoney.js";
 import { isApprovedVariation } from "../util/variationStatus.js";
+import { ownerAllowsMoney } from "../util/ownerMoney.js";
 import { isFolderMarker } from "../util/folderMarker.js";
+import { User } from "../models/User.js";
+import { carbonForUser } from "../services/rateCarbon.js";
+import { buildIcmsReport, exportIcmsWorkbook, icmsDetailsFromBody, icmsJson } from "../util/icmsExport.js";
+import { resolveProjectAccess, userObjectId } from "../util/projectAccess.js";
 
 const router = express.Router();
 
@@ -192,6 +197,17 @@ async function findProjectDoc({ tool, id, userId }) {
       err.code = "VIEW_ONLY";
       throw err;
     }
+    // Both exports are priced workbooks. When the owner has hidden the
+    // project's money from this collaborator (R4b), exporting it would hand
+    // over every rate the project page hides, so it is refused.
+    if (!ownerAllowsMoney(direct, userId)) {
+      const err = new Error(
+        "The project owner has hidden this project's money from you, so it cannot be exported.",
+      );
+      err.statusCode = 403;
+      err.code = "MONEY_HIDDEN_BY_OWNER";
+      throw err;
+    }
     // Both exports are priced workbooks: every rate and total on the bill.
     // A collaborator sees those on the project page only with an active
     // RateGen subscription (routes/projects.js resolveProjectAccess), and the
@@ -362,6 +378,107 @@ router.get(
   }),
 );
 
+
+/* ------------------------------ ICMS 3 ------------------------------ */
+
+// The carbon rates the project's lines take their carbon from: the OWNER's
+// RateGen library, priced for the owner's state (the rates the bill was priced
+// with). A failure leaves the report without carbon rather than failing it.
+async function icmsCarbonRates(project) {
+  try {
+    const owner = project.userId;
+    if (!owner) return [];
+    const u = await User.findById(owner, { state: 1, zone: 1 }).lean();
+    const { rates } = await carbonForUser(owner, { state: u?.state || null, zone: u?.zone || null });
+    return rates;
+  } catch (err) {
+    console.warn(`[icms] carbon rates unavailable for ${project._id}:`, err?.message || err);
+    return [];
+  }
+}
+
+async function buildIcmsFor(req, res) {
+  const loaded = await loadProjectForExport(req, res);
+  if (!loaded) return null;
+  const { project, tool } = loaded;
+  const carbonRates = await icmsCarbonRates(project);
+  return { project, report: buildIcmsReport(project, { productKey: project.productKey || tool, carbonRates }) };
+}
+
+/**
+ * GET /projectsboq/:tool/:id/icms
+ * The ICMS 3 report as data, for the review screen: attributes (stated or
+ * assumed), totals, Groups, and every line with its code and carbon.
+ */
+router.get(
+  "/:tool/:id/icms",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const built = await buildIcmsFor(req, res);
+    if (!built) return undefined;
+    const { report } = built;
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ ok: true, ...report });
+  }),
+);
+
+/**
+ * GET /projectsboq/:tool/:id/export/icms?format=xlsx|json
+ * The ICMS 3 cost and carbon report: a workbook (cover, cost by Group G-2,
+ * carbon by Group H-1/H-2, lines, not placed) or the same as JSON in the RICS
+ * Data Standard 3.3.3 shape, with the ADLM detail under rics:OtherData.adlm.
+ */
+router.get(
+  "/:tool/:id/export/icms",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const built = await buildIcmsFor(req, res);
+    if (!built) return undefined;
+    const { report } = built;
+    const format = String(req.query.format || "xlsx").trim().toLowerCase();
+    try {
+      if (format === "json") {
+        const safe = String(report.attributes.projectName.value || "Project").replace(/[^\w.-]+/g, "_").slice(0, 60);
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+        res.setHeader("Content-Disposition", `attachment; filename="${safe}_ICMS3.json"`);
+        return res.json(icmsJson(report));
+      }
+      return sendWorkbook(res, await exportIcmsWorkbook(report));
+    } catch (err) {
+      return exportFailed(res, err, { label: "ICMS 3 report", tool: req.params.tool, id: req.params.id });
+    }
+  }),
+);
+
+/**
+ * PUT /projectsboq/:tool/:id/icms
+ * Save the project's ICMS details (attributes the bill does not carry, and the
+ * QS's own placement of lines). Edit access only.
+ */
+router.put(
+  "/:tool/:id/icms",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const uid = userObjectId(req);
+    const id = String(req.params.id || "").trim();
+    if (!uid) return res.status(401).json({ error: "Unauthorized", code: "NO_USER" });
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const { details, error } = icmsDetailsFromBody(req.body || {});
+    if (error) return res.status(400).json({ error, code: "ICMS_INVALID" });
+
+    const project = await TakeoffProject.findById(id);
+    if (!project) return res.status(404).json({ error: "Project not found, or you do not have access to it.", code: "PROJECT_NOT_FOUND" });
+    const access = await resolveProjectAccess(uid, project, { hasRateGen: readerMaySeeRates });
+    if (!access.canEdit) return res.status(403).json({ error: "You do not have edit access to this project.", code: "NO_EDIT" });
+
+    const current = project.icms ? project.icms.toObject() : {};
+    project.icms = { ...current, ...details, updatedAt: new Date() };
+    await project.save();
+    return res.json({ ok: true, icms: project.icms });
+  }),
+);
 
 /**
  * GET /projectsboq/:tool/:id/export/boq

@@ -11,6 +11,7 @@
 
 import React from "react";
 import { API_BASE } from "../config.js";
+import { CATALOGUE_FALLBACK } from "./catalogueFallback.js";
 
 const NGN = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -20,13 +21,19 @@ const NGN = new Intl.NumberFormat("en-NG", {
 
 const money = (n) => NGN.format(Number(n) || 0);
 
+function fromTable(key) {
+  const p = CATALOGUE_FALLBACK[key] || { mo: 0, yr: 0, install: 0 };
+  return { monthly: p.mo, yearly: p.yr, install: p.install };
+}
+
 /**
  * @param {string} key   catalogue key — revit, planswift, rategen, mep, qs-takeoff, civil3d
- * @param {{monthly:number, yearly:number, install:number}} fallback
- *   His own figures, used until the fetch lands and if it fails. The page must
- *   never render a blank where a price should be.
+ * @param {{monthly:number, yearly:number, install:number}} [fallback]
+ *   Used until the fetch lands and if it fails, so the page never renders a
+ *   blank where a price should be. Defaults to the shared table in
+ *   catalogueFallback.js; pass one only to override it.
  */
-export function useProductPricing(key, fallback) {
+export function useProductPricing(key, fallback = fromTable(key)) {
   const [price, setPrice] = React.useState(fallback);
 
   React.useEffect(() => {
@@ -46,13 +53,13 @@ export function useProductPricing(key, fallback) {
           install: p.installNGN == null ? fallback.install : Number(p.installNGN),
         });
       } catch {
-        // Keep the fallback — his figures.
+        // Keep the fallback.
       }
     })();
     return () => {
       alive = false;
     };
-    // `fallback` is a literal defined at the call site and never changes.
+    // `fallback` is fixed per key: the shared table, or a literal at the call site.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 

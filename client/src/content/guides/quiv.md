@@ -2,8 +2,8 @@
 id: quiv
 title: QUIV for Revit
 tagline: Measure your Revit model item by item, review the quantities, and send the take-off to ADLM Cloud to price, plan and value.
-version: "4.0.3"
-updated: 2026-10-04
+version: "4.0, build 4.0.2610.1"
+updated: 2026-10-07
 platform: Revit 2024-2027 add-in (Windows)
 productKeys: [revit]
 pdf: ADLM-QUIV-Revit-User-Guide.pdf
@@ -12,18 +12,18 @@ order: 3
 
 QUIV is ADLM's quantity take-off add-in for Autodesk Revit. It reads quantities straight from your model: foundations, frame, walls, roof, doors, windows, finishes and external works. You add only what a quantity surveyor knows that the model does not, such as bar sizes, spacing and filling thicknesses. QUIV 4.0 measures; ADLM Cloud prices. You save your take-off to ADLM Cloud, and on adlmstudio.net you price the bill with your Rate Gen rates, plan the budget and value the work.
 
-> **Note:** This guide covers **QUIV 4.0.3**. QUIV 4.0.0 is the version the Installer Hub gives customers today. Versions 4.0.1, 4.0.2 and 4.0.3 are being prepared, and each feature they add is marked "from 4.0.1", "from 4.0.2" or "from 4.0.3". Until the Hub offers them, those features are not on your PC yet.
+> **Note:** This guide covers **QUIV 4.0, build 4.0.2610.1**. QUIV keeps the version 4.0 through 2026; each release changes only its build number. Features new in this build are marked "from build 4.0.2610.1". Until the Installer Hub offers you this build, those features are not on your PC yet.
 
-## What's new in 4.0.3
+## What's new in build 4.0.2610.1
 
 QUIV 4.0 is a new QUIV, from sign-in to save. The measuring underneath is the QUIV you know. The latest builds add:
 
-- **From 4.0.1: search on Review.** Type any words, such as "lintel 230 basement", to filter the bill lines.
-- **From 4.0.1: click a line to see it in the model.** A Review line selects and zooms to the Revit elements behind it.
-- **From 4.0.1: Add rates on ADLM Cloud.** One button on Review opens your project on the website, where it is priced.
-- **From 4.0.1: tile skirting.** The floor finishes item now measures skirting in metres, net of door openings.
-- **From 4.0.2: room finishes go to ADLM Cloud.** Each save sends the floor finish, floor area and skirting length of every Revit room.
-- **From 4.0.3: aligned material constants.** POP ceiling boards, emulsion paint and pile cap soil poison now use the same figures as ADLM Cloud and HERON. See [Material constants](#material-constants).
+- **search on Review.** Type any words, such as "lintel 230 basement", to filter the bill lines.
+- **click a line to see it in the model.** A Review line selects and zooms to the Revit elements behind it.
+- **Add rates on ADLM Cloud.** One button on Review opens your project on the website, where it is priced.
+- **tile skirting.** The floor finishes item now measures skirting in metres, net of door openings.
+- **room finishes go to ADLM Cloud.** Each save sends the floor finish, floor area and skirting length of every Revit room.
+- **aligned material constants.** POP ceiling boards, emulsion paint and pile cap soil poison now use the same figures as ADLM Cloud and HERON. See [Material constants](#material-constants).
 
 See [Version history](#version-history) for everything that changed since QUIV 3.1.11.
 
@@ -157,7 +157,7 @@ Only the items for your building and foundations appear. Each group shows how ma
 
 > **Tip:** Work down the list from top to bottom. It is the order a bill is written in, so your bill comes out in bill order.
 
-> **Note:** QUIV reads the model when you measure, not all the time. If the model changes after you measured an item, open the item again and measure it again. QUIV 4.0.3 does not warn you when the model changes.
+> **Note:** QUIV reads the model when you measure, not all the time. If the model changes after you measured an item, open the item again and measure it again. QUIV 4.0 (build 4.0.2610.1) does not warn you when the model changes.
 
 ## Measuring an item
 
@@ -223,7 +223,7 @@ Steel beams and columns are measured under **Steelwork** only, not as concrete b
 
 ## Tile skirting
 
-From 4.0.1, the **Floor finishes** item measures tile skirting, in metres.
+From build 4.0.2610.1, the **Floor finishes** item measures tile skirting, in metres.
 
 1. Open **Floor finishes** and select the finished floors in Revit.
 2. Read **Skirting** (m) under **Results**, beside **Floor tiling** and **Tile packs**.
@@ -240,7 +240,7 @@ Skirting goes on the bill as its own line, "Skirtings, 100mm high", in metres un
 
 ## Room finishes sent to ADLM Cloud
 
-From 4.0.2, every save to ADLM Cloud also sends a room-by-room record of the finishes QUIV measured. For each Revit room standing on a measured floor, it records:
+From build 4.0.2610.1, every save to ADLM Cloud also sends a room-by-room record of the finishes QUIV measured. For each Revit room standing on a measured floor, it records:
 
 - the room name, number and level
 - the floor finish
@@ -294,11 +294,11 @@ Click **Review and save** on the take-off list. Review shows your take-off as bi
 
 - Three figures at the top: **measured**, **still to do** and **bill lines**.
 - If items are not measured yet, a note names them. You can save now and finish later; the project updates on ADLM Cloud each time. When all are done it says "Every item is measured."
-- **Click a bill line** (from 4.0.1) to select and zoom to its elements in the Revit model. A line with nothing behind it, or from a model that is not open, says so.
+- **Click a bill line** (from build 4.0.2610.1) to select and zoom to its elements in the Revit model. A line with nothing behind it, or from a model that is not open, says so.
 
 ### Search the quantities
 
-From 4.0.1, a search box sits above the bill lines: "Search quantities: item, level, type or size".
+From build 4.0.2610.1, a search box sits above the bill lines: "Search quantities: item, level, type or size".
 
 1. Type one or more words, for example `lintel 230 basement`.
 2. Every word must appear in the line (item, level, type, size, quantity or unit), in any order.
@@ -317,7 +317,7 @@ Each save updates the same project. QUIV will not save when nothing is measured,
 
 ### Add rates on ADLM Cloud
 
-QUIV 4.0 measures; rates and the budget are added on ADLM Cloud. From 4.0.1, **Add rates on ADLM Cloud** on Review opens this project's page on adlmstudio.net. Save the take-off first; otherwise QUIV says "Save to ADLM Cloud first".
+QUIV 4.0 measures; rates and the budget are added on ADLM Cloud. From build 4.0.2610.1, **Add rates on ADLM Cloud** on Review opens this project's page on adlmstudio.net. Save the take-off first; otherwise QUIV says "Save to ADLM Cloud first".
 
 ## Pricing with Rate Gen
 
@@ -347,9 +347,9 @@ Many jobs come as an architectural model with the structural engineer's model li
 
 ## Material constants
 
-QUIV turns measured quantities into materials with a set of material constants: waste factors, coverages and conversions. From 4.0.3, the constants below match ADLM Cloud and HERON, so the same model gives the same materials in every ADLM product.
+QUIV turns measured quantities into materials with a set of material constants: waste factors, coverages and conversions. From build 4.0.2610.1, the constants below match ADLM Cloud and HERON, so the same model gives the same materials in every ADLM product.
 
-| Constant | Value in 4.0.3 | What it means |
+| Constant | Value in build 4.0.2610.1 | What it means |
 |---|---|---|
 | **POP board factor** | 1.44 m² per board | A 1.2 m x 1.2 m POP ceiling board. Boards = ceiling area x 1.3 ÷ 1.44, rounded up. Was 4.32. |
 | **Emulsion paint (20L drum)** | 0.026 drums per m² | 0.52 litres per m², so 100 m² needs 52 litres (2.6 drums). Used by the floor finishes item, the material schedule and model items alike. |
@@ -425,7 +425,7 @@ Auto take-off is labelled "AI" on screen, but a run **uses no AI model**. It dri
 
 ### Ada on ADLM Cloud
 
-Once your take-off is saved, Ada, the assistant on the website, can answer questions about your project, and the AI cost checks compare your rates with the market. From 4.0.2, the room finishes QUIV sends are there for room questions. Nothing changes in your bill without your confirmation.
+Once your take-off is saved, Ada, the assistant on the website, can answer questions about your project, and the AI cost checks compare your rates with the market. From build 4.0.2610.1, the room finishes QUIV sends are there for room questions. Nothing changes in your bill without your confirmation.
 
 ## ADLM Cloud: your project on the website
 
@@ -437,40 +437,35 @@ At the top of the QUIV projects page you may see **Learning samples**: fully wor
 
 ### Exports on the website
 
-Exports are made on ADLM Cloud. On an open project, click **Export**. The groups are **Bill & Budget**, **Generic BoQ**, **Elemental BoQ** (by building element), **Trade BoQ** (by work section) and **Milestone BoQ** (one priceable bill per construction stage).
+Exports are made on ADLM Cloud. On an open project, click **Export** for the Excel bills and PDF reports. The classic workspace (**More actions** > **Open the classic workspace**) has the fullest **Export** menu: **Bill & Budget**, **Generic BoQ**, **Elemental BoQ** (by building element), **Trade BoQ** (by work section), **Milestone BoQ** (one priceable bill per construction stage) and **ICMS 3**.
 
-From the ICMS 3 release on ADLM Cloud, the **Export** menu also has an **ICMS 3** group, "international cost and carbon report":
+The **ICMS 3** group, "international cost and carbon report", is on the classic workspace's menu only:
 
 - **ICMS 3 cost and carbon (Excel)**: cost and upfront carbon (A1-A5) by ICMS 3 Group, with every line's code and carbon source, and the lines not yet placed.
 - **ICMS 3 cost and carbon (JSON)**: the same report as data, conforming to the RICS Data Standard 3.3.3.
 
-The report total equals the contract total: preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020. Carbon per line comes from your Rate Gen rates, so price the bill with Rate Gen rates first. Cost and carbon per m² appear when an IPMS 1 or 2 floor area is given. It works on the learning samples too.
+The report total equals the contract total: preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020. Carbon per line comes from your Rate Gen rates, so price the bill with Rate Gen rates first. Cost and carbon per m² appear only when an IPMS 1 or 2 floor area is recorded, and ADLM Cloud has no screen to record one yet. It works on the learning samples too.
 
 See the [ADLM Cloud guide](/guides/cloud) for the rest of the website.
 
 ## Version history
 
-### 4.0.3 (October 2026, being prepared)
-
-- POP ceiling boards use 1.44 m² per board in every QUIV tool, matching ADLM Cloud.
-- One paint basis everywhere: 0.026 drums per m² (0.52 L/m²). The old 10 m² per litre paint coverage is retired.
-- Pile cap surface treatment uses the soil poison coverage, 20 m² per unit.
-- Values you edited yourself are kept through the update.
-
-### 4.0.2 (October 2026, being prepared)
-
-- Room-by-room finishes (floor finish, floor area and skirting per Revit room) go to ADLM Cloud with each save.
-
-### 4.0.1 (October 2026, being prepared)
+### Build 4.0.2610.1 (October 2026)
 
 - Search on Review.
 - Click a Review line to see its elements in the model.
 - **Add rates on ADLM Cloud** on Review.
 - Tile skirting in metres on **Floor finishes**.
+- Room-by-room finishes (floor finish, floor area and skirting per Revit room) go to ADLM Cloud with each save.
+- POP ceiling boards use 1.44 m² per board in every QUIV tool, matching ADLM Cloud.
+- One paint basis everywhere: 0.026 drums per m² (0.52 L/m²). The old 10 m² per litre paint coverage is retired.
+- Pile cap surface treatment uses the soil poison coverage, 20 m² per unit.
+- Values you edited yourself are kept through the update.
+- Linked and IFC models: substructure items, slabs, steelwork and stairs measure the linked elements you pick, and Review lines from linked picks select their elements again.
 - Curtain walling reopened from ADLM Cloud keeps its mullion, panel and fixing lines.
 - A fence wall modelled from ground level bills its blockwork below ground.
 
-### 4.0.0 (September 2026)
+### 4.0 (September 2026)
 
 A new QUIV, from sign-in to save:
 
@@ -482,7 +477,7 @@ A new QUIV, from sign-in to save:
 
 ### Since 3.1.11
 
-QUIV 3.1.11 was the last QUIV 3 release (<kbd>Esc</kbd> closes pop-ups; pop-ups fit a narrow panel). 4.0.0 includes its fixes, and the 3.1.9 features (linked models, a line per level and type) carry on.
+QUIV 3.1.11 was the last QUIV 3 release (<kbd>Esc</kbd> closes pop-ups; pop-ups fit a narrow panel). QUIV 4.0 includes its fixes, and the 3.1.9 features (linked models, a line per level and type) carry on.
 
 ## Troubleshooting
 
@@ -555,7 +550,7 @@ Yes, for beams, columns and slabs. Make sure the link is loaded. See [Linked mod
 
 ### Why did my POP boards or paint change after the update?
 
-From 4.0.3, QUIV uses the same constants as ADLM Cloud and HERON: 1.44 m² per POP board and 0.52 litres of paint per m². Constants you edited yourself are kept. See [Material constants](#material-constants).
+From build 4.0.2610.1, QUIV uses the same constants as ADLM Cloud and HERON: 1.44 m² per POP board and 0.52 litres of paint per m². Constants you edited yourself are kept. See [Material constants](#material-constants).
 
 ### Which versions of Revit does QUIV work with?
 

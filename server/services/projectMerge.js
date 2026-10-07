@@ -32,6 +32,7 @@
 // the document that owns it.
 
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { driftForClient } from "./modelDrift.js";
 
 // Separator for namespaced identities. "::" cannot appear in a Mongo ObjectId
 // or in the plugin-generated codes, so it round-trips unambiguously.
@@ -214,6 +215,9 @@ export async function resolveMergedProject(container) {
       // container owns the commercial state, so a locked source is a leftover
       // from before the merge rather than something that governs it.
       sourceContractLocked: !!project?.contract?.locked,
+      // Model drift lives on the source, where the model is: a merged project
+      // shows each part's badge rather than owning one of its own.
+      modelDrift: driftForClient(project.modelDrift),
     });
   }
 

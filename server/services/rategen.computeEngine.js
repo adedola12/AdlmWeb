@@ -12,12 +12,20 @@ function norm(s) {
  *  - "cached": always use unitPriceAtBuild
  *  - "hybrid": use current when available, else fallback to cached
  */
+/**
+ * tradeDefaults: the caller's own overhead/profit default for this section
+ * (util/tradeMargins.js), either half may be null. Order, per half:
+ * a percentage passed on the call > the caller's trade default > the compute
+ * item's own default > 10 / 25. With no trade default set this is exactly the
+ * old behaviour. The response says which one priced each half.
+ */
 export async function computeRate({
   section,
   name,
   overheadPercent,
   profitPercent,
   priceMode = "hybrid",
+  tradeDefaults = null,
 }) {
   const item = await RateGenComputeItem.findOne({
     section,
@@ -30,13 +38,23 @@ export async function computeRate({
     throw err;
   }
 
-  const oh = Number.isFinite(overheadPercent)
-    ? overheadPercent
-    : item.overheadPercentDefault ?? 10;
-
-  const pf = Number.isFinite(profitPercent)
-    ? profitPercent
-    : item.profitPercentDefault ?? 25;
+  const pickHalf = (given, trade, itemDefault, builtin) => {
+    if (Number.isFinite(given)) return [given, "rate"];
+    if (Number.isFinite(trade)) return [trade, "your-trade"];
+    return [itemDefault ?? builtin, "default"];
+  };
+  const [oh, overheadSource] = pickHalf(
+    overheadPercent,
+    tradeDefaults?.overheadPercent,
+    item.overheadPercentDefault,
+    10,
+  );
+  const [pf, profitSource] = pickHalf(
+    profitPercent,
+    tradeDefaults?.profitPercent,
+    item.profitPercentDefault,
+    25,
+  );
 
   // Fetch all referenced SNs in bulk (fast)
   const matSNs = item.lines
@@ -147,6 +165,8 @@ export async function computeRate({
 
     overheadPercent: oh,
     profitPercent: pf,
+    overheadSource,
+    profitSource,
 
     netCost: round2(net),
     overheadValue: round2(overheadVal),
