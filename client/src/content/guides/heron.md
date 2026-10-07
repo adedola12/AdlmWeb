@@ -2,7 +2,7 @@
 id: heron
 title: ADLM HERON
 tagline: Measure PDF drawings in PlanSwift with the ADLM template, then let HERON check the take-off, price the budget and hand a clean bill to Excel and ADLM Cloud.
-version: "3.0.1"
+version: "3.0, build 3.0.2610.1"
 updated: 2026-10-04
 platform: Windows desktop app that works alongside PlanSwift 10 or 11
 productKeys: [planswift, heron]
@@ -11,9 +11,9 @@ pdfAliases: [ADLM-Complete-User-Guide.pdf]
 order: 5
 ---
 
-ADLM HERON is a Windows app for quantity surveyors and estimators who take off from 2D drawings in PlanSwift. You measure in PlanSwift with the ADLM template, so every slab, wall, finish and service already knows its unit and its formula. HERON then reads the job PlanSwift has open, tells you what is wrong with the take-off before it becomes a bill, prices a material and labour budget from your Rate Gen library, works out steel tonnage, and sends the bill to Excel and to ADLM Cloud. This guide covers HERON 3.0.1. HERON 3.0.0 is the version on the Installer Hub today; 3.0.1 is staged and adds the constants fixes listed in [What's new](#whats-new-in-301).
+ADLM HERON is a Windows app for quantity surveyors and estimators who take off from 2D drawings in PlanSwift. You measure in PlanSwift with the ADLM template, so every slab, wall, finish and service already knows its unit and its formula. HERON then reads the job PlanSwift has open, tells you what is wrong with the take-off before it becomes a bill, prices a material and labour budget from your Rate Gen library, works out steel tonnage, and sends the bill to Excel and to ADLM Cloud. This guide covers HERON 3.0, build 3.0.2610.1. HERON 3.0.0 is the version on the Installer Hub today; build 3.0.2610.1 is staged and adds the constants fixes listed in [What's new](#what-s-new-in-heron-3-0).
 
-## What's new in 3.0.1
+## What's new in HERON 3.0
 
 HERON 3.0 is a complete redesign. If you used HERON 2.9, the main changes are:
 
@@ -27,7 +27,7 @@ HERON 3.0 is a complete redesign. If you used HERON 2.9, the main changes are:
 - **Roof timber is billed again.** The Roof Covering works out its rafters, purlins, struts and ties, wall plate, fascia and barge boards, and they reach the bill, the budget and the export.
 - **Pile, beam, slab and staircase breakdowns** are calculated again.
 
-**HERON 3.0.1** (staged) aligns HERON's material constants with the other ADLM products:
+**Build 3.0.2610.1** (staged for sign-off) aligns HERON's material constants with the other ADLM products:
 
 - Blockwork waste is now **1.03** (was 1.05).
 - Floor and wall tile waste is now **1.10** (was 1.12).
@@ -398,7 +398,7 @@ Linked cells update when you switch back to Excel after a change in HERON. You c
 
 ## Importing a bill from Excel
 
-Sometimes the bill comes first and you need real measurements behind it. Importing a bill as a new HERON project happens on the ADLM website; you then build it in PlanSwift from HERON. (To put HERON's quantities into a client's bill instead, use [Fill a client's bill](#fill-a-clients-bill).)
+Sometimes the bill comes first and you need real measurements behind it. Importing a bill as a new HERON project happens on the ADLM website; you then build it in PlanSwift from HERON. (To put HERON's quantities into a client's bill instead, use [Fill a client's bill](#fill-a-client-s-bill).)
 
 > **Note:** Excel bill import is switched on for your account by ADLM and needs a live HERON subscription. If you do not see **Import Excel BoQ · HERON** on your HERON projects page, contact [/support](/support).
 
@@ -429,7 +429,7 @@ Click **Settings** at the bottom of the sidebar (it is hidden while docked). Pic
 2. Edit the **Value**. **Default** shows what ADLM ships.
 3. Click **Save**. **Reset Defaults** puts every constant back to ADLM's figures.
 
-Some defaults in 3.0.1:
+Some defaults in build 3.0.2610.1:
 
 | Constant | Default |
 |---|---|
@@ -475,7 +475,7 @@ In **Fill a client's bill**, **Match with AI** proposes which HERON lines make u
 
 ### Auto take-off
 
-**Auto take-off** and **Auto-takeoff probe** show under **BETA** in the sidebar, but they are greyed out for everyone in HERON 3.0 and 3.0.1: "Auto take-off is in beta and is not available in this release." Joining the beta programme does not turn them on.
+**Auto take-off** and **Auto-takeoff probe** show under **BETA** in the sidebar, but they are greyed out for everyone in HERON 3.0, including build 3.0.2610.1: "Auto take-off is in beta and is not available in this release." Joining the beta programme does not turn them on.
 
 > **Note:** HERON's bill wording, its checks and its material breakdowns are not AI. They come from the ADLM template and fixed rules.
 

@@ -50,7 +50,7 @@ One rule runs through all of them: **the AI suggests, you decide.** Quantities c
 | **AI Match Labour** and **AI Match Materials** | QUIV | Not in standard installs | Set up by ADLM |
 | **AI Review** (**AI Bill Review**) | HERON 2.9 and 3.0 | On for everyone | Signed in, active licence |
 | **Auto take-off** | HERON | Beta in 2.9; switched off in 3.0 | Beta channel (2.9 only) |
-| **Build with AI** | Rate Gen 3.0.1 | On for everyone | Signed in, active licence |
+| **Build with AI** | Rate Gen 3.0, build 3.0.2610.1 | On for everyone | Signed in, active licence |
 | **Price a bill** (price a client's bill with ADLM AI) | Rate Gen | Coming | Not released |
 | **ADLM AI Review** and **BUILD WITH ADLM AI** | SERVIQ (Revit MEP) | Not in standard installs | Set up by ADLM |
 | WhatsApp sales assistant | WhatsApp | Rolling out | A WhatsApp number |
@@ -320,7 +320,7 @@ HERON's description library and **Specifications** are not AI, though your speci
 
 ### Build with AI
 
-**Availability:** On for everyone signed in, in Rate Gen 3.0.1, on by default.
+**Availability:** On for everyone signed in, in Rate Gen 3.0, build 3.0.2610.1, on by default.
 
 Describe an item of work in one sentence and ADLM AI drafts a full build-up into the custom rate form, for you to check, edit and save.
 
@@ -393,7 +393,7 @@ ADLM never shows one firm's bills, rates or wording to another, never lets Ada r
 - **Programme gang outputs** estimated from the bill.
 - **QUIV 4.0:** **Auto take-off** with confidence and **Accept N**.
 - **HERON 3.0:** **AI Review** carried over; **Auto take-off** switched off.
-- **Rate Gen 3.0.1:** **Build with AI** on by default, prices from your library first and flags drafts that fail ADLM's checks.
+- **Rate Gen 3.0, build 3.0.2610.1:** **Build with AI** on by default, prices from your library first and flags drafts that fail ADLM's checks.
 - **All AI runs on Amazon Bedrock** in ADLM's AWS account.
 
 ## Troubleshooting

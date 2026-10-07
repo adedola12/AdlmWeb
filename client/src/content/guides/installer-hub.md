@@ -512,7 +512,7 @@ It installs and updates the products that have AI features, so installing the la
 |---|---|---|
 | QUIV for Revit | **AI Rate Check**; **✦ Run the whole takeoff** and **Auto take-off** (uses no AI model) | On for everyone (Auto take-off in QUIV 4.0) |
 | HERON | **AI Review** (**AI Bill Review**) | On for everyone in HERON 2.9 and 3.0 |
-| Rate Gen | **Build with AI** | On for everyone, from Rate Gen 3.0.1 |
+| Rate Gen | **Build with AI** | On for everyone, from Rate Gen 3.0, build 3.0.2610.1 |
 | SERVIQ (Revit MEP) | **ADLM AI Review** and **BUILD WITH ADLM AI** | Not in standard installs |
 
 AI features need a good connection to ADLM Cloud. The network signal is a quick check. On **Fair** or **Poor**, AI features and cloud saves will be slow.
