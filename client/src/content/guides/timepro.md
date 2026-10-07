@@ -2,7 +2,7 @@
 id: timepro
 title: ADLM Time Pro
 tagline: Record what your gangs really produce on site, then turn a bill quantity into a duration, a crew size and a Microsoft Project programme.
-version: "1.0"
+version: "1.0, build 1.0.2610.1"
 updated: 2026-10-07
 platform: Windows 10 and 11 desktop app
 productKeys: [qs-takeoff]
@@ -12,9 +12,11 @@ order: 9
 
 ADLM Time Pro is a Windows app for quantity surveyors, site engineers and project managers who need durations they can defend. You log what each gang actually produced on site, day by day. Time Pro averages those records for every item of work. Then you type in a quantity from your bill, and it tells you how many days the work will take and how many skilled and unskilled hands you need to finish in the time you want. When you are happy, you send the result to Excel or to Microsoft Project.
 
-## What's new in the August 2026 release
+> **Note:** This guide covers **Time Pro 1.0, build 1.0.2610.1**. Time Pro keeps the version 1.0; each release changes only its build number. Before ADLM moved to build numbers in October 2026, this release was numbered 1.1.1 in the app, so an older install may still show that number. It is the same software.
 
-Time Pro 1.0 is the current version, and it keeps that version through 2026: releases change only the build number. The August 2026 release is the one the Installer Hub installs for every subscriber.
+## What's new in build 1.0.2610.1
+
+Build 1.0.2610.1 is the current build. The Installer Hub installs it for every subscriber.
 
 - **Dark mode on every screen.** Follows your Windows setting at first, then remembers your choice. Switch from the bottom of the side menu.
 - **Sign out from the side menu.** **Sign Out** now sits under the theme switch.
@@ -26,9 +28,9 @@ Time Pro 1.0 is the current version, and it keeps that version through 2026: rel
 - **Clearer messages when an item cannot be exported.** Time Pro names the items with no duration and tells you what they need.
 - **A readable side menu.** Every button shows its icon and name, with the current screen in ADLM orange.
 
-An earlier Time Pro 1.0 release made Time Pro a paid subscription: you sign in with your ADLM account, Time Pro checks for an active subscription, and your licence is tied to your computer.
+An earlier build made Time Pro a paid subscription: you sign in with your ADLM account, Time Pro checks for an active subscription, and your licence is tied to your computer.
 
-> **Note:** The keyboard shortcuts and the connection signal indicator added to other ADLM products in September 2026 are not in Time Pro 1.0. Nothing newer than the August 2026 build has been released.
+> **Note:** The keyboard shortcuts and the connection signal indicator added to other ADLM products in September 2026 are not in Time Pro yet. Nothing newer than build 1.0.2610.1 has been released.
 
 ## Before you start
 
@@ -292,7 +294,7 @@ Say your records for "Blockwork 225mm" average 18 m2 a day from 3 skilled and 2 
 
 ### Enter quantities and export in one sitting
 
-> **Important:** In Time Pro 1.0, Time Pro does not keep the figures you type on the Duration Summary. **BOQ Qty (Requested)**, **Planned Duration (days)** and **Weather Scenario** clear when you leave the Duration Summary for another screen, when you add, edit or delete a task, and when you close Time Pro. Enter your quantities, then export to Excel or Microsoft Project before you move away. Keep your bill quantities handy (for example in your BOQ spreadsheet) so you can type them in again.
+> **Important:** In build 1.0.2610.1, Time Pro does not keep the figures you type on the Duration Summary. **BOQ Qty (Requested)**, **Planned Duration (days)** and **Weather Scenario** clear when you leave the Duration Summary for another screen, when you add, edit or delete a task, and when you close Time Pro. Enter your quantities, then export to Excel or Microsoft Project before you move away. Keep your bill quantities handy (for example in your BOQ spreadsheet) so you can type them in again.
 
 ## Exporting your work
 
@@ -387,7 +389,7 @@ From here, use Microsoft Project for everything Time Pro does not do:
 
 ## AI in Time Pro
 
-Time Pro 1.0 has no AI features. Every figure it shows is arithmetic on your own Task Log, and nothing is sent to an AI service. For the AI features in other ADLM products, see [ADLM AI services](/guides/ai-services).
+Time Pro has no AI features. Every figure it shows is arithmetic on your own Task Log, and nothing is sent to an AI service. For the AI features in other ADLM products, see [ADLM AI services](/guides/ai-services).
 
 ### How this relates to "Estimate the outputs" on ADLM Cloud
 
@@ -440,7 +442,7 @@ No item has a BOQ quantity yet. Enter at least one quantity in **BOQ Qty (Reques
 Either no item has a BOQ quantity, or the items with a quantity have no duration because there are no logged tasks for them. Follow the message: enter quantities, or type a **Planned Duration (days)** for the items it lists.
 
 ### Microsoft Project will not open the file
-Make sure you have the latest Time Pro 1.0 build (update through the Installer Hub). Earlier builds produced files that Project could reject. Open the file from **File**, then **Open** in Project, and choose XML files in the file type list if the file does not show.
+Make sure you are on build 1.0.2610.1 (update through the Installer Hub). Earlier builds produced files that Project could reject. Open the file from **File**, then **Open** in Project, and choose XML files in the file type list if the file does not show.
 
 ### Costs in Microsoft Project are zero
 You left a rate at 0 in the export window. Either export again with your rates, or type the rates for each resource in Project's Resource Sheet.
@@ -484,7 +486,7 @@ No. Time Pro records the weather so you can see it, but applies no adjustment. U
 From your bill. You can measure them with [QUIV for Revit](/guides/quiv) or another ADLM takeoff tool, or take them from any bill of quantities, and type them into **BOQ Qty (Requested)**. Keep the unit the same as the unit you recorded output in.
 
 ### Does Time Pro have keyboard shortcuts or a connection indicator?
-Not in Time Pro 1.0. Those arrived in other ADLM products in September 2026 but have not been released for Time Pro.
+Not yet. Those arrived in other ADLM products in September 2026 but have not been released for Time Pro.
 
 ### Does Time Pro use AI?
 No. See [AI in Time Pro](#ai-in-time-pro) for how it relates to the AI output estimate on ADLM Cloud.

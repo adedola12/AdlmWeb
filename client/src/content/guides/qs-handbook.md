@@ -1489,7 +1489,7 @@ Durations and crew sizes based on what your own gangs produce, a Microsoft Proje
 
 ### Tips
 
-> **Important:** In Time Pro 1.0 the figures you type on the **Duration Summary** clear when you leave that screen, change the Task Log or close the app. Enter your quantities and export in one sitting.
+> **Important:** In Time Pro 1.0 (build 1.0.2610.1) the figures you type on the **Duration Summary** clear when you leave that screen, change the Task Log or close the app. Enter your quantities and export in one sitting.
 
 - Keep the output unit the same as the bill unit. Blockwork recorded in m2 must be forecast against a quantity in m2.
 - If you only need a quick programme without site records, use **Generate from BoQ** on the **PM Dashboard**, which creates one task per bill item, and set the dates yourself.
