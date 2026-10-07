@@ -186,6 +186,9 @@ export default function AiAgent() {
           // ...and the pricing and report cards (features/ada), so the API
           // may offer the estimator tools.
           cards: true,
+          // ...including the card for a rate the user states ("windows are
+          // 88,000 per m2"), so the API may offer pricing by message.
+          capabilities: ["ada-user-rate-card"],
         }),
       });
 

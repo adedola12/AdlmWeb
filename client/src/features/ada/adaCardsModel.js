@@ -60,20 +60,101 @@ export function priceManyPath(project) {
   return `/projects/${encodeURIComponent(key)}/${encodeURIComponent(id)}/bill/price-many`;
 }
 
-/** The request body: which rate on which line, never a price. */
+/**
+ * The request body: which rate on which line, never a price Ada made up.
+ *
+ * A line from a Rate Gen proposal names its rate. A line from a rate the USER
+ * stated (propose_price_by_area / propose_set_rates, card.mode "user-rate")
+ * carries the user's own figure and split instead:
+ *
+ *   by area → { code, ratePerM2, split }  the server reads the size off the
+ *             bill line and works the line's rate out itself
+ *   by rate → { code, userRate, unit?, split }
+ */
 export function priceManyBody(lines) {
   return {
-    lines: (Array.isArray(lines) ? lines : []).slice(0, MAX_APPLY_LINES).map((l) => ({
-      code: str(l?.code),
-      rateId: str(l?.rateId),
-      description: str(l?.rateDescription || l?.description),
-      unit: str(l?.rateUnit || l?.unit),
-      // A rate in another unit: the dimension it converts by. Never a factor;
-      // the server works that out.
-      ...(l?.convert && typeof l.convert === "object" ? { convert: l.convert } : {}),
-    })),
+    lines: (Array.isArray(lines) ? lines : []).slice(0, MAX_APPLY_LINES).map((l) => {
+      if (isUserRateLine(l)) return userRateBody(l);
+      return {
+        code: str(l?.code),
+        rateId: str(l?.rateId),
+        description: str(l?.rateDescription || l?.description),
+        unit: str(l?.rateUnit || l?.unit),
+        // A rate in another unit: the dimension it converts by. Never a factor;
+        // the server works that out.
+        ...(l?.convert && typeof l.convert === "object" ? { convert: l.convert } : {}),
+      };
+    }),
     via: "ada",
   };
+}
+
+/** A proposed line that carries a rate the user stated, not a library rate. */
+export function isUserRateLine(l) {
+  return Boolean(l) && (l.ratePerM2 != null || l.userRate != null) && !str(l.rateId);
+}
+
+function cleanSplit(split) {
+  if (!split || typeof split !== "object") return undefined;
+  return {
+    material: num(split.material),
+    labour: num(split.labour),
+    overheadProfit: num(split.overheadProfit),
+  };
+}
+
+function userRateBody(l) {
+  const split = cleanSplit(l?.split);
+  if (l?.ratePerM2 != null) {
+    return { code: str(l?.code), ratePerM2: num(l.ratePerM2), ...(split ? { split } : {}) };
+  }
+  return {
+    code: str(l?.code),
+    userRate: num(l?.userRate),
+    // The unit the user said the rate is per, so the server refuses a line
+    // measured in another one.
+    ...(str(l?.rateUnit) ? { unit: str(l.rateUnit) } : {}),
+    ...(split ? { split } : {}),
+  };
+}
+
+/** True for a card built from a rate the user stated. */
+export function isUserRateCard(card) {
+  return card?.mode === "user-rate";
+}
+
+const fmtPct = (v) => {
+  const n = num(v);
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+};
+
+/** "60% material · 20% labour · 20% overhead & profit". */
+export function splitLabel(split) {
+  if (!split || typeof split !== "object") return "";
+  return `${fmtPct(split.material)}% material · ${fmtPct(split.labour)}% labour · ${fmtPct(
+    split.overheadProfit,
+  )}% overhead & profit`;
+}
+
+/** "1200×1500 mm · 1.8 m²" for an opening; "" for a line without a size. */
+export function sizeLabel(line) {
+  const s = str(line?.sizeLabel);
+  if (!s) return "";
+  const a = num(line?.areaM2);
+  return a > 0 ? `${s} mm · ${Math.round(a * 10000) / 10000} m²` : `${s} mm`;
+}
+
+/**
+ * The card's heading for a stated-rate proposal. `money` is passed in so the
+ * model stays free of the app's formatter.
+ */
+export function userRateHeading(card, money = (v) => String(v)) {
+  if (card?.basis === "area") {
+    const what = card?.category === "doors" ? "Doors" : "Windows";
+    return `${what} at ${money(card?.ratePerM2)} per m²`;
+  }
+  const unit = str(card?.unit);
+  return `${money(card?.rate)}${unit ? ` per ${unit}` : ""} on the lines you named`;
 }
 
 /**
