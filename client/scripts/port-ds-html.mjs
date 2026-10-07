@@ -354,18 +354,29 @@ const VIDEOS_EDIT = {
 // The whole sentence becomes one token, not just the numbers, because his
 // wording changes shape with the fee ("One-time install fee of X" vs "No
 // install fee") and only the live figure knows which applies.
-const priceEdits = (monthly, ledeStart) => [
+// Matched on the shape, not the figure: his source was still on the old
+// prices on 7 Oct 2026, and an edit keyed on "₦12,000" would stop matching
+// the day he corrects it.
+const priceEdits = () => [
   {
     label: "price headline from the catalogue",
-    find: `<h2>${monthly} a month,`,
+    findRe: /<h2>₦[\d,]+ a month,/,
     replace: "<h2>@@d.monthly@@ a month,",
   },
   {
     label: "price sentence from the catalogue",
-    findRe: new RegExp(`<p class="lede">${ledeStart}[^<]*</p>`),
+    findRe: /<p class="lede">Or ₦[\d,]+[^<]*<\/p>/,
     replace: '<p class="lede">@@d.priceLine@@</p>',
   },
 ];
+
+// His hero note, "Latest v3.1.7 · Revit 2024...", becomes the frozen version
+// and current build from ds/productBuilds.js (owner's rule, 6/7 Oct 2026).
+const versionEdit = {
+  label: "hero version line from productBuilds",
+  findRe: /Latest v\d+(?:\.\d+)+ · /,
+  replace: "@@d.latest@@ · ",
+};
 
 
 // The six plan cards on the pricing page, and the three course cards below
@@ -520,11 +531,17 @@ const PAGE_EDITS = {
       replace: "@@DsCheckoutSummarySlot@@",
     },
   ],
-  "src/quiv.html": [VIDEOS_EDIT, releaseEdit("quiv"), ...priceEdits("₦50,000", "Or ₦500,000")],
-  "src/heron.html": [VIDEOS_EDIT, releaseEdit("heron"), ...priceEdits("₦12,000", "Or ₦120,000")],
-  "src/rategen.html": [VIDEOS_EDIT, releaseEdit("rategen"), ...priceEdits("₦8,000", "Or ₦70,000")],
-  "src/mep.html": [VIDEOS_EDIT, releaseEdit("mep"), ...priceEdits("₦18,000", "Or ₦180,000")],
-  "src/timepro.html": [VIDEOS_EDIT, releaseEdit("timepro"), ...priceEdits("₦2,000", "Or ₦20,000")],
+  "src/quiv.html": [VIDEOS_EDIT, releaseEdit("quiv"), versionEdit, ...priceEdits()],
+  "src/heron.html": [VIDEOS_EDIT, releaseEdit("heron"), versionEdit, ...priceEdits()],
+  "src/rategen.html": [
+    VIDEOS_EDIT,
+    releaseEdit("rategen"),
+    versionEdit,
+    ...priceEdits(),
+    { label: "rategen: version on the sync chip", find: "synced · v2.5.0", replace: "synced · @@d.version@@" },
+  ],
+  "src/mep.html": [VIDEOS_EDIT, releaseEdit("mep"), versionEdit, ...priceEdits()],
+  "src/timepro.html": [VIDEOS_EDIT, releaseEdit("timepro"), versionEdit, ...priceEdits()],
 
   // His "Latest across the toolkit" table stated each product's newest build
   // in the markup, and had fallen behind on three of seven rows. The whole

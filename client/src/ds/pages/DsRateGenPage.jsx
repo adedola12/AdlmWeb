@@ -72,7 +72,7 @@ export default function DsRateGenPage({ d }) {
           <p className="phero-note">
             <span className="pulse">
             </span>
-            Latest v2.5.0 · desktop, syncs to every plugin
+            {d.latest} · desktop, syncs to every plugin
           </p>
           {" "}
         </div>
@@ -330,7 +330,7 @@ export default function DsRateGenPage({ d }) {
                   {" "}
                   <div style={{ textAlign: "center", marginTop: "12px" }}>
                     <span className="vz-chip">
-                      synced · v2.5.0
+                      synced · {d.version}
                     </span>
                   </div>
                 </div>
