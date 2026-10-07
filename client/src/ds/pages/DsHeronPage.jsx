@@ -72,7 +72,7 @@ export default function DsHeronPage({ d }) {
           <p className="phero-note">
             <span className="pulse">
             </span>
-            Latest v2.9.1 · works inside PlanSwift
+            {d.latest} · works inside PlanSwift
           </p>
           {" "}
         </div>
