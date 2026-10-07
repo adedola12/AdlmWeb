@@ -3,7 +3,7 @@ id: quiv
 title: QUIV for Revit
 tagline: Measure your Revit model item by item, review the quantities, and send the take-off to ADLM Cloud to price, plan and value.
 version: "4.0, build 4.0.2610.1"
-updated: 2026-10-04
+updated: 2026-10-07
 platform: Revit 2024-2027 add-in (Windows)
 productKeys: [revit]
 pdf: ADLM-QUIV-Revit-User-Guide.pdf
@@ -437,14 +437,14 @@ At the top of the QUIV projects page you may see **Learning samples**: fully wor
 
 ### Exports on the website
 
-Exports are made on ADLM Cloud. On an open project, click **Export**. The groups are **Bill & Budget**, **Generic BoQ**, **Elemental BoQ** (by building element), **Trade BoQ** (by work section) and **Milestone BoQ** (one priceable bill per construction stage).
+Exports are made on ADLM Cloud. On an open project, click **Export** for the Excel bills and PDF reports. The classic workspace (**More actions** > **Open the classic workspace**) has the fullest **Export** menu: **Bill & Budget**, **Generic BoQ**, **Elemental BoQ** (by building element), **Trade BoQ** (by work section), **Milestone BoQ** (one priceable bill per construction stage) and **ICMS 3**.
 
-From the ICMS 3 release on ADLM Cloud, the **Export** menu also has an **ICMS 3** group, "international cost and carbon report":
+The **ICMS 3** group, "international cost and carbon report", is on the classic workspace's menu only:
 
 - **ICMS 3 cost and carbon (Excel)**: cost and upfront carbon (A1-A5) by ICMS 3 Group, with every line's code and carbon source, and the lines not yet placed.
 - **ICMS 3 cost and carbon (JSON)**: the same report as data, conforming to the RICS Data Standard 3.3.3.
 
-The report total equals the contract total: preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020. Carbon per line comes from your Rate Gen rates, so price the bill with Rate Gen rates first. Cost and carbon per m² appear when an IPMS 1 or 2 floor area is given. It works on the learning samples too.
+The report total equals the contract total: preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020. Carbon per line comes from your Rate Gen rates, so price the bill with Rate Gen rates first. Cost and carbon per m² appear only when an IPMS 1 or 2 floor area is recorded, and ADLM Cloud has no screen to record one yet. It works on the learning samples too.
 
 See the [ADLM Cloud guide](/guides/cloud) for the rest of the website.
 
@@ -465,7 +465,7 @@ See the [ADLM Cloud guide](/guides/cloud) for the rest of the website.
 - Curtain walling reopened from ADLM Cloud keeps its mullion, panel and fixing lines.
 - A fence wall modelled from ground level bills its blockwork below ground.
 
-### 4.0.0 (September 2026)
+### 4.0 (September 2026)
 
 A new QUIV, from sign-in to save:
 
@@ -477,7 +477,7 @@ A new QUIV, from sign-in to save:
 
 ### Since 3.1.11
 
-QUIV 3.1.11 was the last QUIV 3 release (<kbd>Esc</kbd> closes pop-ups; pop-ups fit a narrow panel). 4.0.0 includes its fixes, and the 3.1.9 features (linked models, a line per level and type) carry on.
+QUIV 3.1.11 was the last QUIV 3 release (<kbd>Esc</kbd> closes pop-ups; pop-ups fit a narrow panel). QUIV 4.0 includes its fixes, and the 3.1.9 features (linked models, a line per level and type) carry on.
 
 ## Troubleshooting
 

@@ -3,7 +3,7 @@ id: heron
 title: ADLM HERON
 tagline: Measure PDF drawings in PlanSwift with the ADLM template, then let HERON check the take-off, price the budget and hand a clean bill to Excel and ADLM Cloud.
 version: "3.0, build 3.0.2610.1"
-updated: 2026-10-04
+updated: 2026-10-07
 platform: Windows desktop app that works alongside PlanSwift 10 or 11
 productKeys: [planswift, heron]
 pdf: ADLM-Heron-User-Guide.pdf
@@ -344,7 +344,7 @@ What to know:
 
 Saved take-offs appear on the ADLM website under your HERON projects (**HERON** in the side rail, or `/projects/planswift`). There you can price the bill from your Rate Gen rates, value it, share it and export it. See the [ADLM Cloud guide](/guides/cloud).
 
-From the project's **Export** menu on the website, the **ICMS 3** group ("international cost and carbon report") offers **ICMS 3 cost and carbon (Excel)**, with cost and upfront carbon (A1-A5) by ICMS 3 Group, and **ICMS 3 cost and carbon (JSON)**, the same report as data to the RICS Data Standard. Carbon per line comes from your Rate Gen rates, so price the HERON bill with Rate Gen rates first.
+From the **Export** menu in the classic workspace on the website (**More actions** > **Open the classic workspace**), the **ICMS 3** group ("international cost and carbon report") offers **ICMS 3 cost and carbon (Excel)**, with cost and upfront carbon (A1-A5) by ICMS 3 Group, and **ICMS 3 cost and carbon (JSON)**, the same report as data to the RICS Data Standard. Carbon per line comes from your Rate Gen rates, so price the HERON bill with Rate Gen rates first.
 
 ## Excel
 

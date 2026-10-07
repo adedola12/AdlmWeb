@@ -3,7 +3,7 @@ id: installer-hub
 title: ADLM Installer Hub
 tagline: Sign in once, then install, update, open and repair every ADLM product your licence covers.
 version: "2.0"
-updated: 2026-10-04
+updated: 2026-10-07
 platform: Windows 10 and 11 desktop app (64-bit)
 productKeys: []
 pdf: ADLM-Installer-Hub-User-Guide.pdf
@@ -188,7 +188,7 @@ Click **Installation Center** in the sidebar. Each product appears as a card wit
 
 ### Release names
 
-Cards name releases the way people say them: **QUIV 4.0** rather than 4.0.0, and **HERON 3.0**. A release such as 3.1.11 keeps its full number. When an update is waiting, **Version** shows both, for example "v2.9.6 → HERON 3.0".
+Cards name releases by their two-digit version, the way people say them: **QUIV 4.0** and **HERON 3.0**. An older release such as 3.1.11 keeps its full number. When an update is waiting, **Version** shows both, for example "v2.9.6 → HERON 3.0".
 
 ### Reading a card
 
@@ -512,7 +512,7 @@ It installs and updates the products that have AI features, so installing the la
 |---|---|---|
 | QUIV for Revit | **AI Rate Check**; **✦ Run the whole takeoff** and **Auto take-off** (uses no AI model) | On for everyone (Auto take-off in QUIV 4.0) |
 | HERON | **AI Review** (**AI Bill Review**) | On for everyone in HERON 2.9 and 3.0 |
-| Rate Gen | **Build with AI** | On for everyone, from Rate Gen 3.0, build 3.0.2610.1 |
+| Rate Gen | **Build with AI**; **Price a bill** | On for everyone: Build with AI from Rate Gen 3.0, build 3.0.2610.1; Price a bill from build 3.0.2610.2 |
 | SERVIQ (Revit MEP) | **ADLM AI Review** and **BUILD WITH ADLM AI** | Not in standard installs |
 
 AI features need a good connection to ADLM Cloud. The network signal is a quick check. On **Fair** or **Poor**, AI features and cloud saves will be slow.
