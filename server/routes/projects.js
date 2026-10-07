@@ -641,6 +641,8 @@ import {
   certificateMoney,
   certifiedSoFar,
   earnedLineValue,
+  certificateLineSnapshot,
+  previousSnapshotLines,
 } from "../util/certificateMaths.js";
 import { sendMail } from "../util/mailer.js";
 import { contractLocked } from "../util/emailContent.js";
@@ -1857,6 +1859,24 @@ function applyValuationTracking({
     // valuationFactor and therefore the basis of every interim certificate,
     // so a plugin re-save used to zero the earned position of a line the QS
     // had marked 60% done — and emit a NEGATIVE valuation event for it.
+    //
+    // THE SAME IS TRUE OF THE PRICE IT IS EARNED AT, AND THAT HALF WAS MISSING.
+    //
+    // A line's earned value is quantity × rate × percent, and earnedLineValue
+    // takes the quantity and rate from actualQty/actualRate whenever they are
+    // recorded. So the actuals are not a side note on the earned position — they
+    // are two of its three terms.
+    //
+    // QUIV's takeoff has no rate field in its DTO and sends the PLANNED rate in
+    // actualRate (see the promotion in sanitizeItems). For a line the QS has
+    // already priced, that promotion does not fire, so the plugin's planned rate
+    // was written straight over an actual the QS never recorded — and because the
+    // certificate values work at the actual, the line's certified value moved. A
+    // 100 m3 line priced at 1,000 and 60% done is worth 60,000; re-sent by the
+    // plugin at 850 it became 51,000. Nine thousand naira, on a sync, silently.
+    //
+    // A payload with no opinion about progress has no opinion about the price
+    // either, so both halves of the earned position are now held.
     if (keepEarnedPosition && previousMatch) {
       item = {
         ...item,
@@ -1864,6 +1884,23 @@ function applyValuationTracking({
         purchased: previousItem.purchased,
         percentComplete: previousItem.percentComplete,
       };
+      // ONLY where there is a measurement to protect. On a line the QS has not
+      // priced there is no earned position, the promotion in sanitizeItems is
+      // doing the right thing, and QUIV's planned rate is the only price the
+      // line has — so carrying an absent actual over it would stop the plugin
+      // pricing a bill at all.
+      //
+      // The two terms move together. A line measured by the QS is valued at the
+      // QS's figures, both of them, including one they left blank; a line they
+      // never measured is valued at the plugin's.
+      //
+      // Only the figures. actualRecordedAt and actualUpdatedAt are rebuilt from
+      // previousItem a few lines below, so carrying them here would be dead code
+      // that reads as load-bearing.
+      if (previousItem.actualQty != null || previousItem.actualRate != null) {
+        item.actualQty = previousItem.actualQty;
+        item.actualRate = previousItem.actualRate;
+      }
     }
     const previousStatus = Boolean(previousItem?.[statusField]);
     const nextStatus = Boolean(item?.[statusField]);
@@ -5234,6 +5271,13 @@ async function issueCertificate(req, res) {
         ? req.body.status
         : "draft";
 
+    const snapshot = certificateLineSnapshot({
+      items: project.items,
+      factorFor: (it) => valuationFactor(it, isMaterialsProductKey(project.productKey) ? "purchased" : "completed"),
+      previousLines: previousSnapshotLines(previousCerts),
+      identityFor: itemIdentity,
+    });
+
     const cert = {
       number,
       date: certDate,
@@ -5254,6 +5298,21 @@ async function issueCertificate(req, res) {
       notes,
       snapshotCompletedCount: rollup.markedItems,
       snapshotTotalCount: rollup.totalItems,
+      // THE LINES THAT MOVED THIS PERIOD, WRITTEN ONCE AND NEVER TOUCHED AGAIN.
+      //
+      // Two integers used to be the whole of a certificate's memory of its own
+      // lines, so "which lines does this cover, and what did each earn in this
+      // period?" had no answer — and nothing was durable: a line certified at 60%
+      // today reads 100% next month, because percentComplete is one current value.
+      //
+      // The previous position comes from the PREVIOUS CERTIFICATES' OWN ROWS, not
+      // from the project. Asking the project what last month looked like gets this
+      // month's answer, which is the mistake the snapshot exists to end.
+      //
+      // valuationFactor and itemIdentity are handed in rather than reimplemented,
+      // so the snapshot, the certificate total and the daily log cannot drift
+      // apart: they are all reading the same two functions.
+      lines: snapshot.lines,
       // So a screen and a PDF can both explain a negative certificate rather
       // than printing a figure nobody expects.
       overCertified,
@@ -5776,9 +5835,11 @@ async function exportCertificateXlsx(req, res) {
     // untouched and still correct, and a missing explanation is a great deal
     // better than a contradictory one.
     //
-    // Reconstructing the breakdown as it stood at issue needs a per-line
-    // snapshot on the certificate, which it does not carry. That is the next
-    // piece of work, not something to guess at here.
+    // A certificate that carries its own line snapshot no longer depends on any of
+    // this: the "What this certificate covers" table is printed from its stored
+    // rows, which cannot move. The breakdown block is the project-wide one —
+    // measured, variations, provisional, preliminaries — and that still has no
+    // historical source, so the test below stands for it.
     const rollup = computeValueToDate(project);
     const stored = cert.toObject ? cert.toObject() : cert;
     // A tenth of a kobo, to absorb floating-point drift rather than a real move.
@@ -9029,6 +9090,7 @@ router.delete(
 export const __test = {
   applyValuationTracking,
   buildValuationLogs,
+  carriesValuationState,
   computeValueToDate,
   valuationFactor,
 };
