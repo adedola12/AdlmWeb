@@ -26,8 +26,8 @@
 //
 // A subject is kept inside SUBJECT_BUDGET characters (updateList). A mail client
 // shows about seventy on a desktop row and about half that on a phone, and the
-// 2026 version freeze spends fourteen of them per update ("4.0.0 · build
-// 2610.1"), so an uncapped list of labels pushed every product name past the cut
+// 2026 version freeze spends about twenty of them per update ("4.0, build
+// 4.0.2610.1"), so an uncapped list of labels pushed every product name past the cut
 // for anyone holding two or more: "This week's ADLM updates: Installation Center
 // 1.0.0 · bu…". It drops the versions first, which the headings carry anyway,
 // and only then counts the rest.
@@ -101,7 +101,7 @@ function capGroups(groups = [], max = MAX_ITEMS_PER_UPDATE) {
 const isHub = (item) => item?.kind === "hub";
 
 /**
- * A version as a customer reads it: "4.0.0 · build 2610.1", never
+ * A version as a customer reads it: "4.0, build 4.0.2610.1", never
  * "4.0.2610.1". Every ADLM product launched in 2026 keeps its launch version
  * until 2027 and only the build moves (owner, 6 Oct 2026, util/releaseVersion.js
  * displayVersion). Display only: the notice key and every comparison still use
@@ -110,7 +110,7 @@ const isHub = (item) => item?.kind === "hub";
 export const shownVersion = (version) =>
   displayVersion(String(version || "").trim()) || String(version || "").trim();
 
-/** "QUIV 4.0.0 · build 2610.1": how an update is named in a list. */
+/** "QUIV 4.0, build 4.0.2610.1": how an update is named in a list. */
 export const updateLabel = (item) =>
   `${isHub(item) ? HUB_PRODUCT.shortName : item.product.name} ${shownVersion(item.version)}`.trim();
 

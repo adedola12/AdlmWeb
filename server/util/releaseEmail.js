@@ -283,7 +283,7 @@ export function buildReleaseMessage({
   replyTo = "",
 }) {
   const name = product.name;
-  // "QUIV 4.0.0 · build 2610.1", not "QUIV 4.0.2610.1": the 2026 versions are
+  // "QUIV 4.0, build 4.0.2610.1", not "QUIV 4.0.2610.1": the 2026 versions are
   // frozen and only the build moves (owner, 6 Oct 2026). Display only - the
   // notice key, the comparisons and the dedupe all keep the deployed string.
   const v = displayVersion(String(version || "").trim()) || String(version || "").trim();

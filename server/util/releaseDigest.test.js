@@ -1743,7 +1743,7 @@ test("a hotfix for everybody survives a higher build only the firms can get", as
   // The single user, who is running 3.1.11, hears about the hotfix.
   assert.match(mailTo(ses, "user2@firm.test")[0].subject, /3\.1\.12/);
   // The firm hears about the build it can actually get.
-  assert.match(mailTo(ses, "user1@ys.test")[0].html, /4\.0\.0 \u00b7 build 2610\.1/);
+  assert.match(mailTo(ses, "user1@ys.test")[0].html, /4\.0, build 4\.0\.2610\.1/);
 });
 
 test("a newer build for everybody still supersedes an older one, firms-only or not", async () => {
@@ -1766,11 +1766,11 @@ test("a newer build for everybody still supersedes an older one, firms-only or n
 //
 // Owner, 6-7 Oct 2026: every ADLM product keeps its launch version until 2027
 // and only the BUILD moves. QUIV ships builds as 4.0.YYMM.N so they still sort
-// above 4.0.1, and a customer must read "QUIV 4.0.0, build 2610.1".
+// above 4.0.1, and a customer must read "QUIV 4.0, build 4.0.2610.1".
 
 test("a 2026 build is announced as its launch version and its build, never as 4.0.2610.1", async () => {
-  assert.equal(shownVersion("4.0.2610.1"), "4.0.0 \u00b7 build 2610.1");
-  assert.equal(shownVersion("4.0.2610"), "4.0.0 \u00b7 build 2610");
+  assert.equal(shownVersion("4.0.2610.1"), "4.0, build 4.0.2610.1");
+  assert.equal(shownVersion("4.0.2610"), "4.0, build 4.0.2610");
   assert.equal(shownVersion("3.1.11"), "3.1.11", "a pre-freeze version reads as written");
 
   const quiv = productFor("revit", "");
@@ -1781,10 +1781,13 @@ test("a 2026 build is announced as its launch version and its build, never as 4.
   ];
 
   // One product: the subject carries the version, in the frozen form.
-  assert.match(digestSubject([items[0]]), /4\.0\.0 \u00b7 build 2610\.1 is ready/);
-  assert.ok(!/4\.0\.2610\.1/.test(digestSubject([items[0]])), "never the raw build string");
+  assert.match(digestSubject([items[0]]), /4\.0, build 4\.0\.2610\.1 is ready/);
+  assert.ok(
+    !/QUIV 4\.0\.2610\.1/.test(digestSubject([items[0]])),
+    "never the build standing in for the version",
+  );
 
-  // Several: the frozen form costs ~14 characters per update, so two of them no
+  // Several: the frozen form costs ~20 characters per update, so two of them no
   // longer fit a subject line. It names the products instead of overflowing
   // (updateList); the versions are in the headings, which is where a customer
   // reads them.
@@ -1795,9 +1798,12 @@ test("a 2026 build is announced as its launch version and its build, never as 4.
 
   const m = buildDigestMessage({ firstName: "Adaeze", items, unsubscribeUrl: "https://api.test/u" });
   for (const part of [m.subject, m.html, m.text]) {
-    assert.ok(!/4\.0\.2610/.test(part), "no raw YYMM build string anywhere in the email");
+    assert.ok(
+      !/(QUIV|RateGen) 4\.0\.2610/.test(part),
+      "the build never stands in for the version",
+    );
   }
-  for (const part of [m.html, m.text]) assert.match(part, /4\.0\.0 \u00b7 build 2610\.1/);
+  for (const part of [m.html, m.text]) assert.match(part, /4\.0, build 4\.0\.2610\.1/);
 });
 
 test("a subject never grows past what a mail client shows, however many products", () => {
@@ -1823,7 +1829,7 @@ test("a subject never grows past what a mail client shows, however many products
   const long = digestSubject(many);
   assert.ok(long.length <= SUBJECT_BUDGET, `${long.length}: ${long}`);
   assert.match(long, /^This week's ADLM updates: Installation Center, ADLM MEP and 6 more$/);
-  assert.ok(!/4\.0\.2610/.test(long), "and still never the raw build string");
+  assert.ok(!/(QUIV|RateGen|Installation Center) 4\.0\.2610/.test(long), "and still never the build alone");
 
   // The preheader beside it is bounded the same way.
   const m = buildDigestMessage({ firstName: "Tunde", items: many, unsubscribeUrl: "https://api.test/u" });
@@ -1847,10 +1853,13 @@ test("the whole weekly email obeys the freeze, end to end", async () => {
   const out = await tick(store, ses, MON_W40);
   assert.equal(out.status, "done");
   const [mail] = mailTo(ses, "user1@firm.test");
-  assert.ok(!/4\.0\.2610/.test(mail.subject + mail.html + mail.text), mail.subject);
+  assert.ok(
+    !/(QUIV|RateGen) 4\.0\.2610/.test(mail.subject + mail.html + mail.text),
+    mail.subject,
+  );
   assert.equal(mail.subject, "This week's ADLM updates: QUIV, RateGen");
   assert.ok(mail.subject.length <= SUBJECT_BUDGET);
-  assert.match(mail.html, /4\.0\.0 \u00b7 build 2610\.1/);
+  assert.match(mail.html, /4\.0, build 4\.0\.2610\.1/);
 
   // The notice key, and so the dedupe, still use the version as deployed.
   assert.ok(store.notices.has("revit@4.0.2610.1"));
