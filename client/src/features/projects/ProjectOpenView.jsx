@@ -15,6 +15,7 @@ import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
 import OpenInDesktopButton from "./OpenInDesktopButton.jsx";
 import { projectTotals } from "./lib/projectTotals.js";
+import { driftTitle } from "./lib/modelDrift.js";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
 const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
@@ -412,6 +413,9 @@ export default function ProjectOpenView({
   // Sample project descriptor (project.sample) when this is read-only learning
   // material; null for real projects.
   sampleInfo = null,
+  // Model drift (r2-model-drift-alerts): the plugin found the model has
+  // changed since this bill's last take-off. Null when nothing is open.
+  modelDrift = null,
   linkedGroupsCount = 0,
   // Cross-project links (MEP services → this general bill). Feature P1.
   linkedSummaries = [],
@@ -876,6 +880,15 @@ export default function ProjectOpenView({
               Draft (editable)
             </span>
           )}
+
+          {/* Model drift. A placeholder in his existing amber status chip
+              until Richard designs the badge (design track on the work
+              board); the plugin panel is where the change is acted on. */}
+          {modelDrift?.status === "open" ? (
+            <span className="wk-dirty" role="status" title={driftTitle(modelDrift)}>
+              Model changed since last take-off
+            </span>
+          ) : null}
 
           {/* Project ID stays one click away for the Windows plugin
               "Open from Cloud" flow. */}

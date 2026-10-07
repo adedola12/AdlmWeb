@@ -925,6 +925,69 @@ const SampleInfoSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Model drift (work-board item r2-model-drift-alerts).
+//
+// The website stores no model versions, so it cannot tell on its own that a
+// Revit / ArchiCAD model has moved on since the bill was measured. The desktop
+// plugin can: when it opens a model linked to this project it compares the
+// model with the element IDs and quantities saved here, and reports a SUMMARY
+// (POST /projects/:productKey/:id/model-drift). This is that summary.
+//
+// Privacy, as for take-off timing: counts and bill-line codes only. No model
+// content, no file / project / element / client names, no quantities, and no
+// element IDs. The model is named only by `modelRef`, a one-way code of the
+// project's model fingerprint, so a report about a different copy of the
+// model is refused rather than attached to the wrong project.
+//
+//   status "none"      never reported, or nothing has changed
+//          "open"      the model changed after the last take-off save
+//          "cleared"   a later take-off save (or a clean re-check) closed it
+//          "dismissed" somebody said it is not a real change
+const ModelDriftLineSchema = new mongoose.Schema(
+  {
+    code: { type: String, default: "" }, // TakeoffItem.code, already stored here
+    added: { type: Number, default: 0, min: 0 },
+    removed: { type: Number, default: 0, min: 0 },
+    changed: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false },
+);
+
+const ModelDriftSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["none", "open", "cleared", "dismissed"],
+      default: "none",
+    },
+    modelRef: { type: String, default: "" },
+    // When this drift was first seen, and when the plugin last confirmed it.
+    detectedAt: { type: Date, default: null },
+    checkedAt: { type: Date, default: null },
+    // The project version the plugin compared against.
+    basisVersion: { type: Number, default: 0 },
+    counts: {
+      added: { type: Number, default: 0 },
+      removed: { type: Number, default: 0 },
+      changed: { type: Number, default: 0 },
+      linesAffected: { type: Number, default: 0 },
+      elementsChecked: { type: Number, default: 0 },
+    },
+    lines: { type: [ModelDriftLineSchema], default: [] },
+    // A stable digest of the per-line counts, so re-reporting a drift that was
+    // dismissed does not reopen it, and the owner is emailed once per drift.
+    signature: { type: String, default: "" },
+    productVersion: { type: String, default: "" },
+    clearedAt: { type: Date, default: null },
+    clearedBy: { type: String, enum: ["", "takeoff-save", "clean-check", "dismissed"], default: "" },
+    dismissedReason: { type: String, default: "" },
+    notifiedAt: { type: Date, default: null },
+    // ModelDriftEvent row for the success metric; one per drift opened.
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
+  },
+  { _id: false },
+);
+
 // One Revit room as QUIV measures it (QUIV 4.0.2+): floor finish, floor area,
 // skirting run and, when the model has one, the wall finish area. Sent as the
 // top-level `roomFinishes` list on a Revit save and read by Ada's
@@ -1058,6 +1121,9 @@ const TakeoffProjectSchema = new mongoose.Schema(
     certificates: { type: [CertificateSchema], default: [] },
     finalAccount: { type: FinalAccountSchema, default: () => ({}) },
     models: { type: ProjectModelsSchema, default: () => ({}) },
+    // Additive: absent on every project saved before it existed, and plugins
+    // that read the project ignore unknown fields. See ModelDriftSchema.
+    modelDrift: { type: ModelDriftSchema, default: undefined },
     pmTrackerOnly: { type: Boolean, default: false },
     projectManagement: {
       type: ProjectManagementSchema,
