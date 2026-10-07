@@ -173,3 +173,62 @@ test("a failing channel feed never stops the poll or the drain", async () => {
   assert.deepEqual(calls.map((c) => c.name), ["video-poll", "release-notices"]);
   assert.deepEqual(out.freeLibrary, { ok: false, error: "feed timed out" });
 });
+
+/* The campaign sweep (util/campaignSend.js): the safety net for a marketing
+   send the API could not finish. It rides on EVERY scheduled invocation, last,
+   with a budget inside the function's timeout, and never fails the job. */
+
+function withSweep(sweep) {
+  const f = fakeJobs();
+  f.jobs.runCampaignSweep = async (arg) => {
+    f.calls.push({ name: "campaign-sweep", arg });
+    return sweep ? sweep(arg) : { ok: true, checked: 0, results: [] };
+  };
+  return f;
+}
+
+test("the campaign sweep runs last on every job, with a budget a minute inside the time left", async () => {
+  for (const [job, before] of [
+    ["video-poll", ["video-poll", "release-notices"]],
+    ["auto-renew", ["auto-renew"]],
+    ["expiry-notifier", ["expiry-notifier", "ops-digest", "unconfirmed-sweep", "sync-indexes"]],
+    ["release-notices", ["release-notices"]],
+  ]) {
+    const { jobs, calls } = withSweep();
+    const out = await quietly(() => runJob(job, jobs, context));
+    assert.deepEqual(calls.map((c) => c.name), [...before, "campaign-sweep"], job);
+    const { deadlineMs } = calls.at(-1).arg;
+    assert.ok(deadlineMs > 0 && deadlineMs <= 5 * 60 * 1000, `${job}: five minutes at most`);
+    assert.deepEqual(out.campaignSweep, { ok: true, checked: 0, results: [] });
+  }
+
+  const { jobs, calls } = withSweep();
+  await quietly(() => runJob("auto-renew", jobs, { getRemainingTimeInMillis: () => 3 * 60 * 1000 }));
+  assert.ok(calls.at(-1).arg.deadlineMs <= 2 * 60 * 1000, "a minute short of what is left");
+});
+
+test("the campaign sweep failing never fails the job", async () => {
+  const { jobs } = withSweep(() => {
+    throw new Error("Mongo went away");
+  });
+  const out = await quietly(() => runJob("video-poll", jobs, context));
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.campaignSweep, { ok: false, error: "Mongo went away" });
+});
+
+test("a failing video poll still runs the campaign sweep, and still throws the poll's error", async () => {
+  const pollError = new Error("YouTube quota exceeded");
+  const { jobs, calls } = withSweep();
+  jobs.runVideoPoll = async () => {
+    throw pollError;
+  };
+  await quietly(() => assert.rejects(runJob("video-poll", jobs, context), (err) => err === pollError));
+  assert.equal(calls.at(-1).name, "campaign-sweep");
+});
+
+test("with under a minute and a quarter left, the sweep is skipped rather than started", async () => {
+  const { jobs, calls } = withSweep();
+  const out = await quietly(() => runJob("auto-renew", jobs, { getRemainingTimeInMillis: () => 70 * 1000 }));
+  assert.ok(!calls.some((c) => c.name === "campaign-sweep"));
+  assert.equal(out.campaignSweep.skipped, true);
+});

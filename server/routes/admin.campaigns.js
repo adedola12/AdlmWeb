@@ -28,10 +28,14 @@ import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { Campaign } from "../models/Campaign.js";
 import { Product } from "../models/Product.js";
 import { sendMail } from "../util/mailer.js";
-import { mapWithPool } from "../util/sendPool.js";
-import { isSesSelected, sendRatePerSecond } from "../util/sesTransport.js";
 import { marketingMessage } from "../util/emailContent.js";
-import { writeAudit, reqAuditContext } from "../util/audit.js";
+import { reqAuditContext } from "../util/audit.js";
+import {
+  runCampaignSend,
+  mongoStore as campaignStore,
+  ROUTE_BUDGET_MS,
+  LOCK_MARGIN_MS,
+} from "../util/campaignSend.js";
 import {
   AUDIENCES,
   resolveAudience,
@@ -42,29 +46,9 @@ import {
 const router = express.Router();
 const hub = [requireAuth, requirePermission("adminhub")];
 
-/**
- * How fast a campaign goes out.
- *
- * CAMPAIGN_GAP_MS used to be a sleep between one send and the next, which made
- * three hundred recipients a two-minute job and eight hundred a five-minute
- * one. It is now the pacing for a transport that cannot tell us its limit:
- * 400ms between sends is 2.5 a second, which is a guess, and a guess is the
- * best available answer when the provider will not say.
- *
- * SES will say. So when SES is carrying the mail the gap is replaced by its
- * real per-second ceiling and as many sends in flight as that ceiling can
- * feed — the same campaign in under a minute, without ever exceeding what the
- * account is allowed.
- */
-const GAP_MS = Number(process.env.CAMPAIGN_GAP_MS || 400);
-
-async function campaignPacing() {
-  if (!isSesSelected()) return { concurrency: 1, ratePerSecond: 1000 / GAP_MS };
-  const ratePerSecond = await sendRatePerSecond();
-  const concurrency =
-    Number(process.env.CAMPAIGN_CONCURRENCY) || Math.max(1, Math.ceil(ratePerSecond));
-  return { concurrency, ratePerSecond };
-}
+// How fast a campaign goes out, and the send itself, live in
+// util/campaignSend.js, shared with the scheduled sweeper that finishes a send
+// this route could not.
 
 const shape = (c) => ({
   id: String(c._id),
@@ -246,7 +230,7 @@ router.post("/:id/test", ...hub, async (req, res, next) => {
 
 router.post("/:id/send", ...hub, async (req, res, next) => {
   try {
-    const c = await Campaign.findById(req.params.id);
+    const c = await Campaign.findById(req.params.id).lean();
     if (!c) return res.status(404).json({ error: "No such campaign" });
 
     // Sending twice is the mistake with no undo, so it is refused at the
@@ -267,122 +251,62 @@ router.post("/:id/send", ...hub, async (req, res, next) => {
       });
     }
 
-    const people = await resolveAudience(c.audience, c.productKey)
-      .select("email firstName emailPrefs emailVerified")
-      .lean();
+    const people = await campaignStore.audience(c);
 
-    c.status = "sending";
-    c.stats = {
-      audience: people.length,
-      sent: 0,
-      skippedOptedOut: 0,
-      skippedUnverified: 0,
-      failed: 0,
-    };
-    await c.save();
-
-    // Answer now, send in the background. Three hundred sends at 400ms is two
-    // minutes, and a request held open that long is a gateway timeout and an
-    // admin who does not know whether it worked.
-    res.json({ ok: true, started: people.length });
-
-    let sent = 0;
-    let optedOut = 0;
-    let unverified = 0;
-    let failed = 0;
-
-    // Consent is settled before a single message is queued, so the pool only
-    // ever holds people who should actually receive this. Filtering inside the
-    // worker would have the skipped recipients occupying rate-limit slots they
-    // do not need.
-    const mailable = [];
-    for (const u of people) {
-      if (u.emailPrefs?.marketing === false) optedOut++;
-      // An unverified address is one nobody has proved exists. Marketing to it
-      // buys nothing and costs sender reputation on a bounce.
-      else if (!u.emailVerified) unverified++;
-      else mailable.push(u);
-    }
-
-    const { concurrency, ratePerSecond } = await campaignPacing();
-
-    await mapWithPool(
-      mailable,
-      async (u) => {
-        const optOut = unsubscribeUrl(u._id);
-        const r = marketingMessage({
-          firstName: u.firstName,
-          subject: c.subject,
-          preheader: c.preheader,
-          heading: c.heading,
-          body: c.body,
-          ctaLabel: c.ctaLabel,
-          ctaHref: c.ctaHref,
-          unsubscribeUrl: optOut,
-        });
-        await sendMail({
-          to: u.email,
-          subject: r.subject,
-          html: r.html,
-          templateKey: "marketing.campaign",
-          // Marketing mail without a header-level opt-out is what Gmail's bulk
-          // sender rules exist to punish. The footer link stays too — this is
-          // the same URL, reachable from the client's own chrome.
-          listUnsubscribe: optOut,
-          // Routes this send to MarketingConfigSet, the only configuration set
-          // that records opens and clicks, and keeps the recipient against this
-          // campaign in EmailSend. Without it a campaign goes out on the
-          // identity default set and is never measured. Transactional mail
-          // must not pass this; see models/EmailSend.js.
-          track: { campaign: String(c._id) },
-        });
-      },
-      {
-        concurrency,
-        ratePerSecond,
-        onResult: (u, result) => {
-          if (result.ok) sent++;
-          else {
-            failed++;
-            console.error(`[campaign ${c._id}] ${u.email}:`, result.error?.message || result.error);
-          }
-        },
-      },
-    );
-
-    await Campaign.updateOne(
-      { _id: c._id },
+    // The move to "sending" is one conditional update, so two requests that
+    // both got past the checks above cannot both start a send. It also takes
+    // the lock the sweeper respects, until this run's deadline has passed.
+    const startedAt = Date.now();
+    const deadlineAt = startedAt + ROUTE_BUDGET_MS;
+    const lockUntil = new Date(deadlineAt + LOCK_MARGIN_MS);
+    const started = await Campaign.findOneAndUpdate(
+      { _id: c._id, status: { $nin: ["sent", "sending"] } },
       {
         $set: {
-          status: "sent",
-          sentAt: new Date(),
+          status: "sending",
+          sendStartedAt: new Date(startedAt),
           sentByEmail: req.user?.email || "",
-          "stats.sent": sent,
-          "stats.skippedOptedOut": optedOut,
-          "stats.skippedUnverified": unverified,
-          "stats.failed": failed,
+          sentById: req.user?._id || null,
+          sweepLockedUntil: lockUntil,
+          failedIds: [],
+          auditedAt: null,
+          stats: {
+            audience: people.length,
+            sent: 0,
+            skippedOptedOut: 0,
+            skippedUnverified: 0,
+            failed: 0,
+          },
         },
       },
-    );
+      { new: true },
+    ).lean();
+    if (!started) {
+      return res.status(409).json({ error: "This is going out now." });
+    }
 
-    await writeAudit({
-      actorId: req.user?._id,
-      actorEmail: req.user?.email,
-      action: "campaign.send",
-      status: 200,
-      ...reqAuditContext(req),
-      meta: {
-        campaign: String(c._id),
-        subject: c.subject,
-        audience: c.audience,
-        sent,
-        optedOut,
-        unverified,
-        failed,
-      },
-    });
+    // Answer now, send in the background. A request held open for the whole
+    // send is a gateway timeout and an admin who does not know whether it
+    // worked. On Lambda the background work is not promised to finish, which
+    // is why the send lives in util/campaignSend.js: whatever this run does not
+    // get through, the scheduled sweeper picks up from the EmailSend ledger,
+    // and nobody already mailed is mailed again.
+    res.json({ ok: true, started: people.length });
+
+    try {
+      await runCampaignSend(started, {
+        deadlineAt,
+        people,
+        auditContext: reqAuditContext(req),
+      });
+    } catch (err) {
+      console.error(`[campaign ${c._id}] send stopped:`, err?.message || err);
+    } finally {
+      await campaignStore.releaseLock(c._id, lockUntil).catch(() => {});
+    }
   } catch (err) {
-    next(err);
+    if (res.headersSent) console.error(`[campaign ${req.params.id}]`, err?.message || err);
+    else next(err);
   }
 });
 
