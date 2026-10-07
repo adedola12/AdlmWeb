@@ -7,18 +7,16 @@ let auth = { user: null };
 vi.mock("../store.jsx", () => ({ useAuth: () => auth }));
 const { useProjectHref } = await import("./useProjectHref.js");
 
-// Where a project card goes USED to depend on the viewer: while /work/* was
-// staff-only, a customer linked there was bounced back to the classic workspace
-// by NewBuildGate — right destination, extra hop.
+// Where a project card goes is decided per VIEWER, in one place
+// (lib/newBuildAccess.js), and since go-live the answer is Richard's project
+// page for everybody. Until 1 October 2026 a customer's card went to the
+// classic workspace, and that branch outlived the gate it mirrored, so
+// customers kept landing on classic after launch.
 //
-// Since 5 Oct 2026 the new page is everybody's, so the card is the same for
-// every reader. The tests below are the ones that fail if a role check is put
-// back, which is how a change like this gets quietly reverted: somebody
-// restores canViewPreview while fixing something nearby.
-// Where a project card goes is decided per VIEWER (lib/newBuildAccess.js), and
-// since go-live (1 October 2026) the answer is Richard's project page for
-// everybody. Until then a customer's card went to the classic workspace, and
-// that branch outlived the gate it mirrored: customers kept landing on classic.
+// The tests below are the ones that fail if a role check is put back, which is
+// how a change like this gets quietly reverted: somebody restores
+// canViewPreview while fixing something nearby. They assert the ANSWER, not the
+// mechanism, so raising GATE_NEW_BUILD is still a one-line change.
 
 function Probe({ project }) {
   const href = useProjectHref();
@@ -78,9 +76,6 @@ describe("what a card links to", () => {
     // the route about where a project lives.
     auth = { user: { _id: "u1", role: "user", permissions: [] } };
     expect(hrefFor(p)).toBe(NEW);
-  it("sends a customer to the new project page, now the new build is the build", () => {
-    auth = { user: { _id: "u1", role: "user", permissions: [] } };
-    expect(hrefFor(p)).toBe("/work/project/planswift/ikoyi-complex");
   });
 
   it("sends staff to the same place", () => {
@@ -105,11 +100,5 @@ describe("what a card links to", () => {
     auth = { user: { _id: "u1", role: "user" } };
     expect(hrefFor({ productKey: "archicad", slug: "tower" })).toBe("/archicad/tower/boq");
     expect(hrefFor({ productKey: "rategen" })).toBe("/rategen");
-  it("sends a signed-out visitor there too — the route asks them to sign in first", () => {
-    // Both /work/project and /projects/:tool sit behind ProtectedRoute, which
-    // carries ?next back to the page asked for, so there is nothing gained by
-    // pointing a signed-out visitor somewhere else.
-    auth = { user: null };
-    expect(hrefFor(p)).toBe("/work/project/planswift/ikoyi-complex");
   });
 });

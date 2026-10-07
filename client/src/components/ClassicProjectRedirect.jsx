@@ -79,7 +79,6 @@ export default function ClassicProjectRedirect({ children }) {
     // decision. ?classic=1 below is the way to each of them in the meantime and
     // must keep working until they are filled — it is the only route to a
     // capability the new build has not got yet.
-    newBuild: true,
     newBuild: seesNewBuild(user),
   });
 
