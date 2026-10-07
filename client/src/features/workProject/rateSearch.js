@@ -212,10 +212,27 @@ export function searchRates(
       a.description.localeCompare(b.description),
   );
 
+  // ROOM FOR A RATE THAT CONVERTS.
+  //
+  // Sorted alone, rates already in the line's unit fill every place first. On a
+  // real m2 lintel line, "concrete" found eight m2 rates and the m3 concrete
+  // rates the QS was after never appeared, so the conversion could not be
+  // reached by searching the obvious word. Up to three places are kept for
+  // rates that convert, after the ones in the line's own unit; any place left
+  // over goes back to whichever list has more.
+  const n = Math.max(1, Math.min(50, limit));
+  const same = out.filter((r) => r.canApply && !r.convert);
+  const conv = out.filter((r) => r.convert);
+  const rest = out.filter((r) => !r.canApply);
+  const convTake = Math.min(conv.length, 3, n);
+  const sameTake = Math.min(same.length, n - convTake);
+  const picked = [...same.slice(0, sameTake), ...conv.slice(0, convTake)];
+  picked.push(...conv.slice(convTake, convTake + (n - picked.length)));
+  picked.push(...rest.slice(0, n - picked.length));
+
   // Rebuilt rather than destructured, so the ranking fields do not leak into
   // what a screen renders.
-  return out
-    .slice(0, Math.max(1, Math.min(50, limit)))
+  return picked
     .map((r) => ({
       rateId: r.rateId,
       description: r.description,

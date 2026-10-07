@@ -7,10 +7,10 @@ let auth = { user: null };
 vi.mock("../store.jsx", () => ({ useAuth: () => auth }));
 const { useProjectHref } = await import("./useProjectHref.js");
 
-// Where a project card goes depends on the VIEWER, not the project: until
-// 1 October only staff may open Richard's project page, and a customer linked
-// there is bounced back to the classic workspace by NewBuildGate. Right
-// destination, but an extra hop on the journey a QS makes most.
+// Where a project card goes is decided per VIEWER (lib/newBuildAccess.js), and
+// since go-live (1 October 2026) the answer is Richard's project page for
+// everybody. Until then a customer's card went to the classic workspace, and
+// that branch outlived the gate it mirrored: customers kept landing on classic.
 
 function Probe({ project }) {
   const href = useProjectHref();
@@ -62,9 +62,9 @@ describe("the plain helper", () => {
 describe("what a card links to", () => {
   const p = { productKey: "planswift", slug: "ikoyi-complex" };
 
-  it("sends a customer to the classic workspace, with no redirect in between", () => {
+  it("sends a customer to the new project page, now the new build is the build", () => {
     auth = { user: { _id: "u1", role: "user", permissions: [] } };
-    expect(hrefFor(p)).toBe("/projects/planswift?project=ikoyi-complex");
+    expect(hrefFor(p)).toBe("/work/project/planswift/ikoyi-complex");
   });
 
   it("sends staff to the new project page", () => {
@@ -79,8 +79,11 @@ describe("what a card links to", () => {
     expect(hrefFor(p)).toBe("/work/project/planswift/ikoyi-complex");
   });
 
-  it("sends a signed-out visitor to classic", () => {
+  it("sends a signed-out visitor there too — the route asks them to sign in first", () => {
+    // Both /work/project and /projects/:tool sit behind ProtectedRoute, which
+    // carries ?next back to the page asked for, so there is nothing gained by
+    // pointing a signed-out visitor somewhere else.
     auth = { user: null };
-    expect(hrefFor(p)).toBe("/projects/planswift?project=ikoyi-complex");
+    expect(hrefFor(p)).toBe("/work/project/planswift/ikoyi-complex");
   });
 });
