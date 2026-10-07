@@ -26,7 +26,7 @@ import { ensureRolesSeededOnce } from "./util/rbac.js";
 import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
-import { buildCorsOptions } from "./util/corsPolicy.js";
+import { buildCorsOptions, corsRejectionHandler } from "./util/corsPolicy.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
@@ -572,6 +572,11 @@ if (SERVE_CLIENT && hasClientBuild) {
 }
 
 /* -------- helpful error handling -------- */
+// A refused browser origin: 403 "Not allowed by CORS: <origin>", plus one
+// rate-limited "cors_rejected" log line, because the request never reached
+// morgan above. A malformed or oversized body goes on to the 400 and 413
+// below, whatever it says. See util/corsPolicy.js.
+app.use(corsRejectionHandler());
 app.use((err, _req, res, next) => {
   if (err?.type === "entity.too.large") {
     return res.status(413).json({
@@ -581,9 +586,6 @@ app.use((err, _req, res, next) => {
   }
   if (err?.type === "entity.parse.failed") {
     return res.status(400).json({ error: "Invalid JSON body." });
-  }
-  if (err && /Not allowed by CORS/.test(err.message)) {
-    return res.status(403).json({ error: err.message });
   }
   next(err);
 });
