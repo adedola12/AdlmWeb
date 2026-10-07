@@ -27,7 +27,7 @@ import { AdmTable, AdmTwo, AdmDim, AdmChip } from "./adminUi.jsx";
 const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   civil3d: "CIVIQ",
   rategen: "RateGen",
   "qs-takeoff": "Time Pro",
@@ -98,7 +98,7 @@ export default function DsAdminOrganisations() {
           <AdmDim>nothing</AdmDim>
         ),
     },
-    { h: "Seats", num: true, cell: (f) => (f.seats ? f.seats : <AdmDim>—</AdmDim>) },
+    { h: "Seats", num: true, cell: (f) => (f.seats ? f.seats : <AdmDim>–</AdmDim>) },
     {
       h: "Licences",
       cell: (f) => (

@@ -147,7 +147,7 @@ export default function DsAdminInstallations() {
             onClick={() => setView(key)}
           >
             <span>{label}</span>
-            <em className="adm-tab-n">{counts[key] ?? "—"}</em>
+            <em className="adm-tab-n">{counts[key] ?? "–"}</em>
           </button>
         ))}
       </div>

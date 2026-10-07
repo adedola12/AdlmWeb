@@ -157,7 +157,7 @@ export default function DsCheckoutSummary() {
               {r.name}
               <i className="qt-q"> × {r.seats}</i>
             </span>
-            <b>{r.known ? fmt(r.amount, currency) : "—"}</b>
+            <b>{r.known ? fmt(r.amount, currency) : "–"}</b>
           </div>
         ))}
 

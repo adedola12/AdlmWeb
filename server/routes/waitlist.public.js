@@ -25,6 +25,12 @@ const ALLOWED_TOPICS = new Set([
   "Individual QS",
   "Students & early career",
   "Institutions",
+  // The Beyond BIM registration form. It is on a generated page that cannot
+  // carry a hidden topic field, so the client recognises it by its form id and
+  // sends this label; the page itself had no action and no handler at all, so
+  // every registration for the programme went nowhere. Its fourteen answers
+  // arrive as labelled lines in `message` — see client/src/ds/WaitlistForm.jsx.
+  "Beyond BIM registration",
 ]);
 
 // Generous enough for a real person who mistypes their email twice, tight

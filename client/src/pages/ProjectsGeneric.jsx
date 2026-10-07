@@ -41,20 +41,29 @@ import {
   variationRow,
 } from "../features/projects/lib/projectRows.js";
 import { reconcileBill } from "../features/projects/rateReconcile.js";
+import { preliminaryPercentOf } from "../features/projects/lib/projectTotals.js";
 // The same product/host table the gallery names its tools from (P0.4), so the
 // two screens say "Measure in QUIV, inside Revit" in exactly the same words.
 import { SOURCES } from "../lib/projectGallery.js";
+import { isFolderMarker } from "../lib/folderMarker.js";
 import {
   budgetDrivenCodes as budgetDrivenCodesFor,
   nextRateStamp,
   rateEditState,
   rateFieldsForSave,
 } from "../features/projects/rateStamp.js";
+import {
+  mergePricedProject,
+  priceFromRateBody,
+  priceFromRateFailure,
+  priceFromRatePath,
+} from "../features/projects/priceFromRate.js";
 
 // His orange palette, for a note that is a warning rather than information.
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
 const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" };
 const NOTE_FULL = { gridColumn: "1 / -1", margin: 0 };
+import SampleProjectsStrip from "../features/projects/SampleProjectsStrip.jsx";
 import {
   allCategoriesForProductKey,
   deriveItemCategory,
@@ -1162,6 +1171,8 @@ export default function ProjectsGeneric() {
   // failure relabels an empty grid "your projects could not be listed".
   const [listFailed, setListFailed] = React.useState(false);
   const [storageInfo, setStorageInfo] = React.useState(null);
+  // Read-only learning samples for this product (GET /projects/:tool/samples).
+  const [samples, setSamples] = React.useState([]);
 
   // explorer selection
   const [selectedMap, setSelectedMap] = React.useState({});
@@ -1222,6 +1233,11 @@ export default function ProjectsGeneric() {
   // Set true when the user reorders bill items so the Save button activates
   // (item order isn't otherwise part of the dirty check). Reset on project
   // load — see the effect just after selectedId is defined.
+  // The items ARRAY changed — reordered, a row deleted, a delete undone. Every
+  // other dirty check compares the per-row edit maps, and none of them notices
+  // a row leaving: an unpriced row contributes nothing to any map, and
+  // ratesEqual reads a missing key and an empty cell as the same 0. So deleting
+  // one left Save disabled and the row came back on the next load.
   const [orderDirty, setOrderDirty] = React.useState(false);
   // Contract lock state — populated from the loaded project.
   const [contract, setContract] = React.useState({
@@ -2185,15 +2201,23 @@ export default function ProjectsGeneric() {
     setListFailed(false);
 
     try {
-      const [list, storage] = await Promise.all([
+      const [list, storage, sampleList] = await Promise.all([
         apiAuthed(endpoints.list, { token: accessToken }),
         isMaterialsTool(tool)
           ? Promise.resolve(null)
           : apiAuthed(`/projects/${normTool(tool)}/storage`, { token: accessToken }).catch(() => null),
+        isMaterialsTool(tool)
+          ? Promise.resolve([])
+          : apiAuthed(`/projects/${normTool(tool)}/samples`, { token: accessToken }).catch(() => []),
       ]);
       const safeList = Array.isArray(list) ? list : [];
+      const safeSamples = Array.isArray(sampleList) ? sampleList : [];
       if (storage) setStorageInfo(storage);
       setRows(safeList);
+      setSamples(safeSamples);
+      // Samples are openable like any project but never join the grid, so the
+      // bulk select / delete / merge actions can't reach them.
+      const openable = [...safeList, ...safeSamples];
 
       if (!keepSelection) setSelectedMap({});
 
@@ -2203,12 +2227,12 @@ export default function ProjectsGeneric() {
         const isObjectId = /^[a-f\d]{24}$/i.test(preselectKey);
         if (isObjectId) {
           // Legacy: load by ObjectId
-          const found = safeList.find((x) => rowId(x) === preselectKey);
+          const found = openable.find((x) => rowId(x) === preselectKey);
           if (found) await view(preselectKey);
           else closeProject();
         } else {
           // New: load by slug
-          const found = safeList.find((x) => x.slug === preselectKey);
+          const found = openable.find((x) => x.slug === preselectKey);
           if (found) await view(rowId(found));
           else {
             // Try loading by slug from server directly
@@ -2229,7 +2253,7 @@ export default function ProjectsGeneric() {
       } else {
         // keep current open project if still valid
         if (selectedId) {
-          const stillThere = safeList.some((x) => rowId(x) === selectedId);
+          const stillThere = openable.some((x) => rowId(x) === selectedId);
           if (!stillThere) closeProject();
         }
       }
@@ -2621,6 +2645,7 @@ export default function ProjectsGeneric() {
     const prev = ratesRef.current || {};
     const next = { ...prev, [k0]: value };
     const stamped = [k0];
+    const pricedCodes = [it?.code];
     const blank = String(value ?? "").trim() === "";
     if (groupId && isGroupLinked(groupId) && !blank) {
       for (let j = 0; j < its.length; j++) {
@@ -2634,12 +2659,75 @@ export default function ProjectsGeneric() {
         if (onlyFillEmpty && existing !== 0) continue;
         next[kj] = value;
         stamped.push(kj);
+        pricedCodes.push(its[j]?.code);
       }
     }
     setRates(next);
     // A rate carried onto a linked sibling was applied by the QS just as much
     // as the line he typed into, so it carries the same stamp.
     stampRates(stamped, meta, { keepRateKey: String(it?.appliedRateKey || "") });
+    // A pick out of the library prices the material and labour behind it
+    // straight away, on every line the rate just landed on. The materials view
+    // picks component prices, not rates, so it has no build-up to write.
+    if (!showMaterials) {
+      const body = priceFromRateBody(value, meta);
+      if (body) priceLinesFromRate(pricedCodes, body);
+    }
+  }
+
+  // Price the Budget of each line from the rate the QS just picked. The server
+  // writes the rows and saves them; the page takes back only what that changed
+  // (priceFromRate.js), so his other unsaved edits survive. Save is held off
+  // while this runs, because the save's baseVersion must be the one it returns.
+  async function priceLinesFromRate(codes, body) {
+    const projectId = selectedId;
+    const list = [
+      ...new Set(codes.map((c) => String(c ?? "").trim()).filter(Boolean)),
+    ];
+    if (!projectId || !list.length) return;
+    setSaving(true);
+    const priced = [];
+    let last = null;
+    let failure = "";
+    const warnings = [];
+    try {
+      for (const code of list) {
+        try {
+          last = await apiAuthed(
+            priceFromRatePath(endpoints.one(projectId), code),
+            { token: accessToken, method: "POST", body },
+          );
+          priced.push(code);
+          for (const w of last?._rateWarnings || []) warnings.push(w);
+        } catch (e) {
+          failure = priceFromRateFailure(e);
+          // The same rate and the same access fail the same way on every line.
+          break;
+        }
+      }
+    } finally {
+      // The QS may have opened another project while this ran.
+      if (last) {
+        setSel((cur) =>
+          String(cur?._id || cur?.id || "") === String(projectId)
+            ? mergePricedProject(cur, last, priced)
+            : cur,
+        );
+      }
+      setSaving(false);
+    }
+    if (failure) {
+      fb.toast({ tone: "warning", title: "Budget not priced", msg: failure });
+    } else if (priced.length) {
+      fb.toast({
+        tone: "success",
+        title:
+          priced.length === 1
+            ? "Material and labour priced from the rate"
+            : `Material and labour priced on ${priced.length} lines`,
+        msg: warnings.length ? warnings.join(" ") : "See the Budget tab.",
+      });
+    }
   }
   function handleActualQtyChange(rowIndex, value) {
     if (!sel) return;
@@ -3037,6 +3125,7 @@ export default function ProjectsGeneric() {
     });
     its.splice(rowIndex, 1);
     setSel((prev) => (prev ? { ...prev, items: its } : prev));
+    setOrderDirty(true); // a removed row is a change to save, priced or not
     // clear rate/status caches for the removed index
     setRates((prev) => {
       const next = {};
@@ -3062,6 +3151,9 @@ export default function ProjectsGeneric() {
           its.splice(at, 0, item);
           return { ...cur, items: its };
         });
+        // Putting the row back is a change to the array too. Without this, an
+        // undo of an unpriced row left Save disabled and the undo was lost.
+        setOrderDirty(true);
         if (cachedRate != null) {
           // Re-seed the rate cache at the new index's key so the row
           // shows its original rate immediately, not a blank cell.
@@ -4467,8 +4559,11 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // compute all rows
+  // compute all rows. HERON's folder markers ("--- GF ---") are dropped here, after
+  // the map, so every row keeps its index into items[] (row.i and the rate/status maps
+  // are keyed by it) while the Bill, its counts and its exports never see a marker.
   const computedAll = items.map((it, i) => {
+    if (isFolderMarker(it)) return null;
     const k = itemKey(it, i);
     const qty = safeNum(it?.qty);
     const rate =
@@ -4550,17 +4645,13 @@ export default function ProjectsGeneric() {
       markedAt:
         statusField === "purchased" ? it?.purchasedAt || null : it?.completedAt || null,
     };
-  });
+  }).filter(Boolean);
   const grossAmount = computedAll.reduce(
     (acc, row) => acc + safeNum(row.fullAmount),
     0,
   );
   const valuedAmount = computedAll.reduce(
     (acc, row) => acc + safeNum(row.valuedAmount),
-    0,
-  );
-  const totalAmount = computedAll.reduce(
-    (acc, row) => acc + safeNum(row.amount),
     0,
   );
 
@@ -4586,7 +4677,7 @@ export default function ProjectsGeneric() {
   const variationsTotalForOverview = approvedVariationsTotal(variations);
   const variationsDoneAmount = approvedVariationsEarned(variations);
 
-  const preliminaryPctForOverview = safeNum(contract?.preliminaryPercent) || 7.5;
+  const preliminaryPctForOverview = preliminaryPercentOf(contract);
   const preliminaryPoolForOverview =
     ((grossAmount + provTotalForOverview) * preliminaryPctForOverview) / 100;
   // Pro-rate the preliminary pool by the allocation of each completed item.
@@ -4618,7 +4709,6 @@ export default function ProjectsGeneric() {
   // Full outstanding — what's still left to earn / claim.
   const fullRemainingAmount = Math.max(0, fullProjectTotal - fullValuedAmount);
   const progressCount = computedAll.filter((row) => row.isMarked).length;
-  const partialCount = computedAll.filter((row) => row.isPartial).length;
   // Partial-aware progress: full point for ratified items, fractional for
   // in-progress ones. Matches the server math so PM + BoQ tiles agree.
   const progressShare = computedAll.reduce(
@@ -5751,6 +5841,8 @@ export default function ProjectsGeneric() {
 
         <main>
             {!sel ? (
+              <>
+              <SampleProjectsStrip samples={samples} onOpenProject={view} productKey={normTool(tool)} />
               <ProjectExplorerGrid
                 rowsShown={rowsShown}
                 selectedIdsCount={selectedIds.length}
@@ -5786,6 +5878,7 @@ export default function ProjectsGeneric() {
                 hostName={gallerySource?.host || ""}
                 isMaterials={showMaterials}
               />
+              </>
             ) : (
               <ProjectOpenView
                 actualCoverageCount={actualCoverageCount}
@@ -5938,6 +6031,7 @@ export default function ProjectsGeneric() {
                 projectId={selectedId}
                 accessToken={accessToken}
                 access={sel?._access}
+                sampleInfo={sel?.isSample ? sel?.sample || {} : null}
                 linkedSummaries={sel?.linkedSummaries || []}
                 onLinkedChange={(updated) => setSel(updated)}
                 onDeleteItem={deleteItem}

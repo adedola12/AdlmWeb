@@ -48,7 +48,7 @@ const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
   rategen: "RateGen",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   "qs-takeoff": "Time Pro",
   civil3d: "CIVIQ",
   archicad: "ArchiCAD",
@@ -294,7 +294,7 @@ export default function DsWorkProject() {
                   <span className="wk-r">
                     <em className="wk-none">no rate</em>
                   </span>
-                  <span className="wk-w">—</span>
+                  <span className="wk-w">–</span>
                 </div>
               ))}
             </div>

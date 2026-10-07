@@ -29,6 +29,7 @@
 // exactly how it should leave the queue.
 
 import express from "express";
+import { Referral } from "../models/Referral.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { Purchase } from "../models/Purchase.js";
 import { User } from "../models/User.js";
@@ -99,6 +100,17 @@ router.get("/", async (req, res, next) => {
       .lean();
     const byId = new Map(users.map((u) => [String(u._id), u]));
 
+    // WHO SENT THIS CUSTOMER.
+    //
+    // No new admin screen is needed to answer "did the person I referred
+    // subscribe": every order already joins to its buyer here, and a referral
+    // is keyed by that same user. One extra query over the ids already in hand.
+    const refs = await Referral.find(
+      { referredUserId: { $in: ids } },
+      { referredUserId: 1, referrerEmail: 1, code: 1, convertedAt: 1 },
+    ).lean();
+    const refByUser = new Map(refs.map((r) => [String(r.referredUserId), r]));
+
     const items = rows.map((p) => {
       const u = byId.get(String(p.userId));
       const lines = p.lines || [];
@@ -140,6 +152,11 @@ router.get("/", async (req, res, next) => {
         createdAt: p.createdAt,
         decidedAt: p.decidedAt || null,
         decidedBy: p.decidedBy || "",
+        // Empty on the overwhelming majority of orders, which is why it sits
+        // beside the gateway reference rather than taking a column of its own.
+        referredBy: refByUser.get(String(p.userId))?.referrerEmail || "",
+        referralCode: refByUser.get(String(p.userId))?.code || "",
+        referralConverted: Boolean(refByUser.get(String(p.userId))?.convertedAt),
         blocked,
       };
     });

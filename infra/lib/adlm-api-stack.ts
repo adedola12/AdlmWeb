@@ -35,7 +35,9 @@ import {
   TimeZone,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { filesBucketName } from "./adlm-files-stack.js";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -57,6 +59,25 @@ import { AdlmConfig, reservedConcurrency } from "../config.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.resolve(__dirname, "..", "..", "server");
 const MPXJ_DIR = path.resolve(__dirname, "..", "..", "tools", "mpxj-converter");
+
+/**
+ * Files the API reads from disk at runtime, relative to server/. esbuild
+ * bundles only imports, so each is copied to the same relative path beside
+ * the ApiFn bundle (see commandHooks). Prefer an import for JSON (it travels
+ * inside the bundle); this list is for files that cannot be imported.
+ */
+const LAMBDA_DISK_ASSETS: { from: string; to: string }[] = [
+  {
+    from: "assets/ADLM-Installer-Hub-User-Guide.pdf",
+    to: "assets/ADLM-Installer-Hub-User-Guide.pdf",
+  },
+  // pdfkit's built-in fonts (Helvetica, Times, Courier...). pdfkit is bundled,
+  // and it reads these from `${__dirname}/data/*.afm`; in the bundle __dirname
+  // is the bundle's own folder, so without them every PDF using a built-in
+  // font (invoices, receipts, proposals, grading, ArchiCAD BoQ) fails with
+  // ENOENT on /var/task/data/Helvetica.afm (seen 4 and 12 Sep 2026).
+  { from: "node_modules/pdfkit/js/data", to: "data" },
+];
 
 export interface AdlmApiStackProps extends StackProps {
   config: AdlmConfig;
@@ -206,6 +227,25 @@ export class AdlmApiStack extends Stack {
           "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);" +
           "import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';" +
           "const __filename=__f(import.meta.url);const __dirname=__d(__filename);",
+        // esbuild only carries what is imported. Files the app reads from disk
+        // at runtime have to be copied beside the bundle by hand, or they are
+        // missing on Lambda while working locally. The Installer Hub user
+        // guide is attached to every purchase-approval email; before this it
+        // failed with ENOENT on /var/assets/... (server/util/userGuide.js
+        // resolves the bundle location, assets/<file> beside index.mjs).
+        // node, not cp/copy: the same command must run in Windows cmd, a
+        // Linux shell and the Docker bundling image.
+        commandHooks: {
+          beforeBundling: () => [],
+          beforeInstall: () => [],
+          afterBundling: (inputDir: string, outputDir: string) =>
+            LAMBDA_DISK_ASSETS.map(
+              ({ from, to }) =>
+                `node -e "require('fs').cpSync(process.argv[1],process.argv[2],{recursive:true})" ` +
+                `"${path.posix.join(inputDir.replace(/\\/g, "/"), from)}" ` +
+                `"${path.posix.join(outputDir.replace(/\\/g, "/"), to)}"`,
+            ),
+        },
       },
     });
     // Source maps are useless in CloudWatch without this.
@@ -466,11 +506,37 @@ export class AdlmApiStack extends Stack {
       marketingConfigSet.configurationSetName,
     );
 
+    // The private files bucket lives in its own stack (AdlmFiles), which
+    // grants this function's role; the API only needs its name.
+    if (cfg.filesBucket) {
+      fn.addEnvironment("FILES_BUCKET", filesBucketName(this.account, this.region));
+    }
+
     /* ─────────────────── Function URL ───────────────────
      * The plan requires verifying the API here BEFORE any DNS change, and it
      * leaves a known-good fallback hostname if CloudFront misbehaves mid-outage.
      */
-    const fnUrl = fn.addFunctionUrl({
+    // Provisioned concurrency lives on a published version, so traffic has to
+    // reach the function through an alias. With it on, the Function URL (and
+    // therefore CloudFront) and the warmer target the `live` alias; with it
+    // off, they target the function exactly as before. See
+    // config.apiProvisionedConcurrency for the cost and the reasoning.
+    //
+    // fn.currentVersion publishes a new version whenever the code or config
+    // changes, and CloudFormation moves the alias and waits for the new
+    // version's environments to finish INIT before the deploy completes, so a
+    // deploy never leaves the alias pointing at uninitialised environments.
+    const apiTarget: lambda.IFunction =
+      cfg.apiProvisionedConcurrency > 0
+        ? new lambda.Alias(this, "ApiLiveAlias", {
+            aliasName: "live",
+            version: fn.currentVersion,
+            provisionedConcurrentExecutions: cfg.apiProvisionedConcurrency,
+            description: "What CloudFront calls - kept initialised by provisioned concurrency",
+          })
+        : fn;
+
+    const fnUrl = (apiTarget as lambda.Function | lambda.Alias).addFunctionUrl({
       authType:
         cfg.functionUrlAuth === "AWS_IAM"
           ? lambda.FunctionUrlAuthType.AWS_IAM
@@ -479,6 +545,30 @@ export class AdlmApiStack extends Stack {
       // it here too would produce duplicate Access-Control-* headers, which
       // browsers reject.
     });
+
+    /* ────────── Origin verification (config.originVerify, item 0c) ──────────
+     * CloudFront adds a secret header that a request sent straight to the
+     * Function URL cannot know; server/middleware/originVerify.js checks it.
+     * Secrets Manager generates the value. CloudFront gets it through a
+     * {{resolve:secretsmanager}} dynamic reference, and the function reads it
+     * at cold start (server/lambda.js) with only the ARN in its environment,
+     * so the value is in no template, env var, git history or log. Not
+     * rotated: CloudFront holds a copy, so a rotation is a redeploy.
+     */
+    const originVerifySecret =
+      cfg.originVerify === "off"
+        ? undefined
+        : new secretsmanager.Secret(this, "OriginVerifySecret", {
+            description:
+              "ADLM API - header CloudFront adds so the API can tell it from a direct Function URL call",
+            generateSecretString: { passwordLength: 48, excludePunctuation: true },
+            removalPolicy: RemovalPolicy.RETAIN,
+          });
+    if (originVerifySecret) {
+      originVerifySecret.grantRead(fn);
+      fn.addEnvironment("ORIGIN_VERIFY_SECRET_ARN", originVerifySecret.secretArn);
+      fn.addEnvironment("ORIGIN_VERIFY_MODE", cfg.originVerify);
+    }
 
     /* ─────────────────── CloudFront ───────────────────
      * Terminates TLS at the edge (including Lagos), which is where the latency
@@ -503,6 +593,14 @@ export class AdlmApiStack extends Stack {
           readTimeout: Duration.seconds(cfg.originTimeoutSeconds),
           // Give a cold start room to finish rather than retrying it.
           keepaliveTimeout: Duration.seconds(60),
+          // Replaces any viewer-sent header of the same name.
+          ...(originVerifySecret
+            ? {
+                customHeaders: {
+                  "x-adlm-origin-verify": `{{resolve:secretsmanager:${originVerifySecret.secretArn}:SecretString}}`,
+                },
+              }
+            : {}),
         }),
         // An API must never be cached. This also keeps us clear of the 1,000
         // free invalidation paths per month, since there is nothing to invalidate.
@@ -951,7 +1049,9 @@ export class AdlmApiStack extends Stack {
         schedule: scheduler.ScheduleExpression.rate(
           Duration.minutes(cfg.warmIntervalMinutes),
         ),
-        target: new schedulerTargets.LambdaInvoke(fn, {
+        // The alias when provisioned concurrency is on, so the ping reaches the
+        // environments that serve traffic and keeps their Mongo socket fresh.
+        target: new schedulerTargets.LambdaInvoke(apiTarget, {
           input: scheduler.ScheduleTargetInput.fromObject({ __warm: true }),
           retryAttempts: 0,
           maxEventAge: Duration.minutes(cfg.warmIntervalMinutes),

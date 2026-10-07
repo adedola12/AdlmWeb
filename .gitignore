@@ -69,3 +69,6 @@ server/scripts/*.backup.*.json
 # working paper.
 server/scripts/checkpoint-draft*.json
 server/scripts/checkpoint-redraft*.json
+
+# Sample project seed output (scripts/seed-sample-projects.mjs)
+server/seed/samples/.out/

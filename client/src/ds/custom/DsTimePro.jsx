@@ -17,7 +17,7 @@ import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsTimePro() {
-  const price = useProductPricing("qs-takeoff", { monthly: 2000, yearly: 20000, install: 0 });
+  const price = useProductPricing("qs-takeoff", { monthly: 5000, yearly: 50000, install: 0 });
   return (
     <DsTimeProPage
       d={{

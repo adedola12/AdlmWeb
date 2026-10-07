@@ -14,6 +14,7 @@ import {
   FT2_PER_M2,
 } from "../../utils/archicadUnits.js";
 import { ARCHICAD_CATEGORIES } from "./archicadApi.js";
+import { sharedAccess, sharedAccessNote } from "./sharedAccess.js";
 
 // The four cost parts, in his tokens.
 const PARTS = [
@@ -105,6 +106,14 @@ export default function ArchiCADBudgetDashboard({
 }) {
   const totals = boq?.totals || {};
   const currency = boq?.currency || "NGN";
+  // A shared reader whose prices are hidden gets dashes and a note, not a
+  // dashboard of ₦0.00; a view-only reader gets no budget editor. The server
+  // refuses both anyway (routes/archicad.routes.js).
+  const access = sharedAccess(boq);
+  const hideMoney = access.moneyHidden;
+  const canEditBudget = access.canEdit && !hideMoney && !boq?.isSample;
+  const note = boq?.isSample ? null : sharedAccessNote(access);
+  const money = (v) => (hideMoney ? "–" : fmtMoney(v, currency));
   const grandTotal = safeNum(totals.grandTotal);
   const storedTarget = safeNum(boq?.targetBudget ?? totals.targetBudget);
   const [target, setTarget] = React.useState(storedTarget ? String(storedTarget) : "");
@@ -144,23 +153,29 @@ export default function ArchiCADBudgetDashboard({
 
   return (
     <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
+      {note ? (
+        <p className="mk-note" data-testid="archicad-shared-note" style={{ margin: 0, background: "var(--pal-light-wash)", color: "var(--pal-light-key)", borderColor: "var(--pal-light-line)" }}>
+          {note}
+        </p>
+      ) : null}
+
       {/* Summary tiles */}
       <div
         className="dsh-stats"
         style={{ marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}
       >
-        <StatCard label="Total material" value={fmtMoney(totals.materialAmount, currency)} />
-        <StatCard label="Total labour" value={fmtMoney(totals.labourAmount, currency)} />
-        <StatCard label="Total direct cost" value={fmtMoney(totals.directCost, currency)} />
-        <StatCard label="Margin" value={fmtMoney(totals.marginAmount, currency)} />
+        <StatCard label="Total material" value={money(totals.materialAmount)} />
+        <StatCard label="Total labour" value={money(totals.labourAmount)} />
+        <StatCard label="Total direct cost" value={money(totals.directCost)} />
+        <StatCard label="Margin" value={money(totals.marginAmount)} />
         <StatCard
           label="Total with margin"
-          value={fmtMoney(grandTotal, currency)}
+          value={money(grandTotal)}
           helper="Grand total"
         />
         <StatCard
           label={`Cost per ${areaLabel}`}
-          value={`${fmtMoney(costPerArea, currency)}`}
+          value={money(costPerArea)}
           helper={
             floorArea > 0
               ? `Floor area ${formatQty(dispFloorArea, 1)} ${areaLabel}`
@@ -169,7 +184,10 @@ export default function ArchiCADBudgetDashboard({
         />
       </div>
 
-      {/* Cost by category */}
+      {/* Cost by category, and the budget tracker: nothing but money, so a
+          reader with prices hidden does not get them at all. */}
+      {hideMoney ? null : (
+      <>
       <section className="wk-panel" style={{ marginBottom: 0 }}>
         <div className="wk-ph">
           <h2>Cost by category</h2>
@@ -185,12 +203,15 @@ export default function ArchiCADBudgetDashboard({
           <div>
             <h2>Budget tracker</h2>
             <div className="wk-locnote" style={{ marginTop: 4 }}>
-              Set a target budget for this project and track the estimate against it.
+              {canEditBudget
+                ? "Set a target budget for this project and track the estimate against it."
+                : "The estimate against the target budget the project owner set."}
             </div>
           </div>
         </div>
         <div style={{ padding: "18px 20px 20px" }}>
 
+        {canEditBudget ? (
         <form onSubmit={submitBudget} className="wk-bar" style={{ margin: 0, alignItems: "flex-end" }}>
           <label className="wk-f" style={{ flex: "0 1 260px", margin: 0 }}>
             <span>Target budget ({currency})</span>
@@ -213,9 +234,10 @@ export default function ArchiCADBudgetDashboard({
             Save budget
           </button>
         </form>
+        ) : null}
 
         {storedTarget > 0 ? (
-          <div className="dsh-meter" style={{ marginTop: 20 }}>
+          <div className="dsh-meter" style={{ marginTop: canEditBudget ? 20 : 0 }}>
             <div className="row">
             <div className="lab" style={{ flexWrap: "wrap" }}>
               <span>
@@ -240,12 +262,14 @@ export default function ArchiCADBudgetDashboard({
             </div>
           </div>
         ) : (
-          <p className="wk-locnote" style={{ margin: "16px 0 0" }}>
+          <p className="wk-locnote" style={{ margin: canEditBudget ? "16px 0 0" : 0 }}>
             No target budget set yet.
           </p>
         )}
         </div>
       </section>
+      </>
+      )}
     </div>
   );
 }

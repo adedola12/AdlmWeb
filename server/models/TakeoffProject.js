@@ -321,7 +321,8 @@ const ContractBaseItemSchema = new mongoose.Schema(
 // One numbered interim certificate. Cumulative-less-previous arithmetic:
 // each certificate carries its own cumulative value-to-date; the amount due
 // this period is derived as cumulativeValue minus the sum of all previous
-// certificates' `thisCertificate` totals. Retention / VAT / WHT are captured
+// certificates' `thisCertificate` totals. The arithmetic itself is in
+// util/certificateMaths.js, tested over the whole six-valuation sequence. Retention / VAT / WHT are captured
 // at the moment of issue so historical certs remain reproducible even if
 // the project settings change later.
 const CertificateSchema = new mongoose.Schema(
@@ -341,6 +342,14 @@ const CertificateSchema = new mongoose.Schema(
     whtPct: { type: Number, default: 2.5 },
     whtAmount: { type: Number, default: 0 },
     netPayable: { type: Number, default: 0 },
+    // A certificate can be NEGATIVE: when the value earned falls below what has
+    // already been certified (a certified variation later rejected, a downward
+    // re-measure), the interim certificate recovers the difference. That is
+    // ordinary practice, and it used to be clamped to zero — which printed ₦0
+    // payable and said nothing about the amount outstanding. Recorded so a
+    // screen and a PDF can both explain it.
+    overCertified: { type: Boolean, default: false },
+    overCertifiedBy: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ["draft", "approved", "paid"],
@@ -369,6 +378,13 @@ const FinalAccountSchema = new mongoose.Schema(
     retentionReleased: { type: Number, default: 0 },
     totalCertifiedToDate: { type: Number, default: 0 },
     agreedContractSum: { type: Number, default: 0 },
+    // The certifiable part of the agreed sum — measured + provisional +
+    // preliminaries, before contingency and VAT. `savings` is measured against
+    // THIS, not against agreedContractSum: neither contingency nor VAT is ever
+    // certified, so their difference is not a saving. util/finalAccountMath.js.
+    agreedCertifiableSum: { type: Number, default: 0 },
+    contingencyAtLock: { type: Number, default: 0 },
+    taxAtLock: { type: Number, default: 0 },
     finalContractValue: { type: Number, default: 0 },
     savings: { type: Number, default: 0 }, // positive = under-run, negative = over-run
     notes: { type: String, default: "" },
@@ -779,7 +795,7 @@ const CollaboratorSchema = new mongoose.Schema(
 // (same posture as the existing plaintext publicToken bearer secret).
 const ShareCodeSchema = new mongoose.Schema(
   {
-    codeHash: { type: String, required: true, index: true },
+    codeHash: { type: String, required: true }, // indexed below as shareCodes.codeHash
     codeLast4: { type: String, default: "" },
     codePlain: { type: String, default: "" },
     accessLevel: { type: String, enum: ["view", "full"], default: "view" },
@@ -849,9 +865,52 @@ const LinkedProjectSchema = new mongoose.Schema(
   { _id: true },
 );
 
+// Learning material shown to every subscriber of the product: a fully worked
+// project (bill, budget, valuations, PM, model) they can open and study but
+// never change. Samples have no owner (userId null), so no account's quota,
+// roll-up or plugin project list ever counts them. See
+// scripts/seed-sample-projects.mjs.
+const SampleInfoSchema = new mongoose.Schema(
+  {
+    // Stable seed key, e.g. "duplex-raft". The seed upserts on (productKey, key).
+    key: { type: String, default: "" },
+    order: { type: Number, default: 0 },
+    foundation: { type: String, default: "" },
+    location: { type: String, default: "" },
+    // Where the job stands, e.g. "Certificate 2 of 4 issued".
+    stage: { type: String, default: "" },
+    summary: { type: String, default: "" },
+    // Short "what to look at" pointers, one per tab worth opening.
+    highlights: { type: [String], default: [] },
+  },
+  { _id: false },
+);
+
+// One Revit room as QUIV measures it (QUIV 4.0.2+): floor finish, floor area,
+// skirting run and, when the model has one, the wall finish area. Sent as the
+// top-level `roomFinishes` list on a Revit save and read by Ada's
+// get_room_finishes tool. Numbers are rounded to 2 dp by the save routes
+// (util/roomFinishes.js); wallFinishAreaM2 stays null when the room has none.
+const RoomFinishSchema = new mongoose.Schema(
+  {
+    roomId: { type: Number, default: 0 },
+    name: { type: String, default: "" },
+    number: { type: String, default: "" },
+    level: { type: String, default: "" },
+    floorFinish: { type: String, default: "" },
+    floorAreaM2: { type: Number, default: 0 },
+    skirtingM: { type: Number, default: 0 },
+    wallFinishAreaM2: { type: Number, default: null },
+    elementIds: { type: [Number], default: [] },
+  },
+  { _id: false },
+);
+
 const TakeoffProjectSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+    isSample: { type: Boolean, default: false },
+    sample: { type: SampleInfoSchema, default: undefined },
     productKey: { type: String, default: "revit", index: true },
     clientProjectKey: { type: String, default: "", index: true },
     modelFingerprint: { type: String, default: "" },
@@ -965,6 +1024,10 @@ const TakeoffProjectSchema = new mongoose.Schema(
       default: () => ({ ...DefaultValuationSettings }),
     },
     valuationEvents: { type: [ValuationEventSchema], default: [] },
+    // Per-room finishes from QUIV (Revit only). Replaced whole by a save that
+    // sends the field; kept as stored by a save that does not. Capped at 5000
+    // rooms by the route sanitiser.
+    roomFinishes: { type: [RoomFinishSchema], default: [] },
     version: { type: Number, default: 1 },
   },
   { timestamps: true },
@@ -977,6 +1040,11 @@ TakeoffProjectSchema.index({ userId: 1, productKey: 1, slug: 1 }, { sparse: true
 TakeoffProjectSchema.index({ "shareCodes.codeHash": 1 });
 // "Projects shared with me" listing + per-request owner-or-collaborator resolve.
 TakeoffProjectSchema.index({ "collaborators.userId": 1, productKey: 1, updatedAt: -1 });
+// Sample listing per product. Partial, so ordinary projects carry no entry.
+TakeoffProjectSchema.index(
+  { productKey: 1, "sample.order": 1 },
+  { partialFilterExpression: { isSample: true } },
+);
 
 export const TakeoffProject = mongoose.model(
   "TakeoffProject",

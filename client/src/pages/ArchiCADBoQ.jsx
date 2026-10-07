@@ -15,6 +15,7 @@ import ArchiCADVersionSelector from "../features/archicad/ArchiCADVersionSelecto
 import ArchiCADExportBar from "../features/archicad/ArchiCADExportBar.jsx";
 import ArchiCADConnectorStatus from "../features/archicad/ArchiCADConnectorStatus.jsx";
 import ArchiCADUnitToggle from "../features/archicad/ArchiCADUnitToggle.jsx";
+import { sharedAccess, sharedAccessNote } from "../features/archicad/sharedAccess.js";
 
 // Optimistic repricing of a line after a margin edit (margin rules from
 // api-contract.md): unitRate = netUnitCost × (1 + OH%/100) × (1 + margin%/100).
@@ -46,7 +47,16 @@ export default function ArchiCADBoQ() {
   const [copied, setCopied] = React.useState(false);
   const [reapplying, setReapplying] = React.useState(false);
 
-  const readOnly = viewingVersionId != null;
+  const isSample = !!boq?.isSample;
+  const viewingOld = viewingVersionId != null;
+  // What the server says this reader may do on a shared project.
+  const access = sharedAccess(boq);
+  const { canEdit, canExport, isOwner, moneyHidden } = access;
+  // An old version, a read-only learning sample, a view-only share, or a bill
+  // whose prices are hidden from this reader cannot be edited. The server
+  // refuses all four anyway; this keeps the controls off the page.
+  const readOnly = viewingOld || isSample || !canEdit || moneyHidden;
+  const sharedNote = isSample ? null : sharedAccessNote(access);
 
 
   // An old link carries the database id; once the project is known, show its
@@ -223,11 +233,15 @@ export default function ArchiCADBoQ() {
             <Link to={`/archicad/${projectId}/dashboard`} className="ds-btn ds-btn-sm btn-o">
               <FaChartBar size={14} /> Dashboard
             </Link>
-            <ArchiCADExportBar
-              projectId={projectId}
-              projectName={boq?.projectName}
-              disabled={loading || !boq}
-            />
+            {/* Exports are owner-or-full, and priced: the server refuses both
+                a view-only reader and one whose prices are hidden. */}
+            {moneyHidden || !canExport ? null : (
+              <ArchiCADExportBar
+                projectId={projectId}
+                projectName={boq?.projectName}
+                disabled={loading || !boq}
+              />
+            )}
           </div>
         </div>
 
@@ -241,10 +255,13 @@ export default function ArchiCADBoQ() {
             currentVersionId={viewingVersionId ? null : boq?.versionId}
             selectedVersionId={viewingVersionId}
             onSelect={selectVersion}
-            onReapply={reapplyRates}
+            onReapply={isSample || !canEdit || moneyHidden ? null : reapplyRates}
             reapplying={reapplying}
             currency={boq?.currency}
           />
+          {/* The public share link is the owner's alone (the server answers
+              404 to anyone else). */}
+          {isSample || !isOwner ? null : (
           <div className="wk-acts" style={{ alignItems: "center" }}>
             <button
               type="button"
@@ -276,10 +293,27 @@ export default function ArchiCADBoQ() {
               </span>
             ) : null}
           </div>
+          )}
         </div>
 
         {/* Notes */}
-        {readOnly ? (
+        {isSample ? (
+          <div className="mk-note" style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" }}>
+            <b style={{ fontWeight: 500 }}>Sample project · Read-only learning material</b>
+            {boq?.sample?.stage ? ` · ${boq.sample.stage}` : ""}
+            {boq?.sample?.summary ? <p style={{ margin: "6px 0 0" }}>{boq.sample.summary}</p> : null}
+            <p style={{ margin: "6px 0 0" }}>
+              Every line, element and version can be opened and exported, but nothing can be
+              changed. Extract your own model from the connector to start a project of your own.
+            </p>
+          </div>
+        ) : null}
+        {sharedNote ? (
+          <p className="mk-note" data-testid="archicad-shared-note" style={{ margin: 0, background: "var(--pal-light-wash)", color: "var(--pal-light-key)", borderColor: "var(--pal-light-line)" }}>
+            {sharedNote}
+          </p>
+        ) : null}
+        {!isSample && viewingOld ? (
           <p className="mk-note" style={{ margin: 0, background: "var(--pal-light-wash)", color: "var(--pal-light-key)", borderColor: "var(--pal-light-line)" }}>
             Viewing old version{viewedVersion ? ` v${viewedVersion.versionNumber}` : ""},
             read-only.{" "}

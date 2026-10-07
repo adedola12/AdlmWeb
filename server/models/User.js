@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { registerTakeoffErasure } from "../services/takeoffErasure.js";
 
 const DeviceBindingSchema = new mongoose.Schema(
   {
@@ -220,6 +221,12 @@ const UserSchema = new mongoose.Schema(
       stepUpEnabled: { type: Boolean, default: false },
     },
 
+    // The user's OWN code, handed out by Ada. Made on first ask and kept for
+    // ever after: a code that changed between conversations would be worse than
+    // none, because every link already sent would stop working. Sparse, because
+    // most accounts never ask for one.
+    referralCode: { type: String, trim: true, uppercase: true, unique: true, sparse: true },
+
     entitlements: { type: [EntitlementSchema], default: [] },
 
     // Saved card for auto-renewals — Paystack's reusable authorization token
@@ -359,5 +366,9 @@ const UserSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+// Deleting a user deletes their Takeoff Time Log records too (privacy policy,
+// "Take-off timing"). Registered before the model is compiled.
+registerTakeoffErasure(UserSchema);
 
 export const User = mongoose.models.User || mongoose.model("User", UserSchema);

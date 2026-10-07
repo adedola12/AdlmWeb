@@ -28,7 +28,7 @@ function toNum(v, fallback = 0) {
 }
 
 function getSectionLabel(k) {
-  return SECTIONS.find((s) => s.key === k)?.label || k || "—";
+  return SECTIONS.find((s) => s.key === k)?.label || k || "–";
 }
 
 function money(n, currency = "NGN") {
@@ -318,7 +318,7 @@ export default function RateGenUpdates() {
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10">
               <span className="text-blue-100">Last checked:</span>
               <span className="font-semibold">
-                {lastCheckedAt ? dayjs(lastCheckedAt).fromNow() : "—"}
+                {lastCheckedAt ? dayjs(lastCheckedAt).fromNow() : "–"}
               </span>
             </span>
 

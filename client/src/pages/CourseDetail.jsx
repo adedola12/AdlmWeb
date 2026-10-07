@@ -2,6 +2,7 @@ import React from "react";
 import { uploadSubmission, SUBMISSION_ACCEPT } from "../lib/submissionUpload.js";
 import dayjs from "dayjs";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import DsSampleModels from "../ds/DsSampleModels.jsx";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 import { useFeedback } from "../ds/feedback/feedbackContext.js";
@@ -68,7 +69,14 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
       current = null;
     };
 
-    (async () => {
+    // Claims a seat and keeps it alive. Called again when the server says the
+    // session is gone (404) or the page comes back from the back/forward cache:
+    // pagehide ends the session, and without a fresh claim the timer resumed on
+    // a dead one, so every ping 404'd and watch time stopped recording (1,546
+    // failed pings from two students, 21-26 Sep 2026).
+    const claim = async () => {
+      clearInterval(timer);
+      timer = null;
       try {
         const res = await apiAuthed(
           `/me/courses/${encodeURIComponent(sku)}/playback/start`,
@@ -88,6 +96,7 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
           return;
         }
         current = res.sessionId;
+        lastPingAt = Date.now();
         setSession(res);
         setBlocked(null);
 
@@ -104,7 +113,12 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
               watchedDeltaSec: deltaSec,
               positionSec: Math.round((now - startedAt) / 1000),
             }),
-          }).catch(() => {});
+          }).catch((e) => {
+            if (e?.status === 404 && !cancelled) {
+              current = null;
+              claim();
+            }
+          });
         }, (res.heartbeatSec || 30) * 1000);
       } catch (e) {
         if (cancelled) return;
@@ -113,13 +127,24 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
           setBlocked(e.data || { error: "Too many active streams" });
         }
       }
-    })();
+    };
+    claim();
 
-    window.addEventListener("pagehide", stop);
+    const onHide = () => {
+      clearInterval(timer);
+      timer = null;
+      stop();
+    };
+    const onShow = (e) => {
+      if (e.persisted && !cancelled) claim();
+    };
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("pageshow", onShow);
     return () => {
       cancelled = true;
       clearInterval(timer);
-      window.removeEventListener("pagehide", stop);
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("pageshow", onShow);
       stop();
     };
   }, [sku, moduleCode, token, track]);
@@ -749,6 +774,14 @@ export default function CourseDetail() {
 
             {tabOn === "resources" ? (
               <>
+                {/* THE COURSE'S MODEL FILE.
+                    The sample-model library had no reader screen at all: an
+                    admin could attach a Revit model to this course and publish
+                    it, and no learner could ever reach it. Filed with the other
+                    resources, scoped to this course, and `quiet` so a course
+                    that ships no model shows nothing rather than an empty box. */}
+                <DsSampleModels courseSku={sku} title="Model files" quiet />
+
                 <div className="lx-res">
                   {softwares.map((s) => {
                     const mb = s.fileSize ? (s.fileSize / (1024 * 1024)).toFixed(1) : null;

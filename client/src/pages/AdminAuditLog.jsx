@@ -9,7 +9,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
 function fmt(d) {
-  return d ? new Date(d).toLocaleString() : "—";
+  return d ? new Date(d).toLocaleString() : "–";
 }
 
 export default function AdminAuditLog() {
@@ -183,15 +183,15 @@ export default function AdminAuditLog() {
                   <tr key={l._id} className="border-b border-slate-100">
                     <td className="py-2 pr-3 whitespace-nowrap">{fmt(l.createdAt)}</td>
                     <td className="py-2 pr-3">
-                      {l.actorEmail || "—"}
+                      {l.actorEmail || "–"}
                       {l.isGod ? <span className="ml-1 text-[10px] px-1 rounded bg-purple-100 text-purple-700">GOD</span> : null}
                     </td>
                     <td className="py-2 pr-3 font-mono text-xs">{l.action}</td>
                     <td className="py-2 pr-3 text-slate-600 text-xs">
-                      {l.method ? `${l.method} ${l.path || ""}` : "—"}
+                      {l.method ? `${l.method} ${l.path || ""}` : "–"}
                       {l.targetEmail ? ` → ${l.targetEmail}` : ""}
                     </td>
-                    <td className="py-2 pr-3 text-xs">{l.ip || "—"}</td>
+                    <td className="py-2 pr-3 text-xs">{l.ip || "–"}</td>
                   </tr>
                 ))}
               </tbody>

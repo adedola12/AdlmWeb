@@ -31,7 +31,7 @@ import { toneFor } from "./adminKit.jsx";
 const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   civil3d: "CIVIQ",
   rategen: "RateGen",
   "qs-takeoff": "Time Pro",
@@ -105,7 +105,7 @@ export default function DsAdminPeople() {
     {
       h: "Seats",
       num: true,
-      cell: (a) => (a.seats ? a.seats : <AdmDim>—</AdmDim>),
+      cell: (a) => (a.seats ? a.seats : <AdmDim>–</AdmDim>),
     },
     {
       h: "Next expiry",
@@ -113,7 +113,7 @@ export default function DsAdminPeople() {
         a.expiry ? (
           <AdmChip tone={toneFor(a.expiry.status)}>{when(a.expiry.date)}</AdmChip>
         ) : (
-          <AdmDim>—</AdmDim>
+          <AdmDim>–</AdmDim>
         ),
     },
   ];

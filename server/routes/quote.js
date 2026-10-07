@@ -47,7 +47,7 @@ router.post("/send", async (req, res) => {
         (it, i) =>
           `<tr style="border-bottom:1px solid #eee;background:${i % 2 === 1 ? "#f4f4f4" : "#fff"}">
             <td style="padding:8px 10px;font-size:13px">${i + 1}.</td>
-            <td style="padding:8px 10px;font-size:13px">${it.description || "—"}</td>
+            <td style="padding:8px 10px;font-size:13px">${it.description || "–"}</td>
             <td style="padding:8px 10px;font-size:13px;text-align:center">${it.qty || 1}</td>
             <td style="padding:8px 10px;font-size:13px;text-align:right">${curr}${Number(it.unitPrice || 0).toLocaleString()}</td>
             <td style="padding:8px 10px;font-size:13px;text-align:right;font-weight:600">${curr}${Number(it.total || 0).toLocaleString()}</td>

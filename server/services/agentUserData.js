@@ -6,11 +6,23 @@
 // for Ada to read another user's projects, money, or subscriptions.
 
 import mongoose from "mongoose";
+import { projectStage, stageLabel, STAGES, stageIsOpen } from "../util/projectStage.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { computePmDashboard, computeProjectScope } from "./pmCompute.js";
 import { productLabel } from "./reportEngine.js";
 import { similarityScore } from "../util/fuzzyMatch.js";
 import { canonicalKind, kindLabel } from "../util/resourceKind.js";
+import { RateGenRate } from "../models/RateGenRate.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { ActivityLog } from "../models/ActivityLog.js";
+import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
+import { resolveProjectAccess } from "../util/projectAccess.js";
+import { buildPricingProposal } from "../util/pricingProposal.js";
+import { buildAreaProposal, buildSetRatesProposal } from "../util/priceByArea.js";
+import { RateUsage } from "../models/RateUsage.js";
+import { usageIndex } from "../util/rateSuggestions.js";
+import { parseReportRange, buildPeriodSummary } from "./reportPeriod.js";
+import { projectTips } from "../util/projectTips.js";
 
 function oid(id) {
   return new mongoose.Types.ObjectId(String(id));
@@ -27,9 +39,9 @@ function naira(v) {
 }
 
 function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "–";
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? "—" : d.toISOString().slice(0, 10);
+  return Number.isNaN(d.getTime()) ? "–" : d.toISOString().slice(0, 10);
 }
 
 // ── Portfolio summary ──────────────────────────────────────────────────────
@@ -79,6 +91,16 @@ export async function getPortfolioSummary(userId) {
         name: 1,
         origin: 1,
         updatedAt: 1,
+        // "Who is this job for" had no answer at all: the client was never
+        // projected, so Ada could list a portfolio and not name a single one.
+        clientName: 1,
+        // The five facts the stage is worked out from (util/projectStage.js).
+        // Without them a tendered job is indistinguishable from a priced one,
+        // and "all my open projects" cannot be answered.
+        contractLocked: { $ifNull: ["$contract.locked", false] },
+        tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
+        finalized: { $ifNull: ["$finalAccount.finalized", false] },
+        certificateCount: { $size: { $ifNull: ["$certificates", []] } },
         // Which disciplines have a 3D (IFC) model attached — the question
         // "which of my projects has a model" has no other answer source.
         modelArch: { $gt: [{ $strLenCP: { $ifNull: ["$models.architectural.url", ""] } }, 0] },
@@ -111,7 +133,19 @@ export async function getPortfolioSummary(userId) {
   let grandValued = 0;
   let grandItems = 0;
   let grandMarked = 0;
+  // "What is the total value of all my OPEN projects" is the question people
+  // actually ask, and it is not the same number as the whole portfolio: a
+  // finalised account is a finished job whose money is settled.
+  let openCost = 0;
+  let openCount = 0;
+  const byStage = new Map();
   for (const r of rows) {
+    r.stage = projectStage(r);
+    byStage.set(r.stage, (byStage.get(r.stage) || 0) + 1);
+    if (stageIsOpen(r.stage)) {
+      openCount += 1;
+      openCost += safeNum(r.totalCost);
+    }
     grandCost += safeNum(r.totalCost);
     grandValued += safeNum(r.valuedAmount);
     grandItems += safeNum(r.itemCount);
@@ -127,10 +161,19 @@ export async function getPortfolioSummary(userId) {
 
   const lines = [];
   lines.push(`Total projects: ${rows.length}`);
+  lines.push(
+    `Open projects (everything except a finalised account): ${openCount}, worth ${naira(openCost)}`,
+  );
   lines.push(`Combined project value (sum of BoQ qty×rate): ${naira(grandCost)}`);
   lines.push(`Value of work completed to date: ${naira(grandValued)}`);
   lines.push(`Outstanding (remaining) value: ${naira(grandCost - grandValued)}`);
   lines.push(`Overall delivery progress: ${overall.toFixed(1)}%`);
+  lines.push("");
+  lines.push("By stage:");
+  for (const st of STAGES) {
+    const n = byStage.get(st.key) || 0;
+    if (n) lines.push(`- ${st.label}: ${n} project(s)`);
+  }
   lines.push("");
   lines.push("Breakdown by product:");
   for (const [key, g] of [...byProduct.entries()].sort((a, b) => b[1].cost - a[1].cost)) {
@@ -175,8 +218,24 @@ export async function getPortfolioSummary(userId) {
     const pct = safeNum(r.itemCount) > 0 ? (safeNum(r.progressShare) / safeNum(r.itemCount)) * 100 : 0;
     const model = r.modelArch || r.modelStruct || r.modelMep ? ", 3D model attached" : "";
     const imported = r.origin === "boq-import" ? ", imported from Excel" : "";
+    // The client and the stage. "Who is the Lekki job for" and "which of these
+    // are still live" were both unanswerable without them.
+    const client = String(r.clientName || "").trim();
+    const forWhom = client ? ` for ${client}` : "";
     lines.push(
-      `- ${r.name || "Untitled"}: ${productLabel(r.productKey)}, ${r.itemCount} lines, value ${naira(r.totalCost)}, ${pct.toFixed(0)}% done${model}${imported}, updated ${fmtDate(r.updatedAt)}`,
+      `- ${r.name || "Untitled"}${forWhom}: ${productLabel(r.productKey)}, ${stageLabel(r.stage)}, ${r.itemCount} lines, value ${naira(r.totalCost)}, ${pct.toFixed(0)}% done${model}${imported}, updated ${fmtDate(r.updatedAt)}`,
+    );
+  }
+
+  // The clients, so "who are my clients" is one answer rather than a list the
+  // model has to re-read line by line.
+  const clients = [...new Set(rows.map((r) => String(r.clientName || "").trim()).filter(Boolean))];
+  lines.push("");
+  if (clients.length) {
+    lines.push(`Clients on these projects (${clients.length}): ${clients.join(", ")}`);
+  } else {
+    lines.push(
+      "No client is recorded on any of these projects. The client is set on the project's own page.",
     );
   }
 
@@ -191,10 +250,47 @@ export async function getPortfolioSummary(userId) {
 // Fuzzy-find ONE of the user's own projects by name. Returns either
 // { project } (loaded, owner-scoped) or { error } — a sentence Ada can relay.
 // Shared by every project-scoped tool so they all disambiguate identically.
-async function resolveProject(userId, projectName) {
+/**
+ * THE PROJECT THE USER IS LOOKING AT.
+ *
+ * `ref` is whatever the page's address carries — an ObjectId on the classic
+ * workspace, a slug on the new one. Resolved against the caller's own projects,
+ * so a ref belonging to somebody else finds nothing rather than leaking a name.
+ */
+async function projectFromRef(userId, ref, productKey) {
+  const raw = String(ref || "").trim();
+  if (!raw) return null;
+  const uid = oid(userId);
+  const where = { userId: uid };
+  if (productKey) where.productKey = String(productKey).trim().toLowerCase();
+  const fields = { name: 1, productKey: 1, updatedAt: 1, pmTrackerOnly: 1 };
+  if (/^[a-f\d]{24}$/i.test(raw)) {
+    const byId = await TakeoffProject.findOne({ ...where, _id: raw }, fields).lean();
+    if (byId) return byId;
+  }
+  return TakeoffProject.findOne({ ...where, slug: raw }, fields).lean();
+}
+
+async function resolveProject(userId, projectName, context = {}) {
   const uid = oid(userId);
   const query = String(projectName || "").trim();
-  if (!query) return { error: "Ask the user which project they mean (by name)." };
+
+  // WHAT THE USER IS LOOKING AT, WHEN THEY DID NOT SAY A NAME.
+  //
+  // "how much is left to buy on this job" used to be unanswerable: the tool
+  // asked which project they meant, while the page they were standing on
+  // already knew. The client now sends its own address with every message and
+  // it is used ONLY when no name was given — naming a project still wins, so
+  // "and what about Lekki Mall" works from any page.
+  // Ada is told the page's reference and passes it as the name where a tool
+  // requires one; a database id or slug never matches a project NAME, so it is
+  // read as "this page" too.
+  const ref = String(context.projectRef || "").trim();
+  if (!query || (ref && query === ref)) {
+    const here = await projectFromRef(uid, context.projectRef, context.productKey);
+    if (here) return { project: here };
+    return { error: "Ask the user which project they mean (by name)." };
+  }
 
   const candidates = await TakeoffProject.find(
     { userId: uid },
@@ -251,8 +347,8 @@ async function resolveProject(userId, projectName) {
 
 // ── Single project detail ──────────────────────────────────────────────────
 // Summarise one project's value, progress and schedule.
-export async function getProjectDetails(userId, projectName) {
-  const { project, error, note } = await resolveProject(userId, projectName);
+export async function getProjectDetails(userId, projectName, context = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
   if (error) return error;
 
   const scope = computeProjectScope(project);
@@ -413,7 +509,7 @@ function formatQtyByUnit(map) {
 // breakdown (and the bill lines as a fallback) for rows matching `resource`,
 // then totals the quantity PER UNIT. Scoped to one project when projectName is
 // given, otherwise across every project the user owns.
-export async function getResourceQuantity(userId, resource, projectName) {
+export async function getResourceQuantity(userId, resource, projectName, context = {}) {
   const query = String(resource || "").trim();
   if (!query) {
     return "Ask the user which material, labour or resource they want the quantity for (e.g. cement, rebar, mason).";
@@ -422,7 +518,7 @@ export async function getResourceQuantity(userId, resource, projectName) {
   let projects = [];
   let resolveNote = "";
   if (String(projectName || "").trim()) {
-    const { project, error, note } = await resolveProject(userId, projectName);
+    const { project, error, note } = await resolveProject(userId, projectName, context);
     if (error) return error;
     projects = [project];
     resolveNote = note || "";
@@ -554,8 +650,8 @@ export async function getResourceQuantity(userId, resource, projectName) {
 // ── Budget (Material & Labour) breakdown ───────────────────────────────────
 // The whole cost plan for one project: Material vs Labour vs Plant totals,
 // procurement status, and the biggest resources by cost.
-export async function getProjectBudget(userId, projectName) {
-  const { project, error, note } = await resolveProject(userId, projectName);
+export async function getProjectBudget(userId, projectName, context = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
   if (error) return error;
 
   const rows = budgetRows(project);
@@ -628,8 +724,8 @@ export async function getProjectBudget(userId, projectName) {
 // ── Bill of Quantities lines ───────────────────────────────────────────────
 // The measured work items themselves — qty, unit, rate, amount, % complete —
 // optionally filtered to lines matching a search phrase.
-export async function getProjectBill(userId, projectName, search) {
-  const { project, error, note } = await resolveProject(userId, projectName);
+export async function getProjectBill(userId, projectName, search, context = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
   if (error) return error;
 
   const all = billRows(project);
@@ -701,8 +797,8 @@ export async function getProjectBill(userId, projectName, search) {
 // rate-check / error-scan tools run against the user's REAL bill rather than
 // anything the model retyped. `search` narrows a big bill; `limit` keeps the
 // request (and the AI service's per-call cost) bounded.
-export async function getBillItemsForAi(userId, projectName, search, limit = 200, opts = {}) {
-  const { project, error, note } = await resolveProject(userId, projectName);
+export async function getBillItemsForAi(userId, projectName, search, limit = 200, opts = {}, context = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
   if (error) return { error };
 
   const all = billRows(project);
@@ -789,15 +885,44 @@ export async function getAccountSummary(user) {
   // answer "how many projects can I still create?".
   try {
     const uid = oid(user._id);
+    // TWO THINGS WERE WRONG WITH THIS COUNT.
+    //
+    // It counted the auto-created *-materials siblings as projects of their
+    // own, so a QS with five HERON jobs was told they had ten, listed under a
+    // product called "HERON Materials". Real slot accounting never counts them
+    // (routes/projects.js, projectLimitForProduct and its caller).
+    //
+    // And it captioned the answer "used of 30-slot base cap per product", which
+    // is the PERSONAL cap. An organisation licence gets 50, and any product can
+    // carry purchased extraProjectSlots on top. Ada's own tool description
+    // promises "how many projects can I still create", so a wrong cap is a
+    // wrong answer to the question she is advertising.
     const counts = await TakeoffProject.aggregate([
-      { $match: { userId: uid, pmTrackerOnly: { $ne: true } } },
+      {
+        $match: {
+          userId: uid,
+          pmTrackerOnly: { $ne: true },
+          productKey: { $not: /-material/i },
+        },
+      },
       { $group: { _id: "$productKey", count: { $sum: 1 } } },
     ]);
     if (counts.length) {
+      const isOrg = ents.some(
+        (e) => e?.licenseType === "organization" && e?.status === "active",
+      );
+      const base = isOrg ? 50 : 30;
       lines.push("");
-      lines.push("Project usage (used of 30-slot base cap per product):");
+      lines.push(
+        `Project usage (${isOrg ? "organisation" : "personal"} licence: ${base} slots per product, plus any purchased):`,
+      );
       for (const c of counts.sort((a, b) => b.count - a.count)) {
-        lines.push(`- ${productLabel(c._id)}: ${c.count} project(s)`);
+        const ent = ents.find((e) => e?.productKey === c._id && e?.status === "active");
+        const extra = safeNum(ent?.extraProjectSlots);
+        const cap = base + extra;
+        lines.push(
+          `- ${productLabel(c._id)}: ${c.count} of ${cap} used${extra ? ` (${base} + ${extra} purchased)` : ""}, ${Math.max(0, cap - c.count)} left`,
+        );
       }
     }
   } catch {
@@ -809,4 +934,591 @@ export async function getAccountSummary(user) {
     "If a subscription is expired or they want more seats/slots, offer a renewal/upgrade next step.",
   );
   return lines.join("\n");
+}
+
+// ── Procurement ────────────────────────────────────────────────────────────
+//
+// "What do I need to buy next" had no answer. getProjectBudget returns
+// procured-vs-outstanding as one figure and the fifteen biggest resources by
+// cost — useful for "how much is left to spend", useless for "what do I order
+// this week", which is a question about DATES.
+//
+// The dates already exist. A budget row carries billIdentity; a programme task
+// carries the identities of the lines it builds and its own start. So the
+// earliest task that needs a material, less the supplier's lead time, is when
+// it has to be ordered — exactly what the Buy schedule screen shows. This is
+// that list, in words.
+//
+// Nothing is invented: a project with no programme has no dates, and this says
+// so rather than making some up.
+export async function getProcurementSchedule(userId, projectName, context = {}, opts = {}) {
+  const { project, error, note } = await resolveProject(userId, projectName, context);
+  if (error) return error;
+
+  const leadDays = Math.max(0, Math.min(180, safeNum(opts.leadDays) || 14));
+  const budget = Array.isArray(project.budgetItems) ? project.budgetItems : [];
+  if (!budget.length) {
+    return `${project.name} has no Material & Labour breakdown yet, so there is nothing to buy from. It arrives with the bill from QUIV or HERON, or from cost rates typed against each line.`;
+  }
+
+  const tasks = Array.isArray(project?.projectManagement?.tasks)
+    ? project.projectManagement.tasks
+    : [];
+  // Bill code -> the earliest task that builds it.
+  const startByCode = new Map();
+  for (const t of tasks) {
+    const start = t?.startDate ? new Date(t.startDate) : null;
+    if (!start || Number.isNaN(start.getTime())) continue;
+    for (const ident of t?.linkedBoqIdentities || []) {
+      const parts = String(ident || "").split("::");
+      const code = String(parts.length > 1 ? parts[1] : parts[0] || "").trim().toLowerCase();
+      if (!code) continue;
+      const cur = startByCode.get(code);
+      if (!cur || start < cur.start) startByCode.set(code, { start, name: String(t?.name || "") });
+    }
+  }
+
+  const DAY = 86400000;
+  const rows = budget
+    .filter((r) => {
+      const kind = canonicalKind(r?.componentKind);
+      // Only a material is bought from a supplier against a lead time. A gang
+      // in a purchase list is how somebody orders a bricklayer.
+      return kind !== "Labour" && kind !== "Plant";
+    })
+    .map((r) => {
+      const hit = startByCode.get(String(r?.billIdentity || "").trim().toLowerCase());
+      const amount = safeNum(r?.qty) * (safeNum(r?.budgetRate) || safeNum(r?.rate));
+      return {
+        name: String(r?.materialName || r?.description || "Unnamed material").trim(),
+        unit: String(r?.unit || "").trim(),
+        qty: safeNum(r?.qty),
+        amount,
+        supplier: String(r?.supplier || "").trim(),
+        bought: r?.procured === true || safeNum(r?.procuredPercent) >= 100,
+        needBy: hit ? hit.start : null,
+        buyBy: hit ? new Date(hit.start.getTime() - leadDays * DAY) : null,
+        forTask: hit ? hit.name : "",
+      };
+    })
+    .filter((r) => !r.bought);
+
+  if (!rows.length) {
+    return `Everything on ${project.name}'s material schedule is already marked bought.`;
+  }
+
+  const dated = rows.filter((r) => r.buyBy).sort((a, b) => a.buyBy - b.buyBy);
+  const undated = rows.filter((r) => !r.buyBy).sort((a, b) => b.amount - a.amount);
+  const now = Date.now();
+  const overdue = dated.filter((r) => r.buyBy.getTime() < now);
+  const outstanding = rows.reduce((a, r) => a + r.amount, 0);
+
+  const lines = [];
+  lines.push(`Procurement still to buy on ${project.name}: ${naira(outstanding)} across ${rows.length} material(s).`);
+  if (overdue.length) {
+    lines.push(
+      `${overdue.length} should already have been ordered, worth ${naira(overdue.reduce((a, r) => a + r.amount, 0))}.`,
+    );
+  }
+
+  if (dated.length) {
+    lines.push("");
+    lines.push(`Next to order (soonest first, ${leadDays}-day lead time):`);
+    for (const r of dated.slice(0, 20)) {
+      const late = r.buyBy.getTime() < now ? " — OVERDUE" : "";
+      const who = r.supplier ? ` from ${r.supplier}` : "";
+      lines.push(
+        `- ${r.name}: ${r.qty ? `${Math.ceil(r.qty)} ${r.unit}`.trim() : "quantity not set"}, ${naira(r.amount)}, order by ${fmtDate(r.buyBy)} for ${fmtDate(r.needBy)} on site${who}${late}`,
+      );
+    }
+    if (dated.length > 20) lines.push(`…and ${dated.length - 20} more with dates.`);
+  }
+
+  if (undated.length) {
+    lines.push("");
+    // Honest about WHY, because the remedy is one button on the PM dashboard.
+    lines.push(
+      `${undated.length} material(s) worth ${naira(undated.reduce((a, r) => a + r.amount, 0))} have no order date: no programme task covers their bill lines, so nothing says when they are needed. Planning the work from the bill on the PM dashboard gives them dates.`,
+    );
+    for (const r of undated.slice(0, 10)) {
+      lines.push(`- ${r.name}: ${naira(r.amount)}`);
+    }
+  }
+
+  if (note) lines.push(note);
+  return lines.join("\n");
+}
+
+// ── Estimator & PM tools: pricing proposal, period report, tips ────────────
+//
+// These three return { text, card } rather than a bare string. `text` goes back
+// to the model as the tool result, like every tool above. `card` is rendered by
+// the chat under Ada's reply (components/AiAgent.jsx): a confirm list for
+// pricing, a report button for a date range. The card carries the project's
+// _id and productKey because the endpoints it calls address a project that
+// way; both come from the project resolved against the caller's OWN account,
+// never from anything the model typed.
+
+// resolveProject returns a slim projection when the project came from the page
+// reference. These tools need the whole document.
+async function loadWhole(userId, project) {
+  if (Array.isArray(project?.items)) return project;
+  return TakeoffProject.findOne({ _id: project._id, userId: oid(userId) }).lean();
+}
+
+// What the caller may do with it, by the same rule as routes/projects.js.
+// resolveProject only ever finds the caller's own projects, so this is the
+// owner today; asking anyway means a future change to resolveProject (shared
+// projects, say) cannot quietly hand rates to a collaborator who may not see
+// them. hasRateGen answers false: if that day comes, the safe default is to
+// mask until somebody wires the real check in.
+async function accessFor(userId, project) {
+  return resolveProjectAccess(oid(userId), project, { hasRateGen: async () => false });
+}
+
+function cardProject(project) {
+  return {
+    id: String(project._id),
+    productKey: String(project.productKey || "").toLowerCase(),
+    name: String(project.name || "Project"),
+    slug: String(project.slug || ""),
+  };
+}
+
+/**
+ * A proposed rate for every unpriced line on one project. Never writes.
+ *
+ * @returns {Promise<string | {text: string, card: object}>}
+ */
+export async function getPricingProposal(userId, projectName, context = {}) {
+  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  if (error) return error;
+  const project = await loadWhole(userId, found);
+  if (!project) return "That project could not be loaded.";
+
+  const access = await accessFor(userId, project);
+  if (!access.canSeeRates) {
+    return `The user cannot see rates on "${project.name}", so no rates can be proposed for it. Say so plainly.`;
+  }
+  if (!access.canEdit) {
+    return `The user has view-only access to "${project.name}", so rates cannot be applied to it. Say so plainly.`;
+  }
+
+  const [masterRates, lib] = await Promise.all([
+    RateGenRate.find({}).lean(),
+    RateGenLibrary.findOne({ userId: oid(userId) }).lean(),
+  ]);
+  const merged = mergeRatesWithUserData(
+    masterRates,
+    Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+    Array.isArray(lib?.customRates) ? lib.customRates : [],
+  );
+  // What this QS chose before ranks first, as it does in the line panel.
+  let usage = null;
+  try {
+    const rows = await RateUsage.find({ userId: oid(userId) })
+      .sort({ createdAt: -1 })
+      .limit(3000)
+      .select("key unit rateId projectId projectName createdAt")
+      .lean();
+    usage = usageIndex(rows.map((r) => ({ ...r, at: r.createdAt })));
+  } catch {
+    usage = null;
+  }
+  const p = buildPricingProposal(project.items, merged, { usage, convert: true });
+
+  if (!p.unpricedCount) {
+    return `Every line on "${project.name}" already has a rate. Nothing to propose. Offer to check the rates against the market instead, if that tool is available.`;
+  }
+  if (!p.lines.length) {
+    return [
+      `"${project.name}" has ${p.unpricedCount} unpriced line(s), but none of the user's ${p.libraryCount} RateGen rates matches them in the same unit.`,
+      p.noCodeCount
+        ? `${p.noCodeCount} of them have no bill code, so they can only be priced from the line itself.`
+        : "",
+      "Say so plainly. Do NOT suggest figures yourself. Offer to build a rate up for a named line with suggest_rate if that tool is available, or point them to the Rates & budget tab.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  const lines = [];
+  lines.push(
+    `Pricing proposal for "${project.name}" (${productLabel(project.productKey)}): ${p.lines.length} of ${p.unpricedCount} unpriced line(s) matched a rate in the user's own RateGen library. Applying all of them would add ${naira(p.totalToAdd)} to the bill.`,
+  );
+  if (p.unmatchedCount) lines.push(`${p.unmatchedCount} unpriced line(s) had no rate in the same unit.`);
+  if (p.noCodeCount) {
+    lines.push(`${p.noCodeCount} unpriced line(s) have no bill code and cannot be priced from here.`);
+  }
+  if (p.truncated) {
+    lines.push(`Only the first ${p.lines.length} are on the card; apply them, then ask again for the rest.`);
+  }
+  lines.push("");
+  lines.push("Proposed (bill order, first 12):");
+  for (const l of p.lines.slice(0, 12)) {
+    lines.push(
+      `- ${l.code}: ${l.description.slice(0, 80)} — ${fmtQty(l.qty)} ${l.unit} × ${naira(l.unitPrice)} (${l.rateDescription.slice(0, 70)}) = ${naira(l.amount)}. ${l.why}.`,
+    );
+  }
+  lines.push("");
+  lines.push(
+    "A confirm card listing every proposed line, each with a tick box, is shown under your reply. NOTHING has been priced. Tell the user to untick any line they disagree with and press Apply. Never say the rates are applied. Briefly explain the strongest and weakest matches, and that a rate is matched by description and unit only.",
+  );
+  if (note) lines.push(note);
+
+  return {
+    text: lines.join("\n"),
+    card: {
+      type: "price-proposal",
+      label: `Apply ${p.lines.length} rate${p.lines.length === 1 ? "" : "s"}`,
+      project: cardProject(project),
+      lines: p.lines,
+      totalToAdd: p.totalToAdd,
+      unpricedCount: p.unpricedCount,
+      unmatchedCount: p.unmatchedCount,
+      noCodeCount: p.noCodeCount,
+      truncated: p.truncated,
+    },
+  };
+}
+
+// ── Rates the USER states ──────────────────────────────────────────────────
+// "Windows are 88,000 per m2", "set blockwork to 9,500 per m2", "rate line 14
+// at 2,000". The figure is the user's, not Ada's; these build the same kind of
+// confirm card as propose_project_pricing and write nothing. Apply posts the
+// stated rate (and for openings the rate PER M², never the line's figure) to
+// price-many, which re-works every line from the bill itself.
+
+/** The project, whole, if the caller may price it; otherwise the words why not. */
+async function projectToPrice(userId, projectName, context) {
+  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  if (error) return { error };
+  const project = await loadWhole(userId, found);
+  if (!project) return { error: "That project could not be loaded." };
+  const access = await accessFor(userId, project);
+  if (!access.canSeeRates) {
+    return { error: `The user cannot see rates on "${project.name}", so no rates can be set on it. Say so plainly.` };
+  }
+  if (!access.canEdit) {
+    return { error: `The user has view-only access to "${project.name}", so rates cannot be applied to it. Say so plainly.` };
+  }
+  return { project, note };
+}
+
+function splitWords(split) {
+  return `${split.material}% material, ${split.labour}% labour, ${split.overheadProfit}% overhead and profit`;
+}
+
+const CONFIRM_RULE =
+  "A confirm card listing every line, each with a tick box, is shown under your reply. NOTHING has been priced. " +
+  "Tell the user to untick any line they disagree with and press Apply. Never say the rates are applied or saved.";
+
+/**
+ * Every window or door on a project priced from its size at a stated rate per m².
+ *
+ * @param {{category: string, ratePerM2: number, split?: object}} input
+ * @returns {Promise<string | {text: string, card: object}>}
+ */
+export async function getAreaPricingProposal(userId, projectName, input = {}, context = {}) {
+  const { project, note, error } = await projectToPrice(userId, projectName, context);
+  if (error) return error;
+
+  const p = buildAreaProposal(project.items, input);
+  if (!p.ok) return `${p.error} Ask the user to restate it.`;
+  const noun = p.category === "windows" ? "window" : "door";
+
+  if (!p.lines.length) {
+    const why = [];
+    if (p.skipped.noSize) why.push(`${p.skipped.noSize} ${noun} line(s) carry no width × height in their description`);
+    if (p.skipped.noQty) why.push(`${p.skipped.noQty} have no quantity`);
+    if (p.skipped.noCode) why.push(`${p.skipped.noCode} have no bill code`);
+    return [
+      `No ${noun} lines on "${project.name}" could be priced by area.`,
+      why.length
+        ? `${why.join("; ")}.`
+        : `The bill has no line that starts with "${noun}" and carries a size like (1200×1500).`,
+      "Say so plainly. Do NOT work out figures yourself.",
+    ].join("\n");
+  }
+
+  const lines = [];
+  lines.push(
+    `Proposal for "${project.name}" (${productLabel(project.productKey)}): ${p.lines.length} ${noun} line(s) at ${naira(p.ratePerM2)} per m², split ${splitWords(p.split)}. Applying all of them would put ${naira(p.totalToAdd)} on the bill for these lines.`,
+  );
+  if (p.repricedCount) {
+    lines.push(`${p.repricedCount} of them already have a rate; applying replaces it. Point this out.`);
+  }
+  if (p.skipped.aggregate) {
+    lines.push(`${p.skipped.aggregate} total line(s) (total area / perimeter) were left alone, as they should be.`);
+  }
+  if (p.skipped.noSize) lines.push(`${p.skipped.noSize} ${noun} line(s) had no size in the description and are not on the card.`);
+  if (p.skipped.noQty) lines.push(`${p.skipped.noQty} ${noun} line(s) have no quantity and are not on the card.`);
+  if (p.skipped.noCode) lines.push(`${p.skipped.noCode} ${noun} line(s) have no bill code and must be priced on the line.`);
+  lines.push("");
+  lines.push("By size (largest first):");
+  for (const g of p.groups.slice(0, 15)) {
+    lines.push(
+      `- ${g.sizeLabel} mm = ${g.areaM2} m² → ${naira(g.rate)} each; ${g.count} line(s), ${fmtQty(g.qty)} in all, ${naira(g.amount)}.`,
+    );
+  }
+  lines.push("");
+  lines.push(CONFIRM_RULE);
+  if (note) lines.push(note);
+
+  return {
+    text: lines.join("\n"),
+    card: {
+      type: "price-proposal",
+      mode: "user-rate",
+      basis: "area",
+      cardKey: `area-${p.category}`,
+      label: `Apply ${p.lines.length} rate${p.lines.length === 1 ? "" : "s"}`,
+      project: cardProject(project),
+      category: p.category,
+      ratePerM2: p.ratePerM2,
+      split: p.split,
+      lines: p.lines,
+      groups: p.groups,
+      totalToAdd: p.totalToAdd,
+      repricedCount: p.repricedCount,
+      skipped: p.skipped,
+    },
+  };
+}
+
+/**
+ * A stated rate on the bill lines a message names (description words, codes or
+ * line numbers).
+ *
+ * @param {{match: object, rate: number, unit?: string, split?: object}} input
+ * @returns {Promise<string | {text: string, card: object}>}
+ */
+export async function getSetRatesProposal(userId, projectName, input = {}, context = {}) {
+  const { project, note, error } = await projectToPrice(userId, projectName, context);
+  if (error) return error;
+
+  const p = buildSetRatesProposal(project.items, input);
+  if (!p.ok) return `${p.error} Ask the user to restate it.`;
+
+  const m = input?.match || {};
+  const asked = [
+    m.text ? `"${String(m.text).slice(0, 80)}"` : "",
+    m.code ? `code ${[].concat(m.code).join(", ")}` : "",
+    m.sn ? `line ${[].concat(m.sn).join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join(" / ");
+
+  if (!p.lines.length) {
+    const out = [];
+    if (!p.matchedCount) {
+      out.push(`No bill line on "${project.name}" matches ${asked || "that"}.`);
+      out.push("Ask how the item is worded on their bill, or look it up with get_project_bill and a search.");
+    } else {
+      out.push(`${p.matchedCount} line(s) on "${project.name}" match ${asked}, but none can take this rate.`);
+      if (p.skipped.wrongUnit.length) {
+        const units = [...new Set(p.skipped.wrongUnit.map((w) => w.unit || "no unit"))].join(", ");
+        out.push(
+          `${p.skipped.wrongUnit.length} are measured in ${units}, not ${p.unit}. Do NOT convert; ask the user for a rate in that unit.`,
+        );
+      }
+      if (p.skipped.noQty) out.push(`${p.skipped.noQty} have no quantity.`);
+      if (p.skipped.noCode) out.push(`${p.skipped.noCode} have no bill code and must be priced on the line.`);
+    }
+    return out.join("\n");
+  }
+
+  const lines = [];
+  lines.push(
+    `Proposal for "${project.name}" (${productLabel(project.productKey)}): ${naira(p.rate)}${p.unit ? ` per ${p.unit}` : ""} on ${p.lines.length} line(s) matching ${asked}, split ${splitWords(p.split)}. Applying all of them would put ${naira(p.totalToAdd)} on the bill for these lines.`,
+  );
+  if (p.repricedCount) lines.push(`${p.repricedCount} of them already have a rate; applying replaces it. Point this out.`);
+  if (p.skipped.wrongUnit.length) {
+    lines.push(
+      `${p.skipped.wrongUnit.length} matching line(s) are in another unit (${p.skipped.wrongUnit
+        .slice(0, 5)
+        .map((w) => `${w.code}: ${w.unit || "no unit"}`)
+        .join(", ")}) and are NOT on the card. Do not convert.`,
+    );
+  }
+  if (p.skipped.noQty) lines.push(`${p.skipped.noQty} matching line(s) have no quantity and are not on the card.`);
+  if (p.lines.length > 1) {
+    lines.push("Check with the user that every line on the card is one they meant: a description match can catch more than intended.");
+  }
+  lines.push("");
+  lines.push("On the card (first 12):");
+  for (const l of p.lines.slice(0, 12)) {
+    lines.push(
+      `- ${l.code}: ${l.description.slice(0, 80)} — ${fmtQty(l.qty)} ${l.unit} × ${naira(l.userRate)} = ${naira(l.amount)}${l.currentRate ? ` (now ${naira(l.currentRate)})` : ""}.`,
+    );
+  }
+  lines.push("");
+  lines.push(CONFIRM_RULE);
+  if (note) lines.push(note);
+
+  return {
+    text: lines.join("\n"),
+    card: {
+      type: "price-proposal",
+      mode: "user-rate",
+      basis: "rate",
+      cardKey: `rate-${p.rate}-${p.unit}-${p.lines.map((l) => l.code).join(",")}`.slice(0, 160),
+      label: `Apply ${p.lines.length} rate${p.lines.length === 1 ? "" : "s"}`,
+      project: cardProject(project),
+      rate: p.rate,
+      unit: p.unit,
+      split: p.split,
+      lines: p.lines,
+      totalToAdd: p.totalToAdd,
+      repricedCount: p.repricedCount,
+      skipped: { wrongUnit: p.skipped.wrongUnit.length, noQty: p.skipped.noQty, noCode: p.skipped.noCode },
+    },
+  };
+}
+
+/**
+ * What moved on one project between two dates (YYYY-MM-DD, Lagos days).
+ *
+ * @returns {Promise<string | {text: string, card: object}>}
+ */
+export async function getProjectPeriodReport(userId, projectName, from, to, context = {}) {
+  const range = parseReportRange(from, to);
+  if (range.error) {
+    return `${range.error} Work the dates out again from today's date and call the tool with YYYY-MM-DD.`;
+  }
+  if (!range.from && !range.to) return "Ask the user which dates the report should cover.";
+
+  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  if (error) return error;
+  const project = await loadWhole(userId, found);
+  if (!project) return "That project could not be loaded.";
+  const access = await accessFor(userId, project);
+
+  const where = { projectId: project._id, createdAt: {} };
+  if (range.from) where.createdAt.$gte = range.from;
+  if (range.to) where.createdAt.$lte = range.to;
+  const activity = await ActivityLog.find(where, {
+    createdAt: 1,
+    summary: 1,
+    category: 1,
+    actorName: 1,
+  })
+    .sort({ createdAt: -1 })
+    .limit(300)
+    .lean();
+
+  const s = buildPeriodSummary(project, {
+    from: range.from,
+    to: range.to,
+    activity,
+    canSeeMoney: access.canSeeRates,
+  });
+  const span = `${range.fromDay || "the start"} to ${range.toDay}`;
+  const card = {
+    type: "project-report",
+    label: "Open the report",
+    project: cardProject(project),
+    from: range.fromDay,
+    to: range.toDay,
+    summary: {
+      valued: s.progress.net,
+      completedLines: s.progress.completedLines,
+      certified: s.certificates.certified,
+      certificates: s.certificates.list.length,
+      bought: s.procurement.value,
+      variationsRaised: s.variations.raised,
+      activity: s.activity.total,
+      quiet: s.quiet,
+      moneyMasked: s.moneyMasked,
+    },
+  };
+
+  if (s.quiet) {
+    return {
+      text: `Nothing was recorded on "${project.name}" between ${span} (Lagos time): no progress, certificates, variations, purchases, programme changes or activity. Say so plainly — a quiet period is a finding, not an error. The card under your reply still opens the full report.${note ? `\n${note}` : ""}`,
+      card,
+    };
+  }
+
+  const L = [];
+  L.push(`Report for "${project.name}" (${productLabel(project.productKey)}), ${span} (Lagos days):`);
+  L.push(
+    `- Progress: ${s.progress.events} valuation tick(s) on ${s.progress.linesMoved} line(s), net ${naira(s.progress.net)} of work valued (${naira(s.progress.valued)} forward, ${naira(s.progress.reversed)} wound back). ${s.progress.completedLines} line(s) signed off complete, worth ${naira(s.progress.completedValue)}.`,
+  );
+  if (s.actuals.lines) {
+    L.push(
+      `- Actual cost recorded on ${s.actuals.lines} line(s): planned ${naira(s.actuals.planned)}, actual ${naira(s.actuals.actual)}, variance ${naira(s.actuals.variance)}${s.actuals.variance > 0 ? " (OVER budget)" : ""}.`,
+    );
+    for (const r of s.actuals.top.slice(0, 5)) {
+      L.push(
+        `  - ${r.code ? `${r.code} ` : ""}${r.description.slice(0, 70)}: planned ${naira(r.planned)}, actual ${naira(r.actual)}`,
+      );
+    }
+  }
+  if (s.certificates.list.length) {
+    const certs = s.certificates.list
+      .map((c) => `No. ${c.number} (${fmtDate(c.date)}, ${c.status}, this certificate ${naira(c.thisCertificate)})`)
+      .join("; ");
+    L.push(
+      `- Certificates: ${certs}. Certified in period (approved or paid): ${naira(s.certificates.certified)}; paid: ${naira(s.certificates.paid)}.`,
+    );
+  } else {
+    L.push("- No certificate was issued in this period.");
+  }
+  L.push(
+    `- Variations: ${s.variations.raised} raised (${naira(s.variations.raisedValue)}), ${s.variations.approved} approved (${naira(s.variations.approvedValue)}), ${s.variations.rejected} rejected.`,
+  );
+  L.push(
+    `- Procurement: ${s.procurement.lines} budget line(s) marked bought, worth ${naira(s.procurement.value)}.`,
+  );
+  const late = s.programme.dueNotDoneNames.length ? ` (${s.programme.dueNotDoneNames.join(", ")})` : "";
+  L.push(
+    `- Programme: ${s.programme.finished} task(s) finished; ${s.programme.dueNotDone} due in the period but not finished${late}; ${s.programme.risksRaised} risk(s) raised; ${s.programme.issuesOpened} issue(s) opened, ${s.programme.issuesResolved} resolved.`,
+  );
+  if (s.activity.total) {
+    L.push(`- Activity log: ${s.activity.total} entr${s.activity.total === 1 ? "y" : "ies"}. Most recent:`);
+    for (const a of s.activity.recent.slice(0, 6)) {
+      L.push(`  - ${fmtDate(a.at)}: ${a.summary}${a.by ? ` (${a.by})` : ""}`);
+    }
+  }
+  if (s.moneyMasked) {
+    L.push("Money is hidden: the user cannot see rates on this project. Do not quote amounts.");
+  }
+  L.push("");
+  L.push(
+    "Quote these figures exactly. Lead with the two or three that matter most (value done, certified, overspend or slippage), flag any risk, and suggest one next step. A card under your reply opens the full Project report for this range as a PDF.",
+  );
+  if (note) L.push(note);
+  return { text: L.join("\n"), card };
+}
+
+/**
+ * The live tips for one project — the same rules as the strip on the
+ * work-project tabs (util/projectTips.js mirrors the client's).
+ */
+export async function getProjectTipsForAgent(userId, projectName, context = {}, { now = new Date() } = {}) {
+  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  if (error) return error;
+  const project = await loadWhole(userId, found);
+  if (!project) return "That project could not be loaded.";
+  const access = await accessFor(userId, project);
+  const tips = projectTips(
+    { ...project, _ratesMasked: !access.canSeeRates },
+    { now, canEdit: access.canEdit },
+  );
+  if (!tips.length) {
+    return `Nothing stands out on "${project.name}": the bill is priced, and nothing on the programme or the money needs attention. Say so, and offer a report for the last month.${note ? `\n${note}` : ""}`;
+  }
+  const TAB_NAMES = { pm: "PM dashboard", rates: "Rates & budget", valuations: "Valuations", bill: "Bill" };
+  const L = [`What to do next on "${project.name}", most urgent first:`];
+  for (const t of tips) {
+    let how = "";
+    if (t.id === "unpriced") how = " (you can run propose_project_pricing for this)";
+    else if (t.action?.kind === "tab") how = ` (on the project's ${TAB_NAMES[t.action.tab] || t.action.tab} tab)`;
+    L.push(`- ${t.title}. ${t.body}${how}`);
+  }
+  L.push("");
+  L.push("Give the top one or two in plain words and offer to do the first. Do not list all of them unless asked.");
+  if (note) L.push(note);
+  return L.join("\n");
 }

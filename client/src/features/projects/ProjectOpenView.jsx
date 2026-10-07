@@ -2,7 +2,7 @@ import React from "react";
 import { useSearchParams } from "react-router-dom";
 import { rememberPlace } from "../../lib/lastPlace.js";
 import { useDismiss as useSharedDismiss } from "../../ds/dismiss.js";
-import { FaCheck, FaCopy, FaTrash } from "../../components/icons.jsx";
+import { FaCheck, FaCopy, FaEye, FaTrash } from "../../components/icons.jsx";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
@@ -12,7 +12,6 @@ import ServicesPricingPanel from "./ServicesPricingPanel.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
-import { approvedVariationsEarned } from "../../lib/variations.js";
 import { projectTotals } from "./lib/projectTotals.js";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
@@ -393,6 +392,9 @@ export default function ProjectOpenView({
     canManage: true,
     canSeeRates: true,
   },
+  // Sample project descriptor (project.sample) when this is read-only learning
+  // material; null for real projects.
+  sampleInfo = null,
   linkedGroupsCount = 0,
   // Cross-project links (MEP services → this general bill). Feature P1.
   linkedSummaries = [],
@@ -614,7 +616,8 @@ export default function ProjectOpenView({
   const canManage = access?.canManage !== false;
   const canSeeRates = access?.canSeeRates !== false;
   const accessRole = access?.role || "owner";
-  const isShared = accessRole !== "owner";
+  const isSample = accessRole === "sample" || !!sampleInfo;
+  const isShared = accessRole !== "owner" && !isSample;
 
   // P0.4, his "continue where you left off": a link from the Work overview
   // carries ?tab= (and &line= for the bill). They are used once, when that
@@ -707,18 +710,11 @@ export default function ProjectOpenView({
     ],
   );
 
-  // The share of the preliminary pool earned by the preliminary items ticked
-  // complete, pro-rated by allocation. The server does the same sum.
-  const preliminaryEarned = React.useMemo(() => {
-    const rows = Array.isArray(preliminaryItems) ? preliminaryItems : [];
-    const allocated = rows.reduce((acc, p) => acc + (Number(p?.allocation) || 0), 0);
-    const base = allocated > 0 ? allocated : 100;
-    return rows.reduce(
-      (acc, p) =>
-        p?.completed ? acc + (totals.prelims * (Number(p?.allocation) || 0)) / base : acc,
-      0,
-    );
-  }, [preliminaryItems, totals.prelims]);
+  // The share of the preliminary pool earned by the completed preliminary items
+  // used to be recomputed here and added to actualSpent. ProjectsGeneric
+  // already folds it into the valuedAmount it passes down (as
+  // prelimDoneAmountForOverview), so doing it again double-counted it — see
+  // the actualSpent prop below. Removed rather than left unused.
 
   // Budget tab is available for every source (QUIV/Revit, Heron/PlanSwift,
   // MEP, CIVIQ). It shows whatever material/labour breakdown the plugin
@@ -778,6 +774,35 @@ export default function ProjectOpenView({
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
+      {isSample ? (
+        <div
+          className="mk-note"
+          style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px" }}>
+            <b style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <FaEye /> Sample project · Read-only learning material
+            </b>
+            {sampleInfo?.foundation ? <b>{sampleInfo.foundation}</b> : null}
+            {sampleInfo?.stage ? <span>{sampleInfo.stage}</span> : null}
+          </div>
+          {sampleInfo?.summary ? <p style={{ margin: "6px 0 0" }}>{sampleInfo.summary}</p> : null}
+          {Array.isArray(sampleInfo?.highlights) && sampleInfo.highlights.length ? (
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 600 }}>What to look at in this sample</summary>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                {sampleInfo.highlights.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <p style={{ margin: "6px 0 0" }}>
+            You can open every tab, filter, and export, but nothing can be changed. Sync
+            your own model from the plugin to start a project of your own.
+          </p>
+        </div>
+      ) : null}
       {isShared ? (
         <p className="mk-note" style={{ margin: 0 }}>
           <b>Shared project · {canEdit ? "Full access" : "View only"}</b>
@@ -1250,22 +1275,24 @@ export default function ProjectOpenView({
           tax={totals.tax}
           contingencyPercent={contingencyPct}
           taxPercent={taxPct}
-          // Actual spent — measured-valued + executed PC + completed
-          // prelims + executed variations. Drives the over-run vs
-          // planned comparison so the final-account figure reflects
-          // real spend, not BoQ drift. A variation counts here only when it
-          // is BOTH approved and executed, which is the server's rule too
-          // (approvedVariationsEarned in util/variationStatus.js).
-          actualSpent={
-            (valuedAmount || 0) +
-            (provisionalSums || []).reduce(
-              (acc, s) =>
-                s?.completed ? acc + (Number(s?.amount) || 0) : acc,
-              0,
-            ) +
-            approvedVariationsEarned(variations) +
-            preliminaryEarned
-          }
+          // Actual spent — measured-valued + executed PC + completed prelims +
+          // executed variations. Drives the over-run vs planned comparison so
+          // the final-account figure reflects real spend, not BoQ drift.
+          //
+          // That is exactly what `valuedAmount` already is. ProjectsGeneric
+          // passes fullValuedAmount, which it builds as
+          //
+          //   valuedAmount + provDoneAmount + prelimDoneAmountForOverview
+          //     + variationsDoneAmount
+          //
+          // so adding those three again counted every one of them twice and
+          // manufactured an over-run on any job with provisional sums, earned
+          // preliminaries or executed variations — the very phantom over-run the
+          // comment above claimed to have removed. A variation counts here only
+          // when it is BOTH approved and executed, which is the server's rule
+          // too (approvedVariationsEarned in util/variationStatus.js) and is
+          // already how ProjectsGeneric builds variationsDoneAmount.
+          actualSpent={valuedAmount || 0}
           // S18 valuations: the variation rows, and who may act on them.
           variationRows={variations}
           onRaiseVariation={onRaiseVariation}

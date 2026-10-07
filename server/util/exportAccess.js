@@ -67,3 +67,29 @@ export function userOwnsDoc(doc, userId) {
 
   return true;
 }
+
+/**
+ * Is the export allowed to carry the money?
+ *
+ * canExportProject above answers "may you download this at all", and it kept a
+ * view-only collaborator out. It says nothing about rates, so a FULL
+ * collaborator without an active RateGen subscription could open the project,
+ * see every rate masked to zero on screen — and then download a workbook with
+ * all of them in it. The bill is the one document where the rates are the whole
+ * content, so there is nothing useful to hand back with them removed: the
+ * export refuses and says why.
+ *
+ * The owner is never gated, and neither is a sample, which is published
+ * teaching material.
+ *
+ * `hasRateGen` is injected so this stays a pure rule; a caller that forgets to
+ * pass one denies rather than grants.
+ */
+export async function mayExportRates(doc, userId, { hasRateGen } = {}) {
+  const uid = normalizeId(userId);
+  if (!doc || !uid) return false;
+  if (doc.isSample) return true;
+  if (doc.userId != null && normalizeId(doc.userId) === uid) return true;
+  if (typeof hasRateGen !== "function") return false;
+  return !!(await hasRateGen(userId));
+}

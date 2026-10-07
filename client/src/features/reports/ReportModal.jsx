@@ -26,13 +26,23 @@ const TITLES = {
   activity: "Project Activity Report",
 };
 
-function endpointFor(type, productKey, projectId) {
+// from / to (YYYY-MM-DD, Lagos days) are optional and only mean anything on
+// the two project reports: the server then adds a `period` block covering what
+// moved in that window, which the report prints as its own page. Ada's report
+// card passes them; every other caller leaves them out and gets exactly the
+// report it always got.
+function endpointFor(type, productKey, projectId, { from = "", to = "" } = {}) {
   if (type === "management") return "/reports/management";
   if (type === "activity") return "/me/activity/report";
-  return `/reports/${type}/${productKey}/${projectId}`;
+  const base = `/reports/${type}/${productKey}/${projectId}`;
+  const q = new URLSearchParams();
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  const qs = q.toString();
+  return qs ? `${base}?${qs}` : base;
 }
 
-export default function ReportModal({ open, onClose, type, productKey, projectId }) {
+export default function ReportModal({ open, onClose, type, productKey, projectId, from = "", to = "" }) {
   const { accessToken } = useAuth();
   const previewRef = useRef(null);
   const [report, setReport] = useState(null);
@@ -46,7 +56,7 @@ export default function ReportModal({ open, onClose, type, productKey, projectId
     setReport(null);
     setError("");
     setLoading(true);
-    apiAuthed(endpointFor(type, productKey, projectId), { token: accessToken })
+    apiAuthed(endpointFor(type, productKey, projectId, { from, to }), { token: accessToken })
       .then((res) => {
         if (cancelled) return;
         if (res?.report) setReport(res.report);
@@ -61,7 +71,7 @@ export default function ReportModal({ open, onClose, type, productKey, projectId
     return () => {
       cancelled = true;
     };
-  }, [open, type, productKey, projectId, accessToken]);
+  }, [open, type, productKey, projectId, from, to, accessToken]);
 
   if (!open) return null;
 

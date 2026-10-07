@@ -164,7 +164,12 @@ export default function Nav() {
           (h-14) reserves the 56px so page content doesn't slide up under it. */}
       <header
         // Sits under the launch countdown strip when it is showing (R20).
-        style={{ top: "var(--launch-strip-h, 0px)" }}
+        style={{
+          // Below the fixed launch strip AND the coupon banner. The banner is in
+          // flow but starts under the strip, so the nav has to clear both or it
+          // lands on top of the promo code.
+          top: "calc(var(--launch-strip-h, 0px) + var(--coupon-banner-h, 0px))",
+        }}
         className={`fixed inset-x-0 top-0 z-[100] transition-all duration-300 ${
           scrolled
             ? "bg-adlm-navy/95 backdrop-blur-xl border-b border-adlm-navy-tertiary shadow-lg shadow-black/30"
@@ -251,7 +256,7 @@ export default function Nav() {
       <div
         aria-hidden="true"
         className="h-14 flex-shrink-0"
-        style={{ height: "calc(3.5rem + var(--launch-strip-h, 0px))" }}
+        style={{ height: "calc(3.5rem + var(--launch-strip-h, 0px) + var(--coupon-banner-h, 0px))" }}
       />
 
       <div

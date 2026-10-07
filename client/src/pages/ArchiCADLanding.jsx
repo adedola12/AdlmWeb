@@ -11,6 +11,7 @@ import { apiAuthed } from "../http.js";
 import { unwrapList } from "../features/archicad/archicadApi.js";
 import { fmtMoney } from "../utils/archicadUnits.js";
 import ArchiCADConnectorStatus from "../features/archicad/ArchiCADConnectorStatus.jsx";
+import SampleProjectsStrip from "../features/projects/SampleProjectsStrip.jsx";
 
 dayjs.extend(relativeTime);
 
@@ -47,13 +48,19 @@ export default function ArchiCADLanding() {
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
+  const [samples, setSamples] = React.useState([]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setErr("");
     try {
-      const res = await apiAuthed("/api/archicad/projects", { token: accessToken });
+      const [res, sampleList] = await Promise.all([
+        apiAuthed("/api/archicad/projects", { token: accessToken }),
+        // Read-only learning samples; none (or no ArchiCAD licence) hides the row.
+        apiAuthed("/projects/archicad/samples", { token: accessToken }).catch(() => []),
+      ]);
       setRows(unwrapList(res));
+      setSamples(Array.isArray(sampleList) ? sampleList : []);
     } catch (e) {
       setErr(e?.message || "Failed to load ArchiCAD projects.");
     } finally {
@@ -90,6 +97,8 @@ export default function ArchiCADLanding() {
         </p>
       ) : null}
 
+      <SampleProjectsStrip samples={samples} productKey="archicad" />
+
       <p className="wk-grp" style={{ padding: 0, margin: 0 }}>
         Your ArchiCAD projects
       </p>
@@ -116,7 +125,8 @@ export default function ArchiCADLanding() {
               </p>
               <div className="f">
                 <div>
-                  <b>{fmtMoney(p.grandTotal)}</b>
+                  {/* A shared project whose prices are hidden from this reader. */}
+                  <b>{p.moneyHidden ? "–" : fmtMoney(p.grandTotal)}</b>
                   <span>estimate</span>
                 </div>
               </div>

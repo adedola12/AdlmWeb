@@ -24,6 +24,12 @@ import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+// Imported, not read from disk: on Lambda the API is one esbuild bundle and a
+// path relative to this file points at /var/assets/boq, which does not exist.
+// An import travels inside the bundle. The paths below remain for messages
+// and for callers (tests) that pass their own mappingPath.
+import elementalMappingJson from "../assets/boq/elemental-mapping.json" with { type: "json" };
+import tradeMappingJson from "../assets/boq/trade-mapping.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,8 +105,12 @@ function round2(n) {
   return Math.round(safeNum(n) * 100) / 100;
 }
 
-function loadMapping(mappingPath) {
+export function loadMapping(mappingPath) {
   const p = String(mappingPath || DEFAULT_MAPPING_PATH);
+  // A fresh copy each time, as a file read gave, so one export can never
+  // change the mapping another export sees.
+  if (p === DEFAULT_MAPPING_PATH) return structuredClone(elementalMappingJson);
+  if (p === TRADE_MAPPING_PATH) return structuredClone(tradeMappingJson);
   if (!fs.existsSync(p)) {
     throw new Error(`Elemental BoQ mapping not found at ${p}`);
   }
@@ -200,7 +210,25 @@ function itemMatchesGroup(haystack, words) {
   return true;
 }
 
-function findMatchingItems(boqItem, projectItems, matchedSet) {
+// An item's "exclude" list vetoes a match when any of its words appears in the
+// haystack. Lookups match on substrings, so "slab"+"concrete" also catches
+// "Concrete in Pool Slab" and "Oversite Slab Concrete"; the veto keeps those
+// ground-bearing slabs out of the suspended-slab lines. Excludes match whole
+// words (with an optional plural "s"), so "bed" does not veto "embedded".
+function itemExcluded(haystack, excludeWords) {
+  if (!Array.isArray(excludeWords) || !excludeWords.length) return false;
+  for (const w of excludeWords) {
+    const needle = normalizeText(w);
+    if (!needle) continue;
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(^|[^a-z0-9])${escaped}s?($|[^a-z0-9])`).test(haystack)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function findMatchingItems(boqItem, projectItems, matchedSet) {
   const lookups = Array.isArray(boqItem?.lookups) ? boqItem.lookups : [];
   const combineMode = String(boqItem?.lookupCombine || "first");
   if (!lookups.length) return [];
@@ -215,6 +243,7 @@ function findMatchingItems(boqItem, projectItems, matchedSet) {
       const it = projectItems[i];
       const haystack = itemHaystack(it);
       if (!itemMatchesGroup(haystack, group)) continue;
+      if (itemExcluded(haystack, boqItem.exclude)) continue;
       groupHits.push({ idx: i, item: it });
     }
     if (groupHits.length) {

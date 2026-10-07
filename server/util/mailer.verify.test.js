@@ -1,11 +1,9 @@
 // What the "Can we send?" report says, and about which transport.
 //
-// The regression these exist for: this report predates the SES cutover and
-// only ever probed Resend and Gmail SMTP. With MAIL_TRANSPORT=ses in
-// production it showed "resend-smtp — works" and nothing at all about SES,
-// which reads as "mail leaves here on Resend" — the opposite of the truth. An
-// admin checking whether mail was healthy was being shown the health of a
-// transport that cannot carry a single message while MAIL_FALLBACK=off.
+// SES is the only transport (owner's rule, 6 Oct 2026: no Resend, no SMTP
+// fallback), so the report is about SES and nothing else. The regression
+// these guard against: a report that showed some other provider "works" while
+// SES, the thing actually carrying the mail, was paused or in sandbox.
 //
 // No network: verifyMail takes the account reader, so sandbox, paused and
 // unreachable can each be driven directly.
@@ -14,13 +12,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 process.env.MAIL_TRANSPORT = "ses";
-process.env.MAIL_FALLBACK = "off";
-// Keep the other rungs out of the way unless a test wants them. buildTransports
-// runs at import, so these have to be gone before mailer.js loads.
-delete process.env.RESEND_API_KEY;
-delete process.env.SMTP_HOST;
-delete process.env.SMTP_USER;
-delete process.env.SMTP_PASS;
 
 const { verifyMail, summariseMailWays } = await import("./mailer.js");
 
@@ -89,39 +80,32 @@ test("SES unreachable fails the report rather than throwing", async () => {
   assert.equal(report.ok, false);
 });
 
-test("a healthy Resend behind a closed fallback is not counted as a way out", () => {
-  // The exact shape of the bug: SES paused, Resend authenticating fine. The
-  // old report said "there is a way out that has been checked" on Resend's
-  // strength while MAIL_FALLBACK=off meant nothing could reach it. Driven
-  // through the rule itself — producing a real Resend row needs a network
-  // call, and the network is not what is under test.
+test("anything other than SES is never counted as a way out", () => {
+  // SES is the only transport. Should any other row ever be handed in, it is
+  // marked not in use and cannot make a paused SES look healthy.
   const report = summariseMailWays([
     { via: "ses", ok: false, live: true, said: "SENDING PAUSED by AWS" },
-    { via: "resend-api", ok: true, said: "authenticated" },
-    { via: "resend-smtp smtp.resend.com:465", ok: true, said: "authenticated" },
+    { via: "smtp smtp.example.com:465", ok: true, said: "authenticated" },
   ]);
 
-  const resend = report.ways.find((r) => r.via === "resend-api");
-  assert.equal(resend.ok, true, "its key really does authenticate");
-  assert.equal(resend.unused, true, "but it must be marked as unable to carry mail");
-  assert.equal(resend.live, false);
+  const other = report.ways.find((r) => r.via !== "ses");
+  assert.equal(other.unused, true, "it must be marked as unable to carry mail");
+  assert.equal(other.live, false);
 
   assert.equal(report.transport, "ses");
-  assert.equal(
-    report.ok,
-    false,
-    "the report called the system healthy on a transport nothing can reach",
-  );
+  assert.equal(report.ok, false, "a paused SES is a failed report, whatever else answers");
 });
 
-test("with no transport selected the old any-way-out rule still applies", () => {
+test("with MAIL_TRANSPORT unset the report still names SES as the transport", async () => {
   const was = process.env.MAIL_TRANSPORT;
   delete process.env.MAIL_TRANSPORT;
   try {
-    const report = summariseMailWays([{ via: "resend-api", ok: true, said: "authenticated" }]);
-    assert.equal(report.transport, "", "nothing is live when none is selected");
-    assert.equal(report.ok, true, "a working Resend is a real way out when it can be reached");
-    assert.equal(report.ways[0].unused, undefined, "and it is not dead weight");
+    const report = await verifyMail({ readAccount: async () => HEALTHY });
+    assert.equal(report.transport, "ses");
+    assert.equal(report.fallbackOff, true, "nothing falls back, ever");
+    assert.equal(report.ways.length, 1, "SES is the only row");
+    assert.equal(report.ways[0].live, true);
+    assert.equal(report.ok, true);
   } finally {
     if (was === undefined) delete process.env.MAIL_TRANSPORT;
     else process.env.MAIL_TRANSPORT = was;

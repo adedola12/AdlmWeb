@@ -8,6 +8,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config.js";
+import { upcomingTrainings } from "../lib/upcomingTrainings.js";
 
 const NGN = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 });
 const month = (d) => new Date(d).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
@@ -37,10 +38,8 @@ export default function DsTrainingCalendar() {
     };
   }, []);
 
-  const now = Date.now();
-  const upcoming = (events || [])
-    .filter((e) => e.startAt && new Date(e.endAt || e.startAt).getTime() >= now)
-    .sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+  // The same rule /products uses, now that it uses one — see lib/upcomingTrainings.js.
+  const upcoming = upcomingTrainings(events);
   const months = [];
   for (const ev of upcoming) {
     const m = month(ev.startAt);

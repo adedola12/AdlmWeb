@@ -158,7 +158,7 @@ function buildAttemptedItem(p) {
     p?.productTitle ||
     p?.productKey ||
     p?.sku ||
-    "—"
+    "–"
   );
 }
 
@@ -231,7 +231,7 @@ async function getUnpaidAttemptRows() {
     if (!agg.firstName && r.firstName) agg.firstName = r.firstName;
     if (!agg.lastName && r.lastName) agg.lastName = r.lastName;
 
-    if (r.attemptedItem && r.attemptedItem !== "—") {
+    if (r.attemptedItem && r.attemptedItem !== "–") {
       const parts = String(r.attemptedItem)
         .split("·")
         .map((s) => s.trim())
@@ -245,7 +245,7 @@ async function getUnpaidAttemptRows() {
     firstName: x.firstName,
     lastName: x.lastName,
     email: x.email,
-    attemptedItem: x._items.size ? Array.from(x._items).join(" · ") : "—",
+    attemptedItem: x._items.size ? Array.from(x._items).join(" · ") : "–",
     createdAt: x.createdAt,
   }));
 }

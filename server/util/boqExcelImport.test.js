@@ -98,3 +98,50 @@ test("refuses an elemental BoQ export", async () => {
     (err) => err.code === "ADLM_EXPORT_NOT_IMPORTABLE",
   );
 });
+
+/* ── a schedule row that ties to nothing ─────────────────────────────────── */
+
+// Found while trying to reproduce a reported procurement loss on re-import.
+// The loss did not reproduce — the carry-over works — but a workbook whose
+// "Bill S/N" does not resolve strands its schedule rows: they price no bill
+// line, the line still reads as unpriced, and the M&L engine then generates a
+// whole synthetic schedule on top of the one the QS supplied. The import
+// reported its row count and looked like a success.
+test("says when a schedule row could not be tied to a bill line", async () => {
+  const wb = new ExcelJS.Workbook();
+  const bill = wb.addWorksheet("BoQ");
+  bill.addRow(["S/N", "Category", "Description", "Unit", "Qty", "Rate"]);
+  bill.addRow([1, null, "Reinforced concrete grade 25 in columns", "m3", 32, 65_000]);
+
+  const sched = wb.addWorksheet("Material Schedule");
+  sched.addRow(["Bill S/N", "Component", "Description", "Unit", "Qty", "Rate"]);
+  sched.addRow([1, "Material", "Cement (50kg bags)", "bags", 224, 9_500]);
+  // S/N 9 is not in the bill — a typo, or a sheet copied from another job.
+  sched.addRow([9, "Material", "Sharp sand", "m3", 14, 18_000]);
+
+  const parsed = await parseBoqWorkbook(await toBuffer(wb));
+  const orphanWarning = parsed.warnings.find((w) => /could not be tied to a bill line/.test(w));
+  assert.ok(orphanWarning, `expected an orphan warning, got: ${parsed.warnings.join(" | ")}`);
+  assert.match(orphanWarning, /1 material\/labour row/);
+  assert.match(orphanWarning, /Sharp sand/);
+  assert.match(orphanWarning, /Bill S\/N/);
+});
+
+test("a workbook whose schedule all ties up says nothing about orphans", async () => {
+  const wb = new ExcelJS.Workbook();
+  const bill = wb.addWorksheet("BoQ");
+  bill.addRow(["S/N", "Category", "Description", "Unit", "Qty", "Rate"]);
+  bill.addRow([1, null, "Reinforced concrete grade 25 in columns", "m3", 32, 65_000]);
+  const sched = wb.addWorksheet("Material Schedule");
+  sched.addRow(["Bill S/N", "Component", "Description", "Unit", "Qty", "Rate"]);
+  sched.addRow([1, "Material", "Cement (50kg bags)", "bags", 224, 9_500]);
+
+  const parsed = await parseBoqWorkbook(await toBuffer(wb));
+  assert.equal(
+    parsed.warnings.some((w) => /could not be tied to a bill line/.test(w)),
+    false,
+  );
+  // And the row really is tied on, so the engine will not double it up.
+  assert.equal(parsed.budgetItems.length, 1);
+  assert.equal(parsed.budgetItems[0].billIdentity, parsed.items[0].code);
+});

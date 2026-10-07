@@ -20,6 +20,7 @@ import {
   RPT,
   STATUS_COLORS,
 } from "./reportKit.jsx";
+import PeriodSection from "./PeriodSection.jsx";
 
 export default function PmReport({ report }) {
   const meta = report.meta;
@@ -219,6 +220,11 @@ export default function PmReport({ report }) {
     );
   }
 
+  // ── Page: this period (only when the report was asked for a date range) ──
+  // Second, straight after the summary: somebody who asked for September
+  // wants September first, not after the trade breakdown.
+  if (report.period) pages.splice(1, 0, <PeriodSection period={report.period} />);
+
   const pageCount = pages.length + 1;
   return (
     <>
@@ -228,7 +234,7 @@ export default function PmReport({ report }) {
         lede={`Schedule and earned-value performance for this ${meta.productLabel} project as at ${dayjs(meta.generatedAt).format("DD MMMM YYYY")}.`}
         metaPairs={[
           { label: "Project", value: meta.name },
-          { label: "Schedule", value: report.projectStart ? `${fmtDate(report.projectStart)} → ${fmtDate(report.projectFinish)}` : "—" },
+          { label: "Schedule", value: report.projectStart ? `${fmtDate(report.projectStart)} → ${fmtDate(report.projectFinish)}` : "–" },
           { label: "Progress", value: fmtPct(h.progressPercent) },
           { label: "CPI / SPI", value: `${(h.CPI ?? 0).toFixed(2)} / ${(h.SPI ?? 0).toFixed(2)}` },
           { label: "BAC", value: fmtMoney(t.BAC) },

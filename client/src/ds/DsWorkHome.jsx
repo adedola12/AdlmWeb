@@ -53,7 +53,8 @@ import WkPrefs from "./WkPrefs.jsx";
 // project gallery imported it, so a cold load of /work had no dashboard styles.
 import "../styles/ds-work-proj.css";
 import { FaChevronRight } from "../components/icons.jsx";
-import { foldMaterials, normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { foldMaterials, normaliseRollup } from "../lib/projectLinks.js";
+import { useProjectHref } from "../lib/useProjectHref.js";
 import { placeHref, readPlaces } from "../lib/lastPlace.js";
 import {
   SOURCES,
@@ -91,7 +92,7 @@ const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
   rategen: "RateGen",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   "qs-takeoff": "Time Pro",
   civil3d: "CIVIQ",
   archicad: "ArchiCAD",
@@ -187,6 +188,7 @@ const stageName = (p) => STAGES.find((s) => s.id === stageOf(p))?.name || "";
 const measurable = (p) => (Number(p.pricedCount) || 0) + (Number(p.unpricedCount) || 0);
 
 export default function DsWorkHome() {
+  const projectHref = useProjectHref();
   const { accessToken } = useAuth();
   const [projects, setProjects] = React.useState(null);
   const [summary, setSummary] = React.useState(null);
@@ -200,6 +202,8 @@ export default function DsWorkHome() {
   const [courses, setCourses] = React.useState(null);
   const [coursesFailed, setCoursesFailed] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  // Merged contracts' own certificates, which no project row carries.
+  const [mergedContracts, setMergedContracts] = React.useState([]);
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
@@ -208,7 +212,11 @@ export default function DsWorkHome() {
     // Five independent reads, in parallel. Only the rollup can take the page
     // down; every other panel carries its own failure.
     apiAuthed("/me/projects-rollup", { token: accessToken })
-      .then((d) => alive && setProjects(foldMaterials(normaliseRollup(d.projects))))
+      .then((d) => {
+        if (!alive) return;
+        setMergedContracts(Array.isArray(d.mergedContracts) ? d.mergedContracts : []);
+        setProjects(foldMaterials(normaliseRollup(d.projects)));
+      })
       .catch(() => alive && setFailed(true));
 
     apiAuthed("/me/work-overview", { token: accessToken })
@@ -241,7 +249,10 @@ export default function DsWorkHome() {
     };
   }, [accessToken]);
 
-  const kpi = React.useMemo(() => (projects ? headline(projects) : null), [projects]);
+  const kpi = React.useMemo(
+    () => (projects ? headline(projects, mergedContracts) : null),
+    [projects, mergedContracts],
+  );
 
   const decisions = React.useMemo(
     () =>
@@ -285,13 +296,13 @@ export default function DsWorkHome() {
       used.add(String(p.id));
       rows.push({
         project: p,
-        href: projectWorkspaceHref(p),
+        href: projectHref(p),
         eyebrow: "Recently updated",
         tab: "",
       });
     }
     return rows;
-  }, [projects]);
+  }, [projects, projectHref]);
 
   const lesson = React.useMemo(() => (courses ? pickNextLesson(courses) : null), [courses]);
 
@@ -389,7 +400,18 @@ export default function DsWorkHome() {
           return (
             <tr key={r.id}>
               <td className="tw">
-                <Link className="oh-p b" to={`/work/rate/${encodeURIComponent(r.id)}`}>
+                {/* ADDRESSED AS A CUSTOM RATE, which is what every row here is.
+                    This panel is fed only by GET /rategen-v2/library/custom-rates,
+                    and DsWorkRate reads a custom rate only from the
+                    `custom:<id>` form — a bare id is looked up among the MASTER
+                    rates by ObjectId, which a slug like "concrete-1-2-4-k3p9x"
+                    never matches. Every row led to "That rate is not in this
+                    library", about a rate the reader had just built. Same shape
+                    as rategen/mergeRateRows.js builds. */}
+                <Link
+                  className="oh-p b"
+                  to={`/work/rate/custom:${encodeURIComponent(r.customRateId || r.id)}`}
+                >
                   {r.title || r.description || "Untitled rate"}
                 </Link>
                 {r.sectionLabel ? <em>{r.sectionLabel}</em> : null}

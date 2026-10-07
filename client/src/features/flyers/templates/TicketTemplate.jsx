@@ -32,7 +32,7 @@ const SEAL_RED = "#d6232e";
 const SEAL_GOLD = "#e8b84a";
 const LABEL_ORANGE = "#E86A27";
 
-export default function TicketTemplate({ flyer, accent, days, palette }) {
+export default function TicketTemplate({ flyer, accent, palette }) {
   const currency = flyer.currency || "NGN";
 
   return (

@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 
@@ -71,84 +71,10 @@ function EmptyState({ title, detail }) {
   );
 }
 
-/**
- * One editable price cell.
- *
- * Kept as its own component so each row holds its own draft. A single draft
- * lifted to the table would reset whichever row the user was mid-way through
- * typing in every time the page auto-refreshed, which it does every 30 seconds.
- */
-function PriceCell({ row, kind, onSave, saving }) {
-  const [editing, setEditing] = React.useState(false);
-  const [draft, setDraft] = React.useState("");
-  const isMine = !!row.isUserPrice;
-
-  function begin() {
-    setDraft(String(row.price ?? ""));
-    setEditing(true);
-  }
-
-  async function commit() {
-    const trimmed = draft.trim();
-    // Same figure, or nothing typed: no request, so a stray click cannot bump
-    // the version and make every other device re-sync for nothing.
-    if (trimmed === "" || Number(trimmed) === Number(row.price)) {
-      setEditing(false);
-      return;
-    }
-    await onSave({ kind, name: row.description, unit: row.unit, price: Number(trimmed) });
-    setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <div className="flex items-center gap-1">
-        <input
-          autoFocus
-          type="number"
-          min="0"
-          value={draft}
-          disabled={saving}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
-            if (e.key === "Escape") setEditing(false);
-          }}
-          onBlur={commit}
-          className="w-28 rounded-lg border border-adlm-blue-700 px-2 py-1 text-sm focus:outline-none"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={begin}
-        title="Click to set your own price for this location"
-        className={`rounded px-1 text-left hover:bg-slate-100 ${
-          isMine ? "font-semibold text-adlm-blue-700" : "text-slate-700"
-        }`}
-      >
-        {formatMoney(row.price)}
-      </button>
-      {isMine ? (
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => onSave({ kind, name: row.description, unit: row.unit, price: null })}
-          title="Remove your price and go back to the published one"
-          className="text-[10px] uppercase tracking-wide text-slate-400 hover:text-rose-600"
-        >
-          yours · reset
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function LibraryTable({ rows, editable = false, kind = "material", onSave, saving }) {
+// Read-only. Prices are changed in Rate Gen (owner's rule, 4 Oct 2026): a
+// material or labour price is part of every rate built on it, and the server
+// refuses a browser's write (server/middleware/rateGenOnlyWrites.js).
+function LibraryTable({ rows }) {
   if (!rows.length) {
     return (
       <EmptyState
@@ -190,12 +116,17 @@ function LibraryTable({ rows, editable = false, kind = "material", onSave, savin
                 ) : null}
               </td>
               <td className="px-4 py-3 text-slate-700">{row.unit || "-"}</td>
-              <td className="px-4 py-3 text-slate-700">
-                {editable ? (
-                  <PriceCell row={row} kind={kind} onSave={onSave} saving={saving} />
-                ) : (
-                  formatMoney(row.price)
-                )}
+              <td
+                className={`px-4 py-3 ${
+                  row.isUserPrice ? "font-semibold text-adlm-blue-700" : "text-slate-700"
+                }`}
+              >
+                {formatMoney(row.price)}
+                {row.isUserPrice ? (
+                  <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">
+                    yours
+                  </span>
+                ) : null}
               </td>
               <td className="px-4 py-3 text-slate-500">
                 {row.category || "-"}
@@ -423,42 +354,6 @@ export default function RateGenLibrary() {
     (stateKey ? stateKey.replace(/_/g, " ") : "");
   const zoneLabel = zone ? zone.replace(/_/g, " ") : "";
 
-  /* ── the user's own prices for their location ── */
-
-  const [savingPrice, setSavingPrice] = React.useState(false);
-  const [priceMsg, setPriceMsg] = React.useState("");
-
-  const savePriceOverride = React.useCallback(
-    async ({ kind, name, unit, price }) => {
-      if (!accessToken) return;
-      setSavingPrice(true);
-      setPriceMsg("");
-      try {
-        const res = await apiAuthed("/rategen/price-overrides", {
-          token: accessToken,
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind, name, unit, price }),
-        });
-        setPriceMsg(
-          res?.cleared
-            ? `Reset "${name}" to the published price.`
-            : `Saved your price for "${name}". It reaches RateGen on your next sign-in.`,
-        );
-        // Re-read rather than patching the row locally, so what is on screen is
-        // what the server will actually serve to the desktop.
-        await loadAll({ silent: true });
-      } catch (e) {
-        setPriceMsg(e?.message || "Could not save that price.");
-      } finally {
-        setSavingPrice(false);
-      }
-    },
-    // loadAll is defined below and is stable via useCallback.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [accessToken],
-  );
-
   React.useEffect(() => {
     latestMineRef.current = mine;
   }, [mine]);
@@ -511,6 +406,16 @@ export default function RateGenLibrary() {
             }),
             apiAuthed("/rategen-v2/library/meta", { token: accessToken }),
           ]);
+
+        // A dead session: every call came back 401 even after the silent
+        // refresh. Stop polling instead of retrying every 10s for days (one
+        // stale tab sent ~900 401s to each of these endpoints, 20-25 Sep 2026).
+        const results = [masterRes, mineRes, mergedRes, metaRes];
+        if (results.every((r) => r.status === "rejected" && r.reason?.status === 401)) {
+          setAutoRefresh(false);
+          setErr("You are signed out. Please sign in again.");
+          return;
+        }
 
         const partialErrors = [];
         let nextMine = latestMineRef.current;
@@ -576,6 +481,7 @@ export default function RateGenLibrary() {
     if (!accessToken || !autoRefresh) return undefined;
 
     const interval = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       loadAll({ silent: true });
       loadUpdatesCount();
     }, 10000);
@@ -843,28 +749,15 @@ export default function RateGenLibrary() {
           </div>
         )}
 
-        {(tab === "master-materials" || tab === "master-labour") && !loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <strong className="text-slate-800">Set your own prices.</strong>{" "}
-            Click any price to replace it with what you actually pay
-            {stateLabel ? ` in ${stateLabel}` : ""}. Your figure is used by
-            RateGen, QUIV and HERON from your next sign-in, and{" "}
-            <em>reset</em> puts the published price back.{" "}
-            {stateKey ? (
-              <>It applies to {stateLabel} only, so work you price elsewhere is unaffected.</>
-            ) : (
-              <>
-                You have no state set, so it will apply everywhere. Set one on
-                your <Link to="/profile" className="underline">Profile</Link> to
-                keep prices separate by location.
-              </>
-            )}
-          </div>
-        ) : null}
-
-        {priceMsg ? (
-          <div className="rounded-2xl border border-adlm-blue-700/20 bg-adlm-blue-700/5 px-4 py-3 text-sm text-slate-700">
-            {priceMsg}
+        {!loading ? (
+          <div
+            role="note"
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
+          >
+            <strong className="text-slate-800">Build and edit rates in ADLM Rate Gen.</strong>{" "}
+            This page shows your library. New rates, changes to a rate and your own material or
+            labour prices{stateLabel ? ` for ${stateLabel}` : ""} are made in Rate Gen on your
+            computer, and appear here after its next sync.
           </div>
         ) : null}
 
@@ -881,17 +774,7 @@ export default function RateGenLibrary() {
             ) : tab === "effective-rates" || tab === "my-rate-overrides" ? (
               <RateTable rows={filteredRows} />
             ) : (
-              <LibraryTable
-                rows={filteredRows}
-                // Only the published catalog is editable here. "My Materials"
-                // and "My Labour" are rows the user added in the app, and they
-                // are edited there; making them editable in two places would be
-                // two sources of truth for the same row.
-                editable={tab === "master-materials" || tab === "master-labour"}
-                kind={tab === "master-labour" ? "labour" : "material"}
-                onSave={savePriceOverride}
-                saving={savingPrice}
-              />
+              <LibraryTable rows={filteredRows} />
             )}
           </>
         )}

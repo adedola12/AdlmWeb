@@ -74,6 +74,11 @@ describe("the tool page's empty project grid", () => {
       const p = String(path);
       if (p.startsWith("/projects/revit/storage")) return Promise.resolve(null);
       if (p.includes("entitlements")) return Promise.resolve({ items: [] });
+      // The read-only learning samples are their own endpoint and their own
+      // strip on the page. Without this the catch-all below answered that call
+      // too, so the same two projects rendered twice — once in the grid, once
+      // as samples — and every getByText in here found two of everything.
+      if (p.endsWith("/samples")) return Promise.resolve([]);
       if (opts.method === "DELETE") return Promise.reject(new Error("Could not delete"));
       return Promise.resolve([project("p1", "Ikoyi tower"), project("p2", "Lekki annexe")]);
     });

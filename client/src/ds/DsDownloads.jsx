@@ -20,6 +20,7 @@ import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
 import { useAuth } from "../store.jsx";
+import DsSampleModels from "./DsSampleModels.jsx";
 
 const ICONS = {
   revit: "/ds/ic-quiv.png",
@@ -167,6 +168,9 @@ export default function DsDownloads() {
   }
 
   const { hub } = view;
+  // R3: the Hub is for paid accounts. The server sends no link to an unpaid
+  // one, only allowed:false, so the page points it at the products instead.
+  const hubLocked = hub.allowed === false;
 
   // R15: a fresh link from our storage at the moment of the click; the one on
   // the page is the fallback, and it expires an hour after the page loaded.
@@ -176,8 +180,13 @@ export default function DsDownloads() {
     try {
       const r = await apiAuthed("/me/downloads/installer-hub", { token: accessToken });
       window.location.assign(r?.url || fallback);
-    } catch {
-      window.location.assign(fallback);
+    } catch (err) {
+      // A licence that lapsed since the page loaded: no file, the products.
+      if (err?.status === 403 && err?.data?.code === "HUB_REQUIRES_PAID") {
+        window.location.assign("/products");
+        return;
+      }
+      if (fallback) window.location.assign(fallback);
     }
   };
 
@@ -207,7 +216,12 @@ export default function DsDownloads() {
           One signed-in app that installs and updates everything on this account, shows what your
           subscription covers, and keeps each product on its current build.
         </p>
-        {hub.downloadUrl ? (
+        {hubLocked ? (
+          <p className="meta">
+            The Installer Hub comes with a licence for one of our desktop products.{" "}
+            <Link to="/products">See the products</Link> to buy or renew one, then download it here.
+          </p>
+        ) : hub.downloadUrl ? (
           <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl} onClick={freshHub}>
             Download for Windows {icon("downloads")}
           </a>
@@ -333,6 +347,12 @@ export default function DsDownloads() {
               </p>
             </div>
           </section>
+
+          {/* The Revit and IFC files courses and demos are built on. The whole
+              reader half of that library had no screen at all: an admin could
+              publish a model and no learner could ever reach it. `quiet` so a
+              practice with none sees nothing rather than an empty panel. */}
+          <DsSampleModels quiet />
 
           <section className="dsh-panel">
             <div className="dsh-ph">

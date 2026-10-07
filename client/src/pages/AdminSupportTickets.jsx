@@ -19,7 +19,7 @@ const statusTone = {
 };
 
 function fmtDate(d) {
-  return d ? new Date(d).toLocaleDateString() : "—";
+  return d ? new Date(d).toLocaleDateString() : "–";
 }
 
 // Format a Date for <input type="datetime-local"> in the admin's local time.
@@ -229,7 +229,7 @@ export default function AdminSupportTickets() {
           <div className="grid sm:grid-cols-3 gap-4">
             <div>
               <div className="text-xs font-semibold text-slate-500 uppercase mb-1">AnyDesk</div>
-              <div className="text-sm font-mono">{sel.anyDeskAddress || "—"}</div>
+              <div className="text-sm font-mono">{sel.anyDeskAddress || "–"}</div>
             </div>
             <div>
               <div className="text-xs font-semibold text-slate-500 uppercase mb-1">Category</div>
@@ -237,7 +237,7 @@ export default function AdminSupportTickets() {
             </div>
             <div>
               <div className="text-xs font-semibold text-slate-500 uppercase mb-1">Product</div>
-              <div className="text-sm">{sel.productKey || "—"}</div>
+              <div className="text-sm">{sel.productKey || "–"}</div>
             </div>
             <div>
               <div className="text-xs font-semibold text-slate-500 uppercase mb-1">Raised from</div>
@@ -365,7 +365,7 @@ export default function AdminSupportTickets() {
                         )}
                       </td>
                       <td className="py-2 pr-3 text-slate-600">{t.userEmail}</td>
-                      <td className="py-2 pr-3 text-slate-600">{t.productKey || t.source || "—"}</td>
+                      <td className="py-2 pr-3 text-slate-600">{t.productKey || t.source || "–"}</td>
                       <td className="py-2 pr-3">
                         <span className={`text-[11px] px-2 py-0.5 rounded-full capitalize ${statusTone[t.status] || "bg-slate-100"}`}>
                           {t.status}
