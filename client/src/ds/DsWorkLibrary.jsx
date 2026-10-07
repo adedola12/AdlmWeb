@@ -75,6 +75,10 @@ export default function DsWorkLibrary() {
   const [master, setMaster] = React.useState(null); // materials + labour
   const [masterFailed, setMasterFailed] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  // The plant library (machines per day from their parts, used by the hour),
+  // read when the Plant tab is first opened.
+  const [plantLib, setPlantLib] = React.useState(null); // { items, version }
+  const [plantFailed, setPlantFailed] = React.useState(false);
 
   const [tab, setTab] = React.useState("rates");
   const [q, setQ] = React.useState("");
@@ -121,6 +125,26 @@ export default function DsWorkLibrary() {
       .catch(() => setMasterFailed(true));
   }, [accessToken]);
 
+  const loadPlant = React.useCallback(() => {
+    if (!accessToken) return Promise.resolve(null);
+    return apiAuthed("/rategen-v2/library/plant", { token: accessToken })
+      .then((d) => {
+        const v = { items: Array.isArray(d.items) ? d.items : [], version: d.version ?? 1 };
+        setPlantLib(v);
+        setPlantFailed(false);
+        return v;
+      })
+      .catch(() => {
+        setPlantFailed(true);
+        return null;
+      });
+  }, [accessToken]);
+
+  React.useEffect(() => {
+    if (!accessToken || tab !== "plant" || plantLib || plantFailed) return;
+    loadPlant();
+  }, [accessToken, tab, plantLib, plantFailed, loadPlant]);
+
   React.useEffect(() => {
     if (!accessToken) return undefined;
     let alive = true;
@@ -156,38 +180,28 @@ export default function DsWorkLibrary() {
     return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [rows]);
 
-  /* ── plant, honestly ─────────────────────────────────────────────────────
-     There is no plant library. Plant exists only as lines inside rates, so
-     that is exactly what the tab shows: the distinct machines found in the
-     build-ups, at the price captured on them, and how many rates use each.
-     Nothing here is invented, and nothing here is editable, because a machine
-     costed by the day from its hire, fuel, oil and operator is a store we do
-     not have yet. */
+  /* ── plant: the library (R2) ─────────────────────────────────────────────
+     Each machine is costed per day from its parts (hire or ownership, fuel,
+     operator, maintenance, transport) and priced per hour at its stated
+     working day. "Used in" counts the rates whose build-up names it. A machine
+     that cannot be priced says so and is never shown at ₦0. */
   const plantRows = React.useMemo(() => {
-    if (!rows) return [];
-    const seen = new Map();
-    for (const r of rows) {
-      for (const c of componentsOf(r)) {
-        if (c.kind !== "plant" && c.kind !== "equipment") continue;
-        const name = (c.name || "").trim();
-        if (!name) continue;
-        const key = `${name.toLowerCase()}|${(c.unit || "").toLowerCase()}`;
-        const cur = seen.get(key) || {
-          key,
-          name,
-          unit: c.unit || "",
-          unitPrice: c.unitPrice,
-          used: 0,
-        };
-        cur.used += 1;
-        // The dearest captured price, so the row never understates what the
-        // library is actually carrying for this machine.
-        if (toNum(c.unitPrice) > toNum(cur.unitPrice)) cur.unitPrice = c.unitPrice;
-        seen.set(key, cur);
-      }
+    const used = new Map();
+    for (const r of rows || []) {
+      const names = new Set(
+        componentsOf(r)
+          .filter((c) => c.kind === "plant" || c.kind === "equipment")
+          .map((c) => (c.name || "").trim().toLowerCase())
+          .filter(Boolean),
+      );
+      for (const n of names) used.set(n, (used.get(n) || 0) + 1);
     }
-    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows]);
+    return (plantLib?.items || []).map((p) => ({
+      ...p,
+      rowKey: p.sn != null ? `sn-${p.sn}` : `own-${p.key}`,
+      used: used.get(String(p.name || "").trim().toLowerCase()) || 0,
+    }));
+  }, [rows, plantLib]);
 
   const itemRows = React.useMemo(() => {
     if (tab !== "materials" && tab !== "labour") return [];
@@ -217,7 +231,17 @@ export default function DsWorkLibrary() {
       ];
     }
     if (tab === "plant") {
-      return [{ value: "all", label: "All plant", note: `${plantRows.length}` }];
+      const counts = new Map();
+      for (const p of plantRows) {
+        const c = (p.category || "").trim();
+        if (c) counts.set(c, (counts.get(c) || 0) + 1);
+      }
+      return [
+        { value: "all", label: "All plant", note: `${plantRows.length}` },
+        ...[...counts.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([c, n]) => ({ value: c, label: c, note: `${n}` })),
+      ];
     }
     const counts = new Map();
     for (const m of itemRows) {
@@ -280,8 +304,13 @@ export default function DsWorkLibrary() {
   }, [itemRows, cat, term, sort]);
 
   const shownPlant = React.useMemo(
-    () => (term ? plantRows.filter((p) => p.name.toLowerCase().includes(term)) : plantRows),
-    [plantRows, term],
+    () =>
+      plantRows.filter(
+        (p) =>
+          (cat === "all" || (p.category || "") === cat) &&
+          (!term || p.name.toLowerCase().includes(term)),
+      ),
+    [plantRows, term, cat],
   );
 
   const pickTab = (id) => {
@@ -331,6 +360,39 @@ export default function DsWorkLibrary() {
     });
   }
 
+  /* ── a machine: what its day costs (R2) ──────────────────────────────────
+     Read only. Rates, prices and machines are built and edited in Rate Gen
+     (owner's rule, 4 Oct 2026); the server refuses a browser's write to the
+     plant library like any other library write. */
+
+  function openPlant(p) {
+    const rowsCard = [
+      ...(p.parts || []).map((x) => [
+        `${x.description || x.kind} · ${qty(x.quantity)} ${x.unit || ""} × ${money(x.unitPrice)}`.replace(/\s+/g, " "),
+        money(x.amount),
+      ]),
+      ["Day cost", money(p.dayCost)],
+      ["Working day", p.hoursPerDay ? `${qty(p.hoursPerDay)} hours` : DASH],
+      ["Per hour", p.hourlyRate === null ? `Not priced · ${p.problems?.[0] || ""}` : money(p.hourlyRate)],
+      ...(p.source === "your-copy" && p.adlm?.hourlyRate != null
+        ? [["ADLM's figure", `${money(p.adlm.hourlyRate)} per hr`]]
+        : []),
+    ];
+    fb.card({
+      tone: "info",
+      noIcon: true,
+      title: p.name,
+      msg:
+        p.source === "adlm"
+          ? "ADLM's machine. To use your own hire, diesel or operator prices, make your own version in Rate Gen."
+          : p.source === "your-copy"
+            ? "Your version of ADLM's machine, made in Rate Gen. Rates you build from now on use it."
+            : "A machine of your own, made in Rate Gen.",
+      rows: rowsCard,
+      secondary: "Close",
+    });
+  }
+
   /* ── render ────────────────────────────────────────────────────────────── */
 
   if (failed) {
@@ -362,7 +424,11 @@ export default function DsWorkLibrary() {
             : ""
         }`
       : tab === "plant"
-        ? `${shownPlant.length} machine${shownPlant.length === 1 ? "" : "s"} · plant is priced inside rates, so this is what the build-ups carry`
+        ? plantLib
+          ? `${shownPlant.length} machine${shownPlant.length === 1 ? "" : "s"} · priced per day from their parts, used by the hour`
+          : plantFailed
+            ? "The plant library could not be read."
+            : "Reading the plant library…"
         : master
           ? `${shownItems.length} ${tab === "materials" ? "material" : "labour"} row${
               shownItems.length === 1 ? "" : "s"
@@ -512,36 +578,62 @@ export default function DsWorkLibrary() {
           </div>
         )
       ) : tab === "plant" ? (
-        shownPlant.length ? (
+        plantFailed ? (
+          <div className="wk-empty">
+            The plant library could not be read just now. Your rates are unaffected; please
+            refresh.
+          </div>
+        ) : !plantLib ? (
+          <p className="ds-sub">Reading the plant library…</p>
+        ) : shownPlant.length ? (
           <div className="wk-tbl wk-tbl-mat" role="table">
             <div className="wk-hd" role="row">
-              <span>Plant</span>
+              <span>Machine</span>
               <span>Unit</span>
-              <span>Price</span>
+              <span>Per hour</span>
               <span>Used in</span>
             </div>
             {shownPlant.map((p) => (
-              <div className="wk-row" role="row" key={p.key}>
+              <a
+                className="wk-row"
+                role="row"
+                key={p.rowKey}
+                href={`#plant-${p.rowKey}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  openPlant(p);
+                }}
+              >
                 <span className="wk-nm">
                   <b>{p.name}</b>
-                  <span>read from the rates that use it</span>
+                  <span>
+                    {money(p.dayCost)} a day
+                    {p.hoursPerDay ? ` · ${qty(p.hoursPerDay)}-hour day` : ""}
+                    {p.category ? ` · ${p.category}` : ""}
+                    {p.source !== "adlm" ? (
+                      <>
+                        {" · "}
+                        <em className="wk-own">{p.source === "yours" ? "yours" : "your version"}</em>
+                      </>
+                    ) : null}
+                  </span>
                 </span>
-                <span className="wk-u">{p.unit || DASH}</span>
+                <span className="wk-u">hr</span>
                 <span className="wk-r">
-                  {money(p.unitPrice)}
-                  <i>per {p.unit || "unit"}</i>
+                  {p.hourlyRate === null ? DASH : money(p.hourlyRate)}
+                  <i>{p.hourlyRate === null ? p.problems?.[0] || "not priced" : "per hr"}</i>
                 </span>
                 <span className="wk-w">
-                  {p.used} rate{p.used === 1 ? "" : "s"}
+                  {p.used ? `${p.used} rate${p.used === 1 ? "" : "s"}` : <em>not used yet</em>}
                 </span>
-              </div>
+              </a>
             ))}
           </div>
         ) : (
           <div className="wk-empty">
-            No plant in the library yet. Plant is priced inside a rate — a machine costed by the
-            day from its hire, fuel, oil and operator, and used by the hour, is a library we have
-            not built yet. Until then, a plant line is added on the rate itself.
+            {term || cat !== "all"
+              ? "Nothing here matches."
+              : "No machines in the plant library yet. Add one of your own: cost a working day from its parts and it is priced per hour for your rates."}
           </div>
         )
       ) : masterFailed ? (

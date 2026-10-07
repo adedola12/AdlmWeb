@@ -7491,7 +7491,9 @@ async function priceLineFromRate(req, res) {
       });
     }
 
-    const ctx = await buildMlScheduleContext(userId);
+    // Prices and constants only: this path writes the picked rate's own
+    // build-up and never generates, so it skips the rate plant lookup (R2).
+    const ctx = await buildMlScheduleContext(userId, { ratePlant: false });
     const unitCost = Number(req.body?.unitCost) || 0;
     const convert = cleanConvert(req.body?.convert);
     const one = priceBillLine(project, item, rate, ctx, { unitCost, convert });

@@ -119,6 +119,34 @@ export const SEED = [
     pending: "Richard's sign-off, then merge to QUIV main, version bump and package through the Installer Hub release scripts. Richard is not a collaborator on RevitPluginArch, so GitHub cannot request his review there.",
     refs: "github.com/adedola12/RevitPluginArch/pull/4 (fix/custom-rate-plant-breakdown, c4691eb, worktree nw/RevitPluginArch-r5)",
   },
+  // Richard's review item R2, built together because they touch the same rate
+  // build-up code. Filed 26 Sep with full business cases; built locally
+  // ahead of approval at the owner's request ("we can build locally"),
+  // NOT pushed. Stage stays "proposed" until Richard decides.
+  {
+    key: "r2-overhead-profit-per-trade",
+    title: "RateGen: overhead and profit defaults set per trade",
+    products: ["rategen", "website", "quiv", "heron"],
+    kind: "improvement",
+    stage: "proposed",
+    summary: "A customer (and ADLM for the master library) sets default overhead % and profit % per trade. A default fills only a percentage a rate arrives without; it never rewrites a stored rate.",
+    progress: "Website built locally 27 Sep on AdlmWeb branch feat/r2-rategen-trade-margins-plant (not pushed): per-user table on RateGenLibrary.tradeMargins and ADLM's master table (RateGenTradeMargin); resolved in the custom-rate and override write paths (single and bulk, website and desktop), the compute engine and admin rate create. An edit that omits a percentage now keeps the stored one (it used to reset to 10/25 or 10/10). Tested with worked figures, including a release-day snapshot that no stored total moves. Desktop check done: QUIV has no hard-coded O&P fallback (reads each rate's percentages, 0 when none), so no QUIV change; HERON reads percentages only for its guardrail.",
+    pending: "Richard's approval. Then push once and open the PR. Optional desktop parity: RateGen desktop still starts new rates at its own 10/25 (section screens) and 10/10 (custom rate), so it would need to read GET /rategen-v2/library/trade-margins to show the customer's trade defaults.",
+    refs: "AdlmWeb feat/r2-rategen-trade-margins-plant (local) · server/util/tradeMargins.js · docs/R2-TRADE-MARGINS-AND-PLANT.md",
+    design: { status: "needed", surfaces: "RateGen 'Default margins by trade' table; custom rate builder placeholders ('Trade: 12' / 'Default: 10'); admin master per-trade table" },
+  },
+  {
+    key: "r2-plant-library-per-hour",
+    title: "RateGen plant costing library: priced per day from its parts, used by the hour",
+    products: ["rategen", "website", "quiv", "heron"],
+    kind: "feature",
+    stage: "proposed",
+    summary: "Each machine is costed for a working day from hire/ownership, fuel, operator, maintenance and transport, converted at a stated hours-per-day, and consumed by rates by the hour (0.25 hr of mixer per m3).",
+    progress: "Website built locally 27 Sep on AdlmWeb branch feat/r2-rategen-trade-margins-plant (not pushed): RateGenPlant model + admin library (Rate data > Plant library), customer's own machines / own versions (RateGenLibrary.plant), Plant tab, plant picker in the custom rate builder and the admin rate builder, and the schedule engine's plantFor hook now fed from the rate that priced each bill line (Rate Gen licence only, same unit only). An unpriced machine has no hourly rate and cannot be picked (never a silent zero). Plant lines are breakdown lines with refKind 'plant', unit 'hr' and a stored lineTotal, so no plugin field changes. Fixed on the way: a website custom rate's plant line was only in breakdown[], so a Rate Gen desktop re-push could drop it; it now also rides in materials[] with rateType 'plant', which preservePlantLines protects.",
+    pending: "Richard's approval, then push once. Desktop: QUIV needs RevitPluginArch PR #4 (fix/custom-rate-plant-breakdown, another session, awaiting sign-off) so a custom rate's plant is read. HERON and QUIV still fold plant into labour in the Budget (docs/PLANT-IN-BUDGET-PLUGIN-HANDOVER.md, unchanged). ADLM staff must enter the first machines (the library ships empty). Plant is not zoned yet.",
+    refs: "AdlmWeb feat/r2-rategen-trade-margins-plant (local) · server/util/plantCosting.js · server/util/plantAllowance.js · docs/R2-TRADE-MARGINS-AND-PLANT.md · RevitPluginArch PR #4",
+    design: { status: "needed", surfaces: "RateGen Plant tab; plant item card (parts that build the day cost); 'add plant' picker in the custom rate builder and admin rate builder; admin plant library. Desktop: plant rows in QUIV/HERON rate build-up and Budget." },
+  },
   // Richard's 22 Sep desktop designs (his 596e9cb..ca0e6c3). The QUIV splash is
   // inside quiv-4-redesign and HERON side one inside the HERON 3.0 proposal.
   {
