@@ -117,3 +117,62 @@ test("no dimension in the description, no converted offer", () => {
   const out = suggestRatesForLine({ description: "Concrete in walls", unit: "m2" }, rates, { convert: true });
   assert.equal(out.length, 0);
 });
+
+// ── matching real Revit bill wording (Project Aurora, 3 Oct 2026) ────────────
+// Before lineMatchScore, 1 of 363 unpriced lines on that bill got a suggestion
+// from a library holding answers for over a hundred of them.
+import { lineMatchScore, matchWords } from "./rateSuggestions.js";
+
+const LIB = [
+  { rateId: "bw150", description: "150mm blockwall in cement and sand mortar (1:6)", unit: "m2", unitPrice: 9000 },
+  { rateId: "bw225", description: "225mm blockwall in cement and sand mortar (1:6)", unit: "m2", unitPrice: 11000 },
+  { rateId: "fill150", description: "Concrete filling in 150mm blockwall", unit: "m2", unitPrice: 36229 },
+  { rateId: "render", description: "Cement and sand (1:3) render to wall 12mm thick.", unit: "m2", unitPrice: 2500 },
+  { rateId: "formwork", description: "Sawn formwork to sides and soffit of beams and lintels not exceeding 3.00mm height from ground floor level.", unit: "m2", unitPrice: 6000 },
+  { rateId: "cart", description: "Remove excess excavated material from site, tip location not exceeding 10km form site, using 10ton tipping lorry", unit: "m3", unitPrice: 4000 },
+  { rateId: "door", description: "Supply and install 44mm Timber flush door size 900 x 2100mm high.", unit: "No", unitPrice: 85000 },
+  { rateId: "c20", description: "Concrete (1:2:4) grade 20 in column, wall or suspended floor.", unit: "m3", unitPrice: 167163 },
+];
+const best = (description, unit) => suggestRatesForLine({ description, unit }, LIB, { limit: 1, convert: true })[0];
+
+test("Revit's brackets, codes and dimensions do not count against a match", () => {
+  assert.deepEqual([...matchWords("Door Doors_IntSgl_1 : TD02 - TIMBER DOOR - 850mmW")], ["door", "intsgl", "timber"]);
+  assert.deepEqual([...matchWords("Wall Area [L:01 | T:WT2 _ 150mm Blockwork]")], ["wall"]);
+});
+
+test("the obvious answers are found", () => {
+  assert.equal(best("Blockwork – Lintel Formwork [L:** Site Level | T:WT3 _ 230mm Blockwork _ Paint/Paint]", "m2").rateId, "formwork");
+  assert.equal(best("Drainage – Disposal of Surplus Excavated Material", "m3").rateId, "cart");
+  assert.equal(best("Door Doors_IntSgl_1 : TD02 - TIMBER DOOR - 850mmW", "Nr").rateId, "door");
+  assert.equal(best("Blockwork – Wall Rendering [L:00 | T:WT3 _ 230mm Blockwork]", "m2").rateId, "render");
+});
+
+test("a wall gets the walling rate at its own thickness, not the filling", () => {
+  assert.equal(best("Blockwork – Wall Area [L:00 Basement | T:WT2 _ 150mm Blockwork _ Paint/Paint]", "m2").rateId, "bw150");
+  assert.equal(best("Blockwork – Wall Area [L:00 Basement | T:WT3 _ 230mm Blockwork _ Paint/Paint]", "m2").rateId, "bw225");
+});
+
+test("the host category counts less than the item: lintel concrete is not blockwall filling", () => {
+  // Nothing in this library is lintel or beam concrete, so the honest answer is none.
+  assert.equal(best("Blockwork – Lintel Concrete [L:01 | T:Generic - 230mm]", "m3"), undefined);
+  assert.ok(lineMatchScore("Blockwork – Wall Area", "150mm blockwall in cement and sand mortar (1:6)") > 0.85);
+});
+
+test("Revit's type field, repeated outside the brackets, does not steer the match", () => {
+  // Live on 4 Oct: the type "WT2 _ 150mm Blockwork _ Paint/Paint" was scored as
+  // part of the item, so a wall ranked a paint rate first and lintel formwork
+  // found nothing.
+  const paint = { rateId: "paint", description: "Prepare and apply one undercoat anti-fungal paint and one finish coat paint to wall", unit: "m2", unitPrice: 2825 };
+  const wall = {
+    description: "Blockwork – Wall Area [L:** Site Level | T:WT2 _ 150mm Blockwork _ Paint/Paint]",
+    type: "WT2 _ 150mm Blockwork _ Paint/Paint",
+    unit: "m2",
+  };
+  assert.equal(suggestRatesForLine(wall, [...LIB, paint], { limit: 1 })[0].rateId, "bw150");
+  const lintel = {
+    description: "Blockwork – Lintel Formwork [L:** Site Level | T:WT3 _ 230mm Blockwork _ Paint/Paint]",
+    type: "WT3 _ 230mm Blockwork _ Paint/Paint",
+    unit: "m2",
+  };
+  assert.equal(suggestRatesForLine(lintel, LIB, { limit: 1 })[0]?.rateId, "formwork");
+});

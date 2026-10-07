@@ -97,12 +97,40 @@ export function deriveLineRate(billQty, lines) {
 // Mutate project.items in place: every bill item with a priced build-up gets
 // its rate derived; netUnitCost / overhead% / profit% are stored for
 // transparency. Returns { updated, skipped } — skipped counts the lines whose
-// rate the QS applied himself and which were therefore left alone.
+// rate the QS applied himself and which were therefore left alone, plus every
+// line on a locked contract.
+//
+// A LOCKED CONTRACT IS NOT RE-PRICED FROM ITS COST PLAN
+//
+// This had no idea the lock existed, and it is called from nine places including
+// the Budget & procurement save (PUT /:id/budget, markBudget), which checks
+// canEdit and nothing else. So on a locked contract, editing a material price
+// moved the BILL's rate — the agreed contract rate — straight past the lock,
+// with no variation raised and nothing on screen to say a contract figure had
+// changed. That is the one thing the lock exists to prevent: after it, a change
+// becomes a variation or it is diverted to actualRate (projects.js:2276), never a
+// silent rewrite of what was agreed.
+//
+// Two things make it worse than it sounds. isRateApplied is the only other thing
+// that holds a line back, and it reads rateLockedAt, which — as the comment above
+// it says — is absent on every stored row and every plugin payload, so it returns
+// false for every line of every existing project. And the lock's own checklist
+// refuses to lock until EVERY line is priced, so each rate this could move is a
+// rate somebody agreed to.
+//
+// Skipping is therefore safe as well as right: a locked project has no unpriced
+// line that needs a rate derived for it. The cost plan still saves, and still
+// says what the job now costs; what it no longer does is quietly restate the
+// contract.
 export function deriveBillRatesFromBudget(project) {
   try {
     if (!project) return { updated: 0, skipped: 0 };
     const budget = Array.isArray(project.budgetItems) ? project.budgetItems : [];
     if (!budget.length) return { updated: 0, skipped: 0 };
+    if (project.contract?.locked) {
+      const items = Array.isArray(project.items) ? project.items : [];
+      return { updated: 0, skipped: items.length, lockedOut: true };
+    }
     const byCode = groupByBill(budget);
     if (byCode.size === 0) return { updated: 0, skipped: 0 };
     let updated = 0;

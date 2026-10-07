@@ -84,3 +84,22 @@ test("a firm override still wins over the calibrated default", () => {
   const rows = deriveMaterials(item({ description: "225mm blockwork", unit: "m2", qty: 100 }), "blockwork", own);
   assert.equal(mat(rows, "Sharp sand").qty, 7);
 });
+
+test("MEP stock lengths match the services engine's standard lengths", async () => {
+  const { SERVICE_TYPE_DEFAULTS } = await import("./serviceCompute.js");
+  assert.equal(def(MC.MepPipeLengthM), SERVICE_TYPE_DEFAULTS.pipe.standardLength);
+  assert.equal(def(MC.MepPipeLengthM), 6);
+  assert.equal(def(MC.MepConduitLengthM), SERVICE_TYPE_DEFAULTS.conduit.standardLength);
+  assert.equal(def(MC.MepCableDrumLengthM), SERVICE_TYPE_DEFAULTS.cable.standardLength);
+});
+
+test("a firm's saved pipe length survives the new default", () => {
+  const own = resolveConstants({ [MC.MepPipeLengthM]: 5.8 });
+  assert.equal(own.get(MC.MepPipeLengthM), 5.8);
+});
+
+test("POP ceiling boards are 1.2 x 1.2 m: area x 1.3 / 1.44", () => {
+  assert.equal(def(MC.CeilingPopBoardFactor), 1.44);
+  const rows = deriveMaterials(item({ description: "POP ceiling", unit: "m2", qty: 100 }), "pop-ceiling", K);
+  assert.equal(mat(rows, "POP ceiling boards").qty, Math.ceil((100 * 1.3) / 1.44));
+});

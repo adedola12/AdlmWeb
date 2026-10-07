@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlement } from "../middleware/requireEntitlement.js";
 import { ensureDb } from "../db.js";
+import { refuseBrowserRateWrites } from "../middleware/rateGenOnlyWrites.js";
 
 import { RateGenMaterial } from "../models/RateGenMaterial.js";
 import { RateGenLabour } from "../models/RateGenLabour.js";
@@ -26,6 +27,13 @@ import {
   compositionSubtotals,
 } from "../util/rategenUserRates.js";
 import {
+  archiveCustomRate,
+  clientIsSyncAware,
+  customRateOrigin,
+  deleteDecision,
+  mergeBulkCustomRates,
+} from "../util/rategenCustomRateGuard.js";
+import {
   makeCompositionBudget,
   projectBestRate,
   projectRateCandidate,
@@ -34,7 +42,9 @@ import {
 const router = express.Router();
 
 // ✅ IMPORTANT: scope auth ONLY to /library/*
-router.use("/library", requireAuth, requireEntitlement("rategen"));
+// Rates are built in Rate Gen: a browser may read here (and restore an
+// archived custom rate) but not write (middleware/rateGenOnlyWrites.js).
+router.use("/library", requireAuth, requireEntitlement("rategen"), refuseBrowserRateWrites);
 
 const DEFAULT_LIMIT = 250;
 const MAX_LIMIT = 1000;
@@ -957,14 +967,26 @@ router.put("/library/user-rates", async (req, res, next) => {
           typeof r?.toObject === "function" ? r.toObject() : r,
         ]),
       );
-      lib.customRates = customRates.map((item) => {
+      const incoming = customRates.map((item) => {
         const next = normalizeCustomRate(item);
         const prior = storedById.get(String(next.customRateId || ""));
         return prior
           ? preservePlantLines(next, prior, { clientSupportsPlant: req.body?.supportsPlant === true })
           : next;
       });
+      // A rate the payload left out is NOT a deletion: see
+      // util/rategenCustomRateGuard.js. Rate Gen desktop 2.9.x never
+      // downloads custom rates, so its list omits every rate made elsewhere.
+      const merged = mergeBulkCustomRates(lib, incoming, {
+        syncAware: clientIsSyncAware(req),
+      });
+      lib.customRates = merged.customRates;
       lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+      if (merged.kept.length || merged.archived.length) {
+        console.info(
+          `[rategen] bulk custom-rate sync for ${getUserId(req)}: kept ${merged.kept.length} omitted, archived ${merged.archived.length}`
+        );
+      }
     }
 
     await lib.save();
@@ -1193,6 +1215,8 @@ router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
       { clientSupportsPlant: req.body?.supportsPlant === true },
     );
 
+    item.origin = customRateOrigin(existingIndex >= 0 ? nextItems[existingIndex] : item);
+
     if (existingIndex >= 0) nextItems[existingIndex] = item;
     else nextItems.push(item);
 
@@ -1235,18 +1259,98 @@ router.delete("/library/custom-rates/:customRateId", async (req, res, next) => {
       });
     }
 
-    const before = (lib.customRates || []).length;
+    const stored = (lib.customRates || []).find(
+      (item) => String(item?.customRateId || "") === customRateId
+    );
+    if (!stored) {
+      return res.json({ ok: true, customRatesVersion: lib.customRatesVersion ?? 1 });
+    }
+
+    // Rate Gen desktop 2.9.x sends this for every cloud rate missing from its
+    // own list, including rates it never had. Answer ok so its sync carries
+    // on, but keep the rate. See util/rategenCustomRateGuard.js.
+    const decision = deleteDecision(stored, { syncAware: clientIsSyncAware(req) });
+    if (!decision.allow) {
+      console.info(
+        `[rategen] kept custom rate ${customRateId} for ${getUserId(req)}: ${decision.reason}`
+      );
+      return res.json({
+        ok: true,
+        kept: true,
+        reason: decision.reason,
+        customRatesVersion: lib.customRatesVersion ?? 1,
+      });
+    }
+
+    archiveCustomRate(lib, stored, decision.reason);
     lib.customRates = (lib.customRates || []).filter(
       (item) => String(item?.customRateId || "") !== customRateId
     );
-
-    if (lib.customRates.length !== before) {
-      lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
-      await lib.save();
-    }
+    lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+    await lib.save();
 
     res.json({
       ok: true,
+      customRatesVersion: lib.customRatesVersion ?? 1,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /library/custom-rates/deleted
+ * The archive of removed custom rates, newest first.
+ */
+router.get("/library/custom-rates/deleted", async (req, res, next) => {
+  try {
+    await ensureDb();
+    const lib = await ensureUserLibrary(req);
+    res.json({
+      ok: true,
+      items: (lib.deletedCustomRates || []).map((item) => ({
+        ...mapUserCustomRate(item),
+        deletedAt: item.deletedAt,
+        deletedReason: item.deletedReason || "",
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /library/custom-rates/:customRateId/restore
+ * Puts an archived custom rate back. A live rate with the same id wins.
+ */
+router.post("/library/custom-rates/:customRateId/restore", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const customRateId = String(req.params.customRateId || "").trim();
+    const lib = await ensureUserLibrary(req);
+    const archived = (lib.deletedCustomRates || []).find(
+      (item) => String(item?.customRateId || "") === customRateId
+    );
+    if (!archived) return res.status(404).json({ error: "No deleted custom rate with that id" });
+
+    const live = (lib.customRates || []).some(
+      (item) => String(item?.customRateId || "") === customRateId
+    );
+    if (!live) {
+      const { deletedAt, deletedReason, ...rate } =
+        typeof archived.toObject === "function" ? archived.toObject() : archived;
+      lib.customRates = [...(lib.customRates || []), { ...rate, updatedAt: new Date() }];
+      lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+    }
+    lib.deletedCustomRates = (lib.deletedCustomRates || []).filter(
+      (item) => String(item?.customRateId || "") !== customRateId
+    );
+    await lib.save();
+
+    res.json({
+      ok: true,
+      restored: !live,
       customRatesVersion: lib.customRatesVersion ?? 1,
     });
   } catch (err) {

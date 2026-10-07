@@ -915,6 +915,26 @@ const SampleInfoSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// One Revit room as QUIV measures it (QUIV 4.0.2+): floor finish, floor area,
+// skirting run and, when the model has one, the wall finish area. Sent as the
+// top-level `roomFinishes` list on a Revit save and read by Ada's
+// get_room_finishes tool. Numbers are rounded to 2 dp by the save routes
+// (util/roomFinishes.js); wallFinishAreaM2 stays null when the room has none.
+const RoomFinishSchema = new mongoose.Schema(
+  {
+    roomId: { type: Number, default: 0 },
+    name: { type: String, default: "" },
+    number: { type: String, default: "" },
+    level: { type: String, default: "" },
+    floorFinish: { type: String, default: "" },
+    floorAreaM2: { type: Number, default: 0 },
+    skirtingM: { type: Number, default: 0 },
+    wallFinishAreaM2: { type: Number, default: null },
+    elementIds: { type: [Number], default: [] },
+  },
+  { _id: false },
+);
+
 const TakeoffProjectSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -1038,6 +1058,10 @@ const TakeoffProjectSchema = new mongoose.Schema(
       default: () => ({ ...DefaultValuationSettings }),
     },
     valuationEvents: { type: [ValuationEventSchema], default: [] },
+    // Per-room finishes from QUIV (Revit only). Replaced whole by a save that
+    // sends the field; kept as stored by a save that does not. Capped at 5000
+    // rooms by the route sanitiser.
+    roomFinishes: { type: [RoomFinishSchema], default: [] },
     version: { type: Number, default: 1 },
   },
   { timestamps: true },

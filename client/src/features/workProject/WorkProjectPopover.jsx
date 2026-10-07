@@ -13,7 +13,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 
-export default function WorkProjectPopover({ anchorRef, label, onClose, children }) {
+export default function WorkProjectPopover({ anchorRef, label, onClose, className = "", children }) {
   const popRef = React.useRef(null);
   const [at, setAt] = React.useState(null);
 
@@ -66,7 +66,7 @@ export default function WorkProjectPopover({ anchorRef, label, onClose, children
   return createPortal(
     <div className="ds">
       <div
-        className="pj-pop"
+        className={`pj-pop${className ? ` ${className}` : ""}`}
         role="menu"
         aria-label={label}
         ref={popRef}

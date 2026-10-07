@@ -52,6 +52,8 @@ import { getPrivateKey, getKid } from "../util/jwks.js";
 import { isGodUser, isGodEmail } from "../util/godAccount.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
 import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import { checkAddressReachable } from "../util/emailReachable.js";
+import { isPlausiblePhone } from "../util/phonePlausible.js";
 import {
   verifySocialIdentity,
   configuredProviders,
@@ -335,6 +337,17 @@ router.post("/signup", async (req, res) => {
         .json({ error: "firstName, lastName and whatsapp are required" });
     }
 
+    // Required and then unchecked is barely required at all: normalizeWhatsApp
+    // strips to digits and `+` without a length check, so 15 accounts in the
+    // list have a one-digit telephone number. See util/phonePlausible.js for
+    // where the threshold comes from.
+    if (!isPlausiblePhone(whatsapp)) {
+      return res.status(400).json({
+        error: "Enter a WhatsApp number we can actually reach you on, including the country or network code.",
+        code: "IMPLAUSIBLE_PHONE",
+      });
+    }
+
     const pwError = validatePasswordStrength(password);
     if (pwError) {
       return res.status(400).json({ error: pwError, code: "WEAK_PASSWORD" });
@@ -347,6 +360,19 @@ router.post("/signup", async (req, res) => {
     if (!emailRx.test(normalizedEmail)) {
       return res.status(400).json({ error: "Invalid email format" });
     }
+
+    // Matching that pattern only proves the string has an @ in it. `gmail.con`
+    // matches it, and three people who typed exactly that were given accounts,
+    // sent a code that evaporated, and then locked out by util/emailGate.js
+    // waiting for a code they could never receive. Telling them now is the fix.
+    // Fails open if DNS is unreachable — see util/emailReachable.js.
+    const reach = await checkAddressReachable(normalizedEmail, { log: console });
+    if (!reach.ok) {
+      return res
+        .status(400)
+        .json({ error: reach.message, code: "EMAIL_UNREACHABLE", reason: reach.reason });
+    }
+
     const normalizedUsername = String(
       username || normalizedEmail.split("@")[0],
     ).trim();
@@ -1410,6 +1436,25 @@ router.post("/social", authLimiter, async (req, res) => {
           lastName: identity.lastName,
           [field]: identity.subject,
           entitlements: [],
+          // THE PROVIDER HAS ALREADY VERIFIED THIS ADDRESS.
+          //
+          // util/socialIdentity.js refuses the sign-in outright when the
+          // provider reports email_verified false, so by the time we are here
+          // Google or Microsoft has confirmed the address — a stronger check
+          // than our own six-digit code, which only proves the person can read
+          // the inbox once.
+          //
+          // Omitting this was not harmless. util/emailGate.js refuses EVERY
+          // signed-in request from an unconfirmed account except the /auth
+          // ones, so a customer who signed up with Google was created
+          // unverified, never sent a code (only POST /auth/signup sends one),
+          // and then met the "confirm your email" screen asking for a code
+          // that had never been sent. They could press resend and escape, but
+          // the first thing the product did was block them. It is also why 270
+          // accounts sat unmailable: the broadcast audience requires a verified
+          // address, and on this site most sign-ups come through a provider.
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
         });
         created = true;
         // The SECOND place an account is made. A referral captured only in the
