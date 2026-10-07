@@ -1,24 +1,22 @@
 // RateGen: the rates, the materials, the labour and the plant behind them.
 //
-// Kept alongside /rategen rather than over it. That screen is 900 lines and
-// does things this one does not — master and user tabs, the per-row price
-// editing — and replacing working software with a redesign is a decision worth
-// making deliberately. What this adds is what /rategen has never had: one rate
-// opened and shown as what it is made of (see DsWorkRate), the customer's own
-// rates sitting in the same list as the published ones, and a way to build one.
+// Kept alongside /rategen rather than over it. That screen has master and user
+// tabs this one does not. What this adds is what /rategen has never had: one
+// rate opened and shown as what it is made of (see DsWorkRate), and the
+// customer's own rates sitting in the same list as the published ones.
 //
 // His markup: .wk-head / .wk-bar / .wk-find / .wk-tabs / .wk-dd / .wk-count,
 // .wk-tbl.wk-tbl-rates.rg for the seven-column rates table, .wk-tbl-mat for
 // materials, labour and plant, and .rg-op for the bar above them.
 //
-// WHAT IS CUSTOMER-LEVEL, AND WHY THAT IS THE WHOLE POINT
+// THIS SCREEN READS. RATES ARE BUILT IN RATE GEN.
 //
-// Everything this screen writes is the customer's own data: their own prices
-// (priceOverrides), their own copy of a published rate (rateOverrides) and
-// their own rates (customRates). Master material, labour and rate prices are
-// corrected in Rate Gen desktop and published from there; the website's master
-// write routes answer 405 MASTER_READ_ONLY. So the copy here never claims a
-// change reaches anybody else's library.
+// The owner's rule (4 Oct 2026): rates are built and edited only in ADLM Rate
+// Gen desktop. The custom rate builder and "Update prices" that used to live
+// here are gone, and the server refuses a browser's write to the rate library
+// (server/middleware/rateGenOnlyWrites.js, 403 RATES_BUILT_IN_RATEGEN). A
+// material or labour price is part of every rate built on it, so changing one
+// is a rate edit too. What is left in their place says where to go instead.
 //
 // THE LOCATION SWITCH IS STILL NOT REPRODUCED
 //
@@ -106,16 +104,9 @@ export default function DsWorkLibrary() {
         .then((d) => ({
           overrides: Array.isArray(d.rateOverrides) ? d.rateOverrides : [],
           customs: Array.isArray(d.customRates) ? d.customRates : [],
-          ratesVersion: d?.meta?.ratesVersion ?? 1,
-          customRatesVersion: d?.meta?.customRatesVersion ?? 1,
         }))
         // Having no library of your own is the normal state on day one.
-        .catch(() => ({
-          overrides: [],
-          customs: [],
-          ratesVersion: 1,
-          customRatesVersion: 1,
-        })),
+        .catch(() => ({ overrides: [], customs: [] })),
     ]).then(([paged, own]) => {
       setRates(paged.items);
       setRatesTruncated(paged.truncated);
@@ -147,8 +138,7 @@ export default function DsWorkLibrary() {
   }, [accessToken, loadRates]);
 
   // The catalogue is hundreds of rows and most visits never leave the rates
-  // tab, so it is fetched when something first needs it — a tab, or the
-  // builder's line pickers.
+  // tab, so it is fetched when one of its tabs is first opened.
   const needMaster = tab === "materials" || tab === "labour";
   React.useEffect(() => {
     if (!accessToken || !needMaster || master || masterFailed) return;
@@ -547,6 +537,11 @@ export default function DsWorkLibrary() {
             quietly come back. The sentence above says where to do it instead,
             because removing a button without saying where it went just makes
             the screen look broken. */}
+        <div className="wk-acts">
+          <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
+            Full library
+          </Link>
+        </div>
       </div>
 
       <div className="wk-bar">
@@ -596,30 +591,20 @@ export default function DsWorkLibrary() {
 
       <p className="wk-count">{count}</p>
 
-      {tab === "materials" ? (
-        <div className="rg-op">
-          <b>Prices</b>
-          <em>
-            Market prices move. Change a category by a percentage and your own prices follow.
-            Rates already built keep the cost they were built at until they are priced again.
-          </em>
-          <button
-            type="button"
-            className="ds-btn btn-o ds-btn-sm"
-            onClick={updatePrices}
-            disabled={!master || !itemRows.length}
-          >
-            Update prices
-          </button>
-        </div>
-      ) : null}
+      <div className="rg-op" role="note">
+        <b>Build and edit rates in ADLM Rate Gen</b>
+        <em>
+          This page shows your library. New rates, changes to a rate and material or labour
+          prices are made in Rate Gen on your computer, and appear here after its next sync.
+        </em>
+      </div>
 
       {tab === "rates" ? (
         !rows.length ? (
           <div className="wk-empty">
             Nothing in the library yet. Rate Gen fills this as rates are published to your
-            account, and every product on the account prices against it. You can also build a
-            rate of your own here and it behaves exactly like a published one.
+            account, and every product on the account prices against it. Rates of your own are
+            built in Rate Gen and appear here after it syncs.
           </div>
         ) : !shownRates.length ? (
           <p className="wk-empty">

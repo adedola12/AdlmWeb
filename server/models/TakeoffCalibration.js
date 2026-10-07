@@ -12,7 +12,7 @@ import mongoose from "mongoose";
 const TakeoffCalibrationSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    product: { type: String, enum: ["HERON", "QUIV", "RATEGEN"], required: true },
+    product: { type: String, enum: ["HERON", "QUIV", "RATEGEN", "QSTAKEOFF"], required: true },
     skipped: { type: Boolean, default: false },
     manualMinutes: { type: Number, default: 0, min: 0 },
     referenceCounts: {

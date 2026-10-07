@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlement } from "../middleware/requireEntitlement.js";
 import { ensureDb } from "../db.js";
+import { refuseBrowserRateWrites } from "../middleware/rateGenOnlyWrites.js";
 
 import { RateGenMaterial } from "../models/RateGenMaterial.js";
 import { RateGenLabour } from "../models/RateGenLabour.js";
@@ -41,7 +42,9 @@ import {
 const router = express.Router();
 
 // ✅ IMPORTANT: scope auth ONLY to /library/*
-router.use("/library", requireAuth, requireEntitlement("rategen"));
+// Rates are built in Rate Gen: a browser may read here (and restore an
+// archived custom rate) but not write (middleware/rateGenOnlyWrites.js).
+router.use("/library", requireAuth, requireEntitlement("rategen"), refuseBrowserRateWrites);
 
 const DEFAULT_LIMIT = 250;
 const MAX_LIMIT = 1000;

@@ -35,6 +35,8 @@ import { linePanelTitle } from "./billModel.js";
 import { saveProjectPatch, writeIdFor } from "./saveProject.js";
 import WorkProjectHead from "./WorkProjectHead.jsx";
 import { projectIdLabel } from "./headModel.js";
+import { workbookRequest } from "./exportModel.js";
+import { downloadWorkbook } from "./downloadWorkbook.js";
 import WorkProjectPeople from "./WorkProjectPeople.jsx";
 import WorkProjectExports from "./WorkProjectExports.jsx";
 import WorkProjectIssueCert from "./WorkProjectIssueCert.jsx";
@@ -627,8 +629,40 @@ export default function WorkProjectShell({ productKey, id }) {
   const clientName = String(project?.clientName || project?.client || "").trim();
   // The file his line names is the model the take-off came from.
   const sourceFileName = attachedModels(project)[0]?.sourceFile || "";
+  // The Export menu's workbooks. One at a time: the button reads "Exporting…"
+  // until the file lands, and a refusal (view-only, no RateGen) says why in
+  // the server's own words rather than saving an error page as .xlsx.
+  const [exporting, setExporting] = React.useState("");
+  const runExport = React.useCallback(
+    async (key) => {
+      const req = workbookRequest(key, {
+        productKey,
+        projectId: saveId,
+        projectName: project?.name,
+      });
+      if (!req || exporting) return;
+      setExporting(key);
+      try {
+        const name = await downloadWorkbook({ ...req, token: accessToken });
+        fb.toast({ title: "Downloaded", msg: name });
+      } catch (e) {
+        fb.toast({
+          tone: "error",
+          title: "Could not export it",
+          msg: String(e?.message || "").trim() || "The export failed.",
+        });
+      } finally {
+        setExporting("");
+      }
+    },
+    [productKey, saveId, project?.name, exporting, accessToken, fb],
+  );
   const onAction = React.useCallback(
-    (action) => {
+    (action, detail) => {
+      if (action === "export") {
+        runExport(detail);
+        return;
+      }
       if (action === "people") {
         panel.show({ kind: "people" });
         return;
@@ -660,7 +694,7 @@ export default function WorkProjectShell({ productKey, id }) {
       if (action === "pm-report") setReport("pm");
       if (action === "retry" && lastPatch.current) save(lastPatch.current);
     },
-    [panel, project, fb, save, toggleFullScreen],
+    [panel, project, fb, save, toggleFullScreen, runExport],
   );
 
   // Escape leaves full screen — but only when it is the outermost thing open.
@@ -788,6 +822,8 @@ export default function WorkProjectShell({ productKey, id }) {
             canSeePm={tabs.some((t) => t.key === "pm")}
             classicWorkspaceHref={classicWorkspaceHref}
             fullScreen={fullScreen}
+            isBoqImport={project?.origin === "boq-import"}
+            exporting={exporting}
             onAction={onAction}
           />
         </div>

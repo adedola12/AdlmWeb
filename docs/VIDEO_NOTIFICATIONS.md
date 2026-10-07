@@ -60,11 +60,10 @@ channel was found rather than quietly returning nothing.
 
 ### 3. Sender
 
-`EMAIL_FROM` should be `ADLM Studio <admin@adlmstudio.net>`. The domain has to
-be verified in Resend (**Domains → Add domain**, then the DKIM and SPF records
-on `adlmstudio.net`) or Resend refuses the send and `mailer.js` falls back to
-the `onboarding@resend.dev` sender, which is fine for testing and wrong in
-front of customers.
+`EMAIL_FROM` should be `ADLM Studio <admin@adlmstudio.net>`. Mail goes out on
+Amazon SES only, so the domain has to be a verified SES identity in the API's
+region (eu-west-1). If SES refuses the send, it fails and is logged; there is
+no fallback sender.
 
 ### 4. Everything else
 

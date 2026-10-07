@@ -21,6 +21,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import DsSurfaceSwitch from "./DsSurfaceSwitch.jsx";
 import { useAuth } from "../store.jsx";
 import { isStaff } from "../utils/roles.js";
+import { seesNewBuild } from "../lib/newBuildAccess.js";
+import { railForViewer } from "../lib/railGate.js";
+import { classicFallbackFor } from "../lib/classicPaths.js";
 import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
@@ -121,6 +124,21 @@ export default function DsAppShell({
   // different question from which build a customer sees.
   const rail = RAIL;
   const href = React.useCallback((to) => to, []);
+  // This shell wraps ELEVEN CLASSIC screens as well as the new build
+  // (WorkShellRoute, App.jsx:41). Before go-live a customer could not open the
+  // /manage and /work destinations in the rail, so each was rewritten to the
+  // classic screen that does the same job (lib/railGate.js). Since 1 October
+  // the new build is the build and everyone gets the rail untouched — this
+  // used to ask canViewPreview and kept customers on classic after launch.
+  // Raising GATE_NEW_BUILD (lib/newBuildAccess.js) brings the rewrite back.
+  const mayUseNewBuild = seesNewBuild(user);
+  const rail = React.useMemo(() => railForViewer(RAIL, mayUseNewBuild), [mayUseNewBuild]);
+  // The new-build destination, or its classic counterpart while the gate is
+  // up for this viewer. Used for the links that are not in the rail config.
+  const href = React.useCallback(
+    (to) => (mayUseNewBuild ? to : classicFallbackFor(to)),
+    [mayUseNewBuild],
+  );
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -381,7 +399,7 @@ export default function DsAppShell({
                 {/* His switcher, shown only to somebody who holds both
                     surfaces — the same `both` test his dash.js makes. */}
                 {staff && <DsSurfaceSwitch at="account" />}
-                {/* Same rule as the rail: a customer cannot open these yet, so
+                {/* Same rule as the rail: while the gate is up for this viewer
                     they point at the classic screens that answer them. "Billing
                     & invoices" in particular has to reach the invoices, which on
                     classic are on the profile, not the dashboard. */}

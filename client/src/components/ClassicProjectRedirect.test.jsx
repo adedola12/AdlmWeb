@@ -12,7 +12,8 @@ describe("where a classic project URL should actually go", () => {
     expect(classicProjectTarget(staff)).toBe("/work/project/revit/sample-duplex-strip");
   });
 
-  it("leaves a customer on the classic workspace", () => {
+  it("leaves a viewer the go-live switch holds back on the classic workspace", () => {
+    // Nobody, while GATE_NEW_BUILD is false; the rule is kept for if it is raised.
     expect(classicProjectTarget({ ...staff, newBuild: false })).toBe(null);
   });
 
@@ -162,6 +163,10 @@ describe("the route a staff member actually lands on", () => {
     // This is the assertion that would fail if the gate were quietly put back,
     // which is the way a change like this gets reverted: somebody restores a
     // role check while fixing something nearby.
+  it("opens the new page for a customer too, since go-live", () => {
+    // Until 1 October a customer was left on classic here. That branch outlived
+    // the gate and kept customers' bookmarks and share links on the old screen
+    // after launch (lib/newBuildAccess.js).
     auth.user = { email: "customer@example.com", role: "user" };
     auth.accessToken = "t";
     at("/projects/planswift?project=ysa");

@@ -168,18 +168,23 @@ describe("the RateGen library", () => {
     expect(container.textContent).toContain("1 rate");
   });
 
-  it("does not offer Update prices until the catalogue is actually there", async () => {
+  // Owner's rule, 4 Oct 2026: rates are built and edited only in Rate Gen. The
+  // builder and "Update prices" are gone, and the note says where to go.
+  it("says rates are built in Rate Gen and offers no way to change them here", async () => {
     stub();
-    const { container, findByText, getByText } = mount();
+    const { container, findByText, getByText, queryByText } = mount();
     await findByText("Blockwork 225mm in cement mortar");
+    expect(container.textContent).toContain("Build and edit rates in ADLM Rate Gen");
+    expect(queryByText("Build a custom rate")).toBeNull();
+
     fireEvent.click(getByText("Materials"));
-    await waitFor(() => expect(container.textContent).toContain("Market prices move"));
-    const btn = getByText("Update prices");
-    // The stub returns an empty catalogue, so there is nothing to update.
-    expect(btn.disabled).toBe(true);
-    // And the copy does not repeat the prototype's claim about rates moving.
-    expect(container.textContent).not.toContain("every rate using it follows");
-    expect(container.textContent).toContain("keep the cost they were built at");
+    await waitFor(() => expect(container.textContent).toContain("Build and edit rates in ADLM Rate Gen"));
+    expect(queryByText("Update prices")).toBeNull();
+
+    // Nothing on the screen writes to the library.
+    for (const [, init] of apiAuthed.mock.calls) {
+      expect(String(init?.method || "GET").toUpperCase()).toBe("GET");
+    }
   });
 });
 

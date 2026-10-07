@@ -22,10 +22,13 @@ import { normalizeZone, ZONES } from "../util/zones.js";
 import { STATES, normalizeState, zoneForState } from "../util/states.js";
 import { ensureDb } from "../db.js";
 import { clientIsSyncAware, mergeBulkCustomRates } from "../util/rategenCustomRateGuard.js";
+import { refuseBrowserRateWrites } from "../middleware/rateGenOnlyWrites.js";
 
 const router = express.Router();
 
-router.use(requireAuth, requireEntitlement("rategen"));
+// Rates are built in Rate Gen: a browser may read here but not write
+// (middleware/rateGenOnlyWrites.js).
+router.use(requireAuth, requireEntitlement("rategen"), refuseBrowserRateWrites);
 
 function mapUserRateOverride(item) {
   return toUserRateDefinition(item, {

@@ -25,7 +25,7 @@ export const RATES_SYNC_HEADER = "x-adlm-rates-sync";
 export const ARCHIVE_LIMIT = 200;
 
 // Rate Gen desktop keys a custom rate by a .NET Guid (CustomRate.Id). The
-// website builder keys it by a slug (customRateDraft.js newCustomRateId), so
+// website builder (removed 4 Oct 2026, its rates remain) keyed it by a slug, so
 // a rate stored before `origin` existed can still be placed.
 const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

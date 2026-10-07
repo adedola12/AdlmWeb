@@ -140,3 +140,9 @@ test("duration labels read the way the plugin line reads", () => {
   assert.equal(humanDuration(3600), "1 h");
   assert.equal(humanDuration(45), "45 s");
 });
+
+test("normalizeProduct: QS Takeoff's key maps to QSTAKEOFF, Time Pro's does not", () => {
+  assert.equal(normalizeProduct("qstakeoff"), "QSTAKEOFF");
+  assert.equal(normalizeProduct("QSTAKEOFF"), "QSTAKEOFF");
+  assert.equal(normalizeProduct("qs-takeoff"), "");
+});
