@@ -48,6 +48,7 @@ const AdminPeople = lazyScreen(() => import("./pages/AdminPeople.jsx"));
 const AdminEnrolments = lazyScreen(() => import("./pages/AdminEnrolments.jsx"));
 const AdminSubmissions = lazyScreen(() => import("./pages/AdminSubmissions.jsx"));
 const AdminFollowUpsDesk = lazyScreen(() => import("./pages/AdminFollowUpsDesk.jsx"));
+const DsAdminProspecting = lazyScreen(() => import("./ds/DsAdminProspecting.jsx"));
 const AdminReferrals = lazyScreen(() => import("./pages/AdminReferrals.jsx"));
 const AdminDemoModels = lazyScreen(() => import("./pages/AdminDemoModels.jsx"));
 const AdminDsOrganisations = lazyScreen(() => import("./pages/AdminDsOrganisations.jsx"));
@@ -1286,6 +1287,17 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="followups">
             <AdminFollowUpsDesk />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Outbound prospecting review — staff-grantable ("prospecting" area);
+      // the admin-only parts inside check "prospecting_admin" themselves
+      {
+        path: "admin/prospecting",
+        element: (
+          <AdminRoute permission="prospecting">
+            <DsAdminProspecting />
           </AdminRoute>
         ),
       },

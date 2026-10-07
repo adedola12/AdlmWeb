@@ -488,6 +488,7 @@ import meDemoModels from "./routes/me.demoModels.js";
 import adminDocuments from "./routes/admin.documents.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
+import adminProspecting from "./routes/admin.prospecting.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
 app.use("/admin/referrals", adminReferrals);
@@ -509,6 +510,8 @@ app.use("/admin/demo-models", adminDemoModels);
 app.use("/me/demo-models", meDemoModels);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);
+// Outbound prospecting review queue (docs: util/prospecting/review.js).
+app.use("/admin/prospecting", adminProspecting);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin
