@@ -408,8 +408,8 @@ app.use("/admin/certificates", adminCertificates);
 app.use("/verify", verifyRoutes);
 app.use("/downloads", publicDownloads);
 app.use("/admin/broadcast", adminBroadcast);
-// "QUIV 3.1.11 is ready" emails, recorded by the deployment PUT. See
-// util/releaseNotifier.js.
+// "QUIV 3.1.11 is ready" emails, recorded by the deployment PUT and sent in
+// the weekly digest. See util/releaseNotifier.js and util/releaseDigest.js.
 app.use("/admin/release-notifications", adminReleaseNotifications);
 // The batch router first: /admin/releases/batch would otherwise be caught by
 // the candidate router's /:id routes.

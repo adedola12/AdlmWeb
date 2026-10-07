@@ -16,6 +16,7 @@ import {
   normalizeRollout,
   stageFor,
 } from "./releaseRollout.js";
+import { recordInstallerHubChange, withNextDigest } from "./releaseDigest.js";
 import {
   describeCandidate,
   esc,
@@ -93,19 +94,65 @@ export async function stageRelease({ productKey, normalized, previous, body, act
  * Everyone (a hotfix, or a build with nothing live to hold back to): the
  * payload is written to the live row, as the gate always did.
  *
+ * NOTHING IS MAILED HERE. The notifier records the "new version is ready"
+ * notice and sends nothing: customers are told in the next WEEKLY DIGEST
+ * (util/releaseDigest.js, Monday 09:00 Lagos by default), one email each
+ * listing every update they hold. The notice comes back with that date
+ * (nextDigestAt, nextDigestLagos), the same fields the deployment PUT returns,
+ * so the approve and emergency responses say when customers hear.
+ *
+ * This is also the ONLY place a staged build becomes a digest item: a candidate
+ * sitting at /admin/releases unapproved has no notice, so it can never reach a
+ * digest (docs/RELEASE_GATE.md).
+ *
  * `rollout` overrides the candidate's own choice (the approver's switch).
+ * `deployments`, `applySetting`, `record`, `recordHub` and `annotate` are for
+ * the tests.
  * Returns { item, releaseNotice, appliedTo }.
  */
-export async function applyCandidate(candidate, { actor, demoMode = false, rollout, now = new Date() }) {
+export async function applyCandidate(
+  candidate,
+  {
+    actor,
+    demoMode = false,
+    rollout,
+    now = new Date(),
+    deployments = ProductDeployment,
+    applySetting = applySettingCandidate,
+    record = recordDeploymentRelease,
+    recordHub = recordInstallerHubChange,
+    annotate = withNextDigest,
+  } = {},
+) {
   // A gated SETTING (installerHubUrl) is not a package: it writes the
   // Setting and reaches every customer at once. No rollout stages apply.
+  //
+  // This is the approval of a new Installation Center, so it is also where its
+  // digest item is queued: the save at POST /admin/settings/installer-hub only
+  // STAGES the link (routes/admin.settings.js), customers keep the current Hub
+  // until here, and a staged link that is never approved announces nothing.
   if (candidate.kind === "setting") {
-    const out = await applySettingCandidate(candidate, { actor });
-    return { item: out.setting, releaseNotice: { created: false, reason: "setting-change" }, appliedTo: "everyone" };
+    const out = await applySetting(candidate, { actor });
+    let releaseNotice = { created: false, reason: "setting-change" };
+    if (candidate.settingField === "installerHubUrl") {
+      releaseNotice = await annotated(
+        annotate,
+        safeNotice(() =>
+          recordHub({
+            previousUrl: candidate.settingPrevious || "",
+            nextUrl: candidate.payload?.installerHubUrl || "",
+            actor,
+            demoMode,
+          }),
+        ),
+      );
+    }
+    return { item: out.setting, releaseNotice, appliedTo: "everyone" };
   }
 
   const productKey = candidate.productKey;
-  const live = await ProductDeployment.findOne({ productKey })
+  const live = await deployments
+    .findOne({ productKey })
     .select("version enabled packageUri earlyAccess")
     .lean()
     .catch(() => undefined);
@@ -115,25 +162,28 @@ export async function applyCandidate(candidate, { actor, demoMode = false, rollo
 
   if (appliedTo === ROLLOUT_ORGANIZATIONS) {
     const earlyAccess = earlyAccessFor({ existing: live?.earlyAccess, candidate, actor, now });
-    const item = await ProductDeployment.findOneAndUpdate(
+    const item = await deployments.findOneAndUpdate(
       { productKey },
       { $set: { earlyAccess, updatedBy: actor } },
       { new: true, runValidators: true },
     );
-    const releaseNotice = await safeNotice(() =>
-      recordDeploymentRelease({
-        previous: { version: live?.earlyAccess?.version || live.version, enabled: live.enabled, packageUri: live.packageUri },
-        item: { ...candidate.payload, productKey },
-        body: candidate.notifyBody || {},
-        demoMode,
-        actor,
-        audience: ROLLOUT_ORGANIZATIONS,
-      }),
+    const releaseNotice = await annotated(
+      annotate,
+      safeNotice(() =>
+        record({
+          previous: { version: live?.earlyAccess?.version || live.version, enabled: live.enabled, packageUri: live.packageUri },
+          item: { ...candidate.payload, productKey },
+          body: candidate.notifyBody || {},
+          demoMode,
+          actor,
+          audience: ROLLOUT_ORGANIZATIONS,
+        }),
+      ),
     );
     return { item, releaseNotice, appliedTo };
   }
 
-  const item = await ProductDeployment.findOneAndUpdate(
+  const item = await deployments.findOneAndUpdate(
     { productKey },
     { $set: { ...candidate.payload, updatedBy: actor }, $setOnInsert: { createdBy: candidate.submittedBy || actor } },
     { new: true, upsert: true, runValidators: true },
@@ -141,22 +191,24 @@ export async function applyCandidate(candidate, { actor, demoMode = false, rollo
   // A hotfix that catches up with (or passes) the firms' build ends the early
   // stage: everybody is on it now.
   if (live?.earlyAccess && !earlyAccessStillAhead(live.earlyAccess, item.version)) {
-    await ProductDeployment.updateOne({ productKey }, { $set: { earlyAccess: null } });
+    await deployments.updateOne({ productKey }, { $set: { earlyAccess: null } });
     item.earlyAccess = null;
   }
 
-  const releaseNotice =
+  const releaseNotice = await annotated(
+    annotate,
     live === undefined
-      ? { created: false, reason: "previous-version-unreadable" }
-      : await safeNotice(() =>
-          recordDeploymentRelease({
+      ? Promise.resolve({ created: false, reason: "previous-version-unreadable" })
+      : safeNotice(() =>
+          record({
             previous: live ? { version: live.version, enabled: live.enabled, packageUri: live.packageUri } : null,
             item: item?.toObject ? item.toObject() : item,
             body: candidate.notifyBody || {},
             demoMode,
             actor,
           }),
-        );
+        ),
+  );
   return { item, releaseNotice, appliedTo };
 }
 
@@ -169,10 +221,29 @@ async function safeNotice(fn) {
 }
 
 /**
+ * Add when the weekly digest will mail it (nextDigestAt, nextDigestLagos).
+ * Never fails the approval: a notice that cannot be dated comes back exactly as
+ * it was recorded.
+ */
+async function annotated(annotate, noticePromise) {
+  const releaseNotice = await noticePromise;
+  try {
+    return await annotate(releaseNotice);
+  } catch {
+    return releaseNotice; // keep the notice as recorded
+  }
+}
+
+/**
  * Stage 2: the firms' build goes to everyone. Only once the three months are
  * up (the button is locked before then). Writes the early payload to the live
  * row, clears `earlyAccess`, and widens the build's release email to every
- * licence holder not already mailed. Throws with a `status` when refused.
+ * licence holder not already mailed.
+ *
+ * Widening does not send either: the notice becomes a candidate again and the
+ * next weekly digest carries it to everyone outside the firms' ring
+ * (util/releaseNotifier.js widenReleaseNotice). Throws with a `status` when
+ * refused.
  */
 export async function releaseToEveryone(productKey, { actor, demoMode = false, now = new Date() }) {
   const dep = await ProductDeployment.findOne({ productKey }).lean();
@@ -194,14 +265,16 @@ export async function releaseToEveryone(productKey, { actor, demoMode = false, n
 
   const releaseNotice = demoMode
     ? { widened: false, reason: "demo-mode" }
-    : await safeNotice(() => widenReleaseNotice({ productKey, version: early.payload.version, actor }));
+    : await annotated(withNextDigest, safeNotice(() => widenReleaseNotice({ productKey, version: early.payload.version, actor })));
   return { item, early, previousVersion: dep.version, releaseNotice };
 }
 
 /**
  * Take a build back from the firms (a bad release): clears `earlyAccess` so
  * their Hubs are offered the live build again, and cancels its unfinished
- * email. Allowed at any time.
+ * email. A notice a digest has already started mailing is cancelled too
+ * (OPEN_STATUSES includes "digesting"), so it is dropped from every email that
+ * digest has not sent yet. Allowed at any time.
  */
 export async function withdrawEarlyAccess(productKey, { actor }) {
   const dep = await ProductDeployment.findOne({ productKey }).lean();

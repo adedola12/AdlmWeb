@@ -162,6 +162,74 @@ refuses, it says so and sends nothing else). Every step is recorded.
 With no successor, releases stay **blocked**: the gate never opens because
 nobody is approving. The visible emergency path still works for real outages.
 
+## Customer release email
+
+Approving a plugin release (or forcing it with *Emergency release*) records the
+customers' "new version is ready" notice (`server/util/releaseGateFlow.js`
+`applyCandidate`). Nothing is emailed to customers at that moment: the notice
+waits for the **weekly release digest** (`server/util/releaseDigest.js`, Monday
+09:00 Lagos time by default), which sends each customer one email listing every
+update for the software they hold. The approve and emergency responses carry
+`releaseNotice.nextDigestLagos` with that date, as the deployment PUT does. The
+emergency send-now for the digest
+(`POST /admin/release-notifications/digest/send-now`) is admin-only and separate
+from this gate.
+
+**A staged build is never in a digest.** `applyCandidate` is the only place a
+candidate becomes a notice, and a notice is the only thing a digest can carry,
+so a build waiting on the release desk - or one the approver rejects - announces
+nothing. The same holds for `installerHubUrl`: the save only stages it, and the
+Installation Center's digest item is queued when the approver makes it live.
+
+**The rollout cuts the week's list in two** (`server/util/releaseRollout.js`).
+A notice carries the audience its build went to:
+
+| audience | who the digest mails |
+| --- | --- |
+| `organizations` | only accounts in firms of more than 5 seats |
+| `everyone`, widened | only accounts the firms' round did not already MAIL |
+| `everyone` | everybody with a live licence |
+
+The widened round reads who was already mailed from the LEDGER (the sent rows
+carrying that notice key, `util/releaseDigest.js` `toldAlready`), not from the
+early ring. The two rounds are thirteen weeks apart and the ring is recomputed
+from live seat counts each time, so "outside the ring" described the wrong set by
+the time the second round ran: a firm that bought its sixth seat in between was
+skipped by both rounds and never heard about the build, and a firm whose seats
+lapsed was mailed about it twice. A firms-only build also supersedes only older
+firms-only builds, on the digest side as on the record side, so a hotfix that has
+to reach everybody is not killed by a higher build only the firms can get.
+
+A build that has only gone to firms sits in the deployment's `earlyAccess` while
+the live row still names the older version, so the digest checks the build at the
+TOP of the rollout (`newestOffered`) before announcing it - reading the live row
+alone would call it a rollback and cancel it. Taking a build back from firms
+cancels its notice, which drops it from every email that week's digest has not
+sent yet.
+
+**Versions in customer mail are frozen** (owner, 6-7 Oct 2026). Every ADLM
+product keeps its launch version until 2027 and only the build moves, so builds
+ship as `x.y.YYMM.N` and the email reads them as "4.0.0 build 2610.1"
+(`server/util/releaseVersion.js` `displayVersion`). The notice key, the version
+comparisons and the dedupe all keep the version exactly as deployed.
+
+**Open, for the owner to decide (raised 7 Oct 2026):** the freeze is honoured only
+for the `x.y.YYMM.N` shape. `displayVersion` rewrites a version only when its
+third part is 1000 or more, so `4.0.1`, `4.0.2`, `4.0.12` and the AssemblyVersion
+form `4.0.0.12` all pass through verbatim into the subject line, and a legitimate
+pre-freeze version such as HERON `3.1.11` must still read as written - the server
+holds one version string per deployment and no per-product launch-version table,
+so it cannot tell the two apart. Nothing at record time, at approval, or in the
+digest preview warns about a non-conforming string; the freeze rests on the build
+script choosing the `YYMM` shape. Fixing this needs the owner's answer to two
+questions, so NO version is rewritten or bumped here: (1) which launch version is
+each non-QUIV product frozen at (QUIV 4.0.0, HERON 3.0.0, RateGen, MEP, CIVIQ,
+Time Pro, the Installer Hub); (2) should `x.y.z.N` render as "x.y.z build N",
+which would close the AssemblyVersion case. With (1) answered, the stage/approve
+path (`server/util/releaseGateFlow.js`, the deployment PUT) can refuse or flag a
+version that is above its product's launch version but is not an `x.y.YYMM.N`
+build, so it is caught before it reaches a customer's subject line.
+
 ## Mail
 
 All gate mail goes through SES (eu-west-1) and nothing else. The account has
