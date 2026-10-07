@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../store.jsx";
 import { can } from "../../utils/roles.js";
 import { Reveal } from "../../components/effects.jsx";
-import { IconPhone, FiActivity, FiBell, FiBookOpen, FiBox, FiCalendar, FiCheckSquare, FiClipboard, FiCpu, FiDollarSign, FiFileText, FiGift, FiHelpCircle, FiImage, FiLifeBuoy, FiMapPin, FiPlayCircle, FiPlusSquare, FiShield, FiShoppingCart, FiStar, FiTag, FiUsers } from "../../components/icons.jsx";
+import { IconPhone, FiActivity, FiBell, FiBookOpen, FiBox, FiCalendar, FiCheckSquare, FiClipboard, FiCpu, FiDollarSign, FiFileText, FiGift, FiHelpCircle, FiImage, FiLifeBuoy, FiMapPin, FiPlayCircle, FiPlusSquare, FiSearch, FiShield, FiShoppingCart, FiStar, FiTag, FiUsers } from "../../components/icons.jsx";
 
 // area = the permission key that gates the card (see server/config/permissions.js)
 const TOOLS = [
@@ -41,6 +41,7 @@ const TOOLS = [
   { area: "waitlist", to: "/admin/waitlist", label: "Waitlist & Enquiries", desc: "CIVIQ waitlist & solutions leads", icon: FiUsers },
   { area: "orgvideos", to: "/admin/org-videos", label: "Organisation Videos", desc: "Demos & recaps recorded for one firm", icon: FiPlayCircle },
   { area: "followups", to: "/admin/follow-ups", label: "Follow-Up Calls", desc: "Expired subscriptions & unpaid orders to chase", icon: IconPhone },
+  { area: "prospecting", to: "/admin/prospecting", label: "Prospecting", desc: "Review cold emails to firms the finder found", icon: FiSearch },
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },
   { area: "aiusage", to: "/admin/ai-usage", label: "AI Usage", desc: "AI spend, quotas & AWS credit", icon: FiCpu },
   { area: "releases", to: "/admin/releases", label: "Release sign-off", desc: "Approve updates before customers get them", icon: FiShield },

@@ -116,9 +116,11 @@ export function projectWorkspaceHref(p, { newBuild = false } = {}) {
     const key = p?.slug || p?.id || p?._id || "";
     return key ? `/archicad/${encodeURIComponent(key)}/boq` : "/archicad";
   }
-  if (k === "rategen") return "/rategen";
-  if (!k) return "/manage";
   const key = p?.slug || p?.id || p?._id || "";
+  // A RateGen project is a priced bill saved from RateGen's Price a bill: it opens
+  // like any other project. Without one, RateGen means its rates page.
+  if (k === "rategen" && !key) return "/rategen";
+  if (!k) return "/manage";
   if (newBuild && key) {
     return `/work/project/${encodeURIComponent(k)}/${encodeURIComponent(key)}`;
   }

@@ -145,6 +145,13 @@ export const EMAILS = [
     editable: true,
   },
   {
+    key: "project.model-drift",
+    name: "Model changed since last take-off",
+    when: "QUIV finds the model behind a cloud project has changed since its last take-off (once per change)",
+    file: "services/modelDriftNotify.js",
+    editable: true,
+  },
+  {
     key: "project.contract-locked",
     name: "Contract locked",
     when:

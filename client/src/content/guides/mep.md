@@ -2,8 +2,8 @@
 id: mep
 title: SERVIQ for Revit MEP
 tagline: Measure ductwork, pipework, cable, fixtures and equipment straight from your Revit model, price them, and send the take-off to ADLM Cloud.
-version: "2.0.0"
-updated: 2026-10-04
+version: "2.0"
+updated: 2026-10-07
 platform: Revit 2024-2027 add-in (Windows)
 productKeys: [mep]
 pdf: ADLM-Revit-MEP-User-Guide.pdf
@@ -12,13 +12,13 @@ order: 7
 
 SERVIQ is ADLM's Revit add-in for measuring the services in a building: ductwork, pipework, cable and containment, and every terminal, fixture and piece of equipment on them. It reads the quantities from the Revit model you have open, so you do not count symbols on a drawing. It is for services quantity surveyors, main-contract QSs pricing an M&E package, and services engineers who want a quick quantity check. You get a measured take-off, a priced bill with overhead and profit, a material schedule, an Excel workbook, and a project on your ADLM Cloud account that you can price, value and report on the web.
 
-This guide covers **SERVIQ 2.0** (ServiQ 2.0.0), the new version built on the same design as QUIV 4.0. In Revit it adds a tab called **SERVIQ** with one **ServiQ** button. In the Installer Hub the product is listed as the **Revit MEP Plugin**. It is the same subscription as the old ADLM Revit MEP Suite.
+This guide covers **SERVIQ 2.0**, the new version built on the same design as QUIV 4.0. In Revit it adds a tab called **SERVIQ** with one **ServiQ** button. In the Installer Hub the product is listed as the **Revit MEP Plugin**. It is the same subscription as the old ADLM Revit MEP Suite.
 
-> **Note:** SERVIQ 2.0 is rolling out to every customer at once from 3 October 2026, through the Installer Hub. If your Hub still shows version 1.8.3 and no update, 2.0 has not reached your account yet: click **Refresh** in the Hub later. Version 1.8.3 has the older **ADLM MEP & HVAC** tab with one button per service; see [If you are still on 1.8.3](#if-you-are-still-on-183) at the end of this guide.
+> **Note:** SERVIQ 2.0 is rolling out to every customer at once from 3 October 2026, through the Installer Hub. If your Hub still shows version 1.8.3 and no update, 2.0 has not reached your account yet: click **Refresh** in the Hub later. Version 1.8.3 has the older **ADLM MEP & HVAC** tab with one button per service; see [If you are still on 1.8.3](#if-you-are-still-on-1-8-3) at the end of this guide.
 
 ## What's new in 2.0
 
-Version 2.0.0 was released on 1 October 2026.
+SERVIQ 2.0 was released on 1 October 2026.
 
 - **A new name and a new panel.** The add-in is now SERVIQ. One **ServiQ** button on the **SERVIQ** tab opens a single panel beside your model. It signs you in, sets up a take-off list, walks you through each service, and saves to ADLM Cloud. The nine per-service ribbon buttons are gone.
 - **A take-off list by service.** Start a project, tick **HVAC**, **Plumbing** and **Electrical**, and SERVIQ lists every item to measure, grouped by service, with a progress bar.
@@ -85,7 +85,7 @@ The panel opens on its home screen and greets you by name. You sign in once each
 
 No ADLM account yet? Click **Create an account** under "New to ADLM?". It opens the sign-up page on the website.
 
-> **Important:** Your subscription is tied to the computer you first sign in on. To move to a new computer, free the old one first. See [Moving to a new computer](/guides/installer-hub#moving-to-a-new-computer) in the Installer Hub guide.
+> **Important:** Your subscription is tied to the computer you first sign in on. To move to a new computer, free the old one first. See [Moving to a new computer](/guides/installer-hub#move-a-licence-to-a-new-computer) in the Installer Hub guide.
 
 ## Find your way around the panel
 
@@ -367,19 +367,19 @@ How it finds a price:
 
 SERVIQ itself does not show carbon. Carbon for services comes from your Rate Gen rates:
 
-- In Rate Gen 3.0.1, every built-up rate gets an upfront carbon figure in kgCO2e (stages A1 to A5). Building-services rates are listed under **Mechanical**, **Electrical**, **Plumbing** and **Fire**.
-- Copper cable and earthing are weighed from their own names (cores × size of conductor). Insulation and sheath are not counted, so a cable's figure is a minimum.
+- In Rate Gen 3.0, every built-up rate gets an upfront carbon figure in kgCO2e (stages A1 to A5). Building-services rates are listed under **Mechanical**, **Electrical**, **Plumbing** and **Fire**.
+- From Rate Gen 3.0, build 3.0.2610.1, copper cable and earthing are weighed from their own names (cores × size of conductor). Insulation and sheath are not counted, so a cable's figure is a minimum.
 - PP-R pressure pipe and uPVC soil pipe are weighed from their sizes.
 - Fittings and manufactured items (AC units, pumps, fans, sanitaryware, light fittings, accessories, fire equipment, tanks) have no carbon figure yet. They need the maker's own figure.
 
 See [ADLM Rate Gen](/guides/rategen) for the **Carbon & Others** screen.
 
-On ADLM Cloud, open the project's **Export** menu and use the **ICMS 3** group ("international cost and carbon report"):
+On ADLM Cloud, open the project, click **More actions** > **Open the classic workspace**, then **Export**, and use the **ICMS 3** group ("international cost and carbon report"). The project page's own **Export** menu does not have it.
 
 - **ICMS 3 cost and carbon (Excel)**: cost and upfront carbon (A1-A5) by ICMS 3 Group, with every line's code, where its carbon came from, and the lines not yet placed.
 - **ICMS 3 cost and carbon (JSON)**: the same report as data. It conforms to the RICS Data Standard 3.3.3.
 
-SERVIQ lines go into Group 05, services and equipment, by type: for example ducts and air conditioners to 05.010 (heating, ventilating and air-conditioning), distribution boards to 05.020 (electrical services), light fittings to 05.030, pipework to 05.050 (water supply and drainage) and WCs and basins to 05.060 (sanitary fittings). External drainage such as inspection chambers goes to Group 06. A line SERVIQ cannot place is listed as not yet placed. The report total equals the contract total: preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020. Carbon per line comes from your Rate Gen rates, so lines priced from an item with no carbon figure show none. Give an IPMS 1 or 2 floor area to see cost and carbon per m².
+SERVIQ lines go into Group 05, services and equipment, by type: for example ducts and air conditioners to 05.010 (heating, ventilating and air-conditioning), distribution boards to 05.020 (electrical services), light fittings to 05.030, pipework to 05.050 (water supply and drainage) and WCs and basins to 05.060 (sanitary fittings). External drainage such as inspection chambers goes to Group 06. A line SERVIQ cannot place is listed as not yet placed. The report total equals the contract total: preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020. Carbon per line comes from your Rate Gen rates, so lines priced from an item with no carbon figure show none. Cost and carbon per m² need an IPMS 1 or 2 floor area, and ADLM Cloud has no screen to record one yet, so divide by the floor area yourself.
 
 ### Learning samples
 
@@ -417,7 +417,7 @@ Where they are switched on:
 
 ### I still see the ADLM MEP & HVAC tab
 
-You are on version 1.8.3. Update from the Hub when it offers 2.0. See [If you are still on 1.8.3](#if-you-are-still-on-183).
+You are on version 1.8.3. Update from the Hub when it offers 2.0. See [If you are still on 1.8.3](#if-you-are-still-on-1-8-3).
 
 ### The docked panel shows only a short hint
 
@@ -429,7 +429,7 @@ Check your email and password by signing in at [adlmstudio.net](/). If you have 
 
 ### "No active MEP subscription or device mismatch."
 
-Either your SERVIQ subscription is not active, or your licence is in use on another computer. Check your [dashboard](/dashboard). If the subscription is active, free the other computer as described in [Moving to a new computer](/guides/installer-hub#moving-to-a-new-computer), then sign in again. Remember that QUIV and SERVIQ are separate subscriptions.
+Either your SERVIQ subscription is not active, or your licence is in use on another computer. Check your [dashboard](/dashboard). If the subscription is active, free the other computer as described in [Moving to a new computer](/guides/installer-hub#move-a-licence-to-a-new-computer), then sign in again. Remember that QUIV and SERVIQ are separate subscriptions.
 
 ### "Internet is required to sign in" or "Network error"
 

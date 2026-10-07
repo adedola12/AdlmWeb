@@ -14,13 +14,19 @@ import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { ensureMeta } from "../models/RateGenMeta.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { RateGenTradeMargin } from "../models/RateGenTradeMargin.js";
+import { RateGenPlant } from "../models/RateGenPlant.js";
+import { PLANT_UNIT, cleanPlantInput, mergePlantLibrary } from "../util/plantCosting.js";
+import { cleanMarginRows } from "../util/tradeMargins.js";
+import { tradeMarginsView } from "../util/tradeMarginsView.js";
+import { ALLOWED_SECTION_KEYS } from "../util/rategenSections.js";
 import {
   buildRateComposition,
   buildUserRateKey,
   getUserId,
   mergeRatesWithUserData,
-  normalizeCustomRate,
-  normalizeRateOverride,
+  normalizeCustomRateFor,
+  normalizeRateOverrideFor,
   normalizeSectionKey,
   preservePlantLines,
   toUserRateDefinition,
@@ -662,15 +668,18 @@ function mapUserCustomRate(item) {
   });
 }
 
-function normalizeUserRateOverridePayload(rateId, body) {
-  return normalizeRateOverride({
+// A percentage the payload leaves out is filled from the rate already held,
+// then the customer's trade default, then the built-in pair — never by
+// rewriting one the payload carries (util/tradeMargins.js).
+function normalizeUserRateOverridePayload(lib, rateId, body) {
+  return normalizeRateOverrideFor(lib, {
     ...(body || {}),
     rateId,
   });
 }
 
-function normalizeUserCustomRatePayload(customRateId, body) {
-  return normalizeCustomRate({
+function normalizeUserCustomRatePayload(lib, customRateId, body) {
+  return normalizeCustomRateFor(lib, {
     ...(body || {}),
     customRateId,
   });
@@ -948,7 +957,7 @@ router.put("/library/user-rates", async (req, res, next) => {
     }
 
     if (Array.isArray(rateOverrides)) {
-      lib.rateOverrides = rateOverrides.map((item) => normalizeRateOverride(item));
+      lib.rateOverrides = rateOverrides.map((item) => normalizeRateOverrideFor(lib, item));
       lib.ratesVersion = (lib.ratesVersion ?? 1) + 1;
     }
 
@@ -968,7 +977,8 @@ router.put("/library/user-rates", async (req, res, next) => {
         ]),
       );
       const incoming = customRates.map((item) => {
-        const next = normalizeCustomRate(item);
+        // R2: a missing overhead/profit is filled from the trade defaults.
+        const next = normalizeCustomRateFor(lib, item);
         const prior = storedById.get(String(next.customRateId || ""));
         return prior
           ? preservePlantLines(next, prior, { clientSupportsPlant: req.body?.supportsPlant === true })
@@ -1066,7 +1076,7 @@ router.put("/library/user-rates/override/:rateId", async (req, res, next) => {
       });
     }
 
-    const item = normalizeUserRateOverridePayload(rateId, req.body);
+    const item = normalizeUserRateOverridePayload(lib, rateId, req.body);
     if (!item.description) {
       return res.status(400).json({ error: "description is required" });
     }
@@ -1193,7 +1203,7 @@ router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
       });
     }
 
-    const incoming = normalizeUserCustomRatePayload(customRateId, req.body);
+    const incoming = normalizeUserCustomRatePayload(lib, customRateId, req.body);
     if (!incoming.title && !incoming.description) {
       return res
         .status(400)
@@ -1299,6 +1309,69 @@ router.delete("/library/custom-rates/:customRateId", async (req, res, next) => {
 });
 
 /**
+ * GET /library/trade-margins
+ *
+ * The customer's own overhead and profit default per trade, beside ADLM's
+ * master default for the same trade (for reference) and what a NEW custom
+ * rate in that trade would actually get. A default only fills a percentage a
+ * rate arrives without; it never rewrites a stored rate.
+ */
+router.get("/library/trade-margins", async (req, res, next) => {
+  try {
+    await ensureDb();
+    const [lib, master] = await Promise.all([
+      ensureUserLibrary(req),
+      RateGenTradeMargin.find({}).lean(),
+    ]);
+    res.json({
+      ok: true,
+      ...tradeMarginsView(lib.tradeMargins, master),
+      version: lib.tradeMarginsVersion ?? 1,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /library/trade-margins
+ * body: { rows: [{ sectionKey, overheadPercent, profitPercent }], baseVersion? }
+ *
+ * Replaces the customer's table. A row with both figures blank is dropped,
+ * which is how a trade goes back to the default. Nothing already stored is
+ * re-priced: the table is read only when a rate is written without a figure.
+ */
+router.put("/library/trade-margins", async (req, res, next) => {
+  try {
+    await ensureDb();
+    const lib = await ensureUserLibrary(req);
+    const baseVersion = Number(req.body?.baseVersion || 0);
+    if (baseVersion > 0 && baseVersion !== (lib.tradeMarginsVersion ?? 1)) {
+      return res.status(409).json({
+        error: "Your trade margins were changed somewhere else. Reload and try again.",
+        version: lib.tradeMarginsVersion ?? 1,
+      });
+    }
+    const { rows, problem } = cleanMarginRows(req.body?.rows, ALLOWED_SECTION_KEYS);
+    if (problem) return res.status(400).json({ error: problem });
+
+    const now = new Date();
+    lib.tradeMargins = rows.map((r) => ({ ...r, updatedAt: now }));
+    lib.tradeMarginsVersion = (lib.tradeMarginsVersion ?? 1) + 1;
+    await lib.save();
+
+    const master = await RateGenTradeMargin.find({}).lean();
+    res.json({
+      ok: true,
+      ...tradeMarginsView(lib.tradeMargins, master),
+      version: lib.tradeMarginsVersion,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /library/custom-rates/deleted
  * The archive of removed custom rates, newest first.
  */
@@ -1313,6 +1386,108 @@ router.get("/library/custom-rates/deleted", async (req, res, next) => {
         deletedAt: item.deletedAt,
         deletedReason: item.deletedReason || "",
       })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /library/plant
+ *
+ * ADLM's machines with this customer's own versions laid over them, each with
+ * its day cost, hours per day and hourly rate. A machine that cannot be priced
+ * says so (hourlyRate null + problems) rather than reading ₦0.
+ */
+router.get("/library/plant", async (req, res, next) => {
+  try {
+    await ensureDb();
+    const [lib, master] = await Promise.all([
+      ensureUserLibrary(req),
+      RateGenPlant.find({ enabled: true }).lean(),
+    ]);
+    res.json({
+      ok: true,
+      items: mergePlantLibrary(master, lib.plant),
+      version: lib.plantVersion ?? 1,
+      unit: PLANT_UNIT,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /library/plant/:key
+ * body: { baseSn?, name, category?, hoursPerDay, parts[], notes?, plantBaseVersion? }
+ *
+ * The customer's own machine, or (with baseSn) their own version of one of
+ * ADLM's. Rates already built keep the hourly price they were built at.
+ */
+router.put("/library/plant/:key", async (req, res, next) => {
+  try {
+    await ensureDb();
+    const key = String(req.params.key || "").trim();
+    if (!key) return res.status(400).json({ error: "key is required" });
+
+    const lib = await ensureUserLibrary(req);
+    const base = Number(req.body?.plantBaseVersion || 0);
+    if (base > 0 && base !== (lib.plantVersion ?? 1)) {
+      return res.status(409).json({
+        error: "Your plant list was changed somewhere else. Reload and try again.",
+        version: lib.plantVersion ?? 1,
+      });
+    }
+
+    const { plant, problem } = cleanPlantInput(req.body);
+    if (problem) return res.status(400).json({ error: problem });
+
+    let baseSn = null;
+    if (req.body?.baseSn !== undefined && req.body?.baseSn !== null && req.body?.baseSn !== "") {
+      baseSn = Number(req.body.baseSn);
+      const exists = Number.isFinite(baseSn) && (await RateGenPlant.exists({ sn: baseSn }));
+      if (!exists) return res.status(400).json({ error: "That ADLM machine does not exist" });
+    }
+
+    const now = new Date();
+    const row = { ...plant, key, baseSn, priceAsOf: now, updatedAt: now };
+    const list = [...(lib.plant || [])].filter(
+      // one version per ADLM machine, whatever key it was filed under
+      (p) => p.key !== key && !(baseSn !== null && Number(p.baseSn) === baseSn),
+    );
+    list.push(row);
+    lib.plant = list;
+    lib.plantVersion = (lib.plantVersion ?? 1) + 1;
+    await lib.save();
+
+    const master = await RateGenPlant.find({ enabled: true }).lean();
+    res.json({
+      ok: true,
+      items: mergePlantLibrary(master, lib.plant),
+      version: lib.plantVersion,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /library/plant/:key — drop the customer's own row (back to ADLM's, for a copy). */
+router.delete("/library/plant/:key", async (req, res, next) => {
+  try {
+    await ensureDb();
+    const key = String(req.params.key || "").trim();
+    const lib = await ensureUserLibrary(req);
+    const before = (lib.plant || []).length;
+    lib.plant = (lib.plant || []).filter((p) => p.key !== key);
+    if (lib.plant.length !== before) {
+      lib.plantVersion = (lib.plantVersion ?? 1) + 1;
+      await lib.save();
+    }
+    const master = await RateGenPlant.find({ enabled: true }).lean();
+    res.json({
+      ok: true,
+      items: mergePlantLibrary(master, lib.plant),
+      version: lib.plantVersion ?? 1,
     });
   } catch (err) {
     next(err);

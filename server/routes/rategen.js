@@ -10,8 +10,8 @@ import {
 import {
   buildUserRateKey,
   getUserId,
-  normalizeCustomRate,
-  normalizeRateOverride,
+  normalizeCustomRateFor,
+  normalizeRateOverrideFor,
   toUserRateDefinition,
 } from "../util/rategenUserRates.js";
 import {
@@ -52,6 +52,14 @@ function toLibraryResponse(lib) {
   const { deletedCustomRates: _archive, ...plain } = lib?.toObject
     ? lib.toObject()
     : { ...(lib || {}) };
+  // Rate Gen desktop reads this response. The trade-margin table and the plant
+  // library have their own routes (/rategen-v2/library/trade-margins, /plant),
+  // so they are kept out of it and its shape stays what the desktop was built
+  // against.
+  delete plain.tradeMargins;
+  delete plain.tradeMarginsVersion;
+  delete plain.plant;
+  delete plain.plantVersion;
   return {
     ...plain,
     rateOverrides: (plain.rateOverrides || []).map(mapUserRateOverride),
@@ -412,15 +420,16 @@ router.put("/library", async (req, res) => {
     touchedLibrary = true;
   }
   if (Array.isArray(rateOverrides)) {
-    lib.rateOverrides = rateOverrides.map((item) => normalizeRateOverride(item));
+    lib.rateOverrides = rateOverrides.map((item) => normalizeRateOverrideFor(lib, item));
     lib.ratesVersion += 1;
   }
   if (Array.isArray(customRates)) {
     // A rate the payload left out is not a deletion; see
-    // util/rategenCustomRateGuard.js.
+    // util/rategenCustomRateGuard.js. Each rate's missing overhead/profit is
+    // filled from this library's trade defaults (R2) before the merge.
     lib.customRates = mergeBulkCustomRates(
       lib,
-      customRates.map((item) => normalizeCustomRate(item)),
+      customRates.map((item) => normalizeCustomRateFor(lib, item)),
       { syncAware: clientIsSyncAware(req) },
     ).customRates;
     lib.customRatesVersion += 1;

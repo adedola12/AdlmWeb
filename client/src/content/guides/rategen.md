@@ -1,28 +1,34 @@
 ---
 id: rategen
 title: ADLM Rate Gen
-tagline: Build defensible rates from material, labour and plant prices for your location, see the upfront carbon of every rate, and price QUIV, HERON, SERVIQ and ADLM Cloud projects from one library.
-version: "3.0.1"
-updated: 2026-10-04
+tagline: Build defensible rates from material, labour and plant prices for your location, see the upfront carbon of every rate, price a client's own bill, and price QUIV, HERON, SERVIQ and ADLM Cloud projects from one library.
+version: "3.0, build 3.0.2610.2"
+updated: 2026-10-07
 platform: Windows desktop app, plus the read-only RateGen pages on adlmstudio.net
 productKeys: [rategen]
 pdf: ADLM-RateGen-User-Guide.pdf
 order: 6
 ---
 
-ADLM Rate Gen is ADLM's rate build-up tool for quantity surveyors and estimators. It holds a library of material prices, labour day rates and plant hire rates, priced for the part of Nigeria you work in, and builds up a rate for every item of work: ground works, concrete, blockwork, finishes, roofs, painting, steel, windows and doors, and the four building services. Every rate shows exactly what it is made of, so you can check it, change it and defend it. Every priced rate also carries an upfront carbon figure in kgCO2e. Your library lives on your ADLM account, so QUIV, HERON, SERVIQ and your ADLM Cloud projects all price from the same rates.
+ADLM Rate Gen is ADLM's rate build-up tool for quantity surveyors and estimators. It holds a library of material prices, labour day rates and plant hire rates, priced for the part of Nigeria you work in, and builds up a rate for every item of work: ground works, concrete, blockwork, finishes, roofs, painting, steel, windows and doors, and the four building services. Every rate shows exactly what it is made of, so you can check it, change it and defend it. Every priced rate also carries an upfront carbon figure in kgCO2e. **Price a bill** prices a client's own Excel bill from those same rates. Your library lives on your ADLM account, so QUIV, HERON, SERVIQ and your ADLM Cloud projects all price from the same rates.
 
-This guide covers **Rate Gen 3.0.1**, the new suite design. Rate Gen 3.0.1 is staged for sign-off and reaches you through the Installer Hub. Where a feature arrived in 3.0.0 or 3.0.1, this guide says so.
+This guide covers **Rate Gen 3.0, build 3.0.2610.2**, the new suite design. Rate Gen keeps the version 3.0 through 2026; each release changes only its build number. Build 3.0.2610.2 reaches you through the Installer Hub. If your Hub still offers build 3.0.2610.1, you do not have **Price a bill** or **Save to ADLM Cloud** yet. Where a feature arrived with a build, this guide says so.
 
 > **Important:** Rates are built only in the Rate Gen desktop app. The RateGen pages on the ADLM website are **read-only**. They show your library and every rate's build-up, but they cannot build a rate, edit a rate, delete a rate or change a material or labour price. To change anything, open Rate Gen on your computer. Your change appears on the website after Rate Gen's next sync.
 
-## What's new in 3.0.1
+## What's new in build 3.0.2610.2
 
-- **Custom rates now download.** Before 3.0.1, Rate Gen never downloaded your custom rates. A rate made on another PC, or on the website before the website became read-only, could be removed from your account at the next sync. Rate Gen now brings every custom rate on your account into **Saved Rates**, at sign-in and at every sync, with its own prices, unit and section. A rate is deleted from your account only when you delete it in Rate Gen. See [Custom rates and sync](#custom-rates-and-sync).
+- **Price a bill.** Open any client's bill of quantities in Excel, in their own layout. ADLM AI proposes one of your rates for each measured item, in the same unit only, and nothing is priced until you accept it. **Download Excel** saves a priced copy in the client's layout; the client's file is never changed. See [Price a bill](#price-a-bill).
+- **Save to ADLM Cloud.** Keep a bill you are pricing, priced and unpriced lines, as a RateGen project in your ADLM account. Saving again from the same bill updates it. See [Save a priced bill to ADLM Cloud](#save-a-priced-bill-to-adlm-cloud).
+- **Signal bars beside the sync button** show how well this PC reaches ADLM Cloud. See [Connection and working offline](#connection-and-working-offline).
+
+### Also in build 3.0.2610.1
+
+- **Custom rates now download.** Before build 3.0.2610.1, Rate Gen never downloaded your custom rates. A rate made on another PC, or on the website before the website became read-only, could be removed from your account at the next sync. Rate Gen now brings every custom rate on your account into **Saved Rates**, at sign-in and at every sync, with its own prices, unit and section. A rate is deleted from your account only when you delete it in Rate Gen. See [Custom rates and sync](#custom-rates-and-sync).
 - **Carbon for services cables and pipes.** Copper cable and earthing, PP-R pressure pipe and uPVC soil pipe are now weighed from their own names, so services rates that use them get a carbon figure.
 - **Build with AI is on by default** for everyone signed in. See [AI in Rate Gen](#ai-in-rate-gen).
 
-For everything that changed in 3.0.0, see [What's new in 3.0.0](#whats-new-in-300).
+For everything that changed in the 3.0 launch release, see [What's new in 3.0](#what-s-new-in-3-0).
 
 ## Before you start
 
@@ -56,7 +62,7 @@ You only do steps 1 to 3 once.
 3. Open Rate Gen and sign in. Rate Gen loads the prices for your location.
 4. Check prices in the **Library**, then check the rates in each trade.
 5. Build custom rates for anything the library does not cover.
-6. Price your projects in QUIV, HERON, SERVIQ or ADLM Cloud.
+6. Price your projects in QUIV, HERON, SERVIQ or ADLM Cloud, or price a client's own bill with **Price a bill**.
 
 ## Signing in
 
@@ -84,7 +90,7 @@ Rate Gen 3.0 uses the same suite design as every ADLM product: a rail on the lef
 | **Library** | Your material and labour library, with plant in the labour list. |
 | **ITEM OF WORKS** | A heading over the eight trades: **Ground**, **Concrete**, **Block Works**, **Finishes**, **Roofs**, **Painting**, **Steel** and **Window and Door**. |
 | **SERVICES** | **Mechanical** (air conditioning and ventilation), **Electrical** (lighting, power, cables, earthing, containment, security), **Plumbing** (water supply, soil and waste, rainwater, sanitary) and **Fire** (fire protection and alarm). |
-| **MORE** | **Carbon & Others**, the upfront carbon of every priced rate, and **Saved Rates**, your custom rates, with a count beside it. |
+| **MORE** | **Price a bill**, to price a client's own bill from your rates; **Carbon & Others**, the upfront carbon of every priced rate; and **Saved Rates**, your custom rates, with a count beside it. |
 | **Open ADLM Cloud** | Opens RateGen on the website, where your rates price your projects. |
 | **Export** | Saves every rate to Excel. |
 | **Help** | Opens an email to ADLM support with your account email filled in. |
@@ -98,6 +104,7 @@ Click the button at the top of the rail, or press <kbd>Ctrl</kbd>+<kbd>B</kbd>, 
 |---|---|
 | **Search every rate in the library** | Searches every trade and service. Type part of a rate's name and pick a result to open it. Press <kbd>Ctrl</kbd>+<kbd>F</kbd> to jump here. |
 | Currency | Shows prices in NGN, USD, EUR, QAR, GHS or ZAR. This changes how prices are shown only. |
+| Signal bars | How well this PC reaches ADLM Cloud (from build 3.0.2610.2). Hover for details; click to check again. |
 | Sync button | **Sync from Cloud (F5)**. Fetches the latest rates and prices and sends your edits up. Hover over it to see the last sync result. |
 | Banner (eye) | Shows or hides the welcome banner, for more room for rates. |
 | Light or dark | Switches the theme. |
@@ -280,7 +287,7 @@ Custom rates are priced from your library, so they follow when you change a libr
 
 ### Custom rates and sync
 
-From version 3.0.1, custom rates sync both ways:
+From build 3.0.2610.1, custom rates sync both ways:
 
 - Rates on your account that this PC does not have are **downloaded** into **Saved Rates**, at sign-in and at every sync.
 - A rate is deleted from your account **only when you delete it in Rate Gen**.
@@ -291,9 +298,121 @@ So a new PC, or a fresh install, brings back all your custom rates when you sign
 
 > **Note:** Rate Gen has no plant group on a custom rate yet. If an older rate made on the website has a plant line, the line does not show in Rate Gen, but it is kept on your account and the rate keeps its full value.
 
+## Price a bill
+
+**Price a bill** prices a client's own bill of quantities from your Rate Gen rates. It arrived in build 3.0.2610.2. You open the client's Excel bill as it is, in their layout. Rate Gen reads every item with the section and headings above it, ADLM AI proposes one of your rates for each measured item, and you decide. Nothing is priced until you accept it, and the client's file is never changed: the priced bill is saved as a copy.
+
+### What you need
+
+- To be signed in to Rate Gen, with an internet connection. ADLM AI runs on ADLM's servers.
+- The client's bill as an Excel workbook: **.xlsx**, or **.xls** on a PC with Microsoft Excel installed. Any layout and any number of sheets.
+- Your rates loaded. If Rate Gen says it has no priced rates loaded yet, open a trade once so its rates load, then try again.
+
+Matching uses your account's monthly AI allowance. See [AI in Rate Gen](#ai-in-rate-gen).
+
+### Opening a client's bill
+
+1. Click **Price a bill** in the rail, under **MORE**. The screen opens on **Open a client's bill**.
+2. Click **Open a bill**.
+3. Pick the client's workbook in the **Open a bill of quantities** window, then click **Open**.
+4. Wait while Rate Gen works through **Reading the bill**, **Matching to your rates** and **Pricing**. The line under the steps says how far it has got, for example "Matched 40 of 112 bill lines…". Click **Cancel** to stop.
+
+Rate Gen finds the description, unit and quantity columns on each sheet by itself. Summary sheets and sheets it cannot read are skipped; a note at the top of the screen lists them under **Sheets not read**.
+
+> **Note:** For an old-format **.xls** file, Rate Gen uses Excel on your PC to read it. If Excel is not installed, save the file as .xlsx on a PC with Excel and open that copy.
+
+### Reading the priced bill
+
+The bill opens as a table, one row per line of the client's bill. Headings and titles are shown in bold.
+
+| Column | Meaning |
+|---|---|
+| **ITEM** | The client's item reference. |
+| **DESCRIPTION** | The client's wording. Hover over it to see the line as Rate Gen read it, with the section and headings above it. |
+| **UNIT** and **QTY** | The client's unit and quantity. |
+| **YOUR RATE** | The Rate Gen rate proposed or chosen for the line, with its status underneath. |
+| **SURE** | How sure ADLM AI is of its proposal, as a percentage. |
+| **RATE** | The rate. |
+| **AMOUNT** | Quantity times rate, shown once the line is priced. |
+
+The status under each rate tells you where the line stands:
+
+| Status | Meaning |
+|---|---|
+| **Suggested, check it** | ADLM AI proposed a rate. It is not priced until you accept it. |
+| **Priced** | You accepted or chose a rate. |
+| **Priced, no quantity in the bill** | Priced, but the client's bill has no quantity for the line, so it adds nothing to the total. |
+| **No match: choose a rate** | No good match was found. Choose a rate yourself or leave it unpriced. |
+| **Sum: price in the bill** | A lump sum or provisional sum. Price it in the client's bill yourself. |
+| **Not a measured item** | A line with no unit Rate Gen can price, such as a note. |
+
+Use **All**, **Needs attention** and **Priced** above the table to show every line, only the lines still to decide, or only the priced lines. Each shows its count.
+
+### Accepting suggestions
+
+To accept every confident proposal at once:
+
+1. Click **Accept the sure matches**. The button shows how many lines have a suggestion, for example "(36 suggested)".
+2. Rate Gen accepts every suggestion ADLM AI is at least 85% sure of. You can still change any of them.
+
+To decide one line at a time:
+
+1. Click the line. The side panel shows **THE LINE, AS READ**, with its quantity, unit and sheet, and **YOUR RATE**, with the rate's trade, how sure ADLM AI is (for example "ADLM AI 92% sure") and its reason.
+2. Click **Accept** to price the line with that rate, or **Leave unpriced** to clear a priced line.
+
+### Choosing another rate
+
+1. Click the line.
+2. Under **CHOOSE ANOTHER RATE**, the side panel lists your rates that fit the line best. Type in **Search your rates** to look for others.
+3. Double-click a rate, or select it and press <kbd>Enter</kbd>. The line is priced with it.
+
+Only rates in the line's own unit are offered. Steel billed by the kg is offered your per-tonne steel rates, worked out per kg.
+
+### Totals
+
+With no line selected, the side panel shows **BY SECTION**: each sheet and section, how many of its items are priced, and its total. Under the table, Rate Gen shows how many items are priced (for example "84 of 112 items priced") and the **BILL TOTAL**. Totals count accepted lines only.
+
+The rates are Rate Gen's all-in rates: net cost, overhead and profit.
+
+### Downloading the priced bill
+
+1. Click **Download Excel**. It is available once at least one line is priced.
+2. In **Save the priced bill**, choose where to save. Rate Gen suggests the bill's own name with "(RateGen priced)" on the end. You cannot save over the client's original.
+3. Click **Save**. **Priced bill saved** shows how many lines were priced and the bill total.
+4. Click **Show in folder** to find the file, or **Close**.
+
+The copy keeps the client's layout with your rates and amounts filled in:
+
+- If the bill has no rate or amount column, Rate Gen adds **Rate** and **Amount** beside the bill's own columns.
+- Each rate carries a note naming the Rate Gen rate behind it, its trade and its unit.
+- A **RateGen summary** sheet lists each section with **Items priced**, **Items** and **Total**, and the bill total.
+- A rate cell that holds the client's own formula is left as it was.
+- Rates and amounts are written in the currency chosen in the top bar.
+
+> **Tip:** If the save fails, the file may be open in Excel. Close it and click **Download Excel** again.
+
+### Starting another bill
+
+Click **Open another bill**. If you have accepted rates, Rate Gen asks **Start again?** first: the rates you accepted are not kept unless you download the priced bill (or save it to ADLM Cloud) first. Click **Start again** or **Keep working**.
+
+## Save a priced bill to ADLM Cloud
+
+From build 3.0.2610.2, you can keep a bill you are pricing in your ADLM account as a RateGen project. The project holds every measured line, priced and unpriced, and each priced line keeps the Rate Gen rate that priced it. It is named after the client's file.
+
+1. Open and review the bill in **Price a bill**.
+2. Click **Save to ADLM Cloud**. The button reads **Saving…** while it works.
+3. **Saved to ADLM Cloud** confirms it: "The bill is saved as a RateGen project in your ADLM account. Saving again from here updates the same project." It shows the **Project** name and the **Lines**, with how many are priced.
+4. Click **Open in ADLM Cloud** to open the project on the website, or **Close**.
+
+After the first save the button reads **Save changes to ADLM Cloud**. Click it after more pricing and the same project is updated; you will see **Changes saved to ADLM Cloud**. Opening another bill and saving it makes a new project.
+
+> **Note:** The ICMS 3 cost and carbon export for a bill saved from Rate Gen comes in a later release.
+
+If Rate Gen says **Sign in to save to ADLM Cloud**, your session has ended: sign in again, then save. If it says **Could not save to ADLM Cloud**, check your connection and try again. The priced bill stays on screen, so nothing is lost.
+
 ## Carbon: kgCO2e on every rate
 
-From version 3.0.0, every priced rate has an upfront carbon figure, worked out from the same materials and quantities as its price. Change a quantity and the price and the carbon move together.
+From version 3.0, every priced rate has an upfront carbon figure, worked out from the same materials and quantities as its price. Change a quantity and the price and the carbon move together.
 
 ### What the figure is
 
@@ -316,7 +435,7 @@ From version 3.0.0, every priced rate has an upfront carbon figure, worked out f
 
 ### Services carbon factors
 
-From version 3.0.1, services rates that use these materials get a carbon figure:
+From build 3.0.2610.1, services rates that use these materials get a carbon figure:
 
 | Material | How it is weighed |
 |---|---|
@@ -328,12 +447,12 @@ Rainwater and waste pipe, fittings and manufactured items (air conditioners, pum
 
 ### Where carbon goes next: ICMS 3 on ADLM Cloud
 
-Rate Gen's carbon travels with your rates to ADLM Cloud. On a project, open the **Export** menu and look in the **ICMS 3** group, labelled "international cost and carbon report":
+Rate Gen's carbon travels with your rates to ADLM Cloud. On a project, click **More actions** > **Open the classic workspace**, open the **Export** menu and look in the **ICMS 3** group, labelled "international cost and carbon report":
 
 - **ICMS 3 cost and carbon (Excel):** cost and upfront carbon (A1-A5) by ICMS 3 Group, every line's code and carbon source, and the lines not yet placed.
 - **ICMS 3 cost and carbon (JSON):** the same report as data, conforming to the RICS Data Standard 3.3.3.
 
-The carbon on each line comes from your Rate Gen rates. The report total equals the contract total: preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020. Cost and carbon per m² appear when you give an IPMS 1 or 2 floor area. The export works on sample projects too. For SERVIQ projects, ADLM Cloud uses a wider set of building-services carbon factors. See [ADLM Cloud](/guides/cloud).
+The carbon on each line comes from your Rate Gen rates. The report total equals the contract total: preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020. Cost and carbon per m² need an IPMS 1 or 2 floor area, and ADLM Cloud has no screen to record one yet. The export works on sample projects too. For SERVIQ projects, ADLM Cloud uses a wider set of building-services carbon factors. See [ADLM Cloud](/guides/cloud).
 
 ## AI in Rate Gen
 
@@ -341,7 +460,7 @@ ADLM AI suggests; you decide. Nothing it drafts is saved until you save it. For 
 
 ### Build with AI
 
-**Availability:** on for everyone signed in, from version 3.0.1, on by default. It draws on your account's monthly AI allowance (a rate build-up costs 1 unit).
+**Availability:** on for everyone signed in, from build 3.0.2610.1, on by default. It draws on your account's monthly AI allowance (a rate build-up costs 1 unit).
 
 Describe an item of work in one sentence and ADLM AI drafts a full build-up into the custom rate form, for you to check, edit and save.
 
@@ -365,9 +484,15 @@ How it works:
 
 **Carbon & Others** works out carbon from each rate's own build-up and published factors, by fixed rules. No AI is involved.
 
-### Coming: Price a bill
+### Price a bill
 
-A **Price a bill** screen, which proposes one of your Rate Gen rates for each item in a client's bill, is built but not yet released. It is not in 3.0.1.
+**Availability:** for everyone signed in, from build 3.0.2610.2. **Price a bill** is in the rail for every user. Each request to ADLM AI covers up to 40 bill lines and uses 1 unit of your account's monthly AI allowance, so a 120-line bill uses 3 units. Matching the same lines again within a week costs nothing.
+
+ADLM AI reads each measured item of a client's bill with the section and headings above it, and picks which of your rates is the same work, from a short list of your rates in the same unit. It only picks: the price always comes from your own Rate Gen rate. It shows how sure it is and why, and a line it is not sure about stays unpriced. Nothing is priced until you accept it. See [Price a bill](#price-a-bill) for the steps.
+
+- Rate Gen sends ADLM AI the bill's descriptions, units, sections and headings, and a short list of your rates for each line (name, trade, unit and rate). It does not send the client's file itself.
+- If ADLM AI cannot be reached, or your allowance is used up, a note at the top of the screen says so and you can still price each line by choosing a rate yourself.
+- If the note says "ADLM AI's bill matcher is not live yet, so the general matcher answered", the suggestions came from ADLM's general matcher and are weaker. Check every one.
 
 ## Exporting your rates
 
@@ -396,7 +521,9 @@ When you sync by hand, a **Library checked** box lists each step, for example **
 
 ## Connection and working offline
 
-Rate Gen 3.0.1 has no signal bars in the top bar. You can tell how your connection is doing in three ways:
+From build 3.0.2610.2, signal bars beside the sync button show how well this PC reaches ADLM Cloud: green when the connection is good, amber when it is slow or ADLM Cloud cannot be reached, and red when it is poor. A slash across the bars means this PC is offline. Hover over the bars for details, or click them to check again. Build 3.0.2610.1 has no signal bars.
+
+You can also tell how your connection is doing in these ways:
 
 - **Hover over the sync button.** It shows the last result, such as **Cloud sync: done** or **Cloud sync: failed**.
 - **At start-up,** if ADLM Cloud cannot be reached, a **Working offline** message says that Rate Gen works with the library already on the PC, and that sign-in and sync will work again once the connection allows. It ends with a line for your IT support.
@@ -446,7 +573,7 @@ The build-up page lays one rate out in full under **The build-up**: its material
 
 If a rate's stored net cost is more than its lines add up to, the difference is shown as **Not itemised**. It is part of the rate and is never dropped.
 
-Under **Changing it**, the page explains that it reads the rate and does not change it. The **Open in Rate Gen** link there does not open Rate Gen 3.0.1 yet. Open Rate Gen yourself and search for the rate's name.
+Under **Changing it**, the page explains that it reads the rate and does not change it. The **Open in Rate Gen** link there does not open Rate Gen (build 3.0.2610.2) yet. Open Rate Gen yourself and search for the rate's name.
 
 ### The account view (`/rategen`)
 
@@ -479,11 +606,11 @@ Your Rate Gen library is one library for your account. The other ADLM products r
 | **HERON** | **Load rates** prices the bill and the budget from your library for your zone; it then reads **Refresh rates**. You can also search Rate Gen for one row. See [ADLM HERON](/guides/heron). |
 | **SERVIQ for Revit MEP** | In the **Rate Build-Up** window, **SEARCH RATEGEN LIBRARY** finds items in your library. See [SERVIQ for Revit MEP](/guides/mep). |
 
-Edited quantities you save in Rate Gen sync to QUIV and HERON. Your Rate Gen carbon figures feed the ICMS 3 cost and carbon export on ADLM Cloud.
+Edited quantities you save in Rate Gen sync to QUIV and HERON. Your Rate Gen carbon figures feed the ICMS 3 cost and carbon export on ADLM Cloud. A client's bill priced in **Price a bill** can be saved to ADLM Cloud as a RateGen project; see [Save a priced bill to ADLM Cloud](#save-a-priced-bill-to-adlm-cloud).
 
 > **Note:** These products pick rates from Rate Gen; they never build or edit them.
 
-## What's new in 3.0.0
+## What's new in 3.0
 
 - **The ADLM suite design.** A rail on the left with the Library, every trade, a **SERVICES** group, **Carbon & Others** and **Saved Rates** with a count. The rail folds to icons below 1,100 pixels wide, or with <kbd>Ctrl</kbd>+<kbd>B</kbd>.
 - **One layout for every trade.** Find, sort (order in the bill, most expensive, A to Z), and a table you open with a click or <kbd>Enter</kbd>. Quantities are edited in place.
@@ -549,17 +676,41 @@ You were offline, or the server did not answer. Your edit is saved on the PC and
 
 ### A custom rate is missing on a new PC
 
-Update to Rate Gen 3.0.1 and sign in. From 3.0.1, Rate Gen downloads every custom rate on your account into **Saved Rates**. Older versions did not.
+Update to Rate Gen 3.0, build 3.0.2610.1 or later, and sign in. From build 3.0.2610.1, Rate Gen downloads every custom rate on your account into **Saved Rates**. Older versions did not.
 
 ### Build with AI turns my request away
 
 The request must contain the words "rate" and "build". Start with "Build a rate for…".
+
+### I cannot see Price a bill in the rail
+
+**Price a bill** arrived in build 3.0.2610.2. Update Rate Gen through the Installer Hub. If the Hub still offers build 3.0.2610.1, the new build has not reached you yet.
+
+### "No bill items found"
+
+Rate Gen could not find measured items (a description, a unit and a quantity) in the workbook. The message lists any sheets it could not read. Check that the bill has description, unit and quantity columns, and that the file is the bill rather than a summary or a cover sheet.
+
+### "This is an old-format .xls workbook, and Excel is not installed here to convert it."
+
+Open the file on a PC with Excel, save it as .xlsx, and open that copy in **Price a bill**.
+
+### "Your account does not include ADLM AI. Contact ADLM to add it."
+
+Your account cannot use ADLM AI, so no rates are proposed. You can still price each line by choosing a rate. Contact [support](/support) to add ADLM AI.
+
+### "Could not save the priced bill"
+
+The file may be open in Excel. Close it and click **Download Excel** again.
 
 ### I cannot change a price or build a rate on the website
 
 That is by design. The website is read-only for rates. Make the change in Rate Gen and sync; the website shows it after the sync.
 
 ## Frequently asked questions
+
+### Does Price a bill change the client's file?
+
+No. The priced bill is always saved as a new file, and Rate Gen will not save over the original.
 
 ### Do I need the desktop app, or is the website enough?
 
@@ -579,7 +730,7 @@ It is an estimate from published factors and your own quantities, good for compa
 
 ### Does Rate Gen send my drawings or projects anywhere?
 
-No. Rate Gen sends your library edits, custom rates and prices to your own ADLM account. Build with AI sends only your sentence, your zone and the names of items in your library.
+No. Rate Gen sends your library edits, custom rates and prices to your own ADLM account. Build with AI sends only your sentence, your zone and the names of items in your library. **Price a bill** sends ADLM AI the bill's descriptions, units and headings with a short list of your rates, never the client's file; **Save to ADLM Cloud** saves the bill's lines to your own account only when you click it.
 
 ### How do I get help?
 

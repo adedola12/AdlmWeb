@@ -3,7 +3,7 @@ id: samples
 title: Sample projects
 tagline: Twenty finished, read-only jobs you can open on ADLM Cloud to see a bill, a budget, valuations and a programme filled in from start to finish.
 version: "2026.10"
-updated: 2026-10-04
+updated: 2026-10-07
 platform: Web, any browser (adlmstudio.net)
 productKeys: []
 pdf: ADLM-Sample-Projects-Guide.pdf
@@ -99,10 +99,10 @@ From October 2026, a sample can show you what your own Rate Gen rates make of it
 
 ### Price with my RateGen rates
 
-Under the orange banner of an open sample is a panel called **Price with my RateGen rates**. It re-prices the sample's bill with the Rate Gen rates your account prices with, for the state on your profile: ADLM's rates for that state, with your own changes and custom rates on top. Nothing is saved.
+In the classic workspace, under the orange banner of an open sample, is a panel called **Price with my RateGen rates**. It re-prices the sample's bill with the Rate Gen rates your account prices with, for the state on your profile: ADLM's rates for that state, with your own changes and custom rates on top. Nothing is saved.
 
-1. Open a sample.
-2. In the **Price with my RateGen rates** panel, click **Price with my rates**.
+1. Open a sample, then click **More actions** > **Open the classic workspace**.
+2. In the **Price with my RateGen rates** panel, click **Price with my rates**. The button reads **Pricing…** while it works.
 3. Read the three tiles: **Bill as priced (lines your rates cover)**, **With your RateGen rates** with the percentage difference, and **Lines priced**, which shows how many lines your rates covered and what share of the bill's cost that is.
 4. Read the table under them. Each line shows the **Bill rate** beside **Your rate**, and **From** says how your rate was found (see the table below).
 5. The table shows 25 lines. Click **Show all** and the number of lines to see the rest.
@@ -129,7 +129,7 @@ On the duplex samples the footprint usually covers 90 to 98% of the cost. The PC
 
 Every sample can be exported as an ICMS 3 cost and carbon report:
 
-1. Open the sample and click **Export**.
+1. Open the sample, click **More actions** > **Open the classic workspace**, then click **Export**. The project page's own **Export** menu does not have the **ICMS 3** group.
 2. Under **ICMS 3**, click **ICMS 3 cost and carbon (Excel)** or **ICMS 3 cost and carbon (JSON)**.
 
 The report sorts the bill's cost and upfront carbon into the 13 ICMS 3 Groups and adds up to the contract sum. A sample states no floor area, base date or location, so those details show as **Assumed** and the per-m² columns are blank. The [QS handbook](/guides/qs-handbook) explains ICMS 3 and works through the raft duplex.
@@ -346,7 +346,7 @@ These six exercises take ten to fifteen minutes each. Any product's samples work
 
 ### Exercise 6: Export a sample as an ICMS 3 cost and carbon report
 
-1. Open **5-Bedroom Duplex - Raft Foundation**.
+1. Open **5-Bedroom Duplex - Raft Foundation**, then click **More actions** > **Open the classic workspace**.
 2. Click **Export**, and under **ICMS 3** click **ICMS 3 cost and carbon (Excel)**.
 3. Open the workbook. On **ICMS 3 report**, see which details are **Stated** and which are **Assumed**, and read the carbon coverage.
 4. Open **Cost by Group (G-2)**. Check that the total is the contract sum, about ₦209.0m. Substructure (2.02) is about a quarter of it, because the raft sits on soft clay.

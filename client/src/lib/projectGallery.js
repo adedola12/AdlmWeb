@@ -8,6 +8,8 @@ export const SOURCES = {
   civil3d: { name: "CIVIQ", icon: "/ds/ic-civiq.png", host: "Civil 3D", slug: "civiq" },
   "qs-takeoff": { name: "Time Pro", icon: "/ds/ic-timepro.png", host: "Time Pro", slug: "timepro" },
   archicad: { name: "ArchiCAD", icon: "", host: "ArchiCAD", slug: "archicad" },
+  // A client's bill priced in RateGen ("Price a bill", Save to ADLM Cloud).
+  rategen: { name: "RateGen", icon: "/ds/ic-rategen.png", host: "RateGen", slug: "rategen" },
 };
 
 // His six stages (work.js STAGES, 17 Sep 2026). Each one is now read from
@@ -60,7 +62,9 @@ export function stageOf(p) {
  * GET /me/projects-rollup (and the per-product list) sets `moneyHidden` on a
  * project somebody else owns when the reader may not see rates, and zeroes
  * its money, including totalCost, valuedAmount and remainingAmount (masked
- * since 27 Sep 2026; before that those three leaked).
+ * since 27 Sep 2026; before that those three leaked). `moneyHiddenBy` says
+ * why: "rategen" (the reader has none) or "owner" (the sharer switched money
+ * off for them, R4b).
  *
  * A screen must still never print money it is telling the reader it is
  * withholding: show an en dash and leave the row out of the totals, so a zero

@@ -53,6 +53,7 @@ import {
 import {
   maskSharedMoney,
   MERGED_CONTRACT_MONEY_FIELDS,
+  ownerHidesMoneyExpr,
   readerMaySeeRates,
 } from "../util/sharedMoney.js";
 import {
@@ -1620,6 +1621,9 @@ router.get(
           updatedAt: 1,
           version: 1,
           shared: { $ne: ["$userId", userId] },
+          // The owner switched money off for this reader (R4b). Internal:
+          // maskSharedMoney() reads it and strips it before the response.
+          ownerHidesMoney: ownerHidesMoneyExpr(userId),
           itemCount: { $size: "$safeItems" },
           // Lines that carry a trade and a quantity — i.e. work that can be
           // put on a programme. The Programme screen shelves projects on this
@@ -1872,6 +1876,7 @@ router.get(
           slug: 1,
           productKey: 1,
           shared: { $ne: ["$userId", userId] },
+          ownerHidesMoney: ownerHidesMoneyExpr(userId),
           certificateCount: { $size: { $ifNull: ["$certificates", []] } },
           certifiedToDate: certifiedToDateExpr(),
           approvedVariationsTotal: contractValueExprs().approvedVariationsTotal,

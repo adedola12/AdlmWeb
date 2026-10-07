@@ -3,7 +3,7 @@ id: ai-services
 title: "ADLM AI services"
 tagline: Every AI feature across ADLM's software, what it does for you, how it works, and what it will never do on its own.
 version: "2026.10"
-updated: 2026-10-04
+updated: 2026-10-07
 platform: Web (adlmstudio.net), Revit, PlanSwift, Rate Gen desktop and WhatsApp
 productKeys: []
 pdf: ADLM-AI-Services-Guide.pdf
@@ -50,8 +50,8 @@ One rule runs through all of them: **the AI suggests, you decide.** Quantities c
 | **AI Match Labour** and **AI Match Materials** | QUIV | Not in standard installs | Set up by ADLM |
 | **AI Review** (**AI Bill Review**) | HERON 2.9 and 3.0 | On for everyone | Signed in, active licence |
 | **Auto take-off** | HERON | Beta in 2.9; switched off in 3.0 | Beta channel (2.9 only) |
-| **Build with AI** | Rate Gen 3.0.1 | On for everyone | Signed in, active licence |
-| **Price a bill** (price a client's bill with ADLM AI) | Rate Gen | Coming | Not released |
+| **Build with AI** | Rate Gen 3.0, build 3.0.2610.1 and later | On for everyone | Signed in, active licence |
+| **Price a bill** (price a client's bill with ADLM AI) | Rate Gen 3.0, build 3.0.2610.2 | On for everyone | Signed in, active licence, a client's Excel bill |
 | **ADLM AI Review** and **BUILD WITH ADLM AI** | SERVIQ (Revit MEP) | Not in standard installs | Set up by ADLM |
 | WhatsApp sales assistant | WhatsApp | Rolling out | A WhatsApp number |
 
@@ -320,7 +320,7 @@ HERON's description library and **Specifications** are not AI, though your speci
 
 ### Build with AI
 
-**Availability:** On for everyone signed in, in Rate Gen 3.0.1, on by default.
+**Availability:** On for everyone signed in, from Rate Gen 3.0, build 3.0.2610.1, on by default. It is in the current build, 3.0.2610.2.
 
 Describe an item of work in one sentence and ADLM AI drafts a full build-up into the custom rate form, for you to check, edit and save.
 
@@ -334,11 +334,20 @@ Describe an item of work in one sentence and ADLM AI drafts a full build-up into
 
 **Carbon is not AI.** **Carbon & Others** works out upfront carbon (RICS A1-A5) from each rate's own build-up and published factors.
 
-### Coming: Price a bill
+### Price a bill
 
-**Availability:** Coming; built, not yet approved for release.
+**Availability:** On for everyone signed in, from Rate Gen 3.0, build 3.0.2610.2. **Price a bill** is in the Rate Gen rail for every user; it is not behind a beta channel or a setting. Each request covers up to 40 bill lines and costs 1 unit of the monthly allowance, so a 120-line bill costs 3 units. Repeating the same lines within a week costs nothing.
 
-A **Price a bill** screen will open any client's bill (.xlsx or .xls) in its own layout. ADLM AI proposes one of your Rate Gen rates per item, with the unit as a hard rule, and nothing is priced until you **Accept** a line or **Accept the sure matches**. The client's file is never changed; the priced bill is saved as a copy. A QUIV tool that fills a client's own bill with QUIV quantities is also in development.
+Open any client's bill (.xlsx, or .xls on a PC with Excel) in its own layout, and ADLM AI proposes one of your Rate Gen rates for each measured item.
+
+1. In Rate Gen, click **Price a bill** in the rail, then **Open a bill**, and pick the client's workbook.
+2. Wait for **Reading the bill**, **Matching to your rates** and **Pricing**.
+3. Click **Accept the sure matches** to accept every suggestion ADLM AI is at least 85% sure of, or click a line and **Accept** it. Choose another rate under **CHOOSE ANOTHER RATE** where the suggestion is wrong.
+4. Click **Download Excel** for a priced copy in the client's layout, or **Save to ADLM Cloud** to keep it as a RateGen project in your account.
+
+**How it works:** for each line, Rate Gen sends the description, unit, section and headings with a short list of your rates in the same unit. The AI only picks one of those rates, with a confidence and a reason; the price is always your own Rate Gen rate, and a line it is unsure of stays unpriced. Nothing is priced until you accept it, and the client's file is never changed. If the AI cannot answer (no connection, allowance used up, or "Your account does not include ADLM AI"), a note says so and you can still price each line by choosing a rate. A note reading "ADLM AI's bill matcher is not live yet, so the general matcher answered" means the suggestions came from the general matcher: check every one. See [Price a bill](/guides/rategen#price-a-bill) in the Rate Gen guide.
+
+A QUIV tool that fills a client's own bill with QUIV quantities is in development.
 
 ## SERVIQ for Revit MEP
 
@@ -393,7 +402,8 @@ ADLM never shows one firm's bills, rates or wording to another, never lets Ada r
 - **Programme gang outputs** estimated from the bill.
 - **QUIV 4.0:** **Auto take-off** with confidence and **Accept N**.
 - **HERON 3.0:** **AI Review** carried over; **Auto take-off** switched off.
-- **Rate Gen 3.0.1:** **Build with AI** on by default, prices from your library first and flags drafts that fail ADLM's checks.
+- **Rate Gen 3.0, build 3.0.2610.1:** **Build with AI** on by default, prices from your library first and flags drafts that fail ADLM's checks.
+- **Rate Gen 3.0, build 3.0.2610.2:** **Price a bill** proposes one of your rates for each item of a client's own bill.
 - **All AI runs on Amazon Bedrock** in ADLM's AWS account.
 
 ## Troubleshooting

@@ -43,8 +43,14 @@ describe("where a classic project URL should actually go", () => {
     expect(classicProjectTarget({ tool: "archicad", project: "x", newBuild: true })).toBe(null);
   });
 
-  it("leaves RateGen alone for the same reason", () => {
-    expect(classicProjectTarget({ tool: "rategen", project: "x", newBuild: true })).toBe(null);
+  it("opens a RateGen project (a priced bill) on the new page, like the cards", () => {
+    expect(classicProjectTarget({ tool: "rategen", project: "x", newBuild: true })).toBe(
+      "/work/project/rategen/x",
+    );
+  });
+
+  it("leaves RateGen without a project on its rates page", () => {
+    expect(classicProjectTarget({ tool: "rategen", project: "", newBuild: true })).toBe(null);
   });
 
   it("does not redirect a tool it cannot name", () => {

@@ -5,42 +5,20 @@ import { RateGenRate } from "../models/RateGenRate.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { ensureDb } from "../db.js";
 import { validateRateComposition } from "../util/rateGuardrail.js";
+import { RateGenTradeMargin } from "../models/RateGenTradeMargin.js";
+import { cleanMarginRows, resolveMargins } from "../util/tradeMargins.js";
+import { tradeMarginsView } from "../util/tradeMarginsView.js";
+import { ALLOWED_SECTION_KEYS, SECTION_LABELS } from "../util/rategenSections.js";
 
 const router = express.Router();
 
 // anyone holding the "rategen" admin area can manage rates
 router.use(requireAuth, requirePermission("rategen"));
 
-/** canonical section keys */
-// Exported so the catalogue register can build its section filter from the
-// canonical list rather than from whatever sections happen to have rates in
-// them. A section with nothing in it is a real state and must stay visible:
-// Carbon and Others was invisible on the website for exactly that reason.
-export const ALLOWED_SECTION_KEYS = new Set([
-  "ground",
-  "concrete",
-  "blockwork",
-  "finishes",
-  "roofing",
-  "doors_windows",
-  "paint",
-  "steelwork",
-  "carbon",
-  "mep",
-]);
-
-export const SECTION_LABELS = {
-  ground: "Groundwork",
-  concrete: "Concrete Works",
-  blockwork: "Blockwork",
-  finishes: "Finishes",
-  roofing: "Roofing",
-  doors_windows: "Windows & Doors",
-  paint: "Painting",
-  steelwork: "Steelwork",
-  carbon: "Carbon and Others",
-  mep: "MEP"
-};
+// The canonical trades live in util/rategenSections.js so the trade-margin
+// helpers can read them without importing this router. Re-exported here
+// because the catalogue register already imports them from this file.
+export { ALLOWED_SECTION_KEYS, SECTION_LABELS };
 
 const toNum = (v, fallback = 0) => {
   const n = Number(String(v ?? "").replace(/,/g, ""));
@@ -171,10 +149,23 @@ router.post("/rates", async (req, res, next) => {
       });
     }
 
+    // A figure the builder sends is kept exactly. One it leaves out comes from
+    // ADLM's default for this trade, else the built-in 10 / 25 — which is
+    // exactly what every master rate got before trade defaults existed.
+    const tradeDefaults =
+      b.overheadPercent != null && b.profitPercent != null
+        ? null
+        : resolveMargins({
+            scope: "master",
+            sectionKey,
+            adlmTrades: await RateGenTradeMargin.find({ sectionKey }).lean(),
+          });
     const overheadPercent =
-      b.overheadPercent != null ? toNum(b.overheadPercent, 10) : 10;
+      b.overheadPercent != null
+        ? toNum(b.overheadPercent, 10)
+        : tradeDefaults.overheadPercent;
     const profitPercent =
-      b.profitPercent != null ? toNum(b.profitPercent, 25) : 25;
+      b.profitPercent != null ? toNum(b.profitPercent, 25) : tradeDefaults.profitPercent;
 
     const overheadValue = (netCost * overheadPercent) / 100;
     const profitValue = (netCost * profitPercent) / 100;
@@ -328,10 +319,15 @@ const updateRate = async (req, res, next) => {
       });
     }
 
+    // An edit that leaves a percentage out keeps the one this rate already
+    // holds. It used to fall back to 10 / 25, which silently re-priced a
+    // stored rate; no default of any kind ever rewrites a stored figure.
     const overheadPercent =
-      b.overheadPercent != null ? toNum(b.overheadPercent, 10) : 10;
+      b.overheadPercent != null
+        ? toNum(b.overheadPercent, 10)
+        : toNum(doc.overheadPercent, 10);
     const profitPercent =
-      b.profitPercent != null ? toNum(b.profitPercent, 25) : 25;
+      b.profitPercent != null ? toNum(b.profitPercent, 25) : toNum(doc.profitPercent, 25);
 
     const overheadValue = (netCost * overheadPercent) / 100;
     const profitValue = (netCost * profitPercent) / 100;
@@ -392,6 +388,50 @@ const updateRate = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * GET /admin/rategen-v2/trade-margins
+ * ADLM's overhead and profit default per trade, for the master library.
+ */
+router.get("/trade-margins", async (_req, res, next) => {
+  try {
+    await ensureDb();
+    const rows = await RateGenTradeMargin.find({}).lean();
+    res.json({ ok: true, ...tradeMarginsView([], rows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /admin/rategen-v2/trade-margins
+ * body: { rows: [{ sectionKey, overheadPercent, profitPercent }] }
+ *
+ * Replaces ADLM's table. Read only when a master rate is CREATED without a
+ * percentage: no published rate is re-priced by saving this.
+ */
+router.put("/trade-margins", async (req, res, next) => {
+  try {
+    await ensureDb();
+    const { rows, problem } = cleanMarginRows(req.body?.rows, ALLOWED_SECTION_KEYS);
+    if (problem) return res.status(400).json({ error: problem });
+
+    const by = req.user?._id || req.user?.id || null;
+    const keep = rows.map((r) => r.sectionKey);
+    await RateGenTradeMargin.deleteMany({ sectionKey: { $nin: keep } });
+    for (const r of rows) {
+      await RateGenTradeMargin.findOneAndUpdate(
+        { sectionKey: r.sectionKey },
+        { ...r, updatedBy: by },
+        { upsert: true, new: true, runValidators: true },
+      );
+    }
+    const saved = await RateGenTradeMargin.find({}).lean();
+    res.json({ ok: true, ...tradeMarginsView([], saved) });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.patch("/rates/:id", updateRate);
 router.put("/rates/:id", updateRate);

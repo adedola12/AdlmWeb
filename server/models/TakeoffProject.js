@@ -78,10 +78,18 @@ const ValuationEventSchema = new mongoose.Schema(
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },
     rate: { type: Number, default: 0 },
-    // For 'binary' events (legacy semantic) amount = qty × rate when ratified,
-    // 0 when unratified. For 'partial' events amount = the value delta moved
-    // by this transition, i.e. qty × rate × (nextPercent − previousPercent) / 100.
-    // Summing positive amounts gives "value of work done in this period".
+    // The SIGNED value this event moved, valued the way the certificate values
+    // it — earnedLineValue, which prefers actualQty/actualRate over the contract
+    // figures. Summing every event for a period therefore reconciles against
+    // that period's certificate, which it did not before: the amount used to be
+    // computed from the contract qty × rate while the certificate used the
+    // actuals, so the two disagreed on any re-measured line.
+    //
+    //   binary / partial   the value moved by a change in PROGRESS
+    //   rerate             the value moved by a change in the PRICE — a
+    //                      re-measure or a re-rate — applied to the portion
+    //                      already earned. previousPercent === nextPercent on
+    //                      these, because no work was done.
     amount: { type: Number, default: 0 },
     statusField: {
       type: String,
@@ -95,7 +103,9 @@ const ValuationEventSchema = new mongoose.Schema(
     nextPercent: { type: Number, default: 0 },
     eventType: {
       type: String,
-      enum: ["binary", "partial"],
+      // "rerate" is additive: every stored event predates it, so nothing needs
+      // migrating and an older reader simply never sees one.
+      enum: ["binary", "partial", "rerate"],
       default: "binary",
     },
     markedAt: { type: Date, default: Date.now },
@@ -221,6 +231,35 @@ const BudgetItemSchema = new mongoose.Schema(
 // preliminary amount assigned to this line (sum should be 100). completed
 // flag drives the preliminary-done deduction from the outstanding prelim
 // pool, mirroring how measured items drive valuation.
+// ICMS 3 (International Cost Management Standard) report details. Codes are the
+// standard's: projectType is Level 1 ("01" Buildings), groups and sub-groups
+// are Level 3 and 4 ("03", "03.030").
+const IcmsOverrideSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true }, // the line's lineId / sn, or "ps:<id>" for a provisional sum
+    group: { type: String, default: null },
+    subGroup: { type: String, default: null },
+  },
+  { _id: false },
+);
+const IcmsSchema = new mongoose.Schema(
+  {
+    projectType: { type: String, default: "01", trim: true },
+    country: { type: String, default: "NG", trim: true, uppercase: true },
+    currency: { type: String, default: "NGN", trim: true, uppercase: true },
+    baseDate: { type: String, default: "", trim: true }, // YYYY-MM-DD
+    priceBasis: { type: String, default: "", trim: true },
+    projectStatus: { type: String, default: "", trim: true },
+    location: { type: String, default: "", trim: true },
+    gfaIpms1: { type: Number, default: null }, // gross external area, m2
+    gfaIpms2: { type: Number, default: null }, // gross internal area, m2
+    carbonBoundary: { type: String, default: "", trim: true },
+    overrides: { type: [IcmsOverrideSchema], default: [] },
+    updatedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const PreliminaryItemSchema = new mongoose.Schema(
   {
     // A stable identity for this row, minted by the server the first time it
@@ -786,6 +825,12 @@ const CollaboratorSchema = new mongoose.Schema(
     addedAt: { type: Date, default: Date.now },
     // The shareCodes._id this person joined through (audit / level origin).
     addedViaCode: { type: mongoose.Schema.Types.ObjectId, default: null },
+    // The owner's choice (R4b): may this person see the project's money? Copied
+    // from the code they claimed, changeable per person afterwards. It narrows
+    // the RateGen rule and never widens it (util/sharedMoney.js). A record
+    // saved before the switch existed has no field and reads as true, so every
+    // existing collaborator keeps what they saw before.
+    showMoney: { type: Boolean, default: true },
   },
   { _id: true },
 );
@@ -805,6 +850,9 @@ const ShareCodeSchema = new mongoose.Schema(
     // 0 ⇒ unlimited uses.
     maxUses: { type: Number, default: 0, min: 0 },
     uses: { type: Number, default: 0, min: 0 },
+    // Whether whoever claims this code sees the project's money (R4b). Carried
+    // onto the collaborator record on claim; see CollaboratorSchema.showMoney.
+    showMoney: { type: Boolean, default: true },
     revoked: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
@@ -882,6 +930,69 @@ const SampleInfoSchema = new mongoose.Schema(
     summary: { type: String, default: "" },
     // Short "what to look at" pointers, one per tab worth opening.
     highlights: { type: [String], default: [] },
+  },
+  { _id: false },
+);
+
+// Model drift (work-board item r2-model-drift-alerts).
+//
+// The website stores no model versions, so it cannot tell on its own that a
+// Revit / ArchiCAD model has moved on since the bill was measured. The desktop
+// plugin can: when it opens a model linked to this project it compares the
+// model with the element IDs and quantities saved here, and reports a SUMMARY
+// (POST /projects/:productKey/:id/model-drift). This is that summary.
+//
+// Privacy, as for take-off timing: counts and bill-line codes only. No model
+// content, no file / project / element / client names, no quantities, and no
+// element IDs. The model is named only by `modelRef`, a one-way code of the
+// project's model fingerprint, so a report about a different copy of the
+// model is refused rather than attached to the wrong project.
+//
+//   status "none"      never reported, or nothing has changed
+//          "open"      the model changed after the last take-off save
+//          "cleared"   a later take-off save (or a clean re-check) closed it
+//          "dismissed" somebody said it is not a real change
+const ModelDriftLineSchema = new mongoose.Schema(
+  {
+    code: { type: String, default: "" }, // TakeoffItem.code, already stored here
+    added: { type: Number, default: 0, min: 0 },
+    removed: { type: Number, default: 0, min: 0 },
+    changed: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false },
+);
+
+const ModelDriftSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["none", "open", "cleared", "dismissed"],
+      default: "none",
+    },
+    modelRef: { type: String, default: "" },
+    // When this drift was first seen, and when the plugin last confirmed it.
+    detectedAt: { type: Date, default: null },
+    checkedAt: { type: Date, default: null },
+    // The project version the plugin compared against.
+    basisVersion: { type: Number, default: 0 },
+    counts: {
+      added: { type: Number, default: 0 },
+      removed: { type: Number, default: 0 },
+      changed: { type: Number, default: 0 },
+      linesAffected: { type: Number, default: 0 },
+      elementsChecked: { type: Number, default: 0 },
+    },
+    lines: { type: [ModelDriftLineSchema], default: [] },
+    // A stable digest of the per-line counts, so re-reporting a drift that was
+    // dismissed does not reopen it, and the owner is emailed once per drift.
+    signature: { type: String, default: "" },
+    productVersion: { type: String, default: "" },
+    clearedAt: { type: Date, default: null },
+    clearedBy: { type: String, enum: ["", "takeoff-save", "clean-check", "dismissed"], default: "" },
+    dismissedReason: { type: String, default: "" },
+    notifiedAt: { type: Date, default: null },
+    // ModelDriftEvent row for the success metric; one per drift opened.
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
   },
   { _id: false },
 );
@@ -1011,9 +1122,17 @@ const TakeoffProjectSchema = new mongoose.Schema(
     variations: { type: [VariationSchema], default: [] },
     preliminaryItems: { type: [PreliminaryItemSchema], default: [] },
     contract: { type: ContractSchema, default: () => ({}) },
+    // ICMS 3 report details (util/icmsExport.js): the project attributes the
+    // standard asks for that a bill does not carry, and the QS's own placement
+    // of lines the mapper left out. No default, so a project that never opens
+    // the ICMS export keeps exactly the shape the plugins already read.
+    icms: { type: IcmsSchema, default: undefined },
     certificates: { type: [CertificateSchema], default: [] },
     finalAccount: { type: FinalAccountSchema, default: () => ({}) },
     models: { type: ProjectModelsSchema, default: () => ({}) },
+    // Additive: absent on every project saved before it existed, and plugins
+    // that read the project ignore unknown fields. See ModelDriftSchema.
+    modelDrift: { type: ModelDriftSchema, default: undefined },
     pmTrackerOnly: { type: Boolean, default: false },
     projectManagement: {
       type: ProjectManagementSchema,

@@ -19,7 +19,7 @@
 
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { projectTotals } from "./lib/projectTotals.js";
 
@@ -165,5 +165,29 @@ describe("the contract panel's figures", () => {
       { description: "Lift installation", amount: 5_000_000, kind: "pc", completed: true },
     ] });
     expect(captured.contract.actualSpent).toBe(0);
+  });
+});
+
+// Model drift (r2-model-drift-alerts): the header says the model moved on.
+describe("the model drift chip", () => {
+  it("shows while a drift is open, with the counts in its tooltip", () => {
+    renderProject({
+      modelDrift: {
+        status: "open",
+        detectedAt: "2026-09-27T10:00:00Z",
+        counts: { added: 2, removed: 1, changed: 0, linesAffected: 3 },
+      },
+    });
+    const chip = screen.getByText("Model changed since last take-off");
+    expect(chip.getAttribute("title")).toMatch(/2 elements added, 1 removed/);
+    expect(chip.getAttribute("title")).toMatch(/3 bill lines may no longer match/);
+  });
+
+  it("is absent when nothing is open", () => {
+    renderProject({ modelDrift: { status: "cleared", counts: {} } });
+    expect(screen.queryByText("Model changed since last take-off")).toBeNull();
+    cleanup();
+    renderProject();
+    expect(screen.queryByText("Model changed since last take-off")).toBeNull();
   });
 });

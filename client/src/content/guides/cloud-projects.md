@@ -3,7 +3,7 @@ id: cloud-projects
 title: ADLM Cloud: projects and your workspace
 tagline: Find your way around the ADLM Cloud, open your projects, and use the project page and its tabs.
 version: "2026.10"
-updated: 2026-10-05
+updated: 2026-10-07
 platform: Web, any browser (adlmstudio.net)
 productKeys: []
 pdf: ADLM-Cloud-Projects-Guide.pdf
@@ -200,12 +200,12 @@ Samples appear for products you have an active licence for. More on samples is i
 
 ### Carbon and your own rates on a sample
 
-From the ICMS 3 release, a sample card can also show:
+A sample card can also show:
 
 - **Carbon footprint**: the bill's upfront embodied carbon (A1-A5), in tonnes of CO2e, worked out from your own Rate Gen rates.
 - **Covers**: how much of the bill's cost that carbon figure covers, for example "94% of cost".
 
-In the same release, an open sample in the classic workspace has a **Price with my RateGen rates** panel. It shows the sample's bill priced with your own Rate Gen rates for your state. Nothing is saved.
+An open sample in the classic workspace has a **Price with my RateGen rates** panel. It shows the sample's bill priced with your own Rate Gen rates for your state. Nothing is saved.
 
 1. Open a sample, then click **More actions** > **Open the classic workspace**.
 2. Click **Price with my rates**. The button reads **Pricing…** while it works.
@@ -391,7 +391,7 @@ The ICMS 3 exports are in the classic workspace's **Export** menu, in the **ICMS
 - **ICMS 3 cost and carbon (Excel)**: cost and upfront carbon (A1-A5) by ICMS 3 Group, with every line's code, where its carbon came from, and the lines not yet placed.
 - **ICMS 3 cost and carbon (JSON)**: the same report as data, with full ICMS 3 codes, in the RICS Data Standard 3.3.3 format.
 
-To get one, click **More actions** > **Open the classic workspace**, then **Export**. It works on learning samples too.
+To get one, click **More actions** > **Open the classic workspace**, then **Export**. The project page's own **Export** menu does not have the **ICMS 3** group. It works on learning samples too.
 
 ## AI in this part of ADLM Cloud
 
