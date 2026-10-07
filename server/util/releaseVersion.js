@@ -95,6 +95,22 @@ export function canonicalVersion(v) {
   return parts.join(".") + (p.pre.length ? `-${p.pre.join(".")}` : "");
 }
 
+/**
+ * How a version reads to a person (owner, 6-7 Oct 2026): every ADLM product
+ * keeps its launch version, written to two digits, until 2027, and only the
+ * build moves. Builds ship as Major.Minor.YYMM.N, so they still compare above
+ * the x.y.1, x.y.2 already shipped; a third part of 1000 or more is that YYMM
+ * build, and "4.0.2610.1" reads "4.0, build 4.0.2610.1". Anything else reads
+ * as written (without a leading v). The plugins and the Installer Hub use the
+ * same rule.
+ */
+export function displayVersion(v) {
+  const p = parseVersion(v);
+  if (!p || p.parts.length < 3 || p.parts[2] < 1000) return normalizeVersion(v);
+  const [major, minor, build, rev] = p.parts;
+  return `${major}.${minor}, build ${major}.${minor}.${build}${rev ? `.${rev}` : ""}`;
+}
+
 /** The highest of a list, ignoring anything that is not a version. "" when none. */
 export function maxVersion(list = []) {
   let best = "";
