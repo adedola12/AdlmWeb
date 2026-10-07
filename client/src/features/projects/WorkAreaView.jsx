@@ -20,7 +20,7 @@
 import React from "react";
 import { API_BASE } from "../../config";
 import { apiAuthed } from "../../http.js";
-import { plainText } from "../../lib/plainText.js";
+import ChatMarkdown from "../../lib/chatMarkdown.jsx";
 import { FaMagic } from "../../components/icons.jsx";
 
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
@@ -407,7 +407,7 @@ export default function WorkAreaView({
         method: "POST",
         credentials: "include",
         headers,
-        body: JSON.stringify({ message, history, sessionId: sessionRef.current }),
+        body: JSON.stringify({ message, history, sessionId: sessionRef.current, format: "markdown" }),
       });
       const json = await res.json().catch(() => ({}));
       say({ who: "ada", text: json?.reply || json?.error || "I couldn't answer that just now. Please try again." });
@@ -659,7 +659,11 @@ export default function WorkAreaView({
             {log.map((m, i) => (
               <div key={i} className={`ada-m ada-${m.who}`}>
                 {m.big ? <span className="ada-big">{m.big}</span> : null}
-                <p style={{ whiteSpace: "pre-wrap" }}>{m.who === "ada" ? plainText(m.text) : m.text}</p>
+                {m.who === "ada" ? (
+                  <ChatMarkdown text={m.text} />
+                ) : (
+                  <p style={{ whiteSpace: "pre-wrap" }}>{m.text}</p>
+                )}
                 {m.card?.length ? (
                   <div className="ada-card">
                     {m.card.map((c, j) => (
@@ -910,6 +914,12 @@ export default function WorkAreaView({
               const related = relatedTaskIds?.has(t.taskId);
               const linked = (t.linkedBoqIdentities || []).length;
               const depth = Math.max(0, Math.min(4, safeNum(t.wbsDepth)));
+              // S18: a milestone is a moment, not a span, so it draws as a
+              // diamond at its date instead of a bar, and its % cell reads
+              // "Met" or an en dash rather than a percentage.
+              const isMilestone = Boolean(t.isMilestone);
+              const isCritical = Boolean(t.criticalPath) || t.priority === "critical";
+              const met = safeNum(pct) >= 100 || t.status === "completed";
               const baseline = isSummary && t.rollup ? t.rollup.baselineCost : t.computed?.baselineCost ?? t.baselineCost;
               return (
                 <div
@@ -937,14 +947,40 @@ export default function WorkAreaView({
                     background: on ? "var(--pal-light-wash)" : related ? "var(--bg-alt)" : undefined,
                     boxShadow: on || related ? "inset 3px 0 0 var(--action)" : undefined,
                   }}
-                  title={linked ? `${linked} linked bill line(s)` : "No bill lines linked"}
+                  title={[
+                    linked ? `${linked} linked bill line(s)` : "No bill lines linked",
+                    isMilestone ? `Milestone, ${shortDate(s)}` : null,
+                    isCritical ? "On the critical path" : null,
+                    t.priority ? `Priority: ${t.priority}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 >
                   <span className="t" style={{ ...TRUNC, paddingLeft: depth * 10, fontWeight: isSummary ? 500 : 400 }}>
+                    {isCritical ? (
+                      <i
+                        className="wk-crit"
+                        aria-hidden="true"
+                        title="On the critical path"
+                      />
+                    ) : null}
                     {t.wbs ? <span style={{ color: "var(--ink-3)", marginRight: 6 }}>{t.wbs}</span> : null}
                     {t.name || "(no name)"}
+                    {isMilestone ? (
+                      <span style={{ color: "var(--ink-3)", marginLeft: 6, fontSize: 11 }}>
+                        Milestone, {shortDate(s)}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="g">
-                    {s && e ? (
+                    {isMilestone && s ? (
+                      <i
+                        className="wk-dm"
+                        aria-hidden="true"
+                        style={{ left: `${left}%` }}
+                      />
+                    ) : null}
+                    {!isMilestone && s && e ? (
                       <span
                         className="b"
                         style={{
@@ -983,7 +1019,7 @@ export default function WorkAreaView({
                       color: overdue ? "var(--pal-orange-key)" : "var(--ink-3)",
                     }}
                   >
-                    {Math.round(pct)}%
+                    {isMilestone ? (met ? "Met" : "–") : `${Math.round(pct)}%`}
                     {slip > 0 ? ` · +${slip}d` : slip < 0 ? ` · ${slip}d` : ""}
                   </span>
                   <span className="d">

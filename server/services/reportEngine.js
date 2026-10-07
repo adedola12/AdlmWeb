@@ -98,8 +98,20 @@ function progressByGroup(virtualItems, { limit = 10 } = {}) {
 }
 
 // Budget & procurement rollup from budgetItems. Budget value per line is
-// qty × budgetRate (the internal cost plan); procurement status comes from
-// the procured / procuredPercent / targetDate fields.
+// qty × rate (the internal cost plan); procurement status comes from the
+// procured / procuredPercent / targetDate fields.
+//
+// It has to be `rate`, not `budgetRate`. A budget row qty is a RESOURCE
+// quantity — 224 bags of cement — and its `rate` is the cost of one of those,
+// which is what the Budget tab Amount column shows (ProjectBudgetTab.jsx),
+// what deriveBillRates sums to build a bill rate, and what
+// agentUserData.rowRate deliberately uses. `budgetRate` is the DERIVED
+// PER-BILL-UNIT rate, so multiplying a resource quantity by it is a category
+// error: 224 bags × a ₦65,000/m³ concrete rate is ₦14.6m where ₦2.1m was
+// spent. This report was the only place doing it, and `?? it.rate` never
+// caught it either, because the schema defaults budgetRate to 0 rather than
+// leaving it null — so the amount came out inflated or zero, and right by
+// coincidence only.
 function budgetSummary(project) {
   const items = Array.isArray(project?.budgetItems) ? project.budgetItems : [];
   if (!items.length) return null;
@@ -111,7 +123,7 @@ function budgetSummary(project) {
   const byGroup = new Map();
 
   for (const it of items) {
-    const amount = safeNum(it.qty) * safeNum(it.budgetRate ?? it.rate);
+    const amount = safeNum(it.qty) * safeNum(it.rate);
     budgetTotal += amount;
     const pct = it.procured ? 100 : Math.min(100, Math.max(0, safeNum(it.procuredPercent)));
     procuredValue += amount * (pct / 100);

@@ -96,7 +96,7 @@ export default function DsSolutionsInstitutions() {
               </div>
               {" "}
               <b>
-                3,100+
+                800+
               </b>
               <span>
                 professionals trained
@@ -526,7 +526,7 @@ export default function DsSolutionsInstitutions() {
               {" "}
             </div>
             {" "}
-            <form className="sform-card" action="/checkout/thanks" method="get">
+            <form className="sform-card" action="/checkout/thanks" method="get" data-fb="lead" noValidate={true}>
               {" "}
               <input type="hidden" name="topic" value="Institutions" />
               {" "}

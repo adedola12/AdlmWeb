@@ -108,7 +108,7 @@ export default function DsSignup() {
               </Link>
             </p>
             {" "}
-            <form action="/verify" method="get" id="su-form">
+            <form action="/verify" method="get" id="su-form" data-fb="signup" noValidate={true}>
               {" "}
               <div className="two-up">
                 {" "}

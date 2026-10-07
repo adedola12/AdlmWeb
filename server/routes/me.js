@@ -1,5 +1,12 @@
 // server/routes/me.js
 import express from "express";
+import { resolveDownload } from "../util/downloadLinks.js";
+import { canDownloadInstallerHub, HUB_REQUIRES_PAID } from "../util/installerHubAccess.js";
+import { alertCount } from "../util/assignmentAlerts.js";
+import { myAssignments } from "../util/myAssignments.js";
+import cloudinary from "../cloudinary.js";
+import { checkAvatarUrl } from "../util/avatarCheck.js";
+import { WA_CODE_MINUTES, WA_RESEND_SECONDS, WA_MAX_ATTEMPTS, whatsappEnabled, toWhatsAppNumber, newWaCode, hashWaCode, sendWhatsAppCode } from "../util/whatsappVerify.js";
 import dayjs from "dayjs";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
@@ -33,6 +40,25 @@ import {
   BOQ_IMPORT_ENTITLEMENT,
   BOQ_IMPORT_LEGACY_ENTITLEMENT,
 } from "../util/boqImportAccess.js";
+import { blankToUndefined } from "../util/profileInput.js";
+import {
+  baseProductKeyExpr,
+  buildWorkOverviewPipeline,
+  certifiedToDateExpr,
+  contractValueExprs,
+  estimatePercentExprs,
+  estimatedTotalStages,
+  shapeWorkOverview,
+} from "../util/workOverview.js";
+import {
+  maskSharedMoney,
+  MERGED_CONTRACT_MONEY_FIELDS,
+  readerMaySeeRates,
+} from "../util/sharedMoney.js";
+import {
+  hubSharesAppIdentity,
+  isSchemeAwareBindingEnabled,
+} from "../util/deviceIdentity.js";
 import {
   verifySocialIdentity,
   exchangeCodeForIdToken,
@@ -160,6 +186,11 @@ function applyExpiryToUser(userDoc) {
   return changed;
 }
 
+// Kill switch: DEVICE_SCHEME_AWARE_BINDING=0 (util/deviceIdentity.js).
+function hideDevicesFromInstallerHub(productKey) {
+  return isSchemeAwareBindingEnabled() && !hubSharesAppIdentity(productKey);
+}
+
 function toEntitlementV2(ent) {
   normalizeLegacyEntitlement(ent);
   const act = activeDevices(ent);
@@ -189,7 +220,15 @@ function toEntitlementV2(ent) {
     // When seats are still available, return empty so the desktop client
     // allows the install (it checks devices.length > 0 to gate access).
     // The bind-device endpoint will properly register the new device.
-    devices: act.length >= maxSeats
+    //
+    // QUIV (revit) and ArchiCAD: never. The Installer Hub blocks Install and
+    // Update unless its own id is in this list, and those apps' rows carry a
+    // different id, so a full licence locked the customer out of updating
+    // their own PC. The app's sign-in enforces their seats; bind-device no
+    // longer writes rows for them. Regardless of client header, because the
+    // Hub caches summaries and older Hubs send none. seatsUsed is unchanged.
+    // The web shows machines from GET /me/devices, not from here.
+    devices: act.length >= maxSeats && !hideDevicesFromInstallerHub(ent.productKey)
       ? act.map((d) => ({
           fingerprint: String(d.fingerprint || ""),
           name: d.name || "",
@@ -227,6 +266,8 @@ router.get(
       // being made to sign out and back in to refresh a token.
       state: 1,
       zone: 1,
+      // The token only carries a plain avatar link (routes/auth.js accessTokenClaims).
+      avatarUrl: 1,
     });
 
     if (user) {
@@ -254,7 +295,7 @@ router.get(
       email,
       role: effectiveRole,
       username,
-      avatarUrl,
+      avatarUrl: user?.avatarUrl || avatarUrl,
       zone: user?.zone || zone,
       state: user?.state || null,
       entitlements: entitlementsLegacy, // legacy payload (but now accurate)
@@ -359,6 +400,10 @@ router.get(
       email: 1,
       refreshVersion: 1,
       createdAt: 1,
+      // R3: who may have the Installer Hub link (util/installerHubAccess.js).
+      role: 1,
+      isGod: 1,
+      disabled: 1,
     });
     if (!user) return res.status(404).json({ error: "User missing" });
 
@@ -575,6 +620,18 @@ router.get(
         .lean(),
     ]);
 
+    // R15: from our own storage when the file is there, the Admin setting
+    // otherwise. An hour, because this sits on a page until it is clicked; the
+    // new Downloads screen asks /me/downloads/installer-hub for a fresh one.
+    // R3: an unpaid account gets no link at all, only the reason, so the page
+    // can point it at the products instead of at a file it may not have.
+    const hubAllowed = canDownloadInstallerHub(
+      typeof user.toObject === "function" ? user.toObject() : user,
+    );
+    const hubDownload = hubAllowed
+      ? await resolveDownload("installer-hub", { settings: globalSettings, expiresIn: 3600, allowed: true })
+      : { url: "" };
+
     return res.json({
       email: user.email,
       refreshVersion: user.refreshVersion || 1,
@@ -586,7 +643,9 @@ router.get(
 
       // Installer Hub settings (global, admin-configured)
       installerHub: {
-        downloadUrl: globalSettings?.installerHubUrl || "",
+        downloadUrl: hubDownload.url,
+        allowed: hubAllowed,
+        lockedCode: hubAllowed ? null : HUB_REQUIRES_PAID,
         videoUrl: globalSettings?.installerHubVideoUrl || "",
         // Always present — falls back to the copy bundled with the site.
         guideUrl: resolveUserGuideUrl(globalSettings?.installerHubGuideUrl),
@@ -676,10 +735,7 @@ router.post(
   requireAuth,
   asyncHandler(async (req, res) => {
     const {
-      username,
       avatarUrl,
-      zone,
-      state,
       firstName,
       lastName,
       whatsapp,
@@ -687,6 +743,12 @@ router.post(
       firmName,
       stepUpEnabled,
     } = req.body || {};
+    // Blank means "unchanged" (util/profileInput.js): most accounts have no
+    // state or zone yet, and every save used to fail on the empty one.
+    const username = blankToUndefined(req.body?.username);
+    const state = blankToUndefined(req.body?.state);
+    const zone = blankToUndefined(req.body?.zone);
+
     const u = await User.findById(req.user._id);
     if (!u) return res.status(404).json({ error: "User missing" });
 
@@ -697,6 +759,15 @@ router.post(
     }
 
     if (username !== undefined) u.username = username;
+    // A new photo must be a square photo of a face (R08, util/avatarCheck.js).
+    // Clearing it, or re-sending the one already saved, is not re-checked.
+    if (avatarUrl && avatarUrl !== u.avatarUrl) {
+      const refusal = await checkAvatarUrl(avatarUrl, {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        lookup: (publicId) => cloudinary.api.resource(publicId, { faces: true }),
+      });
+      if (refusal) return res.status(422).json({ error: refusal, field: "avatarUrl" });
+    }
     if (avatarUrl !== undefined) u.avatarUrl = avatarUrl;
 
     // State wins over zone. A state implies exactly one zone, so deriving it here
@@ -734,8 +805,20 @@ router.post(
       if (firstName !== undefined) u.firstName = String(firstName || "").trim();
       if (lastName !== undefined) u.lastName = String(lastName || "").trim();
     }
-    if (whatsapp !== undefined)
-      u.whatsapp = String(whatsapp || "").replace(/[^\d+]/g, "");
+    if (whatsapp !== undefined) {
+      const nextWa = String(whatsapp || "").replace(/[^\d+]/g, "");
+      // A different number is an unproved number.
+      if (nextWa !== u.whatsapp) {
+        u.whatsappVerified = false;
+        u.whatsappVerifiedAt = null;
+        u.whatsappVerifiedNumber = "";
+        // A code sent to the old number cannot prove the new one (review).
+        u.whatsappCodeHash = "";
+        u.whatsappCodeExpires = null;
+        u.whatsappCodeNumber = "";
+      }
+      u.whatsapp = nextWa;
+    }
     if (location !== undefined) u.location = String(location || "").trim();
     if (firmName !== undefined) u.firmName = String(firmName || "").trim();
 
@@ -1132,7 +1215,7 @@ router.get(
         doc.rect(leftCol, y, pageWidth, rowH).fill(bg);
         doc.fontSize(9).font("Helvetica").fillColor(clr);
         doc.text(`${i + 1}.`, colSN + 4, y + 8, { width: 30, align: "center" });
-        doc.text(item.description || "—", colDesc, y + 8, { width: colQty - colDesc - 5 });
+        doc.text(item.description || "–", colDesc, y + 8, { width: colQty - colDesc - 5 });
         doc.text(String(item.qty || 1), colQty, y + 8, { width: 35, align: "center" });
         doc.text("Nr", colUnit, y + 8, { width: 40, align: "center" });
         doc.text(fmtN(item.unitPrice), colRate, y + 8, { width: 55, align: "right" });
@@ -1414,6 +1497,10 @@ router.get(
   }),
 );
 
+// readerMaySeeRates() and maskSharedMoney() used to live here. They moved to
+// util/sharedMoney.js unchanged when the per-product project list needed the
+// same rule — see the imports at the top of this file.
+
 // GET /me/projects-rollup — every project the user owns OR collaborates on,
 // across ALL products (QUIV/HERON/MEP/Civil + their -materials siblings),
 // each with the same cost/valuation rollup the per-product /projects/:key
@@ -1429,6 +1516,7 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const canSeeRates = await readerMaySeeRates(userId);
 
     const num = (path) => ({
       $convert: { input: path, to: "double", onError: 0, onNull: 0 },
@@ -1453,10 +1541,32 @@ router.get(
       ],
     };
 
-    const list = await TakeoffProject.aggregate([
+    const listQuery = TakeoffProject.aggregate([
       {
         $match: {
           pmTrackerOnly: { $ne: true },
+          // A merged project's CONTAINER holds no measurements of its own: its
+          // bill is resolved live from the source projects it links
+          // (services/projectMerge.js), which are themselves rows in this very
+          // list, with their own money. Left in, it arrived as a project worth
+          // ₦0 stuck at "Takeoff" and counted the same job twice — once as the
+          // container, once as each of its parts. Resolving its parts' money
+          // into it instead would double the portfolio's measured work, and
+          // dropping the parts to make room would hide, from a collaborator on
+          // one source model, the only project they can actually open.
+          //
+          // So the rollup excludes containers, exactly as the per-product list
+          // route does by default (routes/projects.js listProjects). The one
+          // screen that manages merges opts in there with ?includeMerged=1 and
+          // is the only place with a design for them; nothing on the Work
+          // screens does. A merged project is still opened, split and exported
+          // from that screen.
+          //
+          // What a container DOES hold of its own is the merged contract's
+          // certificates and its contract-level variations — money no source
+          // carries — so those come back separately as `mergedContracts`
+          // below, and the dashboard's "Certified to date" adds them in.
+          mergeContainer: { $ne: true },
           $or: [{ userId }, { "collaborators.userId": userId }],
         },
       },
@@ -1501,45 +1611,11 @@ router.get(
           // "planswift" import is a HERON project. Filing every import under
           // QUIV showed HERON imports in the QUIV folder, and they then
           // opened as HERON.
-          baseProductKey: {
-            $let: {
-              vars: {
-                k: { $toLower: { $ifNull: ["$productKey", ""] } },
-              },
-              in: {
-                $switch: {
-                  branches: [
-                    {
-                      case: { $in: ["$$k", ["revit-materials", "revit-material"]] },
-                      then: "revit",
-                    },
-                    {
-                      case: { $in: ["$$k", ["planswift-materials", "planswift-material"]] },
-                      then: "planswift",
-                    },
-                    {
-                      case: {
-                        $in: [
-                          "$$k",
-                          ["mep-materials", "mep-material", "revitmep-materials"],
-                        ],
-                      },
-                      then: "mep",
-                    },
-                    {
-                      case: { $in: ["$$k", ["civil3d-materials", "civil3d-material"]] },
-                      then: "civil3d",
-                    },
-                    {
-                      case: { $in: ["$$k", ["archicad-materials", "archicad-material"]] },
-                      then: "archicad",
-                    },
-                  ],
-                  default: "$$k",
-                },
-              },
-            },
-          },
+          //
+          // The expression itself lives in util/workOverview.js, so this route
+          // and GET /me/work-overview can never disagree about which product a
+          // row belongs to.
+          baseProductKey: baseProductKeyExpr(),
           publicShareEnabled: 1,
           updatedAt: 1,
           version: 1,
@@ -1602,6 +1678,117 @@ router.get(
               $map: { input: "$safeItems", as: "item", in: valuationFactor },
             },
           },
+
+          // ── Additive fields for the Work overview (S18/WH-03, WH-06) ──
+          // Every one is derived from data already stored. Nothing is renamed,
+          // nothing is removed, and no existing field changes shape, so the
+          // desktop plugins (which never read this web-only route anyway) and
+          // the screens that already use it are untouched.
+
+          // The employer the bill is being prepared for. Stored since the BoQ
+          // cover needed it; the overview's project table shows it.
+          clientName: { $ifNull: ["$clientName", ""] },
+          // Set on a SOURCE project that has been merged into a container —
+          // i.e. this project's work is claimed as linked services elsewhere.
+          mergedInto: 1,
+
+          // What this user may do here. The rollup already carried `shared`,
+          // which only says "somebody else owns it"; pricing prompts must not
+          // be shown to a read-only collaborator who cannot act on them.
+          accessLevel: {
+            $cond: [
+              { $eq: ["$userId", userId] },
+              "owner",
+              {
+                $ifNull: [
+                  {
+                    $arrayElemAt: [
+                      {
+                        $map: {
+                          input: {
+                            $filter: {
+                              input: { $ifNull: ["$collaborators", []] },
+                              as: "c",
+                              cond: { $eq: ["$$c.userId", userId] },
+                            },
+                          },
+                          as: "c",
+                          in: "$$c.accessLevel",
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  "view",
+                ],
+              },
+            ],
+          },
+
+          // Measured work that has a rate, and measured work that has not.
+          // "Waiting for a rate" is a line with a quantity and no money on it;
+          // a zero-quantity line is a heading or a spare, not work.
+          pricedCount: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $gt: [num("$$item.qty"), 0] },
+                    { $gt: [num("$$item.rate"), 0] },
+                  ],
+                },
+              },
+            },
+          },
+          unpricedCount: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $gt: [num("$$item.qty"), 0] },
+                    { $lte: [num("$$item.rate"), 0] },
+                  ],
+                },
+              },
+            },
+          },
+
+          certificateCount: { $size: { $ifNull: ["$certificates", []] } },
+          // Certified to date: what the approved and paid certificates add up
+          // to, which is the figure the project's own Contract tab shows
+          // (client ProjectContractPanel) and the one the PDF reports print
+          // (services/reportEngine). It used to be the cumulative value of the
+          // highest-numbered approved certificate, which agrees only while
+          // approval runs contiguously from certificate 1 — with cert 1 left a
+          // draft, the dashboard certified work nobody had approved. The
+          // expression lives in util/workOverview.js so the two /me routes
+          // cannot drift apart again.
+          certifiedToDate: certifiedToDateExpr(),
+
+          // ── What the stage is read from (S18 bill, PR2-24) ───────────────
+          // client/src/lib/projectGallery.js stageOf() reads these three plus
+          // certificateCount. Without them the gallery and the overview could
+          // only ever report Takeoff, Priced or Valuations, so a finalised job
+          // read "Valuations" and filtering by Tendered returned nothing. Same
+          // fields, same $ifNull defaults, as the per-product list route.
+          contractLocked: { $ifNull: ["$contract.locked", false] },
+          tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
+          finalized: { $ifNull: ["$finalAccount.finalized", false] },
+
+          // ── The rest of the work's value ─────────────────────────────────
+          // Measured work alone is not what a certificate certifies: a
+          // certificate's cumulative value also carries provisional sums,
+          // preliminaries and approved variations. Carrying them lets the
+          // dashboard show certified value as a share of the same whole,
+          // instead of dividing by qty x rate and reading high.
+          ...contractValueExprs(),
+          // Contingency and VAT, which finish the grand summary but are never
+          // certified. They exist for estimatedTotal below.
+          ...estimatePercentExprs(),
         },
       },
       {
@@ -1614,12 +1801,120 @@ router.get(
               0,
             ],
           },
+          // The preliminary pool is a percentage of measured work plus the
+          // declared provisional sums — the same order the Bill, the contract
+          // lock and computeValueToDate() use.
+          preliminaryTotal: {
+            $divide: [
+              {
+                $multiply: [
+                  { $add: ["$totalCost", "$provisionalTotal"] },
+                  "$preliminaryPercent",
+                ],
+              },
+              100,
+            ],
+          },
         },
       },
+      {
+        $addFields: {
+          // What the work is worth, on the same cascade a certificate is built
+          // from. Contingency and VAT are deliberately out: neither is ever
+          // certified.
+          workValue: {
+            $add: [
+              "$totalCost",
+              "$provisionalTotal",
+              "$preliminaryTotal",
+              "$approvedVariationsTotal",
+            ],
+          },
+        },
+      },
+      // …and what the job is ESTIMATED at: the whole grand summary, the same
+      // figure the project's own Bill shows. The gallery labelled measured
+      // work "Estimated" because this route never sent one; it now sends the
+      // real one, on the one cascade every screen reads
+      // (client/src/features/projects/lib/projectTotals.js).
+      ...estimatedTotalStages(),
       { $sort: { updatedAt: -1 } },
     ]);
 
-    return res.json({ projects: list });
+    // The merged contracts this user is on, with ONLY the money a container
+    // holds in its own right: its certificates (one certificate series governs
+    // the merged job — services/projectMerge.js resolveMergedProject) and the
+    // variations raised against the merged contract (CONTAINER_OWNED_FIELDS).
+    //
+    // Its measured work is deliberately not here. A container's bill is its
+    // sources' bills, and every source is already a row in `projects` with its
+    // own money, so carrying measured work, provisional sums or preliminaries
+    // from the container would count the same job twice. A certificate on the
+    // container, by contrast, is on no source, and leaving it out made a
+    // merged job's certified value vanish from "Certified to date" (R7).
+    //
+    // Kept out of `projects` on purpose: every Work screen that lists projects
+    // reads that array, and a container there is the ₦0 "Takeoff" row the
+    // exclusion above exists to prevent.
+    const mergedQuery = TakeoffProject.aggregate([
+      {
+        $match: {
+          mergeContainer: true,
+          pmTrackerOnly: { $ne: true },
+          $or: [{ userId }, { "collaborators.userId": userId }],
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          id: "$_id",
+          name: 1,
+          slug: 1,
+          productKey: 1,
+          shared: { $ne: ["$userId", userId] },
+          certificateCount: { $size: { $ifNull: ["$certificates", []] } },
+          certifiedToDate: certifiedToDateExpr(),
+          approvedVariationsTotal: contractValueExprs().approvedVariationsTotal,
+        },
+      },
+    ]);
+
+    const [list, merged] = await Promise.all([listQuery, mergedQuery]);
+
+    return res.json({
+      projects: maskSharedMoney(list, canSeeRates),
+      // Same rule as a project row: a collaborator who may not see rates gets
+      // zeros and `moneyHidden`, never the merged contract's figures.
+      mergedContracts: maskSharedMoney(merged, canSeeRates, MERGED_CONTRACT_MONEY_FIELDS),
+    });
+  }),
+);
+
+// GET /me/work-overview — the four things the Work dashboard needs that the
+// projects rollup cannot answer, because the rollup only reads a project's
+// items: certificates, variations, programme tasks, and how many bill lines
+// each RateGen rate is on.
+//
+// Read-only, web-only and additive: no desktop plugin calls it, nothing here
+// writes, and every figure is read exactly as stored (a certificate's
+// netPayable, a variation's qty x rate) so no total anywhere moves.
+//
+// Money on somebody else's project is hidden on the same rule the project
+// itself uses, so the dashboard can never show a figure the project page would
+// have masked.
+//
+// Each panel is independent on the client, so a facet that comes back empty
+// simply shows that panel's empty state.
+router.get(
+  "/work-overview",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const [raw, canSeeRates] = await Promise.all([
+      TakeoffProject.aggregate(buildWorkOverviewPipeline(userId, { now: new Date() })),
+      readerMaySeeRates(userId),
+    ]);
+    return res.json(shapeWorkOverview(raw, { canSeeRates }));
   }),
 );
 
@@ -2163,12 +2458,29 @@ router.get(
     // catalogue, so the rail reads "3 of 7" the way his design does — but with
     // 7 being however many products we sell today, not a number frozen into
     // the markup.
+    //
+    // Only LIVE licences for products we sell count. Every entitlement used to
+    // count, so add-on grants (boq-import, archicad) and expired licences read
+    // "7 of 6". ownedKeys lets the rail's My tools show what this account can
+    // open, rather than Richard's sample tenant.
+    const productKeys = await Product.find({ isCourse: { $ne: true } }, { key: 1 })
+      .lean()
+      .then((rows) => rows.map((r) => r.key).filter(Boolean))
+      .catch(() => []);
+    const sold = new Set(productKeys);
+    const now = dayjs();
     const owned = new Set(
-      (user?.entitlements || []).map((e) => e.productKey).filter(Boolean),
+      (user?.entitlements || [])
+        .filter(
+          (e) =>
+            e?.productKey &&
+            sold.has(e.productKey) &&
+            String(e.status || "").toLowerCase() === "active" &&
+            (!e.expiresAt || dayjs(e.expiresAt).isAfter(now)),
+        )
+        .map((e) => e.productKey),
     );
-    const catalogue = await Product.countDocuments({ isCourse: { $ne: true } }).catch(
-      () => 0,
-    );
+    const catalogue = productKeys.length;
 
     res.json({
       projects,
@@ -2176,8 +2488,13 @@ router.get(
       materials: rateLib.materials,
       gangs: rateLib.gangs,
       certificates,
+      // R11: assignments with a new alert (due soon, overdue, result in).
+      assignments: await myAssignments(userId, { links: false })
+        .then(alertCount)
+        .catch(() => 0),
       productsOwned: owned.size,
       productsTotal: catalogue,
+      ownedKeys: [...owned],
       name: user?.name || "",
       email: user?.email || "",
       organizationName: user?.organizationName || "",
@@ -2525,5 +2842,106 @@ router.get("/free-lessons", requireAuth, async (req, res) => {
     }),
   );
 });
+
+/* ── WhatsApp number verification (util/whatsappVerify.js) ─────────────── */
+
+router.get(
+  "/whatsapp/verify",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const u = await User.findById(req.user._id, {
+      whatsapp: 1,
+      whatsappVerified: 1,
+      whatsappVerifiedNumber: 1,
+    }).lean();
+    if (!u) return res.status(404).json({ error: "User missing" });
+    res.json({
+      enabled: whatsappEnabled(),
+      number: u.whatsapp || "",
+      verified: !!u.whatsappVerified && u.whatsappVerifiedNumber === toWhatsAppNumber(u.whatsapp),
+    });
+  }),
+);
+
+router.post(
+  "/whatsapp/verify/start",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!whatsappEnabled()) {
+      return res.status(503).json({ error: "WhatsApp verification is not switched on yet.", code: "WA_OFF" });
+    }
+    const u = await User.findById(req.user._id);
+    if (!u) return res.status(404).json({ error: "User missing" });
+    const to = toWhatsAppNumber(u.whatsapp);
+    if (!to) {
+      return res.status(400).json({
+        error: "Save a WhatsApp number with its country code first, for example +234 803 000 0000.",
+      });
+    }
+    const since = u.whatsappCodeSentAt ? (Date.now() - u.whatsappCodeSentAt.getTime()) / 1000 : Infinity;
+    if (since < WA_RESEND_SECONDS) {
+      return res.status(429).json({ error: `Wait ${Math.ceil(WA_RESEND_SECONDS - since)} seconds before asking for another code.` });
+    }
+    const code = newWaCode();
+    try {
+      await sendWhatsAppCode(to, code);
+    } catch (err) {
+      console.error("[/me/whatsapp/verify/start]", err?.message || err);
+      return res.status(502).json({
+        error: "WhatsApp would not take the message. Check the number is on WhatsApp and try again.",
+      });
+    }
+    u.whatsappCodeHash = hashWaCode(code);
+    u.whatsappCodeNumber = to;
+    u.whatsappCodeExpires = new Date(Date.now() + WA_CODE_MINUTES * 60_000);
+    u.whatsappCodeSentAt = new Date();
+    u.whatsappCodeAttempts = 0;
+    await u.save();
+    res.json({ ok: true, to: `+${to}`, minutes: WA_CODE_MINUTES });
+  }),
+);
+
+router.post(
+  "/whatsapp/verify/confirm",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const u = await User.findById(req.user._id);
+    if (!u) return res.status(404).json({ error: "User missing" });
+    const code = String(req.body?.code || "").replace(/\D/g, "");
+    if (code.length !== 6) return res.status(400).json({ error: "The WhatsApp code is six digits." });
+    if (!u.whatsappCodeHash || !u.whatsappCodeExpires || u.whatsappCodeExpires.getTime() < Date.now()) {
+      return res.status(400).json({ error: "That code has expired or was never sent. Ask for a new one." });
+    }
+    if ((u.whatsappCodeAttempts || 0) >= WA_MAX_ATTEMPTS) {
+      return res.status(429).json({ error: "Too many wrong codes. Ask for a new one." });
+    }
+    // The code proves the number it was sent to, and only while that is still
+    // the number on the account (review, 2026-09-22).
+    const current = toWhatsAppNumber(u.whatsapp) || "";
+    if (!u.whatsappCodeNumber || u.whatsappCodeNumber !== current) {
+      return res.status(400).json({ error: "The number changed after that code was sent. Ask for a new one." });
+    }
+    if (hashWaCode(code) !== u.whatsappCodeHash) {
+      u.whatsappCodeAttempts = (u.whatsappCodeAttempts || 0) + 1;
+      await u.save();
+      const left = WA_MAX_ATTEMPTS - u.whatsappCodeAttempts;
+      return res.status(400).json({
+        error: left > 0 ? `That code is not right. ${left} ${left === 1 ? "try" : "tries"} left.` : "That code is not right. Ask for a new one.",
+      });
+    }
+    u.whatsappVerified = true;
+    u.whatsappVerifiedAt = new Date();
+    u.whatsappVerifiedNumber = u.whatsappCodeNumber;
+    u.whatsappCodeHash = "";
+    u.whatsappCodeNumber = "";
+    u.whatsappCodeExpires = null;
+    u.whatsappCodeAttempts = 0;
+    await u.save();
+    res.json({ ok: true, verified: true });
+  }),
+);
+
+// Exposed for tests only.
+export const __test = { toEntitlementV2 };
 
 export default router;

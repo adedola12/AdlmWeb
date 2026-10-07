@@ -73,7 +73,16 @@ export default function ServicesPricingPanel({
             className="ds-btn ds-btn-sm btn-p"
             style={{ flex: "none" }}
             onClick={priceAll}
-            disabled={busy}
+            // Pricing re-derives every rate on the bill from the CALLER's
+            // RateGen library, so the server refuses it outright for someone
+            // who may not see the prices (RATES_MASKED). Say so here rather
+            // than offering a button that can only fail.
+            disabled={busy || !canSeeRates}
+            title={
+              canSeeRates
+                ? undefined
+                : "Rates are hidden on this shared project, so you cannot price it."
+            }
           >
             {busy ? "Pricing…" : "Price services"}
           </button>
@@ -96,9 +105,11 @@ export default function ServicesPricingPanel({
         )}
         {result && !error && (
           <p className="mk-note" style={NOTE_GOOD}>
+            {/* No "(rates hidden)" branch: a pricing run only ever happens for
+                someone who can see rates, because the server refuses every
+                other caller and the button above is disabled for them. */}
             Priced {result.billLinesUpdated} bill line
-            {result.billLinesUpdated === 1 ? "" : "s"}
-            {canSeeRates ? "" : " (rates hidden)"} from {result.budgetLines}{" "}
+            {result.billLinesUpdated === 1 ? "" : "s"} from {result.budgetLines}{" "}
             build-up line{result.budgetLines === 1 ? "" : "s"}. Open the Bill tab to
             review.
           </p>

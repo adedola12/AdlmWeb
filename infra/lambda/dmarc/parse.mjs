@@ -209,6 +209,46 @@ export function summarize(reports) {
   };
 }
 
+/* ───────────────────────────────────────────────────────── triage ── */
+
+// Services that send as adlmstudio.net for us, matched on the reverse DNS name
+// of the sending IP. A failure from one of these is our own mail going wrong
+// and needs a look; a failure from anywhere else is someone forging the domain,
+// which p=reject already refuses, so it is logged but does not email anyone.
+const OUR_SENDERS = [
+  ["Amazon SES", /\.amazonses\.com$/i],
+  ["Google", /\.(google|googlemail)\.com$/i],
+  ["Microsoft", /\.outlook\.com$/i],
+  ["Kudimail", /kudimail/i],
+  ["Resend", /resend/i],
+];
+
+/** Which of our sending services a set of reverse DNS names belongs to, or "". */
+export function ourSender(hostnames = []) {
+  for (const host of hostnames) {
+    const name = String(host || "").replace(/\.$/, "");
+    for (const [label, re] of OUR_SENDERS) if (re.test(name)) return label;
+  }
+  return "";
+}
+
+/**
+ * Splits the failing sources by who sent them. `hostsByIp` maps an IP to its
+ * reverse DNS names (missing or empty when the lookup found nothing).
+ */
+export function triage(summary, hostsByIp = new Map()) {
+  const get = (ip) => (hostsByIp instanceof Map ? hostsByIp.get(ip) : hostsByIp[ip]) || [];
+  const ours = [];
+  const strangers = [];
+  for (const s of summary.failing) {
+    const hosts = get(s.sourceIp);
+    const sender = ourSender(hosts);
+    const row = { ...s, host: hosts[0] || "", sender };
+    (sender ? ours : strangers).push(row);
+  }
+  return { ours, strangers };
+}
+
 /** The alert text for a report that has failures. */
 export function alertText(summary, messageId = "") {
   const lines = [
@@ -218,7 +258,12 @@ export function alertText(summary, messageId = "") {
     "Failing sources (IP, messages, DKIM, SPF, what the receiver did):",
     ...summary.failing
       .slice(0, 20)
-      .map((s) => `  ${s.sourceIp}  ${s.count}  dkim=${s.dkim}  spf=${s.spf}  ${s.disposition}`),
+      .map(
+        (s) =>
+          `  ${s.sourceIp}  ${s.count}  dkim=${s.dkim}  spf=${s.spf}  ${s.disposition}` +
+          (s.host ? `  ${s.host}` : "") +
+          (s.sender ? `  <- ${s.sender}, one of OUR senders` : ""),
+      ),
     "",
     "A failing source is either someone forging adlmstudio.net, or a real service",
     "we send through that is not set up for SPF or DKIM. Look up an unfamiliar IP",

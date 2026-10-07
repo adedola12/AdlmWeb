@@ -13,14 +13,20 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath, pathToFileURL } from "url";
 import { connectDB } from "./db.js";
+import {
+  apiMongoOptions,
+  DB_UNAVAILABLE,
+  isMongoUnavailableError,
+} from "./util/mongoTimeouts.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
 import { runVideoPoll } from "./util/videoNotifier.js";
-import { ensureRolesSeeded } from "./util/rbac.js";
+import { ensureRolesSeededOnce } from "./util/rbac.js";
 import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
+import { buildCorsOptions } from "./util/corsPolicy.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
@@ -33,6 +39,7 @@ import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import { designMode } from "./middleware/designMode.js";
+import { originVerify } from "./middleware/originVerify.js";
 import adminRoutes from "./routes/admin.js";
 import { demoModeGuard } from "./middleware/demoMode.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
@@ -93,8 +100,16 @@ import adminBroadcast from "./routes/admin.broadcast.js";
 import adminCampaigns from "./routes/admin.campaigns.js";
 import adminBillboard, { publicBillboard } from "./routes/admin.billboard.js";
 import { sweepStaleOrders } from "./util/staleOrders.js";
-import unsubscribeRouter, { videoUnsubscribeRouter } from "./routes/unsubscribe.js";
+import unsubscribeRouter, {
+  videoUnsubscribeRouter,
+  productUpdatesUnsubscribeRouter,
+} from "./routes/unsubscribe.js";
 import adminVideos from "./routes/admin.videos.js";
+import adminReleaseNotifications from "./routes/admin.releaseNotifications.js";
+import adminReleases from "./routes/admin.releases.js";
+import adminBatch from "./routes/admin.batch.js";
+import releaseGatePublic from "./routes/releaseGatePublic.js";
+import adminWork from "./routes/admin.work.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -108,6 +123,7 @@ import adminUsage from "./routes/admin.usage.js";
 import adminAiUsage from "./routes/admin.aiUsage.js";
 import adminCertificates from "./routes/admin.certificates.js";
 import verifyRoutes from "./routes/verify.js";
+import { publicDownloads, meDownloads } from "./routes/downloads.js";
 import telemetryTakeoff from "./routes/telemetry.takeoff.js";
 import adminTakeoff from "./routes/admin.takeoff.js";
 
@@ -129,45 +145,14 @@ const __dirname = path.dirname(__filename);
 
 app.set("trust proxy", 1);
 
+/* -------- only CloudFront may call in (see middleware/originVerify.js) -------- */
+app.use(originVerify());
+
 /* -------- CORS (MUST be BEFORE body parsers) -------- */
-const IS_PROD = process.env.NODE_ENV === "production";
-
-// Base whitelist from env, plus explicit production origins
-const envWhitelist = (process.env.CORS_ORIGINS || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-// Exact, vetted production origins — no wildcards
-const PROD_ORIGINS = [
-  "https://adlmstudio.net",
-  "https://www.adlmstudio.net",
-  "https://adlm-web.vercel.app",
-];
-
-const whitelist = Array.from(new Set([...envWhitelist, ...PROD_ORIGINS]));
-
-const corsOptions = {
-  origin(origin, cb) {
-    if (!origin) return cb(null, true);
-    if (whitelist.includes(origin)) return cb(null, true);
-    // Localhost only allowed in non-production for dev work
-    if (!IS_PROD && /^http:\/\/localhost:\d+$/.test(origin)) {
-      return cb(null, true);
-    }
-    return cb(new Error(`Not allowed by CORS: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "x-admin-key",
-    "x-adlm-client",
-    "x-adlm-fp-version",
-    "X-Requested-With",
-  ],
-};
+// CORS_ORIGINS from env, the vetted production origins, and the API's own
+// origin (API_BASE_URL), so the unsubscribe pages it serves can post their
+// own form. See util/corsPolicy.js.
+const corsOptions = buildCorsOptions(process.env);
 
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
@@ -295,6 +280,8 @@ app.use("/auth", authLimiter, authRoutes);
 app.use("/me/billing", meBillingRoutes);
 // Mounted before the catch-all /me router so its own routes win.
 app.use("/me/material-constants", materialConstantsRoutes);
+// Ahead of /me so its routes are reached before the catch-all me router (R15).
+app.use("/me/downloads", meDownloads);
 app.use("/me", meRoutes);
 app.use("/me/deployments", deviceLimiter, meDeploymentsRoutes);
 app.use("/me/courses", meCourses);
@@ -355,6 +342,8 @@ app.get("/settings/mobile-app-url", async (_req, res) => {
 
 // Public force-reinstall broadcast — read by the site-wide banner.
 // Returns active=false (and no other fields) when nothing is broadcasting.
+// R16: no installer link here. This answers anyone who asks, and the link is
+// handed out signed in (/me/summary, /me/downloads/installer-hub).
 app.get("/settings/force-reinstall", async (_req, res) => {
   try {
     const s = await Setting.findOne({ key: "global" }).lean();
@@ -363,7 +352,6 @@ app.get("/settings/force-reinstall", async (_req, res) => {
       active: true,
       message: s.forceReinstallMessage || "",
       triggeredAt: s.forceReinstallAt || null,
-      installerHubUrl: s.installerHubUrl || "",
       installerHubVideoUrl: s.installerHubVideoUrl || "",
       installerHubGuideUrl: resolveUserGuideUrl(s.installerHubGuideUrl),
     });
@@ -417,7 +405,20 @@ app.use("/admin/emails", adminEmails);
 app.use("/admin/certificates", adminCertificates);
 // Public on purpose: an employer checking a certificate has no account here.
 app.use("/verify", verifyRoutes);
+app.use("/downloads", publicDownloads);
 app.use("/admin/broadcast", adminBroadcast);
+// "QUIV 3.1.11 is ready" emails, recorded by the deployment PUT. See
+// util/releaseNotifier.js.
+app.use("/admin/release-notifications", adminReleaseNotifications);
+// The batch router first: /admin/releases/batch would otherwise be caught by
+// the candidate router's /:id routes.
+app.use("/admin/releases/batch", adminBatch);
+app.use("/admin/releases", adminReleases);
+// Read-only, no credential: GitHub's required status check asks this whether
+// the approver signed off a given commit (docs/RELEASE_GATE.md).
+app.use("/release-gate", releaseGatePublic);
+// The work board: what is in flight, and approval before a new feature is built.
+app.use("/admin/work", adminWork);
 app.use("/admin/campaigns", adminCampaigns);
 app.use("/admin/billboard", adminBillboard);
 // Public and unauthenticated: it is what every page of the site reads to draw
@@ -429,6 +430,9 @@ app.use("/unsubscribe", unsubscribeRouter);
 // Same reasoning, one list rather than all of them: opened from a video
 // announcement, in a browser nobody is signed in to. The token carries the
 // topic, so this link cannot be edited into a general unsubscribe.
+// The product-updates list is mounted first; its paths have two segments, so
+// the video router's /:token could not match them either way.
+app.use("/api/email/unsubscribe/product-updates", productUpdatesUnsubscribeRouter);
 app.use("/api/email/unsubscribe", videoUnsubscribeRouter);
 app.use("/admin/videos", adminVideos);
 app.use("/admin/rategen-v2/library", adminRateGenLibrary);
@@ -475,11 +479,15 @@ import adminLearnQueues from "./routes/admin.learnQueues.js";
 import adminCommerce from "./routes/admin.commerce.js";
 import adminCatalogue from "./routes/admin.catalogue.js";
 import adminLearnContent from "./routes/admin.learnContent.js";
+import adminDemoModels from "./routes/admin.demoModels.js";
+import adminReferrals from "./routes/admin.referrals.js";
+import meDemoModels from "./routes/me.demoModels.js";
 import adminDocuments from "./routes/admin.documents.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
+app.use("/admin/referrals", adminReferrals);
 app.use("/admin/org-videos", adminOrgVideos);
 app.use("/me/org-videos", meOrgVideos);
 app.use("/admin/today", adminToday);
@@ -493,6 +501,9 @@ app.use("/admin/commerce", adminCommerce);
 app.use("/admin/catalogue", adminCatalogue);
 app.use("/admin/lc", adminLearnContent);
 app.use("/admin/docs", adminDocuments);
+// Before the /admin catch-all below, or the catch-all answers first.
+app.use("/admin/demo-models", adminDemoModels);
+app.use("/me/demo-models", meDemoModels);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);
 
@@ -581,6 +592,16 @@ app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
 app.use((err, _req, res, _next) => {
   console.error(err);
+  // The database did not answer (a stall or failover, cut short by the
+  // socket timeout). Say so and invite a retry, rather than a bare 500: the
+  // request itself was fine.
+  if (isMongoUnavailableError(err)) {
+    res.set("Retry-After", "5");
+    return res.status(503).json({
+      error: "The service is briefly unavailable. Please try again in a moment.",
+      code: DB_UNAVAILABLE,
+    });
+  }
   res.status(500).json({ error: "Server error" });
 });
 
@@ -592,11 +613,14 @@ app.use((err, _req, res, _next) => {
 // adds no new outage surface — it only catches a broken future deploy).
 function validateEnv() {
   const critical = ["MONGO_URI", "JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"];
+  // SMTP_PASS is deliberately absent. Mail goes out on SES using the
+  // Lambda role, and the Gmail app password it named was deleted from SSM
+  // once the cutover was confirmed - warning about a credential we removed on
+  // purpose trains people to ignore this line.
   const recommended = [
     "JWT_LICENSE_SECRET",
     "PAYSTACK_SECRET_KEY",
     "CLOUDINARY_API_SECRET",
-    "SMTP_PASS",
   ];
   const missingCritical = critical.filter((k) => !process.env[k]);
   if (missingCritical.length) {
@@ -634,12 +658,16 @@ export function bootstrap() {
     // model would serve REAL rows to a demo session, silently — better to
     // refuse to boot than to leak. Deliberately NOT caught below.
     assertTenancyApplied();
-    await connectDB(process.env.MONGO_URI);
+    // Fail-fast timeouts: a stalled Atlas errors in seconds instead of holding
+    // every request to Lambda's 60s kill (util/mongoTimeouts.js).
+    await connectDB(process.env.MONGO_URI, apiMongoOptions());
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission
     // cache before serving. Non-fatal: a seed failure logs but doesn't block boot.
+    // On Lambda both the connect above and this seed are usually already in
+    // flight (lambda.js startDatabaseEarly), so these awaits reuse that work.
     try {
-      await ensureRolesSeeded();
+      await ensureRolesSeededOnce();
     } catch (e) {
       console.error("[rbac] role seed failed:", e?.message || e);
     }

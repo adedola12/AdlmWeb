@@ -95,6 +95,19 @@ const WORD = /\.docx$/i;
 
 // ── the screen ─────────────────────────────────────────────────────────────
 
+// His signBlock (admin-doc.js): Dolapo's signature only on ADLM paper,
+// because it is the CEO's hand and a practice's document is not ours to sign.
+function signBlock(mode, paper) {
+  if (mode === "dolapo" && paper === "adlm") {
+    return {
+      type: "signature",
+      image: "/ds/sig-dolapo.png",
+      label: "Adedolapo Quasim · Chief Executive Officer, ADLM Studio",
+    };
+  }
+  return { type: "signature", label: paper === "adlm" ? "For ADLM Studio" : "Authorised signature" };
+}
+
 export default function DsDocComposer() {
   const { accessToken } = useAuth();
   const [template, setTemplate] = React.useState("letter");
@@ -107,6 +120,8 @@ export default function DsDocComposer() {
   const [from, setFrom] = React.useState("");
   const [source, setSource] = React.useState(() => sampleFor("letter"));
   const [kept, setKept] = React.useState([]);
+  // Did the list fail to come back, or is it genuinely empty? Two sentences.
+  const [keptFailed, setKeptFailed] = React.useState(false);
   const [dropping, setDropping] = React.useState(false);
   const [problem, setProblem] = React.useState("");
 
@@ -133,6 +148,10 @@ export default function DsDocComposer() {
   // "Subject or reference" — the engine already renders it as a keyvalue row
   // beside the address, and nothing was filling it in.
   const [subject, setSubject] = React.useState("");
+  // P0.5, his composer: Dolapo's signature (ADLM paper only), a blank line
+  // to sign by hand, or none. Appended by us; it is not editable copy.
+  const [sign, setSign] = React.useState("line");
+  const signed = sign === "dolapo" && paper !== "adlm" ? "line" : sign;
   const [note, setNote] = React.useState("");
 
   const host = React.useRef(null);
@@ -148,6 +167,7 @@ export default function DsDocComposer() {
     setTo(d.to || "");
     setFrom(d.from || "");
     setSource(d.source);
+    if (d.sign) setSign(d.sign);
     setEditingId(d.editingId || null);
     setNote("Picked up where you left off.");
   }, []);
@@ -185,11 +205,11 @@ export default function DsDocComposer() {
   React.useEffect(() => {
     const t = setTimeout(() => {
       if (source && !ALL_SAMPLES.includes(source)) {
-        writeDraft({ template, title, number, to, source, editingId });
+        writeDraft({ template, title, number, to, source, editingId, sign });
       }
     }, 600);
     return () => clearTimeout(t);
-  }, [template, title, number, to, source, editingId]);
+  }, [template, title, number, to, source, editingId, sign]);
 
   const spec = React.useMemo(
     () => ({
@@ -218,9 +238,9 @@ export default function DsDocComposer() {
             .filter(Boolean)
         : null,
       fromLabel: "FROM:",
-      blocks,
+      blocks: signed === "none" ? blocks : [...blocks, signBlock(signed, paper)],
     }),
-    [template, title, number, to, from, blocks, docDate, paper, firm, subject],
+    [template, title, number, to, from, blocks, docDate, paper, firm, subject, signed],
   );
 
   // Re-render the document whenever anything it is made of changes. mount()
@@ -292,9 +312,13 @@ export default function DsDocComposer() {
     try {
       const r = await apiAuthed("/admin/docs/saved", { token: accessToken });
       setKept(r?.items || []);
+      setKeptFailed(false);
     } catch {
       // A library that cannot be read is not a reason to stop writing, so the
-      // composer carries on and says so quietly rather than blocking.
+      // composer carries on and says so quietly rather than blocking. The flag
+      // is what keeps the panel from then reporting an empty library, which
+      // would read as "your documents are gone".
+      setKeptFailed(true);
       setNote("Saved documents could not be listed just now.");
     }
   }, [accessToken]);
@@ -323,6 +347,7 @@ export default function DsDocComposer() {
           to: to.trim(),
           source,
           blocks: blocks.length,
+          sign: signed,
         }),
       });
       setEditingId(r?.id || null);
@@ -340,7 +365,7 @@ export default function DsDocComposer() {
     } finally {
       setSaving(false);
     }
-  }, [accessToken, editingId, source, template, title, number, to, blocks, refresh]);
+  }, [accessToken, editingId, source, template, title, number, to, blocks, signed, refresh]);
 
   /** Open one back into the composer, exactly as it was. */
   const open = React.useCallback(
@@ -356,6 +381,7 @@ export default function DsDocComposer() {
         setTo(full.to || "");
         setFrom(full.from || "");
         setSource(full.source || "");
+        setSign(full.sign || "line");
         setEditingId(full.id);
         setNote(`Editing “${full.title}”. Saving updates it.`);
       } catch {
@@ -607,6 +633,38 @@ export default function DsDocComposer() {
             ADLM documents carry our mark and colour. A practice&rsquo;s carry theirs, with one
             line of credit in the footer — never our letterhead on their professional work.
           </p>
+          <p className="adm-grp">Signature</p>
+          <div className="adm-seg" id="adm-sign" role="group" aria-label="Signature">
+            {[
+              ["dolapo", "Dolapo’s"],
+              ["line", "Blank line"],
+              ["none", "None"],
+            ].map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                className={signed === k ? "on" : undefined}
+                disabled={k === "dolapo" && paper !== "adlm"}
+                title={k === "dolapo" && paper !== "adlm" ? "Only on ADLM paper" : undefined}
+                onClick={() => {
+                  setSign(k);
+                  setNote(
+                    k === "dolapo"
+                      ? "Signature appended: Adedolapo Quasim, Chief Executive Officer."
+                      : k === "none"
+                        ? "Signature removed."
+                        : "Blank signature line.",
+                  );
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="adm-hint">
+            Dolapo&rsquo;s signature goes only on ADLM paper: a practice&rsquo;s document is not ours to
+            sign. A blank line is left to sign by hand.
+          </p>
           {paper === "practice" ? (
             <div className="adm-fields" style={{ marginTop: 10 }}>
               <label>
@@ -709,10 +767,17 @@ export default function DsDocComposer() {
 
           <p className="adm-grp">Saved documents</p>
           <div className="adm-saved">
-            {kept.length === 0 ? (
+            {keptFailed ? (
+              <p className="adm-hint">
+                The list could not be read just now, so nothing is shown here. Your saved
+                documents are on the server and are not affected; what you are writing is not
+                affected either, and saving it still works.
+              </p>
+            ) : kept.length === 0 ? (
               <p className="adm-hint">
                 Nothing saved yet. Documents are kept on the server now, not in this browser, so
-                one written here opens on any machine you sign in from.
+                one written here opens on any machine you sign in from. Write one and press
+                Save, and it joins this list.
               </p>
             ) : (
               <div className="adm-kept">
@@ -742,7 +807,7 @@ export default function DsDocComposer() {
                     </button>
                     <button
                       type="button"
-                      className="adm-x"
+                      className="adm-drawer-x"
                       aria-label={`Remove ${r.title}`}
                       onClick={() => drop(r.id)}
                     >

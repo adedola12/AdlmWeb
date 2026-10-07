@@ -1,31 +1,31 @@
 // server/util/mailer.js
 //
-// THREE TRANSPORTS, IN A DELIBERATE ORDER
+// ONE TRANSPORT: AMAZON SES
 //
-// SES, then Resend, then Gmail SMTP. Set MAIL_TRANSPORT=ses to put SES at the
-// front; leave it unset and nothing changes, which is the point — the switch
-// can be deployed long before the DNS and the sandbox exit are done, and
-// flipped by a parameter when they are.
+// Every message the studio sends goes out on SES, through the Lambda's own
+// role. There is no second provider behind it and no SMTP fallback. Owner's
+// rule (6 Oct 2026): Resend is never used again, and when SES refuses a
+// message the send FAILS LOUDLY - it is logged, recorded as a failed send and
+// thrown to the caller - rather than quietly leaving by some other door.
 //
-// SES and Resend are the same platform. `send.adlmstudio.net` publishes SPF
-// `include:amazonses.com` and an MX at `feedback-smtp.eu-west-1.amazonses.com`,
-// so Resend has been handing this domain's mail to SES in Ireland all along.
-// Going direct removes a reseller and an API key, not a mail platform — which
-// is also why the fallback below is worth keeping through the cutover and not
-// worth keeping forever.
+// A fallback hides exactly the failures worth knowing about: SES in sandbox,
+// a paused account, a missing permission. Each of those used to look like a
+// working site while a reseller carried the mail. Now each one is an error
+// somebody sees.
 //
-// Once SES has carried production traffic for a week, RESEND_API_KEY comes out
-// of SSM and this file loses two of its three transports. The Gmail SMTP path
-// should go with it: an app password that can send as the studio is a
-// credential nobody needs once the Lambda's own role can do the job.
-import nodemailer from "nodemailer";
-import fetch from "node-fetch";
+// MAIL_TRANSPORT and MAIL_FALLBACK are no longer read here. SES is the
+// transport whatever MAIL_TRANSPORT says, so an unset or mistyped setting can
+// never route mail anywhere else.
+//
+// (Cold outreach is a separate path on a separate domain and does not come
+// through this file. It is never a fallback for anything sent here.)
 import { EmailTemplate } from "../models/EmailTemplate.js";
 import { EmailSend, hashRecipient } from "../models/EmailSend.js";
 import { canEdit } from "./emailCatalogue.js";
-import { isSesSelected, sendViaSes } from "./sesTransport.js";
+import { sendViaSes, getSesAccount } from "./sesTransport.js";
+import { senderFor, replyToAddress } from "./senders.js";
 
-// strip HTML → text
+// strip HTML -> text
 function toText(html = "") {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -34,158 +34,85 @@ function toText(html = "") {
     .trim();
 }
 
-function makeTransport({ host, port, user, pass, label }) {
-  const t = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465, // 465 is implicit TLS; 587 upgrades with STARTTLS
-    auth: { user, pass },
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 20_000,
-    tls: { servername: host },
-  });
-  // Carried on the transport so a log line can say which one sent it, and a
-  // verify report can say which one is broken, without re-deriving it.
-  t.adlmLabel = `${label} ${host}:${port}`;
-  return t;
+// The SES sender, swappable only by tests so a refused send can be driven
+// without an AWS round trip. Production never calls the setter.
+let sesSend = sendViaSes;
+export function _setSesSenderForTests(fn) {
+  sesSend = typeof fn === "function" ? fn : sendViaSes;
 }
 
 /**
- * Every way out, best first.
+ * Can the studio send, right now?
  *
- * WHY THERE IS MORE THAN ONE SMTP CANDIDATE
+ * Reports SES and only SES, because SES is the only way out. GetAccount is the
+ * honest check: it proves the credentials, the region and that AWS will accept
+ * a message. Production access and the pause flag are spelled out because
+ * sandbox and a pause are the two states that look fine locally and refuse
+ * every customer. Never throws: it reports.
  *
- * The fallback was two ports on one host, and when the credential for that
- * host stopped being accepted there was nothing behind it — Resend was
- * carrying every message on the site with nothing underneath. Worse, nobody
- * knew: SMTP is only ever reached when Resend has already failed, so a broken
- * fallback is invisible right up to the moment it is the only thing left.
- *
- * So the chain is built from whatever is actually configured:
- *
- *   1. the configured SMTP host, on its configured port first
- *      — genuinely independent of Resend, which is the point of a fallback
- *   2. Resend's own SMTP gateway, authenticated with the API key
- *      — needs no extra credential, and covers the failures that are about
- *        the HTTP path rather than about Resend: a proxy, DNS to
- *        api.resend.com, a request the API rejects that SMTP accepts
- *
- * The second is not redundancy against Resend being down. It is redundancy
- * against the way we talk to it, which is the more common failure and was
- * previously not covered at all.
+ * readAccount is injectable so sandbox, paused and unreachable can be tested
+ * without an AWS round trip. Callers pass nothing.
  */
-function buildTransports() {
-  const out = [];
-  const seen = new Set();
-  const add = (t) => {
-    if (seen.has(t.adlmLabel)) return;
-    seen.add(t.adlmLabel);
-    out.push(t);
-  };
-
-  const host = process.env.SMTP_HOST || "";
-  const user = process.env.SMTP_USER || "";
-  const pass = process.env.SMTP_PASS || "";
-
-  if (host && user && pass) {
-    // SMTP_PORT was being set in the environment and ignored by the code,
-    // which tried 465 then 587 regardless. It is honoured now, and the other
-    // port is still tried behind it — a host that refuses one often takes the
-    // other, and there is no cost to asking.
-    const configured = Number(process.env.SMTP_PORT) || 0;
-    const ports = configured ? [configured, configured === 465 ? 587 : 465] : [465, 587];
-    for (const port of ports) add(makeTransport({ host, port, user, pass, label: "smtp" }));
-  }
-
-  const key = process.env.RESEND_API_KEY;
-  if (key) {
-    for (const port of [465, 587]) {
-      add(makeTransport({
-        host: "smtp.resend.com",
-        port,
-        user: "resend",
-        pass: key,
-        label: "resend-smtp",
-      }));
-    }
-  }
-
-  return out;
-}
-
-const transports = buildTransports();
-
-/**
- * Which ways out actually work, right now.
- *
- * A fallback nobody exercises is a fallback nobody can rely on. This makes the
- * state checkable before it matters, rather than at the moment Resend is down
- * and a customer is waiting. Never throws: it reports.
- */
-export async function verifyMail() {
+export async function verifyMail({ readAccount = getSesAccount } = {}) {
   const rows = [];
-
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    rows.push({ via: "resend-api", ok: false, said: "RESEND_API_KEY is not set" });
-  } else {
-    try {
-      // Resend has no ping, so this asks for the domains: a cheap
-      // authenticated read that proves the key and the network path.
-      //
-      // A key scoped to SENDING ONLY cannot read them, and answers 401. That
-      // is not a broken transport — it is the transport currently carrying
-      // every message on the site — so it is reported as unknown rather than
-      // failed. Calling it broken would have this report crying wolf about the
-      // one thing that works, which is how a health check gets ignored.
-      const res = await fetch("https://api.resend.com/domains", {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      if (res.ok) {
-        rows.push({ via: "resend-api", ok: true, said: "authenticated" });
-      } else if (res.status === 401 || res.status === 403) {
-        rows.push({
-          via: "resend-api",
-          ok: true,
-          unknown: true,
-          said:
-            "reachable; the key has sending-only access, which cannot be " +
-            "confirmed without sending a message",
-        });
-      } else {
-        rows.push({ via: "resend-api", ok: false, said: `HTTP ${res.status}` });
-      }
-    } catch (err) {
-      rows.push({ via: "resend-api", ok: false, said: err?.message || "unreachable" });
-    }
+  try {
+    const acct = await readAccount();
+    const sending = acct?.SendingEnabled !== false;
+    const prod = acct?.ProductionAccessEnabled === true;
+    const sent = Number(acct?.SendQuota?.SentLast24Hours || 0);
+    const cap = Number(acct?.SendQuota?.Max24HourSend || 0);
+    const enforcement = String(acct?.EnforcementStatus || "").toUpperCase();
+    const notes = [
+      prod ? "production access" : "SANDBOX — only verified addresses receive mail",
+      sending ? "sending enabled" : "SENDING PAUSED by AWS",
+      cap ? `${Math.round(sent)} of ${Math.round(cap)} sent in 24h` : "",
+      enforcement && enforcement !== "HEALTHY" ? `enforcement ${enforcement}` : "",
+    ].filter(Boolean);
+    rows.push({ via: "ses", ok: sending, live: true, said: notes.join("; ") });
+  } catch (err) {
+    rows.push({
+      via: "ses",
+      ok: false,
+      live: true,
+      said: String(err?.name || err?.message || err).slice(0, 200),
+    });
   }
+  return summariseMailWays(rows);
+}
 
-  for (const t of transports) {
-    try {
-      await t.verify();
-      rows.push({ via: t.adlmLabel, ok: true, said: "authenticated" });
-    } catch (err) {
-      const code = err?.responseCode || err?.code || "";
-      const said = String(err?.response || err?.message || "").replace(/\s+/g, " ").trim();
-      rows.push({ via: t.adlmLabel, ok: false, said: `${code} ${said}`.trim().slice(0, 200) });
+/**
+ * The verdict, given the probed rows. Split out from verifyMail so the rule
+ * can be tested on its own.
+ *
+ * SES is the only transport, so the verdict is SES's. Any other row handed in
+ * is marked not in use: nothing falls back, so however well something else
+ * authenticates it cannot carry a message, and must never make the report
+ * look healthy. `fallbackOff` is always true, and kept in the shape because
+ * the admin screen reads it.
+ */
+export function summariseMailWays(rows) {
+  for (const r of rows) {
+    if (r.via === "ses") {
+      r.live = true;
+      continue;
     }
+    r.live = false;
+    r.unused = true;
   }
-
+  const ses = rows.find((r) => r.via === "ses");
   return {
-    // Something can definitely send. A sending-only Resend key is reachable
-    // but unproven, so it does not on its own make this true — the point of
-    // the flag is to say whether there is a way out that has been checked.
-    ok: rows.some((r) => r.ok && !r.unknown),
-    reachable: rows.some((r) => r.ok),
+    ok: Boolean(ses?.ok),
+    reachable: Boolean(ses?.ok),
+    transport: "ses",
+    fallbackOff: true,
     ways: rows,
   };
 }
 
 // attachments: optional array of { filename, content } where `content` is a
-// base64-encoded string. Passed through to both Resend and SMTP transports.
-// bcc: optional — Resend sends bypass the Gmail mailbox entirely (nothing in
-// Sent), so callers that need an internal record BCC the admin mailbox.
+// base64-encoded string.
+// bcc: optional - SES sends never appear in the Gmail Sent folder, so callers
+// that need an internal record BCC the admin mailbox.
 /**
  * Apply an admin's override for this message, if there is one.
  *
@@ -237,6 +164,8 @@ async function logSend(templateKey, to, ok, via, messageId = "", track = null) {
  *   lets an admin rewrite the message from the Emails screen, and counts the
  *   send against it. Omitting one still sends — the message is simply logged
  *   as unattributed and cannot be edited.
+ *
+ * Throws when SES refuses the message. There is no fallback.
  */
 export async function sendMail({
   to,
@@ -252,166 +181,51 @@ export async function sendMail({
   // keep logging nothing but a hash.
   track = null,
 }) {
-  // The sender name is "ADLM Studio" and must stay that, here and in the
-  // fallback below. It is what the brand is called everywhere a customer meets
-  // it — the site, the plugins, the signature at the bottom of these messages —
-  // and it is the one line of a message somebody reads before deciding whether
-  // to open it. Two names for one firm in an inbox is how mail from a domain
-  // starts looking like mail about it. (util/mailer.sender.test.js enforces
-  // this by reading this file, so do not write the old name even in a comment.)
-  const primaryFrom =
-    process.env.EMAIL_FROM ||
-    `ADLM Studio <${process.env.SMTP_USER || "noreply@adlmstudio.net"}>`;
-  const fallbackFrom = "ADLM Studio <onboarding@resend.dev>"; // valid for testing
+  // The sender name is "ADLM Studio" and must stay that. It is what the brand
+  // is called everywhere a customer meets it, and it is the one line of a
+  // message somebody reads before deciding whether to open it.
+  // (util/mailer.sender.test.js enforces this by reading this file, so do not
+  // write the old name even in a comment.) Announcements and receipts come
+  // from different addresses so a complaint about one never lands on the
+  // other; both reply to the real inbox. See util/senders.js. A tracked or
+  // unsubscribable send is an announcement.
+  const from = senderFor({ marketing: Boolean(track || listUnsubscribe) });
+  const replyTo = replyToAddress();
 
   const over = await withOverride(templateKey, subject, html);
   subject = over.subject;
   html = over.html;
 
-  const body = {
-    subject,
-    html,
-    text: text || toText(html),
-    to: Array.isArray(to) ? to : [to],
-  };
-  if (bcc) body.bcc = Array.isArray(bcc) ? bcc : [bcc];
+  const toList = Array.isArray(to) ? to : [to];
+  const bccList = bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : undefined;
 
-  const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-
-  // Gmail and Yahoo both require these of anybody sending bulk mail, and the
-  // unsubscribe routes are already built to answer a one-click POST. Only the
-  // senders with a real per-recipient opt-out pass a URL; a receipt gets none,
-  // because there is nothing to unsubscribe from.
-  const listHeaders = listUnsubscribe
-    ? {
-        "List-Unsubscribe": `<${listUnsubscribe}>`,
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-      }
-    : null;
-
-  /* ───────────────────────────── 0) SES ─────────────────────────────
-   * First when asked for. A failure here falls through to the transports
-   * below rather than ending the send — during the cutover that is the whole
-   * safety net, and once RESEND_API_KEY is gone there is simply nothing left
-   * to fall through to. Set MAIL_FALLBACK=off to close the net early and find
-   * out immediately whether SES is really carrying everything.
-   */
-  if (isSesSelected()) {
-    try {
-      const id = await sendViaSes({
-        // A tracked send is a campaign, and only a campaign. It routes to the
-        // marketing configuration set so opens and clicks are measured without
-        // rewriting the links in anybody's password reset.
-        tracked: Boolean(track),
-        from: primaryFrom,
-        to: body.to,
-        bcc: body.bcc,
-        subject,
-        html,
-        text: body.text,
-        attachments,
-        listUnsubscribe,
-      });
-      console.log(`[mailer] SES OK: id=${id || "unknown"} from=${primaryFrom}`);
-      await logSend(templateKey, to, true, "ses", id, track);
-      return;
-    } catch (err) {
-      console.error("[mailer] SES failed:", err?.name || "", err?.message || err);
-      if (/^(0|false|no|off)$/i.test(String(process.env.MAIL_FALLBACK || "").trim())) {
-        await logSend(templateKey, to, false, "none");
-        throw err;
-      }
-      console.warn("[mailer] falling back to Resend/SMTP");
-    }
-  }
-
-  const apiKey = process.env.RESEND_API_KEY;
-
-  // 1) Resend first
-  if (apiKey) {
-    for (const from of [primaryFrom, fallbackFrom]) {
-      const payload = { from, ...body };
-      if (listHeaders) payload.headers = listHeaders;
-      if (hasAttachments) {
-        payload.attachments = attachments.map((a) => ({
-          filename: a.filename,
-          content: a.content,
-        }));
-      }
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.log(
-          `[mailer] Resend OK: id=${data?.id || "unknown"} from=${from}`
-        );
-        await logSend(templateKey, to, true, "resend", data?.id, track);
-        return;
-      }
-
-      const txt = await res.text().catch(() => "");
-      console.error("[mailer] Resend failed:", res.status, txt);
-
-      // If from-address not verified, try fallback sender
-      if (res.status === 422 && from !== fallbackFrom && /from/i.test(txt)) {
-        console.warn("[mailer] Retrying with onboarding@resend.dev sender");
-        continue;
-      }
-
-      // Other errors: break to SMTP fallback
-      break;
-    }
-  } else {
-    console.warn("[mailer] RESEND_API_KEY missing; will try SMTP");
-  }
-
-  // 2) SMTP fallback
-  const message = { from: primaryFrom, ...body };
-  if (listHeaders) message.headers = listHeaders;
-  if (hasAttachments) {
-    message.attachments = attachments.map((a) => ({
-      filename: a.filename,
-      content: Buffer.from(a.content, "base64"),
-    }));
-  }
-  if (!transports.length) {
-    await logSend(templateKey, to, false, "none");
-    throw new Error(
-      "Resend did not send it and there is no SMTP fallback configured — " +
-        "set SMTP_HOST, SMTP_USER and SMTP_PASS, or a RESEND_API_KEY for the SMTP gateway.",
+  try {
+    const id = await sesSend({
+      // A tracked send is a campaign, and only a campaign. It routes to the
+      // marketing configuration set so opens and clicks are measured without
+      // rewriting the links in anybody's password reset.
+      tracked: Boolean(track),
+      from,
+      replyTo,
+      to: toList,
+      bcc: bccList,
+      subject,
+      html,
+      text: text || toText(html),
+      attachments,
+      listUnsubscribe,
+    });
+    console.log(`[mailer] SES OK: id=${id || "unknown"} from=${from}`);
+    await logSend(templateKey, to, true, "ses", id, track);
+  } catch (err) {
+    // Loud on purpose. SES is the only way out, so a refusal here is mail
+    // that did not go - logged, recorded, and thrown to the caller.
+    console.error(
+      "[mailer] SES refused the message; NOT sent (no fallback):",
+      err?.name || "",
+      err?.message || err,
     );
+    await logSend(templateKey, to, false, "ses");
+    throw err;
   }
-
-  let lastErr;
-  const refused = [];
-  for (const t of transports) {
-    try {
-      // verify() first so an authentication failure is reported as one rather
-      // than surfacing later as a confusing send error. Its own failure is not
-      // fatal — some hosts refuse a bare verify and accept a real message.
-      await t.verify().catch(() => {});
-      const info = await t.sendMail(message);
-      console.log(`[mailer] sent via ${t.adlmLabel}: ${info?.messageId || "ok"}`);
-      // Logged by which way out carried it, so the send log can answer "what
-      // is actually delivering our mail" rather than only "did it go".
-      await logSend(templateKey, to, true, t.adlmLabel.split(" ")[0], info?.messageId, track);
-      return;
-    } catch (err) {
-      lastErr = err;
-      const said = err?.response || err?.message || String(err);
-      refused.push(`${t.adlmLabel}: ${String(said).replace(/\s+/g, " ").slice(0, 120)}`);
-      console.error(`[mailer] ${t.adlmLabel} refused:`, said);
-    }
-  }
-  await logSend(templateKey, to, false, "none");
-  // Every refusal, not just the last: "the last one failed" sends whoever
-  // reads this looking at the wrong transport.
-  throw new Error(`No way out accepted the message. ${refused.join(" | ")}`);
 }

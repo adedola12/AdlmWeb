@@ -8,9 +8,7 @@ import DsAdminShell from "../ds/DsAdminShell.jsx";
 // Gate a route by either a permission (preferred) or a legacy role list.
 //   <AdminRoute permission="trainings">...   → allow if can(user, "trainings")
 //   <AdminRoute roles={["admin"]}>...        → admin-exclusive (super-admin)
-//   <AdminRoute ... shell={false}>           → the classic screen, without his
-//                                              admin frame (see lib/classicAdminPaths.js)
-export default function AdminRoute({ roles = ["admin"], permission, shell = true, children }) {
+export default function AdminRoute({ roles = ["admin"], permission, children }) {
   const { user } = useAuth();
   const loc = useLocation();
 
@@ -45,7 +43,7 @@ export default function AdminRoute({ roles = ["admin"], permission, shell = true
   // the admin door gets a reason to show.
   if (!allowed) {
     return isStaff(user) ? (
-      <Navigate to="/dashboard" replace />
+      <Navigate to="/manage" replace />
     ) : (
       <Navigate
         to={`/admin/login?next=${encodeURIComponent(loc.pathname + loc.search)}&denied=1`}
@@ -57,6 +55,5 @@ export default function AdminRoute({ roles = ["admin"], permission, shell = true
   // The admin chrome goes on here rather than around each of the thirty-odd
   // admin routes: this component already IS the boundary of the admin section,
   // so a screen cannot be added inside it and quietly come up without a rail.
-  // The classic screens opt out (shell={false}) until the new build goes live.
-  return shell ? <DsAdminShell>{children}</DsAdminShell> : children;
+  return <DsAdminShell>{children}</DsAdminShell>;
 }

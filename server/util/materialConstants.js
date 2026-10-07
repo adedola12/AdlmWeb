@@ -17,6 +17,8 @@
 //   • "Markup"            — the overhead/profit applied when an UNPRICED bill
 //     is priced from the build-up.
 
+import { SERVICE_TYPE_DEFAULTS } from "./serviceCompute.js";
+
 /** @typedef {{key:string,label:string,unit:string,group:string,def:number,min:number,max:number}} ConstantDef */
 
 const D = (key, label, unit, group, def, min, max) => ({
@@ -34,6 +36,7 @@ export const MC = {
   ConcreteWaste: "Waste.Concrete.Factor",
   BlindingWaste: "Waste.Blinding.Factor",
   BlockWaste: "Waste.Blockwork.Factor",
+  RebarWaste: "Waste.Rebar.Factor",
   FinishesWaste: "Waste.Finishes.Factor",
 
   // Concrete
@@ -46,6 +49,7 @@ export const MC = {
   // Blinding
   BlindingCementBagsPerM3: "Blinding.Cement.BagsPerM3",
   BlindingSandTonsPerM3: "Blinding.SharpSand.TonsPerM3",
+  BlindingGraniteTonsPerM3: "Blinding.Granite.TonsPerM3",
 
   // Formwork
   FormworkBoardAreaPerSheet: "Formwork.Board.AreaPerSheet_m2",
@@ -143,41 +147,62 @@ export const MC = {
   MepConduitLengthM: "Mep.Conduit.StockLength_m",
   MepPipeLengthM: "Mep.Pipe.StockLength_m",
 
+  // Plant allowance per unit of work. Plant is its own resource class, not a
+  // slice of labour, so it gets its own line in the Budget rather than being
+  // buried in the gang rate. DEFAULT 0 FOR EVERY KIND, deliberately: a plant
+  // figure that nobody set is a figure nobody can defend, and a non-zero
+  // default would move the cost/profit split on every project that regenerates
+  // its schedule. Set one and the schedule carries a Plant line for that work.
+  PlantConcretePerM3: "Plant.Concrete.PerM3",
+  PlantExcavationPerM3: "Plant.Excavation.PerM3",
+  PlantFillPerM3: "Plant.Fill.PerM3",
+  PlantBlockworkPerM2: "Plant.Blockwork.PerM2",
+
   // Markup used when an UNPRICED bill is priced from the build-up
   MarkupOverheadPercent: "Markup.Overhead.Percent",
   MarkupProfitPercent: "Markup.Profit.Percent",
 };
 
 /** @type {ConstantDef[]} */
+// Defaults calibrated Sep 2026 against the build-up formulas in ~580 real
+// Nigerian QS bills (one vote per template lineage, firm or unit-rate sheet);
+// QUIV carries the same values and the reasons in MaterialConstantsCalibration.cs.
 export const MATERIAL_CONSTANTS = [
   // ── Waste factors ────────────────────────────────────────────────────────
-  D(MC.ConcreteWaste, "Concrete waste factor", "factor", "Waste Factors", 1.05, 0.5, 2),
+  // The 1.54 dry-volume factor already carries the allowance: 1.05 on top put
+  // 1:2:4 at 6.65 bags against the 6.0-6.3 practice uses.
+  D(MC.ConcreteWaste, "Concrete waste factor", "factor", "Waste Factors", 1.0, 0.5, 2),
   D(MC.BlindingWaste, "Blinding waste factor", "factor", "Waste Factors", 1.05, 0.5, 2),
   D(MC.BlockWaste, "Blockwork waste factor", "factor", "Waste Factors", 1.03, 0.5, 2),
   D(MC.FinishesWaste, "Finishes waste factor", "factor", "Waste Factors", 1.05, 0.5, 2),
+  D(MC.RebarWaste, "Reinforcement waste factor", "factor", "Waste Factors", 1.05, 0.5, 2),
 
   // ── Concrete ─────────────────────────────────────────────────────────────
   D(MC.CementBagWeightKg, "Cement bag weight", "kg/bag", "Concrete", 50, 10, 100),
   D(MC.ConcreteCementKgPerM3, "Cement density (conversion)", "kg/m³", "Concrete", 1440, 200, 5000),
-  D(MC.ConcreteSandKgPerM3, "Sharp sand density (conversion)", "kg/m³", "Concrete", 1600, 200, 5000),
+  // The firms' own trip conversions run 1.36-1.67 t/m³ (median 1.44).
+  D(MC.ConcreteSandKgPerM3, "Sharp sand density (conversion)", "kg/m³", "Concrete", 1440, 200, 5000),
   D(MC.ConcreteGravelMultiplier, "Granite : sand multiplier", "factor", "Concrete", 2, 0, 10),
   // Wet concrete shrinks: 1 m³ placed needs ~1.54 m³ of dry material. This is
   // what puts 1:2:4 at the ~6 bags/m³ every Nigerian QS schedule uses.
   D(MC.ConcreteDryVolumeFactor, "Dry volume factor", "factor", "Concrete", 1.54, 1, 2.5),
 
   // ── Blinding ─────────────────────────────────────────────────────────────
-  D(MC.BlindingCementBagsPerM3, "Blinding cement", "bags/m³", "Blinding", 0.9, 0, 10),
-  D(MC.BlindingSandTonsPerM3, "Blinding sharp sand", "tons/m³", "Blinding", 0.58, 0, 10),
+  // A lean 1:4:8: 3.41 bags, 0.68 t sand, 1.37 t granite per m³ with waste (was 0.945 bags, no granite).
+  D(MC.BlindingCementBagsPerM3, "Blinding cement", "bags/m³", "Blinding", 3.25, 0, 10),
+  D(MC.BlindingSandTonsPerM3, "Blinding sharp sand", "tons/m³", "Blinding", 0.65, 0, 10),
+  D(MC.BlindingGraniteTonsPerM3, "Blinding granite", "tons/m³", "Blinding", 1.3, 0, 10),
 
   // ── Blockwork ────────────────────────────────────────────────────────────
   D(MC.BlocksPerSqm, "Blocks per m²", "blocks/m²", "Blockwork", 10, 0.01, 1000),
-  D(MC.BlockCementBagsPerSqm, "Blockwork cement", "bags/m²", "Blockwork", 0.22, 0, 10),
-  D(MC.BlockSandTonsPerSqm, "Blockwork sharp sand", "tons/m²", "Blockwork", 0.089, 0, 10),
+  D(MC.BlockCementBagsPerSqm, "Blockwork cement", "bags/m²", "Blockwork", 0.2, 0, 10),
+  D(MC.BlockSandTonsPerSqm, "Blockwork sharp sand", "tons/m²", "Blockwork", 0.055, 0, 10),
 
   // ── Formwork ─────────────────────────────────────────────────────────────
   D(MC.FormworkBoardAreaPerSheet, "Formwork board coverage", "m²/sheet", "Formwork", 2.88, 0.01, 1000),
-  D(MC.FormworkBraceFactor, "Brace length factor", "m/sheet", "Formwork", 0, 0, 1000),
-  D(MC.FormworkNailsBagsPerSheet, "Formwork nails", "bags/sheet", "Formwork", 0.015, 0, 1),
+  // ~0.6 × 3.6 m lengths of bracing and 0.02 bag of nails per m² of formwork.
+  D(MC.FormworkBraceFactor, "Brace length factor", "m/sheet", "Formwork", 6.3, 0, 1000),
+  D(MC.FormworkNailsBagsPerSheet, "Formwork nails", "bags/sheet", "Formwork", 0.0576, 0, 1),
 
   // ── Reinforcement ────────────────────────────────────────────────────────
   D(MC.RebarUnitWeightCoeff, "Rebar unit weight coefficient", "kg/m/mm²", "Reinforcement", 0.00617, 0.0001, 1),
@@ -192,8 +217,9 @@ export const MATERIAL_CONSTANTS = [
   D(MC.SteelPrimerLitresPerTon, "Primer / protective paint", "litres/ton", "Structural Steel", 8, 0, 200),
 
   // ── Coverage ─────────────────────────────────────────────────────────────
-  D(MC.DpmAreaPerRoll, "DPM roll coverage", "m²/roll", "Coverage", 25, 0.01, 100000),
-  D(MC.MeshAreaPerRoll, "BRC mesh roll coverage", "m²/roll", "Coverage", 48, 0.01, 100000),
+  // Coverage is net of laps: a 50 m² DPM roll less 10%, a 48 m² BRC roll less 5%.
+  D(MC.DpmAreaPerRoll, "DPM roll coverage (net of laps)", "m²/roll", "Coverage", 45.5, 0.01, 100000),
+  D(MC.MeshAreaPerRoll, "BRC mesh roll coverage (net of laps)", "m²/roll", "Coverage", 45.7, 0.01, 100000),
   D(MC.WaterproofFeltAreaPerRoll, "Waterproofing felt roll coverage", "m²/roll", "Coverage", 40, 0.01, 100000),
   D(MC.SoilPoisonAreaPerUnit, "Soil poison coverage", "m²/unit", "Coverage", 20, 0.01, 100000),
 
@@ -203,21 +229,24 @@ export const MATERIAL_CONSTANTS = [
   D(MC.PopCementBagsPerM2, "POP screeding cement", "bags/m²", "Finishes", 0.04, 0, 5),
   D(MC.PopPaintDrumsPerM2, "POP paint (20L drum)", "drums/m²", "Finishes", 0.1, 0, 5),
   D(MC.PopGlueNrPerM2, "POP glue (Top Bond 10kg)", "nr/m²", "Finishes", 0.0184, 0, 5),
-  D(MC.TileM2PerM2, "Tiles per area", "m²/m²", "Finishes", 1, 0, 5),
+  D(MC.TileM2PerM2, "Tiles per area", "m²/m²", "Finishes", 1.1, 0, 5),
   D(MC.TileCementBagsPerM2, "Tile backing cement", "bags/m²", "Finishes", 0.4, 0, 5),
   D(MC.TileSandTonsPerM2, "Tile backing sharp sand", "tons/m²", "Finishes", 0.057, 0, 5),
-  D(MC.TileWhiteCementBagsPerM2, "Tile white cement (grout)", "bags/m²", "Finishes", 0.0023, 0, 1),
+  D(MC.TileWhiteCementBagsPerM2, "Tile white cement (grout)", "bags/m²", "Finishes", 0.02, 0, 1),
   D(MC.ScreedCementBagsPerM2, "Screeding cement", "bags/m²", "Finishes", 0.4, 0, 5),
   D(MC.ScreedSandTonsPerM2, "Screeding sharp sand", "tons/m²", "Finishes", 0.057, 0, 5),
   D(MC.PaintDrumsPerM2, "Emulsion paint (20L drum)", "drums/m²", "Finishes", 0.026, 0, 5),
 
   // ── Ceiling & roof ───────────────────────────────────────────────────────
+  // A 1.2 × 1.2 m board. Bills price POP ceiling boards as area × 1.3 / 1.44
+  // (41 workbooks, 14 job folders); QUIV now uses the same 1.44 (was 4.32).
   D(MC.CeilingPopBoardFactor, "POP ceiling board coverage", "m²/board", "Ceiling & Roof", 1.44, 0.1, 100),
   D(MC.CeilingBoardCoverage, "Ceiling board coverage", "m²/board", "Ceiling & Roof", 2.88, 0.1, 50),
   D(MC.RoofSheetM2PerM2, "Roof sheet per covered area", "m²/m²", "Ceiling & Roof", 1, 0, 5),
 
   // ── Filling ──────────────────────────────────────────────────────────────
-  D(MC.FillingTonsPerM3, "Fill material density", "tons/m³", "Filling", 0.285, 0, 10),
+  // 0.285 was the reference schedule's =m3/3.51 — tipper TRIPS per m³ — read as tonnes.
+  D(MC.FillingTonsPerM3, "Fill material density", "tons/m³", "Filling", 1.6, 0, 10),
 
   // ── Measurement ──────────────────────────────────────────────────────────
   // BESMM bills narrow work by the metre and state the girth in the item text
@@ -268,9 +297,19 @@ export const MATERIAL_CONSTANTS = [
   D(MC.MepFireMaterialShare, "Fire services: material share", "factor", "MEP – Cost Split", 0.63, 0, 1),
   D(MC.MepFireLabourShare, "Fire services: installation labour share", "factor", "MEP – Cost Split", 0.22, 0, 1),
   D(MC.MepFireAccessoryShare, "Fire services: accessories share", "factor", "MEP – Cost Split", 0.05, 0, 1),
-  D(MC.MepCableDrumLengthM, "Cable drum length", "m/drum", "MEP – Cost Split", 100, 1, 5000),
-  D(MC.MepConduitLengthM, "Conduit stock length", "m/length", "MEP – Cost Split", 3, 0.5, 50),
-  D(MC.MepPipeLengthM, "Pipe stock length", "m/length", "MEP – Cost Split", 5.8, 0.5, 50),
+  // The same purchase lengths the services engine bundles runs into
+  // (SERVICE_TYPE_DEFAULTS standardLength), so the two defaults cannot drift:
+  // pipe was 5.8 here and 6 there.
+  D(MC.MepCableDrumLengthM, "Cable drum length", "m/drum", "MEP – Cost Split", SERVICE_TYPE_DEFAULTS.cable.standardLength, 1, 5000),
+  D(MC.MepConduitLengthM, "Conduit stock length", "m/length", "MEP – Cost Split", SERVICE_TYPE_DEFAULTS.conduit.standardLength, 0.5, 50),
+  D(MC.MepPipeLengthM, "Pipe stock length", "m/length", "MEP – Cost Split", SERVICE_TYPE_DEFAULTS.pipe.standardLength, 0.5, 50),
+
+  // ── Plant ────────────────────────────────────────────────────────────────
+  // All zero by default — see the note on the keys above.
+  D(MC.PlantConcretePerM3, "Concrete plant (mixer, vibrator)", "₦/m³", "Plant", 0, 0, 1000000),
+  D(MC.PlantExcavationPerM3, "Excavation plant", "₦/m³", "Plant", 0, 0, 1000000),
+  D(MC.PlantFillPerM3, "Filling / compaction plant", "₦/m³", "Plant", 0, 0, 1000000),
+  D(MC.PlantBlockworkPerM2, "Blockwork plant (hoist, mixer)", "₦/m²", "Plant", 0, 0, 1000000),
 
   // ── Markup ───────────────────────────────────────────────────────────────
   D(MC.MarkupOverheadPercent, "Overhead", "% of net cost", "Markup", 10, 0, 100),

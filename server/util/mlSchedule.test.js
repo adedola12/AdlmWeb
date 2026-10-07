@@ -12,13 +12,14 @@ import { resolveConstants, MC, clampConstant } from "./materialConstants.js";
 import {
   classifyWork,
   deriveMaterials,
-  labourRateFor,
   generateMlSchedule,
-  normalizeUnit,
-  mepDiscipline,
   isGeneratedRow,
+  labourRateFor,
   measureBasis,
+  mepDiscipline,
+  normalizeUnit,
   parseGirthMetres,
+  plantRateFor,
 } from "./mlSchedule.js";
 
 const K = resolveConstants();
@@ -54,14 +55,14 @@ test("1:2:4 concrete comes out at the ~6 bags/m3 a QS schedule uses", () => {
   assert.equal(classifyWork(it), "concrete");
   const rows = deriveMaterials(it, "concrete", K);
   const cement = mat(rows, "Cement");
-  // (1/7) × 1.54 dry × 1.05 waste × 1440 kg/m³ ÷ 50 kg/bag = 6.65
-  assert.ok(cement.qty > 6 && cement.qty < 7, `cement ${cement.qty} bags/m3`);
+  // (1/7) × 1.54 dry × 1440 kg/m³ ÷ 50 kg/bag = 6.34 — practice runs 6.0-6.8
+  assert.ok(cement.qty >= 6 && cement.qty <= 6.78, `cement ${cement.qty} bags/m3`);
   assert.equal(cement.unit, "bags");
   const sand = mat(rows, "Sharp sand");
   const granite = mat(rows, "Granite");
-  assert.ok(sand.qty > 0.6 && sand.qty < 0.85, `sand ${sand.qty} t/m3`);
+  assert.ok(sand.qty >= 0.584 && sand.qty <= 0.667, `sand ${sand.qty} t/m3`);
   // Granite is the sand multiplier — the reference schedule runs 2:1.
-  assert.equal(granite.qty, Math.round(sand.qty * 2 * 100) / 100);
+  assert.ok(Math.abs(granite.qty - sand.qty * 2) <= 0.02, `granite ${granite.qty} vs sand ${sand.qty}`);
 });
 
 test("a leaner mix orders less cement, and the ratio in the text is honoured", () => {
@@ -100,17 +101,18 @@ test("blockwork orders blocks, cement and sand per m2", () => {
   assert.equal(classifyWork(it), "blockwork");
   const rows = deriveMaterials(it, "blockwork", K);
   assert.equal(mat(rows, "Blocks").qty, 1030); // 100 × 1.03 waste × 10/m²
-  assert.equal(mat(rows, "Cement").qty, 22);
+  assert.equal(mat(rows, "Cement").qty, 20);
+  assert.equal(mat(rows, "Sharp sand").qty, 5.5);
   assert.ok(mat(rows, "Sharp sand").qty > 0);
 });
 
-test("rebar carries binding wire at 1% of the steel weight", () => {
+test("rebar is ordered with waste and carries binding wire at 1% of the measured weight", () => {
   const rows = deriveMaterials(
     item({ description: "High tensile reinforcement bars", unit: "Tonne", qty: 9.15 }),
     "rebar",
     K,
   );
-  assert.equal(mat(rows, "Reinforcement steel").qty, 9.15);
+  assert.equal(mat(rows, "Reinforcement steel").qty, 9.61); // 9.15 × 1.05
   assert.equal(mat(rows, "Reinforcement steel").unit, "tons");
   assert.equal(mat(rows, "Binding wire").qty, 91.5); // 9,150 kg × 0.01
 });
@@ -156,6 +158,21 @@ test("services lines are routed to the right discipline", () => {
   for (const [description, expected] of cases) {
     assert.equal(mepDiscipline(item({ description })), expected, description);
   }
+});
+
+test("a services line priced from an all-in installed item gets no labour on top", () => {
+  const wc = item({ code: "BQ-wc", description: "Water closet with low level cistern", unit: "nr", qty: 2, rate: 150000 });
+  const serviceRateFor = (allIn) => ({
+    material: () => 112000,
+    labour: () => 5000,
+    allIn: () => allIn,
+  });
+  const labourOf = (rows) =>
+    rows.filter((r) => r.billIdentity === "BQ-wc" && r.componentKind === "Labour").reduce((s, r) => s + (r.qty || 0) * (r.rate || 0), 0);
+  const installed = generateMlSchedule([wc], [], K, { serviceRateFor: serviceRateFor(true) }).budgetItems;
+  const supplyOnly = generateMlSchedule([wc], [], K, { serviceRateFor: serviceRateFor(false) }).budgetItems;
+  assert.equal(labourOf(installed), 0);
+  assert.ok(labourOf(supplyOnly) > 0);
 });
 
 test("a bill sheet named Elect makes its lines electrical", () => {
@@ -400,4 +417,225 @@ test("editing a constant changes the schedule it produces", () => {
     tweaked,
   );
   assert.equal(mat(rows, "Blocks").qty, 1287.5); // 100 × 1.03 × 12.5
+});
+
+// ── plant ───────────────────────────────────────────────────────────────────
+//
+// Plant is its own resource class, not a slice of labour. Until it had its own
+// branch the back-solve booked every naira of it as PROFIT: plant sat in the
+// bill rate the QS priced with, and was absent from the build-up, so the whole
+// of it fell into the gap the back-solve calls overhead and profit.
+
+const CONCRETE = (over = {}) =>
+  item({
+    code: CODE,
+    description: "Reinforced concrete 1:2:4 in foundation",
+    unit: "m3",
+    qty: 100,
+    rate: 13500,
+    ...over,
+  });
+
+const netOf = (rows) => rows.reduce((a, b) => a + b.qty * b.rate, 0);
+
+test("a project with no plant generates exactly the schedule it did before", () => {
+  // Every Plant constant ships at 0, so this is the default for every existing
+  // project and nothing about it may change.
+  assert.equal(plantRateFor(CONCRETE(), "concrete", K), 0);
+  const { budgetItems } = generateMlSchedule([CONCRETE()], [], K, {});
+  assert.equal(budgetItems.filter((b) => b.componentKind === "Plant").length, 0);
+});
+
+test("setting a plant constant moves money out of profit and into cost", () => {
+  const plain = generateMlSchedule([CONCRETE()], [], K, {}).budgetItems;
+  const withPlant = generateMlSchedule(
+    [CONCRETE()],
+    [],
+    resolveConstants({ [MC.PlantConcretePerM3]: 1000 }),
+    {},
+  ).budgetItems;
+
+  const plant = withPlant.filter((b) => b.componentKind === "Plant");
+  assert.equal(plant.length, 1, "one Plant line, carrying the whole plant cost");
+  assert.equal(plant[0].qty, 100);
+  assert.equal(plant[0].rate, 1000);
+
+  // Cost rises by exactly the plant, and the reported profit falls by the same.
+  assert.equal(Math.round(netOf(withPlant) - netOf(plain)), 100000);
+
+  const markup = (rows) => rows[0].overheadPercent + rows[0].profitPercent;
+  assert.ok(markup(withPlant) < markup(plain), "the profit percentage comes down");
+});
+
+test("…and the bill total does not move a kobo", () => {
+  // The invariant the whole engine rests on. Plant changes the cost/profit
+  // SPLIT; it must never change what the client was billed.
+  const bill = CONCRETE();
+  for (const K2 of [K, resolveConstants({ [MC.PlantConcretePerM3]: 1000 })]) {
+    const { budgetItems } = generateMlSchedule([bill], [], K2, {});
+    const markup = 1 + (budgetItems[0].overheadPercent + budgetItems[0].profitPercent) / 100;
+    assert.ok(
+      Math.abs((netOf(budgetItems) * markup) / bill.qty - bill.rate) < 0.01,
+      "the derived bill rate is still the rate the bill arrived with",
+    );
+  }
+});
+
+test("a caller that can resolve the line's rate feeds it the rate's plant subtotal", () => {
+  // This is the path that matters: the constants know nothing about plant on
+  // an arbitrary line, but the Rate Gen rate the line was priced from does.
+  const { budgetItems } = generateMlSchedule([CONCRETE()], [], K, {
+    plantFor: (it, kind) => (kind === "concrete" ? 1200 : 0),
+  });
+  const plant = budgetItems.filter((b) => b.componentKind === "Plant");
+  assert.equal(plant.length, 1);
+  assert.equal(plant[0].rate, 1200, "the rate's plant subtotal, not a constant");
+});
+
+test("the rate's plant subtotal beats the constant", () => {
+  const { budgetItems } = generateMlSchedule(
+    [CONCRETE()],
+    [],
+    resolveConstants({ [MC.PlantConcretePerM3]: 1000 }),
+    { plantFor: () => 1500 },
+  );
+  assert.equal(budgetItems.find((b) => b.componentKind === "Plant").rate, 1500);
+});
+
+test("a generated Plant row is replaceable, and keeps the QS's edits", () => {
+  const K2 = resolveConstants({ [MC.PlantConcretePerM3]: 1000 });
+  const first = generateMlSchedule([CONCRETE()], [], K2, {}).budgetItems;
+
+  const plant = first.find((b) => b.componentKind === "Plant");
+  assert.equal(isGeneratedRow(plant), true, "so a regenerate can replace it");
+  plant.rate = 1750; // the QS knows what the mixer actually costs
+  plant.procured = true;
+
+  const second = generateMlSchedule([CONCRETE()], first, K2, {}).budgetItems;
+  const after = second.filter((b) => b.componentKind === "Plant");
+  assert.equal(after.length, 1, "replaced, not duplicated");
+  assert.equal(after[0].rate, 1750, "their price survived the regenerate");
+  assert.equal(after[0].procured, true);
+});
+
+// ── the bill must not move when nothing changed ────────────────────────────
+// Regeneration used to restore a QS's typed price AFTER the overhead and
+// profit had been solved against the constants-priced net, so the markup
+// belonged to one build-up and was stored against a bigger one.
+// deriveBillRatesFromBudget then pushed the difference into the bill, and did
+// it again every rebuild because each solve started from the constants again.
+// Measured before the fix: ₦223,208 -> ₦269,309 -> ₦324,931 -> ₦392,040 on
+// three clicks of a button whose toast says only "schedule rebuilt".
+test("rebuilding the schedule does not move a bill the QS has priced", async () => {
+  const { deriveBillRatesFromBudget } = await import("./deriveBillRates.js");
+  const priceFor = (name) => {
+    const n = String(name || "").toLowerCase();
+    if (n.includes("cement")) return 9500;
+    if (n.includes("sand")) return 4000;
+    if (n.includes("granite") || n.includes("chipping")) return 6000;
+    return 0;
+  };
+  const items = [
+    {
+      code: "A1",
+      description: "Concrete 1:2:4 in foundation",
+      takeoffLine: "Concrete 1:2:4 in foundation",
+      unit: "m3",
+      qty: 100,
+      rate: 185000,
+      sn: 1,
+    },
+  ];
+
+  let budget = generateMlSchedule(items, [], K, { priceFor }).budgetItems;
+  deriveBillRatesFromBudget({ items, budgetItems: budget });
+  assert.ok(Math.abs(items[0].rate - 185000) < 1, "generation reconciles to the bill");
+
+  // The QS reprices cement on the Budget tab. The bill is meant to move once.
+  const cement = budget.find((b) => /cement/i.test(b.materialName || ""));
+  assert.ok(cement, "the build-up has a cement row");
+  cement.rate = 12000;
+  deriveBillRatesFromBudget({ items, budgetItems: budget });
+  const intended = items[0].rate;
+  assert.ok(intended > 185000, "repricing a material raises the line, as it should");
+
+  // Three rebuilds, nothing else touched. The bill must not budge.
+  for (let i = 0; i < 3; i += 1) {
+    budget = generateMlSchedule(items, budget, K, { priceFor }).budgetItems;
+    deriveBillRatesFromBudget({ items, budgetItems: budget });
+    assert.equal(items[0].rate, intended, `bill moved on rebuild ${i + 1}`);
+  }
+
+  // And the QS's price is still there afterwards.
+  const after = budget.find((b) => /cement/i.test(b.materialName || ""));
+  assert.equal(Number(after.rate), 12000, "the typed rate survives the rebuild");
+});
+
+// ── Two work items the classifier used to lose ──
+//
+// Both found by running every family through the real engine and checking the
+// result against Nigerian QS practice. Both are the silent kind: the bill still
+// totals correctly, so nothing downstream complains.
+
+test("formwork with STRUTTING is formwork, not excavation", () => {
+  // "planking and strutting" is an excavation term of art. Bare "strutting"
+  // reads in formwork items, and listing it as an excavation verb sent
+  // "Sawn formwork, props and strutting to slab soffit" to labour-only: no
+  // board, no bracing, no nails, and labour at the excavation rate — which is
+  // per CUBIC metre, applied to SQUARE metres of soffit.
+  const K = resolveConstants();
+  for (const d of [
+    "Sawn formwork, props and strutting to slab soffit",
+    "Formwork including planking and strutting",
+    "Sawn formwork with strutting",
+    "Formwork to staircase soffit with strutting",
+    "Sawn formwork to soffit of suspended slab including props and strutting",
+  ]) {
+    const it = { code: "F1", description: d, takeoffLine: "", unit: "m2", qty: 100, rate: 0 };
+    assert.equal(classifyWork(it, K), "formwork", d);
+    assert.equal(deriveMaterials(it, "formwork", K).length, 3, `${d} must carry board, bracing and nails`);
+  }
+});
+
+test("REAL excavation support is still labour-only", () => {
+  // The fix must not swing the other way: planking and strutting to a trench is
+  // exactly what the phrase is for.
+  const K = resolveConstants();
+  for (const d of [
+    "Excavate trench including planking and strutting",
+    "Earthwork support to sides of excavation",
+    "Excavate oversite to remove topsoil average 150mm deep",
+  ]) {
+    const it = { code: "E1", description: d, takeoffLine: "", unit: "m3", qty: 100, rate: 0 };
+    assert.equal(classifyWork(it, K), "labour-only", d);
+  }
+});
+
+test("BS 4483 fabric is recognised by ref across the A-series", () => {
+  // Only "brc", "mesh" and the single ref "a142" were matched, so
+  // "Fabric reinforcement ref A252 in raft slab" came back unknown — and
+  // generateMlSchedule SKIPS an unknown line, so 500 m2 of fabric was ordered
+  // as nothing at all while the bill still totalled.
+  const K = resolveConstants();
+  for (const d of [
+    "BRC mesh A142 in slab",
+    "Fabric reinforcement ref A252 in slab",
+    "Fabric reinforcement ref A393 in raft",
+    "A193 fabric to ground floor slab",
+    "Welded wire fabric to slab",
+    "Steel fabric reinforcement in slab",
+  ]) {
+    const it = { code: "M1", description: d, takeoffLine: "", unit: "m2", qty: 500, rate: 0 };
+    assert.equal(classifyWork(it, K), "mesh", d);
+    assert.ok(deriveMaterials(it, "mesh", K).length > 0, `${d} must order fabric`);
+  }
+});
+
+test("a stem alternative is not killed by a trailing word boundary", () => {
+  // The first version of the fabric pattern ended the whole group with \b, so
+  // `fabric\s*reinforc` could never match "reinforcement" — the ref alternative
+  // was silently carrying every passing case.
+  const K = resolveConstants();
+  const it = { code: "M1", description: "Steel fabric reinforcement in slab", takeoffLine: "", unit: "m2", qty: 1, rate: 0 };
+  assert.equal(classifyWork(it, K), "mesh");
 });

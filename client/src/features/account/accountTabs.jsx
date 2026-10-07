@@ -59,7 +59,7 @@ function formatPendingProducts(p) {
       })
       .filter(Boolean);
 
-    return parts.length ? parts.join(" · ") : "—";
+    return parts.length ? parts.join(" · ") : "–";
   }
 
   if (Array.isArray(p?.lines) && p.lines.length) {
@@ -69,7 +69,7 @@ function formatPendingProducts(p) {
       .join(" · ");
   }
 
-  return p?.productKey || "—";
+  return p?.productKey || "–";
 }
 
 /* ---------------- physical training helpers ---------------- */
@@ -120,7 +120,7 @@ function installationMetaFromEnrollment(enr) {
 function trainingDurationText(training) {
   const start = training?.startAt ? dayjs(training.startAt) : null;
   const end = training?.endAt ? dayjs(training.endAt) : null;
-  if (!start || !end || !start.isValid() || !end.isValid()) return "—";
+  if (!start || !end || !start.isValid() || !end.isValid()) return "–";
 
   const days = Math.max(
     end.startOf("day").diff(start.startOf("day"), "day") + 1,
@@ -199,7 +199,7 @@ export function OrdersTab({
               {orders.map((o) => {
                 const dateText = o.createdAt
                   ? dayjs(o.createdAt).format("MMM D, YYYY")
-                  : "—";
+                  : "–";
                 const timeAgo = o.createdAt ? dayjs(o.createdAt).fromNow() : "";
 
                 const statusLabel = o.paid
@@ -429,7 +429,7 @@ export function OrdersTab({
               const st = trainingStatusMeta(enr);
               const dateText = enr.createdAt
                 ? dayjs(enr.createdAt).format("MMM D, YYYY")
-                : "—";
+                : "–";
               const timeAgo = enr.createdAt
                 ? dayjs(enr.createdAt).fromNow()
                 : "";
@@ -452,7 +452,7 @@ export function OrdersTab({
 
                       <div className="mt-2">
                         <div className="text-xs text-slate-500">Training</div>
-                        <div className="font-semibold">{t.title || "—"}</div>
+                        <div className="font-semibold">{t.title || "–"}</div>
                         <div className="text-sm text-slate-600 mt-1">
                           Duration: {trainingDurationText(t)}
                         </div>
@@ -584,7 +584,7 @@ export function InstallationsTab({
                         Duration: {trainingDurationText(t)}
                       </div>
                       <div className="text-sm text-slate-600 mt-1">
-                        Location: {buildTrainingAddress(t) || "—"}
+                        Location: {buildTrainingAddress(t) || "–"}
                       </div>
                     </div>
 

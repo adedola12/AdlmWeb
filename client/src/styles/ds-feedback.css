@@ -1,0 +1,150 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/feedback.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* Feedback — toasts and card modals, one system for every surface.
+
+   A TOAST reports something that already happened and needs nothing back:
+   saved, copied, sent, a download starting. It stacks bottom-right, leaves on
+   its own, and pauses while the pointer is on it.
+
+   A CARD is for an outcome that changes what the person does next — a payment
+   that failed, a certificate issued, an invitation sent to someone who now has
+   to act, or a question that must be answered before we go on. It holds focus
+   until it is dismissed.
+
+   Tones: success, error, warning, info. The tone is carried by the icon and a
+   thin edge, never by colour alone.                                          */
+:root{
+  --fb-ok:#15803D; --fb-err:#D92D20; --fb-warn:#C4531A; --fb-info:var(--action);
+}
+:root.dark{--fb-ok:#4ADE80; --fb-err:#F97066; --fb-warn:#F79552}
+:root.dark{--fb-ok:#4ADE80; --fb-err:#F97066; --fb-warn:#F79552}
+
+
+/* ---------------------------------------------------------------- toasts */
+.ds .fb-stack{position:fixed;right:22px;top:76px;z-index:400;display:flex;flex-direction:column;
+  align-items:flex-end;gap:10px;pointer-events:none;width:min(400px,calc(100vw - 32px))}
+.ds .fb-toast{--tone:var(--fb-info);pointer-events:auto;position:relative;width:100%;
+  display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:start;
+  padding:14px 14px 14px 14px;border-radius:14px;overflow:hidden;
+  background:var(--bg);color:var(--ink);border:1px solid var(--line-2);
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.08),0 18px 44px rgba(var(--shadow-c),.22);
+  opacity:0;transform:translateY(-12px) scale(.98);
+  transition:opacity 220ms var(--e-soft),transform 320ms var(--e-out)}
+.ds .fb-toast.on{opacity:1;transform:none}
+.ds .fb-toast.out{opacity:0;transform:translateX(24px)}
+.ds .fb-toast.success{--tone:var(--fb-ok)}
+.ds .fb-toast.error{--tone:var(--fb-err)}
+.ds .fb-toast.warning{--tone:var(--fb-warn)}
+.ds .fb-ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+  color:var(--tone);background:color-mix(in srgb,var(--tone) 13%,transparent)}
+.ds .fb-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .fb-tx{min-width:0;padding-top:1px}
+.ds .fb-tx b{display:block;font-size:13.5px;font-weight:500;letter-spacing:-.01em;line-height:1.35}
+.ds .fb-tx span{display:block;margin-top:3px;font-size:12.5px;font-weight:300;color:var(--ink-2);
+  line-height:1.5}
+.ds .fb-tx b:only-child{padding-top:5px}
+.ds .fb-act{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}
+.ds .fb-act button{font:500 12.5px var(--font);color:var(--action);background:none;border:0;padding:0;
+  cursor:pointer}
+.ds .fb-act button:hover{text-decoration:underline}
+.ds .fb-x{width:26px;height:26px;border-radius:8px;border:0;background:none;cursor:pointer;
+  display:grid;place-items:center;color:var(--ink-3)}
+.ds .fb-x:hover{background:var(--bg-alt);color:var(--ink)}
+.ds .fb-x svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+
+/* the time left, drawn as a hairline that empties */
+.ds .fb-life{position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--tone);opacity:.55;
+  transform-origin:left;animation:fb-life linear forwards}
+.ds .fb-toast:hover .fb-life{animation-play-state:paused}
+@keyframes fb-life{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+
+
+/* ----------------------------------------------------------------- cards */
+.ds .fb-back{position:fixed;inset:0;z-index:410;display:grid;place-items:center;padding:20px;
+  background:color-mix(in srgb,#02080F 52%,transparent);backdrop-filter:blur(6px);
+  opacity:0;transition:opacity 200ms var(--e-soft)}
+.ds .fb-back.on{opacity:1}
+.ds .fb-card{--tone:var(--fb-info);position:relative;width:min(440px,100%);max-height:90vh;overflow:auto;
+  padding:30px 30px 24px;border-radius:22px;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);text-align:center;
+  box-shadow:0 6px 18px rgba(var(--shadow-c),.14),0 40px 90px rgba(var(--shadow-c),.34);
+  transform:translateY(14px) scale(.98);transition:transform 320ms var(--e-out)}
+.ds .fb-back.on .fb-card{transform:none}
+.ds .fb-card.success{--tone:var(--fb-ok)}
+.ds .fb-card.error{--tone:var(--fb-err)}
+.ds .fb-card.warning{--tone:var(--fb-warn)}
+.ds .fb-card .fb-ic{width:54px;height:54px;border-radius:16px;margin:0 auto 16px}
+.ds .fb-card .fb-ic svg{width:26px;height:26px}
+.ds .fb-card h2{margin:0;font-size:21px;font-weight:500;letter-spacing:-.025em;line-height:1.25}
+.ds .fb-card > p{margin:9px auto 0;max-width:40ch;font-size:13.5px;font-weight:300;color:var(--ink-2);
+  line-height:1.6}
+.ds .fb-rows{margin:18px 0 0;padding:4px 14px;border-radius:14px;background:var(--bg-alt);
+  border:1px solid var(--line);text-align:left}
+.ds .fb-rows div{display:flex;justify-content:space-between;gap:14px;padding:9px 0;font-size:12.5px}
+.ds .fb-rows div + div{border-top:1px dashed var(--line-2)}
+.ds .fb-rows span{color:var(--ink-3);font-weight:300}
+.ds .fb-rows b{font-weight:500;color:var(--ink);text-align:right;overflow-wrap:anywhere}
+.ds .fb-btns{display:flex;gap:10px;margin-top:22px}
+.ds .fb-btns button, .ds .fb-btns a{flex:1;padding:13px 14px;border-radius:12px;font:500 14px var(--font);
+  cursor:pointer;text-align:center;text-decoration:none;border:1px solid var(--line-2);
+  background:var(--bg);color:var(--ink);transition:opacity 180ms,background 180ms}
+.ds .fb-btns .p{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ds .fb-card.error .fb-btns .p.danger, .ds .fb-btns .p.danger{background:var(--fb-err);border-color:var(--fb-err);color:#fff}
+.ds .fb-btns button:hover, .ds .fb-btns a:hover{opacity:.88}
+.ds .fb-card .fb-x{position:absolute;top:14px;right:14px}
+
+
+/* a field the feedback system flagged */
+.ds [aria-invalid="true"]{border-color:var(--fb-err)!important;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--fb-err) 16%,transparent)!important}
+.ds .fb-busy{position:relative;color:transparent!important;pointer-events:none}
+.ds .fb-busy::after{content:"";position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px;
+  border-radius:50%;border:2px solid currentColor;border-color:var(--bg) var(--bg) transparent;
+  animation:fb-spin .7s linear infinite}
+.ds .btn-o.fb-busy::after{border-color:var(--ink) var(--ink) transparent}
+@keyframes fb-spin{to{transform:rotate(360deg)}}
+@media (max-width:640px){
+.ds .fb-stack{left:16px;right:16px;top:70px;width:auto;align-items:stretch}
+.ds .fb-btns{flex-direction:column-reverse}
+}
+@media (prefers-reduced-motion:reduce){
+.ds .fb-toast, .ds .fb-card, .ds .fb-back{transition:opacity 120ms}
+.ds .fb-toast, .ds .fb-card{transform:none}
+}
+@media print{
+.ds .fb-stack, .ds .fb-back{display:none!important}
+}
+
+
+/* The attention dot — something here needs you. Red, with one soft ring that
+   pulses twice and stops: it should catch the eye, not keep tugging at it. */
+.ds .adlm-dot{display:inline-block;flex:none;width:8px;height:8px;margin-left:7px;border-radius:50%;
+  background:#E5372B;vertical-align:middle;position:relative;top:-1px;
+  box-shadow:0 0 0 0 rgba(229,55,43,.55);animation:adlm-dot 1.6s var(--e-soft) 2}
+@keyframes adlm-dot{0%{box-shadow:0 0 0 0 rgba(229,55,43,.55)}100%{box-shadow:0 0 0 7px rgba(229,55,43,0)}}
+.ds .dsh-nav a .adlm-dot{margin-left:8px}
+@media (prefers-reduced-motion:reduce){
+.ds .adlm-dot{animation:none}
+}
+
+
+/* theme picker cards (dash-settings → Appearance) */
+.ds .th-pick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ds .th-pick button{display:flex;align-items:center;gap:11px;padding:12px;border-radius:12px;border:1.5px solid var(--line);
+  background:var(--bg);cursor:pointer;text-align:left;font-family:var(--font);color:var(--ink);
+  transition:border-color 180ms,box-shadow 180ms}
+.ds .th-pick button:hover{border-color:var(--line-2)}
+.ds .th-pick button[aria-checked="true"]{border-color:var(--action);box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 14%,transparent)}
+.ds .th-pick b{display:block;font-size:13px;font-weight:500}
+.ds .th-pick em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);font-weight:300}
+.ds .th-pick .tsw{width:30px;height:30px}

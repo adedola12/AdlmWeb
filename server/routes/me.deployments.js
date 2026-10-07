@@ -4,11 +4,22 @@ import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
+import { ReleaseCandidate } from "../models/ReleaseCandidate.js";
+import { getGateConfig, isApprover } from "../util/releaseGate.js";
+import { bigOrgKeys, inEarlyRing, loadOrgUsers, withEarlyAccess } from "../util/releaseRollout.js";
 import {
   createPresignedGetUrl,
   isPrivateInstallerStorageEnabled,
   objectKeyFromPackageUri,
 } from "../utils/r2Upload.js";
+import {
+  HUB_CLIENT,
+  HUB_SCHEME,
+  HUB_SOURCE,
+  hubSharesAppIdentity,
+  isSchemeAwareBindingEnabled,
+} from "../util/deviceIdentity.js";
+import { isBrowserCaller } from "../util/browserCaller.js";
 
 const router = express.Router();
 
@@ -50,6 +61,72 @@ async function withSignedPackageUris(items) {
       }
     }),
   );
+}
+
+/**
+ * Is this request a web browser rather than one of our desktop clients?
+ *
+ * THE RULE THIS SERVES (owner, 3 Oct 2026): the only thing downloadable from the
+ * website is the Installer Hub's own .exe. Every other package — the Revit and
+ * ArchiCAD plugins, HERON, SERVIQ — is installed BY the Hub, which is what makes
+ * licence binding, version pinning and the update channel work at all.
+ *
+ * The website was not honouring it. GET /me/deployments is the Hub's update
+ * channel, but client/src/ds/DsDownloads.jsx calls the same endpoint from the
+ * browser and renders a plain <a href={pkg.packageUri}> for every entitled
+ * product, so a signed-in customer could pull `adlm-revit-mep-v2.0.0-r2.zip`
+ * straight out of the browser and sideload it, with none of that.
+ *
+ * It has to be fixed HERE rather than by removing the button, for two reasons.
+ * The link navigates the browser directly to a pre-signed R2 URL, so once the
+ * URL has been handed over the server never sees the download and cannot refuse
+ * it — the only moment of control is whether to hand it over. And a page that
+ * merely stops drawing the button still leaves the endpoint answering the same
+ * thing to anyone who calls it directly.
+ *
+ * WHICH WAY ROUND THE TEST GOES, AND WHY IT MATTERS
+ *
+ * Phrased as "deny unless the caller proves it is the Hub", any older Hub that
+ * does not send the header stops being able to install anything — breaking paid
+ * customers to enforce a presentation rule. So it is phrased the other way:
+ * deny only what is positively identifiable AS a browser. A cross-origin fetch
+ * always carries `Origin`, and every current browser also sends `Sec-Fetch-*`;
+ * a .NET HttpClient sends neither unless told to.
+ *
+ * And a caller that identifies itself as one of our clients is served whatever
+ * else it looks like, so a desktop client that someday sets an Origin header
+ * cannot be locked out by this.
+ */
+// Lives in util/browserCaller.js, shared with the rate library's write guard.
+// Re-exported so this route's tests and callers keep importing it from here.
+export { isBrowserCaller };
+
+/**
+ * The one package the website is allowed to hand over.
+ *
+ * Matched on the productKey the Hub itself is deployed under, so the Downloads
+ * page keeps working for the thing it is actually for.
+ */
+const WEB_DOWNLOADABLE = new Set(["installer-hub", "installerhub", "hub"]);
+
+/**
+ * Strip the download link from everything the browser may not fetch directly.
+ *
+ * The row itself stays: the Downloads page still lists the product, its version
+ * and its licence state, which is information the customer is entitled to. Only
+ * the means of bypassing the Hub is removed, and `viaHub` is set so the page can
+ * eventually say "install this from the Hub" instead of the generic fallback it
+ * renders today.
+ */
+export function withoutDirectDownloads(items) {
+  return (items || []).map((item) => {
+    const key = String(item?.productKey || "").trim().toLowerCase();
+    if (WEB_DOWNLOADABLE.has(key)) return item;
+    if (!item?.packageUri) return item;
+    const { packageUri, ...rest } = item;
+    void packageUri;
+    return { ...rest, packageUri: "", viaHub: true };
+  });
 }
 
 const asyncHandler = (fn) => (req, res, next) =>
@@ -110,9 +187,26 @@ router.post(
       return res.status(404).json({ error: "Entitlement not found for this product" });
     }
 
-    normalizeLegacyEntitlement(ent);
-
     const fpVersion = Math.max(1, Number(req.get("x-adlm-fp-version")) || 1);
+    const schemeAware = isSchemeAwareBindingEnabled();
+
+    // QUIV (revit) and ArchiCAD never sign in with the id the Hub sends here,
+    // so a row written for them only ever took a seat away from the customer's
+    // own app (DEVICE_LIMIT_REACHED / DEVICE_MISMATCH on their own PC). For
+    // those products the app's own sign-in binds the machine; the Hub only
+    // needs a 2xx to carry on. No row is written or changed, and no v1 swap
+    // runs. Kill switch: DEVICE_SCHEME_AWARE_BINDING=0 (util/deviceIdentity.js).
+    if (schemeAware && !hubSharesAppIdentity(key)) {
+      console.log(
+        `[/me/deployments/bind-device] deferred to app: user=${user.email} ` +
+          `product=${key} fpVersion=${fpVersion} ` +
+          `client=${String(req.get("x-adlm-client") || "-")} ` +
+          `fp=${fp.slice(0, 10)}…`,
+      );
+      return res.json({ ok: true, bound: false, deferredToApp: true });
+    }
+
+    normalizeLegacyEntitlement(ent);
 
     const active = (ent.devices || []).filter((d) => !d.revokedAt);
     const maxSeats = Math.max(parseInt(ent.seats || 1, 10), 1);
@@ -161,6 +255,14 @@ router.post(
       lastSeenAt: new Date(),
       revokedAt: null,
       fpVersion: Math.max(1, Number(fpVersion) || 1),
+      // Provenance: this row is the Hub's, never an app sign-in.
+      ...(schemeAware
+        ? {
+            source: HUB_SOURCE,
+            scheme: fpVersion >= 2 ? HUB_SCHEME : "v1",
+            client: HUB_CLIENT,
+          }
+        : {}),
     });
 
     // Also set legacy field for backward compat
@@ -225,6 +327,24 @@ router.get(
       }
     }
 
+    // RELEASE GATE PREVIEW (docs/RELEASE_GATE.md). The release approver's own
+    // Hub is offered every pending build, so they can install and test exactly
+    // what they are being asked to sign off. Nobody else ever sees a pending
+    // build here. Secrets (envVars) still follow the entitlement rule below.
+    const pendingByKey = new Map();
+    try {
+      const cfg = await getGateConfig();
+      if (isApprover(cfg, req.user?.email)) {
+        const pending = await ReleaseCandidate.find({ status: "pending" }).lean();
+        for (const c of pending) {
+          pendingByKey.set(c.productKey, c);
+          allowedKeys.add(c.productKey);
+        }
+      }
+    } catch (err) {
+      console.error("[me/deployments] release preview lookup failed:", err?.message || err);
+    }
+
     if (allowedKeys.size === 0) {
       return res.json({ ok: true, items: [] });
     }
@@ -237,10 +357,44 @@ router.get(
       .sort({ productKey: 1 })
       .lean();
 
+    // STAGED ROLLOUT (util/releaseRollout.js). A build approved for firms is
+    // offered to accounts of firms holding more than 5 organisation seats;
+    // everyone else keeps the live build until it is released to everyone.
+    // The ring is only worked out when it can matter: some product here has an
+    // early build and this account holds an organisation licence.
+    let inRing = false;
+    const hasOrgLicence = (user.entitlements || []).some(
+      (e) => String(e?.licenseType || "").toLowerCase() === "organization",
+    );
+    if (hasOrgLicence && rawItems.some((r) => r.earlyAccess)) {
+      try {
+        inRing = inEarlyRing(user, bigOrgKeys(await loadOrgUsers(User)));
+      } catch (err) {
+        console.error("[me/deployments] early-access ring lookup failed:", err?.message || err);
+      }
+    }
+    for (let i = 0; i < rawItems.length; i += 1) rawItems[i] = withEarlyAccess(rawItems[i], { inRing });
+
     // Strip envVars unless the caller has an active entitlement for the
     // product. localRandomVars is safe to return to anyone (the actual
     // values are generated on the client). The sha256 integrity hash is
     // also safe to expose.
+    // Overlay the approver's pending builds on the live rows (or add them when
+    // the product has never shipped). `preview` tells the Hub it is unreleased.
+    for (const [key, c] of pendingByKey) {
+      const live = rawItems.find((r) => r.productKey === key);
+      const staged = {
+        ...(live || {}),
+        ...c.payload,
+        productKey: key,
+        preview: true,
+        previewCandidateId: String(c._id),
+        liveVersion: live?.version || "",
+      };
+      if (live) rawItems[rawItems.indexOf(live)] = staged;
+      else rawItems.push(staged);
+    }
+
     const items = rawItems.map((item) => {
       const key = String(item?.productKey || "").trim().toLowerCase();
       if (entitledKeys.has(key)) return item;
@@ -249,7 +403,13 @@ router.get(
       return { ...withoutSecrets, envVars: undefined };
     });
 
-    return res.json({ ok: true, items: await withSignedPackageUris(items) });
+    // Sign first, then strip. The Hub still gets exactly what it got before;
+    // the browser gets the same list with the one thing it may not use removed.
+    const signed = await withSignedPackageUris(items);
+    return res.json({
+      ok: true,
+      items: isBrowserCaller(req) ? withoutDirectDownloads(signed) : signed,
+    });
   }),
 );
 

@@ -18,6 +18,7 @@ import {
   paginateRows,
   RPT,
 } from "./reportKit.jsx";
+import PeriodSection from "./PeriodSection.jsx";
 
 export default function ProjectReport({ report }) {
   const f = report.financials;
@@ -231,6 +232,11 @@ export default function ProjectReport({ report }) {
       </Section>,
     );
   }
+
+  // ── Page: this period (only when the report was asked for a date range) ──
+  // Second, straight after the summary: somebody who asked for September
+  // wants September first, not after the trade breakdown.
+  if (report.period) pages.splice(1, 0, <PeriodSection period={report.period} />);
 
   const pageCount = pages.length + 1;
   return (

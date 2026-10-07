@@ -1,5 +1,6 @@
 // server/routes/admin.learn.js
 import express from "express";
+import { Setting } from "../models/Setting.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { FreeVideo, PaidCourseVideo } from "../models/Learn.js";
 import { fetchDurationSec } from "../util/youtubeDuration.js";
@@ -117,7 +118,16 @@ router.patch(
 router.delete(
   "/free/:id",
   asyncHandler(async (req, res) => {
-    await FreeVideo.findByIdAndDelete(req.params.id);
+    const gone = await FreeVideo.findByIdAndDelete(req.params.id).lean();
+    // Remembered, so the auto-filer does not bring it back from the channel
+    // feed a quarter of an hour later (review, 2026-09-22).
+    if (gone?.youtubeId) {
+      await Setting.updateOne(
+        { key: "global" },
+        { $addToSet: { freeLibraryIgnored: String(gone.youtubeId) } },
+        { upsert: true },
+      );
+    }
     res.json({ ok: true });
   }),
 );

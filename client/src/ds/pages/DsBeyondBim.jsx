@@ -2123,12 +2123,12 @@ export default function DsBeyondBim() {
               {" "}
               <div className="hero-cta" style={{ justifyContent: "flex-start" }}>
                 {" "}
-                <Link to="/ds/bb-poster.jpg" className="ds-btn btn-p" download="ADLM-Beyond-BIM-Oct-2026.jpg">
+                <a href="/ds/bb-poster.jpg" className="ds-btn btn-p" download="ADLM-Beyond-BIM-Oct-2026.jpg">
                   Download the flyer{" "}
                   <svg viewBox="0 0 24 24">
                     <use href="#bb-i-down" />
                   </svg>
-                </Link>
+                </a>
                 {" "}
                 <button type="button" className="ds-btn btn-o" id="bb-share">
                   Copy the link

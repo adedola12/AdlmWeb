@@ -28,6 +28,7 @@
 // so that one carries the mark that was typed in, and only that one.
 
 import express from "express";
+import { refFor } from "../util/certificateRef.js";
 import mongoose from "mongoose";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
@@ -46,7 +47,7 @@ const hub = [requireAuth, requirePermission("adminhub")];
  * without a round trip, and stable for the life of the record — a reissue is
  * the same certificate, so it keeps the same reference.
  */
-const refFor = (id) => `CERT-${String(id).slice(-6).toUpperCase()}`;
+// The one reference rule, shared with the learner's side (util/certificateRef.js).
 
 /** The mean of the best attempt at each module, or null if they sat none. */
 function markFrom(attempts) {
@@ -70,7 +71,9 @@ async function decorate(rows) {
 
   const [courses, people, attempts] = await Promise.all([
     PaidCourse.find({ sku: { $in: skus } }).select("sku title").lean(),
-    User.find({ _id: { $in: ids } }).select("firstName lastName email").lean(),
+    User.find({ _id: { $in: ids } })
+      .select("firstName lastName email certificateFirstName certificateLastName certificateNameLockedAt")
+      .lean(),
     QuizAttempt.find({ userId: { $in: ids } })
       .select("userId courseSku moduleCode quizId score")
       .lean(),
@@ -81,7 +84,14 @@ async function decorate(rows) {
     people.map((u) => [
       String(u._id),
       {
-        name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+        // The name the holder confirmed for print, once they have (R14).
+        name:
+          (u.certificateNameLockedAt
+            ? [u.certificateFirstName, u.certificateLastName]
+            : [u.firstName, u.lastName]
+          )
+            .filter(Boolean)
+            .join(" ") || u.email,
         email: u.email,
       },
     ]),
@@ -273,6 +283,41 @@ router.post("/:id/revoke", ...hub, async (req, res, next) => {
     });
 
     res.json({ ok: true, ref: enr.certificateRef });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * R14: unlock the name printed on a person's certificates, so they can claim
+ * it again (a misspelling, a legal name change). The holder sets the name
+ * once; only staff can reopen it. Takes a certificate id (the row the admin
+ * is looking at) and unlocks its holder's account.
+ */
+router.post("/:id/reset-name", ...hub, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Not a certificate." });
+    }
+    const enr = await CourseEnrollment.findById(req.params.id, { userId: 1, email: 1, certificateRef: 1 }).lean();
+    if (!enr?.userId) return res.status(404).json({ error: "No such certificate." });
+    const u = await User.findById(enr.userId);
+    if (!u) return res.status(404).json({ error: "The holder's account no longer exists." });
+    const was = [u.certificateFirstName, u.certificateLastName].filter(Boolean).join(" ");
+    u.certificateNameLockedAt = null;
+    await u.save();
+
+    await writeAudit({
+      actorId: req.user?.id,
+      actorEmail: req.user?.email,
+      action: "certificate.name-reset",
+      status: 200,
+      ...reqAuditContext(req),
+      targetEmail: u.email || enr.email || "",
+      meta: { ref: enr.certificateRef, was },
+    });
+
+    res.json({ ok: true, was });
   } catch (err) {
     next(err);
   }

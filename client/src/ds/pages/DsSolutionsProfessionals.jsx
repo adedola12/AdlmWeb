@@ -80,7 +80,7 @@ export default function DsSolutionsProfessionals() {
               </div>
               {" "}
               <b>
-                ₦2,000
+                ₦5,000
               </b>
               <span>
                 cheapest entry / mo
@@ -274,7 +274,7 @@ export default function DsSolutionsProfessionals() {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "44ch" }}>
-                  From ₦2,000 a month. Yearly billing costs ten months, so two are free, and you can start without talking to anyone.
+                  From ₦5,000 a month. Yearly billing costs ten months, so two are free, and you can start without talking to anyone.
                 </p>
               </div>
               {" "}
@@ -435,7 +435,7 @@ export default function DsSolutionsProfessionals() {
               </summary>
               {" "}
               <div className="faq-a">
-                Only for QUIV and Revit MEP. HERON needs PlanSwift. RateGen and Time Pro need nothing else.
+                Only for QUIV and SERVIQ. HERON needs PlanSwift. RateGen and Time Pro need nothing else.
               </div>
               {" "}
             </details>
@@ -526,7 +526,7 @@ export default function DsSolutionsProfessionals() {
               {" "}
             </div>
             {" "}
-            <form className="sform-card" action="/checkout/thanks" method="get">
+            <form className="sform-card" action="/checkout/thanks" method="get" data-fb="lead" noValidate={true}>
               {" "}
               <input type="hidden" name="topic" value="Individual QS" />
               {" "}

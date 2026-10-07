@@ -41,6 +41,10 @@ const SavedDocumentSchema = new mongoose.Schema(
     source: { type: String, default: "" },
     blocks: { type: Number, default: 0 },
 
+    // The signature line (P0.5, his composer): Dolapo's signature (ADLM paper
+    // only), a blank line to sign by hand, or none.
+    sign: { type: String, enum: ["dolapo", "line", "none"], default: "line" },
+
     // Who wrote it. Kept as both, because the id answers "show me mine" and
     // the email still reads correctly after somebody leaves.
     byId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },

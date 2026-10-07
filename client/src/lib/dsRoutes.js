@@ -101,10 +101,30 @@ export const MAP = {
   // catalogue and this screen links there.
   "dash-learning": "/dash-learning",
   "dash-certificates": "/dash-certificates",
+  "dash-assignments": "/dash-assignments",
+  // Guides & docs, its own page since 17 Sep. Downloads keeps installers only.
+  "dash-guides": "/manage/guides",
+  // The public check a certificate's QR code opens.
+  certificate: "/certificate",
   "dash-course": "/dash-course/:sku",
   "dash-emails": null, // an internal email preview harness, not a public route
   "work-home": "/work",
   "work-projects": "/work/projects",
+  // One tool's projects; his ?t=quiv|heron|mep is kept on the link.
+  "work-tool": "/work/tool",
+  // Design references for the desktop add-ins; no route of their own.
+  "plugin-quiv": null,
+  "plugin-heron": null,
+  // His 22 September update: the Installer Hub drawn as a Windows app, and the
+  // four launch screens where the splash becomes the sign-in. Designs for
+  // software that runs on a QS's PC, not pages of this website — so each is
+  // deliberately not a route, and staged under /preview only. Building them is
+  // a desktop job; see docs/RICHARD-SEP18.md.
+  hub: null,
+  "splash-quiv": null,
+  "splash-heron": null,
+  "splash-rategen": null,
+  "splash-hub": null,
   "work-project": "/projects/:tool",
   // Rate library and Programme are RateGen and Time Pro under his names — the
   // screens exist, so these keep pointing at the real ones rather than growing

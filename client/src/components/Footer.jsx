@@ -1,21 +1,41 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
+import { API_BASE } from "../config.js";
 import { Link, useNavigate } from "react-router-dom";
 import appleLogo from "../assets/icons/apple-logo.png";
 import googlePlayLogo from "../assets/icons/playstore.png";
 import ComingSoonModal from "./ComingSoonModal.jsx";
+import { useAuth } from "../store.jsx";
 
-const FALLBACK_APP_URL =
-  "https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link";
+// R15: the app downloads from ADLM's own storage through the API, which
+// falls back to the link set in Admin until the file is uploaded. The old
+// relative fetch of /settings/mobile-app-url reached the web host, not the
+// API, so this always served a hard-coded, out-of-date Google Drive copy.
+const appUrl = `${API_BASE}/downloads/android`;
+
+/**
+ * Where the "download the app" buttons point.
+ *
+ * The APK stopped being anonymously fetchable on 3 October — the owner's rule
+ * is that only the Installer Hub's .exe comes off the website, and this was
+ * the one build anybody with the URL could pull. It is a gate rather than a
+ * removal because there is no Play Store listing yet, so the website is the
+ * only way anyone gets the app at all.
+ *
+ * A signed-out visitor following the old link would now meet a bare 401, which
+ * reads as broken rather than as "sign in first". So they are sent to sign in,
+ * with ?next pointing back at the download: they land on the app the moment
+ * they are in.
+ */
+function appHref(signedIn) {
+  return signedIn ? appUrl : `/login?next=${encodeURIComponent("/downloads/android")}`;
+}
 
 export default function Footer() {
-  const [appUrl, setAppUrl] = useState(FALLBACK_APP_URL);
-
-  useEffect(() => {
-    fetch("/settings/mobile-app-url")
-      .then((r) => r.json())
-      .then((d) => { if (d?.mobileAppUrl) setAppUrl(d.mobileAppUrl); })
-      .catch(() => {});
-  }, []);
+  // Only to decide where the app buttons point: signed in goes straight to the
+  // build, signed out goes to sign in first. store.jsx withholds `user` for one
+  // hydration frame, which is right here too — the first render matches the
+  // server and the link settles a frame later.
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   // ✅ routes that REALLY exist in your router
@@ -27,8 +47,10 @@ export default function Footer() {
         "/about",
         "/trainings",
         "/testimonials",
-        "/dashboard",
+        // Both: /manage is the overview, and /dashboard still resolves to it
+        // as a redirect, so a footer link to either lands somewhere.
         "/manage",
+        "/dashboard",
         "/profile",
       ]),
     []
@@ -118,9 +140,8 @@ export default function Footer() {
             </Link>
 
             <a
-              href={appUrl}
-              target="_blank"
-              rel="noreferrer"
+              href={appHref(Boolean(user))}
+              {...(user ? { target: "_blank", rel: "noreferrer" } : {})}
               className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-emerald-500 text-white font-semibold hover:bg-emerald-600"
             >
               Download Mobile App now
@@ -244,9 +265,8 @@ export default function Footer() {
 
               {/* Google Play = your Drive build for now */}
               <a
-                href={appUrl}
-                target="_blank"
-                rel="noreferrer"
+                href={appHref(Boolean(user))}
+                {...(user ? { target: "_blank", rel: "noreferrer" } : {})}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.06] border border-white/10 hover:bg-white/[0.12] hover:-translate-y-0.5 transition-all"
               >
                 <img

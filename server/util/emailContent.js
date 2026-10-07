@@ -17,6 +17,7 @@
 // can fail while somebody is waiting to be told their password was reset.
 
 import { wrapEmail, wrapMarketingEmail, emailBrand } from "./emailLayout.js";
+import { buildReleaseMessage, productFor } from "./releaseEmail.js";
 
 const { SITE } = emailBrand;
 
@@ -54,12 +55,39 @@ export function verifyEmail({ firstName, code, minutes = 30 }) {
         codeBlock(code) +
         p(`It lasts ${minutes} minutes. If it expires, ask for another one.`) +
         p(
-          "Until the address is confirmed you can sign in and look around, but you cannot buy " +
-            "anything or download an installer — we will not sell a licence to an address we " +
-            "cannot reach.",
+          "Until the address is confirmed the account stays closed: you can sign in only to " +
+            "enter this code, ask for a new one, or correct the address.",
         ),
       footNote:
         "If you did not create an ADLM account, ignore this. Nothing happens until the code is used.",
+    }),
+  };
+}
+
+// The one reminder to accounts that signed up but never confirmed (sent by
+// scripts/email-verify-reminder.mjs). No code in it: a code lasts 30 minutes,
+// so the link opens the confirm screen, which sends a fresh one.
+export function confirmReminder({ firstName, days = 14 }) {
+  return {
+    subject: "Confirm your ADLM email to keep your account",
+    html: wrapEmail({
+      title: "One step left on your ADLM account",
+      preheader: `Confirm your email within ${days} days to keep the account.`,
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p(
+          "You created an ADLM account but the email address has not been confirmed yet. " +
+            "Our confirm screen was missing for a while, so this is on us, not you.",
+        ) +
+        p(
+          "Sign in, press Send a new code, and type the six digits we email you. It takes a minute.",
+        ) +
+        p(
+          `If the address is not confirmed within ${days} days the account is closed. ` +
+            "Nothing is deleted; write to us and we will reopen it.",
+        ),
+      cta: { label: "Confirm my email", href: `${SITE}/verify-email` },
+      footNote: "If you did not create an ADLM account, ignore this and it will close by itself.",
     }),
   };
 }
@@ -76,7 +104,7 @@ export function welcome({ firstName }) {
           "Your email is confirmed and the account is open. Everything you buy, every project " +
             "you keep and every certificate you earn lives in one place.",
         ),
-      cta: { label: "Open your account", href: `${SITE}/dashboard` },
+      cta: { label: "Open your account", href: `${SITE}/manage` },
       footNote: "Questions go to support from inside your account, and reach a person.",
     }),
   };
@@ -184,6 +212,66 @@ export function projectInvite({ firstName, invitedBy, projectName, href }) {
         p(`Hello ${first(firstName)},`) +
         p(`<b>${invitedBy}</b> has invited you to work on <b>${projectName}</b>.`) +
         p("You will see the bill, the rates behind it and the programme, as they stand today."),
+      cta: href ? { label: "Open the project", href } : null,
+    }),
+  };
+}
+
+/**
+ * The contract on a shared project has been locked.
+ *
+ * WHY EVERY COLLABORATOR IS TOLD
+ *
+ * Locking is the moment a bill stops being a working estimate and becomes the
+ * contract figure. After it, the quantities and rates on the bill are frozen:
+ * a re-measure no longer moves them, it goes into the actual columns, and new
+ * scope becomes a variation. Somebody who carried on editing without knowing
+ * that would think they were correcting the contract and would in fact be
+ * recording a variation against it.
+ *
+ * So the mail says the sum, who locked it, and what changes now — not just
+ * "the contract was locked", which tells a person nothing they can act on.
+ */
+export function contractLocked({
+  firstName,
+  projectName,
+  lockedBy,
+  contractSum,
+  currency = "NGN",
+  href,
+  // A collaborator without RateGen has every figure on this project masked in
+  // the app (util/projectAccess.js). The mail must not say what the screen
+  // hides, so for them the sum is left out and only the fact is sent. They
+  // still need the fact: what editing means has changed for them too.
+  showMoney = true,
+}) {
+  const sum = money(contractSum, currency);
+  return {
+    subject: showMoney
+      ? `"${projectName}" is now under contract at ${sum}`
+      : `"${projectName}" is now under contract`,
+    html: wrapEmail({
+      title: "The contract has been locked",
+      preheader: showMoney
+        ? `${projectName} is fixed at ${sum}.`
+        : `${projectName} is fixed. The bill is now the contract.`,
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p(
+          showMoney
+            ? `<b>${lockedBy}</b> has locked the contract on <b>${projectName}</b> at <b>${sum}</b>.`
+            : `<b>${lockedBy}</b> has locked the contract on <b>${projectName}</b>.`,
+        ) +
+        p("What changes from now:") +
+        `<ul style="margin:0 0 14px;padding-left:20px;color:#374151">
+          <li style="margin:0 0 6px">The contract quantities and rates are fixed. Re-measuring a
+              line no longer changes them &mdash; the new figure is recorded as the actual, beside
+              the contract one.</li>
+          <li style="margin:0 0 6px">Work that was not in the contract becomes a variation, priced
+              and listed separately.</li>
+          <li style="margin:0 0 6px">Progress recorded on a bill line now feeds the valuations.</li>
+        </ul>` +
+        p("Nothing you have already entered is affected."),
       cta: href ? { label: "Open the project", href } : null,
     }),
   };
@@ -487,6 +575,18 @@ export const PREVIEW = {
     quotation({ firstName: "Adaeze", total: 1250000, currency: "NGN", href: `${SITE}/quote/sample`, validUntil: "30 September 2026" }),
   "project.invite": () =>
     projectInvite({ firstName: "Adaeze", invitedBy: "Babajide Gbajumo", projectName: "Lekki Phase 2 Tower", href: `${SITE}/work` }),
+  "project.contract-locked": () =>
+    contractLocked({
+      firstName: "Adaeze", projectName: "Lekki Phase 2 Tower",
+      lockedBy: "Babajide Gbajumo", contractSum: 486_250_000, currency: "NGN",
+      href: `${SITE}/work`,
+    }),
+  "project.contract-locked-masked": () =>
+    contractLocked({
+      firstName: "Adaeze", projectName: "Lekki Phase 2 Tower",
+      lockedBy: "Babajide Gbajumo", contractSum: 486_250_000, currency: "NGN",
+      href: `${SITE}/work`, showMoney: false,
+    }),
   "entitlement.boq-import": () =>
     entitlementGranted({ firstName: "Adaeze", productName: "BoQ Import" }),
   "support.received": () =>
@@ -497,4 +597,22 @@ export const PREVIEW = {
     trainingProposed({ firstName: "Adaeze", courseName: "BIM for Building Works", dates: "22–24 September 2026" }),
   "training.confirmed": () =>
     trainingConfirmed({ firstName: "Adaeze", courseName: "BIM for Building Works", dates: "22–24 September 2026", venue: "ADLM Studio, Lagos" }),
+  "release.update": () =>
+    buildReleaseMessage({
+      firstName: "Adaeze",
+      product: productFor("revit"),
+      version: "3.1.11",
+      notes: {
+        source: "changelog",
+        title: "Faster takeoffs",
+        highlight: "Linked models are measured in one pass.",
+        groups: [
+          { type: "new", items: ["Take off linked models in the same run"] },
+          { type: "fixed", items: ["Budget totals no longer drift after a re-run"] },
+        ],
+        paragraphs: [],
+      },
+      // A preview only: the real link is per recipient (util/campaigns.js).
+      unsubscribeUrl: "#",
+    }),
 };

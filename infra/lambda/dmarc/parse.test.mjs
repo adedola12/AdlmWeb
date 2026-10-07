@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import zlib from "node:zlib";
-import { reportsFromEmail, summarize, unzip, alertText, parseAggregate } from "./parse.mjs";
+import { reportsFromEmail, summarize, unzip, alertText, parseAggregate, ourSender, triage } from "./parse.mjs";
 
 const XML = `<?xml version="1.0" encoding="UTF-8" ?>
 <feedback>
@@ -136,4 +136,25 @@ test("unzip reads the central directory", () => {
   assert.equal(files.length, 1);
   assert.equal(files[0].name, "a.xml");
   assert.equal(files[0].content.toString(), "<feedback/>");
+});
+
+test("reverse DNS names are matched to the services that send for us", () => {
+  assert.equal(ourSender(["a3-10.smtp-out.eu-west-1.amazonses.com."]), "Amazon SES");
+  assert.equal(ourSender(["mail-sor-f41.google.com"]), "Google");
+  assert.equal(ourSender(["mail-db8eur05on2100.outbound.protection.outlook.com"]), "Microsoft");
+  assert.equal(ourSender(["95-57-1-2.broadband.kz"]), "");
+  assert.equal(ourSender(["evil-google.com.example.net"]), "");
+  assert.equal(ourSender([]), "");
+});
+
+test("a forged source is kept apart from our own failing mail", () => {
+  const xml = XML.replace("</feedback>", `<record><row><source_ip>54.240.3.99</source_ip><count>2</count>
+    <policy_evaluated><disposition>reject</disposition><dkim>fail</dkim><spf>fail</spf></policy_evaluated></row>
+    <identifiers><header_from>adlmstudio.net</header_from></identifiers></record></feedback>`);
+  const summary = summarize([parseAggregate(xml)]);
+  const { ours, strangers } = triage(summary, new Map([["54.240.3.99", ["a3-99.smtp-out.eu-west-1.amazonses.com"]]]));
+  assert.deepEqual(ours.map((s) => s.sourceIp), ["54.240.3.99"]);
+  assert.deepEqual(strangers.map((s) => s.sourceIp), ["203.0.113.9"]);
+  summary.failing = [...ours, ...strangers];
+  assert.match(alertText(summary), /54\.240\.3\.99.*amazonses\.com\s+<- Amazon SES, one of OUR senders/);
 });

@@ -171,6 +171,22 @@ export const videoUnsubscribeUrl = (userId) =>
     topicUnsubscribeToken(VIDEO_TOPIC, userId),
   )}`;
 
+/**
+ * "A new version of something you are licensed for is ready."
+ *
+ * Its own topic, and its own switch: User.notifications.productUpdates, the
+ * one the account settings screen already labels "When a build ships for
+ * something you are licensed for". A link out of a release email turns off
+ * release emails and nothing else, and because the topic is signed it cannot
+ * be edited into the video list or the newsletter.
+ */
+export const PRODUCT_UPDATES_TOPIC = "product-updates";
+
+export const productUpdatesUnsubscribeUrl = (userId) =>
+  `${API_BASE()}/api/email/unsubscribe/product-updates/${encodeURIComponent(
+    topicUnsubscribeToken(PRODUCT_UPDATES_TOPIC, userId),
+  )}`;
+
 /* ─────────────────────────────────────────────────────────────── audiences ── */
 
 /**

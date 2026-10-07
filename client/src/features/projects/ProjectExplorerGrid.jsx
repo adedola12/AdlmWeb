@@ -62,6 +62,15 @@ export default function ProjectExplorerGrid({
   selectedMap = {},
   statusPastLabel = "Completed to date",
   storageInfo = null,
+  // Item 13: an empty grid is three different situations and they need three
+  // different sentences. "No projects found" was the filter sentence, and it
+  // was what a brand-new account was shown on its first morning.
+  loadFailed = false,
+  searching = false,
+  totalCount = 0,
+  sourceName = "",
+  hostName = "",
+  isMaterials = false,
 }) {
   return (
     <div style={{ marginTop: 20 }}>
@@ -138,7 +147,36 @@ export default function ProjectExplorerGrid({
       </div>
 
       {rowsShown.length === 0 ? (
-        <div className="wk-empty">No projects found.</div>
+        <div className="wk-empty">
+          {loadFailed ? (
+            <>
+              <b>Your projects could not be listed</b>
+              <p>
+                The reason is in the message above this list. Nothing has been deleted: this is
+                the list failing to load, not the projects going missing.
+              </p>
+            </>
+          ) : searching && totalCount > 0 ? (
+            <>
+              <b>No project matches</b>
+              <p>
+                Nothing here matches what you typed. Clear the search box to see all{" "}
+                {plural(totalCount, "project")} again.
+              </p>
+            </>
+          ) : (
+            <>
+              <b>No projects yet</b>
+              <p>
+                {isMaterials
+                  ? `A material schedule is generated from a priced bill, so it is ${sourceName || "the takeoff"} that makes one. Price a bill in ${sourceName || "the takeoff"} and save it to ADLM Cloud; the schedule appears here beside it.`
+                  : hostName && sourceName
+                    ? `Projects start in ${hostName}. Measure in ${sourceName}, save to ADLM Cloud, and the project appears here to price, value and programme.`
+                    : "Projects start in the plugins. Measure there, save to ADLM Cloud, and the project appears here to price, value and programme."}
+              </p>
+            </>
+          )}
+        </div>
       ) : (
         <div className="wk-projs">
           {rowsShown.map((row, index) => {

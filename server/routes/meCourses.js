@@ -1,4 +1,10 @@
 import express from "express";
+import { ensureCertificateRef } from "../util/certificateRef.js";
+import { alertCount } from "../util/assignmentAlerts.js";
+import { myAssignments } from "../util/myAssignments.js";
+import { checkSubmissionFile, submissionKey } from "../util/submissionFiles.js";
+import { fileStoreBackend, presignUpload, headFile } from "../util/fileStore.js";
+import { withFileLinks } from "../util/submissionLinks.js";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
@@ -18,6 +24,52 @@ import { LessonNote } from "../models/LessonNote.js";
 
 const router = express.Router();
 router.use(requireAuth);
+
+// R14: the certificate shows the stored reference, the one GET /verify/:ref
+// checks. An issued certificate without one gets it now, saved.
+async function withStoredRef(enrollment) {
+  enrollment.certificateRef = await ensureCertificateRef(enrollment, (ref) =>
+    CourseEnrollment.updateOne({ _id: enrollment._id, certificateRef: { $in: ["", null] } }, { $set: { certificateRef: ref } }),
+  );
+  return enrollment;
+}
+
+// R14: light or dark, the holder's choice, changeable any time.
+router.post("/:sku/certificate-finish", async (req, res) => {
+  const finish = String(req.body?.finish || "");
+  if (!["dark", "light"].includes(finish)) return res.status(400).json({ error: "The finish is light or dark." });
+  const r = await CourseEnrollment.updateOne(
+    { userId: req.user._id, courseSku: req.params.sku },
+    { $set: { certificateFinish: finish } },
+  );
+  if (!r.matchedCount) return res.status(404).json({ error: "Not enrolled" });
+  res.json({ ok: true, finish });
+});
+
+// R11: every assignment across the learner's courses, with state (to do, due
+// soon, overdue, submitted, marked) and new alerts. Before /:sku routes so
+// "assignments" is never read as a course.
+router.get("/assignments", async (req, res) => {
+  const rows = await myAssignments(req.user._id);
+  res.json({ items: rows, alerts: alertCount(rows) });
+});
+
+// Opening an assignment clears its alert, and a marked one's result counts as
+// read (R11/R13).
+router.post("/assignments/seen", async (req, res) => {
+  const { courseSku, moduleCode } = req.body || {};
+  if (!courseSku || !moduleCode) return res.status(400).json({ error: "courseSku and moduleCode required" });
+  const now = new Date();
+  await CourseEnrollment.updateOne(
+    { userId: req.user._id, courseSku },
+    { $set: { [`assignmentSeen.${String(moduleCode).replace(/[.$]/g, "_")}`]: now } },
+  );
+  await CourseSubmission.updateMany(
+    { userId: req.user._id, courseSku, moduleCode, gradeStatus: { $ne: "pending" }, feedbackSeenAt: null },
+    { $set: { feedbackSeenAt: now } },
+  );
+  res.json({ ok: true });
+});
 
 // A stream is "live" if we heard from it recently. Heartbeats land every 30s,
 // so 90s tolerates one dropped beat before the seat is released — otherwise a
@@ -182,7 +234,7 @@ async function loadCourseContext(userId, skus) {
     Product.find({ isCourse: true, courseSku: { $in: skus } })
       .select("key name billingInterval courseSku thumbnailUrl blurb")
       .lean(),
-    CourseSubmission.find({ userId, courseSku: { $in: skus } }).lean(),
+    CourseSubmission.find({ userId, courseSku: { $in: skus } }).lean().then((rows) => withFileLinks(rows)),
   ]);
 
   const coursesBySku = Object.fromEntries(courses.map((course) => [course.sku, course]));
@@ -223,18 +275,6 @@ async function loadCourseContext(userId, skus) {
  * Deterministic, so the card, the PDF and any future verification page all
  * quote the same string for the same enrolment.
  */
-function certificateRef(enrollment) {
-  if (!enrollment?.certificateIssuedAt && enrollment?.status !== "completed") return "";
-  const sku = String(enrollment.courseSku || "");
-  // The leading alpha run of the sku: "bim-bld-arch" -> BIM, "rates-2d" -> RATES.
-  const tag = (sku.match(/^[a-zA-Z]+/)?.[0] || "ADLM").toUpperCase().slice(0, 5);
-  const year = new Date(
-    enrollment.certificateIssuedAt || enrollment.updatedAt || Date.now(),
-  ).getFullYear();
-  const tail = String(enrollment._id || "").slice(-4).toUpperCase();
-  return `ADLM-${tag}-${year}-${tail}`;
-}
-
 function buildCourseResponse(enrollment, context) {
   const fallbackCourse = {
     sku: enrollment.courseSku,
@@ -284,7 +324,7 @@ function buildCourseResponse(enrollment, context) {
   return {
     enrollment: {
       ...enrollment,
-      certificateRef: certificateRef(enrollment),
+      certificateRef: enrollment.certificateRef || "",
       accessStartedAt: toIso(startedAt),
       accessExpiresAt: toIso(expiresAt),
       lastProgressAt: toIso(enrollment.lastProgressAt),
@@ -307,14 +347,56 @@ router.get("/", async (req, res) => {
 
   const skus = [...new Set(enrollments.map((item) => item.courseSku).filter(Boolean))];
   const context = await loadCourseContext(req.user._id, skus);
+  await Promise.all(enrollments.map(withStoredRef));
   const out = enrollments.map((enrollment) => buildCourseResponse(enrollment, context));
   res.json(out);
 });
 
+// R12: ask for a place to upload an assignment file. The file goes straight
+// from the browser to private storage with the returned presigned PUT; the
+// submission is recorded by POST /:sku/submit with the returned key.
+router.post("/:sku/submission-upload", async (req, res) => {
+  const { moduleCode, fileName, fileType, fileSize } = req.body || {};
+  if (!moduleCode) return res.status(400).json({ error: "Which module is this for?" });
+  const check = checkSubmissionFile({ name: fileName, type: fileType, size: fileSize });
+  if (!check.ok) return res.status(400).json({ error: check.error });
+
+  const course = await PaidCourse.findOne({ sku: req.params.sku }).lean();
+  if (!course) return res.status(404).json({ error: "Course not found" });
+  if (!(course.modules || []).some((m) => m.code === moduleCode)) {
+    return res.status(400).json({ error: "Invalid module" });
+  }
+  const enrolled = await CourseEnrollment.exists({ userId: req.user._id, courseSku: req.params.sku });
+  if (!enrolled) return res.status(403).json({ error: "Not enrolled" });
+  if (!fileStoreBackend()) {
+    return res.status(503).json({ error: "Uploads are not available just now. Please try again later." });
+  }
+
+  const key = submissionKey({ userId: req.user._id, courseSku: req.params.sku, moduleCode, name: fileName });
+  const signed = await presignUpload({ key, contentType: check.contentType });
+  res.json({ ...signed, fileName, fileSize: Number(fileSize) || 0 });
+});
+
 router.post("/:sku/submit", async (req, res) => {
-  const { moduleCode, fileUrl, note } = req.body || {};
-  if (!moduleCode || !fileUrl) {
-    return res.status(400).json({ error: "moduleCode and fileUrl required" });
+  const { moduleCode, fileUrl, fileKey, fileName, note } = req.body || {};
+  if (!moduleCode || (!fileUrl && !fileKey)) {
+    return res.status(400).json({ error: "Attach a file before submitting." });
+  }
+
+  // A key from /submission-upload: it must be this learner's, for this
+  // course, and the file must really be there, of an accepted type and size.
+  let fileMeta = null;
+  if (fileKey) {
+    const prefix = submissionKey({ userId: req.user._id, courseSku: req.params.sku, moduleCode, name: "x", now: 0 }).replace(/0-x$/, "");
+    if (!String(fileKey).startsWith(prefix)) {
+      return res.status(400).json({ error: "That upload does not belong to this assignment." });
+    }
+    const storage = fileStoreBackend();
+    const head = storage ? await headFile({ key: fileKey, storage }) : null;
+    if (!head) return res.status(400).json({ error: "The file did not finish uploading. Please upload it again." });
+    const check = checkSubmissionFile({ name: fileName || fileKey, type: head.contentType, size: head.size });
+    if (!check.ok) return res.status(400).json({ error: check.error });
+    fileMeta = { fileKey, storage, fileName: String(fileName || "").slice(0, 200), fileSize: head.size, fileType: head.contentType };
   }
 
   const course = await PaidCourse.findOne({ sku: req.params.sku }).lean();
@@ -334,7 +416,7 @@ router.post("/:sku/submit", async (req, res) => {
     email: req.user.email,
     courseSku: req.params.sku,
     moduleCode,
-    fileUrl,
+    ...(fileMeta || { fileUrl }),
     note: note || "",
     gradeStatus: "pending",
   });
@@ -387,6 +469,7 @@ router.get("/:sku", async (req, res) => {
   if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
 
   const context = await loadCourseContext(req.user._id, [sku]);
+  await withStoredRef(enrollment);
   const response = buildCourseResponse(enrollment, {
     ...context,
     coursesBySku: { ...context.coursesBySku, [sku]: course },

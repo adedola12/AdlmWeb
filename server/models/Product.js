@@ -1,22 +1,5 @@
 import mongoose from "mongoose";
 
-// ---- Discount schema ----
-// percent = percentage off normal recurring total
-// fixed = fixed bundle total (recurring only, per seat)
-const DiscountSchema = new mongoose.Schema(
-  {
-    type: { type: String, enum: ["percent", "fixed"], required: true },
-
-    // For "percent": store the percent in valueNGN (e.g. 10 = 10% off)
-    // For "fixed": store the bundle price in NGN (per seat)
-    valueNGN: { type: Number, default: 0 },
-
-    // Optional: fixed USD bundle (per seat)
-    valueUSD: { type: Number, default: null },
-  },
-  { _id: false },
-);
-
 const PriceSchema = new mongoose.Schema(
   {
     monthlyNGN: { type: Number, default: 0 }, // per month (actual / list price)
@@ -75,12 +58,6 @@ const ProductSchema = new mongoose.Schema(
 
     // Dual currency pricing container
     price: { type: PriceSchema, default: () => ({}) },
-
-    // Bundle discounts (optional)
-    discounts: {
-      sixMonths: { type: DiscountSchema, default: undefined },
-      oneYear: { type: DiscountSchema, default: undefined },
-    },
 
     // Price (NGN) to purchase 10 extra project slots for this product.
     // If not set, the client falls back to 3% of the active subscription price.

@@ -6,7 +6,7 @@ import DsWorkLibrary from "../ds/DsWorkLibrary.jsx";
 
 export default function WorkLibrary() {
   return (
-    <DsAppShell title="Rate library" page="work-library">
+    <DsAppShell title="RateGen" page="work-library">
       <DsWorkLibrary />
     </DsAppShell>
   );

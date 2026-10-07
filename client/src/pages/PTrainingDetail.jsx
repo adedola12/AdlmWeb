@@ -4,6 +4,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { API_BASE } from "../config";
+import Seo from "../components/Seo.jsx";
+import { breadcrumbSchema, ptrainingEventSchema } from "../lib/schema.js";
 
 function fmtDate(d) {
   try {
@@ -33,7 +35,7 @@ function normKey(k) {
 
 function prettyKey(k) {
   const s = String(k || "").trim();
-  if (!s) return "—";
+  if (!s) return "–";
   return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
@@ -137,7 +139,7 @@ function CopyRow({ label, value }) {
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border bg-gray-50">
       <div className="min-w-0">
         <div className="text-xs text-gray-500">{label}</div>
-        <div className="font-semibold break-all">{value || "—"}</div>
+        <div className="font-semibold break-all">{value || "–"}</div>
       </div>
       <button
         onClick={copy}
@@ -483,8 +485,45 @@ export default function PTrainingDetail() {
 
   const activeMedia = galleryMedia[galleryIdx] || null;
 
+  // The path this page is actually reachable at, which is what the canonical
+  // and both schema blocks have to agree on. `key` may be the slug or the id;
+  // whichever the visitor arrived by is the one that gets indexed.
+  const canonicalPath = `/ptrainings/${key}`;
+
+  // Built from the record the API returned, not from anything typed here, so a
+  // date or a fee can only be wrong on this page if it is also wrong in the
+  // admin screen that set it. Null when the event has no usable start date or
+  // location, in which case the page simply carries no Event markup.
+  const eventBlock = ptrainingEventSchema(t, { path: canonicalPath });
+
+  const metaDescription = String(t.subtitle || t.description || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <Seo
+        title={t.title}
+        description={metaDescription || undefined}
+        path={canonicalPath}
+        image={t.flyerUrl || undefined}
+        jsonLd={[
+          eventBlock,
+          // The middle crumb has to be a page this event is actually ON.
+          // /trainings is the ONLINE course list: it reads GET /trainings and
+          // links to /trainings/:id, and no physical training appears on it,
+          // so the trail described a parent that does not hold the child.
+          // /products is the page that does — its "Physical Trainings"
+          // section reads the same GET /ptrainings/events and links straight
+          // here — and "Products" is the crumb that page gives itself
+          // (PageSeo in pages/Products.jsx), so the two trails agree.
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Products", path: "/products" },
+            { name: t.title, path: canonicalPath },
+          ]),
+        ].filter(Boolean)}
+      />
       {/* HERO */}
       <div className="bg-white rounded-2xl border shadow-sm p-4 sm:p-6">
         <div className="flex flex-wrap gap-2">
@@ -584,7 +623,7 @@ export default function PTrainingDetail() {
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
           <h2 className="text-xl font-bold">Program Overview</h2>
           <p className="mt-3 text-gray-700 whitespace-pre-wrap">
-            {t.fullDescription || t.description || "—"}
+            {t.fullDescription || t.description || "–"}
           </p>
 
           {!!includedPlugins.length && (
@@ -608,7 +647,7 @@ export default function PTrainingDetail() {
                       </Link>
 
                       <div className="text-xs text-gray-600 mt-1">
-                        {p.months > 0 ? `${p.months} month(s)` : "Duration: —"}{" "}
+                        {p.months > 0 ? `${p.months} month(s)` : "Duration: –"}{" "}
                         {" • "} Seats: {p.seats || 1}
                       </div>
                     </div>
@@ -691,7 +730,7 @@ export default function PTrainingDetail() {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-xl font-bold">Training Location</h2>
-            <p className="mt-2 text-gray-700 break-words">{address || "—"}</p>
+            <p className="mt-2 text-gray-700 break-words">{address || "–"}</p>
 
             {!!(t.location?.amenities || []).length && (
               <div className="mt-4">

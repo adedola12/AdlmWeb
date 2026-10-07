@@ -1,0 +1,156 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/splash.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* The ADLM product splash.
+
+   Laid out in design pixels against one unit, --u, set by splash.js: at full
+   size 1u = 1px of the 815 x 545 Figma frame, and every position and size is
+   the number Richard drew. The window scales as one piece, so nothing shifts
+   or stretches at any size.
+
+   Two rules that matter: the wordmarks are given a height and never a width,
+   because they are drawn artwork rather than type; and the photographs are
+   placed at the size and offset he gave them rather than stretched to fill,
+   because each has a subject in a particular place.                         */
+.ds .sp{
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3;
+  width: calc(815 * var(--u)); height: calc(545 * var(--u));
+  border-radius: calc(16 * var(--u)); overflow: hidden; isolation: isolate;
+  border: 1px solid rgba(90, 160, 255, .5);
+  box-shadow: 0 calc(40 * var(--u)) calc(110 * var(--u)) rgba(0, 0, 0, .6);
+  font-family: var(--font); color: #fff;
+}
+.ds .sp *{ box-sizing: border-box; }
+
+
+/* ------------------------------------------------------------- the artwork */
+
+/* It sits under the plate and runs the full frame, exactly as in the file:
+   the plate is drawn over its left third rather than the image being cut. */
+.ds .sp-art{ position: absolute; inset: 0; overflow: hidden; background: #0a1420; }
+.ds .sp-art > img{ position: absolute; height: auto; display: block; }
+.ds .sp-art > img.sp-cover{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 38% 50%; }
+
+
+
+/* --------------------------------------------------------------- the plate */
+.ds .sp-l{
+  position: absolute; left: 0; top: 0; width: calc(333 * var(--u)); height: 100%;
+}
+.ds .sp-blue .sp-l{ background: linear-gradient(158deg, #0d2a5e 0%, #0a1f45 48%, #07152f 100%); }
+.ds .sp-ink .sp-l{ background: linear-gradient(158deg, #0e1926 0%, #0a121d 52%, #070c14 100%); }
+.ds .sp-l > *{ position: absolute; margin: 0; }
+.ds .sp-logo{ height: auto; }
+.ds .sp-wm{ width: auto; max-width: none; }
+   /* drawn: height only, never width */
+.ds .sp-tail{
+  font-size: calc(33 * var(--u)); line-height: calc(38 * var(--u));
+  font-weight: 500; letter-spacing: -.01em; white-space: nowrap;
+}
+.ds .sp-v{
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(120, 190, 255, .55); border-radius: calc(5 * var(--u));
+  background: rgba(35, 156, 255, .16); color: #9fd2ff;
+  font-size: calc(8.5 * var(--u)); font-weight: 600; letter-spacing: .01em;
+}
+.ds .sp-tag{
+  font-size: calc(9.2 * var(--u)); line-height: calc(11.4 * var(--u));
+  color: rgba(255, 255, 255, .86);
+}
+.ds .sp-status{
+  font-size: calc(8.4 * var(--u)); line-height: calc(10 * var(--u));
+  font-weight: 500; color: #f5853f; white-space: nowrap;
+}
+.ds .sp-foot{
+  font-size: calc(7.4 * var(--u)); line-height: calc(9.4 * var(--u));
+  color: rgba(255, 255, 255, .55);
+}
+
+
+/* On a phone the artwork has nowhere to go, so the plate takes the window. */
+@media (max-width: 620px){
+.ds .sp{ width: 94vw; height: auto; aspect-ratio: 333 / 545; }
+.ds .sp-art{ display: none; }
+.ds .sp-l{ width: 100%; }
+}
+
+
+/* ------------------------------------------------- the sign-in on the card */
+
+/* The splash does not hand over to a sign-in screen — it becomes one. The
+   lockup, wordmark, version, artwork and footer keep their places, and only
+   the middle of the plate changes, so the window settles rather than
+   switching. */
+.ds .sp-form{ display: flex; flex-direction: column; }
+.ds .sp-form form{ display: contents; }
+.ds .sp-f{ display: block; margin-bottom: calc(10 * var(--u)); }
+.ds .sp-f > span:first-child{
+  display: block; margin-bottom: calc(4 * var(--u));
+  font-size: calc(8.6 * var(--u)); color: rgba(255, 255, 255, .72);
+}
+.ds .sp-f input{
+  width: 100%; padding: calc(9 * var(--u)) calc(11 * var(--u));
+  border: 1px solid rgba(255, 255, 255, .1); border-radius: calc(7 * var(--u));
+  background: rgba(238, 244, 250, .95); color: #0b1c30;
+  font: calc(10 * var(--u)) var(--font);
+}
+.ds .sp-f input::placeholder{ color: #8093a6; }
+.ds .sp-f input:focus{ outline: calc(2 * var(--u)) solid #4fb0ff; outline-offset: calc(1 * var(--u)); border-color: transparent; }
+.ds .sp-pw{ position: relative; display: block; }
+.ds .sp-eye{
+  position: absolute; right: calc(5 * var(--u)); top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center;
+  width: calc(24 * var(--u)); height: calc(24 * var(--u));
+  border: 0; border-radius: calc(6 * var(--u)); background: none; color: #5b6d80; cursor: pointer;
+}
+.ds .sp-eye svg{ width: calc(14 * var(--u)); height: calc(14 * var(--u)); fill: none; stroke: currentColor; stroke-width: 1.8; }
+.ds .sp-eye:hover{ background: rgba(11, 28, 48, .1); color: #0b1c30; }
+.ds .sp-b{
+  width: 100%; margin-top: calc(4 * var(--u));
+  padding: calc(10 * var(--u)); border: 0; border-radius: calc(7 * var(--u));
+  background: linear-gradient(180deg, #3FADFF 0%, #1289E6 52%, #0768B6 100%);
+  color: #fff; font: 600 calc(11 * var(--u)) var(--font); cursor: pointer;
+}
+.ds .sp-b:hover{ filter: brightness(1.06); }
+.ds .sp-links{
+  display: flex; justify-content: space-between; gap: calc(10 * var(--u));
+  margin-top: calc(9 * var(--u));
+}
+.ds .sp-links button{
+  padding: 0; border: 0; background: none; color: #7fcbff;
+  font: 500 calc(8.6 * var(--u)) var(--font); cursor: pointer;
+}
+.ds .sp-links button:hover{ text-decoration: underline; }
+.ds .sp-keep{
+  display: flex; align-items: flex-start; gap: calc(6 * var(--u));
+  margin-top: calc(12 * var(--u)); flex-wrap: wrap;
+  font-size: calc(8.4 * var(--u)); color: rgba(255, 255, 255, .62);
+}
+.ds .sp-keep input{ margin: calc(1 * var(--u)) 0 0; accent-color: #239cff; }
+.ds .sp-keep em{
+  flex-basis: 100%; margin-left: calc(15 * var(--u));
+  font-style: normal; font-size: calc(7.6 * var(--u)); color: rgba(255, 255, 255, .42);
+}
+.ds .sp-err{
+  margin: 0 0 calc(8 * var(--u)); padding: calc(7 * var(--u)) calc(10 * var(--u));
+  border-radius: calc(6 * var(--u));
+  background: rgba(255, 120, 120, .16); border: 1px solid rgba(255, 120, 120, .4);
+  color: #ffb9b9; font-size: calc(8.4 * var(--u));
+}
+
+
+/* A review page is nothing but the card, so it gets a backdrop of its own. */
+.ds:has(#splash){
+  margin: 0; min-height: 100vh;
+  background:
+    radial-gradient(90% 70% at 50% 42%, rgba(18, 72, 150, .42) 0%, rgba(6, 18, 38, 0) 62%),
+    linear-gradient(160deg, #06152c 0%, #040f1f 54%, #02080f 100%);
+}

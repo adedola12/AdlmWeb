@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { mustVerifyEmail, allowedWhileUnverified, EMAIL_NOT_VERIFIED } from "../util/emailGate.js";
 import { User } from "../models/User.js";
 import { verifyStepUp } from "../util/jwt.js";
 import { roleHasArea } from "../util/rbac.js";
@@ -24,8 +25,17 @@ export function signAccess(payload) {
   return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
 }
 
+// The step-up proof and the God-login challenge are signed with this same
+// secret (util/jwt.js) and carry a `scope`. An access token never does. Without
+// this check a God-login challenge, minted after the password but BEFORE the
+// email OTP, passed as an access token, and requireAdmin (which accepts `sub`)
+// let it through.
 export function verifyAccess(token) {
-  return jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  if (decoded && typeof decoded === "object" && decoded.scope) {
+    throw new jwt.JsonWebTokenError("Not an access token");
+  }
+  return decoded;
 }
 
 export function requireAuth(req, res, next) {
@@ -37,6 +47,10 @@ export function requireAuth(req, res, next) {
     // and lock the designer out of every screen, so keep what it set.
     if (req.designMode && req.user) return next();
     req.user = verifyAccess(token); // { id, email, role, isAdmin, ... }
+    // An unconfirmed email opens only the /auth routes (util/emailGate.js).
+    if (mustVerifyEmail(req.user) && !allowedWhileUnverified(req.originalUrl)) {
+      return res.status(403).json(EMAIL_NOT_VERIFIED);
+    }
     next();
   } catch {
     return safeJson(res, 401, "Unauthorized");

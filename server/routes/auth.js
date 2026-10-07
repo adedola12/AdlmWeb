@@ -1,4 +1,6 @@
 import express from "express";
+import { recordReferral } from "../services/referrals.js";
+import { mustVerifyEmail } from "../util/emailGate.js";
 import {
   verifyEmail,
   welcome as welcomeMail,
@@ -10,6 +12,16 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ensureDb } from "../db.js";
+import { SignupThrottle } from "../models/SignupThrottle.js";
+import {
+  REFUSAL as SIGNUP_REFUSAL,
+  guardOff,
+  honeypotTripped,
+  issueTicket,
+  reserveSignup,
+  ticketProblem,
+  visitorIp,
+} from "../util/signupGuard.js";
 import { User } from "../models/User.js";
 import { Refresh } from "../models/Refresh.js";
 import { PasswordReset } from "../models/PasswordReset.js";
@@ -40,12 +52,26 @@ import { getPrivateKey, getKid } from "../util/jwks.js";
 import { isGodUser, isGodEmail } from "../util/godAccount.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
 import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import { checkAddressReachable } from "../util/emailReachable.js";
+import { isPlausiblePhone } from "../util/phonePlausible.js";
 import {
   verifySocialIdentity,
   configuredProviders,
   exchangeCodeForIdToken,
   PROVIDER_FIELD,
 } from "../util/socialIdentity.js";
+import {
+  normalizeLegacyEnt,
+  enforceDeviceBinding,
+  adoptionEvidenceNeeded,
+} from "../util/deviceBinding.js";
+import {
+  clientLabel,
+  clientScheme,
+  entitlementsWithoutDeviceProvenance,
+  isSchemeAwareBindingEnabled,
+} from "../util/deviceIdentity.js";
+import { clearInstallerRowsForAdoption } from "../util/deviceAppEvidence.js";
 
 const router = express.Router();
 
@@ -72,7 +98,9 @@ function buildAuthPayload(user) {
     // state chosen on the website, so a QS who moves job changes it in one place
     // and the desktop reprices on its next sync.
     state: user.state || "",
-    entitlements: user.entitlements || [],
+    // Device rows without their provenance fields: this payload is the access
+    // token, sent on every request (util/deviceIdentity.js explains).
+    entitlements: entitlementsWithoutDeviceProvenance(user.entitlements),
     firstName: user.firstName || "",
     lastName: user.lastName || "",
     whatsapp: user.whatsapp || "",
@@ -97,6 +125,45 @@ function buildAuthPayload(user) {
   };
 }
 
+// What goes INSIDE the access token: buildAuthPayload with slim entitlements.
+//
+// The token rides on every request's Authorization header, and the API edge
+// refuses a request whose headers pass ~10 KB before it reaches Express: the
+// browser sees only "Failed to fetch" and nothing is logged. An organisation
+// with many seats carries a devices row per seat, which put Y.S. Associates'
+// token at 16,923 characters (network check Y8XQZV, 28 Sep 2026) and locked
+// them out of every signed-in page on web and Hub for two months.
+//
+// The desktop plugins DO read entitlements from the token: QUIV, HERON and the
+// other Revit/WPF products decode the JWT and look up productKey / status /
+// expiresAt before they open. Dropping the list outright (PR #77) made every
+// QUIV sign-in say "No subscription information found" (29 Sep 2026). So each
+// entitlement keeps its plain scalar fields and loses only its arrays and
+// objects (the per-seat devices rows), which is what made the token big.
+// Server gates still load entitlements from the database. An uploaded avatar
+// can be a data: URL of any size, so only a plain link is kept; /me reads the
+// real one from the database.
+const MAX_TOKEN_AVATAR_URL = 512;
+const isScalar = (v) => v === null || ["string", "number", "boolean"].includes(typeof v);
+export function tokenEntitlements(entitlements) {
+  return (Array.isArray(entitlements) ? entitlements : []).map((ent) => {
+    const src = ent && typeof ent.toObject === "function" ? ent.toObject() : ent || {};
+    const slim = {};
+    for (const [key, value] of Object.entries(src)) {
+      if (isScalar(value)) slim[key] = value;
+      else if (value instanceof Date) slim[key] = value.toISOString();
+    }
+    return slim;
+  });
+}
+export function accessTokenClaims(payload) {
+  const { entitlements, avatarUrl, ...claims } = payload;
+  claims.entitlements = tokenEntitlements(entitlements);
+  const avatar = String(avatarUrl || "");
+  claims.avatarUrl = avatar.length <= MAX_TOKEN_AVATAR_URL && !avatar.startsWith("data:") ? avatar : "";
+  return claims;
+}
+
 function isPluginClient(req) {
   const header = (name) => (req.get(name) || "").toLowerCase();
   const kind = header("x-adlm-client");
@@ -117,169 +184,12 @@ function normalizeExpiryMaybe(value) {
   return date;
 }
 
-function normalizeLegacyEnt(entitlement) {
-  if (!entitlement) return;
-
-  if (!entitlement.seats || entitlement.seats < 1) entitlement.seats = 1;
-  if (!Array.isArray(entitlement.devices)) entitlement.devices = [];
-
-  const seats = Math.max(Number(entitlement.seats || 1), 1);
-  const licenseType = String(entitlement.licenseType || "").toLowerCase();
-  if (licenseType !== "organization" && seats > 1) {
-    entitlement.licenseType = "organization";
-  }
-  if (!entitlement.licenseType) {
-    entitlement.licenseType = seats > 1 ? "organization" : "personal";
-  }
-
-  if (entitlement.devices.length === 0 && entitlement.deviceFingerprint) {
-    entitlement.devices.push({
-      fingerprint: entitlement.deviceFingerprint,
-      name: "",
-      boundAt: entitlement.deviceBoundAt || new Date(),
-      lastSeenAt: new Date(),
-      revokedAt: null,
-    });
-  }
-}
-
-function activeDevices(entitlement) {
-  return (entitlement?.devices || []).filter((device) => !device.revokedAt);
-}
-
 // Password complexity lives in util/passwordPolicy.js — see the note there
 // on why it is not defined in each route that sets a password.
 
-// Fingerprint v1→v2 migration: clients sending x-adlm-fp-version >= 2 that
-// don't match any existing device may transparently replace the user's
-// single legacy (v1) device. There is deliberately NO calendar deadline:
-// v1 fingerprints are MAC-based and drift whenever the user switches
-// network adapters, so a v1-bound user can show up needing migration at
-// any time (the original fixed 90-day window expired 2026-07-16 and
-// permanently locked such users out with DEVICE_MISMATCH). The migration
-// self-closes per entitlement: once its devices are v2, tryMigrate finds
-// no legacy device and normal binding enforcement applies.
-
-// enforceDeviceBinding enforces seat limits and, for personal (1-seat)
-// licenses, single-device binding. The `fpVersion` (from the
-// x-adlm-fp-version header) lets us auto-migrate users seamlessly from
-// the legacy MAC-based fingerprint to the new hardware-bound one
-// without locking them out when their fingerprint changes shape.
-function enforceDeviceBinding(entitlement, incomingFingerprint, fpVersion = 1) {
-  const fingerprint = String(incomingFingerprint || "").trim();
-  if (!fingerprint) {
-    return {
-      ok: false,
-      status: 400,
-      code: "DFP_REQUIRED",
-      error: "device_fingerprint required",
-    };
-  }
-
-  normalizeLegacyEnt(entitlement);
-
-  const seats = Math.max(Number(entitlement.seats || 1), 1);
-  const isOrg =
-    String(entitlement.licenseType || "").toLowerCase() === "organization" ||
-    seats > 1;
-
-  // Helper: try to migrate an existing v1 device to the new v2 fingerprint.
-  // Only runs when there is exactly one active v1 device (prevents
-  // accidental swaps on org licenses).
-  function tryMigrate(v2Fp) {
-    if (fpVersion < 2) return false;
-
-    const active = activeDevices(entitlement);
-    const legacy = active.filter((d) => (d.fpVersion || 1) < 2);
-    if (legacy.length !== 1) return false;
-
-    const target = legacy[0];
-    target.fingerprint = v2Fp;
-    target.fpVersion = 2;
-    target.lastSeenAt = new Date();
-    // Update legacy top-level mirror so older code paths stay consistent
-    entitlement.deviceFingerprint = v2Fp;
-    return true;
-  }
-
-  if (isOrg) {
-    const devices = activeDevices(entitlement);
-    const existing = devices.find((device) => device.fingerprint === fingerprint);
-
-    if (existing) {
-      existing.lastSeenAt = new Date();
-      if (fpVersion >= 2 && (existing.fpVersion || 1) < 2) existing.fpVersion = 2;
-      return { ok: true, changed: true };
-    }
-
-    if (devices.length < seats) {
-      entitlement.devices.push({
-        fingerprint,
-        name: "",
-        boundAt: new Date(),
-        lastSeenAt: new Date(),
-        revokedAt: null,
-        fpVersion: Math.max(1, Number(fpVersion) || 1),
-      });
-
-      if (!entitlement.deviceFingerprint) entitlement.deviceFingerprint = fingerprint;
-      if (!entitlement.deviceBoundAt) entitlement.deviceBoundAt = new Date();
-
-      return { ok: true, changed: true };
-    }
-
-    // At seat limit — last chance: migrate a lone legacy device in-place.
-    if (tryMigrate(fingerprint)) {
-      return { ok: true, changed: true, migrated: true };
-    }
-
-    return {
-      ok: false,
-      status: 403,
-      code: "DEVICE_LIMIT_REACHED",
-      error: "Device limit reached for this subscription.",
-    };
-  }
-
-  // Personal (single-seat) license
-  if (entitlement.deviceFingerprint && entitlement.deviceFingerprint !== fingerprint) {
-    // Attempt seamless migration for the v1 → v2 transition.
-    if (tryMigrate(fingerprint)) {
-      return { ok: true, changed: true, migrated: true };
-    }
-    return {
-      ok: false,
-      status: 403,
-      code: "DEVICE_MISMATCH",
-      error: "This subscription is already bound to another device.",
-    };
-  }
-
-  if (!entitlement.deviceFingerprint) {
-    entitlement.deviceFingerprint = fingerprint;
-    entitlement.deviceBoundAt = new Date();
-  }
-
-  const devices = activeDevices(entitlement);
-  if (!devices.some((device) => device.fingerprint === fingerprint)) {
-    entitlement.devices.push({
-      fingerprint,
-      name: "",
-      boundAt: entitlement.deviceBoundAt || new Date(),
-      lastSeenAt: new Date(),
-      revokedAt: null,
-      fpVersion: Math.max(1, Number(fpVersion) || 1),
-    });
-  } else {
-    const device = devices.find((item) => item.fingerprint === fingerprint);
-    if (device) {
-      device.lastSeenAt = new Date();
-      if (fpVersion >= 2 && (device.fpVersion || 1) < 2) device.fpVersion = 2;
-    }
-  }
-
-  return { ok: true, changed: true };
-}
+// Seat and device enforcement (normalizeLegacyEnt, enforceDeviceBinding, the
+// v1→v2 fingerprint migration and the scheme-aware Installer Hub adoption)
+// lives in util/deviceBinding.js so it can be unit-tested on its own.
 
 function getLicenseJwtSecret() {
   // Accept either historical name (LICENSE_JWT_SECRET) or the name used in .env
@@ -393,11 +303,29 @@ function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
   return jwt.sign(payload, secret, { ...commonOptions, algorithm: "HS256" });
 }
 
+// The sign-up form's ticket (util/signupGuard.js): asked for when the form
+// opens, required by POST /signup.
+router.get("/signup-ticket", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ ticket: issueTicket() });
+});
+
 router.post("/signup", async (req, res) => {
   try {
     await ensureDb();
     const { email, username, password, zone, firstName, lastName, whatsapp } =
       req.body || {};
+
+    // Bots first (2026-09-22): the hidden field and the form ticket. The
+    // per-visitor cap comes just before the account is created, so only real
+    // accounts count against it. One answer for every refusal.
+    const guard = !guardOff();
+    if (!guard) console.warn("[/auth/signup] SIGNUP_GUARD is off");
+    const blocked = !guard ? "" : honeypotTripped(req.body) ? "honeypot" : ticketProblem(req.body?.ticket);
+    if (blocked) {
+      console.warn(`[/auth/signup] refused: ${blocked}`);
+      return res.status(400).json({ error: SIGNUP_REFUSAL, code: "SIGNUP_CHECK" });
+    }
 
     if (!email || !password) {
       return res.status(400).json({ error: "email and password required" });
@@ -407,6 +335,17 @@ router.post("/signup", async (req, res) => {
       return res
         .status(400)
         .json({ error: "firstName, lastName and whatsapp are required" });
+    }
+
+    // Required and then unchecked is barely required at all: normalizeWhatsApp
+    // strips to digits and `+` without a length check, so 15 accounts in the
+    // list have a one-digit telephone number. See util/phonePlausible.js for
+    // where the threshold comes from.
+    if (!isPlausiblePhone(whatsapp)) {
+      return res.status(400).json({
+        error: "Enter a WhatsApp number we can actually reach you on, including the country or network code.",
+        code: "IMPLAUSIBLE_PHONE",
+      });
     }
 
     const pwError = validatePasswordStrength(password);
@@ -421,6 +360,19 @@ router.post("/signup", async (req, res) => {
     if (!emailRx.test(normalizedEmail)) {
       return res.status(400).json({ error: "Invalid email format" });
     }
+
+    // Matching that pattern only proves the string has an @ in it. `gmail.con`
+    // matches it, and three people who typed exactly that were given accounts,
+    // sent a code that evaporated, and then locked out by util/emailGate.js
+    // waiting for a code they could never receive. Telling them now is the fix.
+    // Fails open if DNS is unreachable — see util/emailReachable.js.
+    const reach = await checkAddressReachable(normalizedEmail, { log: console });
+    if (!reach.ok) {
+      return res
+        .status(400)
+        .json({ error: reach.message, code: "EMAIL_UNREACHABLE", reason: reach.reason });
+    }
+
     const normalizedUsername = String(
       username || normalizedEmail.split("@")[0],
     ).trim();
@@ -434,17 +386,43 @@ router.post("/signup", async (req, res) => {
     if (exists) return res.status(409).json({ error: "User exists" });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({
-      email: normalizedEmail,
-      username: normalizedUsername,
-      passwordHash,
-      role: "user",
-      zone: zone || null,
-      firstName: String(firstName || "").trim(),
-      lastName: String(lastName || "").trim(),
-      whatsapp: normalizeWhatsApp(whatsapp),
-      entitlements: [],
-    });
+    const slot = guard ? await reserveSignup(SignupThrottle, visitorIp(req)) : { problem: "", release: async () => {} };
+    if (slot.problem) {
+      console.warn(`[/auth/signup] refused: ${slot.problem}`);
+      return res.status(400).json({ error: SIGNUP_REFUSAL, code: "SIGNUP_CHECK" });
+    }
+    let user;
+    try {
+      user = await User.create({
+        email: normalizedEmail,
+        username: normalizedUsername,
+        passwordHash,
+        role: "user",
+        zone: zone || null,
+        firstName: String(firstName || "").trim(),
+        lastName: String(lastName || "").trim(),
+        whatsapp: normalizeWhatsApp(whatsapp),
+        entitlements: [],
+      });
+
+      // WHO SENT THEM. A referral is an attribution, never a gate: recordReferral
+      // swallows every failure and returns a reason, so nothing here can stop an
+      // account being created. The code rides in the body from the ?ref= the
+      // browser held on to (client/src/lib/referralRef.js).
+      if (user?._id) {
+        const ref = await recordReferral({
+          code: req.body?.ref,
+          newUser: user,
+          signupMethod: "password",
+        });
+        if (!ref.ok && ref.reason !== "no-code") {
+          console.warn(`[referrals] signup capture skipped: ${ref.reason}`);
+        }
+      }
+    } catch (createErr) {
+      await slot.release().catch(() => {});
+      throw createErr;
+    }
 
     // The address has not been proved yet, so the WELCOME does not go now — it
     // goes when the code comes back. Sending "your account is ready" to an
@@ -486,7 +464,7 @@ router.post("/signup", async (req, res) => {
     }
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     const refreshToken = signRefresh({ sub: payload._id });
 
     await Refresh.create({
@@ -515,9 +493,28 @@ function maskEmail(email) {
   return `${shown}${"*".repeat(Math.max(1, name.length - shown.length))}${domain}`;
 }
 
-// Email a fresh 6-digit OTP for a God login (reuses the StepUpOtp store). If a
-// still-valid code was issued in the last 60s we keep it (no spam) — the user
-// already has a working code. Throws if the email send fails.
+// Send a God login OTP WITHOUT blocking the caller. The sign-in response must
+// not wait on a mail round-trip: the code is verified against the StepUpOtp
+// store, never against the email, so the challenge can be handed back the moment
+// the code is persisted. A slow SES send used to sit inside POST /auth/login and
+// added ~1s (much more on a cold container) to every admin sign-in. Errors are
+// logged, not surfaced — the sign-in screen has already advanced and offers a
+// resend.
+function fireGodOtpEmail(user, code) {
+  const safeName = user.firstName || user.username || user.email.split("@")[0];
+  sendMail({
+    to: user.email,
+    ...breakGlassCode({ firstName: safeName, code }),
+  }).catch((err) =>
+    console.error("[/auth/login] god OTP mail send failed:", err?.message || err),
+  );
+}
+
+// Ensure a God login has a fresh 6-digit OTP, then email it (fire-and-forget).
+// Only the DB write is awaited, so the login response is not held for SES. If a
+// still-valid code was issued in the last 60s we reuse it rather than mint a new
+// one, and re-send THAT code — so a first send that failed self-heals when the
+// user re-submits, without spawning a second live code.
 async function issueGodLoginOtp(user, req) {
   const recent = await StepUpOtp.findOne({
     userId: user._id,
@@ -525,7 +522,10 @@ async function issueGodLoginOtp(user, req) {
     expiresAt: { $gt: new Date() },
     createdAt: { $gt: new Date(Date.now() - 60 * 1000) },
   });
-  if (recent) return;
+  if (recent) {
+    fireGodOtpEmail(user, recent.code);
+    return;
+  }
 
   const code = String(crypto.randomInt(100000, 999999));
   await StepUpOtp.create({
@@ -535,11 +535,7 @@ async function issueGodLoginOtp(user, req) {
     requestedFromIp: req.ip,
   });
 
-  const safeName = user.firstName || user.username || user.email.split("@")[0];
-  await sendMail({
-    to: user.email,
-    ...breakGlassCode({ firstName: safeName, code }),
-  });
+  fireGodOtpEmail(user, code);
 }
 
 // Mint a license token for a God account on ANY product / device, bypassing
@@ -605,6 +601,16 @@ router.post("/login", async (req, res) => {
         .json({ error: "Account disabled. Please contact support." });
     }
 
+    // A desktop plugin cannot show the confirm-your-email screen, so it is
+    // told why at sign-in rather than meeting a bare Forbidden on its next
+    // call. The web signs in and is shown the screen (util/emailGate.js).
+    if (isPluginClient(req) && mustVerifyEmail(buildAuthPayload(user))) {
+      return res.status(403).json({
+        code: "EMAIL_NOT_VERIFIED",
+        error: `Confirm your email address first. We sent a six-digit code to ${user.email}; sign in at adlmstudio.net to enter it or ask for a new one, then sign in here again.`,
+      });
+    }
+
     // ── Break-glass God account ──
     // Never issue tokens directly. The password check passed, but a God login
     // additionally requires an emailed OTP and the password re-entered, both
@@ -626,9 +632,12 @@ router.post("/login", async (req, res) => {
       }
 
       try {
+        // Only the OTP persistence is awaited here; the email is fired inside
+        // without blocking. A throw means the code could not be stored (DB), which
+        // is worth failing the sign-in for — a mail hiccup is not.
         await issueGodLoginOtp(user, req);
-      } catch (mailErr) {
-        console.error("[/auth/login] god OTP mail error:", mailErr);
+      } catch (otpErr) {
+        console.error("[/auth/login] god OTP setup error:", otpErr);
         return res.status(500).json({ error: "Unable to send sign-in code" });
       }
 
@@ -749,11 +758,60 @@ router.post("/login", async (req, res) => {
       // God gets the same pass: its whole purpose is activating on a customer's
       // machine, and a synthesized entitlement has no device list to bind to.
       if (!isAdminUser && !isGod) {
+        // Scheme-aware binding (util/deviceIdentity.js; kill switch
+        // DEVICE_SCHEME_AWARE_BINDING=0): which id recipe this request carries
+        // decides whether it may take over a seat the Installer Hub holds with
+        // an id this app can never present.
+        const schemeAware = isSchemeAwareBindingEnabled();
+        const clientHeader = String(req.get("x-adlm-client") || "")
+          .trim()
+          .toLowerCase();
+        const userAgent = String(req.get("user-agent") || "");
+        const scheme = clientScheme({
+          productKey: chosenProductKey,
+          clientHeader,
+          userAgent,
+          fpVersion,
+        });
+        const client = clientLabel({ clientHeader, userAgent });
+
+        // Only a sign-in that would otherwise be refused, with an adoptable Hub
+        // row in the way, pays for this lookup; everyone else gets [] back.
+        let clearedInstallerRows;
+        if (schemeAware) {
+          clearedInstallerRows = await clearInstallerRowsForAdoption({
+            userId: user._id,
+            productKey: chosenProductKey,
+            fingerprints: adoptionEvidenceNeeded(entitlement, {
+              productKey: chosenProductKey,
+              scheme,
+              fingerprint: chosenFingerprint,
+            }),
+            onError: (err) =>
+              console.warn(
+                `[/auth/login] device app-use lookup failed, not adopting: ` +
+                  `user=${user.email} product=${chosenProductKey} ` +
+                  `err=${err?.message || err}`,
+              ),
+          });
+        }
+
         const binding = enforceDeviceBinding(
           entitlement,
           chosenFingerprint,
           fpVersion,
+          {
+            enabled: schemeAware,
+            productKey: chosenProductKey,
+            scheme,
+            client,
+            deviceName: String(req.body?.deviceName || req.body?.device_name || ""),
+            clearedInstallerRows,
+          },
         );
+        const schemeLog = schemeAware
+          ? ` scheme=${scheme} client=${client || "-"} decision=${binding.decision}`
+          : "";
         if (!binding.ok) {
           // Structured mismatch diagnostics: enough to triage a lockout from
           // logs alone (which scheme the client used, what it sent vs what is
@@ -772,18 +830,35 @@ router.post("/login", async (req, res) => {
               `clientFpVersion=${fpVersion} ` +
               `incoming=${chosenFingerprint.slice(0, 10)}… ` +
               `bound=${String(entitlement.deviceFingerprint || "").slice(0, 10)}… ` +
-              `devices=[${devs}]`,
+              `devices=[${devs}]` +
+              schemeLog,
           );
+          // `message` is what the desktop clients show (QUIV reads it before
+          // `error`); `holder` says who holds the seat. Neither carries a
+          // fingerprint. Both are absent with the kill switch off.
           return res.status(binding.status).json({
             error: binding.error,
             code: binding.code,
+            ...(binding.message ? { message: binding.message } : {}),
+            ...(binding.holder ? { holder: binding.holder } : {}),
           });
+        }
+        if (binding.adopted) {
+          console.log(
+            `[/auth/login] device seat adopted from installer-hub row: ` +
+              `user=${user.email} product=${chosenProductKey} ` +
+              `new=${chosenFingerprint.slice(0, 10)}… ` +
+              `installer=${String(binding.adoptedFrom?.fingerprint || "").slice(0, 10)}… ` +
+              `installerName=${JSON.stringify(binding.adoptedFrom?.name || "")}` +
+              schemeLog,
+          );
         }
         if (binding.migrated) {
           console.log(
             `[/auth/login] device fingerprint migrated v1→v2: ` +
               `user=${user.email} product=${chosenProductKey} ` +
-              `new=${chosenFingerprint.slice(0, 10)}…`,
+              `new=${chosenFingerprint.slice(0, 10)}…` +
+              schemeLog,
           );
         }
         changed ||= !!binding.changed;
@@ -810,7 +885,7 @@ router.post("/login", async (req, res) => {
     }
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     const refreshToken = signRefresh({ sub: payload._id });
 
     await Refresh.create({
@@ -929,7 +1004,7 @@ router.post("/login/otp", authLimiter, async (req, res) => {
     }
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     const refreshToken = signRefresh({ sub: payload._id });
     await Refresh.create({
       userId: user._id,
@@ -974,7 +1049,7 @@ router.post("/refresh", async (req, res) => {
     if (!user) return res.status(401).json({ error: "User missing" });
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     res.json({ accessToken, user: payload });
   } catch (err) {
     console.error("[/auth/refresh] error:", err);
@@ -1361,8 +1436,39 @@ router.post("/social", authLimiter, async (req, res) => {
           lastName: identity.lastName,
           [field]: identity.subject,
           entitlements: [],
+          // THE PROVIDER HAS ALREADY VERIFIED THIS ADDRESS.
+          //
+          // util/socialIdentity.js refuses the sign-in outright when the
+          // provider reports email_verified false, so by the time we are here
+          // Google or Microsoft has confirmed the address — a stronger check
+          // than our own six-digit code, which only proves the person can read
+          // the inbox once.
+          //
+          // Omitting this was not harmless. util/emailGate.js refuses EVERY
+          // signed-in request from an unconfirmed account except the /auth
+          // ones, so a customer who signed up with Google was created
+          // unverified, never sent a code (only POST /auth/signup sends one),
+          // and then met the "confirm your email" screen asking for a code
+          // that had never been sent. They could press resend and escape, but
+          // the first thing the product did was block them. It is also why 270
+          // accounts sat unmailable: the broadcast audience requires a verified
+          // address, and on this site most sign-ups come through a provider.
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
         });
         created = true;
+        // The SECOND place an account is made. A referral captured only in the
+        // password path loses every Google and Microsoft signup, which on this
+        // site is most of them. The code survived the provider round trip in the
+        // browser's own storage and comes back in this request's body.
+        const ref = await recordReferral({
+          code: req.body?.ref,
+          newUser: user,
+          signupMethod: "social",
+        });
+        if (!ref.ok && ref.reason !== "no-code") {
+          console.warn(`[referrals] social capture skipped: ${ref.reason}`);
+        }
       }
     }
 
@@ -1403,7 +1509,7 @@ router.post("/social", authLimiter, async (req, res) => {
     }
 
     const payload = buildAuthPayload(user);
-    const accessToken = signAccess(payload);
+    const accessToken = signAccess(accessTokenClaims(payload));
     const refreshToken = signRefresh({ sub: payload._id });
 
     await Refresh.create({
@@ -1449,6 +1555,9 @@ router.post("/social", authLimiter, async (req, res) => {
 const VERIFY_MINUTES = 30;
 /** How long before another code may be asked for. */
 const VERIFY_RESEND_SECONDS = 60;
+// Per unconfirmed account (2026-09-22): codes a day, and address changes ever.
+const VERIFY_RESENDS_PER_DAY = 5;
+const EMAIL_CHANGES_MAX = 3;
 /** Wrong guesses before the code is thrown away. */
 const VERIFY_MAX_ATTEMPTS = 6;
 
@@ -1557,10 +1666,23 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
       });
     }
 
+    // How many codes an unconfirmed account may have sent in a day, and how
+    // many times it may change its address. Without these, one account that
+    // got past the sign-up checks could mail any address, every minute
+    // (review of the sign-up protection, 2026-09-22).
+    const today = new Date().toISOString().slice(0, 10);
+    const sentToday = user.emailVerifyResendDay === today ? user.emailVerifyResends || 0 : 0;
+    if (sentToday >= VERIFY_RESENDS_PER_DAY) {
+      return res.status(429).json({ error: "That is the most codes we send in a day. Try again tomorrow, or contact support." });
+    }
+
     // An address change is allowed here, because the commonest reason a code
     // never arrives is that the address was typed wrongly.
     const wanted = String(req.body?.email || "").trim().toLowerCase();
     if (wanted && wanted !== user.email) {
+      if ((user.emailChangeCount || 0) >= EMAIL_CHANGES_MAX) {
+        return res.status(429).json({ error: "The address has been changed too many times. Contact support to finish setting up." });
+      }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(wanted)) {
         return res.status(400).json({ error: "That email does not look right." });
       }
@@ -1568,7 +1690,10 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
         return res.status(409).json({ error: "Another account already uses that address." });
       }
       user.email = wanted;
+      user.emailChangeCount = (user.emailChangeCount || 0) + 1;
     }
+    user.emailVerifyResendDay = today;
+    user.emailVerifyResends = sentToday + 1;
 
     const code = newVerifyCode();
     user.emailVerifyHash = hashCode(code);

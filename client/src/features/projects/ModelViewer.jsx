@@ -247,9 +247,12 @@ export default function ModelViewer({
   if (available.length === 0) {
     return (
       <div className="wk-panel wk-empty" style={{ marginBottom: 0 }}>
+        {/* <strong>, not <b>: a <b> inside a .wk-empty is now the empty
+            state's heading and is laid out as a block of its own, which would
+            snap this tab name onto its own line mid-sentence. */}
         No model attached yet. Upload a validated IFC from the{" "}
-        <b style={{ fontWeight: 500, color: "var(--ink)" }}>Bill of Quantity</b> tab to view it
-        here.
+        <strong style={{ fontWeight: 500, color: "var(--ink)" }}>Bill of Quantity</strong> tab to
+        view it here.
       </div>
     );
   }

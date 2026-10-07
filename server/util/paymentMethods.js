@@ -7,10 +7,13 @@
 // useless outside this Paystack account and is stripped from API responses
 // (select:false on the schema path). Do not log it.
 import { User } from "../models/User.js";
+import { paystackAccount } from "./paystackKeys.js";
 
 // chargeData = the `data` object of a Paystack charge.success event or of a
 // /transaction/verify response (both carry the same `authorization` shape).
-export async function saveCardAuthorization(userId, chargeData) {
+// `account`: the Paystack account the charge went through (R22); a card can
+// only be charged again through the same one.
+export async function saveCardAuthorization(userId, chargeData, account = paystackAccount()) {
   if (!userId || !chargeData) return { saved: false, reason: "no-data" };
 
   const auth = chargeData.authorization || {};
@@ -30,6 +33,7 @@ export async function saveCardAuthorization(userId, chargeData) {
       $set: {
         paymentMethod: {
           provider: "paystack",
+          account: account === "business" ? "business" : "personal",
           authorizationCode: code,
           signature: String(auth.signature || ""),
           last4: String(auth.last4 || ""),

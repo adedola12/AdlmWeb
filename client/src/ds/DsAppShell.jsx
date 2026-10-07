@@ -21,11 +21,21 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import DsSurfaceSwitch from "./DsSurfaceSwitch.jsx";
 import { useAuth } from "../store.jsx";
 import { isStaff } from "../utils/roles.js";
+import { seesNewBuild } from "../lib/newBuildAccess.js";
+import { railForViewer } from "../lib/railGate.js";
+import { classicFallbackFor } from "../lib/classicPaths.js";
 import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
-import DsRail from "./chrome/DsRail.jsx";
+import DsRailNav from "./DsRailNav.jsx";
+import { useDismiss } from "./dismiss.js";
+import DsSectionTabs from "./DsSectionTabs.jsx";
+import DsNotifBell from "./DsNotifBell.jsx";
+import { activeRailId } from "../lib/railActive.js";
+import { RAIL, railItems } from "./railConfig.js";
+import { useFeedback } from "./feedback/feedbackContext.js";
 import NetworkIndicator from "../components/NetworkIndicator.jsx";
+import Seo from "../components/Seo.jsx";
 
 // His app screens load dash.css and work.css on top of site.css. Importing
 // them here rather than in main.jsx is what keeps ~91 KB of dashboard styling
@@ -58,10 +68,48 @@ function initialsOf(text, fallback) {
  * @param {string} [props.page]              his page name for the current
  *                                          screen, when the route it lives at
  *                                          is not the one the rail links to
+ * @param {boolean} [props.sectionTabs]      false on a screen that carries its
+ *                                          own tab strip. The project page is
+ *                                          the one: his work-project.html is a
+ *                                          bare <div id="pj-app"> in the shell,
+ *                                          and its .pj-tabs (Overview, Bill,
+ *                                          Rates & budget …) sit where these
+ *                                          would. Two tab rows stacked is not a
+ *                                          spacing problem, it is two different
+ *                                          navigations in the same place.
+ * @param {boolean} [props.full]             full screen: the rail and the app
+ *                                          bar go and the screen takes the
+ *                                          viewport. Only the project
+ *                                          workspace asks for it — a bill of
+ *                                          280 lines beside a 264px rail is
+ *                                          the reason — and the screen that
+ *                                          asks owns the way back out of it.
  */
-export default function DsAppShell({ children, title = "", page = "" }) {
+export default function DsAppShell({
+  children,
+  title = "",
+  page = "",
+  sectionTabs = true,
+  full = false,
+}) {
   const { user, accessToken, clear } = useAuth();
   const staff = isStaff(user);
+
+  // This shell wraps ELEVEN CLASSIC screens as well as the new build
+  // (WorkShellRoute, App.jsx:41). Before go-live a customer could not open the
+  // /manage and /work destinations in the rail, so each was rewritten to the
+  // classic screen that does the same job (lib/railGate.js). Since 1 October
+  // the new build is the build and everyone gets the rail untouched — this
+  // used to ask canViewPreview and kept customers on classic after launch.
+  // Raising GATE_NEW_BUILD (lib/newBuildAccess.js) brings the rewrite back.
+  const mayUseNewBuild = seesNewBuild(user);
+  const rail = React.useMemo(() => railForViewer(RAIL, mayUseNewBuild), [mayUseNewBuild]);
+  // The new-build destination, or its classic counterpart while the gate is
+  // up for this viewer. Used for the links that are not in the rail config.
+  const href = React.useCallback(
+    (to) => (mayUseNewBuild ? to : classicFallbackFor(to)),
+    [mayUseNewBuild],
+  );
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -75,9 +123,16 @@ export default function DsAppShell({ children, title = "", page = "" }) {
       ? "Search projects, rates and programmes"
       : "Search products, invoices, people";
 
+  const fb = useFeedback();
   const [counts, setCounts] = React.useState(null);
+  // The rail's red dot: /me/rail's count on arrival, then the bell's live one.
+  const [bellN, setBellN] = React.useState(null);
   const [drawer, setDrawer] = React.useState(false);
   const [menu, setMenu] = React.useState(false);
+  const accRef = React.useRef(null);
+  // The account menu closes on a click elsewhere, Escape, or another
+  // dropdown opening (R05). It used to close only from its own button.
+  useDismiss(menu, () => setMenu(false), [accRef]);
 
   // His dash.js puts these on <body>/<html>; several of his rules key off them.
   React.useEffect(() => {
@@ -150,27 +205,44 @@ export default function DsAppShell({ children, title = "", page = "" }) {
     team: "",
   };
 
-  // His dash.js marks the current item with `.on` by comparing his page names.
-  // Two things have to match here, because the rail is used from two places:
-  // on a real route the current path is what identifies the screen, but under
-  // /preview/* the path is /preview/<slug> while the rail links at /manage/*,
-  // and comparing those marks nothing at all. His page name — which the porter
-  // records on every link as data-ds-page — identifies the screen in both.
+  // The current rail item: an exact match of this route against the rail
+  // config (lib/railActive.js), falling back to the screen's page name only
+  // when its route is not in the rail. One item at most (R04).
+  const activeId = activeRailId({
+    pathname: location.pathname,
+    search: location.search,
+    page,
+  });
+  const alertN = bellN ?? Number(counts?.assignments || 0);
   const railRef = React.useRef(null);
+  // Every page in the rail the search box can jump to.
+  const searchable = React.useMemo(
+    () =>
+      railItems(RAIL).filter(
+        (it) => !it.action && it.ready !== false && !it.aliasOnly,
+      ),
+    [],
+  );
+
+  // /manage/support#ticket and the like: the router does not scroll to a hash,
+  // and .dsh-main (not the window) is the scroller.
   React.useEffect(() => {
-    const root = railRef.current;
-    if (!root) return;
-    const here = location.pathname;
-    root.querySelectorAll("a[href]").forEach((a) => {
-      const to = a.getAttribute("href");
-      const on = page
-        ? a.getAttribute("data-ds-page") === page
-        : to === here || (to !== "/" && here.startsWith(`${to}/`));
-      a.classList.toggle("on", on);
-      if (on) a.setAttribute("aria-current", "page");
-      else a.removeAttribute("aria-current");
-    });
-  }, [location.pathname, page, counts]);
+    const id = location.hash.replace(/^#/, "");
+    if (!id) return undefined;
+    // The screen may still be loading its data, so keep looking for the
+    // target for a few seconds rather than trying once.
+    let tries = 0;
+    const t = setInterval(() => {
+      const el = document.getElementById(decodeURIComponent(id));
+      if (el || ++tries > 25) clearInterval(t);
+      el?.scrollIntoView({ block: "start" });
+    }, 200);
+    return () => clearInterval(t);
+  }, [location.pathname, location.hash]);
+  const owned = React.useMemo(
+    () => (Array.isArray(counts?.ownedKeys) ? new Set(counts.ownedKeys) : null),
+    [counts],
+  );
 
   // Below 1000px his rail is a fixed drawer that slides in on `.open`. The
   // class has to land on .dsh-rail itself — the host above renders as
@@ -187,7 +259,18 @@ export default function DsAppShell({ children, title = "", page = "" }) {
   };
 
   return (
-    <div className="ds">
+    <div className={full ? "ds dsh-fs" : "ds"}>
+      {/* Every screen inside this shell is behind ProtectedRoute: a crawler
+          that reaches one can only be redirected to /login, so indexing it
+          spends crawl budget to publish a page nobody can open. robots.txt
+          disallows these paths too, but that is only an instruction about
+          fetching — this is the instruction about indexing, for anything that
+          fetches the page anyway (a crawler that ignores robots.txt, or one
+          arriving from a link rather than from the path list).
+          index.html ships a default index,follow and Seo always overwrites the
+          tag outright, so one mount here covers the whole signed-in app rather
+          than every screen remembering for itself. */}
+      <Seo title={title || undefined} noindex />
       <div className="dsh">
         {/* His "leaving the studio" card. Renders nothing until a link to a
             public page is clicked; the listener is on the document, so this
@@ -210,7 +293,15 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             if (e.target.closest("a")) setDrawer(false);
           }}
         >
-          <DsRail d={d} />
+          <DsRailNav
+            rail={rail}
+            homeHref={href("/work")}
+            activeId={activeId}
+            d={d}
+            dots={alertN ? { assignments: { label: `${alertN} assignment${alertN === 1 ? "" : "s"} need${alertN === 1 ? "s" : ""} you` } } : null}
+            owned={owned}
+            onSignOut={signOut}
+          />
         </div>
 
         <div className="dsh-main">
@@ -228,16 +319,39 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             <span className="sp" />
             <span className="dsh-search">
               {icon("search")}
+              {/* It had no handler at all. It now jumps to the account page
+                  whose name matches (R01), suggesting them as you type. */}
               <input
                 type="search"
                 placeholder={searchPlaceholder}
                 aria-label="Search this account"
+                list="dsh-search-pages"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  const q = e.currentTarget.value.trim().toLowerCase();
+                  if (!q) return;
+                  const hit = searchable.find((it) => it.label.toLowerCase() === q) ||
+                    searchable.find((it) => it.label.toLowerCase().includes(q));
+                  if (hit) {
+                    e.currentTarget.value = "";
+                    navigate(hit.to);
+                  } else {
+                    fb.toast({ tone: "info", title: `Nothing in your account is called "${e.currentTarget.value.trim()}"` });
+                  }
+                }}
               />
+              <datalist id="dsh-search-pages">
+                {searchable.map((it) => (
+                  <option key={it.id} value={it.label} />
+                ))}
+              </datalist>
             </span>
             {/* Not in his build: signal bars for the round trip to ADLM Cloud,
                 the same indicator the desktop products carry in their header. */}
             <NetworkIndicator />
-            <span className="dsh-acc">
+            {/* R11: assignment deadlines and marks. */}
+            <DsNotifBell accessToken={accessToken} onCount={setBellN} />
+            <span className="dsh-acc" ref={accRef}>
               <button
                 type="button"
                 className="dsh-me"
@@ -256,9 +370,13 @@ export default function DsAppShell({ children, title = "", page = "" }) {
                 {/* His switcher, shown only to somebody who holds both
                     surfaces — the same `both` test his dash.js makes. */}
                 {staff && <DsSurfaceSwitch at="account" />}
-                <Link to="/manage">Dashboard</Link>
-                <Link to="/manage/settings">Account settings</Link>
-                <Link to="/manage/billing">Billing &amp; invoices</Link>
+                {/* Same rule as the rail: while the gate is up for this viewer
+                    they point at the classic screens that answer them. "Billing
+                    & invoices" in particular has to reach the invoices, which on
+                    classic are on the profile, not the dashboard. */}
+                <Link to={href("/manage")}>Dashboard</Link>
+                <Link to={href("/manage/settings")}>Account settings</Link>
+                <Link to={href("/manage/billing")}>Billing &amp; invoices</Link>
                 {/* His rule mutes it: .dsh-menu a.out { color: var(--ink-3) }.
                     Sign out is the one item nobody should hit by accident, so
                     it reads quieter than the things you came here to do. */}
@@ -269,6 +387,12 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             </span>
           </header>
 
+          {/* R03: this section's destinations as tabs, from the rail config.
+              Suppressed on a screen that has its own tab strip — see the
+              sectionTabs prop. The rail still carries every destination. */}
+          {sectionTabs ? (
+            <DsSectionTabs rail={rail} activeId={activeId} owned={owned} />
+          ) : null}
           {children}
         </div>
 

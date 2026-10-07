@@ -209,7 +209,7 @@ export default function DsAdminIssued() {
     { h: "Document", w: "18%", cell: (r) => <AdmTwo top={r.ref || r.kind} under={r.kind} /> },
     { h: "To", w: "24%", cell: (r) => <AdmTwo top={r.to} under={r.org || r.email} /> },
     { h: "Sent", cell: (r) => when(r.on) },
-    { h: "For", num: true, cell: (r) => r.worth || <AdmDim>—</AdmDim> },
+    { h: "For", num: true, cell: (r) => r.worth || <AdmDim>–</AdmDim> },
     {
       h: "",
       cell: (r) => (

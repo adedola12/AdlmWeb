@@ -174,7 +174,7 @@ export default function DsAdminPurchases() {
             onClick={() => setView(key)}
           >
             <span>{label}</span>
-            <em className="adm-tab-n">{counts[countKey] ?? "—"}</em>
+            <em className="adm-tab-n">{counts[countKey] ?? "–"}</em>
           </button>
         ))}
       </div>

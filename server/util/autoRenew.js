@@ -20,6 +20,7 @@
 //     to renew manually. Max RENEW_MAX_ATTEMPTS attempts per expiry cycle,
 //     at most one per day → "retry max 2x over 3 days" with daily cron.
 import crypto from "crypto";
+import { paystackSecret, paystackKeys, cardAccount } from "./paystackKeys.js";
 import mongoose from "mongoose";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
@@ -29,8 +30,10 @@ import { sendMail } from "./mailer.js";
 import { applyEntitlementsFromPurchase } from "./applyEntitlements.js";
 import { autoEnrollFromPurchase } from "./autoEnroll.js";
 import { toMoney, getEffectivePrices, computeRecurring } from "./pricing.js";
+import { bundleDiscountForRenewal } from "./bundleDiscount.js";
 
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+// R22: keys from util/paystackKeys.js. A renewal charges the card through the
+// account it was saved on, whichever account new payments use.
 
 const RENEW_WINDOW_DAYS = Math.max(
   parseInt(process.env.RENEW_WINDOW_DAYS || "3", 10) || 3,
@@ -52,7 +55,7 @@ const WEB_URL =
   ).trim() || "http://localhost:5173";
 
 const fmtNaira = (n) => `₦${Number(n || 0).toLocaleString("en-NG")}`;
-const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
+const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "–");
 
 /* ---------------- job lock (same pattern as expiryNotifier) ---------------- */
 
@@ -209,15 +212,24 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
     periods,
     seats,
     currency: "NGN",
-    fx: 1,
   });
   if (!(recurring > 0)) {
     return { status: "skipped", reason: "no-price" };
   }
 
+  // Same bundle rule as checkout: a customer who still holds every desktop
+  // product renews each one at 5% off (10% when it renews for a year).
+  const bundle = bundleDiscountForRenewal({
+    entitlements: user.entitlements || [],
+    productKey,
+    months: periods * (isYearly ? 12 : 1),
+    recurring,
+  });
+  const charged = Math.max(Math.round(recurring - bundle.amount), 0);
+
   const vatAmount =
-    vatCfg.percent > 0 ? toMoney((recurring * vatCfg.percent) / 100, "NGN") : 0;
-  const totalAmount = Math.round(recurring + vatAmount);
+    vatCfg.percent > 0 ? toMoney((charged * vatCfg.percent) / 100, "NGN") : 0;
+  const totalAmount = Math.round(charged + vatAmount);
   const amountKobo = Math.round(totalAmount * 100);
 
   if (dryRun) {
@@ -233,6 +245,7 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
     email: user.email,
     currency: "NGN",
     totalBeforeDiscount: recurring,
+    bundleDiscount: bundle.amount,
     vatPercent: vatCfg.percent,
     vatAmount,
     vatLabel: vatCfg.percent > 0 ? `${vatCfg.label} ${vatCfg.percent}%` : "",
@@ -254,6 +267,8 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
         unit: isYearly ? eff.yearly : eff.monthly,
         install: 0,
         subtotal: recurring,
+        bundlePercent: bundle.percent,
+        bundleDiscount: bundle.amount,
       },
     ],
     status: "pending",
@@ -269,7 +284,7 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET}`,
+          Authorization: `Bearer ${paystackSecret(process.env, cardAccount(user.paymentMethod))}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -350,7 +365,7 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
 /* ---------------- main entry ---------------- */
 
 export async function runAutoRenewals({ dryRun = false, limit = 0 } = {}) {
-  if (!PAYSTACK_SECRET) {
+  if (!paystackKeys().length) {
     return { ok: false, skipped: true, reason: "paystack-not-configured" };
   }
 

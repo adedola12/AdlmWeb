@@ -55,7 +55,7 @@ const dayLabel = (s) => {
     ? s
     : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 };
-const pct = (part, whole) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—");
+const pct = (part, whole) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "–");
 
 function downloadCsv(filename, headers, rows) {
   const esc = (v) => {
@@ -379,14 +379,14 @@ export default function DsAdminTimeSaved() {
   ];
   const userCols = [
     { h: "User", k: "email", cell: (r) => <AdmTwo top={r.email} under={r.firmName || ""} /> },
-    { h: "Product", k: "product", cell: (r) => (r.product ? <AdmChip>{r.product}</AdmChip> : <AdmDim>—</AdmDim>) },
+    { h: "Product", k: "product", cell: (r) => (r.product ? <AdmChip>{r.product}</AdmChip> : <AdmDim>–</AdmDim>) },
     { h: "Sessions", k: "sessions", num: true, cell: (r) => r.sessions },
     { h: "Items", k: "items", num: true, cell: (r) => r.items },
     { h: "Active", k: "activeSeconds", num: true, cell: (r) => `${hours(r.activeSeconds)} h` },
     { h: "Est. manual", k: "estimatedManualSeconds", num: true, cell: (r) => `${hours(r.estimatedManualSeconds)} h` },
     { h: "Saved", k: "savedSeconds", num: true, cell: (r) => <b>{hours(r.savedSeconds)} h</b> },
     { h: "Median session", k: "medianActiveSeconds", num: true, cell: (r) => dur(r.medianActiveSeconds) },
-    { h: "Last session", k: "lastAt", cell: (r) => (r.lastAt ? dayLabel(r.lastAt) : <AdmDim>—</AdmDim>) },
+    { h: "Last session", k: "lastAt", cell: (r) => (r.lastAt ? dayLabel(r.lastAt) : <AdmDim>–</AdmDim>) },
   ];
 
   const exportFirms = () =>
@@ -559,7 +559,7 @@ export default function DsAdminTimeSaved() {
             <div className="adm-panel-h">
               <h2>Methodology and baseline</h2>
               <span className="note">
-                active version <b>{active?.version || "—"}</b>
+                active version <b>{active?.version || "–"}</b>
                 {active?.activatedAt ? ` since ${dayLabel(active.activatedAt)}` : ""}
               </span>
             </div>

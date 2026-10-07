@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlement } from "../middleware/requireEntitlement.js";
 import { ensureDb } from "../db.js";
+import { refuseBrowserRateWrites } from "../middleware/rateGenOnlyWrites.js";
 
 import { RateGenMaterial } from "../models/RateGenMaterial.js";
 import { RateGenLabour } from "../models/RateGenLabour.js";
@@ -21,13 +22,29 @@ import {
   normalizeCustomRate,
   normalizeRateOverride,
   normalizeSectionKey,
+  preservePlantLines,
   toUserRateDefinition,
+  compositionSubtotals,
 } from "../util/rategenUserRates.js";
+import {
+  archiveCustomRate,
+  clientIsSyncAware,
+  customRateOrigin,
+  deleteDecision,
+  mergeBulkCustomRates,
+} from "../util/rategenCustomRateGuard.js";
+import {
+  makeCompositionBudget,
+  projectBestRate,
+  projectRateCandidate,
+} from "../util/rategenRateProjection.js";
 
 const router = express.Router();
 
 // ✅ IMPORTANT: scope auth ONLY to /library/*
-router.use("/library", requireAuth, requireEntitlement("rategen"));
+// Rates are built in Rate Gen: a browser may read here (and restore an
+// archived custom rate) but not write (middleware/rateGenOnlyWrites.js).
+router.use("/library", requireAuth, requireEntitlement("rategen"), refuseBrowserRateWrites);
 
 const DEFAULT_LIMIT = 250;
 const MAX_LIMIT = 1000;
@@ -407,7 +424,13 @@ router.post("/library/material-prices/resolve", async (req, res, next) => {
  * POST /library/rate-items/resolve
  * Fuzzy-match BOQ item descriptions against the user's effective RateGen rates.
  * Body: { items: [{ description, unit }], limitCandidates?: number }
- * Returns: { ok, results, ratesByKey, candidatesByKey }
+ * Returns: { ok, results, ratesByKey, candidatesByKey, stats }
+ *
+ * Every candidate carries the rate's id and its per-unit split by resource
+ * class — materialCost / labourCost / plantCost / otherCost — because plant is
+ * its own class and a caller filing this money into a Budget has to know which
+ * bucket it belongs in. The best match additionally carries the full
+ * `composition` (up to a per-response cap; see util/rategenRateProjection.js).
  */
 router.post("/library/rate-items/resolve", async (req, res, next) => {
   try {
@@ -450,6 +473,13 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
           sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
           source: String(r?.source || "master"),
           rateId: r?.rateId || r?.id || r?._id || null,
+          // The build-up itself, and its split by resource class. A rate's
+          // material, labour and plant prices were parsed a line above and then
+          // thrown away at the projection; the caller needs them to put the
+          // right money in the right Budget bucket (plant is its own class, not
+          // a slice of labour).
+          composition: r?.composition || null,
+          subtotals: compositionSubtotals(r?.composition),
           _tokens: tokens(desc),
           _unitNorm: normUnit(r?.unit),
           _plantShare: plantShareOf(r),
@@ -461,6 +491,9 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
     const ratesByKey = {};
     const candidatesByKey = {};
     const results = [];
+
+    // Bounds how much build-up one response may carry; see the helper.
+    const budget = makeCompositionBudget();
 
     for (const w of wanted) {
       const reqToks = tokens(w.description);
@@ -486,28 +519,14 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
 
       const best = candidates[0] || null;
 
-      const mapped = candidates.map((c) => ({
-        description: c.description,
-        unit: c.unit,
-        totalCost: c.totalCost,
-        netCost: c.netCost,
-        sectionKey: c.sectionKey,
-        sectionLabel: c.sectionLabel,
-        source: c.source,
-        score: Number((c.score || 0).toFixed(4)),
-      }));
+      // Candidates carry the per-unit subtotals and the rate's id, but NOT the
+      // whole build-up — see util/rategenRateProjection.js for why.
+      const mapped = candidates.map(projectRateCandidate);
 
       candidatesByKey[descKey] = mapped;
-      ratesByKey[descKey] = best
-        ? {
-            description: best.description,
-            unit: best.unit,
-            totalCost: best.totalCost,
-            sectionLabel: best.sectionLabel,
-            source: best.source,
-            score: Number((best.score || 0).toFixed(4)),
-          }
-        : null;
+      ratesByKey[descKey] = projectBestRate(best, {
+        includeComposition: budget.take(best),
+      });
 
       results.push({
         key: descKey,
@@ -522,7 +541,7 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
       results,
       ratesByKey,
       candidatesByKey,
-      stats: { requested: wanted.length, pool: pool.length },
+      stats: { requested: wanted.length, pool: pool.length, ...budget.stats },
     });
   } catch (err) {
     next(err);
@@ -532,7 +551,9 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
 /**
  * GET /library/rate-items/search?q=...&limit=8
  * Lightweight type-ahead: search user's effective rates by description keyword.
- * Returns: { ok, results: [{ description, unit, totalCost, sectionLabel, source }] }
+ * Returns: { ok, results: [{ description, unit, totalCost, netCost, sectionLabel,
+ *   source, score, rateId, materialCost, labourCost, plantCost, otherCost }] }
+ * No composition here — this fires on every keystroke.
  */
 router.get("/library/rate-items/search", async (req, res, next) => {
   try {
@@ -570,6 +591,11 @@ router.get("/library/rate-items/search", async (req, res, next) => {
         }
         if (score === 0) return null;
 
+        // Same additive shape as a resolve candidate: the id so a pick can name
+        // the rate it took, and the per-unit split by resource class so the
+        // caller can file material, labour and plant money separately. The full
+        // build-up stays off a type-ahead result — it fires on every keystroke.
+        const subtotals = compositionSubtotals(r?.composition);
         return {
           description: desc,
           unit: String(r?.unit || ""),
@@ -578,6 +604,11 @@ router.get("/library/rate-items/search", async (req, res, next) => {
           sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
           source: String(r?.source || "master"),
           score,
+          rateId: r?.rateId || r?.id || r?._id || null,
+          materialCost: subtotals.materialCost,
+          labourCost: subtotals.labourCost,
+          plantCost: subtotals.plantCost,
+          otherCost: subtotals.otherCost,
         };
       })
       .filter(Boolean)
@@ -922,8 +953,40 @@ router.put("/library/user-rates", async (req, res, next) => {
     }
 
     if (Array.isArray(customRates)) {
-      lib.customRates = customRates.map((item) => normalizeCustomRate(item));
+      // PLANT SURVIVES THE BULK SYNC TOO.
+      //
+      // This path replaced every custom rate wholesale, and unlike the
+      // single-rate push it never asked preservePlantLines — so one sync from a
+      // Rate Gen desktop that cannot send plant stripped the plant line from
+      // EVERY rate the QS had built here, in one write, each one silently worth
+      // less than before. Same rule as the single push: a client that declares
+      // supportsPlant is authoritative, including for a deliberate deletion.
+      const storedById = new Map(
+        (lib.customRates || []).map((r) => [
+          String(r?.customRateId || r?.id || ""),
+          typeof r?.toObject === "function" ? r.toObject() : r,
+        ]),
+      );
+      const incoming = customRates.map((item) => {
+        const next = normalizeCustomRate(item);
+        const prior = storedById.get(String(next.customRateId || ""));
+        return prior
+          ? preservePlantLines(next, prior, { clientSupportsPlant: req.body?.supportsPlant === true })
+          : next;
+      });
+      // A rate the payload left out is NOT a deletion: see
+      // util/rategenCustomRateGuard.js. Rate Gen desktop 2.9.x never
+      // downloads custom rates, so its list omits every rate made elsewhere.
+      const merged = mergeBulkCustomRates(lib, incoming, {
+        syncAware: clientIsSyncAware(req),
+      });
+      lib.customRates = merged.customRates;
       lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+      if (merged.kept.length || merged.archived.length) {
+        console.info(
+          `[rategen] bulk custom-rate sync for ${getUserId(req)}: kept ${merged.kept.length} omitted, archived ${merged.archived.length}`
+        );
+      }
     }
 
     await lib.save();
@@ -1130,8 +1193,8 @@ router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
       });
     }
 
-    const item = normalizeUserCustomRatePayload(customRateId, req.body);
-    if (!item.title && !item.description) {
+    const incoming = normalizeUserCustomRatePayload(customRateId, req.body);
+    if (!incoming.title && !incoming.description) {
       return res
         .status(400)
         .json({ error: "title or description is required" });
@@ -1141,6 +1204,18 @@ router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
     const existingIndex = nextItems.findIndex(
       (candidate) => String(candidate?.customRateId || "") === customRateId
     );
+
+    // Rate Gen desktop rebuilds its push from its own material and labour
+    // lists, so a plant line authored on the website is simply missing from
+    // it and the rate would come back worth the plant amount less. A client
+    // that understands plant says so and its payload is authoritative.
+    const item = preservePlantLines(
+      incoming,
+      existingIndex >= 0 ? nextItems[existingIndex] : null,
+      { clientSupportsPlant: req.body?.supportsPlant === true },
+    );
+
+    item.origin = customRateOrigin(existingIndex >= 0 ? nextItems[existingIndex] : item);
 
     if (existingIndex >= 0) nextItems[existingIndex] = item;
     else nextItems.push(item);
@@ -1184,18 +1259,98 @@ router.delete("/library/custom-rates/:customRateId", async (req, res, next) => {
       });
     }
 
-    const before = (lib.customRates || []).length;
+    const stored = (lib.customRates || []).find(
+      (item) => String(item?.customRateId || "") === customRateId
+    );
+    if (!stored) {
+      return res.json({ ok: true, customRatesVersion: lib.customRatesVersion ?? 1 });
+    }
+
+    // Rate Gen desktop 2.9.x sends this for every cloud rate missing from its
+    // own list, including rates it never had. Answer ok so its sync carries
+    // on, but keep the rate. See util/rategenCustomRateGuard.js.
+    const decision = deleteDecision(stored, { syncAware: clientIsSyncAware(req) });
+    if (!decision.allow) {
+      console.info(
+        `[rategen] kept custom rate ${customRateId} for ${getUserId(req)}: ${decision.reason}`
+      );
+      return res.json({
+        ok: true,
+        kept: true,
+        reason: decision.reason,
+        customRatesVersion: lib.customRatesVersion ?? 1,
+      });
+    }
+
+    archiveCustomRate(lib, stored, decision.reason);
     lib.customRates = (lib.customRates || []).filter(
       (item) => String(item?.customRateId || "") !== customRateId
     );
-
-    if (lib.customRates.length !== before) {
-      lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
-      await lib.save();
-    }
+    lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+    await lib.save();
 
     res.json({
       ok: true,
+      customRatesVersion: lib.customRatesVersion ?? 1,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /library/custom-rates/deleted
+ * The archive of removed custom rates, newest first.
+ */
+router.get("/library/custom-rates/deleted", async (req, res, next) => {
+  try {
+    await ensureDb();
+    const lib = await ensureUserLibrary(req);
+    res.json({
+      ok: true,
+      items: (lib.deletedCustomRates || []).map((item) => ({
+        ...mapUserCustomRate(item),
+        deletedAt: item.deletedAt,
+        deletedReason: item.deletedReason || "",
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /library/custom-rates/:customRateId/restore
+ * Puts an archived custom rate back. A live rate with the same id wins.
+ */
+router.post("/library/custom-rates/:customRateId/restore", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const customRateId = String(req.params.customRateId || "").trim();
+    const lib = await ensureUserLibrary(req);
+    const archived = (lib.deletedCustomRates || []).find(
+      (item) => String(item?.customRateId || "") === customRateId
+    );
+    if (!archived) return res.status(404).json({ error: "No deleted custom rate with that id" });
+
+    const live = (lib.customRates || []).some(
+      (item) => String(item?.customRateId || "") === customRateId
+    );
+    if (!live) {
+      const { deletedAt, deletedReason, ...rate } =
+        typeof archived.toObject === "function" ? archived.toObject() : archived;
+      lib.customRates = [...(lib.customRates || []), { ...rate, updatedAt: new Date() }];
+      lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+    }
+    lib.deletedCustomRates = (lib.deletedCustomRates || []).filter(
+      (item) => String(item?.customRateId || "") !== customRateId
+    );
+    await lib.save();
+
+    res.json({
+      ok: true,
+      restored: !live,
       customRatesVersion: lib.customRatesVersion ?? 1,
     });
   } catch (err) {

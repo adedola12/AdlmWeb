@@ -1,6 +1,15 @@
 import React from "react";
 import { FaCube, FaDownload, FaFileInvoiceDollar, FaPlus, FaTrashAlt, FaUpload } from "../../components/icons.jsx";
 import { deriveItemDiscipline } from "../../lib/boqCategory.js";
+import WkModal from "../../ds/WkModal.jsx";
+import { useFeedback } from "../../ds/feedback/feedbackContext.js";
+import { certifiableSumOf } from "./lib/certifiableSum.js";
+import {
+  variationKpis,
+  variationRowsNewestFirst,
+  variationStatusLabel,
+  variationStatusClass,
+} from "../../lib/variations.js";
 
 function safeNum(v) {
   const n = Number(v);
@@ -12,6 +21,19 @@ function money(v) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function naira(v) {
+  return "₦" + money(v);
+}
+
+// A variation reads as +value or -value, and as an en dash when the viewer
+// may not see money at all.
+function signedMoney(v, canSeeRates = true) {
+  if (!canSeeRates) return "–";
+  const n = safeNum(v);
+  if (n === 0) return naira(0);
+  return (n > 0 ? "+" : "−") + naira(Math.abs(n));
 }
 
 function formatDate(v) {
@@ -26,24 +48,6 @@ function bytes(n) {
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
   if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
-
-// A button in his .wk-tabs. The count rides after the label in his muted ink.
-function SubTab({ active, onClick, label, count }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={active ? "on" : ""}
-    >
-      {label}
-      {typeof count === "number" && count > 0 ? (
-        <span style={{ marginLeft: 6, color: "var(--ink-3)" }}>{count}</span>
-      ) : null}
-    </button>
-  );
 }
 
 // His palettes for chips and tones.
@@ -79,20 +83,13 @@ function SectionHead({ title, sub, children }) {
   );
 }
 
-// His tiles are four fixed columns, sized for short figures. A full naira
-// figure at his tile size is ~210px, so the tiles wrap at a width that fits one.
-const FIT_TILES = { marginBottom: 0, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" };
-
-// One figure, in his dashboard tile.
-function Tile({ label, value, sub, tone: t, title }) {
-  return (
-    <div className={`dsh-stat${t ? ` ${t}` : ""}`} title={title}>
-      <span className="k">{label}</span>
-      <b>{value}</b>
-      <span className="ds-sub">{sub}</span>
-    </div>
-  );
-}
+/**
+ * A fresh period for the next certificate.
+ *
+ * Starts empty rather than guessing: a period invented by the screen and left
+ * unread is worse than a blank one, because it would be printed as fact.
+ */
+const blankDraft = () => ({ periodStart: "", periodEnd: "", notes: "", retentionReleased: "" });
 
 function CertificatesSection({
   certificates = [],
@@ -104,6 +101,9 @@ function CertificatesSection({
   disabled,
   note,
 }) {
+  // What the next certificate says it covers. null = the form is closed.
+  const [draft, setDraft] = React.useState(null);
+
   const sorted = [...certificates].sort(
     (a, b) => Number(a.number) - Number(b.number),
   );
@@ -126,7 +126,15 @@ function CertificatesSection({
         <button
           type="button"
           className="ds-btn ds-btn-sm btn-p"
-          onClick={() => onIssue?.()}
+          // THE PERIOD AND THE NOTES ARE ASKED FOR.
+          //
+          // This used to call onIssue() with no arguments, and the handler it
+          // calls has always accepted overrides and posted them. So every
+          // certificate stored periodStart: null and the exporter printed
+          // "Period – to <issue date>" on all of them: six certificates over six
+          // months, not one of them stating the period it covered. The notes
+          // field was unreachable the same way.
+          onClick={() => setDraft(draft ? null : blankDraft())}
           disabled={busy || disabled}
           title={
             disabled
@@ -139,6 +147,107 @@ function CertificatesSection({
         </button>
       </SectionHead>
 
+      {draft ? (
+        <div className="pcp-issue">
+          <div className="pcp-issue-fields">
+            <label>
+              <span>Period from</span>
+              <input
+                type="date"
+                value={draft.periodStart}
+                max={draft.periodEnd || undefined}
+                onChange={(e) => setDraft((d) => ({ ...d, periodStart: e.target.value }))}
+              />
+            </label>
+            <label>
+              <span>Period to</span>
+              <input
+                type="date"
+                value={draft.periodEnd}
+                min={draft.periodStart || undefined}
+                onChange={(e) => setDraft((d) => ({ ...d, periodEnd: e.target.value }))}
+              />
+            </label>
+            <label>
+              {/* RELEASING RETENTION.
+                  The certificate has carried a retentionReleased field all
+                  along and the endpoint has always accepted it — nothing ever
+                  sent one, so half the retention due back at practical
+                  completion could not be recorded at all. On six valuations at
+                  5% of an ₦80,000,000 cumulative, that is ₦2,000,000 with
+                  nowhere to go. */}
+              <span>Release retention{totalRetained > 0 ? ` (${naira(totalRetained)} held)` : ""}</span>
+              <input
+                type="number"
+                min="0"
+                max={totalRetained > 0 ? totalRetained : undefined}
+                step="any"
+                placeholder="0"
+                value={draft.retentionReleased}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, retentionReleased: e.target.value }))
+                }
+              />
+            </label>
+            <label className="wide">
+              <span>Notes on this certificate</span>
+              <input
+                type="text"
+                maxLength={2000}
+                placeholder="Optional — printed on the certificate"
+                value={draft.notes}
+                onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+              />
+            </label>
+          </div>
+          <p className="pcp-issue-hint">
+            The period is what the certificate says it covers. Leave it blank and the document can
+            only show its issue date, which is not the same thing. Retention released is added back
+            on this certificate and taxed with the rest &mdash; leave it at 0 on an ordinary interim.
+          </p>
+          {Number(draft.retentionReleased) > totalRetained && totalRetained > 0 ? (
+            <p className="pcp-issue-bad">
+              Only {naira(totalRetained)} is held. Releasing more than has been retained would pay
+              out money that was never withheld.
+            </p>
+          ) : null}
+          <div className="pcp-issue-acts">
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-o"
+              onClick={() => setDraft(null)}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-p"
+              disabled={
+                busy || (totalRetained > 0 && Number(draft.retentionReleased) > totalRetained)
+              }
+              onClick={async () => {
+                // Only send what was filled in: an empty string would be stored
+                // as an invalid date rather than left unset.
+                const body = {};
+                if (draft.periodStart) body.periodStart = draft.periodStart;
+                if (draft.periodEnd) body.periodEnd = draft.periodEnd;
+                if (draft.notes.trim()) body.notes = draft.notes.trim();
+                // Only a real, positive figure. An empty box means "release
+                // nothing", which is not the same as releasing 0 and must not
+                // be sent as one.
+                const release = Number(draft.retentionReleased);
+                if (Number.isFinite(release) && release > 0) body.retentionReleased = release;
+                const out = await onIssue?.(body);
+                if (out !== null) setDraft(null);
+              }}
+            >
+              {busy ? "Issuing..." : "Issue it"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {note ? (
         <p className="mk-note" style={{ margin: 0, ...NOTE_WARN }}>
           {note}
@@ -147,8 +256,20 @@ function CertificatesSection({
 
       {sorted.length === 0 ? (
         <div className="wk-panel wk-empty" style={NO_MB}>
-          No certificates issued yet. Click “Issue certificate” to generate
-          IPC #01 against the current value-to-date.
+          <b>No certificates issued yet</b>
+          <p>
+            A certificate is what the client is asked to pay against: the value of work to
+            date, less what has already been certified, less retention, with VAT and
+            withholding tax applied. Each one is numbered and keeps its own figures, so
+            reissuing never rewrites an earlier one.
+          </p>
+          {/* Telling somebody to press a button that is greyed out is worse
+              than saying nothing, so the sentence follows the button. */}
+          <p>
+            {disabled
+              ? "The final account is closed, so no new certificate can be issued. Reopen it to issue IPC 01 against the current value to date."
+              : "Issue certificate makes IPC 01 against the current value to date."}
+          </p>
         </div>
       ) : (
         <div className="wk-panel" style={{ marginBottom: 0, overflowX: "auto" }}>
@@ -260,6 +381,292 @@ function CertificatesSection({
   );
 }
 
+// ── Variations (S18) ──────────────────────────────────────────────────────
+// His .pj-kpi.c4 + .pj-vars list. A variation is raised pending and only
+// moves the project total once someone with edit access approves it.
+function VariationsSection({
+  rows = [],
+  onAdd,
+  onDecide,
+  canEdit = false,
+  canSeeRates = true,
+  disabled = false,
+  estimatedTotal = 0,
+}) {
+  const fb = useFeedback();
+  const [adding, setAdding] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [form, setForm] = React.useState({
+    description: "",
+    reference: "",
+    kind: "addition",
+    amount: "",
+  });
+
+  const kpis = React.useMemo(() => variationKpis(rows), [rows]);
+  const list = React.useMemo(() => variationRowsNewestFirst(rows), [rows]);
+
+  function resetForm() {
+    setForm({ description: "", reference: "", kind: "addition", amount: "" });
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (busy) return;
+    const description = form.description.trim();
+    if (!description) {
+      fb.toast({ tone: "error", title: "Say what changed" });
+      return;
+    }
+    const amount = Math.abs(Number(form.amount));
+    if (!Number.isFinite(amount) || amount === 0) {
+      fb.toast({ tone: "error", title: "Enter the value of the variation" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await onAdd?.({
+        description,
+        reference: form.reference.trim(),
+        kind: form.kind,
+        amount,
+      });
+      if (result) {
+        setAdding(false);
+        resetForm();
+        fb.toast({
+          tone: "success",
+          title: `V${Number(result.index ?? 0) + 1} added, pending approval`,
+          msg: "It counts once it is approved.",
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openRow(row) {
+    const rows2 = [
+      ["Value", signedMoney(row.amount, canSeeRates)],
+      ["Status", variationStatusLabel(row.status)],
+    ];
+    // What the project total becomes if this one is approved. For a decided
+    // variation the total already reflects it, so we say so plainly rather
+    // than showing a figure that would not change.
+    if (canSeeRates) {
+      rows2.push([
+        row.status === "pending" ? "Estimated total if approved" : "Estimated total",
+        naira(row.status === "pending" ? estimatedTotal + row.amount : estimatedTotal),
+      ]);
+    }
+    const canDecide = canEdit && !disabled && row.status === "pending";
+    const answer = await fb.card({
+      tone: "info",
+      noIcon: true,
+      title: `V${row.no} · ${row.description || "Variation"}`,
+      msg: [row.reference, formatDate(row.issuedAt)].filter(Boolean).join(" · "),
+      rows: rows2,
+      secondary: canDecide ? "Reject" : null,
+      primary: canDecide ? "Approve" : "Close",
+    });
+    if (!canDecide || !answer) return;
+    const status = answer === "primary" ? "approved" : "rejected";
+    const ok = await onDecide?.(row.index, status);
+    if (ok) {
+      fb.toast({
+        tone: status === "approved" ? "success" : "info",
+        title: `V${row.no} ${status === "approved" ? "approved" : "rejected"}`,
+        msg:
+          status === "approved"
+            ? "It now counts toward the project total and the final account."
+            : "It stays on record and is not counted.",
+      });
+    }
+  }
+
+  return (
+    <div style={STACK}>
+      <div className="pj-tb" style={NO_MB}>
+        <span className="wk-locnote" style={{ flex: "1 1 240px" }}>
+          Architect’s instructions, site instructions and client changes.
+          Only an approved variation moves the project total.
+        </span>
+        {canEdit ? (
+          <div className="pj-acts">
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-p"
+              onClick={() => setAdding(true)}
+              // A variation is born with a value, and there is no stored figure
+              // to restore onto one, so the server refuses to raise a variation
+              // for a viewer who cannot see rates (RATES_MASKED). Offer the
+              // reason instead of a button that can only fail.
+              disabled={disabled || !canSeeRates}
+              title={
+                disabled
+                  ? "The final account is closed. Reopen it to raise a variation."
+                  : !canSeeRates
+                    ? "Rates are hidden on this shared project, so you cannot raise a variation."
+                    : "Raise a variation against this contract"
+              }
+            >
+              <FaPlus size={12} /> Add variation
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="pj-kpi c4">
+        <div>
+          <span>Approved, net</span>
+          <b>{canSeeRates ? naira(kpis.approvedNet) : "–"}</b>
+          <em>Moves the project total</em>
+        </div>
+        <div>
+          <span>Additions</span>
+          <b>{canSeeRates ? naira(kpis.additions) : "–"}</b>
+          <em>
+            {kpis.additionsCount} approved
+          </em>
+        </div>
+        <div>
+          <span>Omissions</span>
+          <b>{canSeeRates ? naira(kpis.omissions) : "–"}</b>
+          <em>{kpis.omissionsCount} approved</em>
+        </div>
+        <div className={kpis.pendingCount ? "warn" : ""}>
+          <span>Waiting for approval</span>
+          <b>{kpis.pendingCount}</b>
+          <em>
+            {kpis.pendingCount
+              ? canSeeRates
+                ? `${naira(kpis.pendingNet)} not counted yet`
+                : "Not counted yet"
+              : "None"}
+          </em>
+        </div>
+      </div>
+
+      {list.length ? (
+        <div className="pj-vars">
+          {list.map((row) => (
+            <button
+              type="button"
+              key={`${row.index}-${row.no}`}
+              className="vr"
+              onClick={() => openRow(row)}
+            >
+              <span className="no">V{row.no}</span>
+              <span className="ds">
+                <b>{row.description || "Variation"}</b>
+                <em>
+                  {[row.reference || "No reference", formatDate(row.issuedAt)].join(" · ")}
+                </em>
+              </span>
+              <span className={`n ${row.amount < 0 ? "om" : "ad"}`}>
+                <b>{signedMoney(row.amount, canSeeRates)}</b>
+              </span>
+              <span className={`pj-stage ${variationStatusClass(row.status)}`}>
+                {variationStatusLabel(row.status)}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="pj-empty">
+          <b>No variations yet</b>
+          <p>
+            Log architect’s instructions, site instructions and client changes
+            here. An approved variation changes the project total and the final
+            account; a pending one changes nothing until it is approved.
+          </p>
+          {/* The action, and only where it can actually be taken: a reader
+              without edit rights, on a closed account, or on a shared project
+              with the rates hidden, is told which of those it is instead of
+              being pointed at a control they do not have. */}
+          <p>
+            {!canEdit
+              ? "You are reading this project rather than working on it, so you cannot raise one."
+              : disabled
+                ? "The final account is closed. Reopen it to raise the first one."
+                : !canSeeRates
+                  ? "Rates are hidden on this shared project, and a variation has to carry a value, so you cannot raise one here."
+                  : "Add variation raises the first one."}
+          </p>
+        </div>
+      )}
+
+      <p className="pj-foot" style={NO_MB}>
+        New lines added to the bill after the contract was locked are raised
+        here automatically, already approved, so the contract keeps its record
+        of the change.
+      </p>
+
+      <WkModal
+        open={adding}
+        title="Add a variation"
+        sub="From an architect’s instruction, a site instruction or a client change."
+        busy={busy}
+        onClose={() => {
+          setAdding(false);
+          resetForm();
+        }}
+      >
+        <form onSubmit={submit}>
+          <label className="wk-f">
+            <span>What changed</span>
+            <input
+              type="text"
+              value={form.description}
+              autoFocus
+              maxLength={500}
+              placeholder="e.g. Additional windows to stair core"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, description: e.target.value }))
+              }
+            />
+          </label>
+          <label className="wk-f half">
+            <span>Instruction reference</span>
+            <input
+              type="text"
+              value={form.reference}
+              maxLength={120}
+              placeholder="e.g. AI-012"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, reference: e.target.value }))
+              }
+            />
+          </label>
+          <label className="wk-f half">
+            <span>Type</span>
+            <select
+              value={form.kind}
+              onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}
+            >
+              <option value="addition">Addition</option>
+              <option value="omission">Omission</option>
+            </select>
+          </label>
+          <label className="wk-f half">
+            <span>Value (₦)</span>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+            />
+          </label>
+          <button type="submit" className="wk-modal-go" disabled={busy}>
+            {busy ? "Adding…" : "Add variation"}
+          </button>
+        </form>
+      </WkModal>
+    </div>
+  );
+}
+
 function FinalAccountSection({
   finalAccount,
   onFinalize,
@@ -281,6 +688,8 @@ function FinalAccountSection({
   // Actual spent so far — used for true over-run calculation
   // (spend exceeds planned), NOT for live BoQ drift.
   actualSpent = 0,
+  // S18 valuations: what the approved and paid certificates add up to.
+  certifiedToDate = 0,
   disabledFinalize,
 }) {
   const isFinalized = Boolean(finalAccount?.finalized);
@@ -372,38 +781,168 @@ function FinalAccountSection({
     ? { ...finalAccount, savingsLabel, savingsTone, savingsValue }
     : livePreview;
 
+  // Movement against the contract sum — a different question from the
+  // over-run above, and both are worth an answer, so both are shown and
+  // labelled. This one asks "has the contract VALUE moved since signing?";
+  // the over-run asks "is the SPEND ahead of the plan?". Neither changes a
+  // figure: they read the same totals the rest of the tab uses.
+  const finalTotal = safeNum(view.currentValue ?? view.finalContractValue);
+  // Which agreed sum to measure against depends on what finalTotal IS.
+  //
+  // Live, finalTotal is view.currentValue — plannedTotal + variations — and
+  // plannedTotal already carries the contingency and VAT props, so comparing it
+  // to the whole contractSum is like for like and the movement is the real
+  // scope drift.
+  //
+  // Once finalized, finalTotal is the server's finalContractValue, which is
+  // measured + provisional + preliminaries + variations and deliberately
+  // carries NEITHER contingency nor VAT, because neither is ever certified.
+  // Held against the full contractSum it reported the contingency plus the VAT
+  // as a "Saving" — ₦12.875m on a ₦100m subtotal at the defaults, on a job that
+  // came in exactly as measured. So a finalized account is measured against the
+  // certifiable part of the sum instead.
+  const certifiableSum = isFinalized
+    ? certifiableSumOf(finalAccount, { contingencyPercent, taxPercent })
+    : null;
+  const movementBase =
+    certifiableSum === null ? safeNum(contractSum) : certifiableSum;
+  const movement = contractLocked || isFinalized ? finalTotal - movementBase : 0;
+  const movementPct = movementBase > 0 ? (movement / movementBase) * 100 : 0;
+  const certifiedPct = finalTotal > 0 ? (certifiedToDate / finalTotal) * 100 : 0;
+
   return (
     <div style={STACK}>
       <SectionHead
         title="Final account"
         sub={
           isFinalized
-            ? `Finalized on ${formatDate(finalAccount.finalizedAt)}, all project data is frozen.`
+            ? `Closed on ${formatDate(finalAccount.finalizedAt)}. Items, variations and certificates are frozen.`
             : contractLocked
-              ? "Preview of the closing settlement based on current data."
-              : "Pre-lock preview, savings / over-run only start tracking after the contract is locked."
+              ? "The closing settlement as it stands today. Nothing is frozen until you close it."
+              : "Pre-lock preview. Movement and over-run only start tracking once the contract is locked."
         }
       >
-        <div className="wk-acts">
-          {isFinalized ? (
-            <>
-              <button
-                type="button"
-                className="ds-btn ds-btn-sm btn-o"
-                onClick={onDownload}
-              >
-                <FaDownload size={12} /> Download
-              </button>
-              <button
-                type="button"
-                className="ds-btn ds-btn-sm btn-o"
-                onClick={onReopen}
-                title="Reopen the final account to make adjustments"
-              >
-                Reopen
-              </button>
-            </>
-          ) : (
+        {isFinalized ? (
+          <div className="wk-acts">
+            <button type="button" className="ds-btn ds-btn-sm btn-o" onClick={onDownload}>
+              <FaDownload size={12} /> Download
+            </button>
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-o"
+              onClick={onReopen}
+              title="Reopen the final account to make adjustments"
+            >
+              Reopen
+            </button>
+          </div>
+        ) : null}
+      </SectionHead>
+
+      <div className="pj-final">
+        <section className="pj-card2">
+          <h3>Final account{isFinalized ? " · closed" : " · live"}</h3>
+          <dl className="brk">
+            <div>
+              <dt>Measured work</dt>
+              <dd>{naira(view.measuredWorkFinal)}</dd>
+            </div>
+            <div>
+              <dt>Preliminaries</dt>
+              <dd>{naira(view.preliminaryFinal)}</dd>
+            </div>
+            <div>
+              <dt>Provisional and PC sums</dt>
+              <dd>{naira(view.provisionalFinal)}</dd>
+            </div>
+            <div>
+              <dt>
+                Contingency
+                {contingencyPercent ? ` (${Number(contingencyPercent).toFixed(1)}%)` : ""}
+              </dt>
+              <dd>{naira(view.contingencyFinal)}</dd>
+            </div>
+            <div>
+              <dt>Approved variations</dt>
+              <dd>{naira(view.variationsFinal)}</dd>
+            </div>
+            <div>
+              <dt>VAT{taxPercent ? ` (${Number(taxPercent).toFixed(1)}%)` : ""}</dt>
+              <dd>{naira(view.taxFinal)}</dd>
+            </div>
+            <div className="t">
+              <dt>{contractLocked || isFinalized ? "Final account" : "Live project total"}</dt>
+              <dd>{naira(finalTotal)}</dd>
+            </div>
+          </dl>
+          <p className="pj-foot">
+            Only approved variations are in this total. Anything still waiting
+            for approval is on the Variations view and counts for nothing here.
+          </p>
+        </section>
+
+        <section className="pj-card2 cmp2">
+          <h3>Against the contract</h3>
+
+          <div className="big2">
+            <span>Contract sum</span>
+            <b>{contractLocked || isFinalized ? naira(contractSum) : "–"}</b>
+            <em>
+              {contractLocked || isFinalized
+                ? "Fixed when the contract was locked"
+                : "Lock the contract to fix it"}
+            </em>
+          </div>
+
+          <div className={`big2${movement > 0 ? " over" : movement < 0 ? " under" : ""}`}>
+            <span>
+              {movement > 0 ? "Over-run" : movement < 0 ? "Saving" : "On the contract sum"}
+            </span>
+            <b>{contractLocked || isFinalized ? (movement ? naira(Math.abs(movement)) : "–") : "–"}</b>
+            <em>
+              {contractLocked || isFinalized
+                ? `Contract value movement${
+                    safeNum(contractSum) > 0
+                      ? `, ${movementPct.toFixed(1)}% of the contract`
+                      : ""
+                  }`
+                : "Movement against the contract sum"}
+            </em>
+          </div>
+
+          <div
+            className={`big2${
+              view.savingsTone === "negative"
+                ? " over"
+                : view.savingsTone === "positive"
+                  ? " under"
+                  : ""
+            }`}
+          >
+            <span>{view.savingsLabel || "Actual against planned"}</span>
+            <b>
+              {!contractLocked && !isFinalized ? "–" : naira(safeNum(view.savingsValue))}
+            </b>
+            <em>
+              {!contractLocked && !isFinalized
+                ? "Lock the contract to start tracking"
+                : safeNum(view.actualSpent) === 0
+                  ? "No spend recorded yet"
+                  : `Spent ${naira(view.actualSpent)} of ${naira(view.plannedTotal + view.variationsFinal)} planned`}
+            </em>
+          </div>
+
+          <div className="big2">
+            <span>Certified so far</span>
+            <b>{naira(certifiedToDate)}</b>
+            <em>
+              {finalTotal > 0
+                ? `${Math.round(certifiedPct)}% of the final account`
+                : "Nothing certified yet"}
+            </em>
+          </div>
+
+          {!isFinalized ? (
             <button
               type="button"
               className="ds-btn ds-btn-sm btn-p"
@@ -412,79 +951,13 @@ function FinalAccountSection({
               title={
                 disabledFinalize
                   ? "Lock the contract first."
-                  : "Freeze the final account and compute settlement"
+                  : "Freeze the final account and compute the settlement"
               }
             >
-              <FaFileInvoiceDollar size={12} /> Finalize
+              <FaFileInvoiceDollar size={12} /> Close the final account
             </button>
-          )}
-        </div>
-      </SectionHead>
-
-      {/* The settlement, in his dashboard tiles (four a row, wrapping). */}
-      <div className="dsh-stats" style={FIT_TILES}>
-        <Tile label="Measured work (final)" value={money(view.measuredWorkFinal)} />
-        <Tile label="Provisional" value={money(view.provisionalFinal)} />
-        <Tile label="Preliminaries" value={money(view.preliminaryFinal)} />
-        {/* Contingency + Tax, only render when set so old projects
-            without these values don't show ₦0 stub tiles. */}
-        {safeNum(view.contingencyFinal) > 0 || contingencyPercent > 0 ? (
-          <Tile
-            label={`Contingency (${Number(contingencyPercent || 0).toFixed(1)}%)`}
-            value={money(view.contingencyFinal)}
-          />
-        ) : null}
-        {safeNum(view.taxFinal) > 0 || taxPercent > 0 ? (
-          <Tile
-            label={`Tax / VAT (${Number(taxPercent || 0).toFixed(1)}%)`}
-            value={money(view.taxFinal)}
-          />
-        ) : null}
-        <Tile label="Variations" value={money(view.variationsFinal)} />
-        <Tile
-          label={contractLocked || isFinalized ? "Final contract value" : "Live project total"}
-          value={money(view.currentValue ?? view.finalContractValue)}
-          sub={!contractLocked && !isFinalized ? "Pre-lock preview." : null}
-        />
-        {/* Actual spent, surfaces the live actuals figure so users can
-            see what their over-run is being calculated against. */}
-        <Tile
-          label="Actual spent to date"
-          value={money(view.actualSpent)}
-          sub={safeNum(view.actualSpent) === 0 ? "No spend recorded yet." : null}
-        />
-        <Tile
-          label={
-            view.savingsLabel ||
-            (view.savings >= 0 ? "Under-run (savings)" : "Over-run")
-          }
-          tone={
-            view.savingsTone === "positive"
-              ? "pal-on"
-              : view.savingsTone === "negative"
-                ? "warn"
-                : ""
-          }
-          title={
-            !contractLocked && !isFinalized
-              ? "Lock the contract to start tracking savings or over-run against the agreed sum."
-              : safeNum(view.actualSpent) === 0
-                ? "Over-run = max(0, actual spent − planned). With no spend recorded, the figure is 0."
-                : `Over-run = Actual spent (₦${money(view.actualSpent)}) − Planned (₦${money(view.plannedTotal + view.variationsFinal)})`
-          }
-          value={
-            !contractLocked && !isFinalized
-              ? "–"
-              : money(safeNum(view.savingsValue))
-          }
-          sub={
-            !contractLocked && !isFinalized
-              ? "Lock the contract to start tracking."
-              : safeNum(view.actualSpent) === 0 && safeNum(view.savingsValue) === 0
-                ? "No actual spend yet, no over-run."
-                : null
-          }
-        />
+          ) : null}
+        </section>
       </div>
     </div>
   );
@@ -771,51 +1244,48 @@ export default function ProjectContractPanel({
   contingencyPercent = 0,
   taxPercent = 0,
   actualSpent = 0,
+  // S18 valuations: the variation rows themselves, plus who may act on them.
+  variationRows = [],
+  onRaiseVariation,
+  onDecideVariation,
+  canEditProject = false,
+  canSeeRates = true,
 }) {
   const [tab, setTab] = React.useState("certificates");
-  // Collapsed state persists per-browser so users who never need
-  // certificates / final account / BIM can keep the section folded.
-  // localStorage key is scoped, not project-specific — the preference
-  // travels with the user across all projects.
-  const [collapsed, setCollapsed] = React.useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem("adlm:contractAdminCollapsed") === "1";
-    } catch {
-      return false;
-    }
-  });
-
-  function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(
-          "adlm:contractAdminCollapsed",
-          next ? "1" : "0",
-        );
-      } catch {
-        // ignore — feature still works without persistence
-      }
-      return next;
-    });
-  }
 
   const hasAnyFeature =
     onIssueCertificate || onFinalizeAccount || onUploadModel;
   if (!hasAnyFeature) return null;
 
   const modelCount = Object.values(projectModels || {}).filter(Boolean).length;
-  const certCount = certificates.length;
-  // Pre-compute a one-line summary the collapsed header can show. Gives
-  // users at-a-glance status without expanding.
-  const collapsedSummary = [
-    certCount ? `${certCount} certificate${certCount === 1 ? "" : "s"}` : null,
-    finalAccount?.finalized ? "Final account closed" : null,
-    modelCount ? `${modelCount} BIM model${modelCount === 1 ? "" : "s"}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const isFinalized = Boolean(finalAccount?.finalized);
+  // Certified so far: what the approved and paid certificates add up to.
+  // Drafts are not money yet, so they are not in this figure.
+  const certifiedToDate = (certificates || []).reduce(
+    (acc, c) =>
+      c?.status === "approved" || c?.status === "paid"
+        ? acc + safeNum(c.thisCertificate)
+        : acc,
+    0,
+  );
+  // The project total the Variations card quotes, on the same cascade the
+  // Bill and the Final account use.
+  const estimatedTotal =
+    safeNum(measured) +
+    safeNum(provisional) +
+    safeNum(preliminary) +
+    safeNum(contingency) +
+    safeNum(tax) +
+    safeNum(variations);
+
+  const views = [
+    { id: "certificates", label: "Certificates", count: certificates.length },
+    { id: "variations", label: "Variations", count: variationRows.length },
+    { id: "final", label: "Final account", count: null },
+    ...(hideModels
+      ? []
+      : [{ id: "models", label: "BIM models", count: modelCount }]),
+  ];
 
   return (
     <section className="wk-panel" style={NO_MB}>
@@ -823,114 +1293,98 @@ export default function ProjectContractPanel({
         <div style={{ minWidth: 0, flex: "1 1 260px" }}>
           <h2>Contract administration</h2>
           <div className="wk-locnote" style={{ marginTop: 4 }}>
-            {collapsed && collapsedSummary
-              ? collapsedSummary
-              : hideModels
-                ? "Certificates and final account. Everything a QS needs after contract award."
-                : "Certificates, final account and BIM models. Everything a QS needs after contract award."}
+            Certificates, variations and the final account: everything a QS
+            needs after contract award.
           </div>
         </div>
-        {/* Collapse / expand toggle. Persists in localStorage so the
-            preference survives page reloads and crosses projects. */}
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-expanded={!collapsed}
-          aria-controls="contract-admin-body"
-          className="ds-btn ds-btn-sm btn-o"
-          title={collapsed ? "Show contract administration" : "Hide contract administration"}
-        >
-          {collapsed ? "Show" : "Hide"}
-        </button>
       </div>
 
-      {collapsed ? null : (
       <div id="contract-admin-body" style={{ ...STACK, padding: "16px 20px 20px" }}>
-      <div
-        className="wk-tabs"
-        role="tablist"
-        aria-label="Contract administration"
-        style={{ maxWidth: "100%", overflowX: "auto", justifySelf: "start" }}
-      >
-        <SubTab
-          active={tab === "certificates"}
-          onClick={() => setTab("certificates")}
-          label="Interim certificates"
-          count={certificates.length}
-        />
-        <SubTab
-          active={tab === "final"}
-          onClick={() => setTab("final")}
-          label="Final account"
-        />
-        {hideModels ? null : (
-          <SubTab
-            active={tab === "models"}
-            onClick={() => setTab("models")}
-            label="BIM models"
-            count={modelCount}
+        <div
+          className="pj-seg"
+          role="group"
+          aria-label="Contract administration"
+          style={{ maxWidth: "100%", overflowX: "auto", justifySelf: "start" }}
+        >
+          {views.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              aria-pressed={tab === v.id}
+              onClick={() => setTab(v.id)}
+            >
+              {v.label}
+              {typeof v.count === "number" && v.count > 0 ? <em>{v.count}</em> : null}
+            </button>
+          ))}
+        </div>
+
+        {tab === "certificates" ? (
+          <CertificatesSection
+            certificates={certificates}
+            onIssue={onIssueCertificate}
+            onUpdate={onUpdateCertificate}
+            onDelete={onDeleteCertificate}
+            onDownload={onDownloadCertificate}
+            busy={certBusy}
+            disabled={isFinalized}
+            note={
+              !contractLocked
+                ? "Tip: lock the contract first so each certificate has a stable baseline to measure against."
+                : null
+            }
           />
-        )}
+        ) : null}
+
+        {tab === "variations" ? (
+          <VariationsSection
+            rows={variationRows}
+            onAdd={onRaiseVariation}
+            onDecide={onDecideVariation}
+            canEdit={canEditProject && typeof onRaiseVariation === "function"}
+            canSeeRates={canSeeRates}
+            disabled={isFinalized}
+            estimatedTotal={estimatedTotal}
+          />
+        ) : null}
+
+        {tab === "final" ? (
+          <FinalAccountSection
+            finalAccount={finalAccount}
+            onFinalize={onFinalizeAccount}
+            onReopen={onReopenFinalAccount}
+            onDownload={onDownloadFinalAccount}
+            contractSum={contractSum}
+            // Pass contractLocked so the section can suppress the
+            // misleading "Over-run" reading before the contract is
+            // signed — pre-lock there's no agreement to over-run.
+            contractLocked={contractLocked}
+            measured={measured}
+            provisional={provisional}
+            preliminary={preliminary}
+            variations={variations}
+            contingency={contingency}
+            tax={tax}
+            contingencyPercent={contingencyPercent}
+            taxPercent={taxPercent}
+            actualSpent={actualSpent}
+            certifiedToDate={certifiedToDate}
+            disabledFinalize={!contractLocked}
+          />
+        ) : null}
+
+        {!hideModels && tab === "models" ? (
+          <ModelsPanel
+            projectModels={projectModels}
+            modelUploadBusy={modelUploadBusy}
+            onUploadModel={onUploadModel}
+            onDeleteModel={onDeleteModel}
+            items={items}
+            productKey={productKey}
+            disabled={isFinalized}
+          />
+        ) : null}
       </div>
-
-      {!collapsed && tab === "certificates" ? (
-        <CertificatesSection
-          certificates={certificates}
-          onIssue={onIssueCertificate}
-          onUpdate={onUpdateCertificate}
-          onDelete={onDeleteCertificate}
-          onDownload={onDownloadCertificate}
-          busy={certBusy}
-          disabled={Boolean(finalAccount?.finalized)}
-          note={
-            !contractLocked
-              ? "Tip: lock the contract first so each certificate has a stable baseline to measure against."
-              : null
-          }
-        />
-      ) : null}
-
-      {!collapsed && tab === "final" ? (
-        <FinalAccountSection
-          finalAccount={finalAccount}
-          onFinalize={onFinalizeAccount}
-          onReopen={onReopenFinalAccount}
-          onDownload={onDownloadFinalAccount}
-          contractSum={contractSum}
-          // Pass contractLocked so the section can suppress the
-          // misleading "Over-run ₦Xm" reading before the contract is
-          // signed — pre-lock there's no agreement to over-run.
-          contractLocked={contractLocked}
-          measured={measured}
-          provisional={provisional}
-          preliminary={preliminary}
-          variations={variations}
-          // Full QS cascade — Contingency + Tax flow into the breakdown
-          // and into the planned-vs-actual over-run math.
-          contingency={contingency}
-          tax={tax}
-          contingencyPercent={contingencyPercent}
-          taxPercent={taxPercent}
-          // Actual spent so the over-run is computed off real
-          // expenditure, not BoQ drift.
-          actualSpent={actualSpent}
-          disabledFinalize={!contractLocked}
-        />
-      ) : null}
-
-      {!collapsed && !hideModels && tab === "models" ? (
-        <ModelsPanel
-          projectModels={projectModels}
-          modelUploadBusy={modelUploadBusy}
-          onUploadModel={onUploadModel}
-          onDeleteModel={onDeleteModel}
-          items={items}
-          productKey={productKey}
-          disabled={Boolean(finalAccount?.finalized)}
-        />
-      ) : null}
-      </div>
-      )}
     </section>
   );
 }

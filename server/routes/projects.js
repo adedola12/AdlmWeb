@@ -19,6 +19,11 @@ function normalizeLockPin(value) {
 // subscription may see quantities / descriptions / progress but NOT pricing.
 // Quantities, units, %complete, categories, dates, flags and percentages are
 // intentionally preserved — only currency amounts are stripped.
+//
+// READ THIS BEFORE ADDING A FIELD: whatever is blanked here comes back on the
+// viewer's next save, so MASKED_MONEY_BLANKS (just below) has to blank the
+// same field or that save writes the zero over the owner's price. The two are
+// mirror images and projects.masking.test.js fails when they drift.
 function maskRates(obj) {
   if (!obj || typeof obj !== "object") return obj;
 
@@ -99,6 +104,412 @@ function maskRates(obj) {
   }
 
   return obj;
+}
+
+// ── The mirror image of maskRates() ──────────────────────────────────────
+// maskRates() is the ONE place that decides what a viewer without RateGen may
+// not SEE. This table is the ONE place that decides what such a viewer may not
+// WRITE, and the two must name exactly the same fields. Read them side by
+// side: every zero/null maskRates() puts into a payload appears here, because
+// that zero is what the client hands back on the next save. A money field
+// added to maskRates() and forgotten here is a field a masked save silently
+// writes over the owner's prices.
+//
+// The value against each field is what a BRAND-NEW row gets — i.e. exactly
+// what maskRates() would have shown the viewer — so a row they add carries no
+// money either way.
+const MASKED_MONEY_BLANKS = Object.freeze({
+  items: Object.freeze({
+    rate: 0,
+    actualRate: null,
+    netUnitCost: null,
+    overheadPercent: null,
+    profitPercent: null,
+  }),
+  materialItems: Object.freeze({
+    rate: 0,
+    actualRate: null,
+    netUnitCost: null,
+    overheadPercent: null,
+    profitPercent: null,
+  }),
+  budgetItems: Object.freeze({
+    rate: 0,
+    netUnitCost: 0,
+    overheadPercent: 0,
+    profitPercent: 0,
+    budgetRate: 0,
+  }),
+  provisionalSums: Object.freeze({ amount: 0 }),
+  preliminaryItems: Object.freeze({ actualAmount: 0 }),
+  variations: Object.freeze({ rate: 0 }),
+});
+
+// Every array on a project payload that carries money. Exported so the guard
+// and its tests iterate ONE list.
+export const MASKED_MONEY_ARRAYS = Object.freeze(Object.keys(MASKED_MONEY_BLANKS));
+
+// The arrays a federated merge container does NOT own: they are split back out
+// to the discipline projects that hold the real lines, so the container has no
+// stored money to restore them from.
+const MERGE_ROUTED_ARRAYS = Object.freeze([
+  "items",
+  "materialItems",
+  "budgetItems",
+  "provisionalSums",
+  "variations",
+]);
+
+// Fields that only ever belong to the server. projectForClient() removes them
+// from (or replaces them in) every payload it serves, so nothing legitimate
+// ever sends them back — stripping them makes it impossible for a round-tripped
+// payload to erase a share code, a collaborator or the contract lock PIN hash,
+// whatever a future write path chooses to read off the body.
+const NEVER_ACCEPTED_FROM_CLIENT = Object.freeze([
+  "shareCodes",
+  "collaborators",
+  "lockPinHash",
+]);
+
+// A row's own identity, as the client hands it back.
+//
+// These rows are `_id: false` subdocuments, so until now a row had no name
+// of its own: pairing an incoming row to the stored row it came from could
+// only read its text and its position, and a row REPLACED in its slot was
+// indistinguishable from the same row edited in place. lineId is that name.
+// The server mints it on write, and every other field on the row can then
+// change without the row losing track of which stored row it is.
+//
+// Deliberately opaque and deliberately random: it must never encode a
+// position, because a stale id that happened to line up with a re-used slot
+// would pair two rows that have nothing to do with each other. Bounded and
+// character-limited so a client cannot post a megabyte of it.
+//
+// What it is NOT: an authorisation. A masked collaborator could forge one to
+// pull a particular stored row's price onto a different line — but they can
+// already do that by copying that row's description and unit, and either way
+// the figure comes from the STORE and stays invisible to them. The guard
+// stops a masked save writing money; it does not pretend to stop an editor
+// the owner trusted from re-arranging which line money sits on.
+const LINE_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+// The id on a row, or "" when there is none worth trusting.
+function normalizeLineId(value) {
+  const id = String(value == null ? "" : value).trim();
+  return LINE_ID_RE.test(id) ? id : "";
+}
+
+// The id a sanitized row is stored with: the client's own, when it sent one
+// back, and a fresh one when it did not. Every sanitizer calls this, so every
+// write path mints ids without knowing it — including the plugins, which send
+// no id and, ignoring unknown JSON fields as they do, never see one.
+//
+// Exported for its unit test (projects.sanitize.test.js).
+export function keepLineId(value) {
+  return normalizeLineId(value) || crypto.randomUUID();
+}
+
+// An identity for one row that is made of NOTHING the guard protects, so two
+// rows can be paired without ever consulting the money that is in dispute.
+function moneyFreeKey(kind, row, index) {
+  const part = (v) => String(v == null ? "" : v).trim().toLowerCase();
+  if (kind === "items" || kind === "materialItems") {
+    // Deliberately NOT itemIdentity(): that keys on `sn` too, and a client
+    // that renumbers lines when they are dragged would change every key at
+    // once, leaving the pairing to fall back on position — which is the one
+    // thing a re-order has just invalidated. Everything here survives a
+    // re-order, so a moved line keeps its own rate.
+    return [
+      part(row?.code),
+      part(row?.description),
+      part(row?.takeoffLine),
+      part(row?.materialName),
+      part(row?.unit),
+    ].join("::");
+  }
+  if (kind === "budgetItems") {
+    return [
+      part(row?.billIdentity || row?.sourceTakeoffCode),
+      part(row?.componentKind),
+      part(row?.description || row?.materialName),
+      part(row?.materialName),
+      part(row?.unit),
+    ].join("::");
+  }
+  if (kind === "provisionalSums") {
+    return [part(row?.kind) || "provisional", part(row?.description)].join("::");
+  }
+  if (kind === "preliminaryItems") return part(row?.name);
+  if (kind === "variations") {
+    return [part(row?.reference), part(row?.description), part(row?.unit)].join("::");
+  }
+  return `#${index}`;
+}
+
+// Does this stored row hold money that a save has to carry forward? Every
+// protected field is a figure, so "money" is any of them holding a number that
+// is not zero — a negative rate (an omission variation) counts. A row that is
+// all zeros and nulls has nothing to lose, so losing it is not worth refusing
+// a save over.
+function rowCarriesMoney(row, fields) {
+  return fields.some((f) => {
+    const v = row?.[f];
+    return typeof v === "number" && Number.isFinite(v) && v !== 0;
+  });
+}
+
+// Restore the money a rate-masked viewer was never shown.
+//
+// `stored` is what the project holds today, `incoming` is the array that came
+// back on the request. Returns { rows } — the incoming rows with every
+// protected field forced back to the stored value — or { unsafe: true } when
+// the two lists cannot be paired without guessing, in which case the caller
+// must refuse the write rather than write a guess over real money.
+//
+// Pairing, in order:
+//   0. the row's own lineId, when both sides carry one — the only pass that
+//      survives the row's text AND its position changing in the same save;
+//   1. same identity (money-free), bucketed so duplicates pair one-for-one and
+//      a pure re-order still matches completely;
+//   2. leftovers that sit at the same index on BOTH sides, and only while the
+//      two sides have the same number of leftovers — the ordinary "edited a
+//      description in place" case, where position still means something.
+// There is no fourth pass. There used to be a third — any remaining leftovers
+// paired in order whenever the counts happened to match — and it was wrong:
+// equal leftover counts do NOT mean the leftovers correspond. Delete one line
+// and add another in the same save and the added line inherited the deleted
+// line's rate; edit one line's description into another's and the two rates
+// came back exchanged. Neither is a figure anyone typed.
+//
+// So a row with no counterpart is NEW and gets blank money, never another
+// row's. And if treating it as new would leave a stored row whose money
+// nobody carried forward, we refuse the whole save instead: a 409 the viewer
+// can recover from by reloading beats a silent transplant. Deleting a line is
+// still an ordinary save — the money goes with the line the viewer meant to
+// delete, and no incoming row is left holding somebody else's figure.
+//
+// The id is what closes the old known limit, and it closes it only for a
+// client that round-trips it. Replace a row in its own slot and the added row
+// arrives carrying no id (or one that names no stored row) in a payload whose
+// other rows are named, which is the client telling us it is new. It no longer
+// reaches pass 2, so it no longer inherits the slot's rate — and because the
+// replaced row is then a priced leftover, the save is REFUSED rather than
+// quietly blanked. A 409 that says "reload and save a smaller change" is the
+// right answer to a request the server genuinely cannot read: the alternative
+// is dropping a figure the viewer was never allowed to see.
+//
+// A payload carrying no ids at all names nothing, falls straight through to
+// passes 1 and 2, and behaves exactly as it did before the id existed — which
+// is the contract the desktop plugins are held to.
+export function preserveMaskedMoney(stored, incoming, kind) {
+  const blanks = MASKED_MONEY_BLANKS[kind];
+  if (!blanks) {
+    return { rows: null, unsafe: true, reason: `unknown money array "${kind}"` };
+  }
+  const fields = Object.keys(blanks);
+  const storedRows = Array.isArray(stored) ? stored : [];
+  const rows = (Array.isArray(incoming) ? incoming : []).map((r) => ({ ...(r || {}) }));
+
+  const sourceFor = new Array(rows.length).fill(-1);
+  const storedTaken = new Array(storedRows.length).fill(false);
+
+  // One pairing pass over whatever is still unpaired. `keyOf(row, index)`
+  // returns the key this pass matches on, or null for a row it cannot speak
+  // for. Bucketed, so duplicate keys pair one-for-one and a pure re-order
+  // still matches completely.
+  const pairOn = (keyOf) => {
+    const buckets = new Map();
+    storedRows.forEach((row, i) => {
+      if (storedTaken[i]) return;
+      const key = keyOf(row, i);
+      if (key == null) return;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(i);
+    });
+    if (!buckets.size) return;
+    rows.forEach((row, i) => {
+      if (sourceFor[i] >= 0) return;
+      const key = keyOf(row, i);
+      if (key == null) return;
+      const bucket = buckets.get(key);
+      if (!bucket || !bucket.length) return;
+      const si = bucket.shift();
+      sourceFor[i] = si;
+      storedTaken[si] = true;
+    });
+  };
+
+  // Does this payload name its rows at all? One valid id anywhere in the
+  // array is the client saying "I round-trip these", which is what makes a
+  // row WITHOUT one a row it has just created rather than a row it forgot to
+  // label. A payload with no ids claims nothing, and gets exactly the
+  // behaviour it had before this field existed.
+  const payloadNamesRows = rows.some((row) => normalizeLineId(row?.lineId));
+
+  // 0. the row's own id. Skipped for any row without one, on either side, so
+  //    a payload that carries no ids reaches pass 1 with nothing paired.
+  pairOn((row) => normalizeLineId(row?.lineId) || null);
+
+  // 1. identity. moneyFreeKey() always returns a string — including "" for a
+  //    row with nothing in its key fields — and "" is a key like any other
+  //    here, which is what it has always been.
+  pairOn((row, i) => moneyFreeKey(kind, row, i));
+
+  // Whatever is left on each side is either a row whose identity the viewer
+  // edited, a row they added, or a row they deleted — and from here we cannot
+  // tell which.
+  let leftIn = [];
+  rows.forEach((_, i) => {
+    if (sourceFor[i] < 0) leftIn.push(i);
+  });
+  const leftStored = new Set();
+  storedRows.forEach((_, i) => {
+    if (!storedTaken[i]) leftStored.add(i);
+  });
+
+  // 2. leftovers that sit at the same index on both sides — the ordinary
+  //    "edited this row in place" case. Only while the two sides have the same
+  //    number of leftovers: an unequal count means rows were added or removed
+  //    around the edit, and then index i on one side is not index i on the
+  //    other (delete a line and the line below it slides up into its place).
+  //
+  //    Position is a guess, and an id is evidence, so the guess only gets to
+  //    stand where no id contradicts it. Two things contradict it:
+  //      • the incoming row carries an id. It got this far, so that id named
+  //        no stored row — it is a new row, or a stale one from a client that
+  //        loaded before somebody else's save. Either way it is not whichever
+  //        row happens to sit at this index now.
+  //      • the incoming row carries none while the stored row at this index
+  //        does, in a payload that named its other rows. A client that echoes
+  //        ids would have echoed that one, so this is a row it just created.
+  //    This is the pass that used to hand a replaced row its slot's rate. A
+  //    client that names its rows no longer reaches it, and the save is
+  //    refused below instead — which the viewer fixes by reloading.
+  //
+  //    What still pairs here, exactly as it always has: a payload that names
+  //    nothing, which is every desktop plugin; and an unnamed row against an
+  //    unnamed stored row, which is a row synthesised server-side or one
+  //    written before this field existed.
+  const positionContradicted = (i) =>
+    Boolean(normalizeLineId(rows[i]?.lineId)) ||
+    (payloadNamesRows && Boolean(normalizeLineId(storedRows[i]?.lineId)));
+  if (leftIn.length && leftIn.length === leftStored.size) {
+    leftIn = leftIn.filter((i) => {
+      if (!leftStored.has(i)) return true;
+      if (positionContradicted(i)) return true;
+      sourceFor[i] = i;
+      leftStored.delete(i);
+      return false;
+    });
+  }
+
+  // Everything still unpaired on the incoming side is about to be treated as a
+  // brand-new row. That is safe on its own — a new row gets blanks. It is only
+  // unsafe if a stored row is ALSO left over still holding money, because then
+  // we cannot tell a new row from that row edited, and blanking would drop a
+  // figure the viewer could not see. Refuse, and say which array.
+  if (leftIn.length) {
+    const orphaned = [...leftStored].filter((i) =>
+      rowCarriesMoney(storedRows[i], fields),
+    );
+    if (orphaned.length) {
+      return {
+        rows: null,
+        unsafe: true,
+        reason:
+          `${kind}: ${leftIn.length} row(s) could not be matched to a stored ` +
+          `row, and ${orphaned.length} priced stored row(s) were left over`,
+      };
+    }
+  }
+
+  rows.forEach((row, i) => {
+    const src = sourceFor[i] >= 0 ? storedRows[sourceFor[i]] : null;
+    for (const f of fields) {
+      row[f] = src ? src[f] : blanks[f];
+    }
+    // A row that paired on its text or its position, but arrived without an
+    // id, inherits the stored row's. Without this a masked save would drop
+    // the id the owner's client minted, and the NEXT masked save would be
+    // back to guessing. The id is not money and is not in `fields`, so a row
+    // that sent its own keeps it.
+    if (src && !normalizeLineId(row.lineId)) {
+      const carried = normalizeLineId(src.lineId);
+      if (carried) row.lineId = carried;
+    }
+  });
+  return { rows, unsafe: false, reason: "" };
+}
+
+// Route-level guard. Hand it the stored project, the resolved access and the
+// request body; use the body it hands back, or refuse with the error it hands
+// back. A viewer who CAN see rates gets their body back with only the
+// server-only fields stripped, so their saves are untouched.
+//
+// Exported for its unit test (projects.masking.test.js).
+export function guardMaskedWrite({ project, access, body, isMergeContainer: merged = false }) {
+  const next = { ...(body || {}) };
+  for (const field of NEVER_ACCEPTED_FROM_CLIENT) delete next[field];
+  if (next.contract && typeof next.contract === "object") {
+    next.contract = { ...next.contract };
+    for (const field of NEVER_ACCEPTED_FROM_CLIENT) delete next.contract[field];
+  }
+
+  if (access ? access.canSeeRates : true) return { body: next };
+
+  // A merge container holds none of the routed lines, so there is nothing here
+  // to restore them from — pairing against its empty arrays would blank every
+  // rate. Refuse loudly instead of destroying the disciplines' prices.
+  if (merged) {
+    const touched = MERGE_ROUTED_ARRAYS.filter((k) => Array.isArray(next[k]));
+    if (touched.length) {
+      return {
+        error: {
+          status: 409,
+          body: {
+            error:
+              "Rates are hidden on this shared project, so a bill or budget " +
+              "save cannot be applied to a merged project. Ask the owner.",
+            code: "RATES_MASKED_MERGE_UNSUPPORTED",
+            details: { arrays: touched },
+          },
+        },
+      };
+    }
+  }
+
+  for (const kind of MASKED_MONEY_ARRAYS) {
+    if (!Array.isArray(next[kind])) continue;
+    const { rows, unsafe, reason } = preserveMaskedMoney(project?.[kind], next[kind], kind);
+    if (unsafe) {
+      return {
+        error: {
+          status: 409,
+          body: {
+            error:
+              "Rates are hidden on this shared project, and this save changed " +
+              "too much at once for the stored prices to be matched back to it. " +
+              "Reload the project and save a smaller change.",
+            code: "RATES_MASKED_UNSAFE_MERGE",
+            details: { array: kind, reason },
+          },
+        },
+      };
+    }
+    next[kind] = rows;
+  }
+  return { body: next };
+}
+
+// Some writes do not carry money in the body at all — they REPRICE, by running
+// a pricing pass over the project. There is nothing to restore in those, and
+// re-pricing a bill you are not allowed to read is not work, it is damage, so
+// they are refused outright. One message, so the client can recognise it.
+function refuseRateMaskedWrite(res, what) {
+  return res.status(403).json({
+    error: `Rates are hidden on this shared project, so you cannot ${what}. Ask the owner.`,
+    code: "RATES_MASKED",
+  });
 }
 
 // Mask the money fields on a single certificate / final-account object before
@@ -182,6 +593,12 @@ function projectForClient(project, access) {
   // already rate-masked). Always strip the raw array.
   delete obj.linkedProjects;
 
+  // The gang / plant detail behind each Budget Labour and Plant row is served
+  // by GET /:productKey/:id/resources, not here. Keeping it off this payload
+  // is what lets it exist at all without changing the shape of any route a
+  // desktop plugin calls.
+  delete obj.resourceItems;
+
   if (!canSeeRates) {
     maskRates(obj);
     obj._ratesMasked = true;
@@ -213,12 +630,31 @@ import {
 } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import {
+  containerOwnerId,
   isMergeContainer,
   mergeLinks,
   resolveMergedProject,
   splitMergedWrite,
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
+import {
+  certificateMoney,
+  certifiedSoFar,
+  earnedLineValue,
+} from "../util/certificateMaths.js";
+import { sendMail } from "../util/mailer.js";
+import { contractLocked } from "../util/emailContent.js";
+import {
+  isShared,
+  lockedByName,
+  lockNoticeRecipients,
+  maySeeMoney,
+} from "../util/contractLockNotice.js";
+import {
+  maskSharedMoney,
+  readerMaySeeRates,
+  PROJECT_LIST_MONEY_FIELDS,
+} from "../util/sharedMoney.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import {
@@ -242,6 +678,7 @@ import {
   cascadeBillQtyToMaterials,
 } from "../util/billBudgetCascade.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
+import { rejectSampleWrites, sampleSummary } from "../util/sampleProjects.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
 import {
@@ -249,14 +686,66 @@ import {
   buildBoqTemplateWorkbook,
 } from "../util/boqExcelImport.js";
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
-import { generateMlSchedule } from "../util/mlSchedule.js";
+import { generateMlSchedule, isGeneratedRow } from "../util/mlSchedule.js";
 import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
+import { RateGenRate } from "../models/RateGenRate.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
+import {
+  lineKey,
+  suggestRatesForLine,
+  suggestionMapForBill,
+  usageIndex,
+  worthOffering,
+} from "../util/rateSuggestions.js";
+import { RateUsage } from "../models/RateUsage.js";
+import { conversionFactor } from "../util/unitConversion.js";
+import { unitsAgree } from "../util/rateSuggestions.js";
+import {
+  applyRateRows,
+  buildRateBudgetRows,
+  isRateGenRow,
+  whyRateCannotPrice,
+} from "../util/rateToBudget.js";
+import {
+  buildUserRateRows,
+  isUserRateLine,
+  resolveUserRate,
+  setUserRateOnItem,
+} from "../util/priceByArea.js";
+import {
+  collectBudgetEdits,
+  reapplyBudgetEdits,
+  preserveBudgetUserEdits,
+} from "../util/budgetUserEdits.js";
+import { preliminaryPercentOf } from "../util/contractDefaults.js";
+import {
+  certifiableContractSum,
+  finalAccountSavings,
+} from "../util/finalAccountMath.js";
+import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
+import { carryCloudRateLocks } from "../util/cloudRateLocks.js";
+import { priceBudgetFromCloud } from "../util/cloudBudgetPricing.js";
+import { sanitizeRoomFinishes } from "../util/roomFinishes.js";
+import {
+  sanitizeResourceItems,
+  applyResourceRows,
+  buildResourcesFromRate,
+  RESOURCE_SOURCE_RATE,
+} from "../util/projectResources.js";
 import {
   BOQ_IMPORT_PRODUCTS,
   hasBoqImportGrant,
   canImportBoqFor,
   isBoqImportProduct,
 } from "../util/boqImportAccess.js";
+import {
+  normalizeVariationStatus,
+  isApprovedVariation,
+  variationAmount,
+  approvedVariationsTotal,
+  approvedVariationsEarned,
+} from "../util/variationStatus.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
 // IFC files; we can raise this per-tier later via an entitlement flag.
@@ -353,6 +842,8 @@ const boqImportUpload = multer({
 const router = express.Router();
 
 router.use(requireAuth);
+// Sample projects are read-only for everyone (util/sampleProjects.js).
+router.param("id", rejectSampleWrites);
 
 function normalizeProductKey(v) {
   return String(v || "")
@@ -407,6 +898,17 @@ function requestedProductKey(req) {
   return normalizeProductKey(req.productKeyOriginal ?? req.params.productKey);
 }
 
+// QUIV's per-room finishes (QUIV 4.0.2+). Revit take-offs only: no other
+// plugin measures rooms, and the "-materials" twin never carries them.
+// Returns undefined when the body did not send the list, which every save
+// path reads as "keep what is stored" - an older QUIV, or a website save of
+// the bill, must not wipe the rooms.
+export function roomFinishesFromBody(productKey, body) {
+  if (productKey !== "revit") return undefined;
+  const list = body?.roomFinishes;
+  return Array.isArray(list) ? sanitizeRoomFinishes(list) : undefined;
+}
+
 // ── Collaborator access resolution ───────────────────────────────────────
 // True when `userId` holds an active, unexpired entitlement for `key`. Mirrors
 // requireEntitlement() — used for the RateGen rate-mask decision and the
@@ -423,14 +925,39 @@ async function userHasActiveEntitlement(userId, key) {
   return true;
 }
 
+// QUIV measures, ADLM Cloud prices (owner, 1 and 4 Oct 2026). QUIV sends its
+// material and labour schedule as quantities; for an account with RateGen the
+// cloud prices the unpriced rows and builds the lines QUIV did not cover (see
+// util/cloudBudgetPricing.js). Without RateGen the budget stays quantities only,
+// the 24 Sep rule. Runs after preserveBudgetUserEdits, so anything the QS priced
+// is already back and is never changed. Never fails the save.
+async function cloudPriceQuivBudget(project, productKey, userId, tag) {
+  if (productKey !== "revit" || !project) return;
+  try {
+    if (!(await userHasActiveEntitlement(userId, "rategen"))) return;
+    const ctx = await buildMlScheduleContext(userId);
+    const r = priceBudgetFromCloud(project.items, project.budgetItems, ctx);
+    if (!r.priced && !r.generated) return;
+    project.budgetItems = ensureBillItemCoverage(project.items, sanitizeBudgetItems(r.budgetItems));
+    console.log(`[${tag}] cloud priced the QUIV budget: ${r.priced} rows priced, ${r.covered} lines built (${r.generated} rows)`);
+  } catch (e) {
+    console.error(`[${tag}] cloud pricing failed:`, e?.message || e);
+  }
+}
+
 // Mongo filter matching a project the requester may READ: they own it OR are a
 // collaborator on it. Write/export/manage powers are refined by
 // resolveProjectAccess() once the document is loaded.
+//
+// Sample projects are readable by anyone who reached this far: every route that
+// uses this filter sits behind requireEntitlementParam, so "anyone" here means
+// an active subscriber of the product. resolveProjectAccess() makes them
+// read-only and rejectSampleWrites() refuses every write before a handler runs.
 function accessFilter(id, userId, productKey) {
   return {
     _id: id,
     productKey,
-    $or: [{ userId }, { "collaborators.userId": userId }],
+    $or: [{ userId }, { "collaborators.userId": userId }, { isSample: true }],
   };
 }
 
@@ -440,34 +967,13 @@ function accessFilter(id, userId, productKey) {
 //   canExport:   owner or full  (xlsx / model download)
 //   canManage:   owner only     (codes, collaborators, delete project)
 //   canSeeRates: owner always; collaborator only with active rategen
+// The rule itself moved to util/projectAccess.js so the ArchiCAD routes can
+// ask the same question — they were not asking it at all. Behaviour here is
+// unchanged; this is the same function with its body shared.
 async function resolveProjectAccess(req, project) {
-  const uid = getUserObjectId(req);
-  const out = {
-    role: "none",
-    accessLevel: null,
-    canEdit: false,
-    canExport: false,
-    canManage: false,
-    canSeeRates: false,
-  };
-  if (!project || !uid) return out;
-
-  if (project.userId && uid.equals(project.userId)) {
-    out.role = "owner";
-    out.canEdit = out.canExport = out.canManage = out.canSeeRates = true;
-    return out;
-  }
-
-  const collab = (project.collaborators || []).find(
-    (c) => c.userId && uid.equals(c.userId),
-  );
-  if (!collab) return out; // not owner, not collaborator → no access
-
-  out.role = collab.accessLevel === "full" ? "full" : "view";
-  out.accessLevel = out.role;
-  out.canEdit = out.canExport = out.role === "full";
-  out.canSeeRates = await userHasActiveEntitlement(uid, "rategen");
-  return out;
+  return resolveSharedProjectAccess(getUserObjectId(req), project, {
+    hasRateGen: (uid) => userHasActiveEntitlement(uid, "rategen"),
+  });
 }
 
 // ── Cross-project linking (e.g. MEP services → architectural bill) ─────────
@@ -482,8 +988,8 @@ function computeProjectRollup(project) {
   for (const it of items) measured += safeNum(it?.qty) * safeNum(it?.rate);
   let provisional = 0;
   for (const p of project?.provisionalSums || []) provisional += safeNum(p?.amount);
-  let variations = 0;
-  for (const v of project?.variations || []) variations += safeNum(v?.qty) * safeNum(v?.rate);
+  // S18 valuations: only approved variations are part of the works cost.
+  const variations = approvedVariationsTotal(project?.variations);
   return {
     measured,
     provisional,
@@ -833,6 +1339,8 @@ const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   vatPct: 7.5,
   withholdingPct: 2.5,
   basis: "boq",
+  // S18 valuations: procurement lead time, in days, for the buy schedule.
+  procurementLeadDays: 14,
 });
 
 function clampPercentage(value, fallback = 0) {
@@ -884,7 +1392,23 @@ function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTIN
         : base.basis === "budget"
           ? "budget"
           : "boq",
+    // S18 valuations: clamped 0-120 days. Anything unusable falls back to
+    // what the project already had, then to the 14-day default.
+    procurementLeadDays: clampLeadDays(
+      source.procurementLeadDays,
+      clampLeadDays(
+        base.procurementLeadDays,
+        DEFAULT_VALUATION_SETTINGS.procurementLeadDays,
+      ),
+    ),
   };
+}
+
+// S18 valuations: a procurement lead time is a whole number of days, 0-120.
+function clampLeadDays(value, fallback = 14) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(120, Math.round(n)));
 }
 
 function itemIdentity(item, index) {
@@ -971,12 +1495,19 @@ function sanitizeItems(items, productKey = "") {
     if (wasBinaryDone && parsedPercent < 100) parsedPercent = 100;
 
     const baseItem = {
+      // See keepLineId(). Kept when the client echoed one, minted when it
+      // did not, so a row is never stored without a name of its own.
+      lineId: keepLineId(item.lineId),
       sn: Number.isFinite(Number(item.sn)) ? Number(item.sn) : i + 1,
       qty: Number.isFinite(Number(item.qty)) ? Number(item.qty) : 0,
       unit: item.unit != null ? String(item.unit) : "",
       rate: parsedRate,
       // RateGen library description that priced this line (plugin provenance).
       appliedRateKey: item.appliedRateKey != null ? String(item.appliedRateKey) : "",
+      // When the QS applied this rate himself (Rate Gen pick or typed figure).
+      // Optional: absent on every plugin payload, so a plugin save leaves it
+      // null and the line keeps deriving from the Budget exactly as today.
+      rateLockedAt: parseOptionalDate(item.rateLockedAt),
       actualQty: parseOptionalNumber(item.actualQty),
       actualRate: parsedActualRate,
       actualRecordedAt: parsedActualRecordedAt,
@@ -1037,7 +1568,10 @@ function sanitizeItems(items, productKey = "") {
   return safe;
 }
 
-function sanitizeProvisionalSums(sums) {
+// Exported for its unit test (projects.sanitize.test.js). The PUT replaces
+// the whole array with what comes back from this function, so what it keeps
+// is exactly what survives a save.
+export function sanitizeProvisionalSums(sums) {
   if (!Array.isArray(sums)) return [];
   const out = [];
   for (let i = 0; i < sums.length && out.length < 200; i += 1) {
@@ -1054,7 +1588,12 @@ function sanitizeProvisionalSums(sums) {
       }
       if (!completedAt) completedAt = new Date();
     }
-    out.push({ description, amount, completed, completedAt });
+    // S18 bill: keep the group a sum belongs to. Anything that is not the
+    // literal "pc" is a provisional sum, which is how the whole list has
+    // always been treated, so a client that does not send `kind` (every
+    // desktop plugin today) leaves its rows exactly as they were.
+    const kind = String(s.kind || "").trim().toLowerCase() === "pc" ? "pc" : "provisional";
+    out.push({ lineId: keepLineId(s.lineId), description, amount, completed, completedAt, kind });
   }
   return out;
 }
@@ -1117,6 +1656,7 @@ function sanitizeBudgetItems(items) {
           .slice(0, 5000)
       : [];
     out.push({
+      lineId: keepLineId(b.lineId),
       billIdentity,
       sn: num(b.sn),
       description,
@@ -1200,12 +1740,16 @@ function sanitizePreliminaryItems(items) {
     const actualAmount = Number.isFinite(Number(it.actualAmount))
       ? Math.max(0, Number(it.actualAmount))
       : 0;
-    out.push({ name, allocation, completed, completedAt, notes, actualAmount });
+    out.push({
+      lineId: keepLineId(it.lineId),
+      name, allocation, completed, completedAt, notes, actualAmount,
+    });
   }
   return out;
 }
 
-function sanitizeVariations(variations) {
+// Exported for its unit test — see sanitizeProvisionalSums above.
+export function sanitizeVariations(variations) {
   if (!Array.isArray(variations)) return [];
   const out = [];
   for (let i = 0; i < variations.length && out.length < 500; i += 1) {
@@ -1231,10 +1775,21 @@ function sanitizeVariations(variations) {
       }
       if (!completedAt) completedAt = new Date();
     }
+    // S18 valuations: a row with no status — everything written before the
+    // field existed, and everything the post-lock auto-add raises — reads
+    // back as approved, so no existing total moves.
+    const status = normalizeVariationStatus(v.status);
+    let decidedAt = null;
+    if (v.decidedAt) {
+      const d = new Date(v.decidedAt);
+      if (!Number.isNaN(d.getTime())) decidedAt = d;
+    }
+    const decidedBy = isValidObjectId(v.decidedBy) ? v.decidedBy : null;
     if (!description && qty === 0 && rate === 0) continue;
     out.push({
+      lineId: keepLineId(v.lineId),
       description, qty, unit, rate, reference, issuedAt, source,
-      completed, completedAt,
+      completed, completedAt, status, decidedAt, decidedBy,
     });
   }
   return out;
@@ -1251,7 +1806,36 @@ function bucketPreviousItems(items) {
   return buckets;
 }
 
-function applyValuationTracking({ productKey, previousItems = [], nextItems = [], previousEvents = [] }) {
+/**
+ * Does this payload have an opinion about what has been built?
+ *
+ * The website round-trips a line's earned position — completed / purchased /
+ * percentComplete — so an absent field there means "no". A desktop plugin
+ * never sends them at all: HERON's CloudTakeoffItemDto carries sn,
+ * description, qty, unit, rate, level, type and code, and nothing about
+ * progress. Treating that silence as "nothing is built" resets the line.
+ *
+ * actualRate is deliberately NOT in this list. QUIV's takeoff sends the
+ * planned rate in it (see sanitizeItems), so it would report every Revit
+ * payload as carrying progress and the guard would never fire.
+ */
+function carriesValuationState(rawItems) {
+  return (Array.isArray(rawItems) ? rawItems : []).some(
+    (it) =>
+      it &&
+      (it.percentComplete !== undefined ||
+        it.completed !== undefined ||
+        it.purchased !== undefined),
+  );
+}
+
+function applyValuationTracking({
+  productKey,
+  previousItems = [],
+  nextItems = [],
+  previousEvents = [],
+  keepEarnedPosition = false,
+}) {
   const statusField = statusFieldForProductKey(productKey);
   const statusDateField = statusDateFieldForProductKey(productKey);
   const otherStatusField = statusField === "purchased" ? "completed" : "purchased";
@@ -1268,6 +1852,19 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
     else previousBuckets.delete(key);
 
     const previousItem = previousMatch?.item || {};
+    // A payload with no opinion about progress must not be read as "nothing
+    // is built". percentComplete and completed are the multiplier in
+    // valuationFactor and therefore the basis of every interim certificate,
+    // so a plugin re-save used to zero the earned position of a line the QS
+    // had marked 60% done — and emit a NEGATIVE valuation event for it.
+    if (keepEarnedPosition && previousMatch) {
+      item = {
+        ...item,
+        completed: previousItem.completed,
+        purchased: previousItem.purchased,
+        percentComplete: previousItem.percentComplete,
+      };
+    }
     const previousStatus = Boolean(previousItem?.[statusField]);
     const nextStatus = Boolean(item?.[statusField]);
     const previousStatusAt = parseOptionalDate(previousItem?.[statusDateField]);
@@ -1503,7 +2100,15 @@ function buildValuationLogs(project, productKey) {
       : Math.max(0, Math.min(100, safeNum(it?.percentComplete)));
     if (!ratified && pct <= 0) continue; // nothing earned on this line
 
-    const amount = safeNum(it?.qty) * safeNum(it?.rate) * (pct / 100);
+    // THE SAME RULE THE CERTIFICATE USES.
+    //
+    // This read qty * rate — the frozen CONTRACT figures — while
+    // computeValueToDate, which feeds the interim certificate, reads the
+    // actuals. On a line re-measured from 120 m³ to 134 the certificate said
+    // ₦11,390,000 and the printed Interim Payment Application said
+    // ₦10,200,000, for the same work on the same day. Whichever the client saw
+    // first was the one they believed.
+    const amount = earnedLineValue(it, pct);
     if (amount <= 0) continue;
 
     const when =
@@ -1633,7 +2238,8 @@ function buildValuationLogs(project, productKey) {
     : [];
   for (let i = 0; i < projectVariations.length; i += 1) {
     const v = projectVariations[i];
-    if (!v?.completed) continue;
+    // S18 valuations: earned only when approved AND executed on site.
+    if (!v?.completed || !isApprovedVariation(v)) continue;
     const amount = safeNum(v?.qty) * safeNum(v?.rate);
     if (amount <= 0) continue;
     // Use completedAt if present, else fall back to issuedAt, else today.
@@ -1865,6 +2471,9 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
   // qty/rate to the baseline and divert post-lock changes to actualQty/actualRate, push brand-new
   // lines to variations, and re-insert omitted base items — so a plugin (HERON) re-save via the
   // unified /full or per-key POST can never overwrite a locked contract. No-op when unlocked/new.
+  // A rate the QS set on the website keeps its lock through a plugin re-save
+  // (the plugins' payload has no rateLockedAt; see util/cloudRateLocks.js).
+  if (!created) carryCloudRateLocks(project.items, items);
   const sanitizedNext = sanitizeItems(items, productKey);
   const { lockedItems, extraVariations } = enforceContractLock({ project, sanitizedNext });
 
@@ -1876,6 +2485,9 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
       created || !Array.isArray(project.valuationEvents)
         ? []
         : project.valuationEvents,
+    // A plugin payload says nothing about progress. That is not the same as
+    // saying nothing has been built.
+    keepEarnedPosition: !carriesValuationState(items),
   });
   project.items = tracked.items;
   project.valuationEvents = tracked.valuationEvents;
@@ -1911,6 +2523,8 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
       project.valuationSettings || DEFAULT_VALUATION_SETTINGS,
     );
   }
+  const rooms = roomFinishesFromBody(productKey, payload);
+  if (rooms) project.roomFinishes = rooms;
 
   if (!created) project.version += 1;
   await project.save();
@@ -2016,6 +2630,7 @@ async function createProject(req, res) {
             : true,
       checklistCompositeKeys: normalizeChecklistKeys(checklistCompositeKeys),
       valuationSettings: normalizeValuationSettings(valuationSettings),
+      roomFinishes: roomFinishesFromBody(productKey, req.body) || [],
     });
 
     recordActivity(req, project, ACT.PROJECT_CREATED, "Created the project", {
@@ -2097,6 +2712,8 @@ async function saveProjectFull(req, res) {
         ...sharedMeta,
         items: Array.isArray(takeoffItems) ? takeoffItems : [],
         origin: origin || "",
+        // Rooms belong to the take-off only, never the materials twin.
+        roomFinishes: body.roomFinishes,
       },
     });
 
@@ -2128,6 +2745,16 @@ async function saveProjectFull(req, res) {
     // transition; budgetItems[] is the canonical source for the Budget tab.
     if (mats.length) {
       try {
+        // What the QS owns on these rows, read BEFORE the plugin's list
+        // replaces them. Procurement marks, the buy-schedule slot and any
+        // rate typed on the website exist nowhere else: this assignment used
+        // to drop them outright, and because the GET heal rebuilds its own
+        // edit map FROM budgetItems, by the next open there was nothing left
+        // to recover them from. deriveBillRatesFromBudget runs three lines
+        // below, so a lost budget rate moved the BILL too — the QS's pricing
+        // reverted to the plugin's without anyone being told.
+        const previousBudget = takeoffRes.project.budgetItems || [];
+
         const budget = sanitizeBudgetItems(
           materialsRes ? materialsRes.project.items : mats,
         );
@@ -2135,10 +2762,20 @@ async function saveProjectFull(req, res) {
         // so material + labour bundle under the right line, then derive the
         // bill rates from the priced build-up before reconciling progress.
         backfillBudgetLinks(takeoffRes.project.items, budget);
-        takeoffRes.project.budgetItems = ensureBillItemCoverage(
+        const freshBudget = ensureBillItemCoverage(
           takeoffRes.project.items,
           budget,
         );
+        // After coverage, so the synthesised Labour/Material placeholders get
+        // their edits back too — the same order the GET heal uses.
+        const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+        if (restored.procurement || restored.pricing) {
+          console.log(
+            `[full] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+          );
+        }
+        takeoffRes.project.budgetItems = freshBudget;
+        await cloudPriceQuivBudget(takeoffRes.project, takeoffKey, userId, "full");
         deriveBillRatesFromBudget(takeoffRes.project);
         reconcileItemsFromBudget(takeoffRes.project);
         await takeoffRes.project.save();
@@ -2302,6 +2939,69 @@ async function listProjects(req, res) {
               },
             },
           },
+          // ── S18 bill: what stage a project is at, from what it holds ─────
+          // The gallery used to guess the stage from progressPercent, so a
+          // finished job with no final account read as "Final account". These
+          // five facts let it read the stage instead of inferring it. They are
+          // additive fields on a row the desktop plugins parse as a bare
+          // array, alongside shared/accessLevel/mergedPartCount, which those
+          // parsers already ignore.
+          contractLocked: { $ifNull: ["$contract.locked", false] },
+          tenderedAt: { $ifNull: ["$contract.tenderedAt", null] },
+          finalized: { $ifNull: ["$finalAccount.finalized", false] },
+          certificateCount: { $size: { $ifNull: ["$certificates", []] } },
+          contractSum: { $ifNull: ["$contract.contractSum", 0] },
+          // ── S18 bill: the pieces of the estimated total ──────────────────
+          // The card's "Estimated" figure was totalCost, which is measured
+          // work alone. These carry the rest of the grand summary so the
+          // gallery can show the same total the Bill does, using the one
+          // formula (client/src/features/projects/lib/projectTotals.js).
+          // Defaults match the model's, so a project that predates a field
+          // reads exactly as the project page reads it.
+          provisionalTotal: {
+            $sum: {
+              $map: {
+                input: { $ifNull: ["$provisionalSums", []] },
+                as: "s",
+                in: {
+                  $convert: { input: "$$s.amount", to: "double", onError: 0, onNull: 0 },
+                },
+              },
+            },
+          },
+          // Approved variations only. A row with no status is work that has
+          // always counted, so a missing status reads as approved — the same
+          // defensive rule the client uses.
+          approvedVariationsTotal: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: { $ifNull: ["$variations", []] },
+                    as: "v",
+                    cond: {
+                      $not: {
+                        $in: [
+                          { $ifNull: ["$$v.status", "approved"] },
+                          ["pending", "rejected"],
+                        ],
+                      },
+                    },
+                  },
+                },
+                as: "v",
+                in: {
+                  $multiply: [
+                    { $convert: { input: "$$v.qty", to: "double", onError: 0, onNull: 0 } },
+                    { $convert: { input: "$$v.rate", to: "double", onError: 0, onNull: 0 } },
+                  ],
+                },
+              },
+            },
+          },
+          preliminaryPercent: { $ifNull: ["$contract.preliminaryPercent", 7.5] },
+          contingencyPercent: { $ifNull: ["$contract.contingencyPercent", 5] },
+          taxPercent: { $ifNull: ["$contract.taxPercent", 7.5] },
           // Ownership badge: true when this row was shared with the requester.
           shared: { $ne: ["$userId", userId] },
           accessLevel: {
@@ -2400,12 +3100,116 @@ async function listProjects(req, res) {
           },
         },
       },
+      // S18 bill: the grand-summary cascade, one step per stage because a
+      // $addFields cannot read a field it is defining. Same order as the Bill
+      // and as lockContract(): prelims on measured + sums, contingency on the
+      // sub-total, VAT on sub-total + contingency, approved variations last.
+      {
+        $addFields: {
+          preliminaryTotal: {
+            $divide: [
+              {
+                $multiply: [
+                  { $add: ["$totalCost", "$provisionalTotal"] },
+                  "$preliminaryPercent",
+                ],
+              },
+              100,
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          estimateSubtotal: {
+            $add: ["$totalCost", "$provisionalTotal", "$preliminaryTotal"],
+          },
+        },
+      },
+      {
+        $addFields: {
+          contingencyTotal: {
+            $divide: [{ $multiply: ["$estimateSubtotal", "$contingencyPercent"] }, 100],
+          },
+        },
+      },
+      {
+        $addFields: {
+          taxTotal: {
+            $divide: [
+              {
+                $multiply: [
+                  { $add: ["$estimateSubtotal", "$contingencyTotal"] },
+                  "$taxPercent",
+                ],
+              },
+              100,
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          estimatedTotal: {
+            $add: [
+              "$estimateSubtotal",
+              "$contingencyTotal",
+              "$taxTotal",
+              "$approvedVariationsTotal",
+            ],
+          },
+        },
+      },
       { $sort: { updatedAt: -1 } },
     ]);
 
-    res.json(list);
+    // The same rule the project itself is served under: a row someone else
+    // owns shows no money unless the reader holds RateGen. Opening one of
+    // these projects already masks every figure (maskRates), and
+    // /me/projects-rollup already masks its equivalent fields — this list was
+    // the way round it, handing a collaborator without RateGen the contract
+    // sum and the whole estimate cascade on a project that is not theirs.
+    //
+    // Own rows are never masked, so a user's own list is untouched, and the
+    // lookup is skipped entirely unless a shared row is actually present.
+    const shared = list.some((p) => p?.shared);
+    const out = shared
+      ? maskSharedMoney(list, await readerMaySeeRates(userId), PROJECT_LIST_MONEY_FIELDS)
+      : list;
+
+    res.json(out);
   } catch (err) {
     console.error("GET projects error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function listSampleProjects(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const samples = await TakeoffProject.find(
+      { productKey, isSample: true },
+      {
+        name: 1,
+        slug: 1,
+        clientName: 1,
+        productKey: 1,
+        sample: 1,
+        "items.qty": 1,
+        "items.rate": 1,
+        "contract.contractSum": 1,
+        "certificates.number": 1,
+        "models.architectural.key": 1,
+        "models.structural.key": 1,
+        "models.mep.key": 1,
+        updatedAt: 1,
+      },
+    )
+      .sort({ "sample.order": 1 })
+      .lean();
+    res.json(samples.map(sampleSummary));
+  } catch (err) {
+    console.error("GET sample projects error:", err);
     res.status(500).json({ error: "Server error" });
   }
 }
@@ -2434,12 +3238,27 @@ async function getProject(req, res) {
     // derivation) would either no-op or, worse, persist an empty budget onto
     // it. The healing still happens — on each SOURCE, when that source is
     // opened or saved by its plugin — and the combined view simply reflects it.
+    //
+    // The sources resolve under the CONTAINER's owner, and applyMergedLineWrite
+    // now resolves them the same way, so a collaborator can save what this
+    // serves them. What they may do is decided here, on the container, by
+    // resolveProjectAccess.
     if (isMergeContainer(project)) {
       const access = await resolveProjectAccess(req, project);
-      const merged = await resolveMergedProject(project, project.userId);
+      const merged = await resolveMergedProject(project);
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+      return res.json(out);
+    }
+
+    // Samples are seeded complete and never written on read: the lazy heals
+    // below all save, and a read-only document shared by every subscriber
+    // must not change because one of them opened it.
+    if (project.isSample) {
+      const access = await resolveProjectAccess(req, project);
+      const out = projectForClient(project, access);
+      out.linkedSummaries = [];
       return res.json(out);
     }
 
@@ -2503,13 +3322,9 @@ async function getProject(req, res) {
       const hasMaterials =
         Array.isArray(project.materialItems) && project.materialItems.length;
 
-      const editKey = (b) =>
-        [
-          Number(b?.sn) || 0,
-          String(b?.materialName || b?.description || "").trim().toLowerCase(),
-          String(b?.unit || "").trim().toLowerCase(),
-          String(b?.componentKind || "").trim().toLowerCase(),
-        ].join("|");
+      // The key this used to build inline now lives in util/budgetUserEdits.js
+      // with the rest of the preservation, so the plugin save path and this
+      // one cannot drift apart again.
       const linkSig = (list) =>
         (list || [])
           .map(
@@ -2523,8 +3338,7 @@ async function getProject(req, res) {
           .join("|");
 
       if (hasMaterials) {
-        const edits = new Map();
-        for (const b of currentBudget) edits.set(editKey(b), b);
+        const edits = collectBudgetEdits(currentBudget);
 
         let fresh = sanitizeBudgetItems(project.materialItems);
         backfillBudgetLinks(project.items, fresh);
@@ -2532,19 +3346,13 @@ async function getProject(req, res) {
         // Material line — synthesise the gaps so each card is complete.
         fresh = ensureBillItemCoverage(project.items, fresh);
         // Re-apply user edits (procurement + pricing) onto the rebuilt list,
-        // including the synthetic placeholders.
-        for (const b of fresh) {
-          const prev = edits.get(editKey(b));
-          if (!prev) continue;
-          if (prev.procured) {
-            b.procured = true;
-            b.procuredAt = prev.procuredAt || b.procuredAt;
-          }
-          if (Number(prev.procuredPercent)) b.procuredPercent = prev.procuredPercent;
-          if (Number(prev.rate)) b.rate = prev.rate;
-          if (Number(prev.overheadPercent)) b.overheadPercent = prev.overheadPercent;
-          if (Number(prev.profitPercent)) b.profitPercent = prev.profitPercent;
-        }
+        // including the synthetic placeholders. Shared with the plugin save
+        // path, which used to do none of this — see util/budgetUserEdits.js.
+        // Matching is unchanged apart from being tried on billIdentity first,
+        // so this can only restore more than the sn key did alone; it also
+        // now carries targetDate, supplier and notes, which this path was
+        // dropping on every rebuild.
+        reapplyBudgetEdits(fresh, edits);
 
         const changed =
           currentBudget.length !== fresh.length ||
@@ -2590,7 +3398,27 @@ async function getProject(req, res) {
 //
 // Returns { ok, applied } or { error, status } — never partially reports
 // success, because a silent half-write on a bill is worse than a refusal.
-async function applyMergedLineWrite({ req, container, userId, body }) {
+//
+// The caller has already settled authorisation on the CONTAINER (accessFilter
+// to load it, then access.canEdit / canSeeRates). This function therefore takes
+// no requester id: the sources resolve under the container's owner, exactly as
+// the read does — see containerOwnerId() in services/projectMerge.js.
+async function applyMergedLineWrite({ req, container, body, canSeeRates = true }) {
+  // A merged write fans out to the discipline projects, which is where the
+  // real prices live — the container holds none of them, so guardMaskedWrite()
+  // has nothing here to restore a rate-masked payload from. Both callers
+  // refuse such a write before getting this far; this is the backstop that
+  // keeps a future caller from routing zeroed rates into the sources.
+  if (!canSeeRates && MERGE_ROUTED_ARRAYS.some((k) => Array.isArray(body?.[k]))) {
+    return {
+      error:
+        "Rates are hidden on this shared project, so a bill or budget save " +
+        "cannot be applied to a merged project. Ask the owner.",
+      code: "RATES_MASKED_MERGE_UNSUPPORTED",
+      status: 409,
+    };
+  }
+
   // ── Post-lock enforcement on a merged contract ──
   // The container owns the contract, so when it is locked the baseline covers
   // every discipline at once and enforcement has to happen HERE, against the
@@ -2609,7 +3437,7 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
   const containerLocked = !!container?.contract?.locked;
 
   if (containerLocked && Array.isArray(body.items)) {
-    const resolved = await resolveMergedProject(container, userId);
+    const resolved = await resolveMergedProject(container);
     const sanitizedNext = sanitizeItems(body.items, container.productKey);
     const { lockedItems, extraVariations } = enforceContractLock({
       project: { contract: container.contract, items: resolved.items },
@@ -2619,7 +3447,10 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
     postLockVariations = extraVariations;
   }
 
-  const { bySource, unroutable } = splitMergedWrite(container, workingBody);
+  const { bySource, container: containerBucket, unroutable } = splitMergedWrite(
+    container,
+    workingBody,
+  );
 
   if (unroutable.length) {
     return {
@@ -2631,10 +3462,21 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
     };
   }
 
+  // Under the CONTAINER's owner, exactly as the read resolves them — see
+  // containerOwnerId(). Loading them under the REQUESTER's id is what used to
+  // make every collaborator's save on a merged project answer 404 about a
+  // missing discipline, on a project they could plainly read and edit. The keys
+  // can only be this container's own merge links (splitMergedWrite fences
+  // them), and whether this requester may edit at all was settled on the
+  // container before we were called.
+  const ownerId = containerOwnerId(container);
   const ids = [...bySource.keys()];
-  const sources = await TakeoffProject.find({ _id: { $in: ids }, userId });
+  const sources = await TakeoffProject.find({ _id: { $in: ids }, userId: ownerId });
   const byId = new Map(sources.map((p) => [String(p._id), p]));
   if (sources.length !== ids.length) {
+    // Now only ever a genuinely missing source — deleted, or moved out of the
+    // owner's namespace — which is the same thing the read reports as
+    // merge.missing rather than an access decision.
     return {
       error: "A discipline project behind this merge could not be loaded.",
       code: "MERGE_SOURCE_MISSING",
@@ -2646,6 +3488,12 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
   for (const [sourceId, bucket] of bySource) {
     const source = byId.get(sourceId);
     const pk = source.productKey;
+
+    // Variations diverted by a source's own contract lock. Collected here
+    // rather than applied inside the items branch, so the payload's own
+    // variations can be laid down FIRST and these appended on top — the same
+    // composition the container does below.
+    let lockVariations = [];
 
     if (Array.isArray(bucket.items)) {
       const sanitizedNext = sanitizeItems(bucket.items, pk);
@@ -2666,20 +3514,33 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
       });
       source.items = tracked.items;
       source.valuationEvents = tracked.valuationEvents;
-      if (extraVariations.length) {
-        source.variations = sanitizeVariations([
-          ...(Array.isArray(source.variations) ? source.variations : []),
-          ...extraVariations,
-        ]);
-      }
+      lockVariations = extraVariations;
       source.markModified("items");
     }
 
     if (Array.isArray(bucket.provisionalSums)) {
       source.provisionalSums = sanitizeProvisionalSums(bucket.provisionalSums);
     }
-    if (Array.isArray(bucket.variations) && !Array.isArray(bucket.items)) {
+    // A save from the project screen sends the whole bill AND the whole
+    // variations list together, which is every ordinary save. Guarding this on
+    // "no items in the payload" therefore threw the QS's variation edits away
+    // on a merged project every single time: approve a variation, save, and the
+    // approval was gone on the next load.
+    //
+    // The guard existed because the items branch above appended the lock's own
+    // diverted variations, and assigning the payload afterwards would have
+    // wiped them. So they compose instead, in the order the container already
+    // uses: the QS's edits set the list, the lock's diversions land on top.
+    if (Array.isArray(bucket.variations)) {
       source.variations = sanitizeVariations(bucket.variations);
+      source.markModified("variations");
+    }
+    if (lockVariations.length) {
+      source.variations = sanitizeVariations([
+        ...(Array.isArray(source.variations) ? source.variations : []),
+        ...lockVariations,
+      ]);
+      source.markModified("variations");
     }
     if (Array.isArray(bucket.materialItems)) {
       source.materialItems = sanitizeItems(bucket.materialItems, pk);
@@ -2710,22 +3571,39 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
     });
   }
 
+  // ── The container's own contract-level rows ──
+  // A variation raised against the whole job belongs to the container, which
+  // is the commercial entity holding the contract — resolveMergedProject hands
+  // those rows to the client tagged with the container's id, and this is where
+  // they come home. Through the same sanitizer the sources use, so a status,
+  // a quantity and a rate round-trip identically either side of the merge.
+  let containerDirty = false;
+  if (Array.isArray(containerBucket?.variations)) {
+    container.variations = sanitizeVariations(containerBucket.variations);
+    container.markModified("variations");
+    containerDirty = true;
+  }
+
   // Post-lock scope belongs to the CONTAINER, not to any one discipline: a
   // variation is raised against the merged contract, and the container is what
   // holds that contract, its certificates and its final account. Filing it on
   // a source would post it to the wrong account and quietly distort that
-  // discipline's own history.
+  // discipline's own history. Appended AFTER the payload above so the two
+  // compose: the QS's edits set the list, and new post-lock scope lands on top
+  // of what they saved rather than being overwritten by it.
   if (postLockVariations.length) {
     container.variations = sanitizeVariations([
       ...(Array.isArray(container.variations) ? container.variations : []),
       ...postLockVariations,
     ]);
     container.markModified("variations");
-    await container.save();
+    containerDirty = true;
     recordActivity(req, container, ACT.VARIATION_ADDED, "Added post-lock scope as variations", {
       count: postLockVariations.length,
     });
   }
+
+  if (containerDirty) await container.save();
 
   recordActivity(req, container, ACT.BILL_UPDATED, "Updated the merged bill & budget", {
     disciplines: applied.length,
@@ -2941,6 +3819,45 @@ async function updateProject(req, res) {
       return res.status(400).json({ error: "Invalid id" });
     }
 
+    const userId = getUserObjectId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid user id in token" });
+    }
+
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    // Authorisation: owner or full-access collaborator may edit; view-only is
+    // rejected before any mutation. Contract-lock handling below is unchanged,
+    // so a full collaborator's edits respect locks exactly like the owner's.
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
+
+    // ── A viewer who cannot see rates cannot move money ──────────────
+    // projectForClient() handed this user a payload with every rate zeroed
+    // (maskRates). They edit a quantity and save, and the payload comes back
+    // carrying those zeros. Restore the stored money onto the incoming rows
+    // BEFORE a single body field is read, so what follows is the same code an
+    // owner runs — quantities, descriptions, units, order and ticks all save
+    // normally. Nothing changes for a viewer who CAN see rates.
+    const guarded = guardMaskedWrite({
+      project,
+      access,
+      body: req.body,
+      isMergeContainer: isMergeContainer(project),
+    });
+    if (guarded.error) {
+      return res.status(guarded.error.status).json(guarded.error.body);
+    }
+    req.body = guarded.body;
+
     const {
       name,
       items,
@@ -2969,27 +3886,6 @@ async function updateProject(req, res) {
       taxPercent,
     } = req.body || {};
 
-    const userId = getUserObjectId(req);
-    if (!userId) {
-      return res.status(401).json({ error: "Invalid user id in token" });
-    }
-
-    const project = await TakeoffProject.findOne(
-      accessFilter(id, userId, productKey),
-    );
-    if (!project) return res.status(404).json({ error: "Not found" });
-
-    // Authorisation: owner or full-access collaborator may edit; view-only is
-    // rejected before any mutation. Contract-lock handling below is unchanged,
-    // so a full collaborator's edits respect locks exactly like the owner's.
-    const access = await resolveProjectAccess(req, project);
-    if (!access.canEdit) {
-      return res.status(403).json({
-        error: "View-only access cannot edit this project.",
-        code: "VIEW_ONLY",
-      });
-    }
-
     // ── Federated merge container ──
     // The container owns no items, so a measurement write must be split and
     // applied to the source that owns each line; writing it here would discard
@@ -3008,8 +3904,8 @@ async function updateProject(req, res) {
         const routed = await applyMergedLineWrite({
           req,
           container: project,
-          userId,
           body: req.body || {},
+          canSeeRates: !!access.canSeeRates,
         });
         if (routed.error) {
           return res.status(routed.status || 400).json({
@@ -3055,7 +3951,7 @@ async function updateProject(req, res) {
       project.version = (Number(project.version) || 0) + 1;
       await project.save();
 
-      const merged = await resolveMergedProject(project, project.userId);
+      const merged = await resolveMergedProject(project);
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
@@ -3090,7 +3986,16 @@ async function updateProject(req, res) {
 
     if (name !== undefined) project.name = String(name).trim();
 
+    // Sent: replaced whole (QUIV sends every room on each save). Not sent:
+    // kept, so a website edit or an older QUIV never wipes the rooms.
+    const rooms = roomFinishesFromBody(productKey, req.body);
+    if (rooms) project.roomFinishes = rooms;
+
     if (Array.isArray(items)) {
+      // A rate the QS set on the website keeps its lock through a plugin re-save
+      // (QUIV's PUT has no rateLockedAt; see util/cloudRateLocks.js).
+      carryCloudRateLocks(project.items, items);
+
       // Self-learning category model — augment items missing an explicit
       // category with the user's learned mapping before sanitizing. This
       // only affects items the client didn't supply a category for.
@@ -3212,6 +4117,7 @@ async function updateProject(req, res) {
         previousEvents: Array.isArray(project.valuationEvents)
           ? project.valuationEvents
           : [],
+        keepEarnedPosition: !carriesValuationState(items),
       });
       project.items = tracked.items;
       project.valuationEvents = tracked.valuationEvents;
@@ -3303,9 +4209,69 @@ async function updateProject(req, res) {
       // to its bill line so material + labour bundle together. Guarded so a
       // mapping issue can never break the save.
       try {
-        const budget = sanitizeBudgetItems(materialItems);
+        // Read before anything replaces it. The same QS-owned fields that
+        // saveProjectFull was dropping are dropped here too — procurement
+        // marks, the buy-schedule slot, a rate typed on the website — and this
+        // is QUIV's primary save route, so it is the path most projects take.
+        // preserveMaskedMoney below does NOT cover it: that guard only runs
+        // for a rate-masked collaborator, and it restores money, not
+        // procurement, so the owner of the project got nothing back at all.
+        const previousBudget = project.budgetItems || [];
+
+        let budget = sanitizeBudgetItems(materialItems);
+        // This REPLACES budgetItems from a different array, so a rate-masked
+        // viewer whose materialItems were blank (nothing stored to restore
+        // from) would still arrive here with zeros and wipe a budget that was
+        // built some other way — a BoQ import, say. Restore against the budget
+        // this is about to overwrite, which is the money actually at risk.
+        if (access && !access.canSeeRates) {
+          // These rows were DERIVED from materialItems, so the ids on them are
+          // materialItems' ids — they name material lines, not budget lines,
+          // and pairing on them would match nothing while still telling
+          // preserveMaskedMoney that this payload names its rows (which would
+          // switch off its position pass). Hand it an anonymous array so this
+          // path pairs on text and position exactly as it always has, then put
+          // the ids back: the ones it carried forward from the stored budget,
+          // and a fresh one for anything genuinely new.
+          const anonymous = budget.map((b) => ({ ...b, lineId: "" }));
+          const kept = preserveMaskedMoney(project.budgetItems, anonymous, "budgetItems");
+          if (kept.unsafe) {
+            return res.status(409).json({
+              error:
+                "Rates are hidden on this shared project, and this save changed " +
+                "too much at once for the stored prices to be matched back to it. " +
+                "Reload the project and save a smaller change.",
+              code: "RATES_MASKED_UNSAFE_MERGE",
+              details: { array: "budgetItems", reason: kept.reason },
+            });
+          }
+          budget = kept.rows.map((b) => ({ ...b, lineId: keepLineId(b.lineId) }));
+        }
+        // previousBudget (read at the top of this block, before anything
+        // replaced it) is what the QS owns on these rows: procurement and typed
+        // rates. QUIV saves its budget through this PUT, so without restoring
+        // it every QUIV re-save put the plugin's prices back over the website's
+        // and the bill rates followed.
+        // previousBudget is read once, above, before anything replaces it.
+        // QUIV saves its budget through this PUT, so without that read every
+        // QUIV re-save put the plugin's prices back over the website's and the
+        // bill rates followed.
         backfillBudgetLinks(project.items, budget);
-        project.budgetItems = ensureBillItemCoverage(project.items, budget);
+        const freshBudget = ensureBillItemCoverage(project.items, budget);
+        // After coverage, so the synthesised rows get their edits back too.
+        // For a masked viewer this runs on top of preserveMaskedMoney and
+        // agrees with it — both restore the rate from the same stored budget —
+        // and it adds back the procurement that guard was never about.
+        const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+        if (restored.procurement || restored.pricing) {
+          console.log(
+            `[update] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+          );
+        }
+        project.budgetItems = freshBudget;
+        // A viewer who cannot see rates never gets prices added on his save.
+        if (access?.canSeeRates !== false)
+          await cloudPriceQuivBudget(project, productKey, userId, "update");
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
       }
@@ -3325,7 +4291,7 @@ async function updateProject(req, res) {
         if (!project.contract) project.contract = {};
         project.contract.preliminaryPercent = clampPercentage(
           n,
-          safeNum(project.contract?.preliminaryPercent) || 7.5,
+          preliminaryPercentOf(project.contract),
         );
       }
     }
@@ -3562,11 +4528,14 @@ async function getProjectBySlug(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({
-      slug,
-      productKey,
-      $or: [{ userId }, { "collaborators.userId": userId }],
-    });
+    // The requester's own project wins over a sample with the same slug.
+    const project =
+      (await TakeoffProject.findOne({
+        slug,
+        productKey,
+        $or: [{ userId }, { "collaborators.userId": userId }],
+      })) ||
+      (await TakeoffProject.findOne({ slug, productKey, isSample: true }));
     if (!project) return res.status(404).json({ error: "Not found" });
 
     const access = await resolveProjectAccess(req, project);
@@ -3645,12 +4614,14 @@ async function lockContract(req, res) {
     const approvedAt = req.body?.approvedAt
       ? new Date(req.body.approvedAt)
       : new Date();
+    // Locking freezes this into the contract sum, so a 0% job must lock at 0%
+    // and not quietly acquire a 7.5% preliminary pool it never had.
     const preliminaryPercent = Number.isFinite(Number(req.body?.preliminaryPercent))
       ? clampPercentage(
           Number(req.body.preliminaryPercent),
-          safeNum(project.contract?.preliminaryPercent) || 7.5,
+          preliminaryPercentOf(project.contract),
         )
-      : safeNum(project.contract?.preliminaryPercent) || 7.5;
+      : preliminaryPercentOf(project.contract);
     const notes = String(req.body?.notes || "").trim().slice(0, 1000);
 
     // 4-digit lock PIN. Required for new locks (this version onwards).
@@ -3679,7 +4650,7 @@ async function lockContract(req, res) {
     // are computed on the namespaced lines, which is the same form later edits
     // arrive in, so post-lock matching lines up.
     const lockScope = isMergeContainer(project)
-      ? await resolveMergedProject(project, project.userId)
+      ? await resolveMergedProject(project)
       : project;
 
     const baseItems = (lockScope.items || []).map((it, idx) => ({
@@ -3745,9 +4716,87 @@ async function lockContract(req, res) {
       contractSum,
     });
     res.json({ ok: true, contract: contractOut, version: project.version });
+
+    // TELL EVERYBODY ELSE ON THE PROJECT.
+    //
+    // Locking changes what editing MEANS: a re-measure stops moving the contract
+    // quantity and records an actual beside it, new scope becomes a variation,
+    // and progress starts feeding the valuations. A collaborator who carries on
+    // without knowing believes they are correcting the contract and is in fact
+    // recording a variation against it. The activity trail records the lock, but
+    // nobody reads an activity trail to find out the rules changed under them.
+    //
+    // AFTER res.json, and never awaited. A mail outage must not fail a contract
+    // lock, and a notification must not sit in a request somebody is waiting on
+    // — the God-login OTP did exactly that until it was fixed.
+    notifyContractLocked(project, userId, contractSum).catch((e) => {
+      console.error("[contract-lock] notice:", e?.message || e);
+    });
   } catch (err) {
     console.error("POST lock error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+}
+
+/**
+ * Mail the collaborators that a contract is now locked.
+ *
+ * Who and what is decided in util/contractLockNotice.js, which is pure and
+ * tested. This part is only the reads and the send, and it never throws at its
+ * caller: everything here is after the response.
+ *
+ * SES only. If SES refuses, this reports and stops — it does not try another
+ * way (standing rule, 15 September).
+ */
+async function notifyContractLocked(project, lockedByUserId, contractSum) {
+  // The overwhelming majority of projects have no collaborators. Nothing to
+  // send, so not even the user reads are done.
+  if (!isShared(project)) return;
+
+  const ids = [
+    String(project.userId || ""),
+    ...(project.collaborators || []).map((c) => String(c?.userId || "")),
+  ].filter(Boolean);
+
+  const [locker, people] = await Promise.all([
+    User.findById(lockedByUserId, { name: 1, firstName: 1, lastName: 1, email: 1 }).lean(),
+    User.find({ _id: { $in: ids } }, { email: 1, name: 1, firstName: 1 }).lean(),
+  ]);
+  const byId = new Map(people.map((u) => [String(u._id), u]));
+
+  const to = lockNoticeRecipients(project, locker, byId);
+  if (!to.length) return;
+
+  const href = `${process.env.CLIENT_URL || "https://www.adlmstudio.net"}/projects/${encodeURIComponent(
+    String(project.productKey || "revit"),
+  )}`;
+  const by = lockedByName(locker);
+
+  // One at a time rather than one mail to everybody: each is addressed by name,
+  // a BCC list would show every collaborator that the others exist — and each
+  // one is asked separately whether they may be told what the contract is
+  // worth, which a single shared message could not do.
+  for (const r of to) {
+    // THE MAIL MUST NOT SAY WHAT THE SCREEN HIDES. A collaborator without
+    // RateGen sees contractSum: 0 and _ratesMasked: true on every read of this
+    // project; posting the real figure to them would hand over in writing the
+    // one number the product withholds. They still get the message, without it.
+    const showMoney = await maySeeMoney(r, (uid) => userHasActiveEntitlement(uid, "rategen"));
+    const { subject, html } = contractLocked({
+      firstName: r.firstName,
+      projectName: String(project.name || "your project"),
+      lockedBy: by,
+      contractSum,
+      currency: String(project.currency || "NGN"),
+      href,
+      showMoney,
+    });
+    try {
+      await sendMail({ to: r.email, subject, html });
+    } catch (e) {
+      // One bad address must not stop the rest being told.
+      console.error(`[contract-lock] could not tell ${r.email}: ${e?.message || e}`);
+    }
   }
 }
 
@@ -3821,6 +4870,75 @@ async function unlockContract(req, res) {
   }
 }
 
+// ── "Mark as tendered" (S18 bill, PR2-25) ────────────────────────────────
+// Records the day the priced bill went out to tender, which is the one thing
+// nothing in the data held. It moves the project to the Tendered stage between
+// Priced and Contract locked and changes no figure whatsoever: nothing reads
+// contract.tenderedAt except stageOf().
+//
+// Sending { tendered: false } takes it back, for the day it is set by mistake.
+// A locked contract is past tendering, so it refuses rather than pretending.
+async function setTendered(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
+
+    const tendered = req.body?.tendered === undefined ? true : Boolean(req.body.tendered);
+
+    if (tendered && project.contract?.locked) {
+      return res.status(409).json({
+        error: "This contract is already locked, which is past the tender stage.",
+        code: "CONTRACT_LOCKED",
+      });
+    }
+
+    let tenderedAt = null;
+    if (tendered) {
+      const supplied = req.body?.tenderedAt ? new Date(req.body.tenderedAt) : null;
+      tenderedAt =
+        supplied && !Number.isNaN(supplied.getTime()) ? supplied : new Date();
+    }
+
+    if (!project.contract) project.contract = {};
+    project.contract.tenderedAt = tenderedAt;
+    project.version += 1;
+    await project.save();
+
+    const contractOut = project.contract?.toObject
+      ? project.contract.toObject()
+      : { ...project.contract };
+    delete contractOut.lockPinHash;
+    recordActivity(
+      req,
+      project,
+      tendered ? ACT.CONTRACT_TENDERED : ACT.CONTRACT_UNTENDERED,
+      tendered ? "Marked the bill as tendered" : "Took back the tendered mark",
+      tendered ? { tenderedAt } : undefined,
+    );
+    res.json({ ok: true, contract: contractOut, version: project.version });
+  } catch (err) {
+    console.error("POST tendered error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── Interim Certificate helpers ──
 // Roll up the current "value of work done to date" for a project:
 //   • completed measured items at their valued amount
@@ -3848,26 +4966,18 @@ function computeValueToDate(project) {
   for (const it of items) {
     const factor = valuationFactor(it, statusField);
     if (factor <= 0) continue;
-    const q = safeNum(it?.actualQty != null ? it.actualQty : it.qty);
-    const r = safeNum(it?.actualRate != null ? it.actualRate : it.rate);
-    measured += q * r * factor;
+    // Same helper the daily valuation log uses, so the certificate and the
+    // printed application cannot quote different figures for the same line.
+    measured += earnedLineValue(it, factor * 100);
   }
 
   // Variations and PC sums each carry a `completed` flag. Both contribute
   // to the BAC (project total) regardless, but only contribute to earned
   // value (cumulativeValue) once flagged as executed. This matches how
   // preliminary items already work.
-  const variationsTotal = (project.variations || []).reduce(
-    (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
-    0,
-  );
-  const variationsEarned = (project.variations || []).reduce(
-    (acc, v) =>
-      v?.completed
-        ? acc + safeNum(v?.qty) * safeNum(v?.rate)
-        : acc,
-    0,
-  );
+  // S18 valuations: a pending or rejected variation is in neither figure.
+  const variationsTotal = approvedVariationsTotal(project.variations);
+  const variationsEarned = approvedVariationsEarned(project.variations);
   const provisionalTotal = (project.provisionalSums || []).reduce(
     (acc, s) => acc + safeNum(s?.amount),
     0,
@@ -3960,32 +5070,61 @@ async function issueCertificate(req, res) {
     const previousCerts = (project.certificates || []).filter(
       (c) => c.status !== "draft" || Number.isFinite(Number(c.thisCertificate)),
     );
-    const lessPrevious = previousCerts.reduce(
-      (acc, c) => acc + safeNum(c.thisCertificate),
-      0,
-    );
+    // Each certificate's OWN share, summed. A recovery (a negative one)
+    // subtracts, so the next certificate starts from the corrected position
+    // instead of carrying an overpayment forward for ever.
+    const lessPrevious = certifiedSoFar(previousCerts);
 
-    const cumulativeValue = safeNum(req.body?.cumulativeValue ?? rollup.cumulativeValue);
-    const thisCertificate = Math.max(0, cumulativeValue - lessPrevious);
+    // A viewer who cannot see rates was served a certificate panel of zeros,
+    // so the figures they send back are those zeros. Ignore the body's money
+    // entirely for them and certify what the project itself says — the same
+    // numbers an owner's "issue" button produces. Everything else on the
+    // certificate (dates, period, notes, status) still comes from them.
+    const moneyFromClient = !!access.canSeeRates;
 
+    const cumulativeValue = moneyFromClient
+      ? safeNum(req.body?.cumulativeValue ?? rollup.cumulativeValue)
+      : safeNum(rollup.cumulativeValue);
     // Rates default to the project's valuation settings.
     const valSettings = project.valuationSettings || {};
-    const retentionPct = Number.isFinite(Number(req.body?.retentionPct))
-      ? clampPercentage(Number(req.body.retentionPct), safeNum(valSettings.retentionPct) || 5)
-      : safeNum(valSettings.retentionPct) || 5;
-    const vatPct = Number.isFinite(Number(req.body?.vatPct))
-      ? clampPercentage(Number(req.body.vatPct), safeNum(valSettings.vatPct) || 7.5)
-      : safeNum(valSettings.vatPct) || 7.5;
-    const whtPct = Number.isFinite(Number(req.body?.whtPct))
-      ? clampPercentage(Number(req.body.whtPct), safeNum(valSettings.withholdingPct) || 2.5)
-      : safeNum(valSettings.withholdingPct) || 2.5;
-    const retentionReleased = safeNum(req.body?.retentionReleased);
+    const retentionPct =
+      moneyFromClient && Number.isFinite(Number(req.body?.retentionPct))
+        ? clampPercentage(Number(req.body.retentionPct), safeNum(valSettings.retentionPct) || 5)
+        : safeNum(valSettings.retentionPct) || 5;
+    const vatPct =
+      moneyFromClient && Number.isFinite(Number(req.body?.vatPct))
+        ? clampPercentage(Number(req.body.vatPct), safeNum(valSettings.vatPct) || 7.5)
+        : safeNum(valSettings.vatPct) || 7.5;
+    const whtPct =
+      moneyFromClient && Number.isFinite(Number(req.body?.whtPct))
+        ? clampPercentage(Number(req.body.whtPct), safeNum(valSettings.withholdingPct) || 2.5)
+        : safeNum(valSettings.withholdingPct) || 2.5;
+    const retentionReleased = moneyFromClient ? safeNum(req.body?.retentionReleased) : 0;
 
-    const retentionAmount = (thisCertificate * retentionPct) / 100;
-    const netBeforeTax = thisCertificate - retentionAmount + retentionReleased;
-    const vatAmount = (netBeforeTax * vatPct) / 100;
-    const whtAmount = (netBeforeTax * whtPct) / 100;
-    const netPayable = netBeforeTax + vatAmount - whtAmount;
+    // Every figure on the certificate, in one tested place. In particular
+    // `thisCertificate` is NO LONGER CLAMPED AT ZERO: when the value earned
+    // falls below what has already been certified — a certified variation later
+    // rejected, or a downward re-measure — the true figure is negative, and a
+    // negative interim certificate is how an overpayment is recovered. The
+    // clamp printed ₦0 payable, ₦0 retention and ₦0 VAT, with nothing anywhere
+    // saying the over-certified amount was outstanding.
+    const {
+      thisCertificate,
+      retentionAmount,
+      netBeforeTax,
+      vatAmount,
+      whtAmount,
+      netPayable,
+      overCertified,
+      overCertifiedBy,
+    } = certificateMoney({
+      cumulativeValue,
+      lessPrevious,
+      retentionPct,
+      retentionReleased,
+      vatPct,
+      whtPct,
+    });
 
     const number =
       (project.certificates || []).reduce((acc, c) => Math.max(acc, Number(c.number) || 0), 0) + 1;
@@ -4019,6 +5158,10 @@ async function issueCertificate(req, res) {
       notes,
       snapshotCompletedCount: rollup.markedItems,
       snapshotTotalCount: rollup.totalItems,
+      // So a screen and a PDF can both explain a negative certificate rather
+      // than printing a figure nobody expects.
+      overCertified,
+      overCertifiedBy,
     };
 
     project.certificates = [...(project.certificates || []), cert];
@@ -4166,6 +5309,208 @@ async function deleteCertificate(req, res) {
   }
 }
 
+// ── Variations (S18 valuations) ────────────────────────────────────────────
+// A variation is raised PENDING and moves no money until someone with edit
+// access approves it. Both routes are additive: the desktop plugins keep
+// writing the whole variations array through PUT /:productKey/:id, and a row
+// they write with no status reads back as approved, exactly as before.
+//
+// Loads the project and checks edit access — the same check that guards a
+// contract change. Returns the loaded doc + access, or null having already
+// answered the request.
+async function loadProjectForVariationWrite(req, res) {
+  const productKey = requestedProductKey(req);
+  const id = String(req.params.id || "").trim();
+  if (!isValidObjectId(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return null;
+  }
+  const userId = getUserObjectId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Invalid user id" });
+    return null;
+  }
+  const project = await TakeoffProject.findOne(
+    accessFilter(id, userId, productKey),
+  );
+  if (!project) {
+    res.status(404).json({ error: "Not found" });
+    return null;
+  }
+  const access = await resolveProjectAccess(req, project);
+  if (!access.canEdit) {
+    res.status(403).json({
+      error: "View-only access cannot edit this project.",
+      code: "VIEW_ONLY",
+    });
+    return null;
+  }
+  if (project.finalAccount?.finalized) {
+    res.status(400).json({
+      error: "Final account is closed. Reopen it before changing variations.",
+      code: "FINAL_ACCOUNT_CLOSED",
+    });
+    return null;
+  }
+  return { project, access };
+}
+
+// One variation, shaped for the client. Money is zeroed for a collaborator
+// who may edit but may not see rates — the same rule maskRates() enforces.
+function variationForClient(v, index, canSeeRates) {
+  const plain = typeof v?.toObject === "function" ? v.toObject() : { ...(v || {}) };
+  return {
+    ...plain,
+    index,
+    rate: canSeeRates ? safeNum(plain.rate) : 0,
+    amount: canSeeRates ? variationAmount(plain) : 0,
+    status: normalizeVariationStatus(plain.status),
+  };
+}
+
+function variationsForClient(list, canSeeRates) {
+  return (Array.isArray(list) ? list : []).map((v, i) =>
+    variationForClient(v, i, canSeeRates),
+  );
+}
+
+// POST /:productKey/:id/variations — raise a variation, pending approval.
+async function addVariation(req, res) {
+  try {
+    const loaded = await loadProjectForVariationWrite(req, res);
+    if (!loaded) return;
+    const { project, access } = loaded;
+    // A variation is a value, and this route is the one place a new one is
+    // born — there is no stored figure to restore, so the only way a viewer
+    // who cannot see rates is kept out of the contract sum is to say no.
+    // variationForClient() would hand them back a 0 anyway.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "raise a variation");
+    }
+
+    const description = String(req.body?.description || "").trim().slice(0, 500);
+    if (!description) {
+      return res.status(400).json({ error: "Say what changed." });
+    }
+    const reference = String(req.body?.reference || "").trim().slice(0, 120);
+
+    // Two shapes are accepted: an explicit qty/unit/rate, or a single signed
+    // value with a kind ("addition" | "omission"), which is what the
+    // Variations view sends. An omission is a negative rate.
+    let qty = Number(req.body?.qty);
+    let rate = Number(req.body?.rate);
+    let unit = String(req.body?.unit || "").trim().slice(0, 40);
+    if (!Number.isFinite(qty) || qty === 0 || !Number.isFinite(rate)) {
+      const amount = Math.abs(Number(req.body?.amount));
+      if (!Number.isFinite(amount) || amount === 0) {
+        return res.status(400).json({ error: "Enter the value of the variation." });
+      }
+      qty = 1;
+      unit = unit || "item";
+      rate =
+        String(req.body?.kind || "").trim().toLowerCase() === "omission"
+          ? -amount
+          : amount;
+    }
+
+    const entry = {
+      description,
+      qty,
+      unit,
+      rate,
+      reference,
+      issuedAt: new Date(),
+      source: "manual",
+      completed: false,
+      completedAt: null,
+      status: "pending",
+      decidedAt: null,
+      decidedBy: null,
+    };
+
+    project.variations = sanitizeVariations([
+      ...(Array.isArray(project.variations) ? project.variations : []),
+      entry,
+    ]);
+    project.markModified("variations");
+    project.version += 1;
+    await project.save();
+
+    const index = project.variations.length - 1;
+    recordActivity(
+      req,
+      project,
+      ACT.VARIATION_ADDED,
+      `Raised variation V${index + 1}, pending approval`,
+      { description, reference },
+    );
+    res.json({
+      ok: true,
+      index,
+      variation: variationForClient(project.variations[index], index, access.canSeeRates),
+      variations: variationsForClient(project.variations, access.canSeeRates),
+      version: project.version,
+    });
+  } catch (err) {
+    console.error("POST variation error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// PATCH /:productKey/:id/variations/:index — approve or reject one.
+// Only a pending variation can be decided: an approved one already counts
+// toward the contract value, and un-approving it would move a total that
+// certificates have already been issued against.
+async function decideVariation(req, res) {
+  try {
+    const loaded = await loadProjectForVariationWrite(req, res);
+    if (!loaded) return;
+    const { project, access } = loaded;
+
+    const index = Number(req.params.index);
+    const list = Array.isArray(project.variations) ? project.variations : [];
+    if (!Number.isInteger(index) || index < 0 || index >= list.length) {
+      return res.status(404).json({ error: "Variation not found" });
+    }
+    const decision = String(req.body?.status || "").trim().toLowerCase();
+    if (decision !== "approved" && decision !== "rejected") {
+      return res.status(400).json({ error: "Decision must be approved or rejected." });
+    }
+    const entry = list[index];
+    if (normalizeVariationStatus(entry.status) !== "pending") {
+      return res.status(409).json({
+        error: "Only a variation waiting for approval can be decided.",
+        code: "VARIATION_ALREADY_DECIDED",
+      });
+    }
+
+    entry.status = decision;
+    entry.decidedAt = new Date();
+    entry.decidedBy = getUserObjectId(req);
+    project.markModified("variations");
+    project.version += 1;
+    await project.save();
+
+    recordActivity(
+      req,
+      project,
+      decision === "approved" ? ACT.VARIATION_APPROVED : ACT.VARIATION_REJECTED,
+      `${decision === "approved" ? "Approved" : "Rejected"} variation V${index + 1}`,
+      { description: String(entry.description || "") },
+    );
+    res.json({
+      ok: true,
+      index,
+      variation: variationForClient(project.variations[index], index, access.canSeeRates),
+      variations: variationsForClient(project.variations, access.canSeeRates),
+      version: project.version,
+    });
+  } catch (err) {
+    console.error("PATCH variation error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── Final Account ──
 // Finalizing snapshots the actual project settlement and freezes edits.
 async function finalizeAccount(req, res) {
@@ -4195,10 +5540,8 @@ async function finalizeAccount(req, res) {
       (acc, s) => acc + safeNum(s?.amount),
       0,
     );
-    const variationsFinal = (project.variations || []).reduce(
-      (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
-      0,
-    );
+    // S18 valuations: the final account settles the approved variations only.
+    const variationsFinal = approvedVariationsTotal(project.variations);
     const measuredWorkFinal = rollup.measured;
     // Preliminary final = the full preliminary pool (done portion already
     // certified; outstanding portion still due at closeout).
@@ -4215,7 +5558,14 @@ async function finalizeAccount(req, res) {
     const finalContractValue =
       measuredWorkFinal + provisionalFinal + preliminaryFinal + variationsFinal;
     const agreedContractSum = safeNum(project.contract?.contractSum);
-    const savings = agreedContractSum - finalContractValue;
+    // Compared against the CERTIFIABLE part of the agreed sum, not the grand
+    // total. contractSum carries contingency and VAT; finalContractValue
+    // deliberately does not, because neither is ever certified. Subtracting one
+    // from the other reported the contingency plus the VAT as money the job
+    // saved — ₦12.875m on a ₦100m subtotal at the defaults, on a job that came
+    // in exactly as measured. See util/finalAccountMath.js.
+    const agreedCertifiableSum = certifiableContractSum(project.contract);
+    const savings = finalAccountSavings(project.contract, finalContractValue);
 
     project.finalAccount = {
       finalized: true,
@@ -4228,6 +5578,11 @@ async function finalizeAccount(req, res) {
       retentionReleased,
       totalCertifiedToDate,
       agreedContractSum,
+      // The baseline the saving was actually measured against, so the report
+      // can show the comparison rather than asking the reader to trust it.
+      agreedCertifiableSum: safeNum(agreedCertifiableSum),
+      contingencyAtLock: safeNum(project.contract?.contingencyAtLock),
+      taxAtLock: safeNum(project.contract?.taxAtLock),
       finalContractValue,
       savings,
       notes: String(req.body?.notes || "").trim().slice(0, 2000),
@@ -4845,11 +6200,9 @@ async function getPublicDashboard(req, res) {
       (acc, p) => acc + (Number(p?.amount) || 0),
       0,
     );
-    const variationsTotal = (project.variations || []).reduce(
-      (acc, v) =>
-        acc + (Number(v?.qty) || 0) * (Number(v?.rate) || 0),
-      0,
-    );
+    // S18 valuations: approved variations only, so this agrees with the
+    // bill, the certificates and the final account.
+    const variationsTotal = approvedVariationsTotal(project.variations);
     const preliminaryPercent = Number(contract?.preliminaryPercent || 0);
     // If we have a locked contract we use the baked-in figures so the
     // contract sum the client sees matches what was signed, not whatever
@@ -4911,13 +6264,7 @@ async function getPublicDashboard(req, res) {
     // drawn, which misled the public dashboard into showing a
     // "₦2,100,000 actual cost" on projects with PC sums declared but
     // nothing drawn.
-    const variationsEarned = (project.variations || []).reduce(
-      (acc, v) =>
-        v?.completed
-          ? acc + (Number(v?.qty) || 0) * (Number(v?.rate) || 0)
-          : acc,
-      0,
-    );
+    const variationsEarned = approvedVariationsEarned(project.variations);
     const provisionalEarned = (project.provisionalSums || []).reduce(
       (acc, p) => (p?.completed ? acc + (Number(p?.amount) || 0) : acc),
       0,
@@ -5217,6 +6564,20 @@ async function markBudget(req, res) {
       });
     }
 
+    // Same rule as the project PUT: a viewer who cannot see rates was served a
+    // budget with every rate zeroed, so the stored prices win over whatever
+    // comes back. Their procurement marks, quantities and notes still save.
+    const guarded = guardMaskedWrite({
+      project,
+      access,
+      body: req.body,
+      isMergeContainer: isMergeContainer(project),
+    });
+    if (guarded.error) {
+      return res.status(guarded.error.status).json(guarded.error.body);
+    }
+    req.body = guarded.body;
+
     const body = req.body || {};
     if (!Array.isArray(body.budgetItems)) {
       return res.status(400).json({ error: "budgetItems array required" });
@@ -5237,8 +6598,8 @@ async function markBudget(req, res) {
       const routed = await applyMergedLineWrite({
         req,
         container: project,
-        userId,
         body: { budgetItems: body.budgetItems },
+        canSeeRates: !!access.canSeeRates,
       });
       if (routed.error) {
         return res.status(routed.status || 400).json({
@@ -5248,7 +6609,7 @@ async function markBudget(req, res) {
       }
       project.version = (Number(project.version) || 0) + 1;
       await project.save();
-      const merged = await resolveMergedProject(project, project.userId);
+      const merged = await resolveMergedProject(project);
       const out = projectForClient(merged, access);
       out.merge = merged.merge;
       return res.json(out);
@@ -5459,6 +6820,12 @@ async function importBoqUpdate(req, res) {
         code: "VIEW_ONLY",
       });
     }
+    // A re-import REPLACES the bill (and usually the budget) with the
+    // workbook's own rates. There is no stored money to restore onto a
+    // spreadsheet, so a viewer who cannot see the prices cannot do this.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "re-import this bill from Excel");
+    }
 
     const parsed = await parseBoqWorkbook(req.file.buffer);
     stampImportedActuals(parsed.items);
@@ -5541,6 +6908,698 @@ async function importBoqUpdate(req, res) {
   }
 }
 
+// ── Project resources ─────────────────────────────────────────────────────
+//
+// The gang and plant detail behind each Budget Labour and Plant row. Its own
+// endpoint, and its own array, precisely so it can never be mistaken for a
+// budget row: deriveBillRatesFromBudget sums every budget row under a
+// billIdentity and drives the bill rate from it on a plain GET, so gang rows
+// in budgetItems would double-count labour and raise the client's bill just
+// because somebody opened the project. See util/projectResources.js.
+async function getProjectResources(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey)).lean();
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    const rows = sanitizeResourceItems(project.resourceItems);
+
+    // Resources carry day rates. A viewer without RateGen sees the gang and
+    // the hours, never the money — the same line maskRates draws everywhere.
+    if (!access.canSeeRates) {
+      return res.json({
+        resourceItems: rows.map((r) => ({ ...r, rate: 0 })),
+        _ratesMasked: true,
+      });
+    }
+    return res.json({ resourceItems: rows });
+  } catch (err) {
+    console.error("getProjectResources error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function putProjectResources(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res
+        .status(403)
+        .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    // A masked viewer's payload carries rate 0 on every row (see the GET), so
+    // saving it would wipe the owner's day rates.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "edit project resources");
+    }
+
+    project.resourceItems = sanitizeResourceItems(req.body?.resourceItems);
+    project.version = (Number(project.version) || 0) + 1;
+    await project.save();
+
+    recordActivity(req, project, ACT.BUDGET_UPDATED, "Updated the project resources", {
+      resourceCount: project.resourceItems.length,
+    });
+
+    return res.json({ resourceItems: project.resourceItems });
+  } catch (err) {
+    console.error("putProjectResources error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// Price ONE bill line from a Rate Gen rate the QS picked in the Bill table.
+//
+// This is the fix for a pick that did not stick. Writing only the bill rate
+// left deriveBillRatesFromBudget to re-derive it from a Budget that had never
+// heard of the rate, so the number reverted while the toast said "Saved".
+// Now the pick writes the build-up too, and the derivation agrees with it.
+//
+// The body says WHICH rate, not what it costs. The rate is re-resolved from
+// this user's own merged library server-side, so a client cannot post a price
+// into a project.
+/**
+ * The QS's own rates that could price this line.
+ *
+ * The new build's rate list has said "No suggestion — price it from the
+ * build-up" since it was written, on the reasoning that inventing a figure is
+ * not a small liberty on a bill. That reasoning holds; the mistake was assuming
+ * there was no honest source. RateGen holds the master rates plus this user's
+ * overrides and custom rates, and priceLineFromRate already resolves a pick
+ * against exactly that merged set — so a suggestion is the QS's own decision,
+ * found, not a number put in their mouth.
+ *
+ * Read-only, and masked the same way pricing is: a collaborator who may not see
+ * rates may not be shown them here either.
+ */
+async function rateSuggestionsForLine(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const code = String(req.params.code || "").trim();
+    if (!code) return res.status(400).json({ error: "A bill line code is required" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) {
+      // Not an error: an empty list with the reason, so the screen says why
+      // rather than looking broken.
+      return res.json({ ok: true, suggestions: [], masked: true });
+    }
+
+    const item = (project.items || []).find(
+      (it) => String(it?.code || "").trim().toLowerCase() === code.toLowerCase(),
+    );
+    if (!item) return res.status(404).json({ error: "That bill line is not on this project" });
+
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+      Array.isArray(lib?.customRates) ? lib.customRates : [],
+    );
+
+    const usage = await loadRateUsage(userId);
+    // Converted offers only for a screen that can show a conversion: the panel
+    // asks with ?convert=1. An older screen would show a converted figure as if
+    // it were the rate's own, and its Apply would be refused for want of the
+    // dimension.
+    const convert = String(req.query?.convert || "") === "1";
+    const suggestions = suggestRatesForLine(item, merged, {
+      limit: 5,
+      usage,
+      convert,
+    }).filter(worthOffering);
+    res.json({
+      ok: true,
+      suggestions,
+      // So the screen can say "none of your rates match" rather than "none".
+      libraryCount: merged.length,
+    });
+  } catch (err) {
+    console.error("GET rate-suggestions error:", err);
+    res.status(500).json({ error: "Could not look for a rate." });
+  }
+}
+
+/**
+ * A rate for EVERY line on this project that has none, in one read.
+ *
+ * WHY BULK AND NOT FIVE HUNDRED CALLS
+ *
+ * The Rates tab lists every unpriced line at once, and its "suggested rate"
+ * slot has read "No suggestion" since it was written. Filling it per line would
+ * be one request each, and each one re-reads the whole rate library — which is
+ * the expensive part. Loading the library once and matching in memory is both
+ * cheaper and the only version that does not fall over on a bill with four
+ * hundred unpriced lines.
+ *
+ * Returns the BEST match per line only. The panel offers the full five when a
+ * line is opened; a list needs one figure, not five.
+ */
+async function rateSuggestionsForProject(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) {
+      return res.json({ ok: true, byCode: {}, masked: true });
+    }
+
+    // Only the lines that need one. A priced line's rate is the QS's decision
+    // and must not be second-guessed in a list.
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+      Array.isArray(lib?.customRates) ? lib.customRates : [],
+    );
+
+    // Every rule — which lines, the lowercased key, the ceiling — is in
+    // util/rateSuggestions.js, where it is tested without a database.
+    const usage = await loadRateUsage(userId);
+    const found = suggestionMapForBill(project.items, merged, {
+      usage,
+      convert: String(req.query?.convert || "") === "1",
+    });
+    res.json({ ok: true, ...found, libraryCount: merged.length });
+  } catch (err) {
+    console.error("GET project rate-suggestions error:", err);
+    res.status(500).json({ error: "Could not look for rates." });
+  }
+}
+
+async function priceLineFromRate(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const code = String(req.params.code || "").trim();
+    if (!code) return res.status(400).json({ error: "A bill line code is required" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res
+        .status(403)
+        .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    // Pricing a line writes money into the owner's budget from the CALLER's
+    // rate library. A collaborator who cannot see rates must not do that.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "price a bill line from a rate");
+    }
+
+    const item = findBillLine(project, code);
+    if (!item) return res.status(404).json({ error: "No bill line with that code" });
+
+    const rate = findPickedRate(await loadMergedRates(userId), req.body || {});
+    if (!rate) {
+      return res.status(404).json({
+        error: "That rate is not in your Rate Gen library.",
+        code: "RATE_NOT_FOUND",
+      });
+    }
+
+    const ctx = await buildMlScheduleContext(userId);
+    const unitCost = Number(req.body?.unitCost) || 0;
+    const convert = cleanConvert(req.body?.convert);
+    const one = priceBillLine(project, item, rate, ctx, { unitCost, convert });
+    if (one.error) return res.status(422).json({ error: one.error.message, code: one.error.code });
+
+    settlePricedProject(project);
+    await project.save();
+
+    recordActivity(req, project, ACT.BUDGET_UPDATED, "Priced a bill line from a rate", {
+      code,
+      rate: String(rate.description || "").slice(0, 200),
+    });
+    recordRateUsage(userId, project, [{ item, rate, convert }], "panel");
+
+    return res.json({
+      ...projectForClient(project, access),
+      _rateWarnings: one.warnings,
+    });
+  } catch (err) {
+    console.error("priceLineFromRate error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// PRICE MANY LINES IN ONE WRITE.
+//
+// Two callers. The line panel, when a QS prices "Lintel Concrete [L:01]" and
+// leaves the 35 other levels of it ticked; and Ada, after the QS confirms the
+// rates she proposed for a whole bill. Each line says which rate, never what it
+// costs, exactly as the single-line endpoint does; every rate is re-resolved
+// from the caller's own library.
+//
+// A line can instead say `sameAs: <code>`: "price this at whatever rate that
+// line got". That reads the rate from RateUsage, so it only works for a line
+// that was itself priced from a rate on the web; a rate typed into a plugin
+// has no rate behind it to copy, and the line is skipped with that reason.
+//
+// A line can also carry a rate THE USER STATED to Ada and confirmed on her
+// card (3 Oct 2026): `{ code, userRate, unit?, split? }` for "set blockwork to
+// 9,500 per m2", or `{ code, ratePerM2, split? }` for "windows are 88,000 per
+// m2", where the server reads the opening's size off the bill line itself and
+// works the line's rate out (util/priceByArea.js). `split` is the material /
+// labour / overhead-and-profit percentages, 60/20/20 when absent. See
+// applyUserRate for what such a line writes.
+//
+// One save at the end, not one per line: a save per line on a 300-line bill
+// is 300 whole-project writes, and a failure half way would leave half a bill
+// priced with nothing to say which half. Lines that cannot be priced are
+// skipped and reported; the rest go through.
+const PRICE_MANY_MAX = 500;
+
+async function priceManyFromRates(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+    if (!lines.length) return res.status(400).json({ error: "No lines to price" });
+    if (lines.length > PRICE_MANY_MAX) {
+      return res
+        .status(400)
+        .json({ error: `At most ${PRICE_MANY_MAX} lines can be priced at once.` });
+    }
+    const via = ["panel", "similar", "ada"].includes(req.body?.via) ? req.body.via : "similar";
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res
+        .status(403)
+        .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "price bill lines from rates");
+    }
+
+    // A stated rate needs neither the library nor the constants: only lines
+    // that name a Rate Gen rate pay for reading them.
+    const needsLibrary = lines.some((l) => !isUserRateLine(l));
+    const [merged, ctx] = needsLibrary
+      ? await Promise.all([loadMergedRates(userId), buildMlScheduleContext(userId)])
+      : [[], null];
+
+    // The rate each `sameAs` line points at, read once for all of them.
+    const sameAsCodes = [
+      ...new Set(lines.map((l) => String(l?.sameAs || "").trim()).filter(Boolean)),
+    ];
+    const copied = new Map();
+    if (sameAsCodes.length) {
+      const rows = await RateUsage.find({
+        projectId: project._id,
+        code: { $in: sameAsCodes },
+      })
+        .sort({ createdAt: -1 })
+        .select("code rateId rateDescription rateUnit convert unit")
+        .lean();
+      for (const r of rows) {
+        const k = String(r.code || "").toLowerCase();
+        if (!copied.has(k)) copied.set(k, r);
+      }
+    }
+
+    const priced = [];
+    const skipped = [];
+    const warnings = new Set();
+    const used = [];
+    const seen = new Set();
+    const stated = [];
+    let changed = false;
+
+    for (const line of lines) {
+      const code = String(line?.code || "").trim();
+      if (!code) continue;
+      if (seen.has(code.toLowerCase())) continue;
+      seen.add(code.toLowerCase());
+
+      const item = findBillLine(project, code);
+      if (!item) {
+        skipped.push({ code, reason: "No bill line with that code" });
+        continue;
+      }
+
+      // A RATE THE USER STATED (Ada's "windows are 88,000 per m2", "set
+      // blockwork to 9,500"). See applyUserRate below.
+      if (isUserRateLine(line)) {
+        const r = resolveUserRate(item, line);
+        if (!r.ok) {
+          skipped.push({ code, reason: r.reason });
+          continue;
+        }
+        if (applyUserRate(project, item, r.rate, r.split)) changed = true;
+        priced.push(code);
+        stated.push({ code, rate: r.rate, split: r.split });
+        continue;
+      }
+
+      let pick = line;
+      const sameAs = String(line?.sameAs || "").trim();
+      if (sameAs) {
+        const from = copied.get(sameAs.toLowerCase());
+        if (!from) {
+          skipped.push({
+            code,
+            reason: `Line ${sameAs} was not priced from a Rate Gen rate here, so there is no rate to copy`,
+          });
+          continue;
+        }
+        pick = {
+          rateId: from.rateId,
+          description: from.rateDescription,
+          unit: from.rateUnit || "",
+          // The same conversion the copied line was priced with. Lines of one
+          // item share a type, so they share its thickness.
+          convert: line?.convert || from.convert || null,
+        };
+      }
+
+      const rate = findPickedRate(merged, pick);
+      if (!rate) {
+        skipped.push({ code, reason: "That rate is not in your Rate Gen library" });
+        continue;
+      }
+      const convert = cleanConvert(pick?.convert);
+      const one = priceBillLine(project, item, rate, ctx, { convert });
+      if (one.error) {
+        skipped.push({ code, reason: one.error.message });
+        continue;
+      }
+      one.warnings.forEach((w) => warnings.add(String(w)));
+      priced.push(code);
+      used.push({ item, rate, convert });
+      changed = true;
+    }
+
+    // Applying the same stated rates twice changes nothing, so it writes
+    // nothing either: no save, no version bump, no activity entry.
+    if (priced.length && changed) {
+      if (stated.length && typeof project.markModified === "function") {
+        project.markModified("items");
+        project.markModified("budgetItems");
+      }
+      settlePricedProject(project);
+      await project.save();
+      const fromLibrary = priced.length - stated.length;
+      if (fromLibrary) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Priced ${fromLibrary} bill ${fromLibrary === 1 ? "line" : "lines"} from rates`,
+          { codes: used.map((u) => String(u.item?.code || "")).slice(0, 50), count: fromLibrary, via },
+        );
+        recordRateUsage(userId, project, used, via);
+      }
+      if (stated.length) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Set ${stated.length} bill ${stated.length === 1 ? "line" : "lines"} to a stated rate`,
+          { codes: stated.map((x) => x.code).slice(0, 50), count: stated.length, via },
+        );
+      }
+    }
+
+    return res.json({
+      ...projectForClient(project, access),
+      _priced: priced,
+      _skipped: skipped,
+      _rateWarnings: [...warnings].slice(0, 20),
+    });
+  } catch (err) {
+    console.error("priceManyFromRates error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+/**
+ * Put a rate the USER stated on one bill line, in memory.
+ *
+ * The line gets the rate and its lock (rateLockedAt), so neither a plugin
+ * re-save (util/cloudRateLocks.js) nor the budget heal moves it. Its Budget
+ * gets ONE Material and ONE Labour row at the bill quantity, priced by the
+ * split, with the overhead/profit share as their overhead %. Those rows sit in
+ * the Rate Gen sn band, so they replace any automatic rows the line had (a
+ * previous pick, the constants generator) and a later Rate Gen pick replaces
+ * them; a row the QS typed survives. The gang a previous pick wrote is cleared:
+ * it described a rate that is no longer the line's.
+ *
+ * Row ids and procurement marks carry across a re-apply, so applying the same
+ * rate twice leaves the project exactly as it was.
+ *
+ * @returns {boolean} whether anything changed
+ */
+function applyUserRate(project, item, rate, split) {
+  const code = String(item?.code || "").trim();
+  const key = code.toLowerCase();
+  const mine = (b) => String(b?.billIdentity || "").trim().toLowerCase() === key;
+  const plain = (b) => (b?.toObject ? b.toObject() : b);
+  const before = (project.budgetItems || []).filter(mine).map(plain);
+  const rows = buildUserRateRows(item, rate, split).map((r) => {
+    const prior = before.find((b) => Number(b?.sn) === r.sn && isRateGenRow(b));
+    return prior?.lineId ? { ...r, lineId: prior.lineId } : r;
+  });
+
+  // What this line's Budget would hold afterwards: everything applyRateRows
+  // keeps (rows the QS typed, plugin rows, coverage rows) and the new rows.
+  const automatic = (b) => isRateGenRow(b) || isGeneratedRow(b);
+  const sig = (list) =>
+    JSON.stringify(
+      list.map((b) => [
+        b.sn, b.componentKind, b.description, b.unit, Number(b.qty), Number(b.rate),
+        Number(b.overheadPercent), Number(b.profitPercent), b.rateSource,
+      ]),
+    );
+  const budgetChanges = sig(before) !== sig(before.filter((b) => !automatic(b)).concat(rows));
+  const staleGang = (project.resourceItems || []).some(
+    (r) => mine(r) && r?.rateSource === RESOURCE_SOURCE_RATE,
+  );
+
+  // Only touch what changes, so a re-apply writes nothing at all.
+  if (budgetChanges) {
+    project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, rows));
+  }
+  if (staleGang) {
+    project.resourceItems = sanitizeResourceItems(
+      applyResourceRows(project.resourceItems, code, []),
+    );
+  }
+  const itemChanged = setUserRateOnItem(item, rate, split);
+  return itemChanged || budgetChanges || staleGang;
+}
+
+/** A bill line by its code, case-insensitively, the way every caller addresses it. */
+function findBillLine(project, code) {
+  const want = String(code || "").trim().toLowerCase();
+  return (project.items || []).find((it) => String(it?.code || "").trim().toLowerCase() === want);
+}
+
+/**
+ * Write one line's rate into the project, IN MEMORY.
+ *
+ * The rate's build-up becomes the line's material, labour and plant rows, and
+ * its gang and plant go to resourceItems (never budgetItems: the bill rate is
+ * derived by summing budget rows, so filing them there would count labour
+ * twice). The caller settles the project and saves it once.
+ */
+function priceBillLine(project, item, rate, ctx, { unitCost = 0, convert = null } = {}) {
+  const code = String(item?.code || "").trim();
+
+  // A RATE IN ANOTHER UNIT. The factor is worked out here from the two units
+  // and the dimension the QS confirmed; a factor is never taken from a client.
+  // Units that do not agree and cannot be converted are refused, because the
+  // alternative is a line priced wrong by a thickness, which looks right.
+  let scale = 1;
+  if (!unitsAgree(item?.unit, rate?.unit)) {
+    const c = conversionFactor(item?.unit, rate?.unit, convert || {});
+    if (!c.ok) return { error: { code: c.code, message: c.message } };
+    scale = c.factor;
+    if (!(Number(unitCost) > 0)) unitCost = Number(rate?.totalCost ?? rate?.unitPrice ?? 0) * scale;
+  }
+
+  const built = buildRateBudgetRows(item, rate, ctx.K, {
+    priceFor: ctx.priceFor,
+    unitCost,
+    scale,
+  });
+  if (!built) {
+    // Three unrelated causes used to share one message, so a line with no
+    // quantity was told the RATE had no build-up, and the QS would go and
+    // rebuild a rate that was never the problem.
+    const why = whyRateCannotPrice(item, rate, { unitCost }) || {
+      code: "RATE_HAS_NO_BUILDUP",
+      message:
+        "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+    };
+    return { error: why };
+  }
+  project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, built.rows));
+  project.resourceItems = sanitizeResourceItems(
+    applyResourceRows(project.resourceItems, code, buildResourcesFromRate(item, rate, { scale })),
+  );
+  return { warnings: Array.isArray(built.warnings) ? built.warnings : [], scale };
+}
+
+/** After one or many lines are priced: links, coverage, and the bill rates derived from the budget. */
+function settlePricedProject(project) {
+  backfillBudgetLinks(project.items, project.budgetItems);
+  project.budgetItems = ensureBillItemCoverage(project.items, project.budgetItems);
+  // The build-up now reproduces the picked rate, so this sets the bill line
+  // to exactly what the QS chose instead of reverting it.
+  deriveBillRatesFromBudget(project);
+  reconcileItemsFromBudget(project);
+  project.version = (Number(project.version) || 0) + 1;
+}
+
+/**
+ * The dimensions a client sent for a unit conversion, as plain numbers, and
+ * nothing else. conversionFactor() checks their range.
+ */
+function cleanConvert(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  for (const k of ["thickness", "width", "depth", "kgPerM", "perItem"]) {
+    const n = Number(raw[k]);
+    if (Number.isFinite(n) && n > 0) out[k] = n;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** The caller's merged rate set: master rates plus their overrides and custom rates. */
+async function loadMergedRates(userId) {
+  const [masterRates, lib] = await Promise.all([
+    RateGenRate.find({}).lean(),
+    RateGenLibrary.findOne({ userId }).lean(),
+  ]);
+  return mergeRatesWithUserData(
+    masterRates,
+    Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+    Array.isArray(lib?.customRates) ? lib.customRates : [],
+  );
+}
+
+// The picked rate, found in the caller's own merged library. Matched by rateId
+// first; a custom rate the desktop app created has no master id, so a
+// description + unit match is the fallback.
+function findPickedRate(merged, body) {
+  const wantedId = String(body?.rateId || "").trim();
+  const wantedDesc = String(body?.description || "").trim().toLowerCase();
+  const wantedUnit = String(body?.unit || "").trim().toLowerCase();
+  if (!wantedId && !wantedDesc) return null;
+
+  if (wantedId) {
+    const byId = merged.find((r) => String(r?.rateId || r?.id || "") === wantedId);
+    if (byId) return byId;
+  }
+  if (!wantedDesc) return null;
+  return (
+    merged.find(
+      (r) =>
+        String(r?.description || "").trim().toLowerCase() === wantedDesc &&
+        (!wantedUnit || String(r?.unit || "").trim().toLowerCase() === wantedUnit),
+    ) || null
+  );
+}
+
+/**
+ * What this user has chosen before, for the suggestions. Never throws: a
+ * suggestion without history is still a suggestion.
+ */
+async function loadRateUsage(userId) {
+  try {
+    const rows = await RateUsage.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(3000)
+      .select("key unit rateId projectId projectName createdAt")
+      .lean();
+    return usageIndex(rows.map((r) => ({ ...r, at: r.createdAt })));
+  } catch (err) {
+    console.warn("loadRateUsage failed:", err?.message || err);
+    return null;
+  }
+}
+
+/** Record which rate priced which line. Fire-and-forget; never fails the pricing. */
+function recordRateUsage(userId, project, used, via) {
+  const docs = (Array.isArray(used) ? used : [])
+    .map(({ item, rate, convert }) => ({
+      userId,
+      projectId: project?._id || null,
+      projectName: String(project?.name || "").slice(0, 200),
+      productKey: String(project?.productKey || "").toLowerCase(),
+      code: String(item?.code || "").trim(),
+      key: lineKey(item?.description),
+      unit: String(item?.unit || "").trim(),
+      rateId: String(rate?.rateId || rate?.id || "").trim(),
+      rateDescription: String(rate?.description || "").slice(0, 300),
+      rateUnit: String(rate?.unit || "").trim(),
+      convert: convert || null,
+      via,
+    }))
+    .filter((d) => d.key && d.rateId);
+  if (!docs.length) return;
+  RateUsage.insertMany(docs, { ordered: false }).catch((err) =>
+    console.warn("recordRateUsage failed:", err?.message || err),
+  );
+}
+
 // Rebuild the Material & Labour schedule for a project from the current
 // constants library. This is what makes the Material Constants window useful:
 // change "blocks per m²" from 10 to 12.5, hit regenerate, and every blockwork
@@ -5564,6 +7623,11 @@ async function regenerateMlSchedule(req, res) {
       return res
         .status(403)
         .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    // Regeneration re-derives the whole material & labour schedule — and its
+    // prices — from the CALLER's constants library, over the owner's budget.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "regenerate the material & labour schedule");
     }
 
     const ctx = await buildMlScheduleContext(userId);
@@ -5981,6 +8045,12 @@ async function priceServicesProject(req, res) {
     if (!access.canEdit) {
       return res.status(403).json({ error: "You do not have edit access to this project" });
     }
+    // This REPLACES budgetItems with a pricing pass over the caller's own
+    // RateGen library and then derives every bill rate from it — the loudest
+    // money write on the project. Not for someone who cannot see the prices.
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "price this bill");
+    }
 
     const items = Array.isArray(project.items) ? project.items : [];
     if (!items.length) return res.status(400).json({ error: "No items to price" });
@@ -6033,7 +8103,25 @@ async function priceServicesProject(req, res) {
       }
     });
 
-    project.budgetItems = budgetItems;
+    // Third instance of the same replace-without-preserve defect, on the
+    // button a services QS presses most. The pricing pass builds a brand-new
+    // array and this used to assign it straight over the stored rows, so
+    // every procurement mark, supplier, target date and typed rate went —
+    // and because the pass returns early for a bill line whose build-up is
+    // empty, those lines' rows were not rebuilt either, they simply vanished.
+    //
+    // Coverage puts the skipped lines back, then the QS's own fields go back
+    // on top. Same helper and same order as the plugin paths.
+    const previousBudget = project.budgetItems || [];
+    backfillBudgetLinks(project.items, budgetItems);
+    const freshBudget = ensureBillItemCoverage(project.items, budgetItems);
+    const restored = preserveBudgetUserEdits(previousBudget, freshBudget);
+    if (restored.procurement || restored.pricing) {
+      console.log(
+        `[services] kept QS budget edits: ${restored.matched} rows, ${restored.procurement} procurement, ${restored.pricing} typed rates`,
+      );
+    }
+    project.budgetItems = freshBudget;
     const { updated } = deriveBillRatesFromBudget(project);
     reconcileItemsFromBudget(project);
     project.markModified("budgetItems");
@@ -6568,6 +8656,58 @@ router.post(
   regenerateMlSchedule,
 );
 
+// The gang / plant detail behind the Budget's Labour and Plant rows. Its own
+// endpoint by design — see projectForClient, which strips resourceItems so no
+// route a desktop plugin calls changes shape.
+router.get(
+  "/:productKey/:id/resources",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  getProjectResources,
+);
+router.put(
+  "/:productKey/:id/resources",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  putProjectResources,
+);
+
+// Price one bill line from a Rate Gen rate the QS picked.
+//
+// ADDITIVE: no plugin calls this, and no plugin route's shape changes. The
+// client sends WHICH rate was picked, never what it costs — the server
+// re-resolves the rate from that user's own merged library, so a price can
+// only ever be one they already hold.
+router.get(
+  "/:productKey/:id/rate-suggestions",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  rateSuggestionsForProject,
+);
+
+router.get(
+  "/:productKey/:id/bill/:code/rate-suggestions",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  rateSuggestionsForLine,
+);
+
+router.post(
+  "/:productKey/:id/bill/:code/price-from-rate",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  priceLineFromRate,
+);
+
+// Several lines at once: the lines like the one just priced, or the rates Ada
+// proposed and the QS confirmed. Same rules as above, one write.
+router.post(
+  "/:productKey/:id/bill/price-many",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  priceManyFromRates,
+);
+
 // Price all services bill lines from RateGen (MEP web Budget view).
 router.post(
   "/:productKey/:id/services/price",
@@ -6621,6 +8761,14 @@ router.post(
   unlockContract,
 );
 
+// S18 bill: no step-up here — this records a date, it does not move money.
+router.post(
+  "/:productKey/:id/contract/tendered",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  setTendered,
+);
+
 router.post(
   "/:productKey/:id/certificates",
   mapEntitlementParam,
@@ -6640,6 +8788,21 @@ router.delete(
   mapEntitlementParam,
   requireEntitlementParam,
   deleteCertificate,
+);
+
+// S18 valuations: raise a variation (pending) and decide one.
+router.post(
+  "/:productKey/:id/variations",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  addVariation,
+);
+
+router.patch(
+  "/:productKey/:id/variations/:index",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  decideVariation,
 );
 
 router.post(
@@ -6691,6 +8854,17 @@ router.get(
   mapEntitlementParam,
   requireEntitlementParam,
   streamProjectModel,
+);
+
+// Sample projects for a product (learning material, read-only). Separate from
+// the main list on purpose: the desktop plugins parse GET /:productKey as a
+// bare array and must never be offered a sample to open or save over. Must be
+// before /:productKey/:id so "samples" is not captured as an :id.
+router.get(
+  "/:productKey/samples",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  listSampleProjects,
 );
 
 // Storage info for a product — must be before /:productKey/:id so "storage"

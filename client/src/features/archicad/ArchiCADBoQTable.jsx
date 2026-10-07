@@ -50,13 +50,14 @@ function SortHeader({ label, sortKey, sort, onSort, className = "" }) {
   );
 }
 
-function MarginCell({ line, readOnly, onCommit }) {
+function MarginCell({ line, readOnly, hideMoney = false, onCommit }) {
   const [val, setVal] = React.useState(String(safeNum(line?.marginPercent)));
   // Re-sync when the server (or an optimistic update) changes the line.
   React.useEffect(() => {
     setVal(String(safeNum(line?.marginPercent)));
   }, [line?.marginPercent]);
 
+  if (hideMoney) return <span className="tabular-nums">–</span>;
   if (readOnly) {
     return <span className="tabular-nums">{formatQty(line?.marginPercent, 2)}%</span>;
   }
@@ -109,6 +110,11 @@ export default function ArchiCADBoQTable({
 
   const lines = Array.isArray(boq?.lines) ? boq.lines : [];
   const currency = boq?.currency || "NGN";
+  // The server zeroes the money a shared reader may not see and says so
+  // (moneyHidden). Show the placeholder dash, not a ₦0.00 that reads as an
+  // unpriced bill.
+  const hideMoney = !!boq?.moneyHidden;
+  const money = (v) => (hideMoney ? "–" : fmtMoney(v, currency));
   const changed = React.useMemo(
     () => new Set(Array.isArray(boq?.changedLineRefs) ? boq.changedLineRefs : []),
     [boq?.changedLineRefs],
@@ -267,10 +273,10 @@ export default function ArchiCADBoQTable({
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-slate-800 dark:text-white">
-                    {fmtMoney(subtotal.total, currency)}
+                    {money(subtotal.total)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-500 dark:text-adlm-dark-muted">
-                    {fmtMoney(subtotal.margin, currency)}
+                    {money(subtotal.margin)}
                   </td>
                 </tr>
 
@@ -308,10 +314,10 @@ export default function ArchiCADBoQTable({
                                   to={`/archicad/${projectId}/element/${encodeURIComponent(singleGuid)}`}
                                   className="text-adlm-blue-700 hover:underline dark:text-adlm-blue-300"
                                 >
-                                  {line?.description || "—"}
+                                  {line?.description || "–"}
                                 </Link>
                               ) : (
-                                <span>{line?.description || "—"}</span>
+                                <span>{line?.description || "–"}</span>
                               )}
                               {guids.length > 1 ? (
                                 <button
@@ -352,17 +358,18 @@ export default function ArchiCADBoQTable({
                             {formatQty(convertQuantity(line?.quantity, line?.unit, units))}
                           </td>
                           <td className={`${numCell} ${unpriced ? "text-amber-600 dark:text-amber-400" : ""}`}>
-                            {fmtMoney(displayRate(line), currency)}
+                            {money(displayRate(line))}
                           </td>
-                          <td className={numCell}>{fmtMoney(line?.materialAmount, currency)}</td>
-                          <td className={numCell}>{fmtMoney(line?.labourAmount, currency)}</td>
+                          <td className={numCell}>{money(line?.materialAmount)}</td>
+                          <td className={numCell}>{money(line?.labourAmount)}</td>
                           <td className={`${numCell} font-semibold ${unpriced ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white"}`}>
-                            {fmtMoney(line?.totalAmount, currency)}
+                            {money(line?.totalAmount)}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-right">
                             <MarginCell
                               line={line}
                               readOnly={readOnly}
+                              hideMoney={hideMoney}
                               onCommit={onLineMargin}
                             />
                           </td>
@@ -397,10 +404,10 @@ export default function ArchiCADBoQTable({
                       {cat.title || cat.key} subtotal
                     </td>
                     <td colSpan={3} />
-                    <td className={`${numCell} font-semibold`}>{fmtMoney(subtotal.material, currency)}</td>
-                    <td className={`${numCell} font-semibold`}>{fmtMoney(subtotal.labour, currency)}</td>
-                    <td className={`${numCell} font-semibold`}>{fmtMoney(subtotal.total, currency)}</td>
-                    <td className={`${numCell} font-semibold`}>{fmtMoney(subtotal.margin, currency)}</td>
+                    <td className={`${numCell} font-semibold`}>{money(subtotal.material)}</td>
+                    <td className={`${numCell} font-semibold`}>{money(subtotal.labour)}</td>
+                    <td className={`${numCell} font-semibold`}>{money(subtotal.total)}</td>
+                    <td className={`${numCell} font-semibold`}>{money(subtotal.margin)}</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -416,16 +423,16 @@ export default function ArchiCADBoQTable({
               </td>
               <td colSpan={3} />
               <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums">
-                {fmtMoney(boq?.totals?.materialAmount, currency)}
+                {money(boq?.totals?.materialAmount)}
               </td>
               <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums">
-                {fmtMoney(boq?.totals?.labourAmount, currency)}
+                {money(boq?.totals?.labourAmount)}
               </td>
               <td className="whitespace-nowrap px-3 py-2.5 text-right text-base font-bold tabular-nums">
-                {fmtMoney(boq?.totals?.grandTotal, currency)}
+                {money(boq?.totals?.grandTotal)}
               </td>
               <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums">
-                {fmtMoney(boq?.totals?.marginAmount, currency)}
+                {money(boq?.totals?.marginAmount)}
               </td>
             </tr>
           </tfoot>

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { canonicalKind, classifyResourceKind, KIND } from "./resourceKind.js";
 
 export const SECTION_LABELS = {
   ground: "Groundwork",
@@ -150,13 +151,10 @@ function normalizeCustomRateLine(raw = {}, fallbackType = "material") {
     raw.Kind ??
     fallbackType;
 
-  const normalizedRateTypeRaw = String(rawRateType || "")
-    .trim()
-    .toLowerCase();
-  const normalizedRateType =
-    normalizedRateTypeRaw === "labour" || normalizedRateTypeRaw === "1"
-      ? "labour"
-      : "material";
+  // A rate line can now say plant. Anything the shared vocabulary does not
+  // recognise still falls to material, exactly as it did when the only two
+  // values were material and labour, so no existing payload changes meaning.
+  const normalizedRateType = canonicalKind(rawRateType) || "material";
 
   return {
     rateType: normalizedRateType,
@@ -225,6 +223,111 @@ export function normalizeRateOverride(raw = {}) {
   };
 }
 
+/**
+ * Keep a plant line that a client which cannot express plant would delete.
+ *
+ * Rate Gen desktop rebuilds a custom rate's push from its own Material and
+ * Labour lists (Services/UserRatesCloudSync.cs BuildCustomRatePayload), so a
+ * plant line authored on the website is simply absent from its next push, and
+ * the rate would come back worth the plant amount less. It reads rateType as a
+ * plain C# string and never enum-parses it, so it cannot FAULT on "plant" —
+ * it just does not know to send one back.
+ *
+ * A client that does understand plant says so with `supportsPlant: true`, and
+ * then its payload is authoritative — including a deliberate deletion. Rate
+ * Gen desktop does not send that flag, so its pushes preserve. When a desktop
+ * release learns to carry plant, it sends the flag and takes over with no
+ * server change.
+ *
+ * @param {object} incoming  the normalised rate from the payload
+ * @param {object} stored    the rate already held, or null
+ * @param {object} [opts]
+ * @param {boolean} [opts.clientSupportsPlant]
+ */
+export function preservePlantLines(incoming, stored, opts = {}) {
+  if (!incoming) return incoming;
+  if (opts.clientSupportsPlant) return incoming;
+
+  const isPlant = (l) => {
+    const k = canonicalKind(l?.rateType);
+    return k === KIND.PLANT || k === KIND.EQUIPMENT;
+  };
+  const storedLines = [
+    ...(Array.isArray(stored?.materials) ? stored.materials : []),
+    ...(Array.isArray(stored?.labour) ? stored.labour : []),
+  ];
+
+  // WHERE A WEBSITE-AUTHORED PLANT LINE ACTUALLY LIVES.
+  //
+  // The website rate builder filed plant ONLY in breakdown[], with refKind "plant" —
+  // it said so itself (customRateDraft.js, removed 4 Oct 2026): "Plant has no
+  // master library of its own (deferred), so a plant line lives in the
+  // breakdown with refKind 'plant'." materials[] holds kind === "material" and
+  // labour[] holds kind === "labour", and nothing else.
+  //
+  // So looking only at those two arrays found NO plant on any rate built here,
+  // this guard returned the payload untouched, and the next Rate Gen desktop
+  // push — which cannot send plant back — silently dropped it. On "Concrete
+  // 1:2:4" with a ₦1,000 mixer, the stored rate fell from ₦8,544 to ₦7,344 and
+  // every bill line priced from it was short, with no warning anywhere.
+  const storedBreakdownPlant = (Array.isArray(stored?.breakdown) ? stored.breakdown : [])
+    .filter((b) => {
+      const k = canonicalKind(b?.refKind);
+      return k === KIND.PLANT || k === KIND.EQUIPMENT;
+    })
+    // Back into the line shape the arrays use, so the rebuild below sees one
+    // kind of object.
+    .map((b) => ({
+      description: normalizeText(b?.componentName || b?.refName),
+      unit: normalizeText(b?.unit),
+      quantity: toNum(b?.quantity, 0),
+      unitPrice: toNum(b?.unitPrice, 0),
+      totalCost: toNum(b?.lineTotal, toNum(b?.quantity, 0) * toNum(b?.unitPrice, 0)),
+      rateType: KIND.PLANT,
+      refSn: b?.refSn ?? null,
+      refName: normalizeText(b?.refName || b?.componentName),
+      priceAsOf: b?.priceAsOf ?? null,
+    }));
+
+  const key = (l) => `${normalizeText(l?.description).toLowerCase()}|${l?.unit || ""}`;
+  const fromArrays = storedLines.filter(isPlant);
+  // A rate that carries plant in BOTH places (a desktop push after a website
+  // edit) must not have it preserved twice.
+  const known = new Set(fromArrays.map(key));
+  const storedPlant = [...fromArrays, ...storedBreakdownPlant.filter((l) => !known.has(key(l)))];
+  if (!storedPlant.length) return incoming;
+
+  const incomingLines = [
+    ...(Array.isArray(incoming.materials) ? incoming.materials : []),
+    ...(Array.isArray(incoming.labour) ? incoming.labour : []),
+  ];
+  // A push that already carries the plant line — in either array, or in its own
+  // breakdown — needs nothing preserved.
+  const seen = new Set([
+    ...incomingLines.map(key),
+    ...(Array.isArray(incoming.breakdown) ? incoming.breakdown : []).map((b) =>
+      key({ description: b?.componentName || b?.refName, unit: b?.unit }),
+    ),
+  ]);
+  const missing = storedPlant.filter((l) => !seen.has(key(l)));
+  if (!missing.length) return incoming;
+
+  // Plant lines ride in `materials`: the schema has only the two arrays, and
+  // rateType is what carries the class. The breakdown and the totals are
+  // rebuilt so the rate is worth what it was worth before the push.
+  const materials = [...(incoming.materials || []), ...missing];
+  const labour = incoming.labour || [];
+  const netCost =
+    [...materials, ...labour].reduce((sum, l) => sum + toNum(l?.totalCost, 0), 0) || 0;
+
+  return {
+    ...incoming,
+    materials,
+    breakdown: toBreakdownFromCustomLines([...materials, ...labour]),
+    ...computeTotals(netCost, incoming.overheadPercent, incoming.profitPercent),
+  };
+}
+
 export function normalizeCustomRate(raw = {}) {
   const customRateId = String(
     raw.customRateId || raw.id || raw.Id || new mongoose.Types.ObjectId()
@@ -290,31 +393,11 @@ export function normalizeCustomRate(raw = {}) {
 // can auto-derive Material + Labour lines for a takeoff and run the
 // "headline == net + overhead + profit" guardrail. See
 // docs/quiv-takeoff-material-rate-upgrade.server-spec.md §1.
-const LABOUR_KIND_RE =
-  /\b(labou?r(er)?|mason|carpenter|bender|fitter|fixer|painter|plumber|electrician|artisan|workmanship|gang|foreman|helper|operative|welder|bricklayer)\b/i;
-const PLANT_KIND_RE =
-  /\b(plant|excavat\w*|mixer|vibrator|crane|machine|pump|roller|compactor|scaffold(ing)?|hoist|hire)\b/i;
-const CONSUMABLE_KIND_RE =
-  /\b(nails?|binding\s*wire|tying\s*wire|fuel|diesel|petrol|consumable|disposab\w*)\b/i;
-
-// Map a component to one of: material | labour | plant | equipment | consumable.
-// Prefer an explicit refKind/rateType; otherwise classify by name keywords.
+// Classification lives in util/resourceKind.js — one vocabulary for the whole
+// pricing path. This wrapper keeps the old name and signature so the plugin
+// composition builder and the refKind backfill script read the same as before.
 export function classifyComponentKind(name, refKind) {
-  const rk = String(refKind || "")
-    .trim()
-    .toLowerCase();
-  if (rk) {
-    if (rk === "labour" || rk === "labor" || rk === "1") return "labour";
-    if (rk === "material" || rk === "0") return "material";
-    if (rk === "plant") return "plant";
-    if (rk === "equipment") return "equipment";
-    if (rk === "consumable") return "consumable";
-  }
-  const n = String(name || "");
-  if (LABOUR_KIND_RE.test(n)) return "labour";
-  if (PLANT_KIND_RE.test(n)) return "plant";
-  if (CONSUMABLE_KIND_RE.test(n)) return "consumable";
-  return "material";
+  return classifyResourceKind(name, refKind);
 }
 
 // Build the `composition` object the plugin's RateCompositionParser expects.
@@ -543,4 +626,51 @@ export function mergeRatesWithUserData(masterRates = [], rateOverrides = [], cus
   }
 
   return merged.sort(sortRateDefinitions);
+}
+
+// ── Resource-class subtotals ──────────────────────────────────────────────
+// Splits a rate's build-up into the three resource classes a QS prices with,
+// plus a remainder so the four always reconcile to the itemised net.
+//
+// The owner's rule (23 Sep 2026): plant is its own resource class, NOT a slice
+// of labour. A Rate Gen build-up carries material, labour AND plant lines, and
+// the Budget must carry the total labour cost alone and the total plant cost
+// alone. Equipment is folded into plant (same class to a QS: hired kit, not a
+// gang); anything else — consumables and unclassified lines — lands in
+// otherCost so nothing is silently dropped and
+// materialCost + labourCost + plantCost + otherCost === Σ components.
+//
+// Figures are per ONE unit of the rate (components carry per-unit money), and
+// are deliberately left unrounded: a build-up line can be worth fractions of a
+// kobo per unit and rounding here would zero it.
+export function compositionSubtotals(composition) {
+  const components = Array.isArray(composition?.components) ? composition.components : [];
+
+  let materialCost = 0;
+  let labourCost = 0;
+  let plantCost = 0;
+  let otherCost = 0;
+
+  for (const c of components) {
+    const amount = toNum(c?.totalCost, 0);
+    if (!amount) continue;
+    switch (String(c?.kind || "").toLowerCase()) {
+      case "labour":
+      case "labor":
+        labourCost += amount;
+        break;
+      case "plant":
+      case "equipment":
+        plantCost += amount;
+        break;
+      case "material":
+        materialCost += amount;
+        break;
+      default:
+        otherCost += amount;
+        break;
+    }
+  }
+
+  return { materialCost, labourCost, plantCost, otherCost };
 }

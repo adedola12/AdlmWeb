@@ -218,19 +218,8 @@ router.get("/grid", async (req, res) => {
  *
  * The GET is untouched — the website still shows the master library, it simply
  * no longer changes it.
- *
- * HELD OPEN UNTIL GO-LIVE. The 15 Sept release put this lock live together
- * with the new admin, before the new build was meant to go live. The classic
- * RateGen admin screens are back (6de46ea), and until go-live staff edit
- * master prices there as they did before, so the lock lets writes through.
- * While it is open, a web edit is not audited and can cross with one
- * published from Rate Gen. At go-live, set this to false (or revert the
- * commit that added it).
  */
-const MASTER_WEB_EDITS_OPEN_UNTIL_GO_LIVE = true;
-
-function masterIsReadOnly(_req, res, next) {
-  if (MASTER_WEB_EDITS_OPEN_UNTIL_GO_LIVE) return next();
+function masterIsReadOnly(_req, res) {
   return res.status(405).json({
     error:
       "Master prices are edited in ADLM Rate Gen and published from there. " +

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { registerTakeoffErasure } from "../services/takeoffErasure.js";
 
 const DeviceBindingSchema = new mongoose.Schema(
   {
@@ -7,11 +8,33 @@ const DeviceBindingSchema = new mongoose.Schema(
     boundAt: { type: Date, default: Date.now },
     lastSeenAt: { type: Date, default: Date.now },
     revokedAt: { type: Date, default: null },
-    // Fingerprint algorithm version:
-    //   1 = legacy SHA256(MachineName + MAC + Username)
-    //   2 = hardware-bound SHA256(CPUId + BIOS SN + Motherboard SN)
-    // Used for the seamless one-time migration from v1 → v2.
+    // Fingerprint algorithm version, as the client reports it:
+    //   1 = legacy, MAC-based (and the ArchiCAD client)
+    //   2 = a stable id, but NOT one recipe. The Installer Hub and most apps
+    //       send SHA256(CPUId|BIOS SN|Board SN) ("hw2"); the shipped QUIV
+    //       Revit plugin sends SHA256("v2|" + MachineGuid + "|" + UserName)
+    //       ("mgu2"). The same PC therefore has two different v2 ids.
+    // Used for the seamless one-time migration from v1 → v2. Which recipe a
+    // row holds is `scheme` below (util/deviceIdentity.js).
     fpVersion: { type: Number, default: 1, min: 1 },
+
+    // Provenance, recorded from DEVICE_SCHEME_AWARE_BINDING onwards (older
+    // rows have none of these; util/deviceIdentity.js infers them). No
+    // defaults on purpose: "absent" is what marks a row as written before.
+    //   source   "installer-hub" (bind-device) | "app" (a desktop sign-in)
+    //   scheme   "hw2" | "mgu2" | "v1": the recipe behind `fingerprint`
+    //   client   x-adlm-client header, or the User-Agent product token
+    source: { type: String, trim: true },
+    scheme: { type: String, trim: true },
+    client: { type: String, trim: true },
+    // Set when an app sign-in took this seat over from an Installer Hub row:
+    // the Hub's id and device name are kept here for support.
+    installerFingerprint: { type: String, trim: true },
+    installerName: { type: String },
+    adoptedAt: { type: Date },
+    // Last time an app sign-in matched or wrote this row. A row with this set
+    // is app use and is never adopted away from its machine.
+    appSeenAt: { type: Date },
   },
   { _id: false },
 );
@@ -109,6 +132,17 @@ const UserSchema = new mongoose.Schema(
     certificateLastName: { type: String, default: "", trim: true },
     certificateNameLockedAt: { type: Date, default: null },
     whatsapp: { type: String, default: "", trim: true },
+    // WhatsApp number proved by a code sent over WhatsApp (util/whatsappVerify.js).
+    // Tied to the exact number: changing the number clears it.
+    whatsappVerified: { type: Boolean, default: false },
+    whatsappVerifiedAt: { type: Date, default: null },
+    whatsappVerifiedNumber: { type: String, default: "" },
+    whatsappCodeHash: { type: String, default: "" },
+    // The number the pending code went to: a code proves that number only.
+    whatsappCodeNumber: { type: String, default: "" },
+    whatsappCodeExpires: { type: Date, default: null },
+    whatsappCodeSentAt: { type: Date, default: null },
+    whatsappCodeAttempts: { type: Number, default: 0 },
 
     // Optional user-supplied profile details.
     location: { type: String, default: "", trim: true },
@@ -165,6 +199,13 @@ const UserSchema = new mongoose.Schema(
     },
 
     disabled: { type: Boolean, default: false },
+    // Why and when, for a disable that was not done by hand (so an admin
+    // reading the account can tell a closed ghost from a banned user).
+    disabledReason: { type: String, default: "" },
+    disabledAt: { type: Date, default: null },
+    // The one "confirm your email or the account closes" reminder, and so the
+    // start of the 14-day clock (util/unconfirmedSweep.js).
+    emailVerifyReminderAt: { type: Date, default: null },
 
     // Break-glass "God" support account flag. On its own this does NOTHING —
     // God powers only activate when this is true AND the email is also listed
@@ -180,6 +221,12 @@ const UserSchema = new mongoose.Schema(
       stepUpEnabled: { type: Boolean, default: false },
     },
 
+    // The user's OWN code, handed out by Ada. Made on first ask and kept for
+    // ever after: a code that changed between conversations would be worse than
+    // none, because every link already sent would stop working. Sparse, because
+    // most accounts never ask for one.
+    referralCode: { type: String, trim: true, uppercase: true, unique: true, sparse: true },
+
     entitlements: { type: [EntitlementSchema], default: [] },
 
     // Saved card for auto-renewals — Paystack's reusable authorization token
@@ -189,6 +236,9 @@ const UserSchema = new mongoose.Schema(
     // opts in with .select("+paymentMethod.authorizationCode").
     paymentMethod: {
       provider: { type: String, default: "paystack" },
+      // The Paystack account the card was saved on (R22, util/paystackKeys.js).
+      // Blank on cards saved before, which are the personal account's.
+      account: { type: String, default: "" },
       authorizationCode: { type: String, select: false },
       signature: { type: String, select: false },
       last4: { type: String, default: "" },
@@ -238,6 +288,11 @@ const UserSchema = new mongoose.Schema(
     // the server is not a way to get around it.
     emailVerifySentAt: { type: Date, default: null },
     emailVerifyAttempts: { type: Number, default: 0 },
+    // Unconfirmed accounts: verification codes sent today, and how many times
+    // the address was changed while confirming (routes/auth.js limits both).
+    emailVerifyResends: { type: Number, default: 0 },
+    emailVerifyResendDay: { type: String, default: "" },
+    emailChangeCount: { type: Number, default: 0 },
 
     /* ── does this address still accept mail? ─────────────────────────────
      *
@@ -311,5 +366,9 @@ const UserSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+// Deleting a user deletes their Takeoff Time Log records too (privacy policy,
+// "Take-off timing"). Registered before the model is compiled.
+registerTakeoffErasure(UserSchema);
 
 export const User = mongoose.models.User || mongoose.model("User", UserSchema);

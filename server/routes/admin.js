@@ -1,5 +1,6 @@
 // server/routes/admin.js
 import express from "express";
+import { creditReferral } from "../services/referrals.js";
 import dayjs from "dayjs";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import mongoose from "mongoose";
@@ -18,6 +19,7 @@ import {
   isBoqImportEligible,
 } from "../util/boqImportAccess.js";
 import { Setting } from "../models/Setting.js";
+import { installerHubPageUrl } from "../util/installerHubAccess.js";
 import {
   resolveUserGuideUrl,
   getUserGuideAttachment,
@@ -773,6 +775,11 @@ router.post(
         );
         await user.save();
         userMutated = true;
+        // A transfer or invoice order is the ONLY conversion for a non-card
+        // customer, and this path never sets `paid` — so anything keyed on that
+        // field drops every one of them. purchaseRaw is the .lean() copy the
+        // grant math uses; creditReferral only reads.
+        await creditReferral(purchaseRaw || purchase, "admin-approval");
       }
 
       // Apply purchased project-storage slots to the user's entitlement(s).
@@ -856,9 +863,11 @@ router.post(
         purchase.firstName || user.firstName || user.username || "";
 
       // Installer Hub download + user guide links, so a new subscriber gets the
-      // app and the walkthrough in the same email as their receipt.
+      // app and the walkthrough in the same email as their receipt. R3: the Hub
+      // button opens the signed-in dashboard, never the file itself, so
+      // the paid-licence check runs when it is clicked.
       const hubSettings = await Setting.findOne({ key: "global" })
-        .select("installerHubUrl installerHubGuideUrl")
+        .select("installerHubGuideUrl")
         .lean()
         .catch(() => null);
 
@@ -874,7 +883,7 @@ router.post(
           receiptLink,
           anydeskLink,
           isPendingInstall,
-          installerHubLink: hubSettings?.installerHubUrl || "",
+          installerHubLink: installerHubPageUrl(WEB_URL),
           userGuideLink: resolveUserGuideUrl(hubSettings?.installerHubGuideUrl),
           guideAttached: !!guideAttachment,
         }),
@@ -1624,7 +1633,7 @@ router.post(
         html: `
           <p>Hi ${user.firstName || "there"},</p>
           <p>Great news! We have proposed a date for your physical training:</p>
-          <p><b>Location:</b> ${purchase.physicalTraining.locationName || "—"}</p>
+          <p><b>Location:</b> ${purchase.physicalTraining.locationName || "–"}</p>
           <p><b>Date:</b> ${startStr}${endStr}</p>
           <p><b>Duration:</b> ${purchase.physicalTraining.durationDays || 1} day(s)</p>
           ${purchase.physicalTraining.bimInstallRequested ? "<p>BIM software installation is also included.</p>" : ""}

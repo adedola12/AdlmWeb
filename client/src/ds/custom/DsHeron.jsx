@@ -17,7 +17,7 @@ import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsHeron() {
-  const price = useProductPricing("planswift", { monthly: 12000, yearly: 120000, install: 15000 });
+  const price = useProductPricing("planswift", { monthly: 25000, yearly: 250000, install: 15000 });
   return (
     <DsHeronPage
       d={{

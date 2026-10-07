@@ -528,6 +528,10 @@ export default function ProjectManagementTab({
               projectFinish: projectFinish || undefined,
             })
           }
+          // S18: the same route, told to plan only the lines that are in no
+          // task. They start after the current programme, so nothing that is
+          // already planned moves.
+          onPlanUnlinked={() => onGenerateFromBoq?.({ onlyUnlinked: true })}
           onImportFile={onImportFile}
           onClearImports={onClearImports}
           onViewDetails={() => setViewMode("details")}

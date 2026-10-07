@@ -54,9 +54,19 @@ const UserRateOverrideSchema = new mongoose.Schema(
 
 const UserCustomRateLineSchema = new mongoose.Schema(
   {
+    // Plant is its own resource class, not a slice of labour (the owner's
+    // rule, 23 Sep 2026). A rate's build-up carries material, labour AND
+    // plant lines, so the enum has to be able to say so.
+    //
+    // Safe to widen: Rate Gen desktop reads this as a plain C# string
+    // (CustomRateLinePayload.RateType in Services/UserRatesCloudSync.cs) and
+    // never parses it to an enum, so an unknown value cannot fault it. What
+    // it DOES do is rebuild its push from its own material and labour lists,
+    // which would delete a plant line authored here - see the guard in
+    // util/rategenUserRates.js preservePlantLines().
     rateType: {
       type: String,
-      enum: ["material", "labour"],
+      enum: ["material", "labour", "plant", "equipment", "consumable"],
       required: true,
       trim: true,
     },
@@ -91,6 +101,19 @@ const UserCustomRateSchema = new mongoose.Schema(
     totalCost: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
+    // "desktop" or "web": where the rate was first made. An old Rate Gen
+    // desktop may only delete desktop-made rates (util/rategenCustomRateGuard.js).
+    origin: { type: String, trim: true, default: "" },
+  },
+  { _id: false }
+);
+
+// A custom rate removed by a sync or a delete, kept so it can be restored.
+const DeletedCustomRateSchema = new mongoose.Schema(
+  {
+    ...UserCustomRateSchema.obj,
+    deletedAt: { type: Date, default: Date.now },
+    deletedReason: { type: String, trim: true, default: "" },
   },
   { _id: false }
 );
@@ -131,6 +154,7 @@ const RateGenLibrarySchema = new mongoose.Schema(
     version: { type: Number, default: 1 },
     rateOverrides: { type: [UserRateOverrideSchema], default: [] },
     customRates: { type: [UserCustomRateSchema], default: [] },
+    deletedCustomRates: { type: [DeletedCustomRateSchema], default: [] },
     priceOverrides: { type: [UserPriceOverrideSchema], default: [] },
     ratesVersion: { type: Number, default: 1 },
     customRatesVersion: { type: Number, default: 1 },

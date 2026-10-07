@@ -21,7 +21,12 @@
 
 import express from "express";
 import { User } from "../models/User.js";
-import { readUnsubscribeToken, readTopicUnsubscribeToken, VIDEO_TOPIC } from "../util/campaigns.js";
+import {
+  readUnsubscribeToken,
+  readTopicUnsubscribeToken,
+  VIDEO_TOPIC,
+  PRODUCT_UPDATES_TOPIC,
+} from "../util/campaigns.js";
 
 const router = express.Router();
 
@@ -234,5 +239,120 @@ videoUnsubscribeRouter.post("/:token", express.urlencoded({ extended: false }), 
     ),
   );
 });
+
+/* ══════════════════════════════════════ getting off PRODUCT UPDATES ══ */
+
+/**
+ * The "new version is ready" list, at
+ * /api/email/unsubscribe/product-updates/:token.
+ *
+ * Writes User.notifications.productUpdates, the switch the account settings
+ * screen already shows ("When a build ships for something you are licensed
+ * for") and the one util/releaseNotifier.js reads. One truth, two ways in.
+ *
+ * Same rules as the video list above: the topic is inside the signed token, so
+ * this link cannot be edited into a general unsubscribe; and GET only shows a
+ * page with a button, so a link scanner opening the mail changes nothing. The
+ * POST is also what a mailbox's one-click unsubscribe sends (the
+ * List-Unsubscribe-Post header points here), which is why it needs no form
+ * field: the token is in the path.
+ *
+ * Built by a factory so the tests can drive the real routes over HTTP with a
+ * stand-in for the two database calls.
+ */
+export function makeProductUpdatesUnsubscribeRouter({
+  findUser = (id) =>
+    User.findById(id).select("email notifications").lean().catch(() => null),
+  optOut = (id) =>
+    User.findByIdAndUpdate(
+      id,
+      { $set: { "notifications.productUpdates": false } },
+      { new: true },
+    )
+      .select("email")
+      .lean()
+      .catch(() => null),
+} = {}) {
+  const r = express.Router();
+
+  const refuse = (res) =>
+    res.status(400).send(
+      page(
+        "Link not recognised",
+        `<h1>That link is not one of ours</h1>
+         <p>It may have been broken by the mail client that showed it to you.</p>
+         <p class="m">You can turn product update emails off in your account settings, or
+         reply to any message from us and we will do it.</p>`,
+      ),
+    );
+
+  r.get("/:token", async (req, res) => {
+    const id = readTopicUnsubscribeToken(PRODUCT_UPDATES_TOPIC, req.params.token);
+    if (!id) return refuse(res);
+
+    const user = await findUser(id);
+    if (!user) {
+      return res.status(404).send(page("Not found", `<h1>We cannot find that account</h1>`));
+    }
+
+    const email = escHtml(user.email);
+    if (user.notifications?.productUpdates === false) {
+      return res.send(
+        page(
+          "Already off",
+          `<h1>Product update emails are already off</h1>
+           <p>${email} does not get an email when a new version ships.</p>
+           <p class="m">The Installation Center still shows every update, and receipts,
+           licence and support messages still arrive.</p>`,
+        ),
+      );
+    }
+
+    res.send(
+      page(
+        "Stop product update emails",
+        `<h1>Stop emails about new versions?</h1>
+         <p>${email} will stop getting an email when a new version of a product you are
+         licensed for is ready.</p>
+         <p class="m">Updates still appear in the Installation Center. Receipts, licence
+         activations, renewal notices and support replies keep coming.</p>
+         <form method="POST" action="/api/email/unsubscribe/product-updates/${encodeURIComponent(req.params.token)}">
+           <button type="submit">Stop product update emails</button>
+         </form>`,
+      ),
+    );
+  });
+
+  r.post("/:token", express.urlencoded({ extended: false }), async (req, res) => {
+    const id = readTopicUnsubscribeToken(PRODUCT_UPDATES_TOPIC, req.params.token);
+    if (!id) return refuse(res);
+
+    const user = await optOut(id);
+    if (!user) {
+      return res.status(404).send(page("Not found", `<h1>We cannot find that account</h1>`));
+    }
+
+    res.send(
+      page(
+        "Done",
+        `<h1>Done</h1>
+         <p>${escHtml(user.email)} will not get emails about new versions again.</p>
+         <p class="m">Updates still appear in the Installation Center. If you change your
+         mind, it is a switch in your account settings.</p>`,
+      ),
+    );
+  });
+
+  return r;
+}
+
+const escHtml = (t) =>
+  String(t ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+export const productUpdatesUnsubscribeRouter = makeProductUpdatesUnsubscribeRouter();
 
 export default router;

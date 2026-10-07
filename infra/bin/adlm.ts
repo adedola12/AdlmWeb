@@ -23,6 +23,8 @@ import { config } from "../config.js";
 import { AdlmEdgeStack } from "../lib/adlm-edge-stack.js";
 import { AdlmApiStack } from "../lib/adlm-api-stack.js";
 import { AdlmOpsAlertsStack } from "../lib/adlm-ops-alerts-stack.js";
+import { AdlmReleaseGateStack } from "../lib/adlm-release-gate-stack.js";
+import { AdlmFilesStack } from "../lib/adlm-files-stack.js";
 
 const app = new App();
 
@@ -78,7 +80,7 @@ if (useExternalDns) {
     );
   }
 
-  new AdlmApiStack(app, "AdlmApi", {
+  const api = new AdlmApiStack(app, "AdlmApi", {
     config,
     certificateArn,
     // No zone: the CNAME is added by hand at the existing DNS provider.
@@ -86,6 +88,7 @@ if (useExternalDns) {
     description:
       "ADLM Cloud - Express API on Lambda behind CloudFront (external DNS)",
   });
+  addFilesStack(api);
 } else {
   const edge = new AdlmEdgeStack(app, "AdlmEdge", {
     config,
@@ -106,6 +109,30 @@ if (useExternalDns) {
   });
 
   api.addStackDependency(edge);
+  addFilesStack(api);
+}
+
+// The private files bucket (lib/adlm-files-stack.ts). Its own stack so an
+// AdlmApi deploy can never delete people's files, and deployed before AdlmApi
+// so FILES_BUCKET never names a bucket that is not there yet.
+function addFilesStack(api: AdlmApiStack) {
+  if (!config.filesBucket) return;
+  const files = new AdlmFilesStack(app, "AdlmFiles", {
+    env: { account: config.account, region: config.region },
+    description: "ADLM - private files bucket (uploads and download installers), presigned access only",
+    terminationProtection: true,
+    // Same role as AdlmReleaseGate below; if AdlmApi is rebuilt, update both.
+    apiRoleArn: "arn:aws:iam::065634457992:role/AdlmApi-ApiFnServiceRoleD18AAE0E-uu6SwJf1pQr7",
+    // Keep in step with PROD_ORIGINS in server/util/corsPolicy.js.
+    allowedOrigins: [
+      "https://adlmstudio.net",
+      "https://www.adlmstudio.net",
+      "https://adlm-web.vercel.app",
+      "https://preview.adlmstudio.net",
+      "http://localhost:5173",
+    ],
+  });
+  api.addStackDependency(files);
 }
 
 // Alerting lives in its own stacks, so a deploy of AdlmApi from the wrong
@@ -128,6 +155,7 @@ new AdlmOpsAlertsStack(app, "AdlmOpsAlertsEu", {
   watchSupportCases: false,
   digestLogGroupName: config.scheduledLogGroupName,
   dmarcReportDomain: config.dmarcReportDomain,
+  api: { functionName: config.apiFunctionName, logGroupName: config.apiLogGroupName },
   description: "ADLM - regional Health events and the daily operations report watchdog",
 });
 
@@ -136,3 +164,26 @@ new AdlmOpsAlertsStack(app, "AdlmOpsAlertsEu", {
 Tags.of(app).add("app", "adlm-cloud");
 Tags.of(app).add("env", "prod");
 Tags.of(app).add("managed-by", "cdk");
+
+// Release gate (docs/RELEASE_GATE.md): the locked audit bucket, the hourly
+// watcher and the GitHub alert role. Its own stack so an AdlmApi deploy can
+// never take it with it. Deploy alone:  npx cdk deploy AdlmReleaseGate
+new AdlmReleaseGateStack(app, "AdlmReleaseGate", {
+  env: { account: config.account, region: config.region },
+  description: "ADLM release gate - locked audit trail and main-branch watcher",
+  terminationProtection: true,
+  repos: [
+    "adedola12/AdlmWeb@main",
+    "adedola12/adlm-ai-service@main",
+    "adedola12/ADLMRateGen-SingleUser@may30-version",
+  ],
+  mailDomain: "adlmstudio.net",
+  fromAddress: "ADLM Studio <notifications@adlmstudio.net>",
+  ownerEmail: "admin@adlmstudio.net",
+  // The API function's execution role (AdlmApi-ApiFn). It keeps its name
+  // across AdlmApi deploys; if AdlmApi is ever rebuilt from scratch, update it.
+  apiRoleArn: "arn:aws:iam::065634457992:role/AdlmApi-ApiFnServiceRoleD18AAE0E-uu6SwJf1pQr7",
+  // Three years. COMPLIANCE mode: nobody, root included, can shorten this for
+  // an object once written.
+  retentionDays: 1095,
+});

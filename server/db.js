@@ -5,8 +5,13 @@ let connectPromise = null;
 /**
  * Single mongoose connection for the AUTH app.
  * Uses AUTH_DB (default: adlmWeb) — NOT the RateGen master DB.
+ *
+ * `extra` is merged into the connect options. The API passes its fail-fast
+ * timeouts here (util/mongoTimeouts.js apiMongoOptions); jobs and scripts pass
+ * nothing and keep the driver defaults. The first caller's options win, since
+ * there is one connection per process.
  */
-export async function connectDB(uri) {
+export async function connectDB(uri, extra = {}) {
   if (mongoose.connection.readyState === 1) return mongoose;
   if (connectPromise) return connectPromise;
 
@@ -29,7 +34,10 @@ export async function connectDB(uri) {
       // request at a time, so a large pool buys nothing there anyway.
       // The long-running server can afford more; override via env.
       maxPoolSize: Number(process.env.MONGO_MAX_POOL || 5),
+      // 0 for jobs and scripts; the API raises it through `extra`
+      // (util/mongoTimeouts.js apiMongoOptions).
       minPoolSize: 0,
+      ...extra,
     })
     .then((m) => {
       console.log(

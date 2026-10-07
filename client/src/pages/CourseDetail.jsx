@@ -1,8 +1,11 @@
 import React from "react";
+import { uploadSubmission, SUBMISSION_ACCEPT } from "../lib/submissionUpload.js";
 import dayjs from "dayjs";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import DsSampleModels from "../ds/DsSampleModels.jsx";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
+import { useFeedback } from "../ds/feedback/feedbackContext.js";
 import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { clock } from "../ds/lxCourses.js";
@@ -66,7 +69,14 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
       current = null;
     };
 
-    (async () => {
+    // Claims a seat and keeps it alive. Called again when the server says the
+    // session is gone (404) or the page comes back from the back/forward cache:
+    // pagehide ends the session, and without a fresh claim the timer resumed on
+    // a dead one, so every ping 404'd and watch time stopped recording (1,546
+    // failed pings from two students, 21-26 Sep 2026).
+    const claim = async () => {
+      clearInterval(timer);
+      timer = null;
       try {
         const res = await apiAuthed(
           `/me/courses/${encodeURIComponent(sku)}/playback/start`,
@@ -86,6 +96,7 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
           return;
         }
         current = res.sessionId;
+        lastPingAt = Date.now();
         setSession(res);
         setBlocked(null);
 
@@ -102,7 +113,12 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
               watchedDeltaSec: deltaSec,
               positionSec: Math.round((now - startedAt) / 1000),
             }),
-          }).catch(() => {});
+          }).catch((e) => {
+            if (e?.status === 404 && !cancelled) {
+              current = null;
+              claim();
+            }
+          });
         }, (res.heartbeatSec || 30) * 1000);
       } catch (e) {
         if (cancelled) return;
@@ -111,13 +127,24 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
           setBlocked(e.data || { error: "Too many active streams" });
         }
       }
-    })();
+    };
+    claim();
 
-    window.addEventListener("pagehide", stop);
+    const onHide = () => {
+      clearInterval(timer);
+      timer = null;
+      stop();
+    };
+    const onShow = (e) => {
+      if (e.persisted && !cancelled) claim();
+    };
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("pageshow", onShow);
     return () => {
       cancelled = true;
       clearInterval(timer);
-      window.removeEventListener("pagehide", stop);
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("pageshow", onShow);
       stop();
     };
   }, [sku, moduleCode, token, track]);
@@ -132,6 +159,21 @@ export default function CourseDetail() {
   const [data, setData] = React.useState(null);
   const [err, setErr] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
+  const fb = useFeedback();
+  // R11: which of this course's assignments carry a new alert (red dot).
+  const [alertCodes, setAlertCodes] = React.useState(() => new Set());
+  const loadAlerts = React.useCallback(() => {
+    apiAuthed("/me/courses/assignments", { token: accessToken })
+      .then((d) =>
+        setAlertCodes(
+          new Set((d.items || []).filter((a) => a.courseSku === sku && a.alerts?.length).map((a) => a.moduleCode)),
+        ),
+      )
+      .catch(() => {});
+  }, [accessToken, sku]);
+  React.useEffect(() => {
+    loadAlerts();
+  }, [loadAlerts]);
   const [activeCode, setActiveCode] = React.useState("");
   const [track, setTrack] = React.useState("lecture");
   // His four-tab strip under the stage. "about" is the only one every
@@ -139,6 +181,20 @@ export default function CourseDetail() {
   // disappears — switching to a session with no assignment must not leave
   // the panel pointing at one.
   const [tab, setTab] = React.useState("about");
+  // Opening a session's Assignment tab clears its alert and marks a result
+  // read (R11/R13).
+  React.useEffect(() => {
+    const code = tab === "assignment" ? activeCode : "";
+    if (!code || !alertCodes.has(code)) return;
+    apiAuthed("/me/courses/assignments/seen", {
+      token: accessToken,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseSku: sku, moduleCode: code }),
+    })
+      .then(loadAlerts)
+      .catch(() => {});
+  }, [tab, activeCode, alertCodes, accessToken, sku, loadAlerts]);
   // His Notes tab. Kept on the account, per lesson — see LessonNote for why
   // that is the whole specification of the feature.
   const [note, setNote] = React.useState("");
@@ -316,53 +372,36 @@ export default function CourseDetail() {
     }
   }
 
-  async function uploadToCloudinary(file, resourceType = "raw") {
-    setUploading(true);
-    try {
-      const sig = await apiAuthed(`/me/media/sign`, {
-        token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resource_type: resourceType }),
-      });
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("api_key", sig.api_key);
-      fd.append("timestamp", sig.timestamp);
-      fd.append("signature", sig.signature);
-      if (sig.folder) fd.append("folder", sig.folder);
-
-      const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resourceType}/upload`;
-      const res = await fetch(endpoint, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok || !json.secure_url) {
-        throw new Error(json?.error?.message || "Upload failed");
-      }
-      return json.secure_url;
-    } finally {
-      setUploading(false);
-    }
-  }
-
+  // R12: PDF, Word, Excel or images, straight to private storage
+  // (lib/submissionUpload.js). It was images only.
   async function submitAssignment(moduleCode, file) {
     if (!file) return;
-    const ext = (file.name || "").split(".").pop().toLowerCase();
-    const isVideo = ["mp4", "mov", "avi", "mkv", "webm"].includes(ext);
-    const isImage = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext);
-    const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
-
+    setUploading(true);
     try {
-      const fileUrl = await uploadToCloudinary(file, resourceType);
-      await apiAuthed(`/me/courses/${encodeURIComponent(sku)}/submit`, {
+      const { fileName, submittedAt } = await uploadSubmission({
+        sku,
+        moduleCode,
+        file,
         token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ moduleCode, fileUrl }),
       });
       await load();
-      alert("Submitted!");
+      loadAlerts();
+      // R13: what was sent, when, and what happens next.
+      // TODO(adlm): Richard's own modal design replaces this card when he sends it.
+      await fb.card({
+        tone: "success",
+        title: "Submitted",
+        msg: "Your tutor marks it next. The mark and their feedback come back to this tab and to Assignments.",
+        rows: [
+          ["File", fileName],
+          ["Submitted", submittedAt.toLocaleString()],
+        ],
+        primary: "Done",
+      });
     } catch (e) {
-      alert(e.message || "Submit failed");
+      fb.toast({ tone: "error", title: e.message || "That could not be submitted." });
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -449,6 +488,7 @@ export default function CourseDetail() {
     isIntro ? null : { id: "notes", label: "Notes" },
   ].filter(Boolean);
   const tabOn = TABS.some((t) => t.id === tab) ? tab : "about";
+
 
   const lessonTitle = isIntro
     ? "Start here, course intro"
@@ -633,6 +673,9 @@ export default function CourseDetail() {
                 onClick={() => setTab(t.id)}
               >
                 {t.label}
+                {t.id === "assignment" && alertCodes.has(active?.moduleCode) ? (
+                  <i className="adlm-dot" role="status" aria-label="New" />
+                ) : null}
               </button>
             ))}
           </div>
@@ -731,6 +774,14 @@ export default function CourseDetail() {
 
             {tabOn === "resources" ? (
               <>
+                {/* THE COURSE'S MODEL FILE.
+                    The sample-model library had no reader screen at all: an
+                    admin could attach a Revit model to this course and publish
+                    it, and no learner could ever reach it. Filed with the other
+                    resources, scoped to this course, and `quiet` so a course
+                    that ships no model shows nothing rather than an empty box. */}
+                <DsSampleModels courseSku={sku} title="Model files" quiet />
+
                 <div className="lx-res">
                   {softwares.map((s) => {
                     const mb = s.fileSize ? (s.fileSize / (1024 * 1024)).toFixed(1) : null;
@@ -783,10 +834,11 @@ export default function CourseDetail() {
                   <label className="row" style={{ cursor: uploading ? "wait" : "pointer" }}>
                     <IconPlus />
                     <b>{uploading ? "Uploading…" : "Upload your submission"}</b>
-                    <em>Any file the brief asks for</em>
+                    <em>PDF, Word, Excel or an image</em>
                     <input
                       type="file"
                       hidden
+                      accept={SUBMISSION_ACCEPT}
                       disabled={uploading}
                       onChange={(e) => submitAssignment(active.moduleCode, e.target.files?.[0])}
                     />
@@ -800,13 +852,32 @@ export default function CourseDetail() {
                       rel="noreferrer"
                     >
                       <IconLink />
-                      <b>
-                        {(sub.fileUrl || "").split("/").pop() || "Submission"}
-                        {sub.feedback ? ` — ${sub.feedback}` : ""}
-                      </b>
-                      <em>{sub.gradeStatus || "submitted"}</em>
+                      <b>{sub.fileName || (sub.fileUrl || "").split("?")[0].split("/").pop() || "Submission"}</b>
+                      <em>
+                        {sub.gradeStatus === "approved"
+                          ? "accepted"
+                          : sub.gradeStatus === "rejected"
+                            ? "returned"
+                            : "waiting to be marked"}
+                        {typeof sub.score === "number" ? ` · ${sub.score}/100` : ""}
+                      </em>
                     </a>
                   ))}
+                  {/* R13: the tutor's result, as a block of its own. */}
+                  {submissions
+                    .filter((sub) => sub.gradeStatus && sub.gradeStatus !== "pending")
+                    .slice(-1)
+                    .map((sub) => (
+                      <div className="as-fb" key={`fb-${sub._id}`}>
+                        <b>
+                          {sub.gradeStatus === "approved" ? "Accepted" : "Returned for another go"}
+                          {typeof sub.score === "number" ? ` · ${sub.score}/100` : ""}
+                          {sub.gradedByName ? ` · ${sub.gradedByName}` : ""}
+                          {sub.gradedAt ? ` · ${dayjs(sub.gradedAt).format("D MMM YYYY")}` : ""}
+                        </b>
+                        {sub.feedback || "No written comment."}
+                      </div>
+                    ))}
                 </div>
                 <p className="wk-note">
                   {submissions.length

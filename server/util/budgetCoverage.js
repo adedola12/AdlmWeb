@@ -19,22 +19,57 @@
 // so user pricing/procurement edits survive re-heals via the sn|name|unit|kind
 // merge key.
 
+import { isLabourKind } from "./resourceKind.js";
+
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
+// The vocabulary is util/resourceKind.js. By the stored kind only — a row
+// NAMED "Mason" but stored as Material is a material here, because that is how
+// it is keyed, exported and priced everywhere else.
 function isLabour(b) {
+  return isLabourKind(b?.componentKind);
+}
+
+// The material bucket, tested explicitly. It used to be "anything that is not
+// labour", which quietly counted a Plant or Equipment row as material: a bill
+// line whose only non-labour row was excavator hire looked covered, so no
+// material line was ever synthesised for it and the QS had nothing to price
+// the materials on. Plant is its own resource class. A blank kind still counts
+// as material — that is what an unstamped row has always meant here.
+function isMaterial(b) {
   const k = String(b?.componentKind || "").trim().toLowerCase();
-  return k === "labour" || k === "labor";
+  return !k || k === "material";
 }
 
 // Work items that are pure labour (no material is bought/placed) — these show
 // a Labour line only. Everything else defaults to Material + Labour.
 // Start-anchored stems (no trailing \b) so "excavat" matches "excavation",
 // "compact" matches "compacting", etc.
+
+// "PLANKING AND STRUTTING" IS THE TERM OF ART; BARE "STRUTTING" IS NOT.
+//
+// This listed `planking` and `strutting` as separate excavation verbs, and the
+// test for it runs BEFORE the formwork branch. So "Sawn formwork, props and
+// strutting to slab soffit" — ordinary wording on a Nigerian bill — classified
+// as excavation: no formwork board, no bracing timber, no nails, and labour at
+// the excavation rate, which is per CUBIC metre, applied to SQUARE metres of
+// soffit.
+//
+// What made it invisible is the reconciliation. On a priced line the engine
+// back-solves the gap, so 100 m2 at NGN 4,500 produced ONE labour row at
+// NGN 1,350 with profitPercent 223 — NGN 3,150/m2 booked as profit instead of
+// as board, bracing and nails that have to be bought. The bill still totalled
+// correctly, so the invariant that guards everything else here could not catch
+// it.
+//
+// Only the gerunds triggered it: "...including all necessary struts and props"
+// and "...including propping" were always fine. So the fix is the phrase, plus
+// the guard below.
 const LABOUR_ONLY_RE =
-  /\b(?:excavat|disposal|dispose|cart\s*away|compact|levell?ing|earthwork[\s-]?support|planking|strutting|backfill|back\s*fill|setting[\s-]?out|site\s*clearance|clearing|topsoil|ramming|grading|hand[\s-]?trim)/i;
+  /\b(?:excavat|disposal|dispose|cart\s*away|compact|levell?ing|earthwork[\s-]?support|planking\s*(?:and|&|\/)?\s*strutting|backfill|back\s*fill|setting[\s-]?out|site\s*clearance|clearing|topsoil|ramming|grading|hand[\s-]?trim)/i;
 
 function isLabourOnly(it) {
   return LABOUR_ONLY_RE.test(
@@ -175,7 +210,7 @@ export function ensureBillItemCoverage(items, budgetItems) {
     // Material only for items that actually carry material — labour-only items
     // (excavation, disposal, compaction, earthwork support, backfill…) stay
     // labour-only.
-    if (!isLabourOnly(it) && !lines.some((b) => !isLabour(b))) {
+    if (!isLabourOnly(it) && !lines.some(isMaterial)) {
       const name = cleanName(it?.description || it?.takeoffLine) || "Material";
       list.push(synth(it, code, "Material", name, 0));
     }

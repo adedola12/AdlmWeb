@@ -11,6 +11,7 @@
 // because only the signature does.
 
 import { apiAuthed } from "../api.js";
+import { checkAvatarFile } from "./avatarRules.js";
 
 /**
  * @param {object} opts
@@ -18,9 +19,10 @@ import { apiAuthed } from "../api.js";
  * @param {string} opts.token           the caller's access token
  * @param {string} [opts.folder]        Cloudinary folder
  * @param {(pct:number)=>void} [opts.onProgress]
+ * @param {boolean} [opts.avatar]      apply the profile-photo rule first
  * @returns {Promise<string>} the secure URL
  */
-export async function uploadImage({ file, token, folder = "adlm/avatars", onProgress }) {
+export async function uploadImage({ file, token, folder = "adlm/avatars", onProgress, avatar = false }) {
   if (!file) throw new Error("No file chosen.");
   if (!/^image\//.test(file.type)) {
     throw new Error("That is not an image. JPG or PNG works best.");
@@ -29,6 +31,12 @@ export async function uploadImage({ file, token, folder = "adlm/avatars", onProg
   // round trip.
   if (file.size > 8 * 1024 * 1024) {
     throw new Error("That image is over 8MB. A smaller one will upload faster.");
+  }
+  // A profile photo must be a square photo of a face (R08); say so before
+  // the upload rather than after it.
+  if (avatar) {
+    const problem = await checkAvatarFile(file);
+    if (problem) throw new Error(problem);
   }
 
   const sig = await apiAuthed("/me/media/sign", {

@@ -145,6 +145,24 @@ export const EMAILS = [
     editable: true,
   },
   {
+    key: "project.contract-locked",
+    name: "Contract locked",
+    when:
+      "The contract on a project is locked; sent to every collaborator on it, and to the owner " +
+      "when somebody else locked it",
+    file: "routes/projects.js",
+    editable: true,
+  },
+  {
+    key: "project.contract-locked-masked",
+    name: "Contract locked (no figures)",
+    when:
+      "The same message, to a collaborator without RateGen: their copy of the project masks " +
+      "every figure, so the contract sum is left out rather than posted to them",
+    file: "routes/projects.js",
+    editable: true,
+  },
+  {
     key: "video.published",
     name: "New video on the channel",
     when: "ADLM Studio publishes a video, found by the poller or announced by hand",
@@ -153,6 +171,18 @@ export const EMAILS = [
     why:
       "The wording is built around the video's own title, description and thumbnail, " +
       "so there is nothing fixed to rewrite. Change what it says in util/videoEmail.js.",
+  },
+  {
+    key: "release.update",
+    name: "New version ready to install",
+    when:
+      "A product's deployment moves to a higher version; sent to everyone with an active, " +
+      "unexpired licence for it who has not turned product updates off",
+    file: "util/releaseEmail.js",
+    editable: false,
+    why:
+      "Built per release from the release notes or the What's New entry, with update steps " +
+      "that name the app to close for each product. Change what it says in util/releaseEmail.js.",
   },
   {
     key: "entitlement.boq-import",

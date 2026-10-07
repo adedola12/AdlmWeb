@@ -19,6 +19,10 @@ import { RateGenMaterial } from "../models/RateGenMaterial.js";
 import { RateGenLabour } from "../models/RateGenLabour.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { fetchMasterLabour } from "../util/rategenMaster.js";
+import {
+  classifyResourceKind,
+  KIND as SHARED_KIND,
+} from "../util/resourceKind.js";
 
 /* ────────────────────────────── constants ────────────────────────────── */
 
@@ -80,39 +84,17 @@ function readNum(obj, ...names) {
 
 /* ──────────────────── kind classification (parser port) ──────────────────── */
 
-const LABOUR_KEYWORDS = [
-  "labour", "labor", "operator", "banksman", "mason", "carpenter", "steel fixer",
-  "steelfixer", "fixer", "foreman", "ganger", "helper", "skilled", "unskilled", "craftsman",
-];
-const PLANT_KEYWORDS = [
-  "bulldozer", "dozer", "mixer", "compressor", "excavator", "loader", "payloader",
-  "crane", "vibrator", "poker", "machine", "plant", "roller", "grader", "truck", "tipper", "pump",
-];
-const CONSUMABLE_KEYWORDS = [
-  "diesel", "fuel", "petrol", "oil", "consumable", "consumables", "lubricant", "grease",
-];
-
+// Classification lives in util/resourceKind.js — one vocabulary for the whole
+// pricing path, so a name classed as plant here is classed as plant in the
+// rate library, the schedule and the Budget too. The id arguments still win
+// over everything: a line resolved against the master Labour or Material
+// library IS that kind, whatever it is called.
 export function classifyKind(name, explicitKind = null, labourId = null, materialId = null) {
   if (labourId) return KIND.LABOUR;
   if (materialId) return KIND.MATERIAL;
-
-  const k = String(explicitKind || "").trim().toLowerCase();
-  switch (k) {
-    case "labour":
-    case "labor": return KIND.LABOUR;
-    case "material": return KIND.MATERIAL;
-    case "plant":
-    case "equipment": return KIND.PLANT;
-    case "consumable":
-    case "consumables": return KIND.CONSUMABLE;
-    default: break;
-  }
-
-  const n = String(name || "").toLowerCase();
-  if (CONSUMABLE_KEYWORDS.some((w) => n.includes(w))) return KIND.CONSUMABLE;
-  if (PLANT_KEYWORDS.some((w) => n.includes(w))) return KIND.PLANT;
-  if (LABOUR_KEYWORDS.some((w) => n.includes(w))) return KIND.LABOUR;
-  return KIND.MATERIAL; // anything physical and priced defaults to material
+  // Equipment is plant on an ArchiCAD costing — there is no separate bucket.
+  const k = classifyResourceKind(name, explicitKind);
+  return k === SHARED_KIND.EQUIPMENT ? KIND.PLANT : k;
 }
 
 /* ──────────────── composition parsing (RateCompositionParser port) ──────────────── */
@@ -157,6 +139,16 @@ function parseComponent(item) {
   return c;
 }
 
+/** What a raw, unparsed array of build-up rows comes to in money. */
+function rawComponentsTotal(arr) {
+  let sum = 0;
+  for (const item of arr || []) {
+    const c = parseComponent(item);
+    if (c) sum += componentEffectiveTotal(c);
+  }
+  return sum;
+}
+
 function findComponentArray(scope) {
   if (!scope || typeof scope !== "object") return null;
 
@@ -165,7 +157,31 @@ function findComponentArray(scope) {
   const mats = Array.isArray(scope.materials) ? scope.materials : null;
   const labs = Array.isArray(scope.labour) ? scope.labour : null;
   if (mats && labs && (mats.length > 0 || labs.length > 0)) {
-    return [...mats, ...labs];
+    const projection = [...mats, ...labs];
+
+    // …but that pair is only PART of a rate built on the website. Its full
+    // build-up — material, labour AND plant — is in breakdown[]; materials[]
+    // and labour[] are a projection of it kept for the desktop, and they
+    // cannot hold a plant line at all (UserCustomRateLineSchema.rateType is
+    // material|labour, and anything that is not "labour" is stored as
+    // "material"). Reading the pair here made every plant line invisible, and
+    // enforceCeiling then clamped the rate DOWN by the whole plant cost — the
+    // takeoff priced the work below the rate the customer published.
+    //
+    // So the breakdown wins whenever it explains at least as much money as the
+    // pair does, which is exactly when it is the fuller build-up. A rate
+    // written before the breakdown existed still falls back to the pair and
+    // prices exactly as it does today. Nothing the desktop reads changes: both
+    // arrays are still written, still in the same shape.
+    const breakdown = Array.isArray(scope.breakdown) ? scope.breakdown : null;
+    if (
+      breakdown &&
+      breakdown.length > 0 &&
+      rawComponentsTotal(breakdown) >= rawComponentsTotal(projection) - 0.005
+    ) {
+      return breakdown;
+    }
+    return projection;
   }
 
   for (const key of COMPONENT_ARRAY_KEYS) {
@@ -280,12 +296,25 @@ export function expectedTotal(comp) {
  * Recomputes netCost / overheadAmount / profitAmount / totalCost so a
  * partially-populated composition becomes fully balanced. Does NOT overwrite
  * a non-zero totalCost coming from the server — the guardrail validates that.
+ *
+ * A stored netCost is the rate's OWN figure and outranks the sum of its lines.
+ * The difference between the two is the rate's unexplained remainder: the part
+ * of a published net cost that no component accounts for. The build-up screen
+ * shows it as "Not itemised" and carries it through every edit
+ * (unexplainedNet/totalsFrom in client/src/ds/rategen/rateMath.js, where
+ * net = Σ lines + carried = the stored net), because the rate a customer saves
+ * is the rate their next bill is priced from. Overwriting netCost with the sum
+ * here stripped that remainder off again, and enforceCeiling then clamped the
+ * headline down to the itemised part — the takeoff priced the work below the
+ * rate the library published. The sum is used only when no netCost was stored
+ * (compute items, and any rate that carries lines and nothing else), so every
+ * rate written before this branch prices exactly as it did.
  */
 export function normalizeComposition(comp) {
   if (!comp) return comp;
   if (Array.isArray(comp.components) && comp.components.length > 0) {
     const sum = comp.components.reduce((s, c) => (c ? s + componentEffectiveTotal(c) : s), 0);
-    if (sum > 0) comp.netCost = sum;
+    if (sum > 0 && toNum(comp.netCost) <= 0) comp.netCost = sum;
   }
 
   if (comp.overheadAmount <= 0 && comp.overheadPercent > 0) {
@@ -614,6 +643,16 @@ export function computeLineAmounts(line) {
   line.totalAmount = round2(qty * toNum(line.unitRate));
   line.materialAmount = round2(qty * toNum(line.materialUnitCost));
   line.labourAmount = round2(qty * toNum(line.labourProvenance?.labourUnitRate));
+  // Plant and the remainder were already computed off the build-up
+  // (compPlantCost / compOtherCost) and then thrown away, so Material + Labour
+  // did not reconcile to the total and a mixer or an excavator read as margin.
+  // Plant is its own resource class, not a slice of labour: the residual
+  // labour path below already subtracts plant, so these do not double count.
+  // A line with no plant in its build-up — and any line stored before this
+  // change, which carries no plantUnitCost — gets 0, so no existing figure
+  // moves. unitRate, netUnitCost, marginAmount and totalAmount are untouched.
+  line.plantAmount = round2(qty * toNum(line.plantUnitCost));
+  line.otherAmount = round2(qty * toNum(line.otherUnitCost));
   const directUnit = toNum(line.netUnitCost) * (1 + toNum(line.overheadPercent) / 100);
   line.marginAmount = round2(line.totalAmount - directUnit * qty);
   return line;
@@ -692,6 +731,8 @@ export function costLine(rawLine, match, labourLibrary) {
     line.profitPercent = toNum(comp.profitPercent);
     line.unitRate = round2(clamped);
     line.materialUnitCost = round2(compMaterialCost(comp));
+    line.plantUnitCost = round2(compPlantCost(comp));
+    line.otherUnitCost = round2(compOtherCost(comp));
     line.marginPercent = toNum(comp.profitPercent); // margin defaults from the rate's profit %
 
     line.rateProvenance = {
@@ -707,6 +748,8 @@ export function costLine(rawLine, match, labourLibrary) {
     line.profitPercent = 0;
     line.unitRate = 0;
     line.materialUnitCost = 0;
+    line.plantUnitCost = 0;
+    line.otherUnitCost = 0;
     line.marginPercent = 0;
     line.rateProvenance = {
       rateId: null,
@@ -758,6 +801,8 @@ export function buildCategories(lines) {
       nrm: c.nrm,
       materialAmount: round2(catLines.reduce((s, l) => s + toNum(l.materialAmount), 0)),
       labourAmount: round2(catLines.reduce((s, l) => s + toNum(l.labourAmount), 0)),
+      plantAmount: round2(catLines.reduce((s, l) => s + toNum(l.plantAmount), 0)),
+      otherAmount: round2(catLines.reduce((s, l) => s + toNum(l.otherAmount), 0)),
       totalAmount: round2(catLines.reduce((s, l) => s + toNum(l.totalAmount), 0)),
       marginAmount: round2(catLines.reduce((s, l) => s + toNum(l.marginAmount), 0)),
     };
@@ -767,6 +812,8 @@ export function buildCategories(lines) {
 export function buildTotals(lines) {
   const materialAmount = round2(lines.reduce((s, l) => s + toNum(l.materialAmount), 0));
   const labourAmount = round2(lines.reduce((s, l) => s + toNum(l.labourAmount), 0));
+  const plantAmount = round2(lines.reduce((s, l) => s + toNum(l.plantAmount), 0));
+  const otherAmount = round2(lines.reduce((s, l) => s + toNum(l.otherAmount), 0));
   const marginAmount = round2(lines.reduce((s, l) => s + toNum(l.marginAmount), 0));
   const grandTotal = round2(lines.reduce((s, l) => s + toNum(l.totalAmount), 0));
 
@@ -782,6 +829,10 @@ export function buildTotals(lines) {
   return {
     materialAmount,
     labourAmount,
+    plantAmount,
+    otherAmount,
+    // directCost, marginAmount and grandTotal are deliberately unchanged:
+    // plant was always inside the total, it just had no name of its own.
     directCost: round2(grandTotal - marginAmount),
     marginAmount,
     grandTotal,

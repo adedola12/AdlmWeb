@@ -29,6 +29,7 @@ import express from "express";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { User } from "../models/User.js";
+import { verifyReply } from "../util/certificateRef.js";
 
 const router = express.Router();
 
@@ -51,7 +52,7 @@ router.get("/:ref", async (req, res, next) => {
       certificateRef: ref,
       certificateIssuedAt: { $ne: null },
     })
-      .select("userId email courseSku certificateIssuedAt certificateState certificateStateAt")
+      .select("userId email courseSku certificateIssuedAt certificateState certificateStateAt certificateFinish")
       .lean();
 
     if (!enr) {
@@ -60,28 +61,12 @@ router.get("/:ref", async (req, res, next) => {
 
     const [course, who] = await Promise.all([
       PaidCourse.findOne({ sku: enr.courseSku }).select("title").lean(),
-      enr.userId ? User.findById(enr.userId).select("firstName lastName").lean() : null,
+      enr.userId
+        ? User.findById(enr.userId).select("firstName lastName certificateFirstName certificateLastName certificateNameLockedAt").lean()
+        : null,
     ]);
 
-    const name = who
-      ? [who.firstName, who.lastName].filter(Boolean).join(" ")
-      : "";
-
-    const revoked = enr.certificateState === "revoked";
-
-    res.json({
-      found: true,
-      valid: !revoked,
-      ref,
-      // Everything below is already printed on the certificate being checked.
-      who: name || "the holder",
-      course: course?.title || enr.courseSku || "",
-      issued: day(enr.certificateIssuedAt),
-      withdrawn: revoked ? day(enr.certificateStateAt) : null,
-      said: revoked
-        ? `This certificate was withdrawn by ADLM Studio on ${day(enr.certificateStateAt)} and should not be relied on.`
-        : `Issued by ADLM Studio on ${day(enr.certificateIssuedAt)}.`,
-    });
+    res.json(verifyReply({ ref, enr, course, who, day }));
   } catch (err) {
     next(err);
   }

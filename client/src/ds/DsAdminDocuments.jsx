@@ -55,7 +55,7 @@ const SCREENS = {
     cols: () => [
       { h: "Reference", cell: (p) => <AdmTwo top={p.ref} under={p.kind} /> },
       { h: "For", w: "24%", cell: (p) => <AdmTwo top={p.who} under={p.org} /> },
-      { h: "Prepared by", cell: (p) => p.by || <AdmDim>—</AdmDim> },
+      { h: "Prepared by", cell: (p) => p.by || <AdmDim>–</AdmDim> },
       { h: "Value", num: true, cell: (p) => money(p.total, p.currency) },
       { h: "Built", cell: (p) => when(p.at) },
       { h: "State", cell: (p) => <AdmChip tone={toneFor(p.state)}>{p.state}</AdmChip> },

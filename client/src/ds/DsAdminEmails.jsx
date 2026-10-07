@@ -253,19 +253,46 @@ export default function DsAdminEmails() {
         <div className="adm-merge" style={{ display: "block" }}>
           <b>
             {ways.ok
-              ? "There is a way out that has been checked."
+              ? ways.transport
+                ? `Mail leaves here on ${ways.transport.toUpperCase()}, and it has been checked.`
+                : "There is a way out that has been checked."
               : ways.reachable
                 ? "Nothing could be confirmed — see below."
                 : "Nothing can send."}
           </b>
+          {ways.transport && ways.fallbackOff ? (
+            <div style={{ marginTop: 6, fontSize: 12 }}>
+              <AdmDim>
+              Nothing falls back. Anything below marked <b>not in use</b> cannot
+              carry a message even when it authenticates, so a green mark on one
+              of those is not a safety net — it is a credential still lying
+              around.
+              </AdmDim>
+            </div>
+          ) : null}
           <table className="adm-table" style={{ marginTop: 10 }}>
             <tbody>
               {(ways.ways || []).map((w) => (
-                <tr key={w.via}>
-                  <td style={{ width: "30%" }}>{w.via}</td>
+                <tr key={w.via} style={w.unused ? { opacity: 0.55 } : undefined}>
+                  <td style={{ width: "30%" }}>
+                    {w.via}
+                    {w.live ? (
+                      <span style={{ marginLeft: 8 }}>
+                        <AdmChip tone="ok">live</AdmChip>
+                      </span>
+                    ) : null}
+                  </td>
                   <td style={{ width: "14%" }}>
-                    <AdmChip tone={w.unknown ? "calm" : w.ok ? "ok" : "bad"}>
-                      {w.unknown ? "unproven" : w.ok ? "works" : "refused"}
+                    <AdmChip
+                      tone={w.unused ? "calm" : w.unknown ? "calm" : w.ok ? "ok" : "bad"}
+                    >
+                      {w.unused
+                        ? "not in use"
+                        : w.unknown
+                          ? "unproven"
+                          : w.ok
+                            ? "works"
+                            : "refused"}
                     </AdmChip>
                   </td>
                   <td>{w.said}</td>

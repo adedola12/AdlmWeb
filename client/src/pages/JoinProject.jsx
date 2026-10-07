@@ -104,7 +104,7 @@ export default function JoinProject() {
               <Link to={`/product/${upsell?.requiredProductKey}`} className="ds-btn ds-btn-sm btn-p">
                 Get {upsell?.productName}
               </Link>
-              <Link to="/dashboard" className="ds-btn ds-btn-sm btn-o">
+              <Link to="/manage" className="ds-btn ds-btn-sm btn-o">
                 Go to dashboard
               </Link>
             </div>
@@ -119,7 +119,7 @@ export default function JoinProject() {
             <h1 style={title}>Couldn&apos;t join</h1>
             <p style={note}>{err}</p>
             <div className="wk-acts" style={{ justifyContent: "center", marginTop: 22 }}>
-              <Link to="/dashboard" className="ds-btn ds-btn-sm btn-o">
+              <Link to="/manage" className="ds-btn ds-btn-sm btn-o">
                 Go to dashboard
               </Link>
             </div>

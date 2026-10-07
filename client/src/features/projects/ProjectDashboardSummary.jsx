@@ -13,6 +13,7 @@
 
 import React from "react";
 import ProjectDashboardChart from "./ProjectDashboardChart.jsx";
+import { projectTotals } from "./lib/projectTotals.js";
 
 function safeNum(value) {
   const num = Number(value);
@@ -81,12 +82,43 @@ export default function ProjectDashboardSummary({
   progressCount = 0,
   progressPercent = 0,
   progressTotal = 0,
-  remainingAmount = 0,
   statusLabel = "Completed",
   statusPastLabel = "Completed to date",
   valuedAmount = 0,
   linkedSummaries = [],
+  // S18 bill (PR2-08): the pieces of the estimated total. `grossAmount` here
+  // is the project's whole scope as the tiles below it use it; the headline
+  // tile needs the grand summary instead, which is what the Bill shows.
+  measuredAmount = null,
+  provisionalSums = [],
+  variations = [],
+  preliminaryPercent = 0,
+  contingencyPercent = 0,
+  taxPercent = 0,
 }) {
+  const totals = React.useMemo(
+    () =>
+      projectTotals({
+        measured: measuredAmount == null ? grossAmount : measuredAmount,
+        provisionalSums,
+        variations,
+        preliminaryPercent,
+        contingencyPercent,
+        taxPercent,
+        linkedSummaries,
+      }),
+    [
+      measuredAmount,
+      grossAmount,
+      provisionalSums,
+      variations,
+      preliminaryPercent,
+      contingencyPercent,
+      taxPercent,
+      linkedSummaries,
+    ],
+  );
+
   const linkedGrandTotal = React.useMemo(
     () =>
       (Array.isArray(linkedSummaries) ? linkedSummaries : []).reduce(
@@ -106,6 +138,20 @@ export default function ProjectDashboardSummary({
           ? "pal-on"
           : "";
 
+  // ── The three headline money tiles, from one result (S18 review) ────────
+  // A reader adds these up without being asked, so they have to add up. The
+  // headline read the shared cascade while "Outstanding" was still derived the
+  // old way — the whole scope less what had been earned, which left out the
+  // contingency and the VAT — so the row did not reconcile. Outstanding is now
+  // simply what is left of the estimated total after what has been earned.
+  //
+  // Linked services stay out of all three, as they do in the Bill's Summary:
+  // that project carries its own cascade and is valued on its own
+  // certificates, so it is reported beside them instead of folded in.
+  const estimatedTotal = totals.total;
+  const completedToDate = safeNum(valuedAmount);
+  const outstanding = estimatedTotal - completedToDate;
+
   const pct = Math.max(0, Math.min(100, safeNum(progressPercent)));
   const remainingCount = Math.max(0, safeNum(progressTotal) - safeNum(progressCount));
   const status = statusLabel.toLowerCase();
@@ -113,24 +159,33 @@ export default function ProjectDashboardSummary({
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <div className="dsh-stats" style={FIT_TILES}>
+        {/* One figure, one formula. This tile used to say "Full project
+          value (measured + PC + prelim + variations)" over a number that was
+          neither — it left out contingency and VAT, so it never agreed with
+          the Bill, the final account or the contract sum. It now reads the
+          shared totals module, which is what every other screen reads. */}
         <Tile
-          label="Planned total"
-          value={money(grossAmount + linkedGrandTotal)}
+          label="Estimated total"
+          value={money(estimatedTotal)}
           sub={
             linkedGrandTotal > 0
-              ? `Own works + linked services (₦${grossAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })} own + ₦${linkedGrandTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })} linked)`
-              : "Full project value (measured + PC + prelim + variations)"
+              ? `Measured work, sums, prelims, contingency, VAT and approved variations · plus ${money(linkedGrandTotal)} of linked services, valued on their own project`
+              : "Measured work, sums, prelims, contingency, VAT and approved variations"
           }
         />
         <Tile
           label={statusPastLabel}
-          value={money(valuedAmount)}
+          value={money(completedToDate)}
           sub={`${statusLabel} items + executed PC sums, prelims & variations`}
         />
         <Tile
           label="Outstanding balance"
-          value={money(remainingAmount + linkedGrandTotal)}
-          sub="Project value still to earn or claim"
+          value={money(outstanding)}
+          sub={
+            linkedGrandTotal > 0
+              ? `The estimated total less what has been earned · ${money(linkedGrandTotal)} of linked services is claimed on its own project`
+              : "The estimated total less what has been earned"
+          }
         />
         <Tile
           label="Progress"

@@ -15,6 +15,23 @@ Disallow: /admin/
 # Signed-in areas: personal, and useless to anyone arriving from a search
 Disallow: /dashboard
 Disallow: /profile
+# The redesigned app surfaces. /manage is what /dashboard became, /work is the
+# project surface, the dash-* routes are the learning screens, and /rategen is
+# the customer rate library. All four sit behind ProtectedRoute and can only
+# redirect a crawler back to /login.
+#
+# A prefix here matches from the start of the path, so none of these touch the
+# marketing pages: /product/rategen and /how-it-works are unaffected.
+Disallow: /manage
+Disallow: /work
+Disallow: /rategen
+Disallow: /dash-learning
+Disallow: /dash-certificates
+Disallow: /dash-assignments
+Disallow: /dash-course
+# The product finder. Staff-gated while it is being proven, so a crawler can
+# only ever see the gate.
+Disallow: /fit
 # Both sit behind ProtectedRoute. They were in the sitemap until now, which
 # invited crawlers to spend budget on pages that can only redirect them away.
 Disallow: /freebies
@@ -24,10 +41,15 @@ Disallow: /purchase
 Disallow: /checkout/
 Disallow: /receipt/
 Disallow: /invoice/
-Disallow: /portfolio-dashboard
+# /portfolio and /portfolio-dashboard both sit behind ProtectedRoute. The
+# prefix covers both.
+Disallow: /portfolio
 Disallow: /pm-tracker
 Disallow: /revit-projects
 Disallow: /projects/
+# The certificate check (R14): one lookup per certificate, useless from a
+# search, and his page is noindex.
+Disallow: /certificate
 Disallow: /archicad
 Disallow: /model-check/
 
@@ -43,7 +65,9 @@ Disallow: /signup
 # Design-system preview: the redesign staged beside the live pages for review.
 # Duplicate content by definition — it is the same copy as the real page in new
 # markup — so it must never be indexed alongside the original.
-Disallow: /preview/
+# The trailing slash left the index at /preview itself crawlable, which is the
+# one page that links to all the rest.
+Disallow: /preview
 
 # Filtered views of the same grid. The canonical already points back at the
 # clean URL, but not spending crawl budget on them at all is cheaper.

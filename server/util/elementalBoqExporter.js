@@ -24,6 +24,12 @@ import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+// Imported, not read from disk: on Lambda the API is one esbuild bundle and a
+// path relative to this file points at /var/assets/boq, which does not exist.
+// An import travels inside the bundle. The paths below remain for messages
+// and for callers (tests) that pass their own mappingPath.
+import elementalMappingJson from "../assets/boq/elemental-mapping.json" with { type: "json" };
+import tradeMappingJson from "../assets/boq/trade-mapping.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,8 +105,12 @@ function round2(n) {
   return Math.round(safeNum(n) * 100) / 100;
 }
 
-function loadMapping(mappingPath) {
+export function loadMapping(mappingPath) {
   const p = String(mappingPath || DEFAULT_MAPPING_PATH);
+  // A fresh copy each time, as a file read gave, so one export can never
+  // change the mapping another export sees.
+  if (p === DEFAULT_MAPPING_PATH) return structuredClone(elementalMappingJson);
+  if (p === TRADE_MAPPING_PATH) return structuredClone(tradeMappingJson);
   if (!fs.existsSync(p)) {
     throw new Error(`Elemental BoQ mapping not found at ${p}`);
   }
@@ -200,7 +210,25 @@ function itemMatchesGroup(haystack, words) {
   return true;
 }
 
-function findMatchingItems(boqItem, projectItems, matchedSet) {
+// An item's "exclude" list vetoes a match when any of its words appears in the
+// haystack. Lookups match on substrings, so "slab"+"concrete" also catches
+// "Concrete in Pool Slab" and "Oversite Slab Concrete"; the veto keeps those
+// ground-bearing slabs out of the suspended-slab lines. Excludes match whole
+// words (with an optional plural "s"), so "bed" does not veto "embedded".
+function itemExcluded(haystack, excludeWords) {
+  if (!Array.isArray(excludeWords) || !excludeWords.length) return false;
+  for (const w of excludeWords) {
+    const needle = normalizeText(w);
+    if (!needle) continue;
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(^|[^a-z0-9])${escaped}s?($|[^a-z0-9])`).test(haystack)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function findMatchingItems(boqItem, projectItems, matchedSet) {
   const lookups = Array.isArray(boqItem?.lookups) ? boqItem.lookups : [];
   const combineMode = String(boqItem?.lookupCombine || "first");
   if (!lookups.length) return [];
@@ -215,6 +243,7 @@ function findMatchingItems(boqItem, projectItems, matchedSet) {
       const it = projectItems[i];
       const haystack = itemHaystack(it);
       if (!itemMatchesGroup(haystack, group)) continue;
+      if (itemExcluded(haystack, boqItem.exclude)) continue;
       groupHits.push({ idx: i, item: it });
     }
     if (groupHits.length) {
@@ -1712,7 +1741,7 @@ function writeSummarySheet(workbook, billRefs) {
 /* =========================
    Public API
    ========================= */
-// Material & Labour build-up sheet — one block per bill line with formula-
+// Resource build-up sheet — one block per bill line with formula-
 // linked Amount = Qty×Rate, Net = SUM(...), Overhead/Profit %, and a derived
 // Bill rate = Net×(1+(O/H+Profit)/100)/billQty. Grouped by billIdentity (=bill
 // code) so it lines up with the rest of the workbook.
@@ -1742,7 +1771,12 @@ function writeBudgetBreakdownSheet(workbook, items, budgetItems) {
     return s ? s[0].toUpperCase() + s.slice(1) : "Material";
   };
 
-  const ws = workbook.addWorksheet(safeSheetName("Material & Labour", workbook));
+  // "Resource Build-up", not "Material & Labour": the Net row below sums EVERY
+  // row in the block, whatever its kind, and the Type column already prints
+  // Plant, Equipment and Consumable when the Budget holds them. The sheet name
+  // has to say what the arithmetic does. It still matches the importer's
+  // SCHEDULE_SHEET_RE, so an exported workbook re-imports as a schedule sheet.
+  const ws = workbook.addWorksheet(safeSheetName("Resource Build-up", workbook));
   ws.columns = [
     { width: 48 },
     { width: 10 },
@@ -1792,7 +1826,9 @@ function writeBudgetBreakdownSheet(workbook, items, budgetItems) {
     const pr = blk.reduce((a, l) => Math.max(a, num(l.profitPercent)), 0);
     const ohRow = ws.addRow(["Overhead %", "", "", "", "", oh]);
     const prRow = ws.addRow(["Profit %", "", "", "", "", pr]);
-    const rateRow = ws.addRow(["Bill rate (Material + Labour + O&P)", "", "", "", "", null]);
+    // The formula divides the Net build-up — every kind of resource in the
+    // block, not just material and labour — by the bill quantity and adds O&P.
+    const rateRow = ws.addRow(["Bill rate (Net build-up + O&P)", "", "", "", "", null]);
     rateRow.getCell(6).value = {
       formula: `IF(D${headerNum}=0,F${netRow.number}*(1+(F${ohRow.number}+F${prRow.number})/100),F${netRow.number}*(1+(F${ohRow.number}+F${prRow.number})/100)/D${headerNum})`,
     };
@@ -2066,7 +2102,7 @@ export async function exportElementalBoQ({
 
   writeSummarySheet(workbook, billRefs);
 
-  // Material & Labour build-up (after the summary so it reads as an appendix).
+  // Resource build-up (after the summary so it reads as an appendix).
   writeBudgetBreakdownSheet(workbook, projectItems, budgetItems);
 
   const buf = await workbook.xlsx.writeBuffer();

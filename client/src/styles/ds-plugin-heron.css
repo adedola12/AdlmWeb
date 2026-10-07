@@ -1,0 +1,452 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/plugin-heron.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* HERON side one.
+
+   HERON runs after PlanSwift rather than beside it, so it is a full-screen
+   workspace, not a docked strip — the QS is switching windows anyway. Dock mode
+   is kept for the moments they want both on screen.
+
+   Everything below uses the ADLM tokens so the plugin, the web product and the
+   website are one piece of software (Richard, 17 Sep 2026). */
+:root, .ds{ height: 100%; }
+.ds{ margin: 0; overflow: hidden; background: var(--bg-alt); }
+.ds .hn{
+  display: grid; grid-template-columns: 236px minmax(0, 1fr);
+  height: 100vh; background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 14px;
+}
+.ds .hn.mode-dock{
+  position: fixed; right: 0; top: 0; bottom: 0; width: min(560px, 92vw);
+  border-left: 1px solid var(--line-2); box-shadow: -18px 0 46px rgba(var(--shadow-c), .22);
+}
+
+
+/* ------------------------------------------------------------------ rail */
+.ds .hn-rail{
+  display: flex; flex-direction: column; gap: 4px; padding: 16px 12px;
+  background: var(--bg-inset); border-right: 1px solid var(--line); min-height: 0;
+}
+.ds .hn-brand{ display: flex; align-items: center; gap: 10px; padding: 2px 6px 18px; }
+.ds .hn-brand img{ width: 30px; height: 30px; border-radius: 8px; }
+.ds .hn-brand b{ display: block; font-size: 15px; letter-spacing: .04em; }
+.ds .hn-brand span{ display: block; font-size: 11px; color: var(--ink-3); }
+.ds .hn-nav{ display: flex; flex-direction: column; gap: 2px; }
+.ds .hn-nav button{
+  position: relative; display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border: 0; border-radius: 10px; background: none;
+  color: var(--ink-2); font: 500 13.5px var(--font); text-align: left; cursor: pointer;
+}
+.ds .hn-nav button b{
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;
+  background: var(--bg); color: var(--ink-3); font-size: 11px; font-weight: 700;
+}
+.ds .hn-nav button:hover{ background: var(--bg); color: var(--ink); }
+.ds .hn-nav button.on{ background: var(--action); color: var(--action-ink); }
+.ds .hn-nav button.on b{ background: rgba(255, 255, 255, .22); color: #fff; }
+.ds .hn-badge{
+  margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 999px;
+  background: var(--accent); color: #fff; font: 700 11px var(--font); font-style: normal; text-align: center;
+}
+.ds .hn-nav button.on .hn-badge{ background: rgba(255, 255, 255, .26); }
+.ds .hn-rail-foot{ margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
+.ds .hn-rail-foot button{
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 0; border-radius: 10px;
+  background: none; color: var(--ink-3); font: 500 12.5px var(--font); text-align: left; cursor: pointer;
+}
+.ds .hn-rail-foot button:hover{ background: var(--bg); color: var(--ink); }
+.ds .hn-acct i{
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--action); color: #fff; font: 700 11px var(--font); font-style: normal;
+}
+.ds .hn-acct span{ display: block; line-height: 1.3; }
+.ds .hn-acct span b{ display: block; color: var(--ink); font-size: 12.5px; }
+
+
+/* ------------------------------------------------------------------- top */
+.ds .hn-main{ display: grid; grid-template-rows: 56px minmax(0, 1fr); min-width: 0; min-height: 0; }
+.ds .hn-top{
+  display: flex; align-items: center; gap: 12px; padding: 0 20px;
+  border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.ds .hn-job{ display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); min-width: 0; }
+.ds .hn-job b{ color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds .hn-sep{ color: var(--ink-3); }
+.ds .hn-live{ width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+.ds .hn-live.off{ background: var(--ink-3); }
+.ds .hn-topact{ margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+
+/* --------------------------------------------------------------- buttons */
+.ds .hn-b{
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border: 1px solid transparent; border-radius: var(--r-btn);
+  background: var(--action-grad); color: var(--action-ink);
+  font: 600 13px var(--font); text-decoration: none; cursor: pointer; white-space: nowrap;
+}
+.ds .hn-b:hover{ filter: brightness(1.05); }
+.ds .hn-b.ghost{ background: var(--bg); color: var(--ink); border-color: var(--line-2); }
+.ds .hn-b.ghost:hover{ background: var(--bg-alt); }
+.ds .hn-b.sm{ padding: 7px 12px; font-size: 12.5px; }
+.ds .hn-b.big{ padding: 12px 22px; font-size: 14.5px; }
+
+
+/* ---------------------------------------------------------------- bodies */
+.ds .hn-body{ overflow-y: auto; overflow-x: hidden; min-height: 0; background: var(--bg-alt); }
+.ds .hn-pad{ padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+.ds .hn-empty{ display: grid; place-content: center; gap: 10px; height: 100%; text-align: center; padding: 40px; }
+.ds .hn-empty h2{ margin: 0; font-size: 20px; }
+.ds .hn-empty p{ margin: 0; max-width: 46ch; color: var(--ink-2); line-height: 1.6; }
+.ds .hn-empty .hn-b{ justify-self: center; margin-top: 8px; }
+.ds .hn-hero{
+  max-width: 720px; margin: 6vh auto 0; padding: 34px; border-radius: var(--r-card);
+  background: var(--card-fill); border: 1px solid var(--line-2); text-align: center;
+}
+.ds .hn-hero h1{ margin: 0 0 12px; font-size: 26px; letter-spacing: -.01em; }
+.ds .hn-hero p{ margin: 0 auto 22px; max-width: 58ch; color: var(--ink-2); line-height: 1.65; }
+.ds .hn-meta{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 26px 0 0; text-align: left; }
+.ds .hn-meta div{ padding: 10px 14px; border-radius: 12px; background: var(--bg-alt); border: 1px solid var(--line); }
+.ds .hn-meta dt{ font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+.ds .hn-meta dd{ margin: 2px 0 0; font-size: 13px; font-weight: 500; }
+
+
+/* ------------------------------------------------------------------ kpis */
+.ds .hn-kpis{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.ds .hn-kpi{ padding: 16px 18px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); }
+.ds .hn-kpi span{ font-size: 12px; color: var(--ink-3); }
+.ds .hn-kpi b{ display: block; margin: 4px 0 2px; font-size: 26px; letter-spacing: -.02em; }
+.ds .hn-kpi em{ font-style: normal; font-size: 12px; color: var(--ink-2); }
+.ds .hn-kpi.warn{ border-color: var(--accent); }
+.ds .hn-kpi.warn b{ color: var(--accent); }
+.ds .hn-card{ padding: 20px; border-radius: 18px; background: var(--bg); border: 1px solid var(--line); }
+.ds .hn-card h2{ margin: 0 0 4px; font-size: 16px; }
+.ds .hn-card.attn{ border-color: var(--line-2); }
+.ds .hn-sub{ margin: 0 0 14px; color: var(--ink-2); font-size: 13px; line-height: 1.6; max-width: 86ch; }
+.ds .hn-two{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.ds .hn-chks{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.ds .hn-chk{
+  display: block; padding: 14px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--bg-alt); text-align: left; cursor: pointer; font-family: var(--font);
+}
+.ds .hn-chk:hover{ border-color: var(--action); }
+.ds .hn-chk b{ display: block; font-size: 22px; color: var(--accent); }
+.ds .hn-chk span{ display: block; margin: 2px 0 4px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.ds .hn-chk em{ font-style: normal; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+.ds .hn-rows{ display: flex; flex-direction: column; gap: 6px; }
+.ds .hn-row{
+  display: block; width: 100%; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg-alt); text-align: left;
+  cursor: pointer; font-family: var(--font);
+}
+.ds .hn-row:hover{ border-color: var(--action); }
+.ds .hn-row b{ display: block; font-size: 13.5px; }
+.ds .hn-row span{ font-size: 12.5px; color: var(--ink-2); }
+.ds .hn-none{ margin: 6px 0 0; color: var(--ink-3); font-size: 13px; line-height: 1.6; }
+.ds .hn-hint{ margin: 4px 0 8px; color: var(--ink-3); font-size: 12px; line-height: 1.55; }
+
+
+/* -------------------------------------------------------------- take-off */
+.ds .hn-tk{ display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100%; }
+.ds .hn-tk:has(.hn-det){ grid-template-columns: 232px minmax(0, 1fr) 380px; }
+.ds .hn-side{ padding: 16px 12px; border-right: 1px solid var(--line); background: var(--bg); }
+.ds .hn-side-h{ padding: 0 8px 10px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.ds .hn-side-h em{ display: block; font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--ink-3); }
+.ds .hn-f{
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px;
+  border: 0; border-radius: 10px; background: none; cursor: pointer;
+  font: 500 13px var(--font); color: var(--ink-2); text-align: left;
+}
+.ds .hn-f b{ font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds .hn-f i{ margin-left: auto; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+.ds .hn-f:hover{ background: var(--bg-alt); color: var(--ink); }
+.ds .hn-f.on{ background: var(--bg-inset); color: var(--ink); font-weight: 600; }
+.ds .hn-f.unfiled b{ color: var(--accent); }
+.ds .hn-note{ margin: 14px 8px 0; font-size: 11.5px; color: var(--ink-3); line-height: 1.6; }
+.ds .hn-mid{ padding: 16px 20px 40px; min-width: 0; }
+.ds .hn-bar{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.ds .hn-bar.plain{ margin: 12px 0; }
+.ds .hn-seg{ display: inline-flex; padding: 3px; border-radius: 10px; background: var(--bg-inset); }
+.ds .hn-seg button{
+  padding: 6px 12px; border: 0; border-radius: 8px; background: none;
+  font: 500 12.5px var(--font); color: var(--ink-2); cursor: pointer; text-transform: capitalize;
+}
+.ds .hn-seg button.on{ background: var(--bg); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(var(--shadow-c), .12); }
+.ds .hn-q{
+  flex: 1; min-width: 180px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); font: 13px var(--font);
+}
+.ds .hn-in{ padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); font: 13px var(--font); }
+.ds .hn-chiprow{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.ds .hn-chip{
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+  border: 1px solid var(--line-2); border-radius: 999px; background: var(--bg);
+  font: 500 12px var(--font); color: var(--ink-2); cursor: pointer;
+}
+.ds .hn-chip i{ font-style: normal; font-size: 11px; color: var(--ink-3); }
+.ds .hn-chip.w{ border-color: rgba(232, 106, 39, .4); }
+.ds .hn-chip.on{ background: var(--action); border-color: var(--action); color: #fff; }
+.ds .hn-chip.on i{ color: rgba(255, 255, 255, .8); }
+.ds .hn-derived{ margin: 0 0 12px; font-size: 12.5px; color: var(--ink-2); }
+.ds .hn-grp{ margin-bottom: 20px; }
+.ds .hn-grp h3{ display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+.ds .hn-grp h3 i{ font-style: normal; font-size: 11.5px; text-transform: none; letter-spacing: 0; }
+
+
+/* ---------------------------------------------------------------- tables */
+.ds .hn-t{ width: 100%; border-collapse: collapse; font-size: 13px; }
+.ds .hn-t th{
+  padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600;
+  letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--line-2);
+}
+.ds .hn-t td{ padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ds .hn-t td em{ display: block; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+.ds .hn-t .n, .ds .hn-t th.n, .ds .hn-t .r{ text-align: right; font-variant-numeric: tabular-nums; }
+.ds .hn-t .ref{ width: 48px; color: var(--ink-3); font-size: 12px; }
+.ds .hn-t .z{ color: var(--accent); }
+.ds .hn-t tfoot td{ border-top: 1px solid var(--line-2); border-bottom: 0; font-weight: 600; }
+.ds .hn-t.rows tbody tr{ cursor: pointer; }
+.ds .hn-t.rows tbody tr:hover{ background: var(--bg-inset); }
+.ds .hn-t.rows tbody tr.on{ background: var(--bg-inset); box-shadow: inset 3px 0 0 var(--action); }
+.ds .hn-t.sm{ font-size: 12.5px; }
+.ds .hn-t.sm td{ padding: 7px 8px; }
+.ds .hn-t .tot td{ font-weight: 600; border-top: 1px solid var(--line-2); }
+.ds .hn-t tr.dead td{ color: var(--ink-3); }
+.ds .hn-t tr.hd td{ background: var(--bg-inset); font-size: 12px; }
+.ds .hn-t tr.ds-sub td{ color: var(--ink-2); }
+.ds .hn-miss{ color: var(--accent); font-size: 11.5px; }
+.ds .hn-ok{ color: var(--ink-3); font-size: 11.5px; }
+.ds .hn-flag{
+  display: inline-block; margin: 0 4px 2px 0; padding: 2px 8px; border-radius: 999px;
+  background: rgba(232, 106, 39, .12); color: var(--accent); font-size: 11px; font-weight: 600;
+}
+.ds .hn-flag.unfiled{ background: rgba(35, 156, 255, .12); color: var(--action); }
+
+
+/* ---------------------------------------------------------------- detail */
+.ds .hn-det{ border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+.ds .hn-det-h{ display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.ds .hn-det-h b{ display: block; font-size: 14.5px; }
+.ds .hn-det-h span{ font-size: 12px; color: var(--ink-3); }
+.ds .hn-x{ margin-left: auto; width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--bg-alt); color: var(--ink-2); font-size: 18px; line-height: 1; cursor: pointer; }
+.ds .hn-det-b{ padding: 16px 18px 40px; overflow: auto; }
+.ds .hn-det-b h4{ display: flex; align-items: baseline; gap: 8px; margin: 22px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
+.ds .hn-det-b h4 i{ font-style: normal; text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+.ds .hn-figs{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ds .hn-figs div{ padding: 10px; border-radius: 10px; background: var(--bg-alt); }
+.ds .hn-figs span{ display: block; font-size: 11px; color: var(--ink-3); }
+.ds .hn-figs b{ font-size: 13px; }
+.ds .hn-warns{ display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.ds .hn-warn{ padding: 12px 14px; border-radius: 12px; background: rgba(232, 106, 39, .08); border: 1px solid rgba(232, 106, 39, .3); }
+.ds .hn-warn b{ font-size: 13px; color: var(--accent); }
+.ds .hn-warn p{ margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+.ds .hn-warn .hn-b{ margin-top: 8px; }
+.ds .hn-ta{
+  width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--bg); color: var(--ink); font: 13px/1.6 var(--font); resize: vertical;
+}
+
+
+/* ---------------------------------------------------------------- budget */
+.ds .hn-tot{ display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--ink-3); flex-wrap: wrap; }
+.ds .hn-tot b{ font-size: 14px; color: var(--ink); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.ds .hn-tot b.big{ font-size: 18px; }
+.ds .hn-cost{ margin-bottom: 14px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--bg); }
+.ds .hn-cost header{ display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--bg-alt); border-bottom: 1px solid var(--line); }
+.ds .hn-ltr{ display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--accent); color: #fff; font: 700 11px var(--font); }
+.ds .hn-cost header b{ font-size: 13.5px; }
+.ds .hn-cost header em{ font-style: normal; font-size: 12px; color: var(--ink-3); }
+.ds .hn-cost header strong{ margin-left: auto; font-size: 14px; font-variant-numeric: tabular-nums; }
+.ds .hn-t.bud tr.ds-sub td{ background: var(--bg-alt); font-weight: 600; color: var(--ink); }
+.ds .hn-t.bud tr.lab td{ color: var(--ink-2); font-style: italic; }
+.ds .hn-price{
+  width: 96px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--bg); color: var(--ink); font: 12.5px var(--font); text-align: right;
+}
+.ds .hn-lab{ display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+
+
+/* ----------------------------------------------------------------- modal */
+.ds .hn-modal{ position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: rgba(4, 16, 31, .55); }
+.ds .hn-sheet{
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(980px, 100%); max-height: 88vh; border-radius: 18px;
+  background: var(--bg); border: 1px solid var(--line-2); overflow: hidden;
+  box-shadow: 0 30px 80px rgba(4, 16, 31, .4);
+}
+.ds .hn-sheet header{ display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.ds .hn-sheet header b{ display: block; font-size: 15px; }
+.ds .hn-sheet header span{ font-size: 12.5px; color: var(--ink-3); }
+.ds .hn-warnbar{ margin: 0; padding: 10px 20px; background: rgba(232, 106, 39, .1); color: var(--accent); font-size: 12.5px; }
+.ds .hn-sheet-b{ overflow: auto; padding: 0 20px 12px; }
+.ds .hn-sheet footer{ display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--line); }
+.ds .hn-spacer{ flex: 1; }
+@media (max-width: 1100px){
+.ds .hn-kpis{ grid-template-columns: repeat(2, 1fr); }
+.ds .hn-two{ grid-template-columns: minmax(0, 1fr); }
+.ds .hn-tk, .ds .hn-tk:has(.hn-det){ grid-template-columns: minmax(0, 1fr); }
+.ds .hn-side{ border-right: 0; border-bottom: 1px solid var(--line); }
+.ds .hn-det{ border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 760px){
+.ds .hn{ grid-template-columns: 64px minmax(0, 1fr); }
+.ds .hn-brand div, .ds .hn-nav button span, .ds .hn-acct span{ display: none; }
+.ds .hn-nav button{ justify-content: center; }
+.ds .hn-meta{ grid-template-columns: 1fr; }
+}
+
+
+/* ------------------------------------------------- PlanSwift, behind HERON */
+
+/* Simulated so HERON can be tried in a browser. It is only ever a backdrop:
+   HERON opens over it full screen, and the QS sees it again when they dock. */
+.ds .hn-behind{
+  position: fixed; inset: 0; display: grid; grid-template-rows: 30px minmax(0, 1fr);
+  background: #e9ecef; color: #2c333b; font: 12px "Segoe UI", var(--font); z-index: 0;
+}
+.ds .hn-ps-title{ display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #1b6ca8; color: #fff; }
+.ds .hn-ps-logo{ display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: #fff; color: #1b6ca8; font-weight: 700; font-size: 11px; }
+.ds .hn-ps-body{ display: grid; grid-template-columns: 230px minmax(0, 1fr) 250px; min-height: 0; }
+.ds .hn-ps-panel{ padding: 8px 10px; background: #f4f6f8; border-right: 1px solid #cfd5dc; overflow: hidden; }
+.ds .hn-ps-panel.r{ border-right: 0; border-left: 1px solid #cfd5dc; }
+.ds .hn-ps-panel b{ display: block; padding-bottom: 6px; border-bottom: 1px solid #cfd5dc; margin-bottom: 6px; }
+.ds .hn-ps-panel ul{ list-style: none; margin: 0; padding: 0; line-height: 1.9; color: #4a535d; }
+.ds .hn-ps-panel li{ display: flex; gap: 8px; }
+.ds .hn-ps-panel li i{ margin-left: auto; font-style: normal; font-variant-numeric: tabular-nums; }
+.ds .hn-ps-panel li.f{ font-weight: 600; color: #2c333b; }
+.ds .hn-ps-panel li.t{ font-weight: 600; color: #1b6ca8; }
+.ds .hn-ps-panel li.in{ padding-left: 14px; }
+.ds .hn-ps-panel li.in2{ padding-left: 28px; }
+.ds .hn-ps-sheet{ display: grid; place-items: center; background: #fff; border: 1px solid #cfd5dc; margin: 10px; color: #8b95a1; }
+.ds .hn.mode-full{ position: relative; z-index: 1; }
+.ds .hn.mode-dock{ z-index: 1; }
+
+
+/* ------------------------------------------------------------ the gallery */
+
+/* HERON opens on the list of take-offs, the way ADLM Cloud does. A take-off
+   is a job you come back to, not a session. */
+.ds .hn-card.live{ border-color: var(--action); }
+.ds .hn-live-h{ display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; color: var(--ink-3); }
+.ds .hn-card.live h2{ font-size: 20px; margin-bottom: 6px; }
+.ds .hn-galh{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ds .hn-galh h2{ display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 16px; }
+.ds .hn-galh h2 i{ font-style: normal; font-size: 12px; color: var(--ink-3); }
+.ds .hn-galh-a{ margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.ds .hn-gal{ display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.ds .hn-pc{
+  padding: 16px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line);
+  cursor: pointer; transition: border-color 140ms, transform 140ms;
+}
+.ds .hn-pc:hover, .ds .hn-pc:focus-visible{ border-color: var(--action); transform: translateY(-1px); }
+.ds .hn-pc header{ display: flex; align-items: flex-start; gap: 8px; }
+.ds .hn-pc header b{ font-size: 15px; line-height: 1.3; }
+.ds .hn-more{
+  margin-left: auto; width: 26px; height: 26px; flex: none; border: 0; border-radius: 7px;
+  background: none; color: var(--ink-3); font-size: 15px; line-height: 1; cursor: pointer;
+}
+.ds .hn-more:hover{ background: var(--bg-inset); color: var(--ink); }
+.ds .hn-pc-j{ margin: 4px 0 14px; font-size: 12px; color: var(--ink-3); }
+.ds .hn-pc-j code, .ds .hn-t code{
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11.5px; color: var(--ink-2);
+}
+.ds .hn-pc-f{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 14px; }
+.ds .hn-pc-f dt{ font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
+.ds .hn-pc-f dd{ margin: 2px 0 0; font-size: 15px; font-weight: 600; }
+.ds .hn-pc-f dd.bad{ color: var(--accent); }
+.ds .hn-pc footer{ padding-top: 12px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-3); }
+
+
+/* project name and rename in the top bar */
+.ds .hn-back{
+  width: 30px; height: 30px; flex: none; border: 1px solid var(--line-2); border-radius: 9px;
+  background: var(--bg); color: var(--ink-2); font-size: 15px; line-height: 1; cursor: pointer;
+}
+.ds .hn-back:hover{ background: var(--bg-alt); color: var(--ink); }
+.ds .hn-ren{
+  padding: 3px 8px; border: 0; border-radius: 7px; background: var(--bg-inset);
+  color: var(--ink-3); font: 500 11px var(--font); cursor: pointer;
+}
+.ds .hn-ren:hover{ color: var(--ink); }
+.ds .hn-navh{
+  margin: 16px 0 4px; padding: 0 10px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+
+/* rail icons */
+.ds .hn-nav button svg{
+  width: 17px; height: 17px; flex: none; fill: none;
+  stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+
+
+/* ================================================================== docked */
+
+/* Docked, HERON is a panel beside PlanSwift, so the rail is icons only, the
+   folder list becomes a select, and the item drawer covers the list instead
+   of taking a third column. Nothing is squeezed — things are put away. */
+.ds .hn.mode-dock{ grid-template-columns: 56px minmax(0, 1fr); }
+.ds .hn.mode-dock .hn-brand{ padding: 2px 0 14px; justify-content: center; }
+.ds .hn.mode-dock .hn-brand div{ display: none; }
+.ds .hn.mode-dock .hn-nav button{ justify-content: center; padding: 10px 0; }
+.ds .hn.mode-dock .hn-nav button span{ display: none; }
+.ds .hn.mode-dock .hn-navh{ font-size: 0; margin: 10px 0; padding: 0; border-top: 1px solid var(--line); }
+.ds .hn.mode-dock .hn-badge{ position: absolute; top: 3px; right: 6px; margin: 0; padding: 0 4px; min-width: 15px; font-size: 10px; }
+.ds .hn.mode-dock .hn-rail-foot button span{ display: none; }
+.ds .hn.mode-dock .hn-rail-foot button{ justify-content: center; padding: 8px 0; }
+.ds .hn.mode-dock .hn-acct span{ display: none; }
+.ds .hn.mode-dock .hn-acct{ justify-content: center; }
+.ds .hn.mode-dock .hn-rail-foot [data-feedback], .ds .hn.mode-dock .hn-rail-foot [data-signout]{ display: none; }
+.ds .hn.mode-dock .hn-tk, .ds .hn.mode-dock .hn-tk:has(.hn-det){ grid-template-columns: minmax(0, 1fr); }
+.ds .hn.mode-dock .hn-side{ display: none; }
+.ds .hn.mode-dock .hn-mid{ padding: 12px 14px 32px; }
+.ds .hn.mode-dock .hn-pad{ padding: 14px; }
+.ds .hn.mode-dock .hn-det{
+  position: absolute; inset: 0; z-index: 12; border-left: 0;
+  box-shadow: 0 0 40px rgba(var(--shadow-c), .3);
+}
+.ds .hn.mode-dock .hn-body{ position: relative; }
+.ds .hn.mode-dock .hn-kpis{ grid-template-columns: repeat(2, 1fr); }
+.ds .hn.mode-dock .hn-two, .ds .hn.mode-dock .hn-gal{ grid-template-columns: minmax(0, 1fr); }
+.ds .hn.mode-dock .hn-top{ padding: 0 12px; gap: 8px; }
+.ds .hn.mode-dock .hn-job b{ max-width: 150px; }
+.ds .hn.mode-dock .hn-topact .hn-b{ padding: 7px 10px; font-size: 12px; }
+
+
+/* ------------------------------------------------- a form inside a card */
+
+/* Renaming and anything else that asks one short question uses the feedback
+   card rather than a screen of its own. */
+.ds .fb-f{ display: block; margin: 12px 0 0; text-align: left; }
+.ds .fb-f span{ display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.ds .fb-f input{
+  width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--bg); color: var(--ink); font: 13.5px var(--font); box-sizing: border-box;
+}
+.ds .fb-f input:focus{ outline: 2px solid var(--action); outline-offset: 1px; border-color: transparent; }
+
+
+/* Docked, the panel is 560px wide, so the table drops the two columns that
+   are a convenience rather than a fact and the rest stays legible. */
+.ds .hn.mode-dock .hn-t.rows th:nth-child(3), .ds .hn.mode-dock .hn-t.rows td:nth-child(3), .ds .hn.mode-dock .hn-t.rows th:nth-child(6), .ds .hn.mode-dock .hn-t.rows td:nth-child(6){ display: none; }
+.ds .hn.mode-dock .hn-grp, .ds .hn.mode-dock .hn-sheet-b{ overflow-x: auto; }
+.ds .hn.mode-dock .hn-job .hn-sep, .ds .hn.mode-dock .hn-job > span:not(.hn-live){ display: none; }
+.ds .hn.mode-dock .hn-bar{ gap: 8px; }
+.ds .hn.mode-dock .hn-seg button{ padding: 6px 9px; font-size: 12px; }
+.ds .hn.mode-dock .hn-cost header{ flex-wrap: wrap; }
+.ds .hn.mode-dock .hn-figs{ grid-template-columns: repeat(2, 1fr); }
+
+
+/* While the splash is up HERON is not a workspace yet, so the shell is out of
+   the way and PlanSwift shows through behind it. */
+.ds .hn.boot{ display: block; background: none; }

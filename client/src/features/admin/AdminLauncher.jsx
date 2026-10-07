@@ -18,7 +18,11 @@ const TOOLS = [
   { area: "ptrainings", to: "/admin/ptrainings", label: "Physical Trainings", desc: "In-person events & enrolment", icon: FiMapPin },
   { area: "learn", to: "/admin/learn", label: "Learn", desc: "Video courses & library", icon: FiPlayCircle },
   { area: "learn", to: "/admin/youtube", label: "YouTube Status", desc: "Channel vs library, held videos, availability", icon: FiPlayCircle },
-  { area: "orgvideos", to: "/admin/organizations", label: "Organisation Videos", desc: "Demos & recaps recorded for one firm", icon: FiPlayCircle },
+  // The Organisations REGISTER. This carried the Organisation Videos label,
+  // description and icon — a copy of the real entry further down — so somebody
+  // granted only `orgvideos` saw two identical "Organisation Videos" tiles and
+  // the first took them to a screen gated on `adminhub`, which refused them.
+  { area: "adminhub", to: "/admin/organizations", label: "Organisations", desc: "Firms, their seats and their licences", icon: FiUsers },
   { area: "courses", to: "/admin/courses", label: "Courses", desc: "Paid online courses", icon: FiBookOpen },
   { area: "grading", to: "/admin/course-grading", label: "Grading", desc: "Grade course submissions", icon: FiCheckSquare },
   { area: "courses", to: "/admin/course-cockpit", label: "Course Cockpit", desc: "Watch time, assignments & who has stalled", icon: FiActivity },
@@ -39,6 +43,8 @@ const TOOLS = [
   { area: "followups", to: "/admin/follow-ups", label: "Follow-Up Calls", desc: "Expired subscriptions & unpaid orders to chase", icon: IconPhone },
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },
   { area: "aiusage", to: "/admin/ai-usage", label: "AI Usage", desc: "AI spend, quotas & AWS credit", icon: FiCpu },
+  { area: "releases", to: "/admin/releases", label: "Release sign-off", desc: "Approve updates before customers get them", icon: FiShield },
+  { area: "releases", to: "/admin/work", label: "Work board", desc: "What is being built, and approval before a new feature starts", icon: FiShield },
 ];
 
 export default function AdminLauncher({ title = "Admin tools", compact = false }) {

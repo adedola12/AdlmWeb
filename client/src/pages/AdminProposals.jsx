@@ -705,7 +705,7 @@ export default function AdminProposals() {
                 <tr key={p._id} className="border-b hover:bg-slate-50">
                   <td className="py-2 pr-3 font-medium">{p.proposalNumber}</td>
                   <td className="py-2 pr-3">
-                    {p.clientFirm || p.clientContact || p.clientEmail || "—"}
+                    {p.clientFirm || p.clientContact || p.clientEmail || "–"}
                   </td>
                   <td className="py-2 pr-3 text-slate-500">
                     {dayjs(p.proposalDate).format("MMM D, YYYY")}

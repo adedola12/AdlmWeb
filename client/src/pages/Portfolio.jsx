@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { foldMaterials, isMaterialsKey, materialsBase } from "../lib/projectLinks.js";
 import { IconArrowRight, IconLink } from "../components/icons.jsx";
@@ -74,7 +73,6 @@ function ProjectCard({ project, onClick }) {
 }
 
 export default function Portfolio() {
-  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [projects, setProjects] = useState([]);
@@ -115,7 +113,7 @@ export default function Portfolio() {
     <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <div className="wk-head" style={{ marginBottom: 0 }}>
         <div>
-          <Link to="/dashboard" className="wk-back">
+          <Link to="/manage" className="wk-back">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <use href="#hi-right" />
             </svg>

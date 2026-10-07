@@ -28,6 +28,7 @@
 import mongoose from "mongoose";
 import dayjs from "dayjs";
 import { SESv2Client, GetAccountCommand } from "@aws-sdk/client-sesv2";
+import { OrganizationsClient, DescribeOrganizationCommand } from "@aws-sdk/client-organizations";
 import { FollowUp } from "../models/FollowUp.js";
 import { SupportTicket } from "../models/SupportTicket.js";
 import { UsageSession } from "../models/UsageSession.js";
@@ -36,6 +37,7 @@ import { ClientNetError } from "../models/ClientNetError.js";
 import { rebuildFollowUps } from "./followUps.js";
 import { sendViaSes } from "./sesTransport.js";
 import { wrapEmail } from "./emailLayout.js";
+import { senderFor, replyToAddress } from "./senders.js";
 
 const SITE = process.env.PUBLIC_SITE_URL || "https://www.adlmstudio.net";
 const DEFAULT_TO = "dolapo836@gmail.com";
@@ -113,6 +115,32 @@ async function sesState() {
     };
   } catch (e) {
     return { error: String(e?.name || e?.message || "unavailable") };
+  }
+}
+
+// Is ADLM's account still a MEMBER of the AWS Organization that pays its bills?
+// ADLM's account (065634457992) never pays directly — usage rolls up to a
+// management account (Spendbase's, payer 479561608683) which covers it with the
+// Activate credit. There is NO card on file. So the one billing event worth
+// watching for is the account leaving that org (or the payer changing): after
+// that, usage accrues here with nothing to pay it. This is the only coverage
+// signal a member account can read about itself, so the morning report reads it.
+const EXPECTED_ORG = process.env.EXPECTED_AWS_ORG_ID || "o-41ibjkwxfx";
+const EXPECTED_PAYER = process.env.EXPECTED_AWS_PAYER || "479561608683";
+
+async function coverageState() {
+  try {
+    const region = process.env.AWS_REGION || "eu-west-1";
+    const o = await new OrganizationsClient({ region }).send(new DescribeOrganizationCommand({}));
+    const orgId = String(o.Organization?.Id || "");
+    const payer = String(o.Organization?.MasterAccountId || "");
+    return { orgId, payer, inExpectedOrg: orgId === EXPECTED_ORG && payer === EXPECTED_PAYER };
+  } catch (e) {
+    // AWSOrganizationsNotInUseException means the account is STANDALONE — it left
+    // the org (or never was in one), which is exactly the "we now pay our own
+    // bills" event to shout about. Anything else is just "could not read".
+    const name = String(e?.name || "");
+    return { error: name || String(e?.message || "unavailable"), standalone: name === "AWSOrganizationsNotInUseException" };
   }
 }
 
@@ -213,6 +241,7 @@ export async function gatherDigest({ now = new Date() } = {}) {
 
   // 5) can SES reach customers?
   const ses = await sesState();
+  const coverage = await coverageState();
 
   return {
     at: now,
@@ -226,6 +255,7 @@ export async function gatherDigest({ now = new Date() } = {}) {
       last: r.last,
     })),
     ses,
+    coverage,
   };
 }
 
@@ -266,6 +296,8 @@ export function buildDigest(data) {
   const netFails = data.netFails || [];
   const ses = data.ses || {};
   const sesBlocked = ses.production === false;
+  const coverage = data.coverage || {};
+  const coverageLost = coverage.standalone === true || (!coverage.error && coverage.inExpectedOrg === false);
 
   const parts = [
     `${silent.length} quiet customer${silent.length === 1 ? "" : "s"}${fresh.length ? ` (${fresh.length} new)` : ""}`,
@@ -274,11 +306,28 @@ export function buildDigest(data) {
   if (waiting.length) parts.push(`${waiting.length} ticket${waiting.length === 1 ? "" : "s"} waiting`);
   if (netFails.length) parts.push(`${netFails.length} blocked browser${netFails.length === 1 ? "" : "s"}`);
   if (sesBlocked) parts.push("SES sandbox");
+  if (coverageLost) parts.unshift("BILLING COVERAGE CHANGED");
   const subject = `ADLM daily watch: ${parts.join(", ")}`;
 
   let body = p(
     `Good morning. This is what needs a person today, as of ${esc(dayjs(data.at).format("ddd D MMM YYYY, HH:mm"))} UTC.`,
   );
+
+  // Billing coverage. Silent when normal (member of the expected org, payer
+  // unchanged) — no news is good news — and loud the day it is not, because
+  // there is no card on file to absorb a sudden switch to paying our own bills.
+  if (coverageLost) {
+    body += h2("&#9888; Billing coverage");
+    body += p(
+      "<b>This account may no longer be covered by the paying organisation.</b> " +
+        (coverage.standalone
+          ? "AWS now reports it as STANDALONE — it has left the organisation, so usage bills to this account directly, and there is no card on file."
+          : `It reports org ${esc(coverage.orgId || "?")} / payer ${esc(coverage.payer || "?")}, not the expected ${esc(EXPECTED_ORG)} / ${esc(EXPECTED_PAYER)}.`) +
+        " Contact Spendbase (Bogdan, case 178955429200188) and, if this is real, move onto the Microsoft/Google credits before charges accrue.",
+    );
+  } else if (coverage.error) {
+    body += muted(`Billing coverage: could not read organisation membership (${esc(coverage.error)}).`);
+  }
 
   // 1
   body += h2(`Customers whose software has gone quiet (${silent.length})`);
@@ -420,7 +469,8 @@ export async function runOpsDigest({ now = new Date(), dryRun = false } = {}) {
     for (const addr of to) {
       try {
         await sendViaSes({
-          from: process.env.EMAIL_FROM || "ADLM Studio <admin@adlmstudio.net>",
+          from: senderFor(),
+          replyTo: replyToAddress(),
           to: [addr],
           subject: mail.subject,
           html: mail.html,

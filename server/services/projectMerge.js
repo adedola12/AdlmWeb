@@ -37,6 +37,24 @@ import { TakeoffProject } from "../models/TakeoffProject.js";
 // or in the plugin-generated codes, so it round-trips unambiguously.
 const NS = "::";
 
+// The arrays a CONTAINER owns in its own right, and which resolveMergedProject
+// therefore reads back off the container tagged with the container's own id.
+//
+// A variation is a contract instrument, not a measurement taken off a model:
+// it is raised against the merged contract, and the container is the document
+// that holds that contract, its certificates and its final account. The
+// post-lock flow already files scope there (see applyMergedLineWrite), and the
+// resolved read lists those rows first — so a write has to be able to route
+// them home again, or a merged project with contract-level scope can never be
+// saved at all.
+//
+// Nothing else is on this list, deliberately. The container's items, budget,
+// material lines and provisional sums are never read back from the container —
+// resolveMergedProject replaces all four with the sources' — so routing a row
+// there would store it where no read would ever find it again. Those stay
+// unroutable, which is the honest answer.
+export const CONTAINER_OWNED_FIELDS = Object.freeze(["variations"]);
+
 export function isMergeContainer(project) {
   return !!project?.mergeContainer;
 }
@@ -74,16 +92,42 @@ function discOf(link, project) {
 }
 
 /**
+ * The identity a container's sources resolve under: the container's OWNER,
+ * never whoever is asking.
+ *
+ * This used to be a parameter, and that was the whole bug. The read path passed
+ * `project.userId` and served a collaborator the full combined bill; the write
+ * path passed the requester's id, found nothing, and answered 404 "a discipline
+ * project behind this merge could not be loaded". A project a collaborator
+ * could plainly read and edit could never be saved.
+ *
+ * Resolving under the owner is the correct authority, not a relaxation of one.
+ * Reachability is already fenced twice over: a source is only reachable through
+ * the container's own `linkType: "merge"` links, and only the owner can create
+ * those (createMergedProject is owner-only over their own projects). What the
+ * requester may DO is decided on the CONTAINER — accessFilter() to load it,
+ * then resolveProjectAccess()'s canEdit / canSeeRates — which is the one
+ * document the sharing was granted on. Asking the sources again would ask the
+ * wrong document.
+ *
+ * Intrinsic rather than passed so the two halves cannot drift apart again.
+ */
+export function containerOwnerId(container) {
+  return container?.userId ?? null;
+}
+
+/**
  * Load the source projects behind a container, in the order they were linked.
- * Owner-scoped: only the caller's own projects resolve, so a collaborator on
- * the container can never pull in a project they were not given access to.
+ * Always scoped to the container's owner — see containerOwnerId().
  *
  * @returns {Promise<Array<{ link, project, discipline }>>} missing sources are
  *          dropped (reported separately by resolveMergedProject).
  */
-export async function loadMergeSources(container, userId) {
+export async function loadMergeSources(container) {
   const links = mergeLinks(container);
   if (!links.length) return [];
+  const userId = containerOwnerId(container);
+  if (!userId) return [];
   const ids = links.map((l) => l.projectId);
   const rows = await TakeoffProject.find({ _id: { $in: ids }, userId }).lean();
   const byId = new Map(rows.map((p) => [String(p._id), p]));
@@ -125,8 +169,8 @@ function tagLines(lines, { sourceId, sourceName, discipline, productKey }, codeF
  * project is the commercial entity, so one contract sum and one certificate
  * series govern all disciplines.
  */
-export async function resolveMergedProject(container, userId) {
-  const sources = await loadMergeSources(container, userId);
+export async function resolveMergedProject(container) {
+  const sources = await loadMergeSources(container);
   const linked = mergeLinks(container);
 
   const items = [];
@@ -203,9 +247,9 @@ export async function resolveMergedProject(container, userId) {
       // wording the UI uses for the parts list.
       partType: plain.mergePartType === "building" ? "building" : "discipline",
       parts,
-      // A source the caller can't load (deleted, or owned by someone else).
-      // Reported rather than silently dropped so the QS knows the combined
-      // total is short.
+      // A linked source that no longer resolves — deleted, or moved out of the
+      // owner's namespace. Reported rather than silently dropped so the QS
+      // knows the combined total is short.
       missing,
       disciplines: [...new Set(parts.map((p) => p.discipline))],
     },
@@ -249,15 +293,20 @@ function ownerOf(line, codeField) {
  * every edit silently. Each line is routed home by the source tag it was given
  * on read, and de-namespaced back to the code its own document stores.
  *
- * Lines whose owner is unknown or is not one of this container's sources are
- * returned as `unroutable` rather than being dropped or guessed at — a QS
- * editing a merged bill must never have an edit vanish.
+ * A row the CONTAINER owns routes to the container instead — see
+ * CONTAINER_OWNED_FIELDS. Lines whose owner is unknown, or is neither the
+ * container nor one of its sources, are returned as `unroutable` rather than
+ * being dropped or guessed at — a QS editing a merged bill must never have an
+ * edit vanish.
  *
- * @returns {{ bySource: Map<string, object>, unroutable: Array, counts: object }}
+ * @returns {{ bySource: Map<string, object>, container: object,
+ *             unroutable: Array, counts: object }}
  */
 export function splitMergedWrite(container, body = {}) {
+  const containerId = String(container?._id || "");
   const allowed = new Set(mergeLinks(container).map((l) => String(l.projectId)));
   const bySource = new Map();
+  const containerBucket = {};
   const unroutable = [];
 
   const FIELDS = [
@@ -270,8 +319,19 @@ export function splitMergedWrite(container, body = {}) {
 
   for (const [field, codeField] of FIELDS) {
     if (!Array.isArray(body[field])) continue;
+    const containerOwns =
+      Boolean(containerId) && CONTAINER_OWNED_FIELDS.includes(field);
+    // Same reason as the per-source backfill at the end of this loop: a
+    // container array that had rows and now has none must still be written,
+    // or deleting the container's last variation would read as "field
+    // untouched" and the row would come straight back on the next read.
+    if (containerOwns) containerBucket[field] = [];
     for (const line of body[field]) {
       const owner = ownerOf(line, codeField);
+      if (containerOwns && owner === containerId) {
+        containerBucket[field].push(denamespace(line, codeField));
+        continue;
+      }
       if (!owner || !allowed.has(owner)) {
         unroutable.push({ field, line });
         continue;
@@ -297,7 +357,7 @@ export function splitMergedWrite(container, body = {}) {
       Object.entries(bucket).map(([k, v]) => [k, v.length]),
     );
   }
-  return { bySource, unroutable, counts };
+  return { bySource, container: containerBucket, unroutable, counts };
 }
 
 /**
@@ -305,13 +365,19 @@ export function splitMergedWrite(container, body = {}) {
  * Every write against a merged project must go through this — the container
  * holds no items, so writing to it would silently discard the edit.
  *
+ * Owner-scoped like the read, and fenced to this container's own merge links —
+ * see containerOwnerId(). The caller has already established on the CONTAINER
+ * that this requester may edit it.
+ *
  * @returns {Promise<{ project, identity } | null>}
  */
-export async function resolveSourceForIdentity(container, userId, namespaced) {
+export async function resolveSourceForIdentity(container, namespaced) {
   const split = splitIdentity(namespaced);
   if (!split) return null;
   const allowed = new Set(mergeLinks(container).map((l) => String(l.projectId)));
   if (!allowed.has(split.sourceProjectId)) return null;
+  const userId = containerOwnerId(container);
+  if (!userId) return null;
   const project = await TakeoffProject.findOne({
     _id: split.sourceProjectId,
     userId,

@@ -1,5 +1,8 @@
 import React from "react";
-import { FaCheck, FaCopy, FaTrash } from "../../components/icons.jsx";
+import { useSearchParams } from "react-router-dom";
+import { rememberPlace } from "../../lib/lastPlace.js";
+import { useDismiss as useSharedDismiss } from "../../ds/dismiss.js";
+import { FaCheck, FaCopy, FaEye, FaTrash } from "../../components/icons.jsx";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
@@ -9,6 +12,7 @@ import ServicesPricingPanel from "./ServicesPricingPanel.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
+import { projectTotals } from "./lib/projectTotals.js";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
 const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
@@ -17,24 +21,11 @@ const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
 const WorkAreaView = React.lazy(() => import("./WorkAreaView.jsx"));
 
-// Close a popover on an outside press or Escape — the same behaviour as his
-// .wk-dd control (see ds/WkDropdown.jsx).
+// Close a popover on an outside press, Escape, or another dropdown opening:
+// the shared rule in ds/dismiss.js (R05), kept under this file's argument
+// order.
 function useDismiss(ref, open, onClose) {
-  React.useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e) => {
-      if (!ref.current?.contains(e.target)) onClose();
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [ref, open, onClose]);
+  useSharedDismiss(open, onClose, [ref]);
 }
 
 // A popover anchored to the right edge of its trigger, in his .wk-dd-m.
@@ -401,6 +392,9 @@ export default function ProjectOpenView({
     canManage: true,
     canSeeRates: true,
   },
+  // Sample project descriptor (project.sample) when this is read-only learning
+  // material; null for real projects.
+  sampleInfo = null,
   linkedGroupsCount = 0,
   // Cross-project links (MEP services → this general bill). Feature P1.
   linkedSummaries = [],
@@ -437,6 +431,9 @@ export default function ProjectOpenView({
   onSearchBudgetRates,
   budgetRateGenReady = false,
   budgetDrivenCodes,
+  // Lines whose applied rate and Budget build-up do not agree — see
+  // rateReconcile.js. Null/empty on a project nobody has re-priced.
+  rateNotes,
   onAddCategory,
   onRemoveCategory,
   onAddTrade,
@@ -452,6 +449,19 @@ export default function ProjectOpenView({
   onLockContract,
   onUnlockContract,
   onPreliminaryPercentChange,
+  // S18 bill: the contingency and VAT percentages reached this component from
+  // ProjectsGeneric but were never forwarded, so the Bill fell back to its own
+  // defaults and its two inputs were read-only. They now reach the Summary.
+  contingencyPercent,
+  taxPercent,
+  onContingencyPercentChange,
+  onTaxPercentChange,
+  // S18 bill: the measured work on its own. `grossAmount` here is the whole
+  // project scope (the Overview needs it that way), which is not the base the
+  // grand summary is built on.
+  measuredAmount = null,
+  onMarkTendered,
+  onRestoreProvisionalSum,
   certificates = [],
   certBusy = false,
   onIssueCertificate,
@@ -474,6 +484,11 @@ export default function ProjectOpenView({
   onAddVariation,
   onUpdateVariation,
   onRemoveVariation,
+  // S18 valuations: raise a variation (pending) and decide a pending one.
+  // Distinct from onAddVariation above, which adds a blank row to the Bill's
+  // own editor and saves with the project.
+  onRaiseVariation,
+  onDecideVariation,
   preliminaryItems = [],
   onUpdatePreliminaryItem,
   onAddPreliminaryItem,
@@ -601,11 +616,105 @@ export default function ProjectOpenView({
   const canManage = access?.canManage !== false;
   const canSeeRates = access?.canSeeRates !== false;
   const accessRole = access?.role || "owner";
-  const isShared = accessRole !== "owner";
+  const isSample = accessRole === "sample" || !!sampleInfo;
+  const isShared = accessRole !== "owner" && !isSample;
 
+  // P0.4, his "continue where you left off": a link from the Work overview
+  // carries ?tab= (and &line= for the bill). They are used once, when that
+  // project opens, then cleared, so the next project still starts on its
+  // Dashboard as before.
+  const [params, setParams] = useSearchParams();
+  const [focusLine, setFocusLine] = React.useState("");
+  const [line, setLine] = React.useState(null);
   React.useEffect(() => {
-    setActiveTab("dashboard");
+    const want = params.get("tab") || "";
+    const valid = TAB_OPTIONS.some((t) => t.id === want);
+    setActiveTab(valid ? want : "dashboard");
+    setFocusLine(valid && want === "bill" ? params.get("line") || "" : "");
+    setLine(null);
+    if (params.has("tab") || params.has("line")) {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("tab");
+          next.delete("line");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+    // Only a newly opened project reads the URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // Remember where this is, for "Pick up where you left off" on Work.
+  React.useEffect(() => {
+    if (!selectedId || !productKey) return;
+    const tab = TAB_OPTIONS.find((t) => t.id === activeTab);
+    rememberPlace({
+      productKey,
+      key: String(selectedId),
+      name: projectName,
+      tab: activeTab,
+      tabLabel: tab?.label || "",
+      line: activeTab === "bill" && line ? line.key : "",
+      lineLabel: activeTab === "bill" && line ? line.label : "",
+    });
+  }, [selectedId, productKey, projectName, activeTab, line]);
+
+  // ── One project, one cascade (S18 review, findings A and C) ────────────
+  // This screen is handed two money figures and they are not the same thing:
+  //
+  //   grossAmount     the WHOLE project scope — measured work plus the sums
+  //                   plus preliminaries plus approved variations
+  //   measuredAmount  the measured work on its own
+  //
+  // Both the Bill's Summary and the contract panel build the grand summary
+  // themselves from a measured base, so handing either of them `grossAmount`
+  // counts the sums, the preliminaries and the variations a second time. The
+  // contract panel was handed exactly that, which is why every locked contract
+  // showed an over-run against its own contract sum and the final account
+  // disagreed with the Bill for the same project.
+  //
+  // The percentages are resolved once, here, with the same fallbacks the Bill
+  // uses (and the same ones the server's schema defaults to), so the Overview
+  // tile, the Bill's Summary and the final account cannot drift apart.
+  const measuredWork =
+    measuredAmount == null ? Number(grossAmount) || 0 : Number(measuredAmount) || 0;
+  const preliminaryPct = Number.isFinite(Number(contract?.preliminaryPercent))
+    ? Number(contract.preliminaryPercent)
+    : 7.5;
+  const contingencyPct = Number.isFinite(Number(contingencyPercent))
+    ? Number(contingencyPercent)
+    : 5;
+  const taxPct = Number.isFinite(Number(taxPercent)) ? Number(taxPercent) : 7.5;
+  const totals = React.useMemo(
+    () =>
+      projectTotals({
+        measured: measuredWork,
+        provisionalSums,
+        variations,
+        preliminaryPercent: preliminaryPct,
+        contingencyPercent: contingencyPct,
+        taxPercent: taxPct,
+        linkedSummaries,
+      }),
+    [
+      measuredWork,
+      provisionalSums,
+      variations,
+      preliminaryPct,
+      contingencyPct,
+      taxPct,
+      linkedSummaries,
+    ],
+  );
+
+  // The share of the preliminary pool earned by the completed preliminary items
+  // used to be recomputed here and added to actualSpent. ProjectsGeneric
+  // already folds it into the valuedAmount it passes down (as
+  // prelimDoneAmountForOverview), so doing it again double-counted it — see
+  // the actualSpent prop below. Removed rather than left unused.
 
   // Budget tab is available for every source (QUIV/Revit, Heron/PlanSwift,
   // MEP, CIVIQ). It shows whatever material/labour breakdown the plugin
@@ -665,6 +774,35 @@ export default function ProjectOpenView({
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
+      {isSample ? (
+        <div
+          className="mk-note"
+          style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px" }}>
+            <b style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <FaEye /> Sample project · Read-only learning material
+            </b>
+            {sampleInfo?.foundation ? <b>{sampleInfo.foundation}</b> : null}
+            {sampleInfo?.stage ? <span>{sampleInfo.stage}</span> : null}
+          </div>
+          {sampleInfo?.summary ? <p style={{ margin: "6px 0 0" }}>{sampleInfo.summary}</p> : null}
+          {Array.isArray(sampleInfo?.highlights) && sampleInfo.highlights.length ? (
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 600 }}>What to look at in this sample</summary>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                {sampleInfo.highlights.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <p style={{ margin: "6px 0 0" }}>
+            You can open every tab, filter, and export, but nothing can be changed. Sync
+            your own model from the plugin to start a project of your own.
+          </p>
+        </div>
+      ) : null}
       {isShared ? (
         <p className="mk-note" style={{ margin: 0 }}>
           <b>Shared project · {canEdit ? "Full access" : "View only"}</b>
@@ -932,11 +1070,16 @@ export default function ProjectOpenView({
             chartMode={dashboardChartMode}
             comparisonRows={comparisonRows}
             grossAmount={grossAmount}
+            measuredAmount={measuredWork}
+            provisionalSums={provisionalSums}
+            variations={variations}
+            preliminaryPercent={preliminaryPct}
+            contingencyPercent={contingencyPct}
+            taxPercent={taxPct}
             onChartModeChange={onDashboardChartModeChange}
             progressCount={progressCount}
             progressPercent={progressPercent}
             progressTotal={progressTotal}
-            remainingAmount={remainingAmount}
             statusLabel={statusLabel}
             statusPastLabel={statusPastLabel}
             valuedAmount={valuedAmount}
@@ -980,6 +1123,14 @@ export default function ProjectOpenView({
           canRateGen={budgetRateGenReady}
           contractLocked={Boolean(contract?.locked)}
           onRebuildSchedule={onRebuildSchedule}
+          canSeeRates={canSeeRates}
+          // S18: the buy schedule's lead time, saved on the project.
+          leadDays={valuationSettings?.procurementLeadDays}
+          onLeadDaysChange={
+            canEdit
+              ? (days) => onValuationSettingChange?.("procurementLeadDays", days)
+              : null
+          }
         />
       ) : null}
 
@@ -1082,6 +1233,73 @@ export default function ProjectOpenView({
             progressCount={progressCount}
             progressTotal={progressTotal}
           />
+
+          {/* S18 valuations: contract administration lives here now, as one
+              switch — Certificates, Variations, Final account (and our BIM
+              models view, which his design drops but we keep reachable). */}
+          <ProjectContractPanel
+          certificates={certificates}
+          certBusy={certBusy}
+          onIssueCertificate={onIssueCertificate}
+          onUpdateCertificate={onUpdateCertificate}
+          onDeleteCertificate={onDeleteCertificate}
+          onDownloadCertificate={onDownloadCertificate}
+          finalAccount={finalAccount}
+          onFinalizeAccount={onFinalizeAccount}
+          onReopenFinalAccount={onReopenFinalAccount}
+          onDownloadFinalAccount={onDownloadFinalAccount}
+          projectModels={projectModels}
+          modelUploadBusy={modelUploadBusy}
+          onUploadModel={onUploadModel}
+          onDeleteModel={onDeleteModel}
+          items={items}
+          productKey={productKey}
+          hideModels={isBoqImport}
+          contractLocked={Boolean(contract?.locked)}
+          contractSum={Number(contract?.contractSum) || 0}
+          // S18 review (finding A): the MEASURED WORK, not the whole project
+          // scope. The panel adds the sums, the preliminaries, the contingency
+          // and the VAT to whatever it is given here, so `grossAmount` — which
+          // already contains the sums, the preliminaries and the variations —
+          // produced a fabricated figure on every locked contract. These five
+          // now come off the same cascade the Bill's Summary shows.
+          measured={totals.measured}
+          provisional={totals.sums}
+          preliminary={totals.prelims}
+          // The panel labels this "Approved variations" and the final account
+          // settles on it, so it is the approved net — summing every row would
+          // settle a variation nobody has approved. A row with no status is
+          // approved, so no existing project's figure moves.
+          variations={totals.variations}
+          contingency={totals.contingency}
+          tax={totals.tax}
+          contingencyPercent={contingencyPct}
+          taxPercent={taxPct}
+          // Actual spent — measured-valued + executed PC + completed prelims +
+          // executed variations. Drives the over-run vs planned comparison so
+          // the final-account figure reflects real spend, not BoQ drift.
+          //
+          // That is exactly what `valuedAmount` already is. ProjectsGeneric
+          // passes fullValuedAmount, which it builds as
+          //
+          //   valuedAmount + provDoneAmount + prelimDoneAmountForOverview
+          //     + variationsDoneAmount
+          //
+          // so adding those three again counted every one of them twice and
+          // manufactured an over-run on any job with provisional sums, earned
+          // preliminaries or executed variations — the very phantom over-run the
+          // comment above claimed to have removed. A variation counts here only
+          // when it is BOTH approved and executed, which is the server's rule
+          // too (approvedVariationsEarned in util/variationStatus.js) and is
+          // already how ProjectsGeneric builds variationsDoneAmount.
+          actualSpent={valuedAmount || 0}
+          // S18 valuations: the variation rows, and who may act on them.
+          variationRows={variations}
+          onRaiseVariation={onRaiseVariation}
+          onDecideVariation={onDecideVariation}
+          canEditProject={canEdit}
+          canSeeRates={canSeeRates}
+        />
         </div>
       ) : null}
 
@@ -1116,123 +1334,6 @@ export default function ProjectOpenView({
             accessToken={accessToken}
           />
         </React.Suspense>
-      ) : null}
-
-      {activeTab === "bill" ? (
-        <ProjectContractPanel
-          certificates={certificates}
-          certBusy={certBusy}
-          onIssueCertificate={onIssueCertificate}
-          onUpdateCertificate={onUpdateCertificate}
-          onDeleteCertificate={onDeleteCertificate}
-          onDownloadCertificate={onDownloadCertificate}
-          finalAccount={finalAccount}
-          onFinalizeAccount={onFinalizeAccount}
-          onReopenFinalAccount={onReopenFinalAccount}
-          onDownloadFinalAccount={onDownloadFinalAccount}
-          projectModels={projectModels}
-          modelUploadBusy={modelUploadBusy}
-          onUploadModel={onUploadModel}
-          onDeleteModel={onDeleteModel}
-          items={items}
-          productKey={productKey}
-          hideModels={isBoqImport}
-          contractLocked={Boolean(contract?.locked)}
-          contractSum={Number(contract?.contractSum) || 0}
-          measured={grossAmount}
-          provisional={(provisionalSums || []).reduce(
-            (acc, s) => acc + (Number(s?.amount) || 0),
-            0,
-          )}
-          preliminary={
-            ((grossAmount +
-              (provisionalSums || []).reduce(
-                (acc, s) => acc + (Number(s?.amount) || 0),
-                0,
-              )) *
-              (Number(contract?.preliminaryPercent) || 0)) /
-            100
-          }
-          variations={(variations || []).reduce(
-            (acc, v) => acc + Number(v?.qty || 0) * Number(v?.rate || 0),
-            0,
-          )}
-          // Contingency / Tax — full QS cascade. Inline calc mirrors
-          // the BoQ Project Total card so the Final Account stays in
-          // sync without re-fetching from the server.
-          contingency={(() => {
-            const grsp = (provisionalSums || []).reduce(
-              (a, s) => a + (Number(s?.amount) || 0),
-              0,
-            );
-            const prelim =
-              ((grossAmount + grsp) *
-                (Number(contract?.preliminaryPercent) || 0)) /
-              100;
-            const sub = grossAmount + grsp + prelim;
-            return (sub * (Number(contract?.contingencyPercent) || 0)) / 100;
-          })()}
-          tax={(() => {
-            const grsp = (provisionalSums || []).reduce(
-              (a, s) => a + (Number(s?.amount) || 0),
-              0,
-            );
-            const prelim =
-              ((grossAmount + grsp) *
-                (Number(contract?.preliminaryPercent) || 0)) /
-              100;
-            const sub = grossAmount + grsp + prelim;
-            const cont =
-              (sub * (Number(contract?.contingencyPercent) || 0)) / 100;
-            return (
-              ((sub + cont) * (Number(contract?.taxPercent) || 0)) / 100
-            );
-          })()}
-          contingencyPercent={Number(contract?.contingencyPercent) || 0}
-          taxPercent={Number(contract?.taxPercent) || 0}
-          // Actual spent — measured-valued + executed PC + completed
-          // prelims + executed variations. Drives the over-run vs
-          // planned comparison so the final-account figure reflects
-          // real spend, not BoQ drift.
-          actualSpent={
-            (valuedAmount || 0) +
-            (provisionalSums || []).reduce(
-              (acc, s) =>
-                s?.completed ? acc + (Number(s?.amount) || 0) : acc,
-              0,
-            ) +
-            (variations || []).reduce(
-              (acc, v) =>
-                v?.completed
-                  ? acc + Number(v?.qty || 0) * Number(v?.rate || 0)
-                  : acc,
-              0,
-            ) +
-            (() => {
-              const items = preliminaryItems || [];
-              const totalAlloc = items.reduce(
-                (a, p) => a + Number(p?.allocation || 0),
-                0,
-              );
-              const base = totalAlloc > 0 ? totalAlloc : 100;
-              const grsp = (provisionalSums || []).reduce(
-                (a, s) => a + (Number(s?.amount) || 0),
-                0,
-              );
-              const pool =
-                ((grossAmount + grsp) *
-                  (Number(contract?.preliminaryPercent) || 0)) /
-                100;
-              return items.reduce(
-                (a, p) =>
-                  p?.completed
-                    ? a + (pool * Number(p?.allocation || 0)) / base
-                    : a,
-                0,
-              );
-            })()
-          }
-        />
       ) : null}
 
       {activeTab === "bill" && mergeInfo?.parts?.length > 1 ? (
@@ -1302,6 +1403,8 @@ export default function ProjectOpenView({
 
       {activeTab === "bill" ? (
         <ProjectBillTable
+          focusLine={focusLine}
+          onLine={(key, label) => setLine((cur) => (cur?.key === key ? cur : { key, label }))}
           actualQtyInputs={actualQtyInputs}
           actualRateInputs={actualRateInputs}
           actualTrackedAmount={actualTrackedAmount}
@@ -1335,6 +1438,7 @@ export default function ProjectOpenView({
           onAddCategory={onAddCategory}
           onAddTrade={onAddTrade}
           budgetDrivenCodes={budgetDrivenCodes}
+          rateNotes={rateNotes}
           tradeOptions={tradeOptions}
           onTradeChange={onTradeChange}
           groupByMode={groupByMode}
@@ -1344,11 +1448,16 @@ export default function ProjectOpenView({
           contractLockedAt={contract?.lockedAt || null}
           contractApprovedAt={contract?.approvedAt || null}
           contractSum={contract?.contractSum || 0}
-          preliminaryPercent={
-            Number.isFinite(Number(contract?.preliminaryPercent))
-              ? Number(contract.preliminaryPercent)
-              : 7.5
-          }
+          preliminaryPercent={preliminaryPct}
+          contingencyPercent={contingencyPct}
+          taxPercent={taxPct}
+          onContingencyPercentChange={onContingencyPercentChange}
+          onTaxPercentChange={onTaxPercentChange}
+          measuredAmount={measuredWork}
+          tenderedAt={contract?.tenderedAt || null}
+          onMarkTendered={onMarkTendered}
+          onRestoreProvisionalSum={onRestoreProvisionalSum}
+          onOpenVariations={() => setActiveTab("valuation")}
           contractBusy={contractBusy}
           stepUpEnabled={stepUpEnabled}
           onLockContract={onLockContract}
@@ -1384,11 +1493,9 @@ export default function ProjectOpenView({
           onPickBoqCandidate={onPickBoqCandidate}
           rateInfoText={rateInfoText}
           rates={rates}
-          remainingAmount={remainingAmount}
           showActualColumns={showActualColumns}
           showMaterials={showMaterials}
           statusLabel={statusLabel}
-          valuedAmount={valuedAmount}
           canRateGenBoq={canRateGenBoq}
           autoFillBoqRates={autoFillBoqRates}
           autoFillBoqBusy={autoFillBoqBusy}

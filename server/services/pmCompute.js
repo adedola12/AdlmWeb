@@ -21,6 +21,9 @@
 // Tasks with no baselineCost contribute 0 to the EVM math but still count
 // toward Tasks Done %.
 
+import { isApprovedVariation } from "../util/variationStatus.js";
+import { preliminaryPercentOf } from "../util/contractDefaults.js";
+
 const MS_DAY = 24 * 60 * 60 * 1000;
 
 function safeNum(value) {
@@ -199,17 +202,23 @@ export function computeProjectScope(project) {
   // ── Variations ────────────────────────────────────────────────────────
   // Same rule as PC sums: instruction-issued contributes to BAC; executed
   // (completed flag set) contributes to EV.
+  // S18 valuations: only an APPROVED variation moves money, so a pending or
+  // rejected one is not a virtual item at all — it is in neither the BAC nor
+  // the earned value. Its index is kept in the identity so `var::N` still
+  // points at the same row of project.variations.
   const variations = Array.isArray(project?.variations) ? project.variations : [];
   let variationsTotal = 0;
   let variationsEarned = 0;
-  const variationsVirtual = variations.map((v, idx) => {
+  const variationsVirtual = [];
+  variations.forEach((v, idx) => {
+    if (!isApprovedVariation(v)) return;
     const qty = safeNum(v?.qty);
     const rate = safeNum(v?.rate);
     const amount = qty * rate;
     const isDone = Boolean(v?.completed);
     variationsTotal += amount;
     if (isDone) variationsEarned += amount;
-    return {
+    variationsVirtual.push({
       identity: `var::${idx}`,
       kind: "variation",
       sn: idx + 1,
@@ -224,12 +233,15 @@ export function computeProjectScope(project) {
       completed: isDone,
       purchased: false,
       percentComplete: isDone ? 100 : 0,
-    };
+    });
   });
 
   // ── Preliminaries (BESMM4 checklist) ─────────────────────────────────
   const contract = project?.contract || {};
-  const preliminaryPercent = safeNum(contract?.preliminaryPercent) || 7.5;
+  // A stored 0 means no preliminaries, not "unset" — see util/contractDefaults.js.
+  // This one feeds preliminaryPool, every prelim:: virtual item, scope.projectTotal
+  // and therefore BAC, CPI/SPI/EAC and the printed report's financials.
+  const preliminaryPercent = preliminaryPercentOf(contract);
   const preliminaryPool = ((measuredPlanned + provisionalTotal) * preliminaryPercent) / 100;
   const preliminaryItems = Array.isArray(project?.preliminaryItems) ? project.preliminaryItems : [];
   const totalAllocation = preliminaryItems.reduce((acc, p) => acc + safeNum(p?.allocation), 0);
@@ -370,6 +382,39 @@ function hydrateTaskCost(task, itemIndex) {
   };
 }
 
+// S18: what the task's own bill lines say it is, weighted by value.
+//
+// READ ONLY. Progress is still recorded on the task and pushed down to its
+// bill lines — this is only so the PM screens can SHOW what the bill reads
+// and flag a task whose figure has drifted from it. Returns null when the
+// task has no linked line, or when the linked lines are all worth nothing
+// (there is no honest weighted percentage of zero).
+function billPercentForTask(task, itemIndex) {
+  const links = Array.isArray(task?.linkedBoqIdentities)
+    ? task.linkedBoqIdentities
+    : [];
+  if (!links.length) return null;
+  const weights = Array.isArray(task?.linkedBoqWeights) ? task.linkedBoqWeights : [];
+  let value = 0;
+  let earned = 0;
+  let matched = 0;
+  for (let i = 0; i < links.length; i += 1) {
+    const entry = itemIndex.get(links[i]);
+    if (!entry) continue;
+    matched += 1;
+    const raw = Number(weights[i]);
+    const weight = (Number.isFinite(raw) ? raw : 100) / 100;
+    const share = safeNum(entry.plannedAmount) * weight;
+    value += share;
+    earned += (share * clamp(entry.percentComplete, 0, 100)) / 100;
+  }
+  if (!matched || value <= 0) return null;
+  return {
+    percent: Math.round(((earned / value) * 100) * 10) / 10,
+    lineCount: matched,
+  };
+}
+
 function summariseTasks(tasks, itemIndex, now) {
   const todayMs = now.getTime();
   const buckets = {
@@ -417,6 +462,8 @@ function summariseTasks(tasks, itemIndex, now) {
     const pct = clamp(task?.percentComplete, 0, 100);
     const { baselineCost, derivedActualCost } = hydrateTaskCost(task, itemIndex);
     const earned = (baselineCost * pct) / 100;
+    // S18: read-only, for display. Never feeds a total.
+    const fromBill = billPercentForTask(task, itemIndex);
 
     let isOverdue = false;
     if (
@@ -524,6 +571,11 @@ function summariseTasks(tasks, itemIndex, now) {
         plannedDuration,
         actualDuration,
         scheduleVarianceDays,
+        // S18: what this task's own bill lines read, weighted by value, and
+        // how many of them answered. Display only — the task's own
+        // percentComplete above is still what every figure is built on.
+        billPercentComplete: fromBill ? fromBill.percent : null,
+        billLineCount: fromBill ? fromBill.lineCount : 0,
       },
     };
   });
@@ -1452,4 +1504,4 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   };
 }
 
-export { itemIdentity as _itemIdentity };
+export { itemIdentity as _itemIdentity, billPercentForTask as _billPercentForTask };

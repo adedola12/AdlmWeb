@@ -175,10 +175,13 @@ export default function ProductDetail() {
           const fallback = await findProductFromListFallback(safeKey, ctl.signal);
           if (!mounted) return;
           setP(fallback);
-          if (!fallback) setErr(e?.message || "Failed to load product");
-        } catch (e2) {
+          // A missing product is the "not found" card's normal case; only a real
+          // failure gets a message, and never the raw server text (it printed
+          // `Request failed (404): {"error":"Product not found"}` to visitors).
+          if (!fallback && e?.status !== 404) setErr("We couldn't load this product just now. Please try again.");
+        } catch {
           if (!mounted) return;
-          setErr(e2?.message || e?.message || "Failed to load product");
+          setErr(e?.status === 404 ? "" : "We couldn't load this product just now. Please try again.");
           setP(null);
         }
       } finally {

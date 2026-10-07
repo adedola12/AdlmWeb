@@ -12,6 +12,7 @@ import {
 import {
   deriveLineRate,
   deriveBillRatesFromBudget,
+  isRateApplied,
 } from "./deriveBillRates.js";
 import { ensureBillItemCoverage } from "./budgetCoverage.js";
 
@@ -317,4 +318,220 @@ test("deriveBillRatesFromBudget mutates items[].rate only where priced", () => {
   assert.equal(updated, 1);
   assert.equal(project.items[0].rate, 12500); // 100,000 ×1.25 /10
   assert.equal(project.items[1].rate, 999); // manual rate preserved
+});
+
+// ── S18: a rate the QS applied himself must survive ─────────────────
+//
+// Reproduces the reported defect and pins the fix. Before this change every
+// one of these lines was silently re-derived from the Budget build-up on
+// save AND on a plain GET (the lazy budget heal runs the same function), so
+// the picked figure reverted while the toast said "Saved".
+
+function pickedProject() {
+  return {
+    items: [
+      // The QS picked a Rate Gen rate worth 15,000 on a line whose build-up
+      // (material + labour only, no plant) derives 12,500. The website's rate
+      // cell stamps BOTH: rateLockedAt is the lock, appliedRateKey only says
+      // which library rate produced the figure.
+      {
+        code: "C-CEIL",
+        qty: 10,
+        rate: 15000,
+        appliedRateKey: "Reinforced concrete grade 25 in foundations",
+        rateLockedAt: "2026-09-23T05:00:00.000Z",
+      },
+    ],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+}
+
+test("isRateApplied: only our own rateLockedAt stamp counts", () => {
+  assert.equal(isRateApplied(null), false);
+  assert.equal(isRateApplied({}), false);
+  assert.equal(isRateApplied({ rateLockedAt: null }), false);
+  assert.equal(isRateApplied({ rateLockedAt: "" }), false);
+  assert.equal(isRateApplied({ rateLockedAt: "not a date" }), false);
+  assert.equal(isRateApplied({ rateLockedAt: "2026-09-23T05:00:00.000Z" }), true);
+  assert.equal(isRateApplied({ rateLockedAt: new Date() }), true);
+  // appliedRateKey is the Revit plugin's provenance, not a lock. On its own it
+  // must never stop a line deriving, whatever it says.
+  assert.equal(isRateApplied({ appliedRateKey: "" }), false);
+  assert.equal(isRateApplied({ appliedRateKey: "   " }), false);
+  assert.equal(isRateApplied({ appliedRateKey: "Concrete 1:2:4" }), false);
+});
+
+test("a QUIV line with appliedRateKey and no stamp derives exactly as before", () => {
+  // THE REGRESSION GUARD. QUIV has always sent appliedRateKey, so on every
+  // existing Revit project these lines are re-derived from the Budget on each
+  // save and each GET. Nothing this work added may change that: the figure a
+  // customer already sees must not move because we shipped a new feature.
+  const quiv = {
+    items: [
+      {
+        code: "C-CEIL",
+        qty: 10,
+        rate: 999,
+        appliedRateKey: "Reinforced concrete grade 25 in foundations",
+      },
+    ],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+  // Byte for byte what the base commit produced: derived, never skipped.
+  const { updated, skipped } = deriveBillRatesFromBudget(quiv);
+  assert.equal(updated, 1);
+  assert.equal(skipped, 0);
+  assert.equal(quiv.items[0].rate, 12500);
+  assert.equal(quiv.items[0].netUnitCost, 10000);
+  assert.equal(quiv.items[0].profitPercent, 25);
+  // The provenance itself is untouched — the plugin round-trips it.
+  assert.equal(
+    quiv.items[0].appliedRateKey,
+    "Reinforced concrete grade 25 in foundations",
+  );
+});
+
+test("a picked Rate Gen rate survives the save", () => {
+  const project = pickedProject();
+  const { updated, skipped } = deriveBillRatesFromBudget(project);
+  assert.equal(project.items[0].rate, 15000); // not re-derived to 12,500
+  assert.equal(updated, 0);
+  assert.equal(skipped, 1);
+});
+
+test("a picked rate survives the GET that triggers the budget heal", () => {
+  // The heal calls the same derive on a plain read, which is the second half
+  // of the revert: even without saving again, opening the project reverted it.
+  const project = pickedProject();
+  deriveBillRatesFromBudget(project); // the save
+  deriveBillRatesFromBudget(project); // the heal on the next GET
+  deriveBillRatesFromBudget(project); // and the one after that
+  assert.equal(project.items[0].rate, 15000);
+});
+
+test("what a backspaced rate cell used to send, and what it sends now", () => {
+  // The client-side half of this is pinned in
+  // client/src/features/projects/rateStamp.test.jsx. This is the money end of
+  // the same sequence, from the server's point of view.
+  //
+  // The QS applied ₦15,000 to a line whose build-up derives ₦12,500, saved,
+  // then backspaced the cell to retype the figure. That single keystroke
+  // released the lock on screen, and the save then sent the STORED rate with
+  // rateLockedAt stripped — which is exactly the shape below, and the server
+  // does the only thing it can with it.
+  const wasSent = {
+    items: [{ code: "C-CEIL", qty: 10, rate: 15000, rateLockedAt: null }],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+  deriveBillRatesFromBudget(wasSent);
+  assert.equal(wasSent.items[0].rate, 12500); // ₦2,500 a unit, on nothing but a backspace
+
+  // A keystroke no longer strips the stamp, so the same save now sends the
+  // line exactly as it stands and the figure does not move.
+  const isSent = {
+    items: [
+      { code: "C-CEIL", qty: 10, rate: 15000, rateLockedAt: "2026-09-23T05:00:00.000Z" },
+    ],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+  deriveBillRatesFromBudget(isSent);
+  assert.equal(isSent.items[0].rate, 15000);
+
+  // And when he DOES commit the release, the hand-back still works: that is
+  // the first payload, and it is the only way to produce it now.
+  assert.equal(wasSent.items[0].rate, 12500);
+});
+
+test("a hand-typed rate stamped with rateLockedAt survives too", () => {
+  const project = {
+    items: [{ code: "C-CEIL", qty: 10, rate: 15000, rateLockedAt: "2026-09-23T05:00:00.000Z" }],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+  const { updated, skipped } = deriveBillRatesFromBudget(project);
+  assert.equal(project.items[0].rate, 15000);
+  assert.equal(updated, 0);
+  assert.equal(skipped, 1);
+});
+
+test("an unstamped line still derives, beside a stamped one", () => {
+  const project = {
+    items: [
+      { code: "C-CEIL", qty: 10, rate: 0 }, // nobody touched it -> derives
+      {
+        code: "C-WALL",
+        qty: 10,
+        rate: 15000,
+        appliedRateKey: "Blockwork 225mm",
+        rateLockedAt: "2026-09-23T05:00:00.000Z",
+      },
+    ],
+    budgetItems: [
+      { billIdentity: "C-CEIL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+      { billIdentity: "C-WALL", qty: 10, rate: 10000, overheadPercent: 0, profitPercent: 25 },
+    ],
+  };
+  const { updated, skipped } = deriveBillRatesFromBudget(project);
+  assert.equal(project.items[0].rate, 12500);
+  assert.equal(project.items[1].rate, 15000);
+  assert.equal(updated, 1);
+  assert.equal(skipped, 1);
+});
+
+test("a project with no build-up behaves exactly as today", () => {
+  // net = 0 on every row: the pick was already kept before this change, and
+  // it is still kept, stamped or not.
+  const budgetItems = [{ billIdentity: "C-CEIL", qty: 10, rate: 0 }];
+  const stamped = {
+    items: [
+      {
+        code: "C-CEIL",
+        qty: 10,
+        rate: 15000,
+        appliedRateKey: "Concrete 1:2:4",
+        rateLockedAt: "2026-09-23T05:00:00.000Z",
+      },
+    ],
+    budgetItems,
+  };
+  const bare = {
+    items: [{ code: "C-CEIL", qty: 10, rate: 15000 }],
+    budgetItems,
+  };
+  assert.deepEqual(deriveBillRatesFromBudget(stamped), { updated: 0, skipped: 1 });
+  assert.deepEqual(deriveBillRatesFromBudget(bare), { updated: 0, skipped: 0 });
+  assert.equal(stamped.items[0].rate, 15000);
+  assert.equal(bare.items[0].rate, 15000);
+});
+
+test("no stored document carries a stamp, so no existing figure moves", () => {
+  // Every row written before this shipped has neither stamp. Run the derive
+  // over a bill of them and nothing is skipped — the outcome is identical to
+  // the old code path, which is the whole money-safety argument.
+  const project = {
+    items: [
+      { code: "A", qty: 4, rate: 0 },
+      { code: "B", qty: 2, rate: 999 },
+      { code: "C", qty: 8, rate: 100, appliedRateKey: "", rateLockedAt: null },
+    ],
+    budgetItems: [
+      { billIdentity: "A", qty: 4, rate: 500, overheadPercent: 10, profitPercent: 10 },
+      { billIdentity: "C", qty: 8, rate: 50, overheadPercent: 0, profitPercent: 0 },
+    ],
+  };
+  const { updated, skipped } = deriveBillRatesFromBudget(project);
+  assert.equal(skipped, 0);
+  assert.equal(updated, 2);
+  assert.equal(project.items[0].rate, 600); // 2,000 × 1.2 / 4
+  assert.equal(project.items[1].rate, 999); // no build-up, untouched
+  assert.equal(project.items[2].rate, 50); // 400 / 8
 });

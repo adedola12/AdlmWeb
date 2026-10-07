@@ -1,0 +1,206 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/cert.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* The certificate sheet, the claim flow and the public verification page.
+
+   The artwork is the designer's blank template (cert-dark.jpg / cert-light.jpg,
+   2189×3097, A4 portrait). Positions below were measured on it: x values are a
+   percentage of the width, y values of the height, and type sizes are cqw so
+   they scale with the sheet. Change the template and these move with it.    */
+.ds .cx-sheet{position:relative;container-type:inline-size;line-height:1;color:#fff;
+  aspect-ratio:2189/3097;overflow:hidden;background:#02142b}
+.ds .cx-sheet.light{color:#0b1f3d;background:#eef1f4}
+.ds .cx-sheet .tpl{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ds .cx-sheet .ov{position:absolute;inset:0}
+.ds .cx-sheet .ov > *{position:absolute;margin:0}
+
+
+/* the name sits on the gold rule at 45.25% — centred over it, script face */
+.ds .cx-sheet .nm{left:12.3%;width:58.6%;bottom:56.2%;text-align:center;white-space:nowrap;
+  font-family:"ADLM Signature","Brush Script MT",cursive;font-weight:400;letter-spacing:.005em;
+  line-height:1.15}
+.ds .cx-sheet .for{left:12.7%;width:57%;top:47.6%;font-size:2.3cqw;font-weight:400;line-height:1.5;
+  font-family:var(--font)}
+.ds .cx-sheet .for b{font-weight:600}
+.ds .cx-sheet .dt{left:12.8%;width:19.3%;bottom:40.5%;text-align:center;font-size:1.95cqw;
+  font-weight:400;font-family:var(--font);letter-spacing:.01em}
+.ds .cx-sheet .sg{left:40.4%;width:18%;bottom:40%;height:auto}
+.ds .cx-sheet.dark .sg{filter:invert(1) brightness(2)}
+.ds .cx-sheet .rf{left:23.3%;top:67.55%;font-size:2.4cqw;font-weight:400;font-family:var(--font);
+  letter-spacing:.01em;white-space:nowrap}
+.ds .cx-sheet .qrbox{left:80.05%;top:84.85%;width:12.8%;aspect-ratio:1;display:block;background:#fff}
+.ds .cx-sheet .qrbox svg{display:block;width:100%;height:100%}
+
+
+/* ---------------------------------------------------------- claim dialog */
+.ds .cx-modal .wk-modal-c{width:min(900px,100%);padding:0;overflow:hidden;display:grid;
+  grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);max-height:92vh}
+.ds .cx-prev{background:var(--bg-alt);padding:26px;display:grid;place-items:center;
+  border-right:1px solid var(--line)}
+.ds .cx-prev .cx-sheet{width:100%;max-width:330px;border-radius:6px;
+  box-shadow:0 18px 44px rgba(var(--shadow-c),.28)}
+.ds .cx-step{padding:40px 38px 32px;overflow-y:auto;display:flex;flex-direction:column}
+.ds .cx-dots{display:flex;gap:6px;margin-bottom:22px}
+.ds .cx-dots i{height:4px;width:22px;border-radius:9px;background:var(--line-2);transition:background 240ms,width 240ms}
+.ds .cx-dots i.on{background:var(--action);width:36px}
+.ds .cx-dots i.done{background:color-mix(in srgb,var(--action) 45%,transparent)}
+.ds .cx-step .k{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:500}
+.ds .cx-step h2{text-align:left;margin:8px 0 0;font-size:25px;font-weight:500;letter-spacing:-.03em;line-height:1.2;color:var(--ink)}
+.ds .cx-step > p{margin:10px 0 0;font-size:13.5px;font-weight:300;color:var(--ink-2);line-height:1.65}
+.ds .cx-f{margin-top:22px}
+.ds .cx-f label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:7px}
+.ds .cx-f input{width:100%;padding:14px 15px;border-radius:12px;border:1px solid var(--line-2);
+  background:var(--bg);color:var(--ink);font:400 17px var(--font);letter-spacing:-.01em}
+.ds .cx-f input:focus{outline:0;border-color:var(--action);box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 16%,transparent)}
+.ds .cx-f .meta{display:flex;justify-content:space-between;gap:10px;margin-top:7px;font-size:11.5px;color:var(--ink-3)}
+.ds .cx-f .meta .bad{color:var(--fb-err)}
+.ds .cx-tips{margin:18px 0 0;padding:0;list-style:none;display:grid;gap:7px}
+.ds .cx-tips li{position:relative;padding-left:20px;font-size:12.5px;font-weight:300;color:var(--ink-3);line-height:1.5}
+.ds .cx-tips li::before{content:"";position:absolute;left:3px;top:5px;width:4px;height:8px;
+  border:solid var(--action);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.ds .cx-big{margin:22px 0 0;padding:22px 18px;border-radius:14px;border:1px dashed var(--line-2);
+  background:var(--bg-alt);text-align:center;font:400 34px/1.2 "ADLM Signature",cursive;color:var(--ink);
+  overflow-wrap:anywhere}
+.ds .cx-warn{display:flex;gap:11px;margin-top:16px;padding:13px 14px;border-radius:12px;
+  background:color-mix(in srgb,var(--fb-warn) 10%,transparent);
+  border:1px solid color-mix(in srgb,var(--fb-warn) 28%,transparent);
+  font-size:12.5px;font-weight:300;color:var(--ink-2);line-height:1.55}
+.ds .cx-warn svg{flex:none;width:17px;height:17px;margin-top:1px;fill:none;stroke:var(--fb-warn);stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .cx-warn b{font-weight:500;color:var(--ink)}
+.ds .cx-check{display:flex;gap:10px;align-items:flex-start;margin-top:16px;font-size:13px;color:var(--ink-2);
+  line-height:1.5;cursor:pointer}
+.ds .cx-check input{margin-top:3px;accent-color:var(--action);width:16px;height:16px}
+.ds .cx-styles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}
+.ds .cx-style{position:relative;border:1.5px solid var(--line);border-radius:14px;padding:10px 10px 12px;
+  background:var(--bg);cursor:pointer;text-align:left;font:inherit;color:var(--ink);
+  transition:border-color 200ms,box-shadow 200ms}
+.ds .cx-style img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;object-position:top;border-radius:8px}
+.ds .cx-style b{display:block;margin-top:10px;font-size:13.5px;font-weight:500}
+.ds .cx-style span{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3);font-weight:300}
+.ds .cx-style[aria-checked="true"]{border-color:var(--action);box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 16%,transparent)}
+.ds .cx-style[aria-checked="true"]::after{content:"";position:absolute;top:18px;right:18px;width:20px;height:20px;
+  border-radius:50%;background:var(--action) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E") center/13px no-repeat}
+.ds .cx-go{display:flex;gap:10px;margin-top:auto;padding-top:26px}
+.ds .cx-go .ds-btn{flex:1;justify-content:center}
+
+
+/* -------------------------------------------------------- preview dialog */
+.ds .cx-view .wk-modal-c{width:min(980px,100%);padding:0;overflow:hidden;display:grid;
+  grid-template-columns:minmax(0,1fr) 300px;max-height:94vh}
+.ds .cx-view .cx-prev{padding:28px}
+.ds .cx-view .cx-prev .cx-sheet{max-width:440px}
+.ds .cx-side{padding:44px 26px 26px;display:flex;flex-direction:column;gap:18px;overflow-y:auto}
+.ds .cx-side h2{text-align:left;margin:0;font-size:20px;font-weight:500;letter-spacing:-.02em;color:var(--ink);line-height:1.25}
+.ds .cx-side .ds-sub{margin:4px 0 0;font-size:12.5px;color:var(--ink-3);font-weight:300}
+.ds .cx-side .lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+.ds .cx-seg{display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:var(--bg-alt);
+  border:1px solid var(--line)}
+.ds .cx-seg button{padding:9px;border:0;border-radius:9px;background:none;font:400 13px var(--font);color:var(--ink-2);cursor:pointer}
+.ds .cx-seg button[aria-pressed="true"]{background:var(--bg);color:var(--ink);font-weight:500;
+  box-shadow:0 1px 3px rgba(var(--shadow-c),.12)}
+.ds .cx-side .ds-btn{width:100%;justify-content:center}
+.ds .cx-ver{padding:14px;border-radius:12px;background:var(--bg-alt);border:1px solid var(--line);
+  font-size:12px;font-weight:300;color:var(--ink-2);line-height:1.55}
+.ds .cx-ver b{display:flex;align-items:center;gap:7px;font-weight:500;color:var(--ink);font-size:12.5px;margin-bottom:4px}
+.ds .cx-ver b::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--fb-ok)}
+.ds .cx-ver code{display:block;margin-top:8px;font:500 11.5px var(--font);color:var(--action);overflow-wrap:anywhere}
+.ds .cx-side .fine{font-size:11.5px;font-weight:300;color:var(--ink-3);line-height:1.55;margin:0}
+
+
+/* ------------------------------------------------------------- printing */
+.ds .cx-print{display:none}
+@media print{
+:root.cx-printing body > *:not(.cx-print){display:none!important}
+:root.cx-printing .cx-print{display:block}
+:root.cx-printing .cx-print .cx-sheet{width:210mm;height:297mm;aspect-ratio:auto}
+:root.cx-printing{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4 portrait;margin:0}
+}
+@media (max-width:760px){
+.ds .cx-modal .wk-modal-c, .ds .cx-view .wk-modal-c{grid-template-columns:1fr;max-height:94vh;overflow-y:auto}
+.ds .cx-prev{border-right:0;border-bottom:1px solid var(--line);padding:18px}
+.ds .cx-prev .cx-sheet{max-width:210px}
+.ds .cx-view .cx-prev .cx-sheet{max-width:300px}
+.ds .cx-step{padding:24px 20px 20px;overflow:visible}
+.ds .cx-side{padding:22px 20px}
+.ds .cx-big{font-size:28px}
+}
+
+
+/* ------------------------------------------------ /certificate — verify */
+.ds .cv-head{max-width:720px;margin:0 auto;text-align:center}
+.ds .cv-head h1{margin:14px 0 0;font-size:clamp(34px,5vw,54px);font-weight:500;letter-spacing:-.04em;line-height:1.05;color:var(--ink)}
+.ds .cv-head .ds-lede{margin:16px auto 0;max-width:56ch}
+.ds .cv-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ds .cv-look{display:flex;gap:10px;margin:30px auto 0;max-width:560px;padding:7px;border-radius:16px;
+  background:var(--bg);border:1px solid var(--line-2);box-shadow:0 14px 40px rgba(var(--shadow-c),.10)}
+.ds .cv-look input{flex:1;min-width:0;border:0;background:none;padding:0 12px;font:400 15px var(--font);color:var(--ink);
+  letter-spacing:.02em;border-radius:10px}
+.ds .cv-look input:focus{outline:0}
+.ds .cv-look:focus-within{border-color:var(--action);box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 16%,transparent)}
+.ds .cv-hint{margin:12px 0 0;font-size:12.5px;color:var(--ink-3);font-weight:300}
+.ds .cv-hint b{font-weight:500;color:var(--ink-2)}
+.ds #cv-out{max-width:1040px;margin:44px auto 0}
+.ds .cv-card{border:1px solid var(--line);border-radius:22px;background:var(--bg);padding:30px;
+  box-shadow:0 20px 60px rgba(var(--shadow-c),.10)}
+.ds .cv-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:34px;align-items:start}
+.ds .cv-wait{display:flex;align-items:center;justify-content:center;gap:12px;padding:44px;font-size:14px;color:var(--ink-2)}
+.ds .cv-spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--action);animation:fb-spin .7s linear infinite}
+.ds .cv-status{--tone:var(--fb-ok);display:flex;gap:16px;align-items:flex-start;padding:18px;border-radius:16px;
+  background:color-mix(in srgb,var(--tone) 9%,transparent);border:1px solid color-mix(in srgb,var(--tone) 30%,transparent)}
+.ds .cv-status.revoked{--tone:var(--fb-err)}
+.ds .cv-status.notfound{--tone:var(--fb-warn)}
+.ds .cv-status i{flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--tone);color:#fff}
+.ds .cv-status i svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.ds .cv-status span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--tone)}
+.ds .cv-status h2{margin:4px 0 0;font-size:22px;font-weight:500;letter-spacing:-.025em;color:var(--ink);line-height:1.25}
+.ds .cv-status p{margin:5px 0 0;font-size:13.5px;font-weight:300;color:var(--ink-2);line-height:1.55}
+.ds .cv-status p b{font-weight:500;color:var(--ink)}
+.ds .cv-body{margin-top:20px}
+.ds .cv-body h3{margin:0;font-size:16px;font-weight:500;color:var(--ink)}
+.ds .cv-rows{margin:0;display:grid}
+.ds .cv-rows div{display:grid;grid-template-columns:150px 1fr;gap:16px;padding:12px 2px;border-bottom:1px solid var(--line)}
+.ds .cv-rows dt{font-size:12.5px;color:var(--ink-3);font-weight:300}
+.ds .cv-rows dd{margin:0;font-size:14px;color:var(--ink);font-weight:500;overflow-wrap:anywhere}
+.ds .cv-rows dd em{font-style:normal;font-weight:300;color:var(--ink-3)}
+.ds .cv-note{margin:18px 0 0;font-size:13px;font-weight:300;color:var(--ink-2);line-height:1.6}
+.ds .cv-note b{font-weight:500;color:var(--ink)}
+.ds .cv-note a{color:var(--action)}
+.ds .cv-list{margin:12px 0 0;padding-left:18px;display:grid;gap:8px;font-size:13.5px;font-weight:300;color:var(--ink-2);line-height:1.55}
+.ds .cv-list b{font-weight:500;color:var(--ink)}
+.ds .cv-acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.ds .cv-when{margin:18px 0 0;font-size:11.5px;color:var(--ink-3);font-weight:300}
+.ds .cv-sheet{margin:0}
+.ds .cv-sheet .cx-sheet{border-radius:6px;box-shadow:0 18px 50px rgba(var(--shadow-c),.26)}
+.ds .cv-sheet figcaption{margin-top:10px;font-size:11.5px;color:var(--ink-3);text-align:center;font-weight:300}
+.ds .cv-how{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.ds .cv-how > div{padding:24px;border-radius:18px;border:1px solid var(--line);background-image:var(--card-fill)}
+.ds .cv-how b{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--bg-alt);
+  border:1px solid var(--line);font-size:13px;font-weight:500;color:var(--action)}
+.ds .cv-how h3{margin:14px 0 0;font-size:16px;font-weight:500;color:var(--ink);letter-spacing:-.01em}
+.ds .cv-how p{margin:6px 0 0;font-size:13px;font-weight:300;color:var(--ink-2);line-height:1.6}
+.ds .cv-safe{margin:22px auto 0;text-align:center;font-size:12.5px;color:var(--ink-3);font-weight:300;max-width:60ch}
+.ds .cv-safe b{font-weight:500;color:var(--ink-2)}
+@media (max-width:860px){
+.ds .cv-grid{grid-template-columns:1fr}
+.ds .cv-sheet{max-width:360px;margin:0 auto}
+.ds .cv-how{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+.ds .cv-card{padding:18px}
+.ds .cv-look{flex-direction:column}
+.ds .cv-look input{padding:12px}
+.ds .cv-rows div{grid-template-columns:1fr;gap:3px}
+}
+@media print{
+.ds .cv .cv-look, .ds .cv .cv-hint, .ds .cv .cv-acts, .ds .nav, .ds footer, .ds .promo{display:none!important}
+}

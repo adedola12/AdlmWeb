@@ -1,18 +1,17 @@
 // Learn — his page, with the real course prices from the catalogue.
 //
-// Two of the three course cards are catalogue rows (bimbld, BIMMEP) and read
-// their per-seat price from GET /products. The third, "Rates & 2D Takeoff" at
-// ₦85,000, is left exactly as he wrote it: there is no catalogue row because
-// the course does not exist. His own notes record its name, price and syllabus
-// as provisional, so it stays visibly hardcoded rather than being dressed up
-// as live data. It is on docs/richard-snag-list.md as content to confirm or pull.
+// Both course cards are catalogue rows (bimbld, BIMMEP) and read their
+// per-seat price from GET /products. There is no third price to fetch: his
+// fourth card, "Rates & 2D Takeoff" at ₦85,000, was a course that does not
+// exist, and it is now removed by port-ds-html.mjs rather than carried into
+// the build. The card beside them, "On-site training", is a service and asks
+// for a quote, so it has no per-seat price either.
 
 import React from "react";
 import DsLearnPage from "../pages/DsLearnPage.jsx";
 import { API_BASE } from "../../config.js";
-import DsFreeLessons from "../DsFreeLessons.jsx";
 import DsCourseLinks from "../DsCourseLinks.jsx";
-import DsFreeLibrary from "../DsFreeLibrary.jsx";
+import DsLessonGrid from "../DsLessonGrid.jsx";
 
 const NGN = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -50,21 +49,16 @@ export default function DsLearn() {
   }, []);
 
   return (
-    // His free-lesson tiles are static markup with no destination. The wrapper
-    // matches each one to a real video and makes it play, without altering his
-    // thumbnails or layout.
     <DsCourseLinks>
-      <DsFreeLessons>
-        <DsLearnPage
+      <DsLearnPage
         d={{
           bimbld: { yearly: money(prices.bimbld) },
           bimmep: { yearly: money(prices.BIMMEP) },
-          // The rest of the channel, shelved by software, under his nine
-          // tiles. Slot placed by port-ds-html.mjs after his "Show more".
-          library: <DsFreeLibrary />,
+          // R02: his filters, tiles and "Show more", on the whole YouTube
+          // library, in place of his nine demo tiles (port-ds-html.mjs slot).
+          lessons: <DsLessonGrid />,
         }}
-        />
-      </DsFreeLessons>
+      />
     </DsCourseLinks>
   );
 }

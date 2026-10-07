@@ -64,6 +64,7 @@ export function toRow(c) {
     completed: c.enrollment?.status === "completed",
     issuedAt: c.enrollment?.certificateIssuedAt || c.enrollment?.updatedAt || null,
     certificateRef: c.enrollment?.certificateRef || "",
+    finish: c.enrollment?.certificateFinish === "light" ? "light" : "dark",
     pending: Number(c.summary?.pendingAssignments || 0),
   };
 }
@@ -87,8 +88,9 @@ export function certificateName(user) {
   );
 }
 
-/** Whether this enrolment has a certificate somebody can actually download. */
-export const certReady = (r) => r.completed && !!r.templateUrl;
+/** Whether this enrolment has an issued certificate. Since R14 it is drawn on
+ *  his template here, so it no longer waits for a per-course upload. */
+export const certReady = (r) => r.completed && !!r.certificateRef;
 
 /** "3d", "1w" — his .ago column. Short, because the column is narrow. */
 export function ago(d) {

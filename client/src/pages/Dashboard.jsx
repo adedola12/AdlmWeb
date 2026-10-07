@@ -93,7 +93,7 @@ function formatPendingProducts(p) {
       })
       .filter(Boolean);
 
-    return parts.length ? parts.join(" · ") : "—";
+    return parts.length ? parts.join(" · ") : "–";
   }
 
   if (Array.isArray(p?.lines) && p.lines.length) {
@@ -103,7 +103,7 @@ function formatPendingProducts(p) {
       .join(" · ");
   }
 
-  return p?.productKey || "—";
+  return p?.productKey || "–";
 }
 
 /* ---------------- physical training helpers ---------------- */
@@ -154,7 +154,7 @@ function installationMetaFromEnrollment(enr) {
 function trainingDurationText(training) {
   const start = training?.startAt ? dayjs(training.startAt) : null;
   const end = training?.endAt ? dayjs(training.endAt) : null;
-  if (!start || !end || !start.isValid() || !end.isValid()) return "—";
+  if (!start || !end || !start.isValid() || !end.isValid()) return "–";
 
   const days = Math.max(
     end.startOf("day").diff(start.startOf("day"), "day") + 1,
@@ -450,9 +450,9 @@ export default function Dashboard() {
                     "Please redownload the Installer Hub, watch the setup video, reinstall the Hub, and redownload all software updates. Your installed apps must be re-activated."}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {reinstall.installerHubUrl ? (
+                  {summary?.installerHub?.downloadUrl ? (
                     <a
-                      href={reinstall.installerHubUrl}
+                      href={summary.installerHub.downloadUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-700 text-white text-xs font-semibold hover:bg-red-800 transition"
@@ -689,7 +689,7 @@ export default function Dashboard() {
                 Started on{" "}
                 {summary?.membership?.startedAt
                   ? dayjs(summary.membership.startedAt).format("MMM D, YYYY")
-                  : "—"}
+                  : "–"}
               </div>
 
               <ul className="relative mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
@@ -905,7 +905,7 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage, storageData = n
                   <span>
                     Expires:{" "}
                     <span className="font-medium text-slate-700 dark:text-slate-200">
-                      {s.expiresAt ? dayjs(s.expiresAt).format("MMM D, YYYY") : "—"}
+                      {s.expiresAt ? dayjs(s.expiresAt).format("MMM D, YYYY") : "–"}
                     </span>
                   </span>
                 </div>
@@ -1293,7 +1293,7 @@ export function OrdersTab({
               {orders.map((o) => {
                 const dateText = o.createdAt
                   ? dayjs(o.createdAt).format("MMM D, YYYY")
-                  : "—";
+                  : "–";
                 const timeAgo = o.createdAt ? dayjs(o.createdAt).fromNow() : "";
 
                 const statusLabel = o.paid
@@ -1523,7 +1523,7 @@ export function OrdersTab({
               const st = trainingStatusMeta(enr);
               const dateText = enr.createdAt
                 ? dayjs(enr.createdAt).format("MMM D, YYYY")
-                : "—";
+                : "–";
               const timeAgo = enr.createdAt
                 ? dayjs(enr.createdAt).fromNow()
                 : "";
@@ -1546,7 +1546,7 @@ export function OrdersTab({
 
                       <div className="mt-2">
                         <div className="text-xs text-slate-500">Training</div>
-                        <div className="font-semibold">{t.title || "—"}</div>
+                        <div className="font-semibold">{t.title || "–"}</div>
                         <div className="text-sm text-slate-600 mt-1">
                           Duration: {trainingDurationText(t)}
                         </div>
@@ -1678,7 +1678,7 @@ export function InstallationsTab({
                         Duration: {trainingDurationText(t)}
                       </div>
                       <div className="text-sm text-slate-600 mt-1">
-                        Location: {buildTrainingAddress(t) || "—"}
+                        Location: {buildTrainingAddress(t) || "–"}
                       </div>
                     </div>
 
@@ -1705,7 +1705,7 @@ export function InstallationsTab({
                         ))}
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-600">—</div>
+                      <div className="text-sm text-slate-600">–</div>
                     )}
                   </div>
 
@@ -1732,7 +1732,7 @@ export function InstallationsTab({
                         ))}
                       </ul>
                     ) : (
-                      <div className="text-sm text-slate-600">—</div>
+                      <div className="text-sm text-slate-600">–</div>
                     )}
                   </div>
 

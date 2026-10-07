@@ -1,10 +1,13 @@
 import express from "express";
+import { creditReferral } from "../services/referrals.js";
+import { paystackKeys, paystackSecret } from "../util/paystackKeys.js";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth.js";
 import { Purchase } from "../models/Purchase.js";
 import { Product } from "../models/Product.js";
 import { Setting } from "../models/Setting.js";
 import { getFxRate } from "../util/fx.js";
 import { validateAndComputeDiscount } from "../util/coupons.js";
+import { bundleDiscountForCart } from "../util/bundleDiscount.js";
 import { TrainingLocation } from "../models/TrainingLocation.js";
 import {
   round2,
@@ -20,7 +23,8 @@ import { sendProformaInvoice } from "../util/proformaInvoice.js";
 import { payoutAccount } from "../util/payoutAccount.js";
 
 const router = express.Router();
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+// R22: the key comes from util/paystackKeys.js (personal today, the business
+// account behind PAYSTACK_ACCOUNT=business), read when used.
 
 // Organization licences normally start at 2 users. RateGen is the exception:
 // firms buy it for a single estimator, so an org may take just 1 seat.
@@ -159,6 +163,7 @@ router.post("/cart", requireAuth, requireVerifiedEmail, async (req, res) => {
     const storageAddons = []; // per-product project-storage slots (NGN only)
     const isNGN = currency === "NGN";
     let total = 0;
+    const bundleBasis = []; // { productKey, periods, recurring } per line
 
     for (const i of items) {
       const p = byKey[i.productKey];
@@ -191,8 +196,9 @@ router.post("/cart", requireAuth, requireVerifiedEmail, async (req, res) => {
       const installPerSeat = firstTime ? eff.install : 0;
       const totalInstall = installPerSeat * seats;
 
-      const recurring = computeRecurring({ p, eff, periods, seats, currency, fx });
+      const recurring = computeRecurring({ p, eff, periods, seats, currency });
       const lineTotal = recurring + totalInstall;
+      bundleBasis.push({ productKey: p.key, periods, recurring });
 
       lines.push({
         productKey: p.key,
@@ -244,10 +250,26 @@ router.post("/cart", requireAuth, requireVerifiedEmail, async (req, res) => {
     total = currency === "USD" ? round2(total) : Math.max(Math.round(total), 0);
     const totalBeforeDiscount = total;
 
+    // All-products bundle: every desktop product in one order takes 5% off
+    // each subscription (10% when paid for 12 months or more). Taken before
+    // any coupon, so a coupon works on what the buyer actually pays.
+    const bundle = bundleDiscountForCart(bundleBasis, currency);
+    const bundleDiscount = bundle.amount;
+    for (const b of bundle.lines) {
+      const line = lines.find((l) => l.productKey === b.productKey && !l.bundleDiscount);
+      if (line) {
+        line.bundlePercent = b.percent;
+        line.bundleDiscount = b.amount;
+      }
+    }
+    if (bundleDiscount > 0) {
+      total = currency === "USD" ? Math.max(round2(total - bundleDiscount), 0) : Math.max(Math.round(total - bundleDiscount), 0);
+    }
+
     const couponRes = await validateAndComputeDiscount({
       code: couponCode,
       currency,
-      subtotal: totalBeforeDiscount,
+      subtotal: total,
       productKeys: keys, // ✅ pass keys (if your coupon util supports it)
     });
 
@@ -328,6 +350,7 @@ router.post("/cart", requireAuth, requireVerifiedEmail, async (req, res) => {
 
       currency,
       totalBeforeDiscount: total,
+      bundleDiscount,
       vatPercent,
       vatAmount,
       vatLabel,
@@ -389,6 +412,7 @@ router.post("/cart", requireAuth, requireVerifiedEmail, async (req, res) => {
       purchaseId: purchase._id,
       lines,
       totalBeforeDiscount,
+      bundleDiscount,
       discount,
       vatPercent,
       vatAmount,
@@ -417,15 +441,25 @@ router.get("/verify", async (req, res) => {
     const reference = String(req.query.reference || "").trim();
     if (!reference)
       return res.status(400).json({ error: "reference required" });
-    if (!PAYSTACK_SECRET)
+    const keys = paystackKeys();
+    if (!keys.length)
       return res.status(400).json({ error: "Paystack not configured" });
 
-    const psRes = await fetch(
-      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } },
-    );
-
-    const data = await psRes.json().catch(() => ({}));
+    // The active account first. The other is tried only if the first does
+    // not know the reference: a payment started just before a switch of
+    // account is verified where it was made (R22).
+    let psRes;
+    let data;
+    let account;
+    for (const k of keys) {
+      psRes = await fetch(
+        `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+        { headers: { Authorization: `Bearer ${k.secret}` } },
+      );
+      data = await psRes.json().catch(() => ({}));
+      account = k.account;
+      if (psRes.ok && data?.status) break;
+    }
     if (!psRes.ok || !data?.status) {
       return res
         .status(400)
@@ -459,7 +493,7 @@ router.get("/verify", async (req, res) => {
 
     // Persist the reusable card token for auto-renewals. Best-effort: a
     // failure here must never block crediting a confirmed payment.
-    await saveCardAuthorization(existing.userId, data?.data).catch((err) =>
+    await saveCardAuthorization(existing.userId, data?.data, account).catch((err) =>
       console.error("[purchase verify] save card failed:", err?.message || err),
     );
 
@@ -487,6 +521,11 @@ router.get("/verify", async (req, res) => {
       const { applyEntitlementsFromPurchase } =
         await import("../util/applyEntitlements.js");
       await applyEntitlementsFromPurchase(purchase);
+
+      // Credit whoever referred this buyer — once, ever. Atomic inside
+      // creditReferral, because this path and the webhook below race on purpose
+      // and Paystack re-delivers. A renewal never credits.
+      await creditReferral(purchase, "card");
 
       const { autoEnrollFromPurchase } = await import("../util/autoEnroll.js");
       await autoEnrollFromPurchase(purchase);
@@ -518,7 +557,8 @@ router.get("/verify", async (req, res) => {
 // in NGN too (their bank handles FX); 3DS runs inside the Paystack popup.
 router.post("/:id/paystack/init", requireAuth, requireVerifiedEmail, async (req, res) => {
   try {
-    if (!PAYSTACK_SECRET)
+    const secret = paystackSecret();
+    if (!secret)
       return res.status(400).json({ error: "Paystack not configured" });
 
     const p = await Purchase.findById(req.params.id);
@@ -547,7 +587,7 @@ router.post("/:id/paystack/init", requireAuth, requireVerifiedEmail, async (req,
     const psRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${PAYSTACK_SECRET}`,
+        Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

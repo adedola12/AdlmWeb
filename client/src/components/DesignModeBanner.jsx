@@ -16,6 +16,26 @@ export default function DesignModeBanner() {
   if (!isDesignAccess(user)) return null;
   if (!loc.pathname.startsWith("/admin")) return null;
 
+  // NOT ON THE RELEASE DESK OR THE WORK BOARD.
+  //
+  // The server exempts the approver on exactly these two paths —
+  // server/middleware/designMode.js, RELEASE_DESK = /^\/admin\/(releases|work)/,
+  // which returns next() before req.designMode is set when the caller is the
+  // approver. His verdicts there are real, recorded and acted on: a merge
+  // happens off the back of them.
+  //
+  // This banner did not know that, so it told him "saving is simulated and
+  // changes nothing" on the one screen where his saving is the most
+  // consequential thing he does. On 3 October he approved a batch, read this
+  // banner, and reported that approving had done nothing — it had worked, and
+  // the merge went out on it. A notice that contradicts what the screen is
+  // doing is worse than no notice.
+  //
+  // The two pages say it themselves when the mask really did apply, because
+  // they know whether this session is the approver (the payload carries
+  // isApprover) and this component does not.
+  if (/^\/admin\/(releases|work)(\/|$)/.test(loc.pathname)) return null;
+
   return (
     <div
       role="status"

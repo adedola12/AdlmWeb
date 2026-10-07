@@ -71,7 +71,7 @@ const PRODUCTS = {
   rategen: ["RateGen", "rategen"],
   "qs-takeoff": ["Time Pro", "timepro"],
   civil3d: ["CIVIQ", "civiq"],
-  mep: ["Revit MEP", "mep"],
+  mep: ["SERVIQ", "mep"],
 };
 
 function destinationFor(path) {

@@ -12,12 +12,58 @@ import { FaCubes, FaFolder, FaInfoCircle } from "../components/icons.jsx";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
+// The workspace is drawn in his project pieces (.pj-empty, .pj-kpi, .pj-buy,
+// .pj-vars, .pj-stage, .pj-sumbox) but nothing on this route ever loaded the
+// sheet that defines them: DsAppShell brings ds-work.css, and ds-work-proj.css
+// was imported only by the gallery and Work's overview. So the buy schedule's
+// and the variation list's empty states rendered as bare text unless the
+// reader happened to have visited /work first in the same session. Importing
+// it here makes the route look the same whichever door it was opened by.
+import "../styles/ds-work-proj.css";
 import WkModal from "../ds/WkModal.jsx";
+import { useFeedback } from "../ds/feedback/feedbackContext.js";
+import {
+  approvedVariationsEarned,
+  approvedVariationsTotal,
+  normalizeVariationStatus,
+  selAfterVariationWrite,
+  variationStatusLabel,
+} from "../lib/variations.js";
+import {
+  newPreliminaryItemRow,
+  newProvisionalSumRow,
+  newVariationRow,
+  preliminaryItemForSave,
+  preliminaryItemRow,
+  provisionalSumForSave,
+  provisionalSumRow,
+  variationForSave,
+  variationRow,
+} from "../features/projects/lib/projectRows.js";
+import { reconcileBill } from "../features/projects/rateReconcile.js";
+import { preliminaryPercentOf } from "../features/projects/lib/projectTotals.js";
+// The same product/host table the gallery names its tools from (P0.4), so the
+// two screens say "Measure in QUIV, inside Revit" in exactly the same words.
+import { SOURCES } from "../lib/projectGallery.js";
+import { isFolderMarker } from "../lib/folderMarker.js";
+import {
+  budgetDrivenCodes as budgetDrivenCodesFor,
+  nextRateStamp,
+  rateEditState,
+  rateFieldsForSave,
+} from "../features/projects/rateStamp.js";
+import {
+  mergePricedProject,
+  priceFromRateBody,
+  priceFromRateFailure,
+  priceFromRatePath,
+} from "../features/projects/priceFromRate.js";
 
 // His orange palette, for a note that is a warning rather than information.
 // Tokens only, so it follows the theme; there is no new CSS rule behind it.
 const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" };
 const NOTE_FULL = { gridColumn: "1 / -1", margin: 0 };
+import SampleProjectsStrip from "../features/projects/SampleProjectsStrip.jsx";
 import {
   allCategoriesForProductKey,
   deriveItemCategory,
@@ -26,7 +72,7 @@ import {
   UNCATEGORIZED,
 } from "../lib/boqCategory.js";
 
-const DASHBOARD_PATH = "/dashboard";
+const DASHBOARD_PATH = "/manage";
 
 // Product names as the rest of the app says them (the tool keys are the old
 // CAD-host slugs: revit = QUIV, planswift = HERON, civil3d = CIVIQ).
@@ -207,6 +253,7 @@ function getEndpoints(tool) {
       share: (id) => "/projects/revit/materials/" + id + "/share",
       lock: (id) => "/projects/revit/materials/" + id + "/contract/lock",
       unlock: (id) => "/projects/revit/materials/" + id + "/contract/unlock",
+      tendered: (id) => "/projects/revit/materials/" + id + "/contract/tendered",
       ...pmEndpoints,
     };
   }
@@ -221,6 +268,7 @@ function getEndpoints(tool) {
       share: (id) => "/projects/planswift/materials/" + id + "/share",
       lock: (id) => "/projects/planswift/materials/" + id + "/contract/lock",
       unlock: (id) => "/projects/planswift/materials/" + id + "/contract/unlock",
+      tendered: (id) => "/projects/planswift/materials/" + id + "/contract/tendered",
       ...pmEndpoints,
     };
   }
@@ -240,12 +288,17 @@ function getEndpoints(tool) {
     share: (id) => "/projects/" + t + "/" + id + "/share",
     lock: (id) => "/projects/" + t + "/" + id + "/contract/lock",
     unlock: (id) => "/projects/" + t + "/" + id + "/contract/unlock",
+    tendered: (id) => "/projects/" + t + "/" + id + "/contract/tendered",
     budget: (id) => "/projects/" + t + "/" + id + "/budget",
     certificates: (id) => "/projects/" + t + "/" + id + "/certificates",
     certificate: (id, n) =>
       "/projects/" + t + "/" + id + "/certificates/" + n,
     certificateExport: (id, n) =>
       "/projects/" + t + "/" + id + "/certificates/" + n + "/export",
+    // S18 valuations: raise a variation (pending) and decide a pending one.
+    variations: (id) => "/projects/" + t + "/" + id + "/variations",
+    variationDecision: (id, index) =>
+      "/projects/" + t + "/" + id + "/variations/" + index,
     finalAccountFinalize: (id) =>
       "/projects/" + t + "/" + id + "/final-account/finalize",
     finalAccountReopen: (id) =>
@@ -518,13 +571,21 @@ function categoryMapsEqual(a, b) {
   return true;
 }
 
+// Every field a sum stores is compared, not just the two the first editor
+// had: ticking "Executed" or moving a row between the PC and provisional
+// groups is an edit, and a comparison that ignored it left the page reading
+// "nothing to save" while the change sat there unsaved.
 function provisionalSumsEqual(a, b) {
   const A = Array.isArray(a) ? a : [];
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    if (String(A[i]?.description || "") !== String(B[i]?.description || "")) return false;
-    if (Number(A[i]?.amount || 0) !== Number(B[i]?.amount || 0)) return false;
+    const X = provisionalSumRow(A[i]);
+    const Y = provisionalSumRow(B[i]);
+    if (X.description !== Y.description) return false;
+    if (X.amount !== Y.amount) return false;
+    if (X.kind !== Y.kind) return false;
+    if (X.completed !== Y.completed) return false;
   }
   return true;
 }
@@ -534,12 +595,14 @@ function preliminaryItemsEqual(a, b) {
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    const X = A[i] || {};
-    const Y = B[i] || {};
-    if (String(X.name || "") !== String(Y.name || "")) return false;
-    if (Number(X.allocation || 0) !== Number(Y.allocation || 0)) return false;
-    if (Boolean(X.completed) !== Boolean(Y.completed)) return false;
-    if (String(X.notes || "") !== String(Y.notes || "")) return false;
+    const X = preliminaryItemRow(A[i]);
+    const Y = preliminaryItemRow(B[i]);
+    if (X.name !== Y.name) return false;
+    if (X.allocation !== Y.allocation) return false;
+    if (X.completed !== Y.completed) return false;
+    if (X.notes !== Y.notes) return false;
+    // The QS's recorded spend is an edit like any other.
+    if (X.actualAmount !== Y.actualAmount) return false;
   }
   return true;
 }
@@ -549,14 +612,18 @@ function variationsEqual(a, b) {
   const B = Array.isArray(b) ? b : [];
   if (A.length !== B.length) return false;
   for (let i = 0; i < A.length; i++) {
-    const X = A[i] || {};
-    const Y = B[i] || {};
-    if (String(X.description || "") !== String(Y.description || "")) return false;
-    if (Number(X.qty || 0) !== Number(Y.qty || 0)) return false;
-    if (String(X.unit || "") !== String(Y.unit || "")) return false;
-    if (Number(X.rate || 0) !== Number(Y.rate || 0)) return false;
-    if (String(X.reference || "") !== String(Y.reference || "")) return false;
-    if (String(X.issuedAt || "") !== String(Y.issuedAt || "")) return false;
+    const X = variationRow(A[i]);
+    const Y = variationRow(B[i]);
+    if (X.description !== Y.description) return false;
+    if (X.qty !== Y.qty) return false;
+    if (X.unit !== Y.unit) return false;
+    if (X.rate !== Y.rate) return false;
+    if (X.reference !== Y.reference) return false;
+    if (X.issuedAt !== Y.issuedAt) return false;
+    if (X.status !== Y.status) return false;
+    // "Executed on site" is the tick that earns a variation its value, so a
+    // page that ignored it here called itself clean and never saved it.
+    if (X.completed !== Y.completed) return false;
   }
   return true;
 }
@@ -571,7 +638,16 @@ const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   vatPct: 7.5,
   withholdingPct: 2.5,
   basis: "boq",
+  // S18: the buy schedule's procurement lead time, in days.
+  procurementLeadDays: 14,
 });
+
+// A lead time is a whole number of days, 0-120. Same clamp as the server.
+function clampLeadDays(value, fallback = 14) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(120, Math.round(n)));
+}
 
 function clampPercentage(value, fallback = 0) {
   const num = Number(value);
@@ -617,6 +693,10 @@ function normalizeValuationSettings(settings) {
       source.basis === "budget" || source.basis === "boq"
         ? source.basis
         : DEFAULT_VALUATION_SETTINGS.basis,
+    procurementLeadDays: clampLeadDays(
+      source.procurementLeadDays,
+      DEFAULT_VALUATION_SETTINGS.procurementLeadDays,
+    ),
   };
 }
 
@@ -632,7 +712,8 @@ function valuationSettingsEqual(a, b) {
     safeNum(A.vatPct) === safeNum(B.vatPct) &&
     safeNum(A.withholdingPct) === safeNum(B.withholdingPct) &&
     A.rateSyncEnabled === B.rateSyncEnabled &&
-    A.basis === B.basis
+    A.basis === B.basis &&
+    safeNum(A.procurementLeadDays) === safeNum(B.procurementLeadDays)
   );
 }
 
@@ -1084,7 +1165,14 @@ export default function ProjectsGeneric() {
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
+  // `err` is the page's general error line: a failed save, a rate sync that
+  // would not run, a rejected upload all land in it. The grid's empty state
+  // needs the narrower fact — did THIS list fail to load — or an unrelated
+  // failure relabels an empty grid "your projects could not be listed".
+  const [listFailed, setListFailed] = React.useState(false);
   const [storageInfo, setStorageInfo] = React.useState(null);
+  // Read-only learning samples for this product (GET /projects/:tool/samples).
+  const [samples, setSamples] = React.useState([]);
 
   // explorer selection
   const [selectedMap, setSelectedMap] = React.useState({});
@@ -1097,6 +1185,18 @@ export default function ProjectsGeneric() {
   // rates editing
   const [rates, setRates] = React.useState({});
   const [baseRates, setBaseRates] = React.useState({});
+  // The rate map as it stands right now. A setRates updater does not run until
+  // React renders, so anything that has to know BOTH the new map and which
+  // lines it touched — the linked-group carry, the Rate Gen sync after its
+  // await — reads this instead and works the edit out once, in one place.
+  const ratesRef = React.useRef(rates);
+  ratesRef.current = rates;
+  // Where each line's rate came from, keyed the same way as `rates`:
+  //   { appliedRateKey, rateLockedAt } for a line the QS priced himself.
+  // Sent with the save so the server stops re-deriving that line out from
+  // under him (server/util/deriveBillRates.js, isRateApplied). A line nobody
+  // has touched has no entry and behaves exactly as it always has.
+  const [rateStamps, setRateStamps] = React.useState({});
   const [actualQtyMap, setActualQtyMap] = React.useState({});
   const [baseActualQtyMap, setBaseActualQtyMap] = React.useState({});
   const [actualRateMap, setActualRateMap] = React.useState({});
@@ -1133,6 +1233,11 @@ export default function ProjectsGeneric() {
   // Set true when the user reorders bill items so the Save button activates
   // (item order isn't otherwise part of the dirty check). Reset on project
   // load — see the effect just after selectedId is defined.
+  // The items ARRAY changed — reordered, a row deleted, a delete undone. Every
+  // other dirty check compares the per-row edit maps, and none of them notices
+  // a row leaving: an unpriced row contributes nothing to any map, and
+  // ratesEqual reads a missing key and an empty cell as the same 0. So deleting
+  // one left Save disabled and the row came back on the next load.
   const [orderDirty, setOrderDirty] = React.useState(false);
   // Contract lock state — populated from the loaded project.
   const [contract, setContract] = React.useState({
@@ -1212,6 +1317,12 @@ export default function ProjectsGeneric() {
   const [boqImportName, setBoqImportName] = React.useState("");
   const [boqImportErr, setBoqImportErr] = React.useState("");
   const boqReimportInputRef = React.useRef(null);
+  // Rates are hidden on a project shared with someone who has no RateGen
+  // subscription (server: resolveProjectAccess → maskRates). The server also
+  // REFUSES every write that would re-price such a project, so the controls
+  // that do that are disabled here with the reason, rather than offered and
+  // then answered with a 403.
+  const ratesHidden = sel?._access?.canSeeRates === false;
 
   // "Add shared project" (claim a project shared with me by code)
   const [claimOpen, setClaimOpen] = React.useState(false);
@@ -1299,6 +1410,10 @@ export default function ProjectsGeneric() {
     setMergeGroupOverride(null);
   }, [selectedId]);
 
+  // The site-wide toast (his feedback.js), for the actions on this page that
+  // do something a user would want reporting back — and undoing.
+  const fb = useFeedback();
+
   function itemKey(it, i) {
     const sn = it?.sn ?? i + 1;
     const code = String(it?.code || "");
@@ -1371,9 +1486,20 @@ export default function ProjectsGeneric() {
     const uiPercents = {};
     const baseCategories = {};
     const uiCategories = {};
+    const stamps = {};
     for (let i = 0; i < its.length; i++) {
       const k = itemKey(its[i], i);
       const r = safeNum(its[i]?.rate);
+      // Carry the stored provenance forward so a save that touches one line
+      // does not strip the stamp off every other line on the bill.
+      const storedKey = String(its[i]?.appliedRateKey || "").trim();
+      const storedLockedAt = its[i]?.rateLockedAt || null;
+      if (storedKey || storedLockedAt) {
+        stamps[k] = {
+          appliedRateKey: storedKey,
+          rateLockedAt: storedLockedAt,
+        };
+      }
       const actualQty = parseOptionalNumber(its[i]?.actualQty);
       const actualRate = parseOptionalNumber(its[i]?.actualRate);
       base[k] = r;
@@ -1426,36 +1552,28 @@ export default function ProjectsGeneric() {
     setCategoryMap(uiCategories);
     setBaseTradeMap(baseTrades);
     setTradeMap(uiTrades);
+    // Rows travel whole (features/projects/lib/projectRows.js): a sum keeps
+    // its group and its "executed" tick, a variation keeps its approval trail,
+    // and on a merged project both keep the source tag the server routes them
+    // home by. Rebuilding them field by field was what erased all of that on
+    // the next save.
     const sums = Array.isArray(project?.provisionalSums)
-      ? project.provisionalSums.map((s) => ({
-          description: String(s?.description || ""),
-          amount: Number(s?.amount) || 0,
-        }))
+      ? project.provisionalSums.map(provisionalSumRow)
       : [];
     setProvisionalSums(sums);
     setBaseProvisionalSums(sums.map((s) => ({ ...s })));
+    // S18 valuations: the approval status travels through load AND save —
+    // without it a save would send the row back with no status, the server
+    // would read that as approved, and a variation still waiting for approval
+    // would silently start moving money. So do `completed`, `source` and the
+    // decidedAt / decidedBy decision trail.
     const vars = Array.isArray(project?.variations)
-      ? project.variations.map((v) => ({
-          description: String(v?.description || ""),
-          qty: Number(v?.qty) || 0,
-          unit: String(v?.unit || ""),
-          rate: Number(v?.rate) || 0,
-          reference: String(v?.reference || ""),
-          issuedAt: v?.issuedAt
-            ? new Date(v.issuedAt).toISOString().slice(0, 10)
-            : "",
-        }))
+      ? project.variations.map(variationRow)
       : [];
     setVariations(vars);
     setBaseVariations(vars.map((v) => ({ ...v })));
     const prelimItems = Array.isArray(project?.preliminaryItems)
-      ? project.preliminaryItems.map((p) => ({
-          name: String(p?.name || ""),
-          allocation: Number(p?.allocation) || 0,
-          completed: Boolean(p?.completed),
-          completedAt: p?.completedAt || null,
-          notes: String(p?.notes || ""),
-        }))
+      ? project.preliminaryItems.map(preliminaryItemRow)
       : [];
     setPreliminaryItems(prelimItems);
     setBasePreliminaryItems(prelimItems.map((p) => ({ ...p })));
@@ -1533,6 +1651,7 @@ export default function ProjectsGeneric() {
     } else {
       setRates(ui);
     }
+    setRateStamps(stamps);
     if (cached && cached?.actualQty && typeof cached.actualQty === "object") {
       const nextActualQty = { ...uiActualQty };
       for (const [k, v] of Object.entries(cached.actualQty)) {
@@ -1584,6 +1703,7 @@ export default function ProjectsGeneric() {
     setSel(null);
     setRates({});
     setBaseRates({});
+    setRateStamps({});
     setActualQtyMap({});
     setBaseActualQtyMap({});
     setActualRateMap({});
@@ -1651,7 +1771,12 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function handlePmGenerateFromBoq({ projectStart, projectFinish } = {}) {
+  async function handlePmGenerateFromBoq({
+    projectStart,
+    projectFinish,
+    // S18 PR2-18: plan only the bill lines that are in no task yet.
+    onlyUnlinked = false,
+  } = {}) {
     if (!selectedId) return;
     setPmGenerating(true);
     setPmImportError("");
@@ -1659,13 +1784,20 @@ export default function ProjectsGeneric() {
       const body = {};
       if (projectStart) body.projectStart = projectStart;
       if (projectFinish) body.projectFinish = projectFinish;
+      if (onlyUnlinked) body.onlyUnlinked = true;
       const data = await apiAuthed(endpoints.pmGenerateFromBoq(selectedId), {
         token: accessToken,
         method: "POST",
         body,
       });
       if (data?.dashboard) setPmDashboard(data.dashboard);
-      setNotice(`Generated ${data?.generated || 0} task(s) from BoQ.`);
+      setNotice(
+        onlyUnlinked
+          ? data?.generated
+            ? `${data.generated} task(s) added for bill lines that were in no task.`
+            : "Every bill line is already in a task."
+          : `Generated ${data?.generated || 0} task(s) from BoQ.`,
+      );
     } catch (e) {
       setPmImportError(e?.message || "Failed to generate tasks from BoQ.");
     } finally {
@@ -2066,17 +2198,26 @@ export default function ProjectsGeneric() {
   async function load({ keepSelection = true } = {}) {
     setErr("");
     setNotice("");
+    setListFailed(false);
 
     try {
-      const [list, storage] = await Promise.all([
+      const [list, storage, sampleList] = await Promise.all([
         apiAuthed(endpoints.list, { token: accessToken }),
         isMaterialsTool(tool)
           ? Promise.resolve(null)
           : apiAuthed(`/projects/${normTool(tool)}/storage`, { token: accessToken }).catch(() => null),
+        isMaterialsTool(tool)
+          ? Promise.resolve([])
+          : apiAuthed(`/projects/${normTool(tool)}/samples`, { token: accessToken }).catch(() => []),
       ]);
       const safeList = Array.isArray(list) ? list : [];
+      const safeSamples = Array.isArray(sampleList) ? sampleList : [];
       if (storage) setStorageInfo(storage);
       setRows(safeList);
+      setSamples(safeSamples);
+      // Samples are openable like any project but never join the grid, so the
+      // bulk select / delete / merge actions can't reach them.
+      const openable = [...safeList, ...safeSamples];
 
       if (!keepSelection) setSelectedMap({});
 
@@ -2086,12 +2227,12 @@ export default function ProjectsGeneric() {
         const isObjectId = /^[a-f\d]{24}$/i.test(preselectKey);
         if (isObjectId) {
           // Legacy: load by ObjectId
-          const found = safeList.find((x) => rowId(x) === preselectKey);
+          const found = openable.find((x) => rowId(x) === preselectKey);
           if (found) await view(preselectKey);
           else closeProject();
         } else {
           // New: load by slug
-          const found = safeList.find((x) => x.slug === preselectKey);
+          const found = openable.find((x) => x.slug === preselectKey);
           if (found) await view(rowId(found));
           else {
             // Try loading by slug from server directly
@@ -2112,7 +2253,7 @@ export default function ProjectsGeneric() {
       } else {
         // keep current open project if still valid
         if (selectedId) {
-          const stillThere = safeList.some((x) => rowId(x) === selectedId);
+          const stillThere = openable.some((x) => rowId(x) === selectedId);
           if (!stillThere) closeProject();
         }
       }
@@ -2121,6 +2262,7 @@ export default function ProjectsGeneric() {
       // left a lapsed subscription looking like an empty "0 projects" list.
       closeProject();
       setRows([]);
+      setListFailed(true);
       const msg = e?.message || "Failed to load projects";
       const product = String(TITLES[tool] || "this product").replace(/ projects$/, "");
       setErr(
@@ -2450,17 +2592,62 @@ export default function ProjectsGeneric() {
     });
   }
 
-  function handleRateChange(rowIndex, value) {
+  // Write the per-line stamp. Each entry carries its own library description,
+  // because a Rate Gen sync applies a different rate to every line it fills.
+  // A null rateLockedAt is a RELEASE, not a no-op: the line goes back to being
+  // derived from its Budget build-up.
+  function stampRateEntries(entries) {
+    if (!entries?.length) return;
+    setRateStamps((prev) => {
+      const next = { ...(prev || {}) };
+      for (const e of entries) {
+        if (!e?.key) continue;
+        next[e.key] = {
+          appliedRateKey: e.appliedRateKey || "",
+          rateLockedAt: e.rateLockedAt ?? null,
+        };
+      }
+      return next;
+    });
+  }
+
+  // Stamp a line (and any line a linked group carries the rate onto) as
+  // priced by the QS. `meta` comes from the rate cell: a Rate Gen pick carries
+  // the library description, a typed figure carries none. Called only from an
+  // explicit edit, never from a background re-fetch, so no project changes
+  // value unless the QS just changed it.
+  function stampRates(keys, meta, { keepRateKey = "" } = {}) {
+    if (!meta || !keys.length) return;
+    // What the meta does to the stamp lives in rateStamp.js, where it can be
+    // tested: an empty cell the QS has COMMITTED releases the stamp (the way
+    // back for a line stamped by mistake, keeping the plugin's own
+    // appliedRateKey because that records which library rate produced the
+    // figure and is not ours to erase); a keystroke on the way to retyping the
+    // figure returns null and moves nothing at all.
+    const stamp = nextRateStamp(meta, { keepRateKey });
+    if (!stamp) return;
+    stampRateEntries(keys.map((key) => ({ key, ...stamp })));
+  }
+
+  function handleRateChange(rowIndex, value, meta) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
     const it = its[rowIndex];
     if (!it) return;
     const k0 = itemKey(it, rowIndex);
     const groupId = groupIdForIndex(rowIndex);
-    setRates((prev) => {
-      const next = { ...(prev || {}), [k0]: value };
-      if (!groupId || !isGroupLinked(groupId)) return next;
-      if (String(value ?? "").trim() === "") return next;
+
+    // Work the whole edit out ONCE, here, and hand the same result to the rate
+    // map and to the stamp. The linked-group keys used to be collected inside
+    // the setRates updater, which React does not run until it renders: by the
+    // time stampRates read the array it still held only this row, so a rate
+    // carried onto a sibling was saved unstamped and reverted on the next save.
+    const prev = ratesRef.current || {};
+    const next = { ...prev, [k0]: value };
+    const stamped = [k0];
+    const pricedCodes = [it?.code];
+    const blank = String(value ?? "").trim() === "";
+    if (groupId && isGroupLinked(groupId) && !blank) {
       for (let j = 0; j < its.length; j++) {
         if (j === rowIndex) continue;
         if (groupIdForIndex(j) !== groupId) continue;
@@ -2471,9 +2658,76 @@ export default function ProjectsGeneric() {
             : safeNum(next[kj]);
         if (onlyFillEmpty && existing !== 0) continue;
         next[kj] = value;
+        stamped.push(kj);
+        pricedCodes.push(its[j]?.code);
       }
-      return next;
-    });
+    }
+    setRates(next);
+    // A rate carried onto a linked sibling was applied by the QS just as much
+    // as the line he typed into, so it carries the same stamp.
+    stampRates(stamped, meta, { keepRateKey: String(it?.appliedRateKey || "") });
+    // A pick out of the library prices the material and labour behind it
+    // straight away, on every line the rate just landed on. The materials view
+    // picks component prices, not rates, so it has no build-up to write.
+    if (!showMaterials) {
+      const body = priceFromRateBody(value, meta);
+      if (body) priceLinesFromRate(pricedCodes, body);
+    }
+  }
+
+  // Price the Budget of each line from the rate the QS just picked. The server
+  // writes the rows and saves them; the page takes back only what that changed
+  // (priceFromRate.js), so his other unsaved edits survive. Save is held off
+  // while this runs, because the save's baseVersion must be the one it returns.
+  async function priceLinesFromRate(codes, body) {
+    const projectId = selectedId;
+    const list = [
+      ...new Set(codes.map((c) => String(c ?? "").trim()).filter(Boolean)),
+    ];
+    if (!projectId || !list.length) return;
+    setSaving(true);
+    const priced = [];
+    let last = null;
+    let failure = "";
+    const warnings = [];
+    try {
+      for (const code of list) {
+        try {
+          last = await apiAuthed(
+            priceFromRatePath(endpoints.one(projectId), code),
+            { token: accessToken, method: "POST", body },
+          );
+          priced.push(code);
+          for (const w of last?._rateWarnings || []) warnings.push(w);
+        } catch (e) {
+          failure = priceFromRateFailure(e);
+          // The same rate and the same access fail the same way on every line.
+          break;
+        }
+      }
+    } finally {
+      // The QS may have opened another project while this ran.
+      if (last) {
+        setSel((cur) =>
+          String(cur?._id || cur?.id || "") === String(projectId)
+            ? mergePricedProject(cur, last, priced)
+            : cur,
+        );
+      }
+      setSaving(false);
+    }
+    if (failure) {
+      fb.toast({ tone: "warning", title: "Budget not priced", msg: failure });
+    } else if (priced.length) {
+      fb.toast({
+        tone: "success",
+        title:
+          priced.length === 1
+            ? "Material and labour priced from the rate"
+            : `Material and labour priced on ${priced.length} lines`,
+        msg: warnings.length ? warnings.join(" ") : "See the Budget tab.",
+      });
+    }
   }
   function handleActualQtyChange(rowIndex, value) {
     if (!sel) return;
@@ -2491,11 +2745,26 @@ export default function ProjectsGeneric() {
     const key = itemKey(it, rowIndex);
     setActualRateMap((prev) => ({ ...(prev || {}), [key]: value }));
   }
-  function handleAddProvisionalSum() {
+  // S18 bill: a sum is added into one of the two named groups. Anything that
+  // is not the literal "pc" is a provisional sum, which is what the whole list
+  // has always been, so the ribbon's plain "Add sum" button still adds exactly
+  // what it added before. The row starts with a name because the server's
+  // sanitiser drops a row with no description and no amount.
+  function handleAddProvisionalSum(kind) {
     setProvisionalSums((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      { description: "", amount: 0 },
+      newProvisionalSumRow(kind),
     ]);
+  }
+  // Put a removed sum back exactly where it was, for the toast's Undo.
+  function handleRestoreProvisionalSum(idx, sum) {
+    if (!sum) return;
+    setProvisionalSums((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      const at = Math.max(0, Math.min(next.length, Number(idx) || 0));
+      next.splice(at, 0, sum);
+      return next;
+    });
   }
   function handleUpdateProvisionalSum(idx, patch) {
     setProvisionalSums((prev) => {
@@ -2521,17 +2790,16 @@ export default function ProjectsGeneric() {
       return next;
     });
   }
+  // A variation raised from the Bill starts PENDING, exactly like one raised
+  // on the Valuation tab's Variations view. It is worth nothing until someone
+  // approves it there, so no user action can create money in an approved
+  // state. (It used to be added with no status, which the server reads as
+  // approved, so keying a row straight into the Bill moved the project total
+  // with no decision behind it.)
   function handleAddVariation() {
     setVariations((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      {
-        description: "",
-        qty: 0,
-        unit: "",
-        rate: 0,
-        reference: "",
-        issuedAt: "",
-      },
+      newVariationRow(),
     ]);
   }
   function handleUpdateVariation(idx, patch) {
@@ -2578,7 +2846,7 @@ export default function ProjectsGeneric() {
   function handleAddPreliminaryItem() {
     setPreliminaryItems((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      { name: "", allocation: 0, completed: false, completedAt: null, notes: "", actualAmount: 0 },
+      newPreliminaryItemRow(),
     ]);
   }
   function handleRemovePreliminaryItem(idx) {
@@ -2679,6 +2947,8 @@ export default function ProjectsGeneric() {
         next[field] = clampPercentage(value, next[field]);
       } else if (field === "rateSyncEnabled") {
         next.rateSyncEnabled = Boolean(value);
+      } else if (field === "procurementLeadDays") {
+        next.procurementLeadDays = clampLeadDays(value, next.procurementLeadDays);
       }
       return { ...next };
     });
@@ -2723,8 +2993,6 @@ export default function ProjectsGeneric() {
       const updatedItems = its.map((it, i) => {
         const k = itemKey(it, i);
         const raw = rates?.[k];
-        const use =
-          String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
         const statusValue = Boolean(statusMap?.[k]);
         // percentComplete falls back to the stored value when no UI input
         // has touched it; statusValue = true forces 100%.
@@ -2751,9 +3019,15 @@ export default function ProjectsGeneric() {
         const nextTrade =
           String(tradeMap?.[k] ?? "").trim() ||
           String(it?.trade || "").trim();
+        // Provenance travels with the rate. Without it the server re-derives
+        // the line from a Budget build-up that never saw this figure, the
+        // rate reverts, and the toast still says "Saved". An empty cell is not
+        // a rate of zero: it keeps the stored figure, and it is the stamp that
+        // decides whether the server keeps it. (rateStamp.js, tested there.)
+        const stamp = rateStamps?.[k] || null;
         return {
           ...it,
-          rate: use,
+          ...rateFieldsForSave(it, raw, stamp),
           actualQty: nextActualQty,
           actualRate: nextActualRate,
           [statusField]: statusValue,
@@ -2767,21 +3041,16 @@ export default function ProjectsGeneric() {
         items: updatedItems,
         valuationSettings: normalizeValuationSettings(valuationSettings),
         clientName: String(clientName || "").trim(),
+        // Whole rows, not a hand-written field list. The PUT replaces both
+        // arrays outright, so anything missing here is deleted — which is how
+        // a PC sum used to come back as a provisional sum and an executed
+        // variation used to un-execute itself. The server's sanitiser is the
+        // one whitelist.
         provisionalSums: provisionalSums
-          .map((s) => ({
-            description: String(s?.description || "").trim(),
-            amount: Number(s?.amount) || 0,
-          }))
+          .map(provisionalSumForSave)
           .filter((s) => s.description || s.amount > 0),
         variations: variations
-          .map((v) => ({
-            description: String(v?.description || "").trim(),
-            qty: Number(v?.qty) || 0,
-            unit: String(v?.unit || "").trim(),
-            rate: Number(v?.rate) || 0,
-            reference: String(v?.reference || "").trim(),
-            issuedAt: v?.issuedAt || null,
-          }))
+          .map(variationForSave)
           .filter((v) => v.description || v.qty > 0 || v.rate > 0),
         preliminaryPercent: Number(contract?.preliminaryPercent) || 0,
         // Contingency + tax (VAT) percentages — only sent when not
@@ -2789,15 +3058,9 @@ export default function ProjectsGeneric() {
         // these (the at-lock values stay frozen).
         contingencyPercent: Number(contract?.contingencyPercent) || 0,
         taxPercent: Number(contract?.taxPercent) || 0,
-        preliminaryItems: preliminaryItems.map((p) => ({
-          name: String(p?.name || "").trim(),
-          allocation: Number(p?.allocation) || 0,
-          completed: Boolean(p?.completed),
-          completedAt: p?.completedAt || null,
-          notes: String(p?.notes || "").trim(),
-          // actualAmount — QS-recorded spend (added in earlier session)
-          actualAmount: Number(p?.actualAmount) || 0,
-        })),
+        // Same rule for the preliminaries: whole rows, so the QS's recorded
+        // spend (actualAmount) survives a save instead of being sent as 0.
+        preliminaryItems: preliminaryItems.map(preliminaryItemForSave),
       };
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
@@ -2862,6 +3125,7 @@ export default function ProjectsGeneric() {
     });
     its.splice(rowIndex, 1);
     setSel((prev) => (prev ? { ...prev, items: its } : prev));
+    setOrderDirty(true); // a removed row is a change to save, priced or not
     // clear rate/status caches for the removed index
     setRates((prev) => {
       const next = {};
@@ -2887,6 +3151,9 @@ export default function ProjectsGeneric() {
           its.splice(at, 0, item);
           return { ...cur, items: its };
         });
+        // Putting the row back is a change to the array too. Without this, an
+        // undo of an unpriced row left Save disabled and the undo was lost.
+        setOrderDirty(true);
         if (cachedRate != null) {
           // Re-seed the rate cache at the new index's key so the row
           // shows its original rate immediately, not a blank cell.
@@ -3234,6 +3501,70 @@ export default function ProjectsGeneric() {
       : [];
   }
 
+  // ── S18 bill (PR2-10): pricing one line prices the matching unpriced ones ─
+  //
+  // His assign() (work-proj.js): when a rate is assigned, every other unpriced
+  // line that reads the same gets it too. "The same" here is our existing
+  // similarity group — the one the "Link similar items" toggle already uses —
+  // so the lines that follow are the lines the bill already treats as alike.
+  //
+  // Two rules keep it safe. A line that already carries a rate is never
+  // touched, so a deliberate difference survives. And a locked contract is
+  // left alone entirely.
+  //
+  // Returns the number of lines that followed, so the caller can say so.
+  function priceMatchingUnpricedLines(rowIndex, value) {
+    if (contract?.locked) return 0;
+    const rate = safeNum(value);
+    if (!rate) return 0;
+    const groupId = groupIdForIndex(rowIndex);
+    if (!groupId) return 0;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+
+    // Work out which lines follow from the rates on screen now, outside the
+    // state updater: an updater can be replayed, and a replay would record
+    // the "before" values it had just written.
+    const current = rates || {};
+    const before = [];
+    for (let j = 0; j < its.length; j += 1) {
+      if (j === rowIndex) continue;
+      if (groupIdForIndex(j) !== groupId) continue;
+      const kj = itemKey(its[j], j);
+      // The rate showing on the line right now: the unsaved input if there is
+      // one, otherwise what is stored.
+      const typed = String(current[kj] ?? "").trim();
+      const shown = typed === "" ? safeNum(its[j]?.rate) : safeNum(current[kj]);
+      if (shown !== 0) continue; // already priced — leave it alone
+      before.push([kj, current[kj]]);
+    }
+    if (!before.length) return 0;
+
+    setRates((prev) => {
+      const next = { ...(prev || {}) };
+      for (const [k] of before) next[k] = String(rate);
+      return next;
+    });
+
+    fb.toast({
+      tone: "info",
+      title: `${before.length} matching line${before.length === 1 ? "" : "s"} priced with it`,
+      msg: "Lines that already had a rate were left alone.",
+      action: {
+        label: "Undo",
+        run: () =>
+          setRates((prev) => {
+            const next = { ...(prev || {}) };
+            for (const [k, was] of before) {
+              if (was === undefined) delete next[k];
+              else next[k] = was;
+            }
+            return next;
+          }),
+      },
+    });
+    return before.length;
+  }
+
   function handlePickCandidate(rowIndex, candidate) {
     if (!candidate) return;
     const it = items[rowIndex];
@@ -3246,7 +3577,12 @@ export default function ProjectsGeneric() {
       ...(prev || {}),
       [mk]: pk,
     }));
-    handleRateChange(rowIndex, String(safeNum(candidate.price) || 0));
+    const price = String(safeNum(candidate.price) || 0);
+    handleRateChange(rowIndex, price, {
+      source: "rategen",
+      rateKey: String(candidate?.description || "").trim(),
+    });
+    priceMatchingUnpricedLines(rowIndex, price);
     setOpenPickKey(null);
   }
 
@@ -3262,7 +3598,21 @@ export default function ProjectsGeneric() {
       .trim();
   }
 
-  async function syncBoqRates(project) {
+  // `explicit` is the whole question here. This sync can fire two ways:
+  //
+  //   • the QS presses "Sync rates", or turns the auto-fill switch on — a
+  //     deliberate act of pricing, no different from picking a rate in the
+  //     cell, so the lines it fills carry the same stamp and the figures stick;
+  //   • an effect runs it on open, because rateSyncEnabled is saved in the
+  //     project's valuation settings. Nobody asked for that this minute, so
+  //     nothing is stamped: on a line with a priced build-up the server still
+  //     re-derives and the sync's figure is discarded on save.
+  //
+  // Stamping the second case would change the money on projects the QS only
+  // opened, which is the one thing this work must not do. So it stays
+  // unstamped — and the notice says plainly how many of the rates it just put
+  // on screen will not survive, instead of claiming all of them were "synced".
+  async function syncBoqRates(project, { explicit = false } = {}) {
     if (showMaterials) return;
     if (!canRateGen) return;
     if (!project?._id) return;
@@ -3294,47 +3644,78 @@ export default function ProjectsGeneric() {
 
       setBoqRateResolved(result);
 
+      // Bill codes with a priced build-up. The server derives those lines from
+      // the Budget, so an unstamped rate dropped into one is thrown away on the
+      // next save — that is the silent revert, and the QS is owed the count.
+      const derivedNet = new Map();
+      for (const b of Array.isArray(project?.budgetItems) ? project.budgetItems : []) {
+        const code = String(b?.billIdentity || "").trim().toLowerCase();
+        if (!code) continue;
+        derivedNet.set(
+          code,
+          (derivedNet.get(code) || 0) + safeNum(b?.qty) * safeNum(b?.rate),
+        );
+      }
+
       let matched = 0;
       let filled = 0;
+      let wontStick = 0;
 
-      setRates((prev) => {
-        const next = { ...(prev || {}) };
+      // Worked out once, here, so the stamps describe exactly the lines the
+      // rate map is about to be given (see ratesRef).
+      const next = { ...(ratesRef.current || {}) };
+      const stamps = [];
+      const rateLockedAt = new Date().toISOString();
 
-        for (let i = 0; i < its.length; i++) {
-          const it = its[i] || {};
-          const k = itemKey(it, i);
-          const descKey = normalizeBoqDescription(it.description);
-          const candidates = Array.isArray(result?.candidatesByKey?.[descKey])
-            ? result.candidatesByKey[descKey]
-            : [];
+      for (let i = 0; i < its.length; i++) {
+        const it = its[i] || {};
+        const k = itemKey(it, i);
+        const descKey = normalizeBoqDescription(it.description);
+        const candidates = Array.isArray(result?.candidatesByKey?.[descKey])
+          ? result.candidatesByKey[descKey]
+          : [];
 
-          if (!candidates.length) continue;
+        if (!candidates.length) continue;
 
-          const best = candidates[0];
-          if (!best) continue;
+        const best = candidates[0];
+        if (!best) continue;
 
-          matched += 1;
+        matched += 1;
 
-          const totalCost = safeNum(best.totalCost);
-          if (totalCost <= 0) continue;
+        const totalCost = safeNum(best.totalCost);
+        if (totalCost <= 0) continue;
 
-          const existing =
-            String(next[k] ?? "").trim() === ""
-              ? safeNum(it?.rate)
-              : safeNum(next[k]);
+        const existing =
+          String(next[k] ?? "").trim() === ""
+            ? safeNum(it?.rate)
+            : safeNum(next[k]);
 
-          if (onlyFillEmpty && existing !== 0) continue;
+        if (onlyFillEmpty && existing !== 0) continue;
 
-          next[k] = String(totalCost);
-          filled += 1;
+        next[k] = String(totalCost);
+        filled += 1;
+
+        if (explicit) {
+          stamps.push({
+            key: k,
+            appliedRateKey: String(best?.description || "").trim(),
+            rateLockedAt,
+          });
+        } else if (safeNum(derivedNet.get(String(it?.code || "").trim().toLowerCase())) > 0) {
+          wontStick += 1;
         }
+      }
 
-        return next;
-      });
+      setRates(next);
+      if (stamps.length) stampRateEntries(stamps);
 
+      const held =
+        wontStick > 0
+          ? ` ${wontStick} of them are priced by the Budget build-up and will go back to the Budget's rate when you save — press Sync rates to apply them yourself.`
+          : "";
       setNotice(
         filled > 0
-          ? `Synced ${filled} rate(s) from RateGen. (${matched} match(es) found)`
+          ? `Synced ${filled} rate(s) from RateGen. (${matched} match(es) found)${held}`
           : `No rates filled. (${matched} match(es) found)`,
       );
     } catch (e) {
@@ -3355,6 +3736,9 @@ export default function ProjectsGeneric() {
     if (autoFillBoqAppliedRef.current[selectedId]) return;
     autoFillBoqAppliedRef.current[selectedId] = true;
 
+    // Opening the project is not a decision to re-price it: this run can come
+    // from a setting saved months ago, so it fills the cells and stamps
+    // nothing.
     syncBoqRates(sel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMaterials, shouldAutoSyncBoq, canRateGen, selectedId]);
@@ -3372,7 +3756,8 @@ export default function ProjectsGeneric() {
     setRateGenPoolLoaded(false);
     autoFillBoqAppliedRef.current = {};
 
-    // Re-sync for the currently open project
+    // Re-sync for the currently open project. A zone change is not a pricing
+    // decision on this bill either, so this run stamps nothing.
     if (shouldAutoSyncBoq && sel && selectedId) {
       syncBoqRates(sel);
     }
@@ -3382,7 +3767,8 @@ export default function ProjectsGeneric() {
   function toggleAutoFillBoq(v) {
     setAutoFillBoqRates(v);
     if (selectedId) delete autoFillBoqAppliedRef.current[selectedId];
-    if (v && sel) syncBoqRates(sel);
+    // The QS just turned this on: the rates it brings in are his.
+    if (v && sel) syncBoqRates(sel, { explicit: true });
   }
 
   function getBoqCandidatesForItem(item) {
@@ -3395,7 +3781,12 @@ export default function ProjectsGeneric() {
 
   function handlePickBoqCandidate(rowIndex, candidate) {
     if (!candidate) return;
-    handleRateChange(rowIndex, String(safeNum(candidate.totalCost) || 0));
+    const price = String(safeNum(candidate.totalCost) || 0);
+    handleRateChange(rowIndex, price, {
+      source: "rategen",
+      rateKey: String(candidate?.description || "").trim(),
+    });
+    priceMatchingUnpricedLines(rowIndex, price);
     setOpenBoqPickKey(null);
   }
 
@@ -3719,6 +4110,40 @@ export default function ProjectsGeneric() {
     }
   }
 
+  // S18 bill (PR2-25): record, or take back, the day the priced bill went out
+  // to tender. It moves the project to the Tendered stage and changes no
+  // figure at all — no step-up, because no money moves.
+  async function handleMarkTendered(on = true) {
+    if (!selectedId || !accessToken) return null;
+    try {
+      const result = await apiAuthed(endpoints.tendered(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: { tendered: Boolean(on) },
+      });
+      if (result?.contract) {
+        setContract((prev) => ({
+          ...(prev || {}),
+          tenderedAt: result.contract.tenderedAt || null,
+        }));
+        setSel((prev) =>
+          prev
+            ? { ...prev, contract: result.contract, version: result.version ?? prev.version }
+            : prev,
+        );
+        setNotice(
+          on
+            ? "Marked as tendered. The project now shows at the Tendered stage."
+            : "Tender mark removed.",
+        );
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Could not update the tender date");
+      return null;
+    }
+  }
+
   function handlePreliminaryPercentChange(value) {
     const n = Math.max(0, Math.min(100, Number(value) || 0));
     setContract((prev) => ({ ...(prev || {}), preliminaryPercent: n }));
@@ -3730,6 +4155,68 @@ export default function ProjectsGeneric() {
   function handleTaxPercentChange(value) {
     const n = Math.max(0, Math.min(100, Number(value) || 0));
     setContract((prev) => ({ ...(prev || {}), taxPercent: n }));
+  }
+
+  // ── Variations: raise one (pending) and decide a pending one ──────────
+  // These go straight to the server rather than through the project save,
+  // for the same reason certificates do: a decision is an act, not a draft
+  // edit. The response is the truth, so local state is replaced from it.
+  function variationsFromServer(rows) {
+    return (Array.isArray(rows) ? rows : []).map(variationRow);
+  }
+
+  // The whole response, not just its rows: a raise and a decision each bump
+  // the document version, and the held project has to move with it or the next
+  // ordinary Bill save is refused as a conflict. See selAfterVariationWrite.
+  function adoptVariations(result) {
+    const rows = Array.isArray(result?.variations) ? result.variations : [];
+    const next = variationsFromServer(rows);
+    setVariations(next);
+    setBaseVariations(next.map((v) => ({ ...v })));
+    setSel((prev) => selAfterVariationWrite(prev, result));
+  }
+
+  // A raise/decide replaces the whole list from the server, so unsaved edits
+  // in the Bill's own variations editor would be lost. Say so instead.
+  function variationEditsPending() {
+    if (variationsEqual(variations, baseVariations)) return false;
+    setErr(
+      "Save your variation edits first: raising or deciding a variation reloads the list from the server.",
+    );
+    return true;
+  }
+
+  async function handleRaiseVariation(body) {
+    if (!selectedId || !accessToken) return null;
+    if (variationEditsPending()) return null;
+    try {
+      const result = await apiAuthed(endpoints.variations(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: body || {},
+      });
+      if (result?.variations) adoptVariations(result);
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to add the variation");
+      return null;
+    }
+  }
+
+  async function handleDecideVariation(index, status) {
+    if (!selectedId || !accessToken) return null;
+    if (variationEditsPending()) return null;
+    try {
+      const result = await apiAuthed(
+        endpoints.variationDecision(selectedId, index),
+        { token: accessToken, method: "PATCH", body: { status } },
+      );
+      if (result?.variations) adoptVariations(result);
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to record the decision");
+      return null;
+    }
   }
 
   // ── Interim certificates ──
@@ -4072,8 +4559,11 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // compute all rows
+  // compute all rows. HERON's folder markers ("--- GF ---") are dropped here, after
+  // the map, so every row keeps its index into items[] (row.i and the rate/status maps
+  // are keyed by it) while the Bill, its counts and its exports never see a marker.
   const computedAll = items.map((it, i) => {
+    if (isFolderMarker(it)) return null;
     const k = itemKey(it, i);
     const qty = safeNum(it?.qty);
     const rate =
@@ -4155,17 +4645,13 @@ export default function ProjectsGeneric() {
       markedAt:
         statusField === "purchased" ? it?.purchasedAt || null : it?.completedAt || null,
     };
-  });
+  }).filter(Boolean);
   const grossAmount = computedAll.reduce(
     (acc, row) => acc + safeNum(row.fullAmount),
     0,
   );
   const valuedAmount = computedAll.reduce(
     (acc, row) => acc + safeNum(row.valuedAmount),
-    0,
-  );
-  const totalAmount = computedAll.reduce(
-    (acc, row) => acc + safeNum(row.amount),
     0,
   );
 
@@ -4182,16 +4668,16 @@ export default function ProjectsGeneric() {
   const provDoneAmount = (Array.isArray(provisionalSums) ? provisionalSums : [])
     .reduce((acc, p) => acc + (p?.completed ? safeNum(p?.amount) : 0), 0);
 
-  const variationsTotalForOverview = (Array.isArray(variations) ? variations : [])
-    .reduce((acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate), 0);
-  const variationsDoneAmount = (Array.isArray(variations) ? variations : [])
-    .reduce(
-      (acc, v) =>
-        v?.completed ? acc + safeNum(v?.qty) * safeNum(v?.rate) : acc,
-      0,
-    );
+  // S18 valuations: only an APPROVED variation counts toward a total, and
+  // only an approved one that has been executed counts as earned. A row with
+  // no status is approved (that is every row written before the field
+  // existed), so no existing project's figures move. The server's rollups use
+  // the same rule — without it the Overview would quote a total the PM
+  // dashboard and the certificates disagree with.
+  const variationsTotalForOverview = approvedVariationsTotal(variations);
+  const variationsDoneAmount = approvedVariationsEarned(variations);
 
-  const preliminaryPctForOverview = safeNum(contract?.preliminaryPercent) || 7.5;
+  const preliminaryPctForOverview = preliminaryPercentOf(contract);
   const preliminaryPoolForOverview =
     ((grossAmount + provTotalForOverview) * preliminaryPctForOverview) / 100;
   // Pro-rate the preliminary pool by the allocation of each completed item.
@@ -4223,7 +4709,6 @@ export default function ProjectsGeneric() {
   // Full outstanding — what's still left to earn / claim.
   const fullRemainingAmount = Math.max(0, fullProjectTotal - fullValuedAmount);
   const progressCount = computedAll.filter((row) => row.isMarked).length;
-  const partialCount = computedAll.filter((row) => row.isPartial).length;
   // Partial-aware progress: full point for ratified items, fractional for
   // in-progress ones. Matches the server math so PM + BoQ tiles agree.
   const progressShare = computedAll.reduce(
@@ -4282,11 +4767,7 @@ export default function ProjectsGeneric() {
     (acc, s) => (s?.completed ? acc + safeNum(s?.amount) : acc),
     0,
   );
-  const variationActualTracked = (variations || []).reduce(
-    (acc, v) =>
-      v?.completed ? acc + safeNum(v?.qty) * safeNum(v?.rate) : acc,
-    0,
-  );
+  const variationActualTracked = approvedVariationsEarned(variations);
   const actualTrackedAmount =
     measuredActualTracked +
     prelimActualTracked +
@@ -4427,19 +4908,59 @@ export default function ProjectsGeneric() {
     return [...base.slice(0, -1), ...extra, last];
   }, [toolNorm, sel?.customCategories, sel?.excludedCategories, userCategories]);
 
-  // Codes whose bill rate is derived from a priced material/labour build-up —
-  // those BoQ rate cells become read-only (the Budget tab drives them).
-  const budgetDrivenCodes = React.useMemo(() => {
-    const totals = new Map();
-    for (const b of sel?.budgetItems || []) {
-      const code = String(b?.billIdentity || "").trim().toLowerCase();
-      if (!code) continue;
-      totals.set(code, (totals.get(code) || 0) + safeNum(b.qty) * safeNum(b.rate));
-    }
-    const set = new Set();
-    for (const [code, net] of totals) if (net > 0) set.add(code);
-    return set;
-  }, [sel?.budgetItems]);
+  // The bill as it stands on screen: stored lines with the unsaved rate and
+  // the unsaved provenance folded in. Used for the read-only decision and the
+  // reconciliation note so both describe what the QS is actually looking at.
+  const billLinesWithStamps = React.useMemo(() => {
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    return its.map((it, i) => {
+      const k = itemKey(it, i);
+      const raw = rates?.[k];
+      const stamp = rateStamps?.[k] || null;
+      return {
+        ...it,
+        rate: String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw),
+        appliedRateKey: stamp
+          ? stamp.appliedRateKey
+          : String(it?.appliedRateKey || ""),
+        rateLockedAt: stamp ? stamp.rateLockedAt : (it?.rateLockedAt ?? null),
+        // Screen-only: the QS has committed a release that is not saved yet.
+        // The line still holds its rate here and in the database; the next
+        // save hands it to the Budget. Never sent anywhere — saveRatesToCloud
+        // builds its payload from sel.items, not from this list.
+        rateReleased: rateEditState(it, stamp).released,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel?.items, rates, rateStamps, showMaterials]);
+
+  // Codes whose bill rate is derived from a priced build-up — those BoQ rate
+  // cells are read-only (the Budget tab drives them).
+  //
+  // Taken from the lines as STORED. An unsaved stamp may only ever UNLOCK a
+  // cell, never lock one: a rate the QS has just applied frees its cell at
+  // once, and a release he has committed leaves the cell editable until the
+  // save, so he can change his mind. Reading the live stamp in both directions
+  // is what used to swap the input he was typing in for a read-only lock chip
+  // the instant he backspaced it.
+  const budgetDrivenCodes = React.useMemo(
+    () =>
+      budgetDrivenCodesFor(sel?.items, sel?.budgetItems, (it, i) =>
+        rateStamps?.[itemKey(it, i)] || null,
+      ),
+    // itemKey is redeclared on every render, so listing it would defeat the
+    // memo; showMaterials is what it actually varies with and is listed. Same
+    // as the memo above it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sel?.items, sel?.budgetItems, rateStamps, showMaterials],
+  );
+
+  // Lines whose applied rate and Budget build-up do not agree. Empty on every
+  // project nobody has re-priced, so nothing new appears on an old bill.
+  const rateNotes = React.useMemo(
+    () => reconcileBill(billLinesWithStamps, sel?.budgetItems),
+    [billLinesWithStamps, sel?.budgetItems],
+  );
 
   // Add a user-defined category for this project's bill arrangement; persists
   // immediately (items untouched — only customCategories[] is sent).
@@ -4741,15 +5262,16 @@ export default function ProjectsGeneric() {
         rate: Number(v?.rate) || 0,
         reference: String(v?.reference || "").trim(),
         issuedAt: String(v?.issuedAt || ""),
+        // S18 valuations: an exported bill that totalled a variation still
+        // waiting for approval would be quoting money nobody has agreed to.
+        // Each row says where it stands, and the total is the approved net.
+        status: normalizeVariationStatus(v?.status),
       }))
       .filter((v) => v.description || v.qty > 0 || v.rate > 0);
-    const variationsTotal = cleanedVariations.reduce(
-      (acc, v) => acc + v.qty * v.rate,
-      0,
-    );
+    const variationsTotal = approvedVariationsTotal(cleanedVariations);
     if (cleanedVariations.length) {
       const varAoa = [
-        ["S/N", "Reference", "Description", "Qty", "Unit", "Rate", "Amount", "Issued"],
+        ["S/N", "Reference", "Description", "Qty", "Unit", "Rate", "Amount", "Status", "Issued"],
         ...cleanedVariations.map((v, i) => [
           i + 1,
           v.reference,
@@ -4758,9 +5280,20 @@ export default function ProjectsGeneric() {
           v.unit,
           Number(v.rate.toFixed(2)),
           Number((v.qty * v.rate).toFixed(2)),
+          variationStatusLabel(v.status),
           v.issuedAt,
         ]),
-        ["", "", "", "", "", "TOTAL", Number(variationsTotal.toFixed(2)), ""],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "TOTAL (approved)",
+          Number(variationsTotal.toFixed(2)),
+          "",
+          "",
+        ],
       ];
       const varWs = XLSX.utils.aoa_to_sheet(varAoa);
       varWs["!cols"] = [
@@ -4771,6 +5304,7 @@ export default function ProjectsGeneric() {
         { wch: 8 },
         { wch: 14 },
         { wch: 16 },
+        { wch: 12 },
         { wch: 12 },
       ];
       XLSX.utils.book_append_sheet(wb, varWs, "Variations");
@@ -5077,6 +5611,16 @@ export default function ProjectsGeneric() {
     [rowsShown],
   );
 
+  // What the grid needs to tell a first run apart from a search that matched
+  // nothing, and both apart from a list that never loaded. The product and its
+  // host come from the same table the gallery uses, so the two screens name
+  // them identically; a tool with no entry falls back to wording that names no
+  // product rather than guessing one.
+  const gallerySource = React.useMemo(() => {
+    const base = normTool(tool).replace(/-materials?$/, "");
+    return SOURCES[base === "revitmep" ? "mep" : base] || null;
+  }, [tool]);
+
   // Explorer selection helpers
   function toggleSelect(id) {
     if (!id) return;
@@ -5235,8 +5779,15 @@ export default function ProjectsGeneric() {
                   <button
                     type="button"
                     onClick={() => boqReimportInputRef.current?.click()}
-                    disabled={boqImportBusy}
-                    title="Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
+                    // A re-import REPLACES the bill with the workbook's own
+                    // rates, so the server refuses it for a collaborator who
+                    // cannot see the prices (RATES_MASKED). Same rule here.
+                    disabled={boqImportBusy || ratesHidden}
+                    title={
+                      ratesHidden
+                        ? "Rates are hidden on this shared project, so you cannot re-import its bill."
+                        : "Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
+                    }
                     className="ds-btn ds-btn-sm btn-o"
                   >
                     {boqImportBusy ? "Updating…" : "Update from Excel"}
@@ -5290,6 +5841,8 @@ export default function ProjectsGeneric() {
 
         <main>
             {!sel ? (
+              <>
+              <SampleProjectsStrip samples={samples} onOpenProject={view} productKey={normTool(tool)} />
               <ProjectExplorerGrid
                 rowsShown={rowsShown}
                 selectedIdsCount={selectedIds.length}
@@ -5318,7 +5871,14 @@ export default function ProjectsGeneric() {
                 sectionSummary={sectionSummary}
                 statusPastLabel={statusPastLabel}
                 storageInfo={storageInfo}
+                loadFailed={listFailed}
+                searching={!!projectQ}
+                totalCount={rows.length}
+                sourceName={gallerySource?.name || ""}
+                hostName={gallerySource?.host || ""}
+                isMaterials={showMaterials}
               />
+              </>
             ) : (
               <ProjectOpenView
                 actualCoverageCount={actualCoverageCount}
@@ -5349,7 +5909,9 @@ export default function ProjectsGeneric() {
                 autoFillBoqRates={autoFillBoqRates}
                 autoFillBoqBusy={autoFillBoqBusy}
                 canRateGenBoq={!showMaterials && canRateGen}
-                onSyncBoqRates={() => sel && syncBoqRates(sel)}
+                onSyncBoqRates={() =>
+                  sel && syncBoqRates(sel, { explicit: true })
+                }
                 onToggleAutoFillBoq={toggleAutoFillBoq}
                 getBoqCandidatesForItem={getBoqCandidatesForItem}
                 onPickBoqCandidate={handlePickBoqCandidate}
@@ -5469,6 +6031,7 @@ export default function ProjectsGeneric() {
                 projectId={selectedId}
                 accessToken={accessToken}
                 access={sel?._access}
+                sampleInfo={sel?.isSample ? sel?.sample || {} : null}
                 linkedSummaries={sel?.linkedSummaries || []}
                 onLinkedChange={(updated) => setSel(updated)}
                 onDeleteItem={deleteItem}
@@ -5488,6 +6051,7 @@ export default function ProjectsGeneric() {
                 onSearchBudgetRates={searchMaterialRates}
                 budgetRateGenReady={canRateGen}
                 budgetDrivenCodes={budgetDrivenCodes}
+                rateNotes={rateNotes}
                 onAddCategory={handleAddCategory}
                 onRemoveCategory={handleRemoveCategory}
                 onAddTrade={handleAddTrade}
@@ -5533,12 +6097,17 @@ export default function ProjectsGeneric() {
                 onDeleteModel={handleDeleteModel}
                 provisionalSums={provisionalSums}
                 onAddProvisionalSum={handleAddProvisionalSum}
+                onRestoreProvisionalSum={handleRestoreProvisionalSum}
+                onMarkTendered={handleMarkTendered}
+                measuredAmount={grossAmount}
                 onUpdateProvisionalSum={handleUpdateProvisionalSum}
                 onRemoveProvisionalSum={handleRemoveProvisionalSum}
                 variations={variations}
                 onAddVariation={handleAddVariation}
                 onUpdateVariation={handleUpdateVariation}
                 onRemoveVariation={handleRemoveVariation}
+                onRaiseVariation={handleRaiseVariation}
+                onDecideVariation={handleDecideVariation}
                 preliminaryItems={preliminaryItems}
                 onUpdatePreliminaryItem={handleUpdatePreliminaryItem}
                 onAddPreliminaryItem={handleAddPreliminaryItem}

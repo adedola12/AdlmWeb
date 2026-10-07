@@ -1,131 +1,152 @@
 // src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
+// `Navigate` is back with the /dashboard redirect at go-live; that redirect is
+// still its only use here. Without the import the route renders undefined and
+// white-screens the page, which eslint's react/jsx-no-undef catches and a
+// module-load test does not.
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./store.jsx";
 import { StepUpProvider } from "./features/security/useStepUp.jsx";
 import { ThemeProvider, initThemeBeforeRender } from "./theme.jsx";
+import { FeedbackProvider } from "./ds/feedback/FeedbackProvider.jsx";
 import App from "./App.jsx";
 import "./index.css";
 // Richard's design system, ported and namespaced under `.ds`. Loading it here
 // is inert until a page opts in by wrapping its content in <div className="ds">
 // — see client/scripts/port-ds-css.mjs for why it is scoped that way.
 import "./styles/ds.css";
+// His toast and card system and the Appearance picker (17 Sep), loaded on every
+// page as his build.js does.
+import "./styles/ds-feedback.css";
 import "./styles/ds-local.css";
 
 // Apply the saved theme class BEFORE React mounts so users on dark mode
 // don't see a brief flash of light UI on reload.
 initThemeBeforeRender();
 
+// Almost every screen below is behind a sign-in, and until now all of them
+// were in the first bundle the browser downloads — so someone reading the
+// homepage paid for the whole admin section and, through the two project
+// screens, for the Excel library as well. `lazyScreen` and `React.lazy`
+// move a screen into its own file, fetched when a route that can actually
+// reach it renders. See lib/lazyScreen.jsx for which of the two to use.
+import LazyScreen from "./components/LazyScreen.jsx";
+import lazyScreen from "./lib/lazyScreen.jsx";
+
 import AppError from "./pages/AppError.jsx";
 import Home from "./pages/Home.jsx";
 import Products from "./pages/Products.jsx";
 import Quote from "./pages/Quote.jsx";
 import ProductDetail from "./pages/ProductDetail.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
 import Login from "./pages/Login.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
-import AdminToday from "./pages/AdminToday.jsx";
-import AdminPurchases from "./pages/AdminPurchases.jsx";
-import AdminInstallationsQueue from "./pages/AdminInstallationsQueue.jsx";
-import AdminPeople from "./pages/AdminPeople.jsx";
-import AdminEnrolments from "./pages/AdminEnrolments.jsx";
-import AdminSubmissions from "./pages/AdminSubmissions.jsx";
-import AdminFollowUpsDesk from "./pages/AdminFollowUpsDesk.jsx";
-import AdminDsOrganisations from "./pages/AdminDsOrganisations.jsx";
-import AdminDsRoles from "./pages/AdminDsRoles.jsx";
-import AdminDsSupport from "./pages/AdminDsSupport.jsx";
-import AdminDsSubscriptions from "./pages/AdminDsSubscriptions.jsx";
-import AdminDsEntitlements from "./pages/AdminDsEntitlements.jsx";
-import AdminDsQuotations from "./pages/AdminDsQuotations.jsx";
-import AdminDsInvoices from "./pages/AdminDsInvoices.jsx";
-import AdminDsCoupons from "./pages/AdminDsCoupons.jsx";
-import AdminCatProducts from "./pages/AdminCatProducts.jsx";
-import AdminCatPricing from "./pages/AdminCatPricing.jsx";
-import AdminCatRates from "./pages/AdminCatRates.jsx";
-import AdminCatSaved from "./pages/AdminCatSaved.jsx";
-import AdminRateBuilder from "./pages/AdminRateBuilder.jsx";
-import AdminDocAi from "./pages/AdminDocAi.jsx";
-import AdminDsCertificates from "./pages/AdminDsCertificates.jsx";
-import AdminTimeSaved from "./pages/AdminTimeSaved.jsx";
-import AdminDocAudit from "./pages/AdminDocAudit.jsx";
-import AdminDocTemplates from "./pages/AdminDocTemplates.jsx";
-import AdminDocSaved from "./pages/AdminDocSaved.jsx";
-import AdminDocIssued from "./pages/AdminDocIssued.jsx";
-import AdminDocProduced from "./pages/AdminDocProduced.jsx";
-import AdminDocSystem from "./pages/AdminDocSystem.jsx";
-import AdminStorage from "./pages/AdminStorage.jsx";
-import AdminEmails from "./pages/AdminEmails.jsx";
-import AdminCampaigns from "./pages/AdminCampaigns.jsx";
-import AdminVideos from "./pages/AdminVideos.jsx";
-import AdminBillboard from "./pages/AdminBillboard.jsx";
-import AdminDsWaitlist from "./pages/AdminDsWaitlist.jsx";
-import AdminDsOrgVideos from "./pages/AdminDsOrgVideos.jsx";
-import AdminLcCourses from "./pages/AdminLcCourses.jsx";
-import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
-import AdminLcLessons from "./pages/AdminLcLessons.jsx";
-import AdminLcEvents from "./pages/AdminLcEvents.jsx";
-import AdminLcChangelogs from "./pages/AdminLcChangelogs.jsx";
-import AdminLcShowcase from "./pages/AdminLcShowcase.jsx";
-import AdminLcFreebies from "./pages/AdminLcFreebies.jsx";
+const AdminToday = lazyScreen(() => import("./pages/AdminToday.jsx"));
+const AdminPurchases = lazyScreen(() => import("./pages/AdminPurchases.jsx"));
+const AdminInstallationsQueue = lazyScreen(() => import("./pages/AdminInstallationsQueue.jsx"));
+const AdminPeople = lazyScreen(() => import("./pages/AdminPeople.jsx"));
+const AdminEnrolments = lazyScreen(() => import("./pages/AdminEnrolments.jsx"));
+const AdminSubmissions = lazyScreen(() => import("./pages/AdminSubmissions.jsx"));
+const AdminFollowUpsDesk = lazyScreen(() => import("./pages/AdminFollowUpsDesk.jsx"));
+const AdminReferrals = lazyScreen(() => import("./pages/AdminReferrals.jsx"));
+const AdminDemoModels = lazyScreen(() => import("./pages/AdminDemoModels.jsx"));
+const AdminDsOrganisations = lazyScreen(() => import("./pages/AdminDsOrganisations.jsx"));
+const AdminDsRoles = lazyScreen(() => import("./pages/AdminDsRoles.jsx"));
+const AdminDsSupport = lazyScreen(() => import("./pages/AdminDsSupport.jsx"));
+const AdminDsSubscriptions = lazyScreen(() => import("./pages/AdminDsSubscriptions.jsx"));
+const AdminDsEntitlements = lazyScreen(() => import("./pages/AdminDsEntitlements.jsx"));
+const AdminDsQuotations = lazyScreen(() => import("./pages/AdminDsQuotations.jsx"));
+const AdminDsInvoices = lazyScreen(() => import("./pages/AdminDsInvoices.jsx"));
+const AdminDsCoupons = lazyScreen(() => import("./pages/AdminDsCoupons.jsx"));
+const AdminCatProducts = lazyScreen(() => import("./pages/AdminCatProducts.jsx"));
+const AdminCatPricing = lazyScreen(() => import("./pages/AdminCatPricing.jsx"));
+const AdminCatRates = lazyScreen(() => import("./pages/AdminCatRates.jsx"));
+const AdminCatSaved = lazyScreen(() => import("./pages/AdminCatSaved.jsx"));
+const AdminRateBuilder = lazyScreen(() => import("./pages/AdminRateBuilder.jsx"));
+const AdminDocAi = lazyScreen(() => import("./pages/AdminDocAi.jsx"));
+const AdminDsCertificates = lazyScreen(() => import("./pages/AdminDsCertificates.jsx"));
+const AdminTimeSaved = lazyScreen(() => import("./pages/AdminTimeSaved.jsx"));
+const AdminDocAudit = lazyScreen(() => import("./pages/AdminDocAudit.jsx"));
+const AdminDocTemplates = lazyScreen(() => import("./pages/AdminDocTemplates.jsx"));
+const AdminDocSaved = lazyScreen(() => import("./pages/AdminDocSaved.jsx"));
+const AdminDocIssued = lazyScreen(() => import("./pages/AdminDocIssued.jsx"));
+const AdminDocProduced = lazyScreen(() => import("./pages/AdminDocProduced.jsx"));
+const AdminDocSystem = lazyScreen(() => import("./pages/AdminDocSystem.jsx"));
+const AdminWork = lazyScreen(() => import("./pages/AdminWork.jsx"));
+const AdminStorage = lazyScreen(() => import("./pages/AdminStorage.jsx"));
+const AdminEmails = lazyScreen(() => import("./pages/AdminEmails.jsx"));
+const AdminCampaigns = lazyScreen(() => import("./pages/AdminCampaigns.jsx"));
+const AdminVideos = lazyScreen(() => import("./pages/AdminVideos.jsx"));
+const AdminBillboard = lazyScreen(() => import("./pages/AdminBillboard.jsx"));
+const AdminDsWaitlist = lazyScreen(() => import("./pages/AdminDsWaitlist.jsx"));
+const AdminDsOrgVideos = lazyScreen(() => import("./pages/AdminDsOrgVideos.jsx"));
+const AdminLcCourses = lazyScreen(() => import("./pages/AdminLcCourses.jsx"));
+const AdminLcQuizzes = lazyScreen(() => import("./pages/AdminLcQuizzes.jsx"));
+const AdminLcLessons = lazyScreen(() => import("./pages/AdminLcLessons.jsx"));
+const AdminLcEvents = lazyScreen(() => import("./pages/AdminLcEvents.jsx"));
+const AdminLcChangelogs = lazyScreen(() => import("./pages/AdminLcChangelogs.jsx"));
+const AdminLcShowcase = lazyScreen(() => import("./pages/AdminLcShowcase.jsx"));
+const AdminLcFreebies = lazyScreen(() => import("./pages/AdminLcFreebies.jsx"));
 import Signup from "./pages/Signup.jsx";
-import Purchase from "./pages/Purchase.jsx";
-import ChangePassword from "./pages/ChangePassword.jsx";
-import Profile from "./pages/Profile.jsx";
+const Purchase = lazyScreen(() => import("./pages/Purchase.jsx"));
+const ChangePassword = lazyScreen(() => import("./pages/ChangePassword.jsx"));
+const Profile = lazyScreen(() => import("./pages/Profile.jsx"));
+// The classic dashboard, still the one customers use until 1 October (#30).
+// It came back to main as an eager import because that is how main loads its
+// pages/Dashboard.jsx is no longer routed — /dashboard redirects to /manage
+// from go-live — so it is no longer imported either. The file itself stays in
+// the tree and in the classic-build-final tag; it is not deleted.
 import Learn from "./pages/Learn.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
-import Admin from "./pages/Admin.jsx";
-import AdminLearn from "./pages/AdminLearn.jsx";
-import AdminYoutube from "./pages/AdminYoutube.jsx";
-import AdminYoutubeStatus from "./pages/AdminYoutubeStatus.jsx";
-import AdminCourses from "./pages/AdminCourses.jsx";
-import AdminProducts from "./pages/AdminProducts.jsx";
-import AdminProductEdit from "./pages/AdminProductEdit.jsx";
-import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
-import AdminCourseCockpit from "./pages/AdminCourseCockpit.jsx";
-import AdminQuizzes from "./pages/AdminQuizzes.jsx";
+const Admin = lazyScreen(() => import("./pages/Admin.jsx"));
+const AdminLearn = lazyScreen(() => import("./pages/AdminLearn.jsx"));
+const AdminYoutube = lazyScreen(() => import("./pages/AdminYoutube.jsx"));
+const AdminYoutubeStatus = lazyScreen(() => import("./pages/AdminYoutubeStatus.jsx"));
+const AdminCourses = lazyScreen(() => import("./pages/AdminCourses.jsx"));
+const AdminProducts = lazyScreen(() => import("./pages/AdminProducts.jsx"));
+const AdminProductEdit = lazyScreen(() => import("./pages/AdminProductEdit.jsx"));
+const AdminCourseGrading = lazyScreen(() => import("./pages/AdminCourseGrading.jsx"));
+const AdminCourseCockpit = lazyScreen(() => import("./pages/AdminCourseCockpit.jsx"));
+const AdminQuizzes = lazyScreen(() => import("./pages/AdminQuizzes.jsx"));
 import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 import AboutADLM from "./pages/About.jsx";
 import WhatsNew from "./pages/WhatsNew.jsx";
 import WhatsNewProduct from "./pages/WhatsNewProduct.jsx";
 import Trainings from "./pages/Trainings.jsx";
-import AdminTrainings from "./pages/AdminTrainings.jsx";
+const AdminTrainings = lazyScreen(() => import("./pages/AdminTrainings.jsx"));
 import NotFound from "./pages/NotFound.jsx";
 import Testimonials from "./pages/Testimonials.jsx";
-import AdminShowcase from "./pages/AdminShowcase.jsx";
-import AdminChangelogs from "./pages/AdminChangelogs.jsx";
+const AdminShowcase = lazyScreen(() => import("./pages/AdminShowcase.jsx"));
+const AdminChangelogs = lazyScreen(() => import("./pages/AdminChangelogs.jsx"));
 import TrainingDetail from "./pages/TrainingDetail.jsx";
-import AdminCoupons from "./pages/AdminCoupons.jsx";
-import AdminInvoices from "./pages/AdminInvoices.jsx";
+const AdminCoupons = lazyScreen(() => import("./pages/AdminCoupons.jsx"));
+const AdminInvoices = lazyScreen(() => import("./pages/AdminInvoices.jsx"));
 // Lazy: it pulls in the document engine and two stylesheets that no other
 // admin screen needs.
 const AdminDocuments = React.lazy(() => import("./pages/AdminDocuments.jsx"));
-import AdminProposals from "./pages/AdminProposals.jsx";
-import AdminRoles from "./pages/AdminRoles.jsx";
+const AdminProposals = lazyScreen(() => import("./pages/AdminProposals.jsx"));
+const AdminRoles = lazyScreen(() => import("./pages/AdminRoles.jsx"));
 import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
-import RequestTechnicalHelp from "./pages/RequestTechnicalHelp.jsx";
-import AdminWaitlist from "./pages/AdminWaitlist.jsx";
-import AdminFollowUps from "./pages/AdminFollowUps.jsx";
-import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
-import AdminAuditLog from "./pages/AdminAuditLog.jsx";
-import RevitProjects from "./pages/RevitProjects.jsx";
-import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
-import Portfolio from "./pages/Portfolio.jsx";
-import PmTracker from "./pages/PmTracker.jsx";
-import PortfolioDashboard from "./pages/PortfolioDashboard.jsx";
-import JoinProject from "./pages/JoinProject.jsx";
-import RateGenLibrary from "./pages/RateGenLibrary.jsx";
-import AdminRateLibrary from "./pages/AdminRateLibrary.jsx";
-import AdminAddRate from "./pages/AdminAddRate.jsx";
-// Classic RateGen admin screens, restored until the new build goes live.
-import AdminRateGen from "./pages/AdminRateGen.jsx";
-import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
-import RateGenUpdates from "./pages/RateGenUpdates.jsx";
-import ServiceConstants from "./pages/ServiceConstants.jsx";
-import MaterialConstants from "./pages/MaterialConstants.jsx";
-import Receipt from "./pages/Receipt.jsx";
-import OrderDetail from "./pages/OrderDetail.jsx";
+const RequestTechnicalHelp = lazyScreen(() => import("./pages/RequestTechnicalHelp.jsx"));
+const AdminWaitlist = lazyScreen(() => import("./pages/AdminWaitlist.jsx"));
+const AdminSupportTickets = lazyScreen(() => import("./pages/AdminSupportTickets.jsx"));
+const AdminAuditLog = lazyScreen(() => import("./pages/AdminAuditLog.jsx"));
+const RevitProjects = React.lazy(() => import("./pages/RevitProjects.jsx"));
+const ProjectsGeneric = React.lazy(() => import("./pages/ProjectsGeneric.jsx"));
+const Portfolio = React.lazy(() => import("./pages/Portfolio.jsx"));
+const PmTracker = React.lazy(() => import("./pages/PmTracker.jsx"));
+const PortfolioDashboard = React.lazy(() => import("./pages/PortfolioDashboard.jsx"));
+const JoinProject = React.lazy(() => import("./pages/JoinProject.jsx"));
+const RateGenLibrary = lazyScreen(() => import("./pages/RateGenLibrary.jsx"));
+const AdminRateLibrary = lazyScreen(() => import("./pages/AdminRateLibrary.jsx"));
+const AdminAddRate = lazyScreen(() => import("./pages/AdminAddRate.jsx"));
+const RateGenUpdates = lazyScreen(() => import("./pages/RateGenUpdates.jsx"));
+const ServiceConstants = lazyScreen(() => import("./pages/ServiceConstants.jsx"));
+const MaterialConstants = lazyScreen(() => import("./pages/MaterialConstants.jsx"));
+const WorkConstants = lazyScreen(() => import("./pages/WorkConstants.jsx"));
+const Receipt = lazyScreen(() => import("./pages/Receipt.jsx"));
+const OrderDetail = lazyScreen(() => import("./pages/OrderDetail.jsx"));
 import AuthCallback from "./pages/AuthCallback.jsx";
 // His Manage overview. Lazy because it pulls in the app shell and ~91KB of his
 // dashboard CSS, which no marketing visitor should pay for.
@@ -134,9 +155,11 @@ const ManageProducts = React.lazy(() => import("./pages/ManageProducts.jsx"));
 const ManageTeam = React.lazy(() => import("./pages/ManageTeam.jsx"));
 const ManageBilling = React.lazy(() => import("./pages/ManageBilling.jsx"));
 const ManageDownloads = React.lazy(() => import("./pages/ManageDownloads.jsx"));
+const ManageGuides = React.lazy(() => import("./pages/ManageGuides.jsx"));
 const ManageSettings = React.lazy(() => import("./pages/ManageSettings.jsx"));
 const WorkHome = React.lazy(() => import("./pages/WorkHome.jsx"));
 const WorkProjects = React.lazy(() => import("./pages/WorkProjects.jsx"));
+const WorkTool = React.lazy(() => import("./pages/WorkTool.jsx"));
 const ManageSupport = React.lazy(() => import("./pages/ManageSupport.jsx"));
 const WorkLibrary = React.lazy(() => import("./pages/WorkLibrary.jsx"));
 const WorkRate = React.lazy(() => import("./pages/WorkRate.jsx"));
@@ -144,37 +167,37 @@ const WorkProject = React.lazy(() => import("./pages/WorkProject.jsx"));
 const WorkProgramme = React.lazy(() => import("./pages/WorkProgramme.jsx"));
 const Learning = React.lazy(() => import("./pages/Learning.jsx"));
 const Certificates = React.lazy(() => import("./pages/Certificates.jsx"));
+const Assignments = React.lazy(() => import("./pages/Assignments.jsx"));
 const LearningCourse = React.lazy(() => import("./pages/LearningCourse.jsx"));
-// Unused until go-live, when /learn/course/:sku points back at it.
 const LearnCourseRedirect = React.lazy(() => import("./pages/LearnCourseRedirect.jsx"));
-import CourseDetailClassic from "./pages/CourseDetailClassic.jsx";
 const WorkShellRoute = React.lazy(() => import("./pages/WorkShellRoute.jsx"));
-import UserInvoice from "./pages/UserInvoice.jsx";
+const UserInvoice = lazyScreen(() => import("./pages/UserInvoice.jsx"));
 
 // ✅ QUIV for ArchiCAD
-import ArchiCADLanding from "./pages/ArchiCADLanding.jsx";
-import ArchiCADBoQ from "./pages/ArchiCADBoQ.jsx";
-import ArchiCADDashboard from "./pages/ArchiCADDashboard.jsx";
-import ArchiCADElement from "./pages/ArchiCADElement.jsx";
+const ArchiCADLanding = React.lazy(() => import("./pages/ArchiCADLanding.jsx"));
+const ArchiCADBoQ = React.lazy(() => import("./pages/ArchiCADBoQ.jsx"));
+const ArchiCADDashboard = React.lazy(() => import("./pages/ArchiCADDashboard.jsx"));
+const ArchiCADElement = React.lazy(() => import("./pages/ArchiCADElement.jsx"));
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import NewBuildGate from "./components/NewBuildGate.jsx";
+import { isGatedPath } from "./lib/classicPaths.js";
 import AdminRoute from "./components/AdminRoute.jsx";
-import LazyScreen from "./components/LazyScreen.jsx";
 
-import TrainingEnrollment from "./pages/TrainingEnrollment.jsx";
-import AdminPTrainings from "./pages/AdminPTrainings.jsx";
+const TrainingEnrollment = lazyScreen(() => import("./pages/TrainingEnrollment.jsx"));
+const AdminPTrainings = lazyScreen(() => import("./pages/AdminPTrainings.jsx"));
 
-import Freebies from "./pages/Freebies.jsx";
+const Freebies = lazyScreen(() => import("./pages/Freebies.jsx"));
 import NetworkCheck from "./pages/NetworkCheck.jsx";
-import AdminFreebies from "./pages/AdminFreebies.jsx";
-import AdminUsersLite from "./pages/AdminUsersLite.jsx";
-import AdminAiUsage from "./pages/AdminAiUsage.jsx";
+const AdminFreebies = lazyScreen(() => import("./pages/AdminFreebies.jsx"));
+const AdminUsersLite = lazyScreen(() => import("./pages/AdminUsersLite.jsx"));
+const AdminAiUsage = lazyScreen(() => import("./pages/AdminAiUsage.jsx"));
 
 // ✅ Physical trainings pages
 import PTrainingDetail from "./pages/PTrainingDetail.jsx";
-import PTrainingEnrollment from "./pages/PTrainingEnrollment.jsx";
+const PTrainingEnrollment = lazyScreen(() => import("./pages/PTrainingEnrollment.jsx"));
 
-import TimeManagement from "./pages/TimeManagement.jsx";
+const TimeManagement = React.lazy(() => import("./pages/TimeManagement.jsx"));
 
 // Search landing pages. Shared with the server route tree in
 // routes.marketing.jsx so both render the same components for these paths,
@@ -187,10 +210,70 @@ import { landingRoutes } from "./pages/landing/routes.jsx";
 // page never means editing this file.
 import DsPreview from "./ds/DsPreview.jsx";
 import DsPreviewGate from "./ds/DsPreviewGate.jsx";
+import VerifyEmail from "./pages/VerifyEmail.jsx";
+import PreviewHostGate from "./components/PreviewHostGate.jsx";
+import ClassicProjectRedirect from "./components/ClassicProjectRedirect.jsx";
+const AdminReleases = lazyScreen(() => import("./pages/AdminReleases.jsx"));
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
 // Lazy: the fit page and its shell only load for someone who opens /fit.
 const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
 const DsFit = React.lazy(() => import("./ds/DsFit.jsx"));
+const DsCertificateVerify = React.lazy(() => import("./ds/DsCertificateVerify.jsx"));
+const DsTrainingCalendar = React.lazy(() => import("./ds/DsTrainingCalendar.jsx"));
+const DsBeyondBimStyles = React.lazy(() => import("./ds/DsBeyondBimStyles.jsx"));
+import DsFlagRoute from "./ds/DsFlagRoute.jsx";
+import DsComingSoon from "./ds/DsComingSoon.jsx";
+import { FLAGS } from "./config/flags.js";
+
+const dsPage = (slug) => {
+  const Page = DS_PAGES.find((p) => p.slug === slug)?.Component;
+  return Page ? <Page /> : null;
+};
+
+/**
+ * One of Richard's pages at a real public path, inside his shell.
+ *
+ * These stay CHILDREN of <App /> rather than becoming top-level routes like
+ * /pricing and /contact did. App is where AnalyticsTracker is mounted — "so it
+ * sees every route change", because before it a session recorded its first
+ * pageview and nothing after — and it also carries the ErrorBoundary, scroll
+ * restoration and the unconfirmed-email notice. Lifting the six busiest public
+ * pages out of App would have quietly taken analytics off exactly the pages
+ * whose traffic matters most.
+ *
+ * App drops the classic nav, footer, launch strip and coupon banner, and the
+ * padding on <main>, for any path in lib/dsPublicPaths.js. So his chrome is
+ * the only chrome, and his full-bleed layouts are not boxed in.
+ */
+// Sign in and create account: his design on our authentication, wired by hand
+// in ds/custom. NOT ds/pages/DsLogin.jsx — that file is generated from his
+// login.html and its form is <form action="/manage" method="get">, so it posts
+// the password into a query string, never calls /auth/login, and has no second
+// step for an OTP account. Routing it would have locked every customer out.
+const DsLoginPage = lazyScreen(() => import("./ds/custom/DsLoginPage.jsx"));
+const DsSignupPage = lazyScreen(() => import("./ds/custom/DsSignupPage.jsx"));
+// His design for the two training screens and the release desk. DsTrainings
+// renders inside DsShell because every class it uses is .ds-scoped — mounted
+// bare it is unstyled markup.
+const DsTrainings = lazyScreen(() => import("./ds/custom/DsTrainings.jsx"));
+const DsTrainingSignup = lazyScreen(() => import("./ds/custom/DsTrainingSignup.jsx"));
+const DsAdminReleases = lazyScreen(() => import("./ds/DsAdminReleases.jsx"));
+
+const dsPublic = (slug) => (
+  <React.Suspense fallback={null}>
+    <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+  </React.Suspense>
+);
+const BEYOND_BIM_SOON = (
+  <DsComingSoon
+    eyebrow="Beyond BIM · coming soon"
+    title="Beyond BIM, the modern roles of a"
+    tone="Quantity Surveyor"
+    lede="The programme page and registration open here soon."
+    primary={{ label: "Ask about the programme", to: "/support" }}
+    secondary={{ label: "Browse free lessons", to: "/learn" }}
+  />
+);
 import { DS_PAGES } from "./ds/pages/manifest.js";
 
 const router = createBrowserRouter([
@@ -199,7 +282,8 @@ const router = createBrowserRouter([
     element: <App />,
     errorElement: <AppError />,
     children: [
-      { index: true, element: <Home /> },
+      // Richard's home page ("Measure it. Price it. Defend it."), his chrome.
+      { index: true, element: dsPublic("home") },
 
       {
         path: "time-management",
@@ -217,8 +301,8 @@ const router = createBrowserRouter([
         ),
       },
 
-      { path: "products", element: <Products /> },
-      { path: "quote", element: <Quote /> },
+      { path: "products", element: dsPublic("products") },
+      { path: "quote", element: dsPublic("quote") },
       { path: "product/:key", element: <ProductDetail /> },
 
       ...landingRoutes,
@@ -226,31 +310,42 @@ const router = createBrowserRouter([
       // Public client-facing proposal view
       { path: "proposal/:token", element: <PublicProposal /> },
 
-      { path: "login", element: <Login /> },
+      { path: "login", element: <DsLoginPage /> },
+      // Enter the six-digit code sign-up emailed (pages/VerifyEmail.jsx).
+      { path: "verify-email", element: <VerifyEmail /> },
       // A separate door, deliberately. His reasoning, kept: an admin session
       // is not a customer session with a flag on it, so it is not reached by
       // adding ?admin to the customer sign-in.
       { path: "admin/login", element: <AdminLogin /> },
-      { path: "signup", element: <Signup /> },
+      { path: "signup", element: <DsSignupPage /> },
 
-      { path: "learn", element: <Learn /> },
+      // His /learn. The player below it stays classic and keeps the classic
+      // chrome, which is why dsPublicPaths matches exactly and not by prefix.
+      { path: "learn", element: dsPublic("learn") },
       // The player moved to /dash-course/:sku. This resolves rather than
       // 404s, because the URL is in emails and in people's history.
-      // The course page customers have, until the new build goes fully live.
-      // Go-live points this back at LearnCourseRedirect (to /dash-course).
-      { path: "learn/course/:sku", element: <CourseDetailClassic /> },
+      { path: "learn/course/:sku", element: <LearnCourseRedirect /> },
       { path: "learn/free/:id", element: <FreeVideoDetail /> },
 
-      { path: "about", element: <AboutADLM /> },
+      { path: "about", element: dsPublic("about") },
 
       // Public product changelogs / "What's New".
       // Hub lists every product; each links to its own detail page.
       // Content lives in src/data/changelogs/*.md (one file per product).
-      { path: "whats-new", element: <WhatsNew /> },
+      { path: "whats-new", element: dsPublic("whats-new") },
       { path: "whats-new/:slug", element: <WhatsNewProduct /> },
 
       // Online trainings
-      { path: "trainings", element: <Trainings /> },
+      {
+        path: "trainings",
+        element: (
+          <React.Suspense fallback={null}>
+            <DsShellLazy>
+              <DsTrainings />
+            </DsShellLazy>
+          </React.Suspense>
+        ),
+      },
       { path: "trainings/:id", element: <TrainingDetail /> },
       {
         path: "trainings/enrollment/:enrollmentId",
@@ -262,7 +357,7 @@ const router = createBrowserRouter([
       },
 
       // ✅ Physical trainings (Public detail by slug OR id + Protected portal)
-      { path: "ptrainings/:key", element: <PTrainingDetail /> },
+      { path: "ptrainings/:key", element: <DsTrainingSignup /> },
       {
         path: "ptrainings/enrollment/:enrollmentId",
         element: (
@@ -296,18 +391,20 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      // The dashboard customers use today. /manage replaces it only when the
-      // new build goes fully live; until then this is every signed-in user's
-      // home, and receipts, enrolment emails and the nav all point here.
-      // The 15 Sept release briefly turned it into a redirect to /manage.
-      {
-        path: "dashboard",
-        element: (
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        ),
-      },
+      // Retired at go-live, 1 October 2026. /manage is the account overview
+      // now — his screen, on real data — and two dashboards competing for the
+      // same job is how one of them quietly goes stale.
+      //
+      // A redirect rather than a deletion, and permanently so: this path is in
+      // receipts, in enrolment emails and in people's history, and the same
+      // reasoning already keeps /learn/course/:sku alive a few lines below.
+      // pages/Dashboard.jsx stays in the tree and in the classic-build-final
+      // tag; it is simply no longer routed.
+      //
+      // This moves together with AFTER_SIGN_IN in lib/afterSignIn.js. Twice
+      // before, one changed without the other and the site contradicted
+      // itself — sign-in went one way, every receipt pointed the other.
+      { path: "dashboard", element: <Navigate to="/manage" replace /> },
       {
         path: "freebies",
         element: (
@@ -320,12 +417,17 @@ const router = createBrowserRouter([
         // His Manage overview — what /dashboard becomes when the makeover
         // lands. Added alongside rather than over it: /dashboard keeps working
         // and keeps its data until this one is proven on real accounts.
+        //
+        // NewBuildGate held it to staff until 1 Oct; since go-live it is a
+        // pass-through and everyone signed in lands here (lib/newBuildAccess.js).
         path: "manage",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <ManageOverview />
-            </LazyScreen>
+            <NewBuildGate>
+              <LazyScreen>
+                <ManageOverview />
+              </LazyScreen>
+            </NewBuildGate>
           </ProtectedRoute>
         ),
       },
@@ -337,22 +439,47 @@ const router = createBrowserRouter([
         { path: "manage/team", el: <ManageTeam /> },
         { path: "manage/billing", el: <ManageBilling /> },
         { path: "manage/downloads", el: <ManageDownloads /> },
+        { path: "manage/guides", el: <ManageGuides /> },
         { path: "manage/settings", el: <ManageSettings /> },
         // The Work group. Organised by project rather than by product, which
         // is the whole architectural point of the surface.
         { path: "work", el: <WorkHome /> },
         { path: "work/projects", el: <WorkProjects /> },
+        // P0.4: his tool pages, one tool's projects.
+        { path: "work/tool/:t", el: <WorkTool /> },
         { path: "manage/support", el: <ManageSupport /> },
         { path: "work/library", el: <WorkLibrary /> },
+        // The constants behind every budget, in the app frame so the rail
+        // survives. /rategen/material-constants still answers for the link
+        // the classic Budget tab has always used.
+        { path: "work/constants", el: <WorkConstants /> },
         { path: "work/rate/:id", el: <WorkRate /> },
         { path: "work/project/:productKey/:id", el: <WorkProject /> },
         { path: "work/programme", el: <WorkProgramme /> },
         { path: "dash-learning", el: <Learning /> },
         { path: "dash-certificates", el: <Certificates /> },
+        { path: "dash-assignments", el: <Assignments /> },
         { path: "dash-course/:sku", el: <LearningCourse /> },
       ].map(({ path, el }) => ({
         path,
-        element: (
+        // The Manage and Work screens sit behind NewBuildGate, which held them
+        // back to staff until launch and has been a pass-through since go-live
+        // (1 Oct 2026). Raise GATE_NEW_BUILD and a customer reaching one lands
+        // on the classic equivalent again (lib/classicPaths.js).
+        //
+        // The four dash-* learning routes below are in this same list and are
+        // deliberately NOT gated: they are the only learning surface there is,
+        // classic /learn links straight into /dash-course/:sku, and
+        // /learn/course/:sku (in sent emails) redirects into it — gating that
+        // would loop the browser and take away paid-for courses. isGatedPath is
+        // the single place that decides, so the two lists cannot drift.
+        element: isGatedPath(`/${path}`) ? (
+          <ProtectedRoute>
+            <NewBuildGate>
+              <LazyScreen>{el}</LazyScreen>
+            </NewBuildGate>
+          </ProtectedRoute>
+        ) : (
           <ProtectedRoute>
             <LazyScreen>{el}</LazyScreen>
           </ProtectedRoute>
@@ -493,13 +620,15 @@ const router = createBrowserRouter([
         path: "projects/:tool",
         element: (
           <ProtectedRoute>
-            <LazyScreen>
-              <WorkShellRoute
-                screen={ProjectsGeneric}
-                title="Projects"
-                page="work-projects"
-              />
-            </LazyScreen>
+            <ClassicProjectRedirect>
+              <LazyScreen>
+                <WorkShellRoute
+                  screen={ProjectsGeneric}
+                  title="Projects"
+                  page="work-projects"
+                />
+              </LazyScreen>
+            </ClassicProjectRedirect>
           </ProtectedRoute>
         ),
       },
@@ -623,11 +752,10 @@ const router = createBrowserRouter([
       // what this replaces is the hub's front page, which was a tab strip over
       // the same lists rather than a view of what needs doing.
       {
-        // Classic screen until the new build goes live (release: AdminToday).
         path: "admin",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin />
+          <AdminRoute permission="adminhub">
+            <AdminToday />
           </AdminRoute>
         ),
       },
@@ -635,47 +763,68 @@ const router = createBrowserRouter([
       // inline at the bottom of /admin. Same <Admin /> component, driven by the
       // `section` prop so all existing data-loading/effects keep working.
       {
-        // Classic screen until the new build goes live (release: AdminPurchases).
+        // His Purchases queue. The path stays /admin/pending because that is
+        // what the old hub used and what people have bookmarked; the rail
+        // calls it Purchases, as he does.
         path: "admin/pending",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="pending" />
+          <AdminRoute permission="adminhub">
+            <AdminPurchases />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsEntitlements).
+        // The sample models a course works through, and the demos somebody
+        // evaluating a product can open. The API for these has existed since
+        // they were built and nothing could reach it, so an admin could not
+        // add one at all. `learn`, matching the route's own permission.
+        path: "admin/sample-models",
+        element: (
+          <AdminRoute permission="learn">
+            <AdminDemoModels />
+          </AdminRoute>
+        ),
+      },
+      {
+        // Who referred whom, and whether they subscribed. The purchases
+        // queue shows "referred by" on an order; it cannot show a referral
+        // that never became one, which is the half a referrer waits on.
+        path: "admin/referrals",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminReferrals />
+          </AdminRoute>
+        ),
+      },
+      {
         path: "admin/active",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="active" />
+          <AdminRoute permission="adminhub">
+            <AdminDsEntitlements />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsOrganisations).
         path: "admin/organizations",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="organizations" />
+          <AdminRoute permission="adminhub">
+            <AdminDsOrganisations />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcEvents).
         path: "admin/physical-training",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="ptrainings" />
+          <AdminRoute permission="adminhub">
+            <AdminLcEvents />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsSubscriptions).
         path: "admin/subscriptions",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="subscriptions" />
+          <AdminRoute permission="adminhub">
+            <AdminDsSubscriptions />
           </AdminRoute>
         ),
       },
@@ -714,28 +863,25 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminStorage).
         path: "admin/storage",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="storage" />
+          <AdminRoute permission="adminhub">
+            <AdminStorage />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminInstallationsQueue).
         path: "admin/installations",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
-            <Admin section="installations" />
+          <AdminRoute permission="adminhub">
+            <AdminInstallationsQueue />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: Admin).
         path: "admin/training-locations",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
+          <AdminRoute permission="adminhub">
             <Admin section="tlocations" />
           </AdminRoute>
         ),
@@ -751,20 +897,39 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDocSystem).
+        // THE REAL SETTINGS EDITOR, NOT THE READ-ONLY REGISTER.
+        //
+        // This path rendered <AdminDocSystem />, which is
+        // <DsAdminDocuments screen="system" /> — the System register. That
+        // register's own "Open the settings editor" button points here, so the
+        // button navigated from the register to the register and looked dead,
+        // and the actual editor (site settings, the exchange rate, the mobile
+        // app link and the Installer Hub upload) was reachable from nowhere at
+        // all. The Hub could not be given its Setup.exe because the only screen
+        // that uploads one had no route.
         path: "admin/settings",
         element: (
-          <AdminRoute shell={false} permission="adminhub">
+          <AdminRoute permission="adminhub">
             <Admin section="settings" />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcCourses).
+        // The register keeps its own address — SCREENS.system in
+        // ds/DsAdminDocuments.jsx has always declared this path, and nothing
+        // was mounted at it.
+        path: "admin/docs/system",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminDocSystem />
+          </AdminRoute>
+        ),
+      },
+      {
         path: "admin/courses",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminCourses />
+          <AdminRoute roles={["admin"]}>
+            <AdminLcCourses />
           </AdminRoute>
         ),
       },
@@ -799,29 +964,26 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminCatProducts).
         path: "admin/products",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminProducts />
+          <AdminRoute roles={["admin"]}>
+            <AdminCatProducts />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminProductEdit).
         path: "admin/products/:id/edit",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
+          <AdminRoute roles={["admin"]}>
             <AdminProductEdit />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsCoupons).
         path: "admin/coupons",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminCoupons />
+          <AdminRoute roles={["admin"]}>
+            <AdminDsCoupons />
           </AdminRoute>
         ),
       },
@@ -839,11 +1001,10 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsInvoices).
         path: "admin/invoices",
         element: (
-          <AdminRoute shell={false} permission="invoices">
-            <AdminInvoices />
+          <AdminRoute permission="invoices">
+            <AdminDsInvoices />
           </AdminRoute>
         ),
       },
@@ -895,72 +1056,67 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminDsQuotations).
         path: "admin/proposals",
         element: (
-          <AdminRoute shell={false} permission="proposals">
-            <AdminProposals />
+          <AdminRoute permission="proposals">
+            <AdminDsQuotations />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminSubmissions).
         path: "admin/course-grading",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminCourseGrading />
+          <AdminRoute roles={["admin"]}>
+            <AdminSubmissions />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminCourseCockpit).
         path: "admin/course-cockpit",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
+          <AdminRoute roles={["admin"]}>
             <AdminCourseCockpit />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcQuizzes).
         path: "admin/quizzes",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminQuizzes />
+          <AdminRoute roles={["admin"]}>
+            <AdminLcQuizzes />
           </AdminRoute>
         ),
       },
 
       // ✅ STAFF (admin + mini_admin)
       {
-        // Classic screen until the new build goes live (release: AdminTrainings).
         path: "admin/trainings",
         element: (
-          <AdminRoute shell={false} permission="trainings">
+          <AdminRoute permission="trainings">
             <AdminTrainings />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcLessons).
         path: "admin/learn",
         element: (
-          <AdminRoute shell={false} permission="learn">
-            <AdminLearn />
+          <AdminRoute permission="learn">
+            <AdminLcLessons />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminYoutube).
-          // The YouTube channel beside the free library: what is filed, held,
-          // missing, and whether each video still plays.
-          path: "admin/youtube",
-          element: (
-            <AdminRoute shell={false} permission="learn">
-              <AdminYoutubeStatus />
-            </AdminRoute>
-          ),
-        },
+        // The YouTube channel beside the free library: what is filed, held,
+        // missing, and whether each video still plays. His design at
+        // /admin/youtube; the older build's screen is kept reachable beside
+        // it for the two admins to be compared.
+        path: "admin/youtube",
+        element: (
+          <AdminRoute permission="learn">
+            <AdminYoutube />
+          </AdminRoute>
+        ),
+      },
       {
         path: "admin/youtube/classic",
         element: (
@@ -970,89 +1126,115 @@ const router = createBrowserRouter([
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminPeople).
+        // His People register. The path stays /admin/users-lite because that
+        // is what the rail and people's bookmarks already point at.
         path: "admin/users-lite",
         element: (
-          <AdminRoute shell={false} permission="users">
-            <AdminUsersLite />
+          <AdminRoute permission="users">
+            <AdminPeople />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcShowcase).
         path: "admin/showcase",
         element: (
-          <AdminRoute shell={false} permission="showcase">
-            <AdminShowcase />
+          <AdminRoute permission="showcase">
+            <AdminLcShowcase />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminLcChangelogs).
         path: "admin/changelogs",
         element: (
-          <AdminRoute shell={false} permission="changelogs">
-            <AdminChangelogs />
+          <AdminRoute permission="changelogs">
+            <AdminLcChangelogs />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminRateLibrary).
         path: "admin/rategen",
         element: (
-          <AdminRoute shell={false} permission="rategen">
-            <AdminRateGen />
+          <AdminRoute permission="rategen">
+            <AdminRateLibrary />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminAddRate).
         path: "admin/rategen/add-rate",
         element: (
-          <AdminRoute shell={false} permission="rategen">
+          <AdminRoute permission="rategen">
             <AdminAddRate />
           </AdminRoute>
         ),
       },
       {
-        // Classic screen until the new build goes live (release: AdminCatRates).
         path: "admin/rategen-master",
         element: (
-          <AdminRoute shell={false} permission="rategen">
-            <AdminRateGenMaster />
+          <AdminRoute permission="rategen">
+            <AdminCatRates />
           </AdminRoute>
         ),
       },
 
       // ✅ Physical trainings admin
       {
-        // Classic screen until the new build goes live (release: AdminEnrolments).
         path: "admin/ptrainings",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
-            <AdminPTrainings />
+          <AdminRoute roles={["admin"]}>
+            <AdminEnrolments />
           </AdminRoute>
         ),
       },
 
       // ✅ Roles & Access Control (UAC) — admin-only
       {
-        // Classic screen until the new build goes live (release: AdminDsRoles).
         path: "admin/roles",
         element: (
-          <AdminRoute shell={false} roles={["admin"]}>
+          <AdminRoute roles={["admin"]}>
+            <AdminDsRoles />
+          </AdminRoute>
+        ),
+      },
+      {
+        // The editor behind the Roles register: create a role, change the
+        // areas it reaches, move people between roles. His register reads
+        // only; until an editor is drawn in his grammar, the older build's
+        // screen does the writing (with its confirmations, the role-move audit
+        // trail, and the server's last-admin and self-demotion guards).
+        path: "admin/roles/edit",
+        element: (
+          <AdminRoute roles={["admin"]}>
             <AdminRoles />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Release sign-off (docs/RELEASE_GATE.md): super-admins + the release approver
+      {
+        path: "admin/releases",
+        element: (
+          <AdminRoute permission="releases">
+            <DsAdminReleases />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Work board (docs/WORK_BOARD.md): same audience as the release desk
+      {
+        path: "admin/work",
+        element: (
+          <AdminRoute shell={false} permission="releases">
+            <AdminWork />
           </AdminRoute>
         ),
       },
 
       // ✅ AI spend, per-user allocations & AWS credit burn-down (admin-only)
       {
-        // Classic screen until the new build goes live (release: AdminDocAi).
         path: "admin/ai-usage",
         element: (
-          <AdminRoute shell={false} permission="aiusage">
-            <AdminAiUsage />
+          <AdminRoute permission="aiusage">
+            <AdminDocAi />
           </AdminRoute>
         ),
       },
@@ -1069,11 +1251,10 @@ const router = createBrowserRouter([
 
       // ✅ Support tickets — staff-grantable ("support" area)
       {
-        // Classic screen until the new build goes live (release: AdminDsSupport).
         path: "admin/support-tickets",
         element: (
-          <AdminRoute shell={false} permission="support">
-            <AdminSupportTickets />
+          <AdminRoute permission="support">
+            <AdminDsSupport />
           </AdminRoute>
         ),
       },
@@ -1101,35 +1282,30 @@ const router = createBrowserRouter([
 
       // ✅ Renewal follow-up calls — staff-grantable ("followups" area)
       {
-        // Classic screen until the new build goes live (release: AdminFollowUpsDesk).
         path: "admin/follow-ups",
         element: (
-          <AdminRoute shell={false} permission="followups">
-            <AdminFollowUps />
+          <AdminRoute permission="followups">
+            <AdminFollowUpsDesk />
           </AdminRoute>
         ),
       },
 
-      // ✅ Renewal follow-up calls — staff-grantable ("followups" area)
-
       // ✅ Audit log & break-glass management — super-admin only ("audit" area)
       {
-        // Classic screen until the new build goes live (release: AdminDocAudit).
         path: "admin/audit-log",
         element: (
-          <AdminRoute shell={false} permission="audit">
-            <AdminAuditLog />
+          <AdminRoute permission="audit">
+            <AdminDocAudit />
           </AdminRoute>
         ),
       },
 
       // ✅ Mini-admin / staff freebies
       {
-        // Classic screen until the new build goes live (release: AdminLcFreebies).
         path: "admin/freebies",
         element: (
-          <AdminRoute shell={false} permission="freebies">
-            <AdminFreebies />
+          <AdminRoute permission="freebies">
+            <AdminLcFreebies />
           </AdminRoute>
         ),
       },
@@ -1137,13 +1313,12 @@ const router = createBrowserRouter([
       // ✅ Mini-admin / staff flyer engine (lazy — keeps html2canvas/jspdf/jszip
       // out of the main bundle; only loaded when an admin opens the engine)
       {
-        // Classic screen until the new build goes live (release: AdminFlyers).
         path: "admin/flyers",
         async lazy() {
-          const { default: AdminFlyers } = await import("./pages/AdminFlyers.jsx");
+          const { default: AdminFlyers } = await import("./pages/AdminLcFlyers.jsx");
           return {
             element: (
-              <AdminRoute shell={false} permission="flyers">
+              <AdminRoute permission="flyers">
                 <AdminFlyers />
               </AdminRoute>
             ),
@@ -1191,6 +1366,122 @@ const router = createBrowserRouter([
     errorElement: <AppError />,
   },
 
+  // R14: the public check a certificate's QR code opens. NOT staff-gated,
+  // unlike the rest of the redesign: whoever scans a certificate is an
+  // employer or a school with no account here. It shows only what is printed
+  // on the certificate (routes/verify.js).
+  {
+    path: "/certificate",
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>
+          <DsCertificateVerify />
+        </DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  },
+
+  // The legal pages, public now rather than at launch. Every footer and the
+  // sign-up form link /privacy, /terms and /licensing, and the live site had no
+  // route for any of them, so all three were "Page not found". Only his redesign
+  // has these pages, so they render in its shell, like /certificate: not through
+  // DsPreview, which would turn every link on them into a staff-only /preview
+  // one. Nothing else of the redesign is exposed by this.
+  // THE SAME BUG, ELEVEN MORE PAGES.
+  //
+  // /privacy, /terms and /licensing were "Page not found" because only the
+  // redesign had them and nothing was mounted at the real path. Exactly the
+  // same is true of these eleven — and they are worse, because the redesign's
+  // own nav and footer LINK to them, and that chrome renders on the four public
+  // DsShell pages above. So a visitor reading the privacy policy clicked
+  // Pricing, Contact or any Solutions link and got Page not found.
+  //
+  // Same remedy, same reason: they render in his shell at their real public
+  // path, not through DsPreview, which would turn every link on them into a
+  // staff-only /preview one.
+  ...[
+    "pricing",
+    "contact",
+    "how-it-works",
+    "mobile",
+    "careers",
+    "press",
+    "ada",
+  ].map((slug) => ({
+    path: `/${slug}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
+
+  // The four Solutions pages, whose public path has a segment the slug does not.
+  ...["firms", "professionals", "students", "institutions"].map((who) => ({
+    path: `/solutions/${who}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(`solutions-${who}`)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
+
+  ...["privacy", "terms", "licensing"].map((slug) => ({
+    path: `/${slug}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
+
+  // R21: Beyond BIM and the training calendar, real public routes behind
+  // launch flags (config/flags.js). Off: "Coming soon" for the public, the
+  // real page for staff.
+  {
+    path: "/beyondbim",
+    element: (
+      <DsFlagRoute live={FLAGS.BEYOND_BIM_LIVE} styles={<DsBeyondBimStyles />} full={dsPage("beyondbim")} soon={BEYOND_BIM_SOON} />
+    ),
+    errorElement: <AppError />,
+  },
+  {
+    path: "/beyondbim/register",
+    element: (
+      <DsFlagRoute
+        live={FLAGS.BEYOND_BIM_LIVE}
+        styles={<DsBeyondBimStyles />}
+        full={dsPage("beyondbim-register")}
+        soon={BEYOND_BIM_SOON}
+      />
+    ),
+    errorElement: <AppError />,
+  },
+  {
+    path: "/learn/calendar",
+    element: (
+      <DsFlagRoute
+        live={FLAGS.TRAINING_CALENDAR_LIVE}
+        full={<DsTrainingCalendar />}
+        soon={
+          <DsComingSoon
+            eyebrow="Training calendar · coming soon"
+            title="The training calendar"
+            tone="is on its way"
+            lede="Scheduled trainings will be listed here by month. Firms can book an in-office programme now."
+            primary={{ label: "Book a programme", to: "/contact" }}
+            secondary={{ label: "See past events", to: "/trainings" }}
+          />
+        }
+      />
+    ),
+    errorElement: <AppError />,
+  },
+
   // An index of everything staged, so the pages can be reviewed without
   // anyone having to remember 25 URLs.
   {
@@ -1210,11 +1501,16 @@ const router = createBrowserRouter([
 const tree = (
   <React.StrictMode>
     <ThemeProvider>
-      <AuthProvider>
-        <StepUpProvider>
-          <RouterProvider router={router} />
-        </StepUpProvider>
-      </AuthProvider>
+      <FeedbackProvider>
+        <AuthProvider>
+          <StepUpProvider>
+            {/* preview.adlmstudio.net and other non-live hosts: admin roles only. */}
+            <PreviewHostGate router={router}>
+              <RouterProvider router={router} />
+            </PreviewHostGate>
+          </StepUpProvider>
+        </AuthProvider>
+      </FeedbackProvider>
     </ThemeProvider>
   </React.StrictMode>
 );

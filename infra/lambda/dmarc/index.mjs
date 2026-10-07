@@ -3,11 +3,14 @@
 // Runs for every email SES receives at the DMARC report address. SES has
 // already stored the raw message in S3 (the rule's first action); this reads
 // it back, parses the reports, keeps a small JSON summary beside it, and
-// emails the ops inbox when any message failed authentication.
+// emails the ops inbox when mail from one of OUR senders (SES, Google,
+// Microsoft, Kudimail) failed authentication. Failures from anywhere else are
+// forgeries that p=reject already refuses, so those are only logged.
 
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
-import { reportsFromEmail, summarize, alertText } from "./parse.mjs";
+import { reverse } from "node:dns/promises";
+import { reportsFromEmail, summarize, alertText, triage } from "./parse.mjs";
 
 const s3 = new S3Client({});
 const sns = new SNSClient({});
@@ -15,6 +18,18 @@ const sns = new SNSClient({});
 const BUCKET = process.env.BUCKET;
 const RAW_PREFIX = process.env.RAW_PREFIX || "raw/";
 const TOPIC_ARN = process.env.TOPIC_ARN;
+
+// Reverse DNS for each failing IP, a couple of seconds at most per lookup.
+async function hostsFor(ips) {
+  const out = new Map();
+  await Promise.all(
+    [...new Set(ips)].slice(0, 50).map(async (ip) => {
+      const timeout = new Promise((resolve) => setTimeout(() => resolve([]), 2500));
+      out.set(ip, await Promise.race([reverse(ip).catch(() => []), timeout]));
+    }),
+  );
+  return out;
+}
 
 export async function handler(event) {
   const results = [];
@@ -39,6 +54,8 @@ export async function handler(event) {
     }
 
     const summary = summarize(reports);
+    const { ours, strangers } = triage(summary, await hostsFor(summary.failing.map((s) => s.sourceIp)));
+    summary.failing = [...ours, ...strangers];
     const day = new Date().toISOString().slice(0, 10);
     await s3.send(
       new PutObjectCommand({
@@ -51,19 +68,21 @@ export async function handler(event) {
 
     console.log(
       `[dmarc] ${messageId} ${summary.reporters.join(",")}: ${summary.messages} messages, ` +
-        `${summary.failedMessages} failed, ${summary.failing.length} failing sources`,
+        `${summary.failedMessages} failed, ${summary.failing.length} failing sources ` +
+        `(${ours.length} ours, ${strangers.length} forged or unknown)`,
     );
 
-    if (summary.failedMessages > 0 && TOPIC_ARN) {
+    if (ours.length && TOPIC_ARN) {
+      const ourFailed = ours.reduce((n, s) => n + s.count, 0);
       await sns.send(
         new PublishCommand({
           TopicArn: TOPIC_ARN,
-          Subject: `DMARC: ${summary.failedMessages} of ${summary.messages} adlmstudio.net messages failed (${summary.reporters[0]})`.slice(0, 99),
+          Subject: `DMARC: ${ourFailed} of our own adlmstudio.net messages failed (${ours[0].sender})`.slice(0, 99),
           Message: alertText(summary, messageId),
         }),
       );
     }
-    results.push({ messageId, reports: reports.length, failed: summary.failedMessages });
+    results.push({ messageId, reports: reports.length, failed: summary.failedMessages, ours: ours.length });
   }
   return { ok: true, results };
 }

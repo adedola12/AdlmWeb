@@ -7,7 +7,7 @@
 //
 // WHAT CHANGED, AND WHY IT MATTERED
 // His catalogue was a literal in the script, and it had already drifted from
-// what we charge: install was 0 for Revit MEP and CIVIQ, where the catalogue
+// what we charge: install was 0 for SERVIQ and CIVIQ, where the catalogue
 // says ₦20,000 and ₦40,000. A marketing page being stale is untidy; a
 // QUOTATION being stale is a disputed invoice, because the customer has a
 // document with our number on it. So every figure here comes from
@@ -70,7 +70,7 @@ const PRODUCTS = [
   { key: "revit", name: "QUIV", sub: "3D takeoff · Autodesk Revit", icon: "/ds/ic-quiv.png" },
   { key: "planswift", name: "HERON", sub: "2D takeoff · PlanSwift", icon: "/ds/ic-heron.png" },
   { key: "rategen", name: "RateGen", sub: "Rate build-ups · desktop", icon: "/ds/ic-rategen.png" },
-  { key: "mep", name: "Revit MEP", sub: "MEP & HVAC takeoff · Revit", icon: "/ds/ic-mep.png" },
+  { key: "mep", name: "SERVIQ", sub: "MEP & HVAC takeoff · Revit", icon: "/ds/ic-mep.png" },
   { key: "qs-takeoff", name: "Time Pro", sub: "Site productivity · desktop & phone", icon: "/ds/ic-timepro.png" },
   {
     key: "civil3d",
@@ -901,8 +901,13 @@ export default function DsQuoteBuilder() {
           </div>
         )}
 
+        {/* His markup is a panel carrying the id: the id is what quote.js
+            reaches for, the look is his .panel .rise. It was written with a
+            .qt-saved class instead, which no sheet defines, so the block
+            rendered with no card, no padding and no radius beside three
+            siblings that had all three. */}
         {drafts.length > 0 && (
-          <div id="qt-saved" className="qt-saved">
+          <div id="qt-saved" className="panel rise">
             <h3>Kept on this machine</h3>
             <p className="ds-sub">
               Quotations you saved here. They live in this browser only: nothing that stores a

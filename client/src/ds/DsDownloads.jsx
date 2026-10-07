@@ -20,6 +20,7 @@ import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
 import { useAuth } from "../store.jsx";
+import DsSampleModels from "./DsSampleModels.jsx";
 
 const ICONS = {
   revit: "/ds/ic-quiv.png",
@@ -167,6 +168,27 @@ export default function DsDownloads() {
   }
 
   const { hub } = view;
+  // R3: the Hub is for paid accounts. The server sends no link to an unpaid
+  // one, only allowed:false, so the page points it at the products instead.
+  const hubLocked = hub.allowed === false;
+
+  // R15: a fresh link from our storage at the moment of the click; the one on
+  // the page is the fallback, and it expires an hour after the page loaded.
+  const freshHub = async (e) => {
+    e.preventDefault();
+    const fallback = hub.downloadUrl;
+    try {
+      const r = await apiAuthed("/me/downloads/installer-hub", { token: accessToken });
+      window.location.assign(r?.url || fallback);
+    } catch (err) {
+      // A licence that lapsed since the page loaded: no file, the products.
+      if (err?.status === 403 && err?.data?.code === "HUB_REQUIRES_PAID") {
+        window.location.assign("/products");
+        return;
+      }
+      if (fallback) window.location.assign(fallback);
+    }
+  };
 
   return (
     <div className="dsh-in">
@@ -181,7 +203,7 @@ export default function DsDownloads() {
         </div>
         {hub.downloadUrl && (
           <div className="dsh-acts">
-            <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl}>
+            <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl} onClick={freshHub}>
               Download the Installer Hub
             </a>
           </div>
@@ -194,8 +216,13 @@ export default function DsDownloads() {
           One signed-in app that installs and updates everything on this account, shows what your
           subscription covers, and keeps each product on its current build.
         </p>
-        {hub.downloadUrl ? (
-          <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl}>
+        {hubLocked ? (
+          <p className="meta">
+            The Installer Hub comes with a licence for one of our desktop products.{" "}
+            <Link to="/products">See the products</Link> to buy or renew one, then download it here.
+          </p>
+        ) : hub.downloadUrl ? (
+          <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl} onClick={freshHub}>
             Download for Windows {icon("downloads")}
           </a>
         ) : (
@@ -250,7 +277,7 @@ export default function DsDownloads() {
                         Installer
                       </a>
                     ) : (
-                      <Link className="ds-btn btn-o ds-btn-sm" to="/support">
+                      <Link className="ds-btn btn-o ds-btn-sm" to="/manage/support#ticket">
                         Get help
                       </Link>
                     )}
@@ -304,45 +331,28 @@ export default function DsDownloads() {
         </div>
 
         <div>
+          {/* Guides moved to their own page on 17 Sep (his dash-guides), so
+              Downloads holds installers only and points across. */}
           <section className="dsh-panel">
             <div className="dsh-ph">
-              <h2>Guides</h2>
+              <h2>User guides</h2>
+              <Link className="more" to="/manage/guides">
+                Guides &amp; docs
+              </Link>
             </div>
             <div className="dsh-body">
-              {hub.guideUrl ? (
-                <div className="dsh-dl">
-                  <span className="ic">{icon("doc")}</span>
-                  <div className="nm">
-                    <b>Installer Hub user guide</b>
-                    <span>PDF · installing, updating and activation</span>
-                  </div>
-                  <a className="ds-btn btn-o ds-btn-sm" href={hub.guideUrl} target="_blank" rel="noreferrer">
-                    PDF
-                  </a>
-                </div>
-              ) : null}
-              <div className="dsh-dl">
-                <span className="ic">{icon("doc")}</span>
-                <div className="nm">
-                  <b>What&apos;s New</b>
-                  <span>Every change that has shipped, product by product</span>
-                </div>
-                <Link className="ds-btn btn-o ds-btn-sm" to="/whats-new">
-                  Read
-                </Link>
-              </div>
-              <div className="dsh-dl">
-                <span className="ic">{icon("doc")}</span>
-                <div className="nm">
-                  <b>Support</b>
-                  <span>Raise a ticket, or get a remote session</span>
-                </div>
-                <Link className="ds-btn btn-o ds-btn-sm" to="/support">
-                  Open
-                </Link>
-              </div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 300, color: "var(--ink-2)", lineHeight: 1.6 }}>
+                The guides for QUIV, RateGen, HERON and the Installer Hub live under Learn, where you can read
+                them in the browser as well as download them.
+              </p>
             </div>
           </section>
+
+          {/* The Revit and IFC files courses and demos are built on. The whole
+              reader half of that library had no screen at all: an admin could
+              publish a model and no learner could ever reach it. `quiet` so a
+              practice with none sees nothing rather than an empty panel. */}
+          <DsSampleModels quiet />
 
           <section className="dsh-panel">
             <div className="dsh-ph">
