@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { railForViewer } from "./railGate.js";
 import { RAIL, railItems } from "../ds/railConfig.js";
@@ -106,5 +109,52 @@ describe("edges", () => {
     const gated = railForViewer(RAIL, false);
     const tools = gated.flatMap((g) => g.items).find((i) => i.id === "tools");
     expect(tools.items.every((i) => !isGatedPath(i.to))).toBe(true);
+  });
+});
+
+// ── the app bar's search box ────────────────────────────────────────────────
+//
+// It must ask the SAME rail the rail itself does. DsAppShell builds its
+// candidate list with railItems(rail) and, on Enter, navigates straight to
+// hit.to — it does not pass it through href(). Fed the RAW config it therefore
+// offered a customer the /manage and /work addresses while the gate was up, and
+// sent them there, to a screen the gate then bounced them off; the rail beside
+// it showed the classic address for the very same label, so the two halves of
+// one app bar disagreed about where "Billing" is.
+//
+// The filter is mirrored from the component rather than imported, because it is
+// written inline in a useMemo there. If it changes, change it here too: what is
+// being pinned is the set of pages the box can reach.
+const searchableFrom = (rail) =>
+  railItems(rail).filter((it) => !it.action && it.ready !== false && !it.aliasOnly);
+
+describe("what the app bar's search box can reach", () => {
+  it("offers a customer nothing the route gate would bounce", () => {
+    const gated = searchableFrom(railForViewer(RAIL, false)).filter((it) => isGatedPath(it.to));
+    expect(gated.map((it) => `${it.label} -> ${it.to}`)).toEqual([]);
+  });
+
+  it("would have offered them straight from the config, so this is not vacuous", () => {
+    const gated = searchableFrom(RAIL).filter((it) => isGatedPath(it.to));
+    expect(gated.length).toBeGreaterThan(0);
+  });
+
+  it("still reaches exactly the same pages for staff", () => {
+    // The gate down is the live case, and it must change nothing at all.
+    expect(searchableFrom(railForViewer(RAIL, true)).map((it) => it.id)).toEqual(
+      searchableFrom(RAIL).map((it) => it.id),
+    );
+  });
+
+  it("is wired to the gated rail in DsAppShell, not to the raw config", () => {
+    // Read from source, the same way newBuildAccess.test.jsx pins the gate's
+    // single definition. While GATE_NEW_BUILD is false railForViewer returns the
+    // config itself, so the two lists are identical and NOTHING observable tells
+    // them apart — the wiring is the only thing left to assert, and it is what
+    // the next raised gate depends on.
+    const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    const shell = fs.readFileSync(path.join(SRC, "ds", "DsAppShell.jsx"), "utf8");
+    expect(shell).toMatch(/railItems\(rail\)/);
+    expect(shell).not.toMatch(/railItems\(RAIL\)/);
   });
 });

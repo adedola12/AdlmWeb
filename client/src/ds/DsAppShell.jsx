@@ -216,12 +216,25 @@ export default function DsAppShell({
   const alertN = bellN ?? Number(counts?.assignments || 0);
   const railRef = React.useRef(null);
   // Every page in the rail the search box can jump to.
+  //
+  // From `rail`, THE GATED ONE, not from RAIL. It reads the raw config no
+  // longer, because Enter navigates straight to hit.to (below) without passing
+  // it through href(): on a raw item that is the /manage or /work address, so
+  // while the gate was up the box sent a customer to a screen the gate then
+  // bounced them off, and offered it to them in the datalist first. The rail
+  // beside it showed the classic address for the same label, so the two halves
+  // of one app bar disagreed about where "Billing" is.
+  //
+  // Inert while GATE_NEW_BUILD is false: railForViewer returns the config
+  // itself, so this is the same list it always was. It matters the moment the
+  // gate goes back up, which is the one-line revert the go-live commit promised
+  // — a revert that has to move every link, or it leaves some of them bouncing.
   const searchable = React.useMemo(
     () =>
-      railItems(RAIL).filter(
+      railItems(rail).filter(
         (it) => !it.action && it.ready !== false && !it.aliasOnly,
       ),
-    [],
+    [rail],
   );
 
   // /manage/support#ticket and the like: the router does not scroll to a hash,
