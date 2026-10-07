@@ -231,6 +231,35 @@ const BudgetItemSchema = new mongoose.Schema(
 // preliminary amount assigned to this line (sum should be 100). completed
 // flag drives the preliminary-done deduction from the outstanding prelim
 // pool, mirroring how measured items drive valuation.
+// ICMS 3 (International Cost Management Standard) report details. Codes are the
+// standard's: projectType is Level 1 ("01" Buildings), groups and sub-groups
+// are Level 3 and 4 ("03", "03.030").
+const IcmsOverrideSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true }, // the line's lineId / sn, or "ps:<id>" for a provisional sum
+    group: { type: String, default: null },
+    subGroup: { type: String, default: null },
+  },
+  { _id: false },
+);
+const IcmsSchema = new mongoose.Schema(
+  {
+    projectType: { type: String, default: "01", trim: true },
+    country: { type: String, default: "NG", trim: true, uppercase: true },
+    currency: { type: String, default: "NGN", trim: true, uppercase: true },
+    baseDate: { type: String, default: "", trim: true }, // YYYY-MM-DD
+    priceBasis: { type: String, default: "", trim: true },
+    projectStatus: { type: String, default: "", trim: true },
+    location: { type: String, default: "", trim: true },
+    gfaIpms1: { type: Number, default: null }, // gross external area, m2
+    gfaIpms2: { type: Number, default: null }, // gross internal area, m2
+    carbonBoundary: { type: String, default: "", trim: true },
+    overrides: { type: [IcmsOverrideSchema], default: [] },
+    updatedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const PreliminaryItemSchema = new mongoose.Schema(
   {
     // A stable identity for this row, minted by the server the first time it
@@ -1021,6 +1050,11 @@ const TakeoffProjectSchema = new mongoose.Schema(
     variations: { type: [VariationSchema], default: [] },
     preliminaryItems: { type: [PreliminaryItemSchema], default: [] },
     contract: { type: ContractSchema, default: () => ({}) },
+    // ICMS 3 report details (util/icmsExport.js): the project attributes the
+    // standard asks for that a bill does not carry, and the QS's own placement
+    // of lines the mapper left out. No default, so a project that never opens
+    // the ICMS export keeps exactly the shape the plugins already read.
+    icms: { type: IcmsSchema, default: undefined },
     certificates: { type: [CertificateSchema], default: [] },
     finalAccount: { type: FinalAccountSchema, default: () => ({}) },
     models: { type: ProjectModelsSchema, default: () => ({}) },

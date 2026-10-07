@@ -679,6 +679,8 @@ import {
 } from "../util/billBudgetCascade.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
 import { rejectSampleWrites, sampleSummary } from "../util/sampleProjects.js";
+import { sampleCarbon } from "../services/sampleCarbon.js";
+import { pricePreview } from "../services/pricePreview.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
 import {
@@ -3293,6 +3295,13 @@ async function listSampleProjects(req, res) {
         sample: 1,
         "items.qty": 1,
         "items.rate": 1,
+        // what the card's carbon footprint is worked out from (services/sampleCarbon.js)
+        "items.description": 1,
+        "items.unit": 1,
+        "items.takeoffLine": 1,
+        "items.type": 1,
+        "items.category": 1,
+        "items.appliedRateKey": 1,
         "contract.contractSum": 1,
         "certificates.number": 1,
         "models.architectural.key": 1,
@@ -3303,10 +3312,37 @@ async function listSampleProjects(req, res) {
     )
       .sort({ "sample.order": 1 })
       .lean();
-    res.json(samples.map(sampleSummary));
+    // the footprint by the viewer's own RateGen rates (services/sampleCarbon.js)
+    const viewerId = getUserObjectId(req);
+    const viewer = viewerId ? await User.findById(viewerId, { state: 1, zone: 1 }).lean() : null;
+    const carbon = await Promise.all(samples.map((s) => sampleCarbon(s, viewerId, viewer || {})));
+    res.json(samples.map((s, i) => ({ ...sampleSummary(s), carbon: carbon[i] })));
   } catch (err) {
     console.error("GET sample projects error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+}
+
+// GET /:productKey/:id/price-preview: what the viewer's RateGen rates would make
+// of this bill. Read-only on every project, including the samples it was built for.
+async function getPricePreview(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey), { items: 1, productKey: 1, userId: 1, isSample: 1, collaborators: 1 }).lean();
+    if (!project) return res.status(404).json({ error: "Not found" });
+    // the bill's own rates are on the page only for someone allowed to see them
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) return refuseRateMaskedWrite(res, "compare this bill's rates");
+
+    return res.json({ ok: true, ...(await pricePreview(project, userId)) });
+  } catch (err) {
+    console.error("GET price-preview error:", err);
+    return res.status(500).json({ error: "Could not price this bill with your RateGen rates." });
   }
 }
 
@@ -9004,6 +9040,16 @@ router.get(
   mapEntitlementParam,
   requireEntitlementParam,
   getProject,
+);
+
+// "Price with my RateGen rates": the bill re-priced with the viewer's own rates,
+// nothing saved (services/pricePreview.js). A GET, so the read-only sample guard
+// (rejectSampleWrites refuses every non-GET on a sample) leaves it open.
+router.get(
+  "/:productKey/:id/price-preview",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  getPricePreview,
 );
 
 router.put(
