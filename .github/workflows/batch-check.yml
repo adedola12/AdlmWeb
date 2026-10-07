@@ -36,7 +36,12 @@ permissions:
 jobs:
   approved-batch:
     name: approved batch
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: GitHub moves that label to Ubuntu 26.04 gradually
+    # between 19 Oct and 19 Nov 2026 (actions/runner-images#14748), so a run in
+    # that window could land on either image with nothing here to say which.
+    # Nothing in this workflow needs 24.04; move to 26.04 as a decision, not
+    # as a surprise.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Does this change what end users see?
