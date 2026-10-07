@@ -18,7 +18,11 @@ const TOOLS = [
   { area: "ptrainings", to: "/admin/ptrainings", label: "Physical Trainings", desc: "In-person events & enrolment", icon: FiMapPin },
   { area: "learn", to: "/admin/learn", label: "Learn", desc: "Video courses & library", icon: FiPlayCircle },
   { area: "learn", to: "/admin/youtube", label: "YouTube Status", desc: "Channel vs library, held videos, availability", icon: FiPlayCircle },
-  { area: "orgvideos", to: "/admin/organizations", label: "Organisation Videos", desc: "Demos & recaps recorded for one firm", icon: FiPlayCircle },
+  // The Organisations REGISTER. This carried the Organisation Videos label,
+  // description and icon — a copy of the real entry further down — so somebody
+  // granted only `orgvideos` saw two identical "Organisation Videos" tiles and
+  // the first took them to a screen gated on `adminhub`, which refused them.
+  { area: "adminhub", to: "/admin/organizations", label: "Organisations", desc: "Firms, their seats and their licences", icon: FiUsers },
   { area: "courses", to: "/admin/courses", label: "Courses", desc: "Paid online courses", icon: FiBookOpen },
   { area: "grading", to: "/admin/course-grading", label: "Grading", desc: "Grade course submissions", icon: FiCheckSquare },
   { area: "courses", to: "/admin/course-cockpit", label: "Course Cockpit", desc: "Watch time, assignments & who has stalled", icon: FiActivity },

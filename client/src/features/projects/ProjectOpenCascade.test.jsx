@@ -125,7 +125,28 @@ describe("the contract panel's figures", () => {
     expect(captured.contract.variations).toBe(1_500_000);
   });
 
-  it("prices a completed preliminary item off the real preliminary pool", () => {
+  // This used to assert that the view priced a completed preliminary item off
+  // the pool ITSELF and added it to actualSpent. It did — and so did
+  // ProjectsGeneric, one level up, which folds the earned preliminaries, the
+  // completed provisional sums and the executed variations into the very
+  // `valuedAmount` it passes down (fullValuedAmount, ProjectsGeneric.jsx). Doing
+  // it again here counted all three twice and manufactured an over-run on any
+  // job that had them — the same class of fabricated over-run this whole file
+  // exists to prevent, one level further in.
+  it("passes the earned figure straight through, without re-adding its parts", () => {
+    renderProject({
+      preliminaryItems: [
+        { description: "Site office", allocation: 40, completed: true },
+        { description: "Insurances", allocation: 60 },
+      ],
+      // What ProjectsGeneric would hand down: measured-valued 10,000,000 plus
+      // 40% of the 3,525,000 preliminary pool.
+      valuedAmount: 10_000_000 + expected.prelims * 0.4,
+    });
+    expect(captured.contract.actualSpent).toBeCloseTo(10_000_000 + expected.prelims * 0.4, 6);
+  });
+
+  it("does not add the preliminaries a second time when nothing is earned", () => {
     renderProject({
       preliminaryItems: [
         { description: "Site office", allocation: 40, completed: true },
@@ -133,8 +154,17 @@ describe("the contract panel's figures", () => {
       ],
       valuedAmount: 0,
     });
-    // 40% of the 3,525,000 pool, and nothing else has been earned.
-    expect(captured.contract.actualSpent).toBeCloseTo(expected.prelims * 0.4, 6);
+    // Nothing valued means nothing spent. The old view reported 1,410,000 here
+    // — 40% of the pool — on top of whatever ProjectsGeneric had already
+    // included in the figure it sent.
+    expect(captured.contract.actualSpent).toBe(0);
+  });
+
+  it("does not add completed provisional sums or executed variations again", () => {
+    renderProject({ valuedAmount: 0, provisionalSums: [
+      { description: "Lift installation", amount: 5_000_000, kind: "pc", completed: true },
+    ] });
+    expect(captured.contract.actualSpent).toBe(0);
   });
 });
 

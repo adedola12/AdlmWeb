@@ -105,7 +105,6 @@ export default function ModelCheckReport() {
   }
 
   const d = data;
-  const issueCount = (d.missingCategories || 0) + (d.overlapCount || 0);
   const cats = d.categories || [];
   const rebar = d.rebarAnalysis || [];
   const hasRebar = rebar.length > 0 && rebar.some(r => r.total > 0);

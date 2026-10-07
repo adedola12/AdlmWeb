@@ -2,16 +2,62 @@
 // Ported from RichardEnoch/adlm-studio-site index.html
 // Re-run the script to pick up his changes; hand edits here are lost.
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { linkFrom } from "../../lib/newBuildPaths.js";
+import { useAuth } from "../../store.jsx";
+import { isStaff } from "../../utils/roles.js";
+import { api } from "../../api.js";
 
 export default function DsNav() {
+  // WHERE THIS IS MOUNTED DECIDES WHERE ITS LINKS GO.
+  //
+  // DsShell renders this on BOTH gated redesign pages (/fit, /preview/*)
+  // and genuinely public ones (/certificate, /privacy, /terms,
+  // /licensing - see main.jsx). On a redesign page a classic link drops
+  // the reader out of the build they are in; on a public page a /preview
+  // link puts a member of the public in front of a staff gate. So each
+  // link asks where it is rather than being repointed wholesale.
+  const { pathname } = useLocation();
+  const href = (to) => linkFrom(pathname, to);
+
+  // WHO IS LOOKING AT THIS.
+  //
+  // This nav used to say "Sign in" to everybody, because it was ported from
+  // a static build where there was nobody to be signed in AS. That was
+  // harmless while it only rendered on /privacy and /certificate. It stopped
+  // being harmless when his design took over the home page, /products,
+  // /about, /learn, /whats-new and /quote: App.jsx suppresses the classic nav
+  // on those paths, so this is the ONLY nav a visitor gets, and a paying
+  // customer was shown an invitation to sign in, with no route to their
+  // dashboard and no way to log out.
+  //
+  // The signed-in items mirror components/Nav.jsx rather than inventing a
+  // second answer: Overview, Time Log, Profile, Admin for staff, and a log
+  // out. Same destinations, same order, same logout call.
+  const { user, clear } = useAuth();
+  const navigate = useNavigate();
+  const [busy, setBusy] = React.useState(false);
+
+  async function logout() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api("/auth/logout", { method: "POST" });
+    } catch {
+      // Clear local auth even if the request fails, exactly as the classic
+      // nav does: a failed call must not leave somebody stuck signed in.
+    }
+    clear();
+    navigate("/login", { replace: true });
+    setTimeout(() => window.location.reload(), 0);
+  }
   return (
     <>
       <nav className="nav">
         {" "}
         <div className="nav-in">
           {" "}
-          <Link to="/" aria-label="ADLM Studio home">
+          <Link to={href("/")} aria-label="ADLM Studio home">
             {" "}
             <img className="logo-l" src="/ds/logo-light.svg" alt="ADLM Studio" />
             {" "}
@@ -22,7 +68,7 @@ export default function DsNav() {
           <ul className="nav-links">
             {" "}
             <li data-panel="products">
-              <Link to="/products" data-ds-page="products" aria-controls="npanel">
+              <Link to={href("/products")} data-ds-page="products" aria-controls="npanel">
                 Products{" "}
                 <i className="caret">
                 </i>
@@ -30,7 +76,7 @@ export default function DsNav() {
             </li>
             {" "}
             <li data-panel="solutions">
-              <Link to="/solutions/firms" data-ds-page="solutions-firms" aria-controls="npanel">
+              <Link to={href("/solutions/firms")} data-ds-page="solutions-firms" aria-controls="npanel">
                 Solutions{" "}
                 <i className="caret">
                 </i>
@@ -38,13 +84,13 @@ export default function DsNav() {
             </li>
             {" "}
             <li>
-              <Link to="/pricing" data-ds-page="pricing">
+              <Link to={href("/pricing")} data-ds-page="pricing">
                 Pricing
               </Link>
             </li>
             {" "}
             <li data-panel="learn">
-              <Link to="/learn" data-ds-page="learn" aria-controls="npanel">
+              <Link to={href("/learn")} data-ds-page="learn" aria-controls="npanel">
                 Learn{" "}
                 <i className="caret">
                 </i>
@@ -52,7 +98,7 @@ export default function DsNav() {
             </li>
             {" "}
             <li data-panel="company">
-              <Link to="/about" data-ds-page="about" aria-controls="npanel">
+              <Link to={href("/about")} data-ds-page="about" aria-controls="npanel">
                 Company{" "}
                 <i className="caret">
                 </i>
@@ -82,13 +128,48 @@ export default function DsNav() {
               {" "}
             </button>
             {" "}
-            <Link to="/login" data-ds-page="login" className="ds-btn btn-o ds-btn-sm">
-              Sign in
-            </Link>
-            {" "}
-            <Link to="/contact" data-ds-page="contact" className="ds-btn btn-p ds-btn-sm">
-              Book a demo
-            </Link>
+            {user ? (
+              <>
+                <Link to="/manage" className="ds-btn btn-o ds-btn-sm">
+                  Overview
+                </Link>
+                {" "}
+                <Link to="/profile" className="ds-btn btn-o ds-btn-sm">
+                  Profile
+                </Link>
+                {" "}
+                {isStaff(user) && (
+                  <>
+                    <Link to="/admin" className="ds-btn btn-o ds-btn-sm">
+                      Admin
+                    </Link>
+                    {" "}
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={logout}
+                  disabled={busy}
+                  className="ds-btn btn-p ds-btn-sm"
+                >
+                  {busy ? "…" : "Log out"}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to={href("/login")} data-ds-page="login" className="ds-btn btn-o ds-btn-sm">
+                  Sign in
+                </Link>
+                {" "}
+                <Link to={href("/signup")} data-ds-page="signup" className="ds-btn btn-o ds-btn-sm">
+                  Sign up
+                </Link>
+                {" "}
+                <Link to={href("/contact")} data-ds-page="contact" className="ds-btn btn-p ds-btn-sm">
+                  Book a demo
+                </Link>
+              </>
+            )}
             {" "}
           </div>
           {" "}
@@ -117,7 +198,7 @@ export default function DsNav() {
                       <ul>
                         {" "}
                         <li>
-                          <Link to="/product/revit" data-ds-page="quiv">
+                          <Link to={href("/product/revit")} data-ds-page="quiv">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-cube" />
@@ -135,7 +216,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/product/planswift" data-ds-page="heron">
+                          <Link to={href("/product/planswift")} data-ds-page="heron">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-ruler" />
@@ -153,7 +234,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/product/rategen" data-ds-page="rategen">
+                          <Link to={href("/product/rategen")} data-ds-page="rategen">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-calc" />
@@ -171,7 +252,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/product/mep" data-ds-page="mep">
+                          <Link to={href("/product/mep")} data-ds-page="mep">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-layers" />
@@ -179,7 +260,7 @@ export default function DsNav() {
                             </span>
                             <span>
                               <b>
-                                Revit MEP
+                                SERVIQ
                               </b>
                               <span>
                                 Services takeoff
@@ -189,7 +270,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/product/qs-takeoff" data-ds-page="timepro">
+                          <Link to={href("/product/qs-takeoff")} data-ds-page="timepro">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-clock" />
@@ -207,7 +288,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/product/civil3d" data-ds-page="civiq">
+                          <Link to={href("/product/civil3d")} data-ds-page="civiq">
                             <span className="mi ds-a">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-road" />
@@ -237,7 +318,7 @@ export default function DsNav() {
                       <ul>
                         {" "}
                         <li>
-                          <Link to="/ada" data-ds-page="ada">
+                          <Link to={href("/ada")} data-ds-page="ada">
                             <span className="mi ds-a">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-bolt" />
@@ -255,7 +336,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/mobile" data-ds-page="mobile">
+                          <Link to={href("/mobile")} data-ds-page="mobile">
                             <span className="mi ds-a">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-phone" />
@@ -273,7 +354,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/how-it-works" data-ds-page="how-it-works">
+                          <Link to={href("/how-it-works")} data-ds-page="how-it-works">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-screen" />
@@ -291,7 +372,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/quote" data-ds-page="quote">
+                          <Link to={href("/quote")} data-ds-page="quote">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-doc" />
@@ -309,7 +390,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/pricing#compare" data-ds-page="pricing">
+                          <Link to={href("/pricing#compare")} data-ds-page="pricing">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-chart" />
@@ -332,7 +413,7 @@ export default function DsNav() {
                     {" "}
                   </div>
                   {" "}
-                  <Link className="np-art" to="/how-it-works" data-ds-page="how-it-works">
+                  <Link className="np-art" to={href("/how-it-works")} data-ds-page="how-it-works">
                     {" "}
                     <img src="/ds/hd-cad.jpg" alt="" loading="lazy" />
                     {" "}
@@ -358,19 +439,19 @@ export default function DsNav() {
                 {" "}
                 <div className="np-foot">
                   {" "}
-                  <Link to="/products" data-ds-page="products">
+                  <Link to={href("/products")} data-ds-page="products">
                     All products
                   </Link>
                   {" "}
-                  <Link to="/pricing" data-ds-page="pricing">
+                  <Link to={href("/pricing")} data-ds-page="pricing">
                     Pricing
                   </Link>
                   {" "}
-                  <Link to="/quote" data-ds-page="quote">
+                  <Link to={href("/quote")} data-ds-page="quote">
                     Build a quotation
                   </Link>
                   {" "}
-                  <Link to="/how-it-works" data-ds-page="how-it-works">
+                  <Link to={href("/how-it-works")} data-ds-page="how-it-works">
                     How ADLM works
                   </Link>
                   {" "}
@@ -393,7 +474,7 @@ export default function DsNav() {
                       <ul>
                         {" "}
                         <li>
-                          <Link to="/solutions/firms" data-ds-page="solutions-firms">
+                          <Link to={href("/solutions/firms")} data-ds-page="solutions-firms">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-layers" />
@@ -411,7 +492,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/solutions/professionals" data-ds-page="solutions-professionals">
+                          <Link to={href("/solutions/professionals")} data-ds-page="solutions-professionals">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-user" />
@@ -429,7 +510,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/solutions/students" data-ds-page="solutions-students">
+                          <Link to={href("/solutions/students")} data-ds-page="solutions-students">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-doc" />
@@ -447,7 +528,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/solutions/institutions" data-ds-page="solutions-institutions">
+                          <Link to={href("/solutions/institutions")} data-ds-page="solutions-institutions">
                             <span className="mi ds-a">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-screen" />
@@ -470,7 +551,7 @@ export default function DsNav() {
                     {" "}
                   </div>
                   {" "}
-                  <Link className="np-art np-art-lg" to="/testimonials" data-ds-page="customers">
+                  <Link className="np-art np-art-lg" to={href("/testimonials")} data-ds-page="customers">
                     {" "}
                     <img src="/ds/hd-helmet.jpg" alt="" loading="lazy" />
                     {" "}
@@ -496,11 +577,11 @@ export default function DsNav() {
                 {" "}
                 <div className="np-foot">
                   {" "}
-                  <Link to="/testimonials" data-ds-page="customers">
+                  <Link to={href("/testimonials")} data-ds-page="customers">
                     Customer stories
                   </Link>
                   {" "}
-                  <Link to="/contact" data-ds-page="contact">
+                  <Link to={href("/contact")} data-ds-page="contact">
                     Talk to sales
                   </Link>
                   {" "}
@@ -523,7 +604,7 @@ export default function DsNav() {
                       <ul>
                         {" "}
                         <li>
-                          <Link to="/learn#courses" data-ds-page="learn">
+                          <Link to={href("/learn#courses")} data-ds-page="learn">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-doc" />
@@ -541,7 +622,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/learn#lessons" data-ds-page="learn">
+                          <Link to={href("/learn#lessons")} data-ds-page="learn">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-screen" />
@@ -559,7 +640,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/learn#events" data-ds-page="learn">
+                          <Link to={href("/learn#events")} data-ds-page="learn">
                             <span className="mi ds-a">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-user" />
@@ -570,14 +651,14 @@ export default function DsNav() {
                                 Events &amp; training
                               </b>
                               <span>
-                                30 delivered, 3,100+ trained
+                                30 delivered, 800+ trained
                               </span>
                             </span>
                           </Link>
                         </li>
                         {" "}
                         <li>
-                          <Link to="/learn#guides" data-ds-page="learn">
+                          <Link to={href("/learn#guides")} data-ds-page="learn">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-down" />
@@ -595,7 +676,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/whats-new" data-ds-page="whats-new">
+                          <Link to={href("/whats-new")} data-ds-page="whats-new">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-bolt" />
@@ -618,7 +699,7 @@ export default function DsNav() {
                     {" "}
                   </div>
                   {" "}
-                  <Link className="np-art np-art-lg" to="/learn#courses" data-ds-page="learn">
+                  <Link className="np-art np-art-lg" to={href("/learn#courses")} data-ds-page="learn">
                     {" "}
                     <img src="/ds/hd-desk.jpg" alt="" loading="lazy" />
                     {" "}
@@ -644,11 +725,11 @@ export default function DsNav() {
                 {" "}
                 <div className="np-foot">
                   {" "}
-                  <Link to="/learn" data-ds-page="learn">
+                  <Link to={href("/learn")} data-ds-page="learn">
                     Browse everything
                   </Link>
                   {" "}
-                  <Link to="/learn#events" data-ds-page="learn">
+                  <Link to={href("/learn#events")} data-ds-page="learn">
                     Upcoming events
                   </Link>
                   {" "}
@@ -671,7 +752,7 @@ export default function DsNav() {
                       <ul>
                         {" "}
                         <li>
-                          <Link to="/about" data-ds-page="about">
+                          <Link to={href("/about")} data-ds-page="about">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-cube" />
@@ -689,7 +770,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/testimonials" data-ds-page="customers">
+                          <Link to={href("/testimonials")} data-ds-page="customers">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-chart" />
@@ -707,7 +788,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/careers" data-ds-page="careers">
+                          <Link to={href("/careers")} data-ds-page="careers">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-user" />
@@ -725,7 +806,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/press" data-ds-page="press">
+                          <Link to={href("/press")} data-ds-page="press">
                             <span className="mi">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-doc" />
@@ -743,7 +824,7 @@ export default function DsNav() {
                         </li>
                         {" "}
                         <li>
-                          <Link to="/contact" data-ds-page="contact">
+                          <Link to={href("/contact")} data-ds-page="contact">
                             <span className="mi ds-a">
                               <svg viewBox="0 0 24 24">
                                 <use href="#i-cloud" />
@@ -766,7 +847,7 @@ export default function DsNav() {
                     {" "}
                   </div>
                   {" "}
-                  <Link className="np-art np-art-lg" to="/about" data-ds-page="about">
+                  <Link className="np-art np-art-lg" to={href("/about")} data-ds-page="about">
                     {" "}
                     <img src="/ds/hd-team.jpg" alt="" loading="lazy" />
                     {" "}
@@ -792,11 +873,11 @@ export default function DsNav() {
                 {" "}
                 <div className="np-foot">
                   {" "}
-                  <Link to="/about" data-ds-page="about">
+                  <Link to={href("/about")} data-ds-page="about">
                     Our story
                   </Link>
                   {" "}
-                  <Link to="/careers" data-ds-page="careers">
+                  <Link to={href("/careers")} data-ds-page="careers">
                     Work with us
                   </Link>
                   {" "}

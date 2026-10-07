@@ -17,7 +17,11 @@ import { htmlToJsx } from "./lib/html-to-jsx.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT = path.resolve(here, "..");
-const SITE = path.resolve(CLIENT, "../../ADLMWebNewUI/site");
+// His repo sits beside ADLMWebsite. From a git worktree that relative path
+// does not reach it, so DS_SITE can name the folder directly.
+const SITE = process.env.DS_SITE
+  ? path.resolve(process.env.DS_SITE)
+  : path.resolve(CLIENT, "../../ADLMWebNewUI/site");
 const OUT_CHROME = path.join(CLIENT, "src/ds/chrome");
 const OUT_PAGES = path.join(CLIENT, "src/ds/pages");
 
@@ -416,7 +420,57 @@ const SLOTS = {
   },
 };
 
+// R09: the home "trusted by" strip shows each client's logo instead of its
+// name (owner approved the logos, 27 Sep 2026). Files are in
+// client/public/ds/logos/, cut to 96px tall from the owner-approved set in
+// Documents/adlm-client-logos-R09 (sources in its README). Godaret Consultant
+// has no logo anywhere, so it stays as text (owner). "BEC Associates" is BEC
+// Consultants' Nigeria Ltd (owner). FAAN carries its official name. Styles:
+// .clogo in src/styles/ds-local.css.
+const CLIENT_LOGOS = [
+  ["NIQS", "niqs", "Nigerian Institute of Quantity Surveyors (NIQS)"],
+  ["The Big 5 Construct", "the-big-5-construct-nigeria", "The Big 5 Construct Nigeria"],
+  ["NIOB", "niob", "Nigerian Institute of Building (NIOB)"],
+  ["Federal Airport Authority", "faan", "Federal Airports Authority of Nigeria (FAAN)"],
+  ["Construworth", "construworth", "ConstruWorth"],
+  ["ITB Nigeria", "itb-nigeria", "ITB Nigeria"],
+  ["BEC Associates", "bec-consultants", "BEC Consultants"],
+  ["JABU", "jabu", "Joseph Ayo Babalola University (JABU)"],
+  ["Rivers State University", "rivers-state-university", "Rivers State University"],
+];
+const clientLogoEdits = CLIENT_LOGOS.map(([name, file, alt]) => ({
+  label: `client logo: ${name}`,
+  find: `<span>${name}</span>`,
+  replace: `<span class="clogo"><img src="assets/img/logos/${file}.png" alt="${alt}" loading="lazy" decoding="async"></span>`,
+}));
+
 const PAGE_EDITS = {
+  "index.html": clientLogoEdits,
+
+  // PR #43 (f3eeed8) added the take-off timing section by editing the
+  // GENERATED DsPrivacy.jsx, so the next port run wiped it. It lives here now,
+  // so every run puts it back after the retention paragraph, before his
+  // "Analytics" section.
+  "src/privacy.html": [
+    {
+      label: "privacy: last-updated date for the take-off timing section",
+      find: '<p class="updated">Last updated 7 August 2026</p>',
+      replace: '<p class="updated">Last updated 26 September 2026</p>',
+    },
+    {
+      label: "privacy: take-off timing section",
+      find: "Support conversations are kept for two years.</p>",
+      replace:
+        "Support conversations are kept for two years.</p>\n" +
+        "<h3>Take-off timing</h3>\n" +
+        "<p>" +
+        "When you finish a take-off in HERON or QUIV, or run an auto take-off in QUIV, the plugin sends us a short record of it: when it started and ended, how long you actively worked on it, and counts of what was measured (drawings or levels, elements, element types and bill lines). It carries no drawing or model content, no file, project, element or client names, and no quantities, rates or prices. A model is identified only by a one-way code, so repeat take-offs of the same model can be grouped without revealing which model it is. The record is linked to your account and, if you hold an organisation licence, to your organisation." +
+        "</p>\n<p>" +
+        "We use these records to measure how much time the tools save, to find and fix the slow parts of the products, and to publish combined figures, for example the typical time an auto take-off takes. Anything we publish is a total or an average across many take-offs; it never identifies you, your organisation or a project. The records are kept until you ask us to delete them, which you can do at any time by writing to admin@adlmstudio.net." +
+        "</p>",
+    },
+  ],
+
   // R19: Etti's card on About is his initials placeholder until a photo is
   // supplied. TODO(adlm): Etti's photo. Save it as
   // client/public/ds/team-etti.jpg (portrait, 960x1200 like the other three)
@@ -495,12 +549,51 @@ const PAGE_EDITS = {
   // summary panel is what assets/js/quote.js drives; DsQuoteBuilder reproduces
   // that markup and its arithmetic, priced from the catalogue instead of the
   // literal in his script — which had install at 0 for Revit MEP and CIVIQ.
-  // The two real courses on the Learn page. The third card — "Rates & 2D
-  // Takeoff" at ₦85,000 — is deliberately NOT wired: it has no catalogue row
-  // because the course does not exist. Richard's own notes flag its name,
-  // price and syllabus as provisional. Leaving the figure hardcoded keeps it
-  // visible as the placeholder it is; see docs/richard-snag-list.md.
+  // The two real courses on the Learn page read their price from the
+  // catalogue. The fourth card does not, because there is no fourth course.
   "src/learn.html": [
+    {
+      // "Rates & 2D Takeoff", ₦85,000 a year, four weeks, a four-line
+      // syllabus and a "View course" button — for a course that does not
+      // exist. GET /learn/courses returns exactly two, and neither is this;
+      // his own notes flag the name, price and syllabus as provisional, and
+      // the button pointed at learn#courses, the section it already sits in.
+      //
+      // It was left in as a visible placeholder while it was only staged at
+      // /preview/learn. Pulled now (owner's call, 26 Sep) rather than carried
+      // to launch: a price on a public page is an offer, and this one could
+      // not have been honoured.
+      //
+      // If it is ever built, this whole edit comes out and the card gets a
+      // courseEdit() beside the other two.
+      label: 'the "Rates & 2D Takeoff" card — a course that does not exist',
+      findRe: /\s*<article class="pcard2 pc-ico pal-light tilt rise" id="course-4">[\s\S]*?<\/article>/,
+      replace: "",
+    },
+    {
+      // Which leaves three cards in a four-column grid: above 1180px they
+      // would keep their width and leave the fourth column empty, in a row
+      // that is centred by transform, so the gap lands off to one side. His
+      // own .pgrid is the three-column version of the same thing, and it
+      // steps down to two and then one at the same breakpoints.
+      label: "three cards, so the course row uses his three-column grid",
+      find: '<div class="pgrid pgrid-4">',
+      replace: '<div class="pgrid">',
+    },
+    {
+      // Google Classroom was retired (ed5d55f), and ce5c229 already took this
+      // same sentence off the classic Learn and course pages in September.
+      // His static build predates both, so the port brings it back every time
+      // it runs — which is how a fixed thing un-fixes itself.
+      label: "courses are delivered on our own platform, not Google Classroom",
+      find: "100% online · Google Classroom · self-paced",
+      replace: "100% online · self-paced",
+    },
+    {
+      label: "the same, in the FAQ answer",
+      find: "Self-paced, delivered through Google Classroom, with weekly assessments",
+      replace: "Self-paced, delivered on the ADLM Studio platform, with weekly assessments",
+    },
     courseEdit("BIM for Building Works", "bimbld"),
     courseEdit("BIM for MEP &amp; HVAC", "bimmep"),
     {
@@ -511,6 +604,18 @@ const PAGE_EDITS = {
       label: "his free-lesson filters, tiles and Show more, on the real library",
       findRe: /<div class="filters rise" id="lesson-filters">[\s\S]*?<div class="lmore">[\s\S]*?<\/div>/,
       replace: "@@d.lessons@@",
+    },
+  ],
+
+  // The same retired platform, in the Beyond BIM FAQ. ce5c229 fixed this exact
+  // sentence in the classic app in September; his static build predates it.
+  "src/beyondbim.html": [
+    {
+      label: "certificated courses are self-paced on our platform, not Google Classroom",
+      // The sentence wraps mid-phrase in his source, so this matches across
+      // the break rather than depending on where the line happens to end.
+      findRe: /are self-paced\s+through Google Classroom and go deep/,
+      replace: "are self-paced on the ADLM Studio platform and go deep",
     },
   ],
 
@@ -677,9 +782,59 @@ const banner = (from) => `// GENERATED by client/scripts/port-ds-html.mjs — do
 // Re-run the script to pick up his changes; hand edits here are lost.
 `;
 
-function component({ name, jsx, usesLink, from, wrap, takesData, slots = [] }) {
+/**
+ * Send every in-app link in a piece of chrome through linkFrom().
+ *
+ * WHY THIS IS SAFE TO DO WHOLESALE
+ *
+ * html-to-jsx emits `to="..."` ONLY for an <a> whose resolved href is already an
+ * in-app path and is not a file (see the href branch there: an external URL, a
+ * /docs/ or /ds/ file and an in-page #anchor all stay `href=`). So every `to=`
+ * in this output is exactly the kind of link that has to ask where it is, and
+ * nothing else is touched. data-ds-page rides along untouched — it is his own
+ * page name, which is what newBuildPaths.js was built from.
+ *
+ * Throws on zero matches rather than emitting chrome that quietly links back to
+ * the classic build. Every nav edit in this script does the same, for the same
+ * reason: a port that silently does nothing is worse than one that stops.
+ */
+function throughLinkFrom(jsx, name) {
+  let n = 0;
+  const out = jsx.replace(/ to="([^"]*)"/g, (_m, to) => {
+    n += 1;
+    return ` to={href(${JSON.stringify(to)})}`;
+  });
+  if (!n) {
+    throw new Error(
+      `[port-ds-html] ${name} is marked routeAware and has no in-app links. ` +
+        "Either his markup changed shape or html-to-jsx stopped emitting `to=`; " +
+        "either way the chrome would link back to the classic build.",
+    );
+  }
+  return out;
+}
+
+function component({ name, jsx, usesLink, from, wrap, takesData, slots = [], routeAware }) {
   const imports = ['import React from "react";'];
-  if (usesLink) imports.push('import { Link } from "react-router-dom";');
+  // ROUTE-AWARE CHROME.
+  //
+  // The nav and footer are mounted by DsShell, and DsShell renders on BOTH
+  // gated redesign pages (/fit, /preview/*) and genuinely public ones
+  // (/certificate, /privacy, /terms, /licensing - see main.jsx). His markup
+  // links to the classic paths, which on a redesign page drops the reader out
+  // of the build they are in; repointing them all at /preview would put a
+  // member of the public in front of a staff gate. So each link asks where it
+  // is, through lib/newBuildPaths.js.
+  //
+  // EMITTED HERE, not edited into the output. The output says "hand edits here
+  // are lost" and means it: the first re-run of this script would have silently
+  // undone every one of those links, and nothing would have failed.
+  if (routeAware) {
+    imports.push('import { Link, useLocation } from "react-router-dom";');
+    imports.push('import { linkFrom } from "../../lib/newBuildPaths.js";');
+  } else if (usesLink) {
+    imports.push('import { Link } from "react-router-dom";');
+  }
   for (const token of slots) {
     const slot = SLOTS[token];
     imports.push(`import ${slot.component} from "${slot.from}";`);
@@ -694,10 +849,27 @@ function component({ name, jsx, usesLink, from, wrap, takesData, slots = [] }) {
   const declared = slots
     .map((token) => `  const ${token} = <${SLOTS[token].component} />;\n`)
     .join("");
+  // The lines that make every Link in this component ask where it is, and
+  // the reason, in the file somebody will be reading when they wonder.
+  const routeHook = routeAware
+    ? [
+        "  // WHERE THIS IS MOUNTED DECIDES WHERE ITS LINKS GO.",
+        "  //",
+        "  // DsShell renders this on BOTH gated redesign pages (/fit, /preview/*)",
+        "  // and genuinely public ones (/certificate, /privacy, /terms,",
+        "  // /licensing - see main.jsx). On a redesign page a classic link drops",
+        "  // the reader out of the build they are in; on a public page a /preview",
+        "  // link puts a member of the public in front of a staff gate. So each",
+        "  // link asks where it is rather than being repointed wholesale.",
+        "  const { pathname } = useLocation();",
+        "  const href = (to) => linkFrom(pathname, to);",
+        "",
+      ].join("\n")
+    : "";
   return `${banner(from)}${imports.join("\n")}
 
 export default function ${name}(${args}) {
-${declared}  return (
+${routeHook}${declared}  return (
     ${open}
 ${jsx}
     ${close}
@@ -809,8 +981,14 @@ function main() {
   // ── shared chrome ──────────────────────────────────────────────────────
   const chrome = [
     { name: "DsSprite", html: slice(index, '<svg width="0" height="0"', "</defs></svg>", "icon sprite") },
-    { name: "DsNav", html: editNav(slice(index, '<nav class="nav">', "</nav>", "nav")) },
-    { name: "DsFooter", html: slice(index, '<footer class="foot">', "</footer>", "footer") },
+    // routeAware: DsShell renders these two on gated redesign pages AND on
+    // public ones, so every link has to ask where it is. See component().
+    { name: "DsNav", html: editNav(slice(index, '<nav class="nav">', "</nav>", "nav")), routeAware: true },
+    {
+      name: "DsFooter",
+      html: slice(index, '<footer class="foot">', "</footer>", "footer"),
+      routeAware: true,
+    },
     { name: "DsPromo", html: slice(index, '<section class="promo"', "<!--/promo-->", "promo band") },
     // The signed-in app's rail. His build injects the identical block into
     // every dash-* and work-* page, so it is chrome in exactly the same sense
@@ -841,12 +1019,20 @@ function main() {
     for (const a of r.backendlessForms) formsWithoutBackend.push(`${where} (action="${a}")`);
   };
 
-  for (const { name, html, takesData } of chrome) {
+  for (const { name, html, takesData, routeAware } of chrome) {
     const r = htmlToJsx(html, { indent: 6 });
     note(`index.html (${name})`, r);
     fs.writeFileSync(
       path.join(OUT_CHROME, `${name}.jsx`),
-      component({ name, jsx: r.jsx, usesLink: r.usesLink, from: "index.html", wrap: false, takesData }),
+      component({
+        name,
+        jsx: routeAware ? throughLinkFrom(r.jsx, name) : r.jsx,
+        usesLink: r.usesLink,
+        from: "index.html",
+        wrap: false,
+        takesData,
+        routeAware,
+      }),
       "utf8",
     );
     console.log(`[port-ds-html] chrome ${name}.jsx`);

@@ -146,7 +146,7 @@ export default function DsAbout() {
               </h4>
               {" "}
               <p>
-                Thirty events and 3,100+ professionals trained since 2022.
+                Thirty events and 800+ professionals trained since 2018.
               </p>
             </div>
             {" "}
@@ -245,8 +245,8 @@ export default function DsAbout() {
                 </svg>
               </div>
               {" "}
-              <b data-count="3100" data-suffix="+">
-                3,100+
+              <b data-count="800" data-suffix="+">
+                800+
               </b>
               <span>
                 Professionals trained
@@ -319,7 +319,7 @@ export default function DsAbout() {
           <h2>
             Thirty events.{" "}
             <span className="grad">
-              3,100+ professionals.
+              800+ professionals.
             </span>
           </h2>
           {" "}

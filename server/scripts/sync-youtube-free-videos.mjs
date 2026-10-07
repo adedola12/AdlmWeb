@@ -4,10 +4,10 @@
 // on the channel, each already filed onto a shelf (see
 // util/freeVideoSections.js) with a sort position and whether the product
 // page recommends it. That file was built from a yt-dlp dump of the channel
-// and its playlists — there is no YOUTUBE_API_KEY on this deployment, so the
-// pull happens on a developer machine and the result is checked in, which
-// also means the mapping is reviewable in a diff rather than living only in
-// the database.
+// and its playlists. The shelf mapping is pulled on a developer machine and
+// checked in, so it is reviewable in a diff rather than living only in the
+// database. (The API does have YOUTUBE_API_KEY, in SSM; the scheduled
+// free-library job uses it only as a fallback when the RSS feed fails.)
 //
 // The comparison and the writes live in util/youtubeLibrary.js and are the
 // same code the admin's YouTube status screen runs. This is the command line

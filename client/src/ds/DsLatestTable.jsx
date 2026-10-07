@@ -21,7 +21,7 @@ import { PRODUCT_KEY } from "../lib/dsRoutes.js";
 const ROWS = [
   { slug: "quiv", label: "QUIV" },
   { slug: "heron", label: "HERON" },
-  { slug: "mep", label: "Revit MEP" },
+  { slug: "mep", label: "SERVIQ" },
   { slug: "rategen", label: "RateGen" },
   { slug: "timepro", label: "Time Pro" },
   { slug: "cloud", label: "ADLM Cloud" },

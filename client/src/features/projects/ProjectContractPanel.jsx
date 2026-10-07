@@ -3,6 +3,7 @@ import { FaCube, FaDownload, FaFileInvoiceDollar, FaPlus, FaTrashAlt, FaUpload }
 import { deriveItemDiscipline } from "../../lib/boqCategory.js";
 import WkModal from "../../ds/WkModal.jsx";
 import { useFeedback } from "../../ds/feedback/feedbackContext.js";
+import { certifiableSumOf } from "./lib/certifiableSum.js";
 import {
   variationKpis,
   variationRowsNewestFirst,
@@ -82,6 +83,14 @@ function SectionHead({ title, sub, children }) {
   );
 }
 
+/**
+ * A fresh period for the next certificate.
+ *
+ * Starts empty rather than guessing: a period invented by the screen and left
+ * unread is worse than a blank one, because it would be printed as fact.
+ */
+const blankDraft = () => ({ periodStart: "", periodEnd: "", notes: "", retentionReleased: "" });
+
 function CertificatesSection({
   certificates = [],
   onIssue,
@@ -92,6 +101,9 @@ function CertificatesSection({
   disabled,
   note,
 }) {
+  // What the next certificate says it covers. null = the form is closed.
+  const [draft, setDraft] = React.useState(null);
+
   const sorted = [...certificates].sort(
     (a, b) => Number(a.number) - Number(b.number),
   );
@@ -114,7 +126,15 @@ function CertificatesSection({
         <button
           type="button"
           className="ds-btn ds-btn-sm btn-p"
-          onClick={() => onIssue?.()}
+          // THE PERIOD AND THE NOTES ARE ASKED FOR.
+          //
+          // This used to call onIssue() with no arguments, and the handler it
+          // calls has always accepted overrides and posted them. So every
+          // certificate stored periodStart: null and the exporter printed
+          // "Period – to <issue date>" on all of them: six certificates over six
+          // months, not one of them stating the period it covered. The notes
+          // field was unreachable the same way.
+          onClick={() => setDraft(draft ? null : blankDraft())}
           disabled={busy || disabled}
           title={
             disabled
@@ -126,6 +146,107 @@ function CertificatesSection({
           {busy ? "Issuing..." : "Issue certificate"}
         </button>
       </SectionHead>
+
+      {draft ? (
+        <div className="pcp-issue">
+          <div className="pcp-issue-fields">
+            <label>
+              <span>Period from</span>
+              <input
+                type="date"
+                value={draft.periodStart}
+                max={draft.periodEnd || undefined}
+                onChange={(e) => setDraft((d) => ({ ...d, periodStart: e.target.value }))}
+              />
+            </label>
+            <label>
+              <span>Period to</span>
+              <input
+                type="date"
+                value={draft.periodEnd}
+                min={draft.periodStart || undefined}
+                onChange={(e) => setDraft((d) => ({ ...d, periodEnd: e.target.value }))}
+              />
+            </label>
+            <label>
+              {/* RELEASING RETENTION.
+                  The certificate has carried a retentionReleased field all
+                  along and the endpoint has always accepted it — nothing ever
+                  sent one, so half the retention due back at practical
+                  completion could not be recorded at all. On six valuations at
+                  5% of an ₦80,000,000 cumulative, that is ₦2,000,000 with
+                  nowhere to go. */}
+              <span>Release retention{totalRetained > 0 ? ` (${naira(totalRetained)} held)` : ""}</span>
+              <input
+                type="number"
+                min="0"
+                max={totalRetained > 0 ? totalRetained : undefined}
+                step="any"
+                placeholder="0"
+                value={draft.retentionReleased}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, retentionReleased: e.target.value }))
+                }
+              />
+            </label>
+            <label className="wide">
+              <span>Notes on this certificate</span>
+              <input
+                type="text"
+                maxLength={2000}
+                placeholder="Optional — printed on the certificate"
+                value={draft.notes}
+                onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+              />
+            </label>
+          </div>
+          <p className="pcp-issue-hint">
+            The period is what the certificate says it covers. Leave it blank and the document can
+            only show its issue date, which is not the same thing. Retention released is added back
+            on this certificate and taxed with the rest &mdash; leave it at 0 on an ordinary interim.
+          </p>
+          {Number(draft.retentionReleased) > totalRetained && totalRetained > 0 ? (
+            <p className="pcp-issue-bad">
+              Only {naira(totalRetained)} is held. Releasing more than has been retained would pay
+              out money that was never withheld.
+            </p>
+          ) : null}
+          <div className="pcp-issue-acts">
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-o"
+              onClick={() => setDraft(null)}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-p"
+              disabled={
+                busy || (totalRetained > 0 && Number(draft.retentionReleased) > totalRetained)
+              }
+              onClick={async () => {
+                // Only send what was filled in: an empty string would be stored
+                // as an invalid date rather than left unset.
+                const body = {};
+                if (draft.periodStart) body.periodStart = draft.periodStart;
+                if (draft.periodEnd) body.periodEnd = draft.periodEnd;
+                if (draft.notes.trim()) body.notes = draft.notes.trim();
+                // Only a real, positive figure. An empty box means "release
+                // nothing", which is not the same as releasing 0 and must not
+                // be sent as one.
+                const release = Number(draft.retentionReleased);
+                if (Number.isFinite(release) && release > 0) body.retentionReleased = release;
+                const out = await onIssue?.(body);
+                if (out !== null) setDraft(null);
+              }}
+            >
+              {busy ? "Issuing..." : "Issue it"}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {note ? (
         <p className="mk-note" style={{ margin: 0, ...NOTE_WARN }}>
@@ -666,9 +787,27 @@ function FinalAccountSection({
   // the over-run asks "is the SPEND ahead of the plan?". Neither changes a
   // figure: they read the same totals the rest of the tab uses.
   const finalTotal = safeNum(view.currentValue ?? view.finalContractValue);
-  const movement = contractLocked || isFinalized ? finalTotal - safeNum(contractSum) : 0;
-  const movementPct =
-    safeNum(contractSum) > 0 ? (movement / safeNum(contractSum)) * 100 : 0;
+  // Which agreed sum to measure against depends on what finalTotal IS.
+  //
+  // Live, finalTotal is view.currentValue — plannedTotal + variations — and
+  // plannedTotal already carries the contingency and VAT props, so comparing it
+  // to the whole contractSum is like for like and the movement is the real
+  // scope drift.
+  //
+  // Once finalized, finalTotal is the server's finalContractValue, which is
+  // measured + provisional + preliminaries + variations and deliberately
+  // carries NEITHER contingency nor VAT, because neither is ever certified.
+  // Held against the full contractSum it reported the contingency plus the VAT
+  // as a "Saving" — ₦12.875m on a ₦100m subtotal at the defaults, on a job that
+  // came in exactly as measured. So a finalized account is measured against the
+  // certifiable part of the sum instead.
+  const certifiableSum = isFinalized
+    ? certifiableSumOf(finalAccount, { contingencyPercent, taxPercent })
+    : null;
+  const movementBase =
+    certifiableSum === null ? safeNum(contractSum) : certifiableSum;
+  const movement = contractLocked || isFinalized ? finalTotal - movementBase : 0;
+  const movementPct = movementBase > 0 ? (movement / movementBase) * 100 : 0;
   const certifiedPct = finalTotal > 0 ? (certifiedToDate / finalTotal) * 100 : 0;
 
   return (

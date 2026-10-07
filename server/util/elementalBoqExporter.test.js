@@ -124,3 +124,16 @@ test("template audit: other names that used to get the wrong description", () =>
     if (right) assert.ok(hits.includes(right), `${line} should be "${right}" (got ${hits.join(" | ")})`);
   }
 });
+
+// On Lambda the API is one esbuild bundle, so a path relative to the exporter
+// points nowhere; the default mappings are imported into the bundle instead.
+test("default mappings load from the import, as a fresh copy each time", async () => {
+  const { loadMapping } = await import("./elementalBoqExporter.js");
+  const onDisk = MAPPINGS.find((m) => m.file === "elemental-mapping.json").json;
+  const a = loadMapping();
+  const b = loadMapping();
+  assert.deepEqual(a, onDisk);
+  assert.notEqual(a, b, "each export gets its own copy");
+  a.mutated = true;
+  assert.equal(loadMapping().mutated, undefined);
+});

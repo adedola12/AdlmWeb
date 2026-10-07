@@ -245,6 +245,66 @@ export function modelDriftAlert({ firstName, projectName, productName, counts, h
   };
 }
 
+/**
+ * The contract on a shared project has been locked.
+ *
+ * WHY EVERY COLLABORATOR IS TOLD
+ *
+ * Locking is the moment a bill stops being a working estimate and becomes the
+ * contract figure. After it, the quantities and rates on the bill are frozen:
+ * a re-measure no longer moves them, it goes into the actual columns, and new
+ * scope becomes a variation. Somebody who carried on editing without knowing
+ * that would think they were correcting the contract and would in fact be
+ * recording a variation against it.
+ *
+ * So the mail says the sum, who locked it, and what changes now — not just
+ * "the contract was locked", which tells a person nothing they can act on.
+ */
+export function contractLocked({
+  firstName,
+  projectName,
+  lockedBy,
+  contractSum,
+  currency = "NGN",
+  href,
+  // A collaborator without RateGen has every figure on this project masked in
+  // the app (util/projectAccess.js). The mail must not say what the screen
+  // hides, so for them the sum is left out and only the fact is sent. They
+  // still need the fact: what editing means has changed for them too.
+  showMoney = true,
+}) {
+  const sum = money(contractSum, currency);
+  return {
+    subject: showMoney
+      ? `"${projectName}" is now under contract at ${sum}`
+      : `"${projectName}" is now under contract`,
+    html: wrapEmail({
+      title: "The contract has been locked",
+      preheader: showMoney
+        ? `${projectName} is fixed at ${sum}.`
+        : `${projectName} is fixed. The bill is now the contract.`,
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p(
+          showMoney
+            ? `<b>${lockedBy}</b> has locked the contract on <b>${projectName}</b> at <b>${sum}</b>.`
+            : `<b>${lockedBy}</b> has locked the contract on <b>${projectName}</b>.`,
+        ) +
+        p("What changes from now:") +
+        `<ul style="margin:0 0 14px;padding-left:20px;color:#374151">
+          <li style="margin:0 0 6px">The contract quantities and rates are fixed. Re-measuring a
+              line no longer changes them &mdash; the new figure is recorded as the actual, beside
+              the contract one.</li>
+          <li style="margin:0 0 6px">Work that was not in the contract becomes a variation, priced
+              and listed separately.</li>
+          <li style="margin:0 0 6px">Progress recorded on a bill line now feeds the valuations.</li>
+        </ul>` +
+        p("Nothing you have already entered is affected."),
+      cta: href ? { label: "Open the project", href } : null,
+    }),
+  };
+}
+
 export function entitlementGranted({ firstName, productName, href }) {
   return {
     subject: `${productName} is now active on your ADLM account`,
@@ -550,6 +610,18 @@ export const PREVIEW = {
       productName: "QUIV",
       counts: { added: 12, removed: 3, changed: 5, linesAffected: 4 },
       href: `${SITE}/work`,
+    }),
+  "project.contract-locked": () =>
+    contractLocked({
+      firstName: "Adaeze", projectName: "Lekki Phase 2 Tower",
+      lockedBy: "Babajide Gbajumo", contractSum: 486_250_000, currency: "NGN",
+      href: `${SITE}/work`,
+    }),
+  "project.contract-locked-masked": () =>
+    contractLocked({
+      firstName: "Adaeze", projectName: "Lekki Phase 2 Tower",
+      lockedBy: "Babajide Gbajumo", contractSum: 486_250_000, currency: "NGN",
+      href: `${SITE}/work`, showMoney: false,
     }),
   "entitlement.boq-import": () =>
     entitlementGranted({ firstName: "Adaeze", productName: "BoQ Import" }),

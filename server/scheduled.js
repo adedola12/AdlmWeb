@@ -77,7 +77,8 @@ function ready() {
       import("./models/Setting.js"),
     ]);
     // R02/R10: new uploads onto the free lesson shelves, from the channel's
-    // public feed (no API key), skipping videos staff have deleted.
+    // public feed (or the Data API, with YOUTUBE_API_KEY, when the feed is
+    // down), skipping videos staff have deleted.
     const runFreeLibrary = () =>
       runFreeLibraryAuto({
         FreeVideo,
@@ -126,7 +127,7 @@ export async function handler(event, context) {
   // Throwing sends the event to the scheduler's dead-letter queue, where the
   // DLQ-depth alarm surfaces it. Silently succeeding would hide a broken rule
   // until someone noticed nobody had been renewed.
-  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll", "ops-digest", "release-notices"];
+  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll", "ops-digest", "release-notices", "sync-indexes"];
   if (!KNOWN.includes(job)) {
     throw new Error(`Unknown job "${job}". Expected one of: ${KNOWN.join(", ")}.`);
   }
@@ -140,6 +141,10 @@ export async function handler(event, context) {
  * ones (ready()), the tests (scheduled.test.js) pass stand-ins, so what rides
  * on what, and which error surfaces, is testable without SSM or a database.
  */
+async function indexSyncFn(jobs) {
+  return jobs.runIndexSync ?? (await import("./util/indexSync.js")).syncAllIndexes;
+}
+
 export async function runJob(job, jobs, context) {
   const run = {
     "auto-renew": () => jobs.runAutoRenewals(),
@@ -172,6 +177,9 @@ export async function runJob(job, jobs, context) {
     // Normally rides on video-poll below; listed so the release emails can be
     // pushed by hand with { "job": "release-notices" }.
     "release-notices": () => jobs.runReleaseNoticeDrain({ deadlineAt: drainDeadline(context) }),
+    // Normally rides on expiry-notifier below; listed so indexes can be built
+    // by hand with { "job": "sync-indexes" } right after a deploy that adds one.
+    "sync-indexes": async () => (await indexSyncFn(jobs))(),
   }[job];
   if (!run) throw new Error(`Unknown job "${job}".`);
 
@@ -232,6 +240,25 @@ export async function runJob(job, jobs, context) {
     } catch (err) {
       console.error("[scheduled] unconfirmed sweep failed:", err?.message || err);
       out.unconfirmedSweep = { ok: false, error: String(err?.message || err) };
+    }
+    // Tell the release approver when a build that went to firms first can go
+    // to everyone (util/releaseRollout.js). Same daily slot, own try/catch.
+    try {
+      const runRolloutUnlockReminders =
+        jobs.runRolloutUnlockReminders ?? (await import("./util/releaseRollout.js")).runRolloutUnlockReminders;
+      out.rolloutReminders = await runRolloutUnlockReminders();
+    } catch (err) {
+      console.error("[scheduled] rollout reminders failed:", err?.message || err);
+      out.rolloutReminders = { ok: false, error: String(err?.message || err) };
+    }
+    // Build any index a model declares that Atlas does not have yet. The API
+    // no longer does this at cold start (util/indexSync.js explains why), so
+    // this is where a new index lands, within a day. Own try/catch.
+    try {
+      out.indexes = await (await indexSyncFn(jobs))();
+    } catch (err) {
+      console.error("[scheduled] index sync failed:", err?.message || err);
+      out.indexes = { ok: false, error: String(err?.message || err) };
     }
   }
 

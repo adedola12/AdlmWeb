@@ -586,8 +586,8 @@ export default function DsManageOverview() {
             <div className="dsh-hub">
               <h3>ADLM Installer Hub</h3>
               <p>
-                The Installer Hub comes with a paid licence. Buy or renew a product and it will be
-                ready to download here.
+                The Installer Hub comes with a licence for one of our desktop products. Buy or
+                renew one and it will be ready to download here.
               </p>
               <Link className="ds-btn btn-p ds-btn-sm" to="/products">
                 See the products

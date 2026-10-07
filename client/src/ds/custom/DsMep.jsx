@@ -20,13 +20,13 @@ export default function DsMep() {
   // The fallback is the CATALOGUE value, not his page's. His said "No install
   // fee" while the catalogue charges ₦20,000; falling back to his figure would
   // reprint that wrong price every time the API is unreachable.
-  const price = useProductPricing("mep", { monthly: 18000, yearly: 180000, install: 20000 });
+  const price = useProductPricing("mep", { monthly: 45000, yearly: 450000, install: 20000 });
   return (
     <DsMepPage
       d={{
         releases: <DsReleaseHistory slug="mep" />,
         // Free walkthroughs flagged for this product, above the releases.
-        videos: <DsRecommendedVideos product="mep" name="Revit MEP" />,
+        videos: <DsRecommendedVideos product="mep" name="SERVIQ" />,
         monthly: price.monthly,
         priceLine: price.priceLine,
       }}

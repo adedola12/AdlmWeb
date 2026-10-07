@@ -34,6 +34,8 @@ export async function connectDB(uri, extra = {}) {
       // request at a time, so a large pool buys nothing there anyway.
       // The long-running server can afford more; override via env.
       maxPoolSize: Number(process.env.MONGO_MAX_POOL || 5),
+      // 0 for jobs and scripts; the API raises it through `extra`
+      // (util/mongoTimeouts.js apiMongoOptions).
       minPoolSize: 0,
       ...extra,
     })
