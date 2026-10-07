@@ -15,7 +15,7 @@
 export const PRODUCT_BUILDS = {
   quiv: { name: "QUIV", version: "4.0", released: "2026-10", n: 1 },
   heron: { name: "HERON", version: "3.0", released: "2026-10", n: 1 },
-  rategen: { name: "RateGen", version: "3.0", released: "2026-10", n: 1 },
+  rategen: { name: "RateGen", version: "3.0", released: "2026-10", n: 2 },
   mep: { name: "SERVIQ", version: "2.0", released: "2026-10", n: 1 },
   timepro: { name: "Time Pro", version: "1.0", released: "2026-10", n: 1 },
 };
