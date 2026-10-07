@@ -8,9 +8,10 @@
 import { MaterialConstantProfile } from "../models/MaterialConstantProfile.js";
 import { User } from "../models/User.js";
 import { resolveConstants } from "./materialConstants.js";
-import { getMergedConstants, buildRateMaps, buildPriceIndexes, lookup, norm } from "./serviceResolve.js";
+import { getMergedConstants, buildRateMaps, buildPriceIndexes, norm } from "./serviceResolve.js";
 import { matchPrice } from "./serviceMatch.js";
 import { fetchMasterMaterials, fetchMasterLabour } from "./rategenMaster.js";
+import { convertedPrice } from "./priceConversion.js";
 
 // The master price list is ~130 priced rows and identical for everyone in a
 // zone, so one import does not deserve a round trip per material. Short TTL:
@@ -28,48 +29,7 @@ function toMap(rows, map = new Map()) {
   return map;
 }
 
-// Unit families that are the same thing at a different scale. Anything not
-// listed is NOT convertible — a price per m³ must never be handed to a
-// quantity in tons just because the names matched.
-const UNIT_ALIASES = {
-  kg: "kg",
-  kgs: "kg",
-  ton: "ton",
-  tons: "ton",
-  tonne: "ton",
-  tonnes: "ton",
-  t: "ton",
-  mt: "ton",
-  bag: "bag",
-  bags: "bag",
-  nr: "nr",
-  no: "nr",
-  nos: "nr",
-  each: "nr",
-  pcs: "nr",
-  m2: "m2",
-  sqm: "m2",
-  m3: "m3",
-  cum: "m3",
-  m: "m",
-  lm: "m",
-};
-
-function unitKey(u) {
-  const s = String(u || "").trim().toLowerCase().replace(/[³3]/g, "3").replace(/[²2]/g, "2").replace(/\./g, "");
-  return UNIT_ALIASES[s] || s;
-}
-
-// Factor to convert a price quoted per `priceUnit` into a price per `wantUnit`,
-// or null when the two are not the same kind of thing.
-function priceScale(priceUnit, wantUnit) {
-  const from = unitKey(priceUnit);
-  const to = unitKey(wantUnit);
-  if (!from || !to || from === to) return 1;
-  if (from === "ton" && to === "kg") return 1 / 1000;
-  if (from === "kg" && to === "ton") return 1000;
-  return null;
-}
+// Unit conversion lives in util/priceConversion.js (convertedPrice).
 
 async function masterPrices(zone, state) {
   const key = `${zone || ""}|${state || ""}`;
@@ -144,15 +104,18 @@ export async function buildMlScheduleContext(userId, opts = {}) {
   // visible gap the QS fills; a wrongly-scaled one silently corrupts the
   // budget, and "Reinforcement steel" is quoted per tonne while bills measure
   // it in both tonnes and kg.
-  const priceIn = (map, name, wantUnit) => {
-    const hit = lookup(map, name);
-    if (!hit) return 0;
-    const scale = wantUnit ? priceScale(hit.unit, wantUnit) : 1;
-    return scale === null ? 0 : hit.price * scale;
-  };
+  //
+  // Since 7 Oct 2026 the conversion is util/priceConversion.js: it tries every
+  // item the name could be (exact, the price list's own wording, then partial
+  // matches) and takes the first whose unit converts: ton <-> kg, a pack size
+  // written in the list (25 kg roll, 4 L tin, 3,600 mm length), and tons <-> m³
+  // for loose sand / granite / laterite / hardcore by density. Anything else
+  // still returns 0.
+  const K = resolveConstants(profile?.values);
+  const priceIn = (map, name, wantUnit) => convertedPrice(map, name, wantUnit, K);
 
   return {
-    K: resolveConstants(profile?.values),
+    K,
     zone,
     state,
     serviceConstants: services?.types || {},
