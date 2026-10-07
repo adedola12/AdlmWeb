@@ -185,26 +185,33 @@ describe("the RateGen library", () => {
     expect(tipper.textContent).not.toMatch(/₦\s?0\.00 ?per hr/);
   });
 
-  it("offers default margins by trade on the rates tab", async () => {
+  // R2 trade margins are set in Rate Gen (owner's rule, 4 Oct 2026): the
+  // website has no editor for them, and the plant library is read only.
+  it("offers no trade-margin editor and no plant editing on the website", async () => {
     stub();
-    const { container, findByText } = mount();
+    const { container, findByText, queryByText } = mount();
     await findByText("Blockwork 225mm in cement mortar");
-    expect(container.textContent).toContain("Default margins by trade");
-    expect(container.textContent).toContain("rates already in your library keep their own figures");
+    expect(container.textContent).not.toContain("Default margins by trade");
+    expect(queryByText("Add a machine of your own")).toBeNull();
   });
 
-  it("does not offer Update prices until the catalogue is actually there", async () => {
+  // Owner's rule, 4 Oct 2026: rates are built and edited only in Rate Gen. The
+  // builder and "Update prices" are gone, and the note says where to go.
+  it("says rates are built in Rate Gen and offers no way to change them here", async () => {
     stub();
-    const { container, findByText, getByText } = mount();
+    const { container, findByText, getByText, queryByText } = mount();
     await findByText("Blockwork 225mm in cement mortar");
+    expect(container.textContent).toContain("Build and edit rates in ADLM Rate Gen");
+    expect(queryByText("Build a custom rate")).toBeNull();
+
     fireEvent.click(getByText("Materials"));
-    await waitFor(() => expect(container.textContent).toContain("Market prices move"));
-    const btn = getByText("Update prices");
-    // The stub returns an empty catalogue, so there is nothing to update.
-    expect(btn.disabled).toBe(true);
-    // And the copy does not repeat the prototype's claim about rates moving.
-    expect(container.textContent).not.toContain("every rate using it follows");
-    expect(container.textContent).toContain("keep the cost they were built at");
+    await waitFor(() => expect(container.textContent).toContain("Build and edit rates in ADLM Rate Gen"));
+    expect(queryByText("Update prices")).toBeNull();
+
+    // Nothing on the screen writes to the library.
+    for (const [, init] of apiAuthed.mock.calls) {
+      expect(String(init?.method || "GET").toUpperCase()).toBe("GET");
+    }
   });
 });
 
@@ -311,72 +318,5 @@ describe("a library bigger than one page", () => {
     await findByText("Concrete 1:2:4 in foundations");
     expect(container.querySelectorAll(".wk-row")).toHaveLength(2);
     expect(container.querySelector(".wk-count").textContent).toContain("2 of 2 rates");
-  });
-});
-
-// ── S18 review, finding 5 ───────────────────────────────────────────────────
-// The server caps one bulk change and skips rows whose price does not move.
-// The screen reported "N prices raised" either way, so a change that half
-// happened read as a change that worked.
-describe("what a bulk price change reports", () => {
-  const catalogue = {
-    materials: [
-      { sn: 1, description: "Cement", unit: "bag", price: 9000, category: "Concrete" },
-      { sn: 2, description: "Sharp sand", unit: "m3", price: 20000, category: "Concrete" },
-    ],
-    labour: [],
-    state: "lagos",
-  };
-
-  function stubWithBulk(bulk) {
-    apiAuthed.mockImplementation(async (path, init) => {
-      if (path.includes("rates/sync")) return { items: [masterRate] };
-      if (path.includes("user-rates"))
-        return { rateOverrides: [], customRates: [], meta: { ratesVersion: 1 } };
-      if (path.includes("price-overrides/bulk")) return bulk;
-      if (path.includes("/rategen/master")) return catalogue;
-      throw new Error(`unstubbed ${path} ${init?.method || ""}`);
-    });
-  }
-
-  async function applyChange() {
-    const r = render(
-      <MemoryRouter initialEntries={["/work/library"]}>
-        <FeedbackProvider>
-          <DsWorkLibrary />
-        </FeedbackProvider>
-      </MemoryRouter>,
-    );
-    await r.findByText("Blockwork 225mm in cement mortar");
-    fireEvent.click(r.getByText("Materials"));
-    await waitFor(() => expect(r.getByText("Update prices").disabled).toBe(false));
-    fireEvent.click(r.getByText("Update prices"));
-    await waitFor(() => expect(document.querySelector(".fb-card")).toBeTruthy());
-    fireEvent.click(document.querySelector(".fb-card .p"));
-    await waitFor(() => expect(document.querySelector(".fb-toast")).toBeTruthy());
-    return document.querySelector(".fb-toast").textContent;
-  }
-
-  it("says how many of the matched rows actually moved", async () => {
-    stubWithBulk({ ok: true, changed: 800, matched: 1400, capped: true, limit: 1000, previous: [] });
-    const said = await applyChange();
-    expect(said).toContain("800 of 1400 prices raised");
-    expect(said).toContain("1400 rows matched");
-    expect(said).toContain("400 were not looked at");
-  });
-
-  it("does not claim a cap that did not happen", async () => {
-    stubWithBulk({ ok: true, changed: 2, matched: 2, capped: false, limit: 1000, previous: [] });
-    const said = await applyChange();
-    expect(said).toContain("2 prices raised by 5%");
-    expect(said).not.toContain("not looked at");
-    expect(said).not.toContain("of 2 prices");
-  });
-
-  it("accounts for rows that matched but did not move", async () => {
-    stubWithBulk({ ok: true, changed: 1, matched: 2, capped: false, limit: 1000, previous: [] });
-    const said = await applyChange();
-    expect(said).toContain("1 of 2 price");
-    expect(said).toContain("1 came to the same figure once rounded");
   });
 });

@@ -55,7 +55,7 @@ so no current flow changes.
 - `rategen/customRateDraft.js`: `blankDefaults()` gives the trade default. Plant rides in `materials[]` with `rateType: "plant"`, and an unpriced plant line is refused.
 - `rategen/CustomRateBuilder.jsx`: placeholders read "Trade: 12" / "Default: 10", and plant is picked from the library by the hour.
 - `rategen/TradeMarginsEditor.jsx`, `rategen/PlantEditor.jsx`, `rategen/AdminPlantLibrary.jsx`, `rategen/plantMath.js`, `rategen/tradeMargins.js`
-- `DsWorkLibrary.jsx`: the Plant tab is now the library, and the rates tab has a "Default margins by trade" bar.
+- `DsWorkLibrary.jsx`: the Plant tab is now the library, read only (see "Since 4 Oct" below).
 - `DsAdminRateLibrary.jsx`: adds "Default margins by trade" and a Rate data → Plant library tab.
 - `DsAdminRateBuilder.jsx`: adds a plant tab, and a new rate starts at ADLM's trade default. The "Labour and plant" subtotal now includes plant.
 
@@ -98,3 +98,24 @@ working versions. Final design is his:
 - **The library ships empty.** ADLM staff add the first machines at Rate data → Plant library.
 - A stored rate does not re-price when a machine's price changes. Its line keeps the price it was built at, as materials do.
 - **Release-day check.** Snapshot bill totals on a few real projects before and after the deploy. The code path cannot move them, and the snapshot proves it.
+
+## Since 4 Oct 2026: rates are built in Rate Gen
+
+The owner's rule of 4 Oct 2026 (`middleware/rateGenOnlyWrites.js`) made the
+customer's rate library read only on the website: the web custom rate builder
+and the price update were removed, and the server refuses a browser's PUT,
+PATCH or DELETE under `/rategen-v2/library`. When this branch was merged with
+`main` it was ported to that rule:
+
+- The customer write routes (`PUT /library/trade-margins`,
+  `PUT/DELETE /library/plant/:key`) sit under the guarded router, so Rate Gen
+  desktop can write them and a browser cannot.
+- `/work/library` shows the plant library read only (day cost, working day,
+  per hour, "used in"); a machine's card has no edit button. There is no
+  customer "Default margins by trade" bar on the website.
+- The custom rate builder's plant picker went with the builder.
+- The trade defaults still fill a missing percentage on every write path that
+  remains (desktop single and bulk custom-rate pushes, admin rate create), and
+  the bulk push keeps main's plant-line preservation and archive guard.
+- Admin keeps its screens: the master per-trade table, the plant library and
+  the plant tab in the admin rate builder.

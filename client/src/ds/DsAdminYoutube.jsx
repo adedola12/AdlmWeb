@@ -27,7 +27,7 @@ const when = (d) =>
 const PRODUCT_NAMES = {
   revit: "QUIV",
   planswift: "HERON",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   rategen: "RateGen",
   "qs-takeoff": "Time Pro",
   civil3d: "CIVIQ",

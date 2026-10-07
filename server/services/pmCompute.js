@@ -22,6 +22,7 @@
 // toward Tasks Done %.
 
 import { isApprovedVariation } from "../util/variationStatus.js";
+import { preliminaryPercentOf } from "../util/contractDefaults.js";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
@@ -237,7 +238,10 @@ export function computeProjectScope(project) {
 
   // ── Preliminaries (BESMM4 checklist) ─────────────────────────────────
   const contract = project?.contract || {};
-  const preliminaryPercent = safeNum(contract?.preliminaryPercent) || 7.5;
+  // A stored 0 means no preliminaries, not "unset" — see util/contractDefaults.js.
+  // This one feeds preliminaryPool, every prelim:: virtual item, scope.projectTotal
+  // and therefore BAC, CPI/SPI/EAC and the printed report's financials.
+  const preliminaryPercent = preliminaryPercentOf(contract);
   const preliminaryPool = ((measuredPlanned + provisionalTotal) * preliminaryPercent) / 100;
   const preliminaryItems = Array.isArray(project?.preliminaryItems) ? project.preliminaryItems : [];
   const totalAllocation = preliminaryItems.reduce((acc, p) => acc + safeNum(p?.allocation), 0);

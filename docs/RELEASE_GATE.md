@@ -42,6 +42,13 @@ design makes every bypass **visible and permanent** instead:
   API, that `main` is protected, was not force-pushed, and that every commit on
   it came through a PR the approver approved. Disabling Actions does not stop it.
 
+## Other protected repositories
+
+`adlm-ai-service` (main) and `ADLMRateGen-SingleUser` (may30-version) have the same
+branch protection and CODEOWNERS, and the hourly watcher checks them too
+(`repos` in `infra/bin/adlm.ts`). Private repositories cannot be protected on
+GitHub Free; the plugin release gate on the API still covers what they ship.
+Offboarding: remove the approver from these repos as well.
 ## Putting the gate on a repository
 
 ```
@@ -58,6 +65,60 @@ on a free account GitHub answers 403 and the repo is reported as skipped, so
 the command is safe to run before upgrading. Offboarding removes the leaver
 from every repo in that list.
 
+## How a release reaches customers (from 29 Sep 2026)
+
+The approver is a designer and never opens GitHub. Nobody reviews pull
+requests into `main` any more; a **batch** is tested and approved instead.
+
+1. Finished work lands on `release`, which `preview.adlmstudio.net` serves.
+2. Someone prepares the batch: `POST /admin/releases/batch` with a title, the
+   test sheet link, the flows, and `headSha` = the exact commit on `release`.
+3. The approver opens **Release sign-off**, tests each flow on preview and in
+   his own Installer Hub, marks them, and presses **Approve**.
+4. That approval is recorded against that commit (Mongo + the locked bucket)
+   and emailed.
+5. GitHub enforces it: `.github/workflows/batch-check.yml` is a **required
+   check** on every pull request into `main`. It asks
+   `GET /release-gate/batch-status?sha=<commit>` and fails unless that exact
+   commit is approved. The merge itself is a button someone presses once the
+   check is green.
+
+The approval is pinned to the commit, so a push to `release` after he tested
+invalidates it and the batch has to be tested again. A database problem, an
+unreachable API or an unknown commit all answer **not approved**: the check
+fails closed.
+
+**Only user-facing UI needs him (owner's rule, 29 Sep 2026).** The check first
+reads the pull request's changed files. When nothing is under `client/` and
+none of the gate's own files changed (`.github/`, this runbook, any
+`server/**/*release*` file, `server/routes/admin.batch.js` where batches are
+prepared and approved, `server/util/rbac.js` which decides who may approve,
+and `infra/lib/adlm-release-gate-stack.ts` which holds the locked audit
+trail), it passes at once: a server fix, a script or a test ships on its
+checks, without a batch. Anything under `client/` or the gate still needs his
+approved batch. A renamed file counts under its old name too. It runs as
+`pull_request_target`, so the copy on `main` decides and a pull request cannot
+rewrite its own gate. If it cannot read the whole file list (the call fails,
+it comes back empty, or the PR passes the API's 3,000-file limit) it asks for
+a batch.
+
+To make it binding: Settings > Branches > main > Require status checks, add
+**approved batch**, keep **Include administrators** ticked, and (only then)
+drop the code-owner review requirement.
+## Settings that are releases
+
+Some settings reach customers by themselves. `installerHubUrl` is the file
+every customer's **Download the Installer Hub** button fetches, so saving it
+used to repoint the whole fleet with no sign-off: the one way round the gate.
+
+Changing it on `POST /admin/settings/installer-hub` is now **staged** like a
+plugin release (202, pending on the release desk). Customers keep the current
+Hub until the approver approves. The candidate keeps the OLD url, so a
+rollback is a fact rather than a memory. The video and guide links are not
+what customers download, so they save as they always did, and CLEARING the
+link is never gated: taking a download away is the safety action.
+
+The list lives in `server/util/releaseGateSetting.js` (`GATED_SETTINGS`).
 ## The locked audit trail
 
 Stack `AdlmReleaseGate` (eu-west-1) owns an S3 bucket with **Object Lock in

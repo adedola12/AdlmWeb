@@ -8,7 +8,8 @@
 import { MaterialConstantProfile } from "../models/MaterialConstantProfile.js";
 import { User } from "../models/User.js";
 import { resolveConstants } from "./materialConstants.js";
-import { getMergedConstants, buildRateMaps, lookup, norm } from "./serviceResolve.js";
+import { getMergedConstants, buildRateMaps, buildPriceIndexes, lookup, norm } from "./serviceResolve.js";
+import { matchPrice } from "./serviceMatch.js";
 import { fetchMasterMaterials, fetchMasterLabour } from "./rategenMaster.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
@@ -126,7 +127,13 @@ export async function buildMlScheduleContext(userId, opts = {}) {
 
   const zone = opts.zone ?? user?.zone ?? null;
   const state = opts.state ?? user?.state ?? null;
-  const master = await masterPrices(zone, state);
+  const [master, strict] = await Promise.all([
+    masterPrices(zone, state),
+    // services lines are matched strictly (util/serviceMatch.js): the master
+    // holds ~600 named items, and "first name containing the other" would price
+    // a connector as a pan connector
+    buildPriceIndexes(userId, { zone, state }).catch(() => null),
+  ]);
 
   // The user's own RateGen library beats the master list — a firm that has
   // negotiated its cement price should see that price in its schedule.
@@ -162,8 +169,9 @@ export async function buildMlScheduleContext(userId, opts = {}) {
     state,
     serviceConstants: services?.types || {},
     serviceRateFor: {
-      material: (name) => priceIn(material, name, ""),
-      labour: (name) => priceIn(labour, name, ""),
+      material: (name, unit) => matchPrice(strict?.material, name, { unit })?.price || 0,
+      labour: (name, unit) => matchPrice(strict?.labour, name, { unit })?.price || 0,
+      allIn: (name, unit) => Boolean(matchPrice(strict?.material, name, { unit })?.allIn),
     },
     // Derived materials are named by the engine ("Cement", "Sharp sand",
     // "Granite") — the short names the RateGen master deliberately uses so a

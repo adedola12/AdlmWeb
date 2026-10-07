@@ -4,6 +4,7 @@
 // under `.adlm-report`, A4 `.page` blocks that downloadReportPdf() captures
 // with html2canvas, and print-safe SVG/CSS-only charts (no chart library —
 // same house style as PmDashboardView / PortfolioDashboard).
+/* eslint-disable react-refresh/only-export-components -- shares hooks/helpers with its components by design, same as store.jsx; the rule only affects dev fast-refresh */
 import React from "react";
 import dayjs from "dayjs";
 

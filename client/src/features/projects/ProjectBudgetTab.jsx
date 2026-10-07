@@ -201,7 +201,7 @@ export default function ProjectBudgetTab({
         // Bill of Quantity should show its budget build-up as done here too,
         // independent of (and even when locked out of) per-line procurement.
         billCompleted: Boolean(it?.completed) || safeNum(it?.percentComplete) >= 100,
-        billPercent: Boolean(it?.completed) ? 100 : safeNum(it?.percentComplete),
+        billPercent: it?.completed ? 100 : safeNum(it?.percentComplete),
         // The QS applied this line's rate himself, so the server no longer
         // derives the bill rate from the build-up below. The figure this tab
         // computes is then a costing, not the rate the client is charged, and

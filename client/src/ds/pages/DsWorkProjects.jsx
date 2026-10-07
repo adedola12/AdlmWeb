@@ -350,7 +350,7 @@ export default function DsWorkProjects() {
                 <li>
                   <Link className="off" to="/work/tool?t=mep" data-ds-page="work-tool">
                     <img src="/ds/ic-mep.png" alt="" />
-                    Revit MEP{" "}
+                    SERVIQ{" "}
                     <span className="add">
                       Add
                     </span>
@@ -559,7 +559,7 @@ export default function DsWorkProjects() {
                 </h1>
                 {" "}
                 <p>
-                  Every project starts where its quantities were extracted: QUIV or Revit MEP in Revit, HERON in PlanSwift, or RateGen with no drawing. From then on it lives here.
+                  Every project starts where its quantities were extracted: QUIV or SERVIQ in Revit, HERON in PlanSwift, or RateGen with no drawing. From then on it lives here.
                 </p>
                 {" "}
               </div>

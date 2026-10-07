@@ -6,6 +6,7 @@
 // so a link to this page on its own does nothing.
 
 import React from "react";
+import { clearRef, readRef } from "../lib/referralRef.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
@@ -47,13 +48,16 @@ export default function AuthCallback() {
             token: accessToken,
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ provider, code, codeVerifier, redirectUri }),
+            body: JSON.stringify({ provider, code, codeVerifier, redirectUri, ref: readRef() }),
           });
+          clearRef();
           nav(`${next}?connected=${provider}`, { replace: true });
           return;
         }
 
-        const res = await api("/auth/social", {
+        // The provider round trip loses our query string; the code came from
+      // storage. Cleared once it has been handed over, either way.
+      const res = await api("/auth/social", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ provider, code, codeVerifier, redirectUri }),

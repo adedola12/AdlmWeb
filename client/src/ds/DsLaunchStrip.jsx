@@ -9,11 +9,17 @@
 // the second the date passes. A visitor can close it for the session.
 
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { linkFrom } from "../lib/newBuildPaths.js";
 import { LAUNCH } from "../config/launch.js";
 import { useHydrated } from "../lib/useHydrated.js";
 
 const KEY = "adlm-launch-strip-closed";
+
+// Fixed, not configurable: the strip is part of the new site, so if it is on
+// screen the new site is live. A countdown that said "opens in" read false
+// from the day the new build went live (24 Sep) until the date passed.
+export const LIVE_LEAD = "The new ADLM Studio is live.";
 
 function left(at, now) {
   const ms = new Date(at).getTime() - now;
@@ -25,6 +31,9 @@ function left(at, now) {
 const two = (n) => String(n).padStart(2, "0");
 
 export default function DsLaunchStrip({ launch = LAUNCH }) {
+  // This strip rides on every DsShell page — gated and public alike — so its
+  // countdown CTA picks its destination the same way the nav and footer do.
+  const { pathname } = useLocation();
   const [now, setNow] = React.useState(() => Date.now());
   const [closed, setClosed] = React.useState(() => {
     try {
@@ -71,7 +80,9 @@ export default function DsLaunchStrip({ launch = LAUNCH }) {
   return (
     <div className="ds" style={{ display: "contents" }}>
       <div className="launch-strip" ref={ref} role="region" aria-label="Launch countdown">
-        <span className="lab">{launch.label}</span>
+        <span className="lab">
+          {LIVE_LEAD} {launch.event}
+        </span>
         <span className="launch-count" aria-live="off">
           {[
             [t.d, "Days"],
@@ -86,7 +97,7 @@ export default function DsLaunchStrip({ launch = LAUNCH }) {
           ))}
         </span>
         {launch.cta?.to ? (
-          <Link className="go" to={launch.cta.to}>
+          <Link className="go" to={linkFrom(pathname, launch.cta.to)}>
             {launch.cta.label}
           </Link>
         ) : null}

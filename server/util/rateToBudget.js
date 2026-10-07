@@ -38,7 +38,13 @@
 //
 // Pure (no DB / mongoose).
 
-import { deriveMaterials, classifyWork, measureBasis, labourRateFor } from "./mlSchedule.js";
+import {
+  classifyWork,
+  deriveMaterials,
+  isGeneratedRow,
+  labourRateFor,
+  measureBasis,
+} from "./mlSchedule.js";
 import { MC } from "./materialConstants.js";
 import { classifyResourceKind, kindLabel, KIND } from "./resourceKind.js";
 
@@ -73,7 +79,7 @@ export function isRateGenRow(b) {
 
 // Deterministic per (bill code, index) so a re-pick lands on the same sn and
 // the QS's procurement marks merge back on, exactly as mlSchedule does it.
-function rateGenSn(code, index) {
+export function rateGenSn(code, index) {
   let h = 0;
   const s = String(code || "");
   for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) % 1000000;
@@ -188,6 +194,9 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
 
   const priceFor = typeof opts.priceFor === "function" ? opts.priceFor : () => 0;
   const billUnit = String(item?.unit || "").trim();
+  // How many of the RATE's unit one BILL unit is (util/unitConversion.js); 1
+  // when they agree. The rate's own material lines are per one of ITS units.
+  const scale = num(opts.scale) > 0 ? num(opts.scale) : 1;
 
   // The rate per BILL unit. The caller converts when the rate's unit differs
   // from the item's, because only it knows the conversion it showed the QS.
@@ -238,7 +247,7 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
       rows.push({
         kind: kindLabel(c.kind === KIND.CONSUMABLE ? KIND.CONSUMABLE : KIND.MATERIAL),
         name: c.name || "Material",
-        qty: round(c.quantity * billQty, 3),
+        qty: round(c.quantity * billQty * scale, 3),
         unit: c.unit,
         rate: c.unitPrice,
       });
@@ -249,7 +258,7 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
         name: "Sundries and allowances",
         qty: billQty,
         unit: billUnit,
-        rate: round(split.unexplained),
+        rate: round(split.unexplained * scale),
         notes: "The part of this rate's net cost that its build-up does not itemise.",
       });
     }
@@ -313,17 +322,12 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
   let reproducesRate = true;
 
   if (net > 0 && billAmount > 0) {
-    const markupPct = (billAmount / net - 1) * 100;
-    if (markupPct >= 0) {
-      // Report it the way the Budget tab does: overhead to its constant first,
-      // then whatever is left is profit.
-      oh = round(Math.min(markupPct, K.get(MC.MarkupOverheadPercent)), 4);
-      pr = round(markupPct - oh, 4);
-    } else {
-      // The build-up costs more than the rate sells for. groupMarkup clamps a
-      // percentage at 0, so a negative markup cannot be carried there without
-      // the rate failing to reproduce and the bill rising on a GET. One named
-      // row absorbs the difference instead, and the QS is told.
+    // The build-up costs more than the rate sells for. groupMarkup clamps a
+    // percentage at 0, so a negative markup cannot be carried there without
+    // the rate failing to reproduce and the bill rising on a GET. One named
+    // row absorbs the difference instead, and the QS is told.
+    const reconciled = billAmount < net;
+    if (reconciled) {
       const target = billAmount / (1 + (overheadPercent + profitPercent) / 100);
       const adjustment = round(target - net);
       rows.push({
@@ -336,12 +340,39 @@ export function buildRateBudgetRows(item, rate, K, opts = {}) {
           "This rate prices the work below what its build-up costs at today's prices. " +
           "This line holds the difference so the bill rate stays exactly as picked.",
       });
-      oh = overheadPercent;
-      pr = profitPercent;
       net += adjustment;
       warnings.push(
         `${code}: the build-up costs more than the picked rate. The bill rate is unchanged and the difference is on a "Rate reconciliation" line.`,
       );
+    }
+
+    // Back-solve the O&P on the net the rows actually carry. Report it the way
+    // the Budget tab does: overhead to its constant first, then whatever is
+    // left is profit. A reconciled line keeps the rate's own overhead, and its
+    // profit takes up the part of a kobo the rounded reconciliation row could
+    // not (at 1 m³, net × 1.35 moves in 1.35-kobo steps and can skip the rate).
+    //
+    // The percentages are stored too, so they get rounded as well, but to no
+    // fewer places than the pick needs. At a fixed 4dp a markup of 20.0137497…%
+    // drops ₦0.50 across 100 m³ and a ₦12,150 rate reads back ₦12,149.99.
+    // Take the tidiest precision that still reproduces the rate to the kobo.
+    const markupPct = Math.max(0, (billAmount / net - 1) * 100);
+    const ohBase = Math.min(
+      markupPct,
+      reconciled ? overheadPercent : K.get(MC.MarkupOverheadPercent),
+    );
+    const wanted = round(unitCost);
+    const reproduces = (o, p) => round((net * (1 + (o + p) / 100)) / billQty) === wanted;
+    oh = ohBase;
+    pr = markupPct - ohBase;
+    for (let dp = 4; dp <= 12; dp += 1) {
+      const o = round(ohBase, dp);
+      const p = round(markupPct - o, dp);
+      if (reproduces(o, p)) {
+        oh = o;
+        pr = p;
+        break;
+      }
     }
   } else {
     reproducesRate = false;
@@ -393,8 +424,22 @@ export function applyRateRows(budgetItems, code, rows) {
   const existing = Array.isArray(budgetItems) ? budgetItems : [];
   if (!billCode) return existing.slice();
 
+  // EVERY AUTOMATIC ROW FOR THIS LINE, NOT JUST THE RATE GEN ONES.
+  //
+  // There are two automatic sources and they sit in their own sn bands: the M&L
+  // constants generator at 800,000,000+ and this module at 700,000,000+. This
+  // used to clear only its own band, so a line the generator had already priced
+  // kept those rows AND gained the rate's — Cement, sharp sand, granite and
+  // labour each listed twice, and the budget for that line jumped from ₦55,000
+  // to ₦457,397 against a bill line worth ₦500,000.
+  //
+  // Picking a rate is a decision about how the line is priced, so the rate
+  // becomes the single authority for it. A row the QS added or edited by hand
+  // is NOT automatic and is kept untouched; their procurement marks still merge
+  // back on through priorEdits below.
+  const automatic = (b) => isRateGenRow(b) || isGeneratedRow(b);
   const mine = (b) =>
-    String(b?.billIdentity || "").trim().toLowerCase() === billCode && isRateGenRow(b);
+    String(b?.billIdentity || "").trim().toLowerCase() === billCode && automatic(b);
 
   const editKey = (b) =>
     [b?.sn, b?.materialName || b?.description, b?.unit, b?.componentKind]
@@ -421,4 +466,51 @@ export function applyRateRows(budgetItems, code, rows) {
   });
 
   return kept.concat(merged);
+}
+
+/**
+ * Why buildRateBudgetRows refused, in words a QS can act on.
+ *
+ * It answers null for three unrelated reasons, and the route reported all three
+ * as RATE_HAS_NO_BUILDUP — so a preliminaries line imported with a unit of
+ * "Item" and no quantity (the importer's own amount-only lump case) told the QS
+ * that a perfectly built-up rate had no build-up. They would go and rebuild a
+ * rate that was never the problem.
+ *
+ * Same guards, same order, so the two cannot disagree.
+ *
+ * @returns {{code, message}|null} null when there is nothing wrong
+ */
+export function whyRateCannotPrice(item, rate, opts = {}) {
+  const code = String(item?.code || "").trim();
+  if (!code) {
+    return {
+      code: "LINE_HAS_NO_CODE",
+      message:
+        "This bill line has no reference, so it cannot be addressed. Give it one, or price it in the budget.",
+    };
+  }
+  if (num(item?.qty) <= 0) {
+    return {
+      code: "LINE_HAS_NO_QUANTITY",
+      message:
+        "This line has no quantity, so a rate has nothing to multiply. Enter the quantity, or price the line as a lump sum in the budget.",
+    };
+  }
+  if (!splitRateByKind(rate).components.length) {
+    return {
+      code: "RATE_HAS_NO_BUILDUP",
+      message:
+        "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+    };
+  }
+  const unitCost = num(opts.unitCost) > 0 ? num(opts.unitCost) : num(rate?.totalCost);
+  if (unitCost <= 0) {
+    return {
+      code: "RATE_IS_WORTH_NOTHING",
+      message:
+        "That rate prices to zero, so applying it would leave the line unpriced. Check its build-up in Rate Gen.",
+    };
+  }
+  return null;
 }

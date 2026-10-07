@@ -67,7 +67,7 @@ const SHORT = {
   revit: "QUIV",
   planswift: "HERON",
   rategen: "RateGen",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   "qs-takeoff": "Time Pro",
   civil3d: "CIVIQ",
 };

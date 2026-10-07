@@ -343,7 +343,7 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
           <p>
             {isData
               ? "The prices a rate is built from — every material, every gang, as they stand for one zone. These are corrected in ADLM Rate Gen and published from there, so what you see here is exactly what every user in this zone prices against."
-              : "One library for the practice. A rate here is what every user prices against in QUIV, HERON and Revit MEP. Rates are read here and edited in Rate Gen — the one thing built on the website is a new one."}
+              : "One library for the practice. A rate here is what every user prices against in QUIV, HERON and SERVIQ. Rates are read here and edited in Rate Gen — the one thing built on the website is a new one."}
           </p>
         </div>
         <div className="wk-acts">

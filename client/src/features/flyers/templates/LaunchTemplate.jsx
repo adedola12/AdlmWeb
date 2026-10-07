@@ -35,7 +35,7 @@ function Dot({ color }) {
   return <span style={{ width: 14, height: 14, borderRadius: "50%", background: color, flexShrink: 0 }} />;
 }
 
-export default function LaunchTemplate({ flyer, accent, days, palette }) {
+export default function LaunchTemplate({ flyer, accent, palette }) {
   const frame = flyer.heroFrame || "none";
   const barBg = palette.isLight ? "#e7edf6" : "rgba(255,255,255,0.06)";
   const surface = palette.panel;

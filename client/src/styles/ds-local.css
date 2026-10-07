@@ -1570,7 +1570,19 @@
 .ds .launch-strip .x{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;
   color:var(--ink-3);font-size:18px;line-height:1;padding:4px 8px;cursor:pointer}
 .ds .launch-strip .x:hover{color:var(--ink)}
-.ds .nav{top:var(--launch-strip-h,0px)}
+/* Below the launch strip AND the coupon banner. The banner is in flow and starts under the fixed strip, so the nav clears both. */
+.ds .nav{top:calc(var(--launch-strip-h,0px) + var(--coupon-banner-h,0px))}
+/* The mobile drawer covers the whole viewport, and its 86px of top padding is
+   his: enough to clear a nav sitting at the very top. Ours is not at the very
+   top while the strip is up, so the first item — "Products" — slid under the
+   logo row. The variable is removed when the strip is dismissed and after the
+   launch passes, and the fallback then puts his own figure back. */
+:root.mnav-open .ds .mnav{padding-top:calc(86px + var(--launch-strip-h,0px) + var(--coupon-banner-h,0px))}
+/* And his .mnav-in takes its min-height from 100dvh less that same padding
+   (126px = 86 top + 40 bottom), which is what drops "Sign in" and "Book a
+   demo" to the foot of the drawer. Taller padding without this just pushes
+   them past the fold, so the strip has to come off here too. */
+:root.mnav-open .ds .mnav-in{min-height:calc(100dvh - 126px - var(--launch-strip-h,0px) - var(--coupon-banner-h,0px))}
 @media (max-width:600px){
 .ds .launch-strip .lab{flex-basis:100%;text-align:center}
 .ds .launch-strip .go{display:none}
@@ -1585,9 +1597,9 @@
    to his own numbers and this is a no-op. ds-local.css is imported after
    ds-feedback.css (main.jsx), so equal specificity resolves our way, and the
    narrow rule sits after the wide one for the same reason. */
-.ds .fb-stack{top:calc(76px + var(--launch-strip-h,0px))}
+.ds .fb-stack{top:calc(76px + var(--launch-strip-h,0px) + var(--coupon-banner-h,0px))}
 @media (max-width:640px){
-.ds .fb-stack{top:calc(70px + var(--launch-strip-h,0px))}
+.ds .fb-stack{top:calc(70px + var(--launch-strip-h,0px) + var(--coupon-banner-h,0px))}
 }
 
 /* P0.4: index.css paints every input in dark mode (.dark input:not(...)),
@@ -1790,3 +1802,106 @@
    made for the buttons under an assignment card. An action inside the empty
    state has to sit under the sentence rather than off to one side. */
 .ds .as-empty .as-acts{justify-content:center}
+
+/* ---------------------------------------------------------------------------
+   The mobile menu, which opens as a 126px-tall scrolling sliver.
+   ---------------------------------------------------------------------------
+   His `.mnav` drawer is `position:fixed;inset:0` and lives INSIDE `<nav
+   class="nav">`. Once the page is scrolled the nav takes `.stuck`, which adds
+   `backdrop-filter:blur(18px) saturate(160%)` — and a backdrop-filter other
+   than `none` makes an element the containing block for its fixed-position
+   descendants. So `inset:0` stops meaning the viewport and starts meaning the
+   63px header. The drawer's own padding is 86px top + 40px bottom = 126px,
+   which is more than the box it now has to fit in, so it lands 126px tall
+   holding 812px of menu: a sliver with an inner scrollbar, with the page
+   showing through underneath.
+
+   Reproduced in HIS build too (ADLMWebNewUI, /learn at 375px, `.stuck` forced:
+   drawer 126px, content 812px, identical), so this is upstream and belongs on
+   the snag list — but it is ours to survive until he takes it.
+
+   Dropping the blur while the menu is open restores the viewport as the
+   containing block: measured 126px -> 812px, inner scrollbar gone. Nothing is
+   lost visually, because a drawer covering the whole screen is what the blur
+   would have been blurring.
+
+   `transition:none` is not tidiness. `.nav` transitions backdrop-filter over
+   340ms, and a value part-way through that transition is still not `none`, so
+   the containing block survives for longer than the drawer takes to fade in —
+   the sliver would simply be animated.
+
+   The three rules after it are his (site.css 2721-2726), which the port
+   dropped on the floor: he writes them as `.mnav-open .nav`, his script puts
+   `mnav-open` on <html>, and port-ds-css.mjs scoped them to
+   `.ds .mnav-open .nav` — a `.mnav-open` INSIDE `.ds`, which never exists.
+   They are what keeps the header readable and its buttons above the drawer;
+   without the last one a full-height drawer covers the burger and the menu
+   cannot be closed. The porter has no way to know which bare classes live on
+   the document root, so it needs a list; that is filed, not done here.
+*/
+:root.mnav-open .ds .nav{
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  transition:none;
+  background:var(--bg);
+  border-bottom-color:var(--line);
+}
+:root.mnav-open .ds .nav.stuck{background:var(--bg)}
+:root.mnav-open .ds .nav > .nav-in{position:relative;z-index:2}
+/* R09: client logos in the home "trusted by" strip (owner, 27 Sep 2026).
+   The porter swaps his text <span>s for <span class="clogo"><img>; a name with
+   no logo (Godaret) stays text and sits on the same centre line. Greyscale at
+   rest, colour on hover. Most of these marks are dark ink on transparent, so
+   on the dark and black themes each sits on a light tile rather than vanish. */
+.ds .marq-track{align-items:center}
+.ds .marq .clogo{display:inline-flex;align-items:center;justify-content:center;height:46px;padding:6px 12px;border-radius:10px}
+.ds .marq .clogo img{display:block;height:34px;width:auto;max-width:170px;object-fit:contain;
+  filter:grayscale(1);opacity:.72;transition:filter .25s ease,opacity .25s ease}
+.ds .marq .clogo:hover img{filter:none;opacity:1}
+:root.dark .ds .marq .clogo{background:#F2F4F7}
+:root.dark .ds .marq .clogo img{opacity:.85}
+@media (prefers-reduced-motion:reduce){.ds .marq .clogo img{transition:none}}
+
+/* Sign in: the states his form never had.
+ *
+ * His auth.css styles a form that cannot fail — no error, no progress, no
+ * second step — because his build has nothing behind the button. Ours does:
+ * a wrong password, an OTP-gated account that needs a code, and a password
+ * reset in two stages. Those need somewhere to speak.
+ *
+ * Named auth2-* rather than ds-* so they sit in the vocabulary of the sheet
+ * they extend, and built from his tokens (--bad, --ink-2, --action) so the
+ * additions read as part of the page rather than bolted onto it.
+ *
+ * Here and not in ds-auth.css because that file is generated from his CSS and
+ * a re-run of port-ds-css.mjs would discard anything added to it.
+ */
+.ds .auth2-err {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--bad, #c8372d);
+}
+.ds .auth2-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+/* A button that has to read as one of his links: the "Forgot your password?"
+ * control sits in .auth2-row beside the keep-signed-in box, where he styled an
+ * <a>. It cannot BE an anchor — it opens a panel in place rather than
+ * navigating — so it borrows that rule rather than redefining it. */
+.ds .auth2-linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--action);
+  cursor: pointer;
+  text-align: left;
+}
+.ds .auth2-linkbtn:hover { text-decoration: underline; }
+.ds .auth2-linkbtn:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }

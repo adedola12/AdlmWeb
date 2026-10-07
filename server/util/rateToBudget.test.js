@@ -9,12 +9,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveConstants, MC } from "./materialConstants.js";
+import { generateMlSchedule } from "./mlSchedule.js";
 import {
-  buildRateBudgetRows,
+  RATEGEN_SOURCE,
   applyRateRows,
+  buildRateBudgetRows,
   isRateGenRow,
   splitRateByKind,
-  RATEGEN_SOURCE,
+  whyRateCannotPrice,
 } from "./rateToBudget.js";
 import { deriveLineRate, deriveBillRatesFromBudget } from "./deriveBillRates.js";
 import { isGeneratedRow } from "./mlSchedule.js";
@@ -222,6 +224,23 @@ test("a rate with no plant writes no Plant row and behaves exactly as today", ()
   assert.equal(deriveLineRate(it.qty, rows).rate, 12150);
 });
 
+test("the picked rate reproduces to the kobo whatever the bill quantity and constants give", () => {
+  // The back-solved O&P is stored rounded. At a fixed 4dp, a ₦12,150 rate on
+  // 100 m³ read back ₦12,149.99 once the constants moved (28 Sep 2026). Sweep
+  // quantities and rates so no constants change can reopen that.
+  const misses = [];
+  for (const totalCost of [12150, 13500, 9876.54, 25000.01]) {
+    const r = concreteRate({ netCost: totalCost / 1.35, totalCost });
+    for (const qty of [1, 3, 7.5, 12.345, 57, 100, 250.8, 999]) {
+      const it = item({ qty });
+      const { rows } = buildRateBudgetRows(it, r, K, { priceFor });
+      const got = deriveLineRate(it.qty, rows).rate;
+      if (got !== totalCost) misses.push(`${totalCost} × ${qty} → ${got}`);
+    }
+  }
+  assert.deepEqual(misses, []);
+});
+
 test("a rate that itemises no labour still gets a Labour row, from the constants", () => {
   const materialOnly = {
     description: "Concrete",
@@ -378,4 +397,179 @@ test("a converted rate reproduces the converted figure, not the rate's own", () 
   const it = item({ unit: "m2", qty: 40 });
   const { rows } = buildRateBudgetRows(it, concreteRate(), K, { priceFor, unitCost: 2025 });
   assert.equal(deriveLineRate(it.qty, rows).rate, 2025);
+});
+
+// ── Why a rate could not price a line ──
+//
+// buildRateBudgetRows answers null for three unrelated reasons and the route
+// reported all of them as RATE_HAS_NO_BUILDUP. So a preliminaries line imported
+// with a unit of "Item" and no quantity — the importer's own amount-only lump
+// case — told the QS that a perfectly built-up rate had no build-up, and they
+// would go and rebuild a rate that was never the problem.
+
+const builtUp = {
+  totalCost: 42_000,
+  overheadPercent: 10,
+  profitPercent: 10,
+  breakdown: [
+    { componentName: "Cement", refKind: "material", quantity: 6, unitPrice: 800, lineTotal: 4_800 },
+  ],
+};
+
+test("a line with no QUANTITY is not told the rate is at fault", () => {
+  const why = whyRateCannotPrice({ code: "BQ-1", qty: 0, unit: "Item" }, builtUp);
+  assert.equal(why.code, "LINE_HAS_NO_QUANTITY");
+  assert.match(why.message, /no quantity/);
+  // And it says what to do instead.
+  assert.match(why.message, /lump sum/);
+});
+
+test("a line with no REFERENCE says so", () => {
+  assert.equal(whyRateCannotPrice({ code: "", qty: 10 }, builtUp).code, "LINE_HAS_NO_CODE");
+});
+
+test("a rate with no build-up still says exactly that", () => {
+  const why = whyRateCannotPrice({ code: "BQ-1", qty: 10 }, { totalCost: 5_000 });
+  assert.equal(why.code, "RATE_HAS_NO_BUILDUP");
+});
+
+test("a rate that prices to nothing is its own answer", () => {
+  // Applying it would leave the line unpriced, which is not the same as having
+  // no build-up to split.
+  const why = whyRateCannotPrice({ code: "BQ-1", qty: 10 }, { ...builtUp, totalCost: 0 });
+  assert.equal(why.code, "RATE_IS_WORTH_NOTHING");
+});
+
+test("nothing wrong, nothing said", () => {
+  assert.equal(whyRateCannotPrice({ code: "BQ-1", qty: 10 }, builtUp), null);
+});
+
+test("the reason agrees with what buildRateBudgetRows actually did", () => {
+  // Same guards, same order — so a refusal always has a matching explanation
+  // and a success never has one. K is the real constants map: the valid case
+  // gets past the guards and into the arithmetic, which reads it.
+  const cases = [
+    { code: "", qty: 10 },
+    { code: "BQ-1", qty: 0 },
+    { code: "BQ-1", qty: 10 },
+  ];
+  for (const item of cases) {
+    const built = buildRateBudgetRows(item, builtUp, K, { priceFor: () => 0 });
+    const why = whyRateCannotPrice(item, builtUp);
+    assert.equal(Boolean(built), !why, JSON.stringify(item));
+  }
+});
+
+// ── Picking a rate replaces the line's budget, it does not add to it ──
+//
+// Reported from live testing: "the rates got filled but the material got
+// duplicated and labour wasn't priced, and the budget total was more than the
+// bill total."
+//
+// There are TWO automatic sources of budget rows and each has its own sn band:
+// the M&L constants generator at 800,000,000+ and rateToBudget at 700,000,000+.
+// applyRateRows cleared only its own band, so a line the generator had already
+// priced kept those rows AND gained the rate's.
+
+test("a line the generator already priced does not double when a rate is picked", () => {
+  const item = { code: "BQ-1", description: "Concrete (1:2:4) in bases", takeoffLine: "", unit: "m3", qty: 10, rate: 50_000 };
+  const generated = generateMlSchedule([item], [], K).budgetItems;
+  const mineOf = (rows) => rows.filter((b) => String(b.billIdentity || "").toLowerCase() === "bq-1");
+  assert.equal(mineOf(generated).length, 4, "cement, sand, granite and labour");
+
+  const rate = {
+    rateId: "r1", unit: "m3", totalCost: 52_000, overheadPercent: 10, profitPercent: 10,
+    breakdown: [
+      { componentName: "Cement", refKind: "material", quantity: 6.5, unitPrice: 5_000, lineTotal: 32_500 },
+      { componentName: "Mason", refKind: "labour", quantity: 1, unitPrice: 8_000, lineTotal: 8_000 },
+    ],
+  };
+  const built = buildRateBudgetRows(item, rate, K, { priceFor: () => 0 });
+  const after = mineOf(applyRateRows(generated, "BQ-1", built.rows));
+
+  // Was 8 — every material and the labour listed twice.
+  assert.equal(after.length, 4, "the rate replaces the line's rows, it does not add to them");
+  const names = after.map((b) => `${b.componentKind}/${b.materialName || b.description}`);
+  assert.equal(new Set(names).size, names.length, "no duplicate rows");
+});
+
+test("the duplication is what pushed the budget over the bill", () => {
+  // The symptom the QS actually saw. One line, bill worth ₦500,000.
+  const item = { code: "BQ-1", description: "Concrete (1:2:4) in bases", takeoffLine: "", unit: "m3", qty: 10, rate: 50_000 };
+  const generated = generateMlSchedule([item], [], K).budgetItems;
+  const rate = {
+    rateId: "r1", unit: "m3", totalCost: 52_000, overheadPercent: 10, profitPercent: 10,
+    breakdown: [
+      { componentName: "Cement", refKind: "material", quantity: 6.5, unitPrice: 5_000, lineTotal: 32_500 },
+      { componentName: "Mason", refKind: "labour", quantity: 1, unitPrice: 8_000, lineTotal: 8_000 },
+    ],
+  };
+  const built = buildRateBudgetRows(item, rate, K, { priceFor: () => 0 });
+  const amount = (b) => Number(b.amount) || Number(b.total) || Number(b.qty) * Number(b.rate) || 0;
+  const budget = applyRateRows(generated, "BQ-1", built.rows)
+    .filter((b) => String(b.billIdentity || "").toLowerCase() === "bq-1")
+    .reduce((a, b) => a + amount(b), 0);
+
+  // The rate re-prices the line to 10 x 52,000; the cost behind it must be less
+  // than what it is sold for, or the line loses money.
+  assert.ok(budget < 10 * 52_000, `budget ${Math.round(budget)} must sit under the line's value`);
+});
+
+test("LABOUR is priced even when the picked rate has none in its build-up", () => {
+  // Most of a real library is material-only build-ups ("Mortar Mix (1:3)"), and
+  // a line with no labour row prices labour at nothing, silently.
+  const item = { code: "BQ-1", description: "Concrete (1:2:4) in bases", takeoffLine: "", unit: "m3", qty: 10, rate: 50_000 };
+  const materialOnly = {
+    rateId: "r2", unit: "m3", totalCost: 52_000, overheadPercent: 10, profitPercent: 10,
+    breakdown: [
+      { componentName: "Cement", refKind: "material", quantity: 6.5, unitPrice: 5_000, lineTotal: 32_500 },
+      { componentName: "Sharp sand", refKind: "material", quantity: 0.6, unitPrice: 9_000, lineTotal: 5_400 },
+    ],
+  };
+  const built = buildRateBudgetRows(item, materialOnly, K, { priceFor: () => 0 });
+  const labour = built.rows.filter((r) => r.componentKind === "Labour");
+  assert.equal(labour.length, 1, "a labour row is still produced");
+  // From the constants' own output for this work, not zero.
+  assert.ok(labour[0].qty * labour[0].rate > 0, "and it carries money");
+});
+
+test("a row the QS added by hand is NOT swept away by picking a rate", () => {
+  // Only the two AUTOMATIC bands are replaceable. A hand-added row is the QS's
+  // own decision and must survive.
+  const item = { code: "BQ-1", description: "Concrete (1:2:4) in bases", takeoffLine: "", unit: "m3", qty: 10, rate: 50_000 };
+  const byHand = { billIdentity: "BQ-1", sn: 12, componentKind: "Material", materialName: "Curing compound", unit: "L", qty: 5, rate: 2_000 };
+  const generated = [...generateMlSchedule([item], [], K).budgetItems, byHand];
+  const rate = {
+    rateId: "r1", unit: "m3", totalCost: 52_000, overheadPercent: 10, profitPercent: 10,
+    breakdown: [{ componentName: "Cement", refKind: "material", quantity: 6.5, unitPrice: 5_000, lineTotal: 32_500 }],
+  };
+  const built = buildRateBudgetRows(item, rate, K, { priceFor: () => 0 });
+  const after = applyRateRows(generated, "BQ-1", built.rows);
+  assert.ok(
+    after.some((b) => b.materialName === "Curing compound"),
+    "the hand-added row survives",
+  );
+});
+
+// ── a rate in another unit (util/unitConversion.js) ─────────────────────────
+test("an m3 rate converted onto an m2 line reproduces the converted rate", () => {
+  // A 230mm wall: 1 m2 is 0.23 m3, so 13,500/m3 prices the line at 3,105/m2.
+  const it = item({ code: "W-1", description: "Blockwork infill 230mm", unit: "m2", qty: 40 });
+  const { rows } = buildRateBudgetRows(it, concreteRate(), K, {
+    priceFor,
+    unitCost: 13500 * 0.23,
+    scale: 0.23,
+  });
+  assert.equal(deriveLineRate(it.qty, rows).rate, 3105);
+});
+
+test("the rate's own material lines scale with the conversion when the constants know nothing", () => {
+  const it = item({ code: "X-1", description: "Proprietary widget fixing", unit: "m2", qty: 10 });
+  const plain = buildRateBudgetRows(it, concreteRate(), K, { priceFor, unitCost: 13500 });
+  const scaled = buildRateBudgetRows(it, concreteRate(), K, { priceFor, unitCost: 3105, scale: 0.23 });
+  const cement = (r) => r.rows.find((x) => x.name === "Cement");
+  if (cement(plain)) {
+    assert.ok(Math.abs(cement(scaled).qty - cement(plain).qty * 0.23) < 0.01);
+  }
+  assert.equal(deriveLineRate(it.qty, scaled.rows).rate, 3105);
 });

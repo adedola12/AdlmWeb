@@ -183,6 +183,60 @@ export function complaintOptOut(at = new Date()) {
  * that customer's IT department — whereas a transient bounce that is silently
  * dropped is indistinguishable from mail that arrived.
  */
+/**
+ * How many transient bounces, and over how long, before an address is treated
+ * as dead.
+ *
+ * Five in fourteen days. A mailbox that is genuinely full gets emptied, and a
+ * server having a bad afternoon has a good one the next day, so a handful spread
+ * over a fortnight is noise and is left alone. Five is above anything a
+ * recovering mailbox produces and well below the nine-in-36-hours that prompted
+ * this, so the addresses it catches are the ones nothing will ever reach.
+ *
+ * Deliberately not reusing the permanent-bounce threshold of one: the whole
+ * argument in this file is that transient and permanent are different claims,
+ * and collapsing them would re-introduce the mistake it warns about.
+ */
+const TRANSIENT_LIMIT = Number.parseInt(process.env.TRANSIENT_BOUNCE_LIMIT || "", 10) || 5;
+const TRANSIENT_WINDOW_DAYS =
+  Number.parseInt(process.env.TRANSIENT_BOUNCE_WINDOW_DAYS || "", 10) || 14;
+
+/**
+ * Has this address bounced transiently so often that it is dead in practice?
+ *
+ * Returns the total count including the event being handled when the limit is
+ * reached, and 0 otherwise — so the caller can both branch on it and quote the
+ * number in what it writes down.
+ *
+ * Counts the EVIDENCE rows rather than a counter on the User record on purpose.
+ * MailEvent already holds every bounce under its own 90-day expiry, so the
+ * window maintains itself: an address that bounced five times in March and works
+ * now ages out of its own accord instead of carrying a tally forever. A counter
+ * field would need resetting, and nothing would ever reset it.
+ *
+ * A failure here returns 0. Not suppressing an address that should have been
+ * suppressed costs reputation; suppressing one that should not have been costs a
+ * customer their receipts and resets, which is worse — so the uncertain case
+ * keeps mailing.
+ */
+async function transientIsChronic(ev, log = console) {
+  try {
+    const since = new Date(Date.now() - TRANSIENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const prior = await MailEvent.countDocuments({
+      email: ev.email,
+      type: "bounce",
+      bounceType: { $ne: "Permanent" },
+      at: { $gte: since },
+    });
+    // +1 for the event in hand: its evidence row is written after this runs.
+    const total = prior + 1;
+    return total >= TRANSIENT_LIMIT ? total : 0;
+  } catch (err) {
+    log.error?.("[mail-feedback] transient bounce count failed:", err?.message || err);
+    return 0;
+  }
+}
+
 export async function applyFeedback(ev, { log = console } = {}) {
   if (!ev?.email) return { ok: false, action: "no address in event" };
 
@@ -227,11 +281,21 @@ export async function applyFeedback(ev, { log = console } = {}) {
     log.error?.("[mail-feedback] user lookup failed:", err?.message || err);
   }
 
+  // A transient bounce means nothing on its own. The same address bouncing
+  // transiently over and over means the opposite, and until this was added
+  // nothing ever stopped it: on 4 Oct 2026 five addresses had each been sent
+  // nine separate messages inside 36 hours — nine distinct SES message ids, so
+  // nine real sends rather than one event redelivered — and every one bounced.
+  // That was roughly a tenth of the day's entire volume spent on five mailboxes
+  // that accept nothing, and the bounce rate it produced is charged to the whole
+  // sending domain.
+  const chronic = ev.type === "bounce" && !ev.permanent ? await transientIsChronic(ev, log) : 0;
+
   if (!user) {
     // Normal, not an error: a proforma to a prospect, a support reply to
     // somebody who never signed up, an address that has since been changed.
     action = "no account for this address";
-  } else if (ev.type === "bounce" && !ev.permanent) {
+  } else if (ev.type === "bounce" && !ev.permanent && !chronic) {
     action = `transient bounce (${ev.bounceSubType || "unspecified"}), recorded only`;
   } else if (ev.type === "bounce") {
     // ONLY the undeliverable fields. Not the marketing and video preferences,
@@ -254,11 +318,18 @@ export async function applyFeedback(ev, { log = console } = {}) {
           emailUndeliverable: true,
           emailUndeliverableAt: new Date(),
           emailUndeliverableReason: "bounce",
-          emailUndeliverableDetail: ev.detail || "",
+          emailUndeliverableDetail: chronic
+            ? `${chronic} transient bounces in ${TRANSIENT_WINDOW_DAYS} days; ${ev.detail || "no diagnostic"}`
+            : ev.detail || "",
         },
       },
     );
-    action = "marked undeliverable";
+    // Two different decisions reach this line, and support needs to be able to
+    // tell them apart: one server saying "never", and one server saying "not
+    // now" so many times that it amounts to the same thing.
+    action = chronic
+      ? `${chronic} transient bounces in ${TRANSIENT_WINDOW_DAYS} days — marked undeliverable`
+      : "marked undeliverable";
   } else if (ev.type === "complaint" && !ev.wantsOut) {
     // complaintFeedbackType "not-spam". Recorded, deliberately not acted on.
     action = "not-spam report, no change";

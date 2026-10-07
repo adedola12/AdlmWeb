@@ -35,6 +35,10 @@ const rows = [
   },
 ];
 
+function openFinalAccount() {
+  fireEvent.click(screen.getByRole("button", { name: /Final account/ }));
+}
+
 function openVariations() {
   fireEvent.click(screen.getByRole("button", { name: /Variations/ }));
 }
@@ -221,5 +225,141 @@ describe("contract administration panel (S18)", () => {
     expect(screen.getByText("₦1,000,000.00")).toBeTruthy();
     expect(screen.getByText("No spend recorded yet")).toBeTruthy();
     expect(screen.getByText("Close the final account")).toBeTruthy();
+  });
+});
+
+// ── What actualSpent means ──────────────────────────────────────────────────
+//
+// ProjectsGeneric builds the earned figure as
+//
+//   fullValuedAmount = valuedAmount + provDoneAmount
+//                    + prelimDoneAmountForOverview + variationsDoneAmount
+//
+// and passes it down. ProjectOpenView used to add the last three on again
+// before handing it here as actualSpent, so every job with provisional sums,
+// earned preliminaries or executed variations reported an over-run it had not
+// had — the exact phantom over-run this panel's own comment says it removed.
+//
+// These pin the consumer end: actualSpent is the whole earned amount, and
+// nothing here adds to it.
+//
+// The fixture is a real locked contract, percentages and all, because an
+// inconsistent one (a contractSum that includes contingency and VAT beside
+// contingency and tax props of 0) invents a saving all by itself.
+const SUBTOTAL = 100_000_000;
+const CONTINGENCY = 5_000_000; // 5% of the subtotal
+const TAX = 7_875_000; // 7.5% of subtotal + contingency
+const CONTRACT_SUM = SUBTOTAL + CONTINGENCY + TAX; // 112,875,000
+
+const spendProps = {
+  ...baseProps,
+  contractSum: CONTRACT_SUM,
+  measured: 85_000_000,
+  provisional: 10_000_000,
+  preliminary: 5_000_000,
+  contingency: CONTINGENCY,
+  tax: TAX,
+  contingencyPercent: 5,
+  taxPercent: 7.5,
+  variations: 0,
+  variationRows: [],
+};
+
+describe("actual spend against the planned budget", () => {
+  afterEach(cleanup);
+
+  it("does not report an over-run when spend is inside the planned budget", () => {
+    render(<ProjectContractPanel {...spendProps} actualSpent={75_000_000} />);
+    openFinalAccount();
+    expect(screen.getByText("Forecast savings vs budget")).toBeTruthy();
+    // Planned is the full cascade, 112,875,000, so 37,875,000 is still to spend.
+    expect(screen.getByText("₦37,875,000.00")).toBeTruthy();
+  });
+
+  it("reports an over-run only once spend passes the planned budget", () => {
+    render(<ProjectContractPanel {...spendProps} actualSpent={CONTRACT_SUM + 4_000_000} />);
+    openFinalAccount();
+    // The spend over-run and the contract movement are separate lines and can
+    // both be labelled this, so assert the label is present rather than unique.
+    expect(screen.getAllByText("Over-run").length).toBeGreaterThan(0);
+    expect(screen.getByText("₦4,000,000.00")).toBeTruthy();
+  });
+
+  it("a live job measured exactly as contracted has not moved against it", () => {
+    // The movement line asks a different question from the over-run: has the
+    // contract VALUE shifted? With no variations and the quantities as
+    // measured, it has not — and must not read as a saving.
+    render(<ProjectContractPanel {...spendProps} actualSpent={50_000_000} />);
+    openFinalAccount();
+    expect(screen.getByText("On the contract sum")).toBeTruthy();
+    expect(screen.queryByText("Saving")).toBe(null);
+  });
+});
+
+// ── A finalized account measures against what a certificate can pay ────────
+describe("the closed final account", () => {
+  afterEach(cleanup);
+
+  const finalized = (over = {}) => ({
+    ...spendProps,
+    finalAccount: {
+      finalized: true,
+      measuredWorkFinal: 85_000_000,
+      provisionalFinal: 10_000_000,
+      preliminaryFinal: 5_000_000,
+      variationsFinal: 0,
+      agreedContractSum: CONTRACT_SUM,
+      agreedCertifiableSum: SUBTOTAL,
+      contingencyAtLock: CONTINGENCY,
+      taxAtLock: TAX,
+      finalContractValue: SUBTOTAL,
+      savings: 0,
+      ...over,
+    },
+  });
+
+  it("a job closed exactly as contracted shows no saving", () => {
+    // THE BUG, on screen. finalContractValue carries neither contingency nor
+    // VAT; contractSum carries both. Held against each other they reported
+    // ₦12,875,000 saved on a job that came in exactly as measured.
+    render(<ProjectContractPanel {...finalized()} />);
+    openFinalAccount();
+    expect(screen.getByText("On the contract sum")).toBeTruthy();
+    expect(screen.queryByText("₦12,875,000.00")).toBe(null);
+  });
+
+  it("a real saving is still reported", () => {
+    render(
+      <ProjectContractPanel
+        {...finalized({ finalContractValue: SUBTOTAL - 3_000_000, savings: 3_000_000 })}
+      />,
+    );
+    openFinalAccount();
+    expect(screen.getByText("Saving")).toBeTruthy();
+    expect(screen.getAllByText("₦3,000,000.00").length).toBeGreaterThan(0);
+  });
+
+  it("a real over-run on the contract is still reported", () => {
+    render(
+      <ProjectContractPanel
+        {...finalized({ finalContractValue: SUBTOTAL + 2_000_000, savings: -2_000_000 })}
+      />,
+    );
+    openFinalAccount();
+    expect(screen.getAllByText("Over-run").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₦2,000,000.00").length).toBeGreaterThan(0);
+  });
+
+  it("an account closed before the baseline was stored derives it, not guesses", () => {
+    // No agreedCertifiableSum and no at-lock amounts: the cascade is inverted
+    // from the percentages, so an old closed account stops showing the phantom
+    // saving the moment it is opened.
+    const legacy = finalized();
+    delete legacy.finalAccount.agreedCertifiableSum;
+    delete legacy.finalAccount.contingencyAtLock;
+    delete legacy.finalAccount.taxAtLock;
+    render(<ProjectContractPanel {...legacy} />);
+    openFinalAccount();
+    expect(screen.getByText("On the contract sum")).toBeTruthy();
   });
 });

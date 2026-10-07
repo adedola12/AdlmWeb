@@ -44,6 +44,7 @@
 // than being recommended at a stale price.
 
 import React from "react";
+import { insideNewBuild } from "../lib/newBuildPaths.js";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config.js";
 
@@ -514,7 +515,7 @@ export default function DsFit() {
                   <React.Fragment key={l.product.key}>
                     <div className="qt-hr" />
                     <div className="qt-big">
-                      <Link to={`/product/${l.product.key}`}>{l.product.name}</Link>
+                      <Link to={insideNewBuild(`/product/${l.product.key}`)}>{l.product.name}</Link>
                       <br />
                       <b>{money(l.price, cur)}</b>{" "}
                       <span className="qt-q">{fit.period === "yearly" ? "a year" : "a month"}</span>
@@ -568,15 +569,22 @@ export default function DsFit() {
                 {single && (
                   <Link
                     className="ds-btn btn-p btn-full"
-                    to={`/product/${fit.lines[0].product.key}`}
+                    to={insideNewBuild(`/product/${fit.lines[0].product.key}`)}
                     style={{ marginTop: "22px" }}
                   >
                     See {fit.lines[0].product.name} in full
                   </Link>
                 )}
+                {/* THE ANSWER STAYS IN THE NEW BUILD.
+                    /fit is a redesign page behind the same gate as the ported
+                    pages, so sending its call to action to the classic /quote
+                    dropped the reader out of the build they were in, halfway
+                    through choosing a product. insideNewBuild resolves the
+                    ported page and falls back to the classic route only where
+                    the redesign has none. */}
                 <Link
                   className={`ds-btn ${single ? "btn-o" : "btn-p"} btn-full`}
-                  to="/quote"
+                  to={insideNewBuild("/quote")}
                   style={{ marginTop: single ? "10px" : "22px" }}
                 >
                   Put it in a quotation

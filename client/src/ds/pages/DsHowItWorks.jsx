@@ -135,7 +135,7 @@ export default function DsHowItWorks() {
               </h4>
               {" "}
               <p>
-                QUIV, HERON and Revit MEP dock into Revit and PlanSwift. RateGen runs on its own.
+                QUIV, HERON and SERVIQ dock into Revit and PlanSwift. RateGen runs on its own.
               </p>
             </article>
             {" "}

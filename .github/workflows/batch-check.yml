@@ -1,0 +1,120 @@
+# The release gate's required check (docs/RELEASE_GATE.md).
+#
+# From 29 Sep 2026 nobody reviews pull requests into main: the approver is a
+# designer, and he signs off a tested BATCH on the release desk instead. This
+# check is what makes GitHub honour that decision. It asks the website whether
+# the approver approved the exact commit being merged, and fails if not.
+#
+# From 29 Sep 2026 (owner's rule) the approver signs off only what end users
+# SEE: a pull request that changes nothing under client/ and none of the gate's
+# own files passes straight away, so a server fix does not wait for a batch.
+# Everything else still needs his approved batch.
+#
+# It can only ever BLOCK a merge. It merges nothing and needs no credential:
+# the endpoint is read-only and answers yes or no about one commit hash.
+#
+# pull_request_target, so the check that runs is always main's copy: a pull
+# request cannot rewrite its own gate. It never checks out the pull request's
+# code; it only reads the list of changed file names.
+#
+# To make it binding:
+#   Settings > Branches > main > Require status checks to pass >
+#   add "approved batch", and keep "Include administrators" ticked.
+
+name: release gate
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  approved-batch:
+    name: approved batch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Does this change what end users see?
+        id: scope
+        if: github.event_name == 'pull_request_target'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          # Paths that need the approver's tested batch: the website UI, and
+          # the gate itself so the rule cannot be loosened by a quiet PR.
+          # Also: the route that prepares and approves batches, the roles that
+          # decide who may approve, and the stack that holds the locked audit
+          # trail; none of them has "release" in its name.
+          NEEDS_APPROVER='^(client/|\.github/|docs/RELEASE_GATE\.md$|server/.*[Rr]elease[A-Za-z.-]*\.(js|mjs)$'
+          NEEDS_APPROVER+='|server/routes/admin\.batch\.js$|server/util/rbac\.js$|infra/lib/adlm-release-gate-stack\.ts$)'
+          # A rename is checked under its old name too, so moving a file out
+          # of client/ still needs him.
+          if ! files=$(gh api --paginate "repos/${{ github.repository }}/pulls/$PR/files" \
+                 --jq '.[] | .filename, (.previous_filename // empty)'); then
+            # Could not read the file list: fail closed, ask for a batch.
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # An empty list, or one cut off at the API's 3,000 files, is not the
+          # whole change: fail closed.
+          listed=$(printf '%s\n' "$files" | grep -c . || true)
+          if [ "$listed" -eq 0 ] || [ "${{ github.event.pull_request.changed_files || 0 }}" -ge 3000 ]; then
+            echo "The file list may be incomplete: asking for a batch."
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          hits=$(printf '%s\n' "$files" | grep -E "$NEEDS_APPROVER" || true)
+          if [ -z "$hits" ]; then
+            echo "ui=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No user-facing UI or gate files changed. The approver is not needed for this one."
+          else
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            echo "These files need the approver's tested batch:"
+            printf '%s\n' "$hits"
+          fi
+
+      - name: Ask the release desk about this commit
+        if: steps.scope.outputs.ui != 'false'
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+          echo "Commit under review: $SHA"
+
+          # A network problem must never read as approved, so a call that never
+          # succeeds fails the check. Three tries, in case the API is cold.
+          body=""
+          for i in 1 2 3; do
+            if body=$(curl -sS --max-time 20 "https://api.adlmstudio.net/release-gate/batch-status?sha=$SHA"); then
+              break
+            fi
+            echo "call failed, retrying in 10s"
+            sleep 10
+          done
+
+          if [ -z "$body" ]; then
+            echo "::error::Could not reach the release desk, so this build is treated as not approved."
+            exit 1
+          fi
+
+          echo "$body"
+          approved=$(printf '%s' "$body" | jq -r '.approved // false')
+          if [ "$approved" = "true" ]; then
+            who=$(printf '%s' "$body" | jq -r '.approvedBy // "the approver"')
+            title=$(printf '%s' "$body" | jq -r '.title // "this batch"')
+            echo "::notice::$title was approved by $who after testing this build."
+            exit 0
+          fi
+
+          reason=$(printf '%s' "$body" | jq -r '.reason // "not approved"')
+          echo "::error::$reason"
+          echo "Nothing reaches customers until the approver has tested and approved this build"
+          echo "on https://www.adlmstudio.net/admin/releases"
+          exit 1
