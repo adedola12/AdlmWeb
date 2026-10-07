@@ -930,17 +930,3 @@
 .ds .rail-tight .dsh-sub{padding-left:0}
 .ds .rail-tight .dsh-sub a{justify-content:center}
 .ds .rail-tight .dsh-sub .add, .ds .rail-tight .dsh-sub .soon{display:none}
-
-/* Issuing an interim certificate: the period it covers, and any notes.
-   Was unreachable — the button posted nothing, so every certificate stored
-   periodStart: null and the document could only print its issue date. */
-.ds .pcp-issue{margin:12px 0 4px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--bg-alt)}
-.ds .pcp-issue-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.ds .pcp-issue-fields label{display:grid;gap:5px;min-width:0}
-.ds .pcp-issue-fields label.wide{grid-column:1/-1}
-.ds .pcp-issue-fields span{font-size:11.5px;color:var(--ink-3)}
-.ds .pcp-issue-fields input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:10px;
-  background:var(--bg);font:400 13px var(--font);color:var(--ink)}
-.ds .pcp-issue-hint{margin:10px 0 0;font-size:11.5px;color:var(--ink-3);line-height:1.5}
-.ds .pcp-issue-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
-.ds .pcp-issue-bad{margin:8px 0 0;font-size:11.5px;color:var(--fb-bad,#b3261e);line-height:1.5}

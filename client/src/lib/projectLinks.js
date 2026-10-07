@@ -102,6 +102,10 @@ export function normaliseRollup(list) {
  * places that genuinely still want the old address: the "Open the classic
  * workspace" links the new build offers for what it cannot do yet, and the
  * classic build's own internal navigation.
+ * workspace. It is a parameter rather than a global because the answer differs
+ * per VIEWER, not per project: callers ask lib/newBuildAccess.js (through
+ * useProjectHref) whether this viewer is sent to /work/*. Since go-live that is
+ * everyone signed in; before it, only staff.
  *
  * ArchiCAD and RateGen are unchanged either way: neither has a page under
  * /work/project, and both had their own home before this.

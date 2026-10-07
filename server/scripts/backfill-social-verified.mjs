@@ -31,6 +31,7 @@
 
 import "dotenv/config";
 import mongoose from "mongoose";
+import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import { User } from "../models/User.js";
 
 const APPLY = process.argv.includes("--apply");
@@ -65,11 +66,45 @@ async function main() {
   // With --apply it would have written there. A second environment variable
   // that silently points somewhere else is worse than no fallback: the run
   // succeeds and tells you the wrong thing.
-  const uri = process.env.MONGO_URI;
+  // MONGO_URI from the environment, or --from-ssm to read it the way the
+  // Lambda does.
+  //
+  // Reading it here keeps the connection string out of shell history, out of a
+  // paste, and out of anybody's terminal scrollback: it goes from Parameter
+  // Store into this process and nowhere else. The AWS CLI cannot see this
+  // parameter from some environments while the SDK can, which is the other
+  // reason it is done in-process.
+  let uri = process.env.MONGO_URI;
+  if (!uri && process.argv.includes("--from-ssm")) {
+    const name = process.env.MONGO_URI_PARAM || "/adlm/cloud/prod/MONGO_URI";
+    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "eu-west-1";
+    try {
+      const ssm = new SSMClient({ region });
+      const r = await ssm.send(new GetParameterCommand({ Name: name, WithDecryption: true }));
+      uri = r.Parameter?.Value || "";
+      say(`connection string: read from SSM ${name} (${region})`);
+      // AUTH_DB too. The connection string's own default database is "test";
+      // the app has never used it. See db.js.
+      if (!process.env.AUTH_DB) {
+        try {
+          const a = await ssm.send(
+            new GetParameterCommand({ Name: "/adlm/cloud/prod/AUTH_DB", WithDecryption: true }),
+          );
+          if (a.Parameter?.Value) process.env.AUTH_DB = a.Parameter.Value;
+        } catch {
+          // Not set in SSM: the default below is the same one db.js uses.
+        }
+      }
+    } catch (e) {
+      console.error(`Could not read ${name} from SSM: ${e?.name || ""} ${e?.message || e}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
   if (!uri) {
     console.error(
       [
-        "backfill-social-verified: MONGO_URI is not set.",
+        "backfill-social-verified: MONGO_URI is not set. Pass --from-ssm to read it",
         "Set it to the production connection string. This script will NOT fall back to",
         "ADLM_MONGO_CONNECTION, which points at a different cluster and would report",
         "zero accounts to fix while finding none of them.",
@@ -78,7 +113,15 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  await mongoose.connect(uri);
+  // THE DATABASE NAME IS NOT IN THE URI.
+  //
+  // db.js connects with dbName: AUTH_DB || "adlmWeb", never the connection
+  // string's default. Connecting without it lands in "test", where none of
+  // these accounts live — and the first run of this script did exactly that
+  // and reported "0 to fix" against an empty database. That is the failure the
+  // `database:` line below exists to make visible.
+  const dbName = process.env.AUTH_DB || "adlmWeb";
+  await mongoose.connect(uri, { dbName });
   // Name the database in the report. A count of zero means one of two very
   // different things — nothing to fix, or the wrong database — and the reader
   // cannot tell them apart without this line.

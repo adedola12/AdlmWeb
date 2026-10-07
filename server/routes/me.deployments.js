@@ -19,6 +19,7 @@ import {
   hubSharesAppIdentity,
   isSchemeAwareBindingEnabled,
 } from "../util/deviceIdentity.js";
+import { isBrowserCaller } from "../util/browserCaller.js";
 
 const router = express.Router();
 
@@ -96,11 +97,9 @@ async function withSignedPackageUris(items) {
  * else it looks like, so a desktop client that someday sets an Origin header
  * cannot be locked out by this.
  */
-export function isBrowserCaller(req) {
-  const client = String(req?.get?.("x-adlm-client") || "").trim().toLowerCase();
-  if (client) return false; // the Hub and the plugins say who they are
-  return !!(req?.get?.("origin") || req?.get?.("sec-fetch-site"));
-}
+// Lives in util/browserCaller.js, shared with the rate library's write guard.
+// Re-exported so this route's tests and callers keep importing it from here.
+export { isBrowserCaller };
 
 /**
  * The one package the website is allowed to hand over.

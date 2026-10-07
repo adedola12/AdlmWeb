@@ -100,6 +100,9 @@ export function projectIdLabel(project) {
  * uploading, linking, certificates and the ONE workbook the browser builds. One
  * used to do both jobs under the first name, which is why "Open the full
  * workspace" navigated away instead of filling the screen.
+ * uploading, linking and certificates (exports now have their own menu). One used to do both
+ * jobs under the first name, which is why "Open the full workspace" navigated
+ * away instead of filling the screen.
  */
 export function overflowActions({ isOwner = false, canSeePm = true, fullScreen = false } = {}) {
   const list = [

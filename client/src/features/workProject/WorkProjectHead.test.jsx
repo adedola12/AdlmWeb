@@ -209,3 +209,30 @@ describe("the collaborators panel", () => {
     expect(() => people(null)).not.toThrow();
   });
 });
+
+describe("the Export menu", () => {
+  it("offers every workbook and the PDF reports, and says which was picked", () => {
+    const onAction = vi.fn();
+    const c = head({ onAction });
+    fireEvent.click(within(c).getByRole("button", { name: "Export" }));
+    for (const g of ["Bill & budget, Excel", "Elemental BoQ, Excel", "Trade BoQ, Excel", "Milestone BoQ, Excel", "Reports, PDF"]) {
+      expect(screen.getByText(g)).toBeTruthy();
+    }
+    fireEvent.click(screen.getByText("Bill & budget by trade"));
+    expect(onAction).toHaveBeenCalledWith("export", "bb-trade");
+  });
+
+  it("opens the PDF report through the same action the overflow uses", () => {
+    const onAction = vi.fn();
+    const c = head({ onAction });
+    fireEvent.click(within(c).getByRole("button", { name: "Export" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Project report/ }));
+    expect(onAction).toHaveBeenCalledWith("report", "report");
+  });
+
+  it("is busy while a file is on its way, so it is not fetched twice", () => {
+    const c = head({ exporting: "bb-cat" });
+    const b = within(c).getByRole("button", { name: "Exporting…" });
+    expect(b.disabled).toBe(true);
+  });
+});
