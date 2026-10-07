@@ -25,19 +25,83 @@ import { exportsFor, noExportsReason } from "./exportModel.js";
 
 const BILL_KEYS = new Set(["boq-elemental", "boq-trade", "bill-budget", "bill-budget-trade"]);
 
+/**
+ * Why there is nothing here, in the reader's terms.
+ *
+ * Four causes, and three of them used to read as the fourth. In particular,
+ * "an active RateGen subscription lifts this" was said to a VIEW-ONLY reader,
+ * for whom it is untrue twice over: buying RateGen flips canSeeRates, and
+ * canExport still refuses every document — including the four bill workbooks,
+ * which findProjectDoc refuses with 403 VIEW_ONLY (projects.boq.js:189).
+ */
+const REASON = {
+  failed:
+    "This project's bill could not be read just now, and every document here is built from it. Reload the page and try again.",
+  "view-only":
+    "You have view access to this project, which does not include taking its documents. The owner can share it at full access if you need them.",
+  "rates-hidden":
+    "This project's rates are not visible to you, so its documents cannot be exported. An active RateGen subscription lifts this.",
+  "no-bill":
+    "There is no bill on this project yet. Measure or import one and every document here is built from it.",
+  loading: "This project is still loading.",
+};
+
+/**
+ * One group of documents.
+ *
+ * At MODULE level, not inside the component. Declared in the body, its identity
+ * changed on every render, so every setBusy and setFailed unmounted and remounted
+ * the whole group — which destroys the button a keyboard reader had just pressed
+ * and drops focus to the body, exactly as the refusal they need appears.
+ */
+function Group({ title, list, busy, failed, onTake }) {
+  if (!list.length) return null;
+  return (
+    <div className="pn-sec">
+      <span className="k">{title}</span>
+      {list.map((r) => (
+        <React.Fragment key={r.key}>
+          <button
+            type="button"
+            className="ds-btn btn-o ds-btn-sm"
+            disabled={!!busy}
+            aria-busy={busy === r.key}
+            onClick={() => onTake(r)}
+          >
+            {busy === r.key ? "Building…" : r.label}
+          </button>
+          {/* role="status" so a refusal is ANNOUNCED. The whole reason a failed
+              export keeps its message in the panel rather than a toast is that
+              the server's words are the only instruction the reader gets — and
+              a reader using a screen reader was the one person who never got
+              them. */}
+          <p className="hint" role={failed[r.key] ? "status" : undefined}>
+            {failed[r.key] ? failed[r.key] : r.note}
+          </p>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 export default function WorkProjectExports({
   project,
   productKey,
   saveId,
   accessToken,
   classicHref = "",
+  // The shell knows the difference between "not loaded yet" and "the load
+  // failed", and only it does: a failed read leaves `project` null exactly as a
+  // pending one does. Without this the panel said "still loading" two inches
+  // below the shell's own banner saying the read had failed.
+  failed: loadFailed = false,
   onToast,
 }) {
   const rows = React.useMemo(
     () => exportsFor(project, { productKey, saveId }),
     [project, productKey, saveId],
   );
-  const reason = noExportsReason(project, { productKey, saveId });
+  const reason = noExportsReason(project, { productKey, saveId, failed: loadFailed });
 
   // Which row is downloading, and what went wrong with it. Keyed by row rather
   // than a single flag: a QS taking the bill and then a certificate should not
@@ -77,14 +141,15 @@ export default function WorkProjectExports({
   if (!rows.length) {
     return (
       <div className="pn-sec">
-        <span className="k">Nothing to export yet</span>
-        <p className="hint">
-          {reason === "rates-hidden"
-            ? "This project's rates are not visible to you, so its documents cannot be exported. An active RateGen subscription lifts this."
-            : reason === "no-bill"
-              ? "There is no bill on this project yet. Measure or import one and every document below is built from it."
-              : "This project is still loading."}
-        </p>
+        <span className="k">{reason === "failed" ? "The bill could not be read" : "Nothing to export yet"}</span>
+        <p className="hint">{REASON[reason] || REASON.loading}</p>
+        {/* The one refusal with somewhere to go: a view-only reader cannot export,
+            but the owner can share the project at full access. */}
+        {reason === "view-only" && classicHref ? (
+          <Link className="ds-btn btn-o ds-btn-sm" to={classicHref}>
+            Open the classic workspace
+          </Link>
+        ) : null}
       </div>
     );
   }
@@ -92,31 +157,10 @@ export default function WorkProjectExports({
   const bill = rows.filter((r) => BILL_KEYS.has(r.key));
   const priced = rows.filter((r) => !BILL_KEYS.has(r.key));
 
-  const Group = ({ title, list }) =>
-    list.length ? (
-      <div className="pn-sec">
-        <span className="k">{title}</span>
-        {list.map((r) => (
-          <React.Fragment key={r.key}>
-            <button
-              type="button"
-              className="ds-btn btn-o ds-btn-sm"
-              disabled={!!busy}
-              aria-busy={busy === r.key}
-              onClick={() => take(r)}
-            >
-              {busy === r.key ? "Building…" : r.label}
-            </button>
-            <p className="hint">{failed[r.key] ? failed[r.key] : r.note}</p>
-          </React.Fragment>
-        ))}
-      </div>
-    ) : null;
-
   return (
     <>
-      <Group title="The bill" list={bill} />
-      <Group title="Payment documents" list={priced} />
+      <Group title="The bill" list={bill} busy={busy} failed={failed} onTake={take} />
+      <Group title="Payment documents" list={priced} busy={busy} failed={failed} onTake={take} />
       {classicHref ? (
         <div className="pn-sec">
           <span className="k">Not here</span>

@@ -36,9 +36,50 @@ export const STAGES = [
  * "now" step reads as broken rather than as new.
  */
 export function stageIndex(project) {
-  const want = String(project?.stage || "").trim().toLowerCase();
+  const want = String(project?.stage || "").trim().toLowerCase() || derivedStage(project);
   const i = STAGES.findIndex((s) => s.id === want);
   return i < 0 ? 0 : i;
+}
+
+/**
+ * The stage, worked out from what the project actually carries.
+ *
+ * NOTHING SENDS `project.stage`. Not the project GET, not the list, not the
+ * rollup — the server emits contractLocked / tenderedAt / finalized /
+ * certificateCount instead, and projectStage() on the server is used by the AI
+ * data service alone. So `String(project?.stage)` was empty on every real
+ * project, the lookup missed, and the fallback answered Takeoff: the stage pill
+ * in the header read "Takeoff" on a locked contract with four certificates
+ * against it, every overview read the first stage, and progressPercent — which
+ * returns 0 below stage 3 — was 0 for everybody.
+ *
+ * It passed its tests because the fixtures inject `stage` by hand, which is the
+ * same way worksBaseFor kept its coverage while reading a field that does not
+ * exist.
+ *
+ * Two shapes have to answer, because the workspace holds both: the rollup
+ * summary (flat flags, which is what lib/projectGallery.stageOf reads) and the
+ * full document (contract.locked, certificates[], finalAccount.finalized). A
+ * project opened by a direct link may have only the second.
+ *
+ * Ordered latest-first, like stageOf: a project with certificates is valuing
+ * whatever else is also true of it.
+ */
+function derivedStage(p) {
+  if (!p) return "takeoff";
+  if (p.finalized || p.finalAccount?.finalized) return "final";
+  const certs = Number(p.certificateCount);
+  if ((Number.isFinite(certs) ? certs : 0) > 0) return "valuing";
+  if (Array.isArray(p.certificates) && p.certificates.length) return "valuing";
+  if (p.contractLocked || p.contract?.locked) return "locked";
+  if (p.tenderedAt || p.contract?.tenderedAt) return "tendered";
+  // `priced` is the masked row's stand-in for a figure: the stage is a state, not
+  // an amount, and reading a withheld total here would label a fully priced job
+  // that somebody else owns "takeoff".
+  if (typeof p.priced === "boolean") return p.priced ? "priced" : "takeoff";
+  if (Number(p.totalCost) > 0) return "priced";
+  const items = Array.isArray(p.items) ? p.items : [];
+  return items.length && items.some((it) => Number(it?.rate) > 0) ? "priced" : "takeoff";
 }
 
 export function nextStage(project) {

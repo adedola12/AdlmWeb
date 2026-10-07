@@ -105,7 +105,13 @@ export function WorkProjectVariationsView({ project, onOpenVariation }) {
               {...(onOpenVariation
                 ? { type: "button", onClick: () => onOpenVariation(r.index) }
                 : {})}
-              className="vr"
+              // .vr carries cursor:pointer and a hover border (ds-work-proj.css:
+              // 622-624) because it was written for a row that IS a button. Making
+              // the element a div took the focus and the keyboard away and left
+              // the hand cursor and the hover lift behind — so a QS still moused
+              // over a row, still saw it light up, still clicked, and still got
+              // nothing. .vr-flat, in ds-local.css, puts both back.
+              className={onOpenVariation ? "vr" : "vr vr-flat"}
             >
               <span className="no">V{r.no}</span>
               <span className="ds">

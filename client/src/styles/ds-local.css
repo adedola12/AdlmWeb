@@ -2497,3 +2497,58 @@
 .ds .pj-pop .pj-pop-g span{margin-left:6px;font-weight:400;letter-spacing:0;text-transform:none}
 .ds .pj-pop .pj-pop-h{margin:0 10px 4px;font:400 12px var(--font);color:var(--ink-3)}
 .ds .pj-pop > button span i{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:2px}
+/* A ROW THAT IS NOT A CONTROL MUST NOT LOOK LIKE ONE.
+ *
+ * .pj-vars .vr is his variations row and it is styled as a button —
+ * cursor:pointer, and a border that lifts on hover. That is right while the row
+ * opens something. WorkProjectValuations renders the variations list with no
+ * handler, because there is nowhere to open yet, so those rows render as plain
+ * divs; the element changed and the affordance did not, which left a QS mousing
+ * over twenty rows that lit up under the hand cursor and did nothing when
+ * clicked. Exactly the complaint the change set out to answer.
+ *
+ * In ds-local.css because ds-work-proj.css is generated from Richard's own
+ * stylesheet and .vr-flat is ours.
+ */
+.ds .pj-vars .vr.vr-flat{cursor:default}
+.ds .pj-vars .vr.vr-flat:hover{border-color:var(--line)}
+
+/* The section RENAME control, which is not the drag handle beside it.
+ *
+ * It borrowed .grip to avoid writing any CSS, and .grip sets cursor:grab and
+ * touch-action:none because it was written for dragging a section. So the pencil
+ * invited a drag it cannot do, two inches from a handle that can. Same box, same
+ * hover, honest cursor.
+ *
+ * .rnm.rnm, DOUBLED, and not for tidiness.
+ *
+ * The element carries both classes, so these declarations compete head-on with
+ * `.ds .pj-bill .grip` — and at equal specificity THIS FILE LOSES. ds-local.css
+ * rides in the ENTRY bundle while every per-screen sheet (ds-work-proj.css here)
+ * is imported by a React.lazy'd screen, so Vite emits it as its own chunk and the
+ * browser appends it AFTER the entry stylesheet. The header of this file reads as
+ * though it loads last; that is true only of ds.css and ds-feedback.css, which
+ * main.jsx imports just above it.
+ *
+ * So a same-specificity override here does nothing at all, silently. Doubling the
+ * class is the idiom already used further up this file for exactly this reason.
+ */
+.ds .pj-bill .rnm.rnm{cursor:pointer;touch-action:auto}
+
+/* The lock checklist, inside the side panel.
+ *
+ * His own checklist is styled under .pj-lock (ds-work-proj.css:448-451), and
+ * .pj-lock is a 560px centred card with 34px of padding — right for the gate that
+ * fills the Valuations tab, wrong inside a 380px panel. These are the same list
+ * rules without the card, so the reader sees the identical ticks and warnings in
+ * both places and does not have to work out whether they mean the same thing.
+ *
+ * In ds-local.css because ds-work-proj.css is generated from Richard's own
+ * stylesheet and this list is ours.
+ */
+.ds .pn-checks{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:8px;text-align:left}
+.ds .pn-checks li{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink-2);line-height:1.45}
+.ds .pn-checks li svg{width:16px;height:16px;flex:none;margin-top:1px;fill:none;
+  stroke:var(--fb-warn);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ds .pn-checks li.ok svg{stroke:var(--fb-ok)}
+.ds .pn-checks li.ok{color:var(--ink-3)}

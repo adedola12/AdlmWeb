@@ -124,9 +124,56 @@ describe("the export panel", () => {
     await waitFor(() => expect(within(c).queryByText("Server error")).toBe(null));
   });
 
+  it("says the read FAILED, not that it is still loading", () => {
+    // A failed read leaves the project null exactly as a pending one does, so
+    // untold, the panel said "still loading" two inches under the shell's own
+    // banner saying the read had failed — telling the reader to wait for something
+    // that would never arrive.
+    const c = render(
+      <MemoryRouter>
+        <WorkProjectExports project={null} productKey="revit" saveId="x" accessToken="t" failed />
+      </MemoryRouter>,
+    ).container;
+    expect(within(c).getByText(/could not be read just now/)).toBeTruthy();
+    expect(within(c).queryByText(/still loading/)).toBe(null);
+  });
+
+  it("does not sell a RateGen subscription to a view-only reader", () => {
+    // It would not help them: buying it flips canSeeRates, and canExport still
+    // refuses every document, bill workbooks included.
+    const c = panel(job({ _access: { canExport: false, canSeeRates: true } }));
+    expect(within(c).getByText(/does not include taking its documents/)).toBeTruthy();
+    expect(within(c).queryByText(/RateGen subscription lifts this/)).toBe(null);
+  });
+
+  it("still names RateGen for the reader it WOULD help", () => {
+    const c = panel(job({ _access: { canExport: true, canSeeRates: false } }));
+    expect(within(c).getByText(/RateGen subscription lifts this/)).toBeTruthy();
+  });
+
+  it("announces a refusal, so it reaches a screen reader", () => {
+    // The whole reason a failed export keeps its message in the panel rather than
+    // a toast is that the server's words are the only instruction the reader gets.
+    // In a plain <p> with no role, the one reader who needs it read aloud was the
+    // one who never got it.
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 403,
+      headers: { get: () => null },
+      blob: async () => new Blob([]),
+      text: async () => JSON.stringify({ error: "A RateGen subscription is required." }),
+    }));
+    const c = panel();
+    fireEvent.click(within(c).getByText("Payment certificate 2"));
+    return waitFor(() => {
+      const msg = within(c).getByText("A RateGen subscription is required.");
+      expect(msg.getAttribute("role")).toBe("status");
+    });
+  });
+
   it("says why there is nothing, not just that there is nothing", () => {
     // Three different causes, and "nothing to export" would be wrong for two.
-    const masked = panel(job({ _access: { canSeeRates: false } }));
+    const masked = panel(job({ _access: { canSeeRates: false, canExport: true } }));
     expect(within(masked).getByText(/rates are not visible to you/)).toBeTruthy();
     cleanup();
     const empty = panel(job({ items: [], certificates: [] }));
