@@ -6,7 +6,9 @@ import {
   tabNeedsAttention,
   loadingNoun,
   LOADING_NOUN,
+  placeToRemember,
 } from "./workProjectTabs.js";
+import { placeHref } from "../../lib/lastPlace.js";
 
 const keys = (k) => tabsFor(k).map((t) => t.key);
 
@@ -150,5 +152,61 @@ describe("what each tab says it is loading", () => {
     expect(loadingNoun("model")).toBe("model");
     expect(loadingNoun("services")).toBe("services");
     expect(loadingNoun("overview")).not.toBe(loadingNoun("bill"));
+  });
+});
+
+describe("what gets remembered as where you were", () => {
+  it("records the project, the tab and the tab's own label", () => {
+    expect(
+      placeToRemember({ productKey: "revit", id: "block-a", name: "Block A", tab: "valuations" }),
+    ).toEqual({
+      productKey: "revit",
+      key: "block-a",
+      name: "Block A",
+      tab: "valuations",
+      tabLabel: "Valuations",
+    });
+  });
+
+  it("round-trips: what is stored reopens the tab it was stored from", () => {
+    // The whole point of the pair. A place written under one build's tab names
+    // and read with the other's is how "Pick up where you left off" sends
+    // somebody to the project summary instead of back to their work.
+    for (const t of tabsFor("revit")) {
+      const place = placeToRemember({ productKey: "revit", id: "block-a", tab: t.key });
+      const href = placeHref(place, { newBuild: true });
+      const asked = new URL(href, "https://x").searchParams.get("tab") || "overview";
+      expect(resolveTab(asked, "revit"), `${t.key} -> ${href}`).toBe(t.key);
+    }
+  });
+
+  it("round-trips a PlanSwift project, whose tabs are not the same set", () => {
+    for (const t of tabsFor("planswift")) {
+      const place = placeToRemember({ productKey: "planswift", id: "ysa", tab: t.key });
+      const href = placeHref(place, { newBuild: true });
+      const asked = new URL(href, "https://x").searchParams.get("tab") || "overview";
+      expect(resolveTab(asked, "planswift"), `${t.key} -> ${href}`).toBe(t.key);
+    }
+  });
+
+  it("leaves the label empty for a tab this product does not have", () => {
+    // A PlanSwift job has no Model tab. Naming one in the eyebrow would promise
+    // a screen that is not there.
+    expect(placeToRemember({ productKey: "planswift", id: "ysa", tab: "model" }).tabLabel).toBe("");
+  });
+
+  it("stores nothing at all until there is a project to store", () => {
+    // The shell renders before the route params resolve. A place with no key is
+    // a row the Work home can never match, taking a slot from one it could.
+    expect(placeToRemember({ productKey: "revit", id: "", tab: "bill" })).toBe(null);
+    expect(placeToRemember({ productKey: "", id: "block-a", tab: "bill" })).toBe(null);
+    expect(placeToRemember()).toBe(null);
+  });
+
+  it("normalises the product key the way the rest of the app reads it", () => {
+    expect(placeToRemember({ productKey: " Revit ", id: "block-a", tab: "bill" })).toMatchObject({
+      productKey: "revit",
+      tabLabel: "Bill",
+    });
   });
 });

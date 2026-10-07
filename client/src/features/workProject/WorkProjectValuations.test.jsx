@@ -274,3 +274,68 @@ describe("the lock control goes where it says", () => {
     }
   });
 });
+
+describe("offering to issue a certificate", () => {
+  // The monthly act, and the one thing this tab could not do. Its empty state told
+  // a QS to "raise the first certificate in the classic workspace" and gave no
+  // link, so the only instruction on an empty Valuations tab was to leave.
+  const locked = (over = {}) => ({
+    contract: { locked: true, contractSum: 80_000_000, tenderedAt: "2026-08-01" },
+    valuationSettings: { retentionPct: 5, vatPct: 7.5, withholdingPct: 2.5 },
+    certificates: [],
+    items: [{ code: "BQ-1", description: "Excavate", unit: "m3", qty: 10, rate: 1000 }],
+    ...over,
+  });
+
+  const draw = (project, props = {}) =>
+    render(
+      <WorkProjectValuations project={project} canEdit view="certs" {...props} />,
+    ).container;
+
+  it("offers it in the toolbar", () => {
+    const onIssueCert = vi.fn();
+    const c = draw(locked(), { onIssueCert });
+    fireEvent.click(within(c).getByText("Issue a certificate"));
+    expect(onIssueCert).toHaveBeenCalled();
+  });
+
+  it("offers it from the empty state instead of sending them to classic", () => {
+    const onIssueCert = vi.fn();
+    const c = draw(locked(), { onIssueCert });
+    expect(within(c).queryByText(/in the classic workspace/)).toBe(null);
+    fireEvent.click(within(c).getByText("Issue the first certificate"));
+    expect(onIssueCert).toHaveBeenCalled();
+  });
+
+  it("does not offer it to a reader who cannot edit", () => {
+    const c = draw(locked(), { onIssueCert: vi.fn(), canEdit: false });
+    expect(within(c).queryByText("Issue a certificate")).toBe(null);
+    expect(within(c).queryByText("Issue the first certificate")).toBe(null);
+  });
+
+  it("does not offer it on the variations or final-account views", () => {
+    // A button about certificates, on a list of variations, is a button about
+    // something else.
+    const onIssueCert = vi.fn();
+    for (const view of ["variations", "final"]) {
+      const c = draw(locked(), { onIssueCert, view });
+      expect(within(c).queryByText("Issue a certificate")).toBe(null);
+      cleanup();
+    }
+  });
+
+  it("does not offer it before the contract is locked", () => {
+    // There is nothing to certify against until the estimate becomes a contract
+    // sum, and the lock gate is what this tab shows instead.
+    const c = draw(locked({ contract: { locked: false } }), { onIssueCert: vi.fn() });
+    expect(within(c).queryByText("Issue a certificate")).toBe(null);
+  });
+
+  it("shows nothing extra when no handler is given", () => {
+    // The tab is rendered in tests and stories without one; an inert button would
+    // be the thing this branch keeps removing.
+    const c = draw(locked());
+    expect(within(c).queryByText("Issue a certificate")).toBe(null);
+    expect(within(c).queryByText("Issue the first certificate")).toBe(null);
+  });
+});

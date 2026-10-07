@@ -19,7 +19,15 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useProjects } from "../../ds/useProjects.js";
 import { apiAuthed } from "../../api.js";
 import { useAuth } from "../../store.jsx";
-import { tabsFor, resolveTab, tabCount, tabNeedsAttention, loadingNoun } from "./workProjectTabs.js";
+import {
+  tabsFor,
+  resolveTab,
+  tabCount,
+  tabNeedsAttention,
+  loadingNoun,
+  placeToRemember,
+} from "./workProjectTabs.js";
+import { rememberPlace } from "../../lib/lastPlace.js";
 import { StillLoading } from "./workProjectBits.jsx";
 import { STAGES, stageIndex } from "./overviewModel.js";
 import { attachedModels } from "./sourcesModel.js";
@@ -28,6 +36,9 @@ import { saveProjectPatch, writeIdFor } from "./saveProject.js";
 import WorkProjectHead from "./WorkProjectHead.jsx";
 import { projectIdLabel } from "./headModel.js";
 import WorkProjectPeople from "./WorkProjectPeople.jsx";
+import WorkProjectExports from "./WorkProjectExports.jsx";
+import WorkProjectIssueCert from "./WorkProjectIssueCert.jsx";
+import { withIssuedCertificate } from "./certificateDraft.js";
 import WorkProjectOverview from "./WorkProjectOverview.jsx";
 import WorkProjectBill from "./WorkProjectBill.jsx";
 import WorkProjectRates from "./WorkProjectRates.jsx";
@@ -203,6 +214,17 @@ export default function WorkProjectShell({ productKey, id }) {
     },
     [params, setParams],
   );
+
+  // WHERE THIS READER LAST WAS, for "Pick up where you left off" on Work home.
+  // The reasoning, and what was broken, is with placeToRemember.
+  //
+  // `tabs` above is deliberately not a dependency: tabsFor returns a fresh array
+  // every render, so depending on it would rewrite storage on every render
+  // rather than when the reader actually moves.
+  React.useEffect(() => {
+    const place = placeToRemember({ productKey, id, name: project?.name, tab });
+    if (place) rememberPlace(place);
+  }, [productKey, id, project?.name, tab]);
 
   // His layer L5: a line, a rate build-up or the model changes open OVER the
   // tab, never as a new page (WORK.md §13). WorkProjectPanel owns the DOM, the
@@ -561,6 +583,47 @@ export default function WorkProjectShell({ productKey, id }) {
     [productKey, saveId, accessToken],
   );
 
+  /**
+   * Issue an interim certificate.
+   *
+   * POST, not a patch through save(): a certificate is a new document with its
+   * own number, and the server decides that number (max + 1) precisely so two
+   * people issuing at once cannot both believe they issued IPC 4. Sending it
+   * through the project PUT would make the certificate list something the client
+   * writes, which is how two of them end up numbered the same.
+   *
+   * It answers with the updated project, so the tab takes that straight rather
+   * than refetching what it was just sent — and throws its own message up to the
+   * form, where there is room to read it. "Final account is finalized. Reopen it
+   * before issuing new certificates." is an instruction, not a status code.
+   */
+  const issueCertificate = React.useCallback(
+    async (body) => {
+      if (!accessToken || !saveId || !productKey) {
+        throw new Error("This project is still loading.");
+      }
+      const out = await apiAuthed(
+        `/projects/${encodeURIComponent(String(productKey).toLowerCase())}/${encodeURIComponent(saveId)}/certificates`,
+        {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        },
+      );
+      // It answers with { ok, certificate, version }, not the project, so the two
+      // things that changed are folded in by hand. withIssuedCertificate says
+      // which two and why — and it is a function rather than three lines here
+      // because getting either of them wrong is silent: the tab keeps saying "No
+      // valuations yet", or the next bill save goes out against a version the
+      // server has already moved past.
+      setFull((prev) => withIssuedCertificate(prev, out));
+      fb.toast({ tone: "success", title: "Certificate issued as a draft" });
+      return out?.certificate || out;
+    },
+    [accessToken, saveId, productKey, fb],
+  );
+
   const clientName = String(project?.clientName || project?.client || "").trim();
   // The file his line names is the model the take-off came from.
   const sourceFileName = attachedModels(project)[0]?.sourceFile || "";
@@ -568,6 +631,10 @@ export default function WorkProjectShell({ productKey, id }) {
     (action) => {
       if (action === "people") {
         panel.show({ kind: "people" });
+        return;
+      }
+      if (action === "export") {
+        panel.show({ kind: "export" });
         return;
       }
       if (action === "id") {
@@ -852,6 +919,7 @@ export default function WorkProjectShell({ productKey, id }) {
               view={rateView}
               onView={setRateView}
               onGo={go}
+              onIssueCert={() => panel.show({ kind: "cert" })}
               // The lock lives on the classic workspace and needs a step-up,
               // so the button that says so now actually goes there.
               classicHref={classicWorkspaceHref}
@@ -894,6 +962,42 @@ export default function WorkProjectShell({ productKey, id }) {
         {panel.content?.kind === "people" ? (
           <WorkProjectPanel title="Collaborators" visible={panel.visible} onClose={panel.close}>
             <WorkProjectPeople project={project} classicWorkspaceHref={classicWorkspaceHref} />
+          </WorkProjectPanel>
+        ) : null}
+
+        {panel.content?.kind === "cert" ? (
+          <WorkProjectPanel
+            title="Issue a certificate"
+            visible={panel.visible}
+            onClose={panel.close}
+          >
+            {/* `full`, not `project`: the next number and the retention held are
+                read off the certificates, which the rollup summary does not
+                carry — so off `project` the form would offer IPC 1 on a contract
+                that has three. */}
+            <WorkProjectIssueCert
+              project={full}
+              onIssue={issueCertificate}
+              onDone={panel.close}
+            />
+          </WorkProjectPanel>
+        ) : null}
+
+        {panel.content?.kind === "export" ? (
+          <WorkProjectPanel title="Export to Excel" visible={panel.visible} onClose={panel.close}>
+            {/* `full`, not `project`. The documents offered depend on the
+                certificates, the final account and _access — none of which are
+                in the rollup summary the head fills itself from, so offering
+                them off `project` would show a QS no certificates on a contract
+                that has four until the full load lands. */}
+            <WorkProjectExports
+              project={full}
+              productKey={productKey}
+              saveId={saveId}
+              accessToken={accessToken}
+              classicHref={classicWorkspaceHref}
+              onToast={fb.toast}
+            />
           </WorkProjectPanel>
         ) : null}
 

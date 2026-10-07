@@ -93,16 +93,25 @@ export default function WorkProjectBudgetHeron({
         </div>
       ) : null}
 
-      <div className="pj-vars">
+      {/* .pj-budline, not .pj-vars .vr.
+          ds-work-proj.css:637 was written FOR this card — its own frame, its own
+          header grid, no inner 420px scroll — and says in its own comment that
+          the markup used to borrow the variations row and force display:block
+          over it inline. The stylesheet landed and the markup never changed, so
+          every HERON budget card has been rendering as a four-column variations
+          row ever since. Same shape as .pj-model: a class written and never used.
+          .pj-budline carries its own spacing (the + rule), so there is no list
+          wrapper here. */}
+      <div>
         {lines.map((l) => (
-          <div className="vr" key={l.code} style={{ cursor: "default", display: "block" }}>
+          <div className="pj-budline" key={l.code}>
             {/* His item header band (MaterialView.xaml:306). */}
-            <div className="pj-tb" style={{ margin: 0 }}>
+            <div className="hd">
               {/* The bill's serial number, which is what a QS matches on. It used
                   to print `code`, and on a QUIV bill that is a hash
                   (e48c57473c148a56) — unreadable and impossible to find on paper. */}
               <span className="no">{l.sn}</span>
-              <span className="ds" style={{ flex: 1, minWidth: 0 }}>
+              <span className="ds">
                 <b>{l.description || "Untitled line"}</b>
                 <em>
                   {[

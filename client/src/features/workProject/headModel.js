@@ -71,10 +71,18 @@ export function projectIdLabel(project) {
  * Open in the plugin, Switch source and Delete. Ours differs in three places and
  * each is deliberate:
  *
- *  • Export to Excel and Switch source are not here. Both exist — the export is
- *    ~400 lines of workbook building in ProjectsGeneric, and switching source
- *    re-runs an import — and re-implementing either against the same project
- *    would be two ways to do one thing. The classic workspace entry goes there.
+ *  • Export to Excel IS here now, and the reasoning that kept it out was wrong
+ *    about all but one workbook. It said the export is "~400 lines of workbook
+ *    building in ProjectsGeneric". That is true of the generic BoQ, which
+ *    SheetJS builds in the BROWSER — and of nothing else. The elemental and
+ *    trade bills, the bill-and-budget workbook in both groupings, a payment
+ *    certificate and the final account are all built by the SERVER and served
+ *    from authenticated GET endpoints, so the client side of seven documents is
+ *    one fetch (lib/downloadWorkbook.js). The one that really is 400 lines of
+ *    browser code stays on classic, and the panel says so.
+ *  • Switch source is not here. It re-runs an import, and re-implementing that
+ *    against the same project would be two ways to do one thing. The classic
+ *    workspace entry goes there.
  *  • Delete is not here. Deleting from a menu on a page whose purpose is reading
  *    is how a project goes by accident; it stays where the confirmation and the
  *    30-day restore message already are.
@@ -89,9 +97,9 @@ export function projectIdLabel(project) {
  * which way it will go.
  *
  * `classic` LEAVES for /projects/:tool, the older screen that still owns
- * uploading, linking, certificates and the Excel export. One used to do both
- * jobs under the first name, which is why "Open the full workspace" navigated
- * away instead of filling the screen.
+ * uploading, linking, certificates and the ONE workbook the browser builds. One
+ * used to do both jobs under the first name, which is why "Open the full
+ * workspace" navigated away instead of filling the screen.
  */
 export function overflowActions({ isOwner = false, canSeePm = true, fullScreen = false } = {}) {
   const list = [
@@ -99,6 +107,8 @@ export function overflowActions({ isOwner = false, canSeePm = true, fullScreen =
     { key: "id", label: "Copy project ID", show: true },
     { key: "report", label: "Project report", show: true },
     { key: "pm-report", label: "Project management report", show: canSeePm },
+    // His label, his position in the list — above the two that leave this page.
+    { key: "export", label: "Export to Excel", show: true },
     {
       key: "full",
       label: fullScreen ? "Leave the full workspace" : "Open the full workspace",

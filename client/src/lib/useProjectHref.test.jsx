@@ -7,10 +7,14 @@ let auth = { user: null };
 vi.mock("../store.jsx", () => ({ useAuth: () => auth }));
 const { useProjectHref } = await import("./useProjectHref.js");
 
-// Where a project card goes depends on the VIEWER, not the project: until
-// 1 October only staff may open Richard's project page, and a customer linked
-// there is bounced back to the classic workspace by NewBuildGate. Right
-// destination, but an extra hop on the journey a QS makes most.
+// Where a project card goes USED to depend on the viewer: while /work/* was
+// staff-only, a customer linked there was bounced back to the classic workspace
+// by NewBuildGate — right destination, extra hop.
+//
+// Since 5 Oct 2026 the new page is everybody's, so the card is the same for
+// every reader. The tests below are the ones that fail if a role check is put
+// back, which is how a change like this gets quietly reverted: somebody
+// restores canViewPreview while fixing something nearby.
 
 function Probe({ project }) {
   const href = useProjectHref();
@@ -61,26 +65,38 @@ describe("the plain helper", () => {
 
 describe("what a card links to", () => {
   const p = { productKey: "planswift", slug: "ikoyi-complex" };
+  const NEW = "/work/project/planswift/ikoyi-complex";
 
-  it("sends a customer to the classic workspace, with no redirect in between", () => {
+  it("sends a PAYING CUSTOMER to the new project page", () => {
+    // The one that was wrong. Every customer card pointed at the classic
+    // workspace while ClassicProjectRedirect was already sending them the other
+    // way, so each project opened cost a redirect and the cards disagreed with
+    // the route about where a project lives.
     auth = { user: { _id: "u1", role: "user", permissions: [] } };
-    expect(hrefFor(p)).toBe("/projects/planswift?project=ikoyi-complex");
+    expect(hrefFor(p)).toBe(NEW);
   });
 
-  it("sends staff to the new project page", () => {
+  it("sends staff to the same place", () => {
     auth = { user: { _id: "a1", role: "admin" } };
-    expect(hrefFor(p)).toBe("/work/project/planswift/ikoyi-complex");
+    expect(hrefFor(p)).toBe(NEW);
   });
 
-  it("sends Tech Support there too, as the gate does", () => {
-    // A card that disagreed with the gate is how somebody ends up in a redirect
-    // they cannot explain.
+  it("sends Tech Support to the same place", () => {
     auth = { user: { _id: "t1", role: "tech_support", permissions: ["preview"] } };
-    expect(hrefFor(p)).toBe("/work/project/planswift/ikoyi-complex");
+    expect(hrefFor(p)).toBe(NEW);
   });
 
-  it("sends a signed-out visitor to classic", () => {
+  it("answers the same with no session at all", () => {
+    // The cards render before AuthProvider has hydrated. An answer that
+    // depended on the user would be the classic address for one frame, which is
+    // the address that would be in the DOM if somebody clicked in that frame.
     auth = { user: null };
-    expect(hrefFor(p)).toBe("/projects/planswift?project=ikoyi-complex");
+    expect(hrefFor(p)).toBe(NEW);
+  });
+
+  it("still leaves ArchiCAD and RateGen on their own screens", () => {
+    auth = { user: { _id: "u1", role: "user" } };
+    expect(hrefFor({ productKey: "archicad", slug: "tower" })).toBe("/archicad/tower/boq");
+    expect(hrefFor({ productKey: "rategen" })).toBe("/rategen");
   });
 });

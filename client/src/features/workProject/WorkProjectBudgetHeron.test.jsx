@@ -50,14 +50,14 @@ describe("HERON's three figures", () => {
 describe("one card per bill line", () => {
   it("names each line and what it costs against what it is billed at", () => {
     const c = view();
-    const card = [...c.querySelectorAll(".pj-vars .vr")][0];
+    const card = [...c.querySelectorAll(".pj-budline")][0];
     expect(card.textContent).toContain("Excavate foundations");
     expect(card.textContent).toContain("billed ₦500,000");
     expect(card.textContent).toContain("costs ₦300,000");
   });
 
   it("puts HERON's margin chip on each line, with his wording", () => {
-    const chip = view().querySelector(".pj-vars .vr .pj-stage");
+    const chip = view().querySelector(".pj-budline .pj-stage");
     expect(chip.textContent).toBe("40.0%");
     expect(chip.getAttribute("title")).toBe(
       "Proposed profit margin = (BoQ rate − material − labour) ÷ BoQ rate",
@@ -68,13 +68,13 @@ describe("one card per bill line", () => {
     const bad = job();
     bad.budgetItems.push({ componentKind: "Material", materialName: "Extra", qty: 1, rate: 400_000, billIdentity: "BQ-2" });
     const c = render(<WorkProjectBudgetHeron project={bad} />).container;
-    const chips = [...c.querySelectorAll(".pj-vars .vr .pj-stage")];
+    const chips = [...c.querySelectorAll(".pj-budline .pj-stage")];
     expect(chips.some((x) => x.className.includes("s-final"))).toBe(true);
     expect(chips.some((x) => x.className.includes("v-rejected"))).toBe(true);
   });
 
   it("lists the material and labour behind the line", () => {
-    const card = [...view().querySelectorAll(".pj-vars .vr")][0];
+    const card = [...view().querySelectorAll(".pj-budline")][0];
     expect(card.textContent).toContain("Cement");
     expect(card.textContent).toContain("Gang");
   });
@@ -120,5 +120,46 @@ describe("marking what has been bought", () => {
 
   it("gives a view-only reader no checkboxes", () => {
     expect(view().querySelector("input[type=checkbox]")).toBe(null);
+  });
+});
+
+describe("the card frame", () => {
+  // ds-work-proj.css:637 was written FOR this card and its own comment says the
+  // markup used to borrow .pj-vars .vr and force display:block over it inline.
+  // The stylesheet landed; the markup never changed. Same shape as .pj-model —
+  // a class written, committed, and never referenced by any JSX.
+  it("uses its own class, not the variations row", () => {
+    const c = render(<WorkProjectBudgetHeron project={job()} />).container;
+    expect(c.querySelectorAll(".pj-budline").length).toBe(2);
+    expect(c.querySelector(".pj-vars")).toBe(null);
+    expect(c.querySelector(".vr")).toBe(null);
+  });
+
+  it("carries no inline layout override", () => {
+    // display:block over a four-column grid is the symptom. If the frame is
+    // right, nothing has to be forced over it.
+    for (const card of render(<WorkProjectBudgetHeron project={job()} />)
+      .container.querySelectorAll(".pj-budline")) {
+      expect(card.getAttribute("style")).toBe(null);
+    }
+  });
+
+  it("gives the header band the grid the stylesheet wrote for it", () => {
+    const c = render(<WorkProjectBudgetHeron project={job()} />).container;
+    const heads = c.querySelectorAll(".pj-budline > .hd");
+    expect(heads.length).toBe(2);
+    // .hd is a grid of its own; the old markup used .pj-tb, a flex row, and had
+    // to set flex:1 and min-width:0 on the description inline to survive it.
+    expect(c.querySelector(".pj-budline .pj-tb")).toBe(null);
+    expect(heads[0].querySelector(".ds").getAttribute("style")).toBe(null);
+  });
+
+  it("keeps the material rows inside the card", () => {
+    // The .br rules moved to .pj-budline with the frame. If the markup moved and
+    // they did not, these rows drop to the three-column .pj-bud .br and lose the
+    // quantity column.
+    const c = render(<WorkProjectBudgetHeron project={job()} />).container;
+    expect(c.querySelectorAll(".pj-budline .pj-bud .br").length).toBeGreaterThan(0);
+    expect(c.querySelectorAll(".pj-budline .pj-bud .br .q").length).toBeGreaterThan(0);
   });
 });

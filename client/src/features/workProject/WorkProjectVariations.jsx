@@ -25,12 +25,29 @@ const day = (d) => {
   if (!d) return "No date";
   const t = new Date(d);
   return Number.isFinite(t.getTime())
-    ? t.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    ? t.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
     : "No date";
 };
 
 /* ──────────────────────────── Variations ──────────────────────────── */
 
+/**
+ * The variations on a contract.
+ *
+ * `onOpenVariation` is optional ON PURPOSE, and the row follows it: with a
+ * handler each row is a button, without one it is a plain div.
+ *
+ * It was a button either way, and the only place that renders this view
+ * (WorkProjectValuations) passes no handler — so on a real contract with twenty
+ * variations, twenty rows took focus, lit up on hover and did nothing when
+ * clicked. A control that does nothing tells a QS the product is broken; a row
+ * that is plainly not a control tells them the action is somewhere else, which
+ * is the truth until the raise/decide form is built.
+ */
 export function WorkProjectVariationsView({ project, onOpenVariation }) {
   const rows = React.useMemo(() => variationRows(project), [project]);
   const k = React.useMemo(() => variationKpis(project), [project]);
@@ -40,8 +57,9 @@ export function WorkProjectVariationsView({ project, onOpenVariation }) {
       <div className="pj-empty">
         <b>No variations yet</b>
         <p>
-          Architect&rsquo;s instructions, site instructions and client changes are logged as
-          variations. An approved one changes the contract value and the final account.
+          Architect&rsquo;s instructions, site instructions and client changes
+          are logged as variations. An approved one changes the contract value
+          and the final account.
         </p>
       </div>
     );
@@ -69,52 +87,65 @@ export function WorkProjectVariationsView({ project, onOpenVariation }) {
           <span>Waiting for approval</span>
           <b>{k.pendingCount}</b>
           <em>
-            {k.pendingCount ? `${compact(k.pendingValue)} not counted yet` : "None"}
+            {k.pendingCount
+              ? `${compact(k.pendingValue)} not counted yet`
+              : "None"}
           </em>
         </div>
       </div>
 
       <div className="pj-vars">
-        {rows.map((r) => (
-          <button
-            type="button"
-            className="vr"
-            key={r.index}
-            onClick={() => onOpenVariation?.(r.index)}
-          >
-            <span className="no">V{r.no}</span>
-            <span className="ds">
-              <b>{r.title}</b>
-              <em>
-                {[
-                  r.reference || "No reference",
-                  day(r.issuedAt),
-                  r.qty ? `${num(r.qty)} ${r.unit}`.trim() : null,
-                  // Approved but not built is money owed later, not money
-                  // earned now, and the row is the only place that can say so.
-                  r.status === "approved" && !r.completed ? "Not yet executed" : null,
-                  r.automatic ? "Raised on lock" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </em>
-            </span>
-            <span className={r.amount < 0 ? "n om" : "n ad"}>
-              <b>
-                {r.amount > 0 ? "+" : ""}
-                {money(r.amount)}
-              </b>
-            </span>
-            <span className={`pj-stage ${r.statusClass}`}>{r.statusLabel}</span>
-          </button>
-        ))}
+        {rows.map((r) => {
+          const Row = onOpenVariation ? "button" : "div";
+          // `key` BEFORE the spread. After it, React cannot tell a key from an
+          // ordinary prop and warns that the list has none.
+          return (
+            <Row
+              key={r.index}
+              {...(onOpenVariation
+                ? { type: "button", onClick: () => onOpenVariation(r.index) }
+                : {})}
+              className="vr"
+            >
+              <span className="no">V{r.no}</span>
+              <span className="ds">
+                <b>{r.title}</b>
+                <em>
+                  {[
+                    r.reference || "No reference",
+                    day(r.issuedAt),
+                    r.qty ? `${num(r.qty)} ${r.unit}`.trim() : null,
+                    // Approved but not built is money owed later, not money
+                    // earned now, and the row is the only place that can say so.
+                    r.status === "approved" && !r.completed
+                      ? "Not yet executed"
+                      : null,
+                    r.automatic ? "Raised on lock" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </em>
+              </span>
+              <span className={r.amount < 0 ? "n om" : "n ad"}>
+                <b>
+                  {r.amount > 0 ? "+" : ""}
+                  {money(r.amount)}
+                </b>
+              </span>
+              <span className={`pj-stage ${r.statusClass}`}>
+                {r.statusLabel}
+              </span>
+            </Row>
+          );
+        })}
       </div>
 
       {k.awaitingExecution ? (
         <p className="pj-foot">
           {k.awaitingExecution} approved{" "}
-          {k.awaitingExecution === 1 ? "variation has" : "variations have"} not been marked
-          executed, so {k.awaitingExecution === 1 ? "it counts" : "they count"} toward the
+          {k.awaitingExecution === 1 ? "variation has" : "variations have"} not
+          been marked executed, so{" "}
+          {k.awaitingExecution === 1 ? "it counts" : "they count"} toward the
           contract value but not toward what has been earned.
         </p>
       ) : null}
@@ -124,7 +155,12 @@ export function WorkProjectVariationsView({ project, onOpenVariation }) {
 
 /* ─────────────────────────── Final account ─────────────────────────── */
 
-export function WorkProjectFinalView({ project, totals, contractSum, certified }) {
+export function WorkProjectFinalView({
+  project,
+  totals,
+  contractSum,
+  certified,
+}) {
   const rows = React.useMemo(() => finalAccountRows(totals), [totals]);
   const c = React.useMemo(
     () => againstContract({ total: totals?.total, contractSum, certified }),
