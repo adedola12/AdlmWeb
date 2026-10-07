@@ -23,6 +23,7 @@
 
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { CATALOGUE_FALLBACK as FALLBACK } from "./catalogueFallback.js";
 import { API_BASE } from "../config.js";
 import { QRCodeSVG } from "qrcode.react";
 import { readCartItems, writeCartItems, readCartMeta, writeCartMeta } from "../lib/cart.js";
@@ -89,18 +90,9 @@ const TRAINING = [
   { key: null, id: "onsite", name: "On-site training", sub: "An ADLM instructor at your office · per day" },
 ];
 
-// His figures, kept only as a floor if the catalogue cannot be reached — with
-// the two install fees corrected to what we actually charge.
-const FALLBACK = {
-  revit: { mo: 50000, yr: 500000, install: 25000 },
-  planswift: { mo: 12000, yr: 120000, install: 15000 },
-  rategen: { mo: 8000, yr: 70000, install: 0 },
-  mep: { mo: 18000, yr: 180000, install: 20000 },
-  "qs-takeoff": { mo: 2000, yr: 20000, install: 0 },
-  civil3d: { mo: 70000, yr: 700000, install: 40000 },
-  bimbld: { yr: 125000 },
-  BIMMEP: { yr: 105000 },
-};
+// Kept only as a floor if the catalogue cannot be reached. One shared table
+// (catalogueFallback.js), so a quotation can never be priced at figures the
+// catalogue has moved on from.
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",

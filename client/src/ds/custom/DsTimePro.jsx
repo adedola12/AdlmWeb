@@ -7,8 +7,8 @@
 //   d.monthly     the price headline, from GET /products key "qs-takeoff"
 //   d.priceLine   his yearly / saving / install sentence, rebuilt from the same
 //
-// The fallbacks are his own published figures, so the page reads correctly
-// before the fetch lands and if it fails.
+// The fallback is the shared table in ../catalogueFallback.js, so the page
+// reads correctly before the fetch lands and if it fails.
 
 import React from "react";
 import DsTimeProPage from "../pages/DsTimeProPage.jsx";
@@ -17,7 +17,7 @@ import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsTimePro() {
-  const price = useProductPricing("qs-takeoff", { monthly: 5000, yearly: 50000, install: 0 });
+  const price = useProductPricing("qs-takeoff");
   return (
     <DsTimeProPage
       d={{

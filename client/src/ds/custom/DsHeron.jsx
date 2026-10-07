@@ -7,8 +7,8 @@
 //   d.monthly     the price headline, from GET /products key "planswift"
 //   d.priceLine   his yearly / saving / install sentence, rebuilt from the same
 //
-// The fallbacks are his own published figures, so the page reads correctly
-// before the fetch lands and if it fails.
+// The fallback is the shared table in ../catalogueFallback.js, so the page
+// reads correctly before the fetch lands and if it fails.
 
 import React from "react";
 import DsHeronPage from "../pages/DsHeronPage.jsx";
@@ -17,7 +17,7 @@ import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsHeron() {
-  const price = useProductPricing("planswift", { monthly: 25000, yearly: 250000, install: 15000 });
+  const price = useProductPricing("planswift");
   return (
     <DsHeronPage
       d={{

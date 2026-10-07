@@ -17,6 +17,7 @@ import DsPricingPage from "../pages/DsPricingPage.jsx";
 import DsCompareRow from "../DsCompareRow.jsx";
 import DsCourseLinks from "../DsCourseLinks.jsx";
 import { API_BASE } from "../../config.js";
+import { CATALOGUE_FALLBACK as FALLBACK } from "../catalogueFallback.js";
 
 const NGN = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -25,19 +26,9 @@ const NGN = new Intl.NumberFormat("en-NG", {
 });
 const money = (n) => NGN.format(Number(n) || 0);
 
-// His figures, with the two install fees corrected to what is actually
-// charged. Used only until the fetch lands, and if it fails — the page must
-// never render a blank where a price should be.
-const FALLBACK = {
-  revit: { mo: 50000, yr: 500000, install: 25000 },
-  rategen: { mo: 8000, yr: 70000, install: 0 },
-  planswift: { mo: 12000, yr: 120000, install: 15000 },
-  mep: { mo: 18000, yr: 180000, install: 20000 },
-  "qs-takeoff": { mo: 2000, yr: 20000, install: 0 },
-  civil3d: { mo: 70000, yr: 700000, install: 40000 },
-  bimbld: { yr: 125000 },
-  BIMMEP: { yr: 105000 },
-};
+// Used only until the fetch lands, and if it fails: the page must never render
+// a blank where a price should be. One shared table, so it cannot drift from
+// the product pages and the quote builder.
 
 // The token names used in his markup -> the catalogue key behind each.
 const PLANS = {

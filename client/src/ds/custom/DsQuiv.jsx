@@ -7,8 +7,8 @@
 //   d.monthly     the price headline, from GET /products key "revit"
 //   d.priceLine   his yearly / saving / install sentence, rebuilt from the same
 //
-// The fallbacks are his own published figures, so the page reads correctly
-// before the fetch lands and if it fails.
+// The fallback is the shared table in ../catalogueFallback.js, so the page
+// reads correctly before the fetch lands and if it fails.
 
 import React from "react";
 import DsQuivPage from "../pages/DsQuivPage.jsx";
@@ -17,7 +17,7 @@ import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsQuiv() {
-  const price = useProductPricing("revit", { monthly: 50000, yearly: 500000, install: 25000 });
+  const price = useProductPricing("revit");
   return (
     <DsQuivPage
       d={{
