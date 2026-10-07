@@ -147,6 +147,11 @@ ReleaseDigestRecipientSchema.index({ digestKey: 1, userId: 1 }, { unique: true }
 ReleaseDigestRecipientSchema.index({ digestKey: 1, emailHash: 1 }, { unique: true });
 // "Give me the next batch still owed an email."
 ReleaseDigestRecipientSchema.index({ digestKey: 1, status: 1 });
+// "Who has already been mailed this notice?" A build that went to firms first is
+// widened three months later, and what the firms' round SENT is the only safe
+// answer to who has heard about it (util/releaseDigest.js, toldAlready): the
+// week-scoped unique keys above cannot suppress across two rounds.
+ReleaseDigestRecipientSchema.index({ sentNoticeKeys: 1, status: 1 });
 
 export const ReleaseDigest =
   mongoose.models.ReleaseDigest || mongoose.model("ReleaseDigest", ReleaseDigestSchema);

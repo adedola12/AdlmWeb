@@ -119,13 +119,14 @@ import mongoose from "mongoose";
 import { User } from "../models/User.js";
 import { Setting } from "../models/Setting.js";
 import { EmailSend, hashRecipient } from "../models/EmailSend.js";
-import { ReleaseNotice, SUPERSEDABLE_STATUSES, OPEN_STATUSES } from "../models/ReleaseNotice.js";
+import { ReleaseNotice, ReleaseNoticeRecipient, SUPERSEDABLE_STATUSES, OPEN_STATUSES } from "../models/ReleaseNotice.js";
 import {
   ReleaseDigest,
   ReleaseDigestRecipient,
   ACTIVE_DIGEST_STATUSES,
   UNFINISHED_DIGEST_STATUSES,
 } from "../models/ReleaseDigest.js";
+import { indexesReady } from "./indexSync.js";
 import { sendViaSesOnce, getSesAccount } from "./sesTransport.js";
 import { mapWithPool } from "./sendPool.js";
 import { productUpdatesUnsubscribeUrl, assertUnsubscribeLinksWork } from "./campaigns.js";
@@ -578,7 +579,7 @@ const licenceLive = (ent, now) => {
 };
 
 /**
- * Is this notice for an account in the firms' ring, or for everybody else?
+ * Is this notice for this account?
  *
  * THE ROLLOUT (util/releaseRollout.js) CUTS THE WEEK'S LIST IN TWO
  *
@@ -586,21 +587,40 @@ const licenceLive = (ent, now) => {
  * everyone else three months later, so one build produces two rounds of mail
  * and neither may reach the other round's accounts:
  *
- *   audience "organizations"          -> only accounts in the ring
- *   audience "everyone" + widenedAt   -> only accounts OUTSIDE the ring: the
- *                                        ring had it in the firms' round, and
- *                                        the digest ledger is unique per
- *                                        (digestKey, address), so it cannot by
- *                                        itself stop a second copy
+ *   audience "organizations"          -> only accounts in the firms' ring
+ *   audience "everyone" + widenedAt   -> only accounts the firms' round did not
+ *                                        already MAIL (`told`: toldAlready)
  *   audience "everyone", not widened  -> everybody (a hotfix, a first release)
+ *
+ * WHY `told` AND NOT "OUTSIDE THE RING" (7 Oct 2026)
+ *
+ * The widened round runs three months after the firms' round, and the ring is
+ * recomputed from live seat counts every time it is read (ringFor ->
+ * earlyRingUserIds). It is therefore NOT the set the firms' round enrolled, and
+ * testing "outside the ring" broke both ways on the normal upsell path:
+ *
+ *   - a firm that bought its sixth seat in between is in the ring NOW and was
+ *     not then. The firms' round skipped it (not in the ring) and the widened
+ *     round skipped it too (in the ring), so the build was never announced to
+ *     it at all, though its Installer Hub had been offering it since the day it
+ *     crossed (releaseRollout.js withEarlyAccess);
+ *   - a firm whose seats lapsed below the threshold is outside the ring NOW and
+ *     was inside then, so it was mailed about the same build twice.
+ *
+ * Neither could happen before the digest: the per-notice ledger is unique on
+ * (noticeKey, emailHash), so re-enrolling everyone on widening dropped exactly
+ * those already mailed, however membership had changed. The digest ledger is
+ * unique per (digestKey, userId)/(digestKey, emailHash) — per WEEK — so it
+ * cannot suppress across two rounds thirteen weeks apart. What the firms' round
+ * actually SENT can, and that is what `told` reads.
  *
  * A hub notice has no rollout: a new Installation Center reaches everyone at
  * once, as the gated setting does (routes/admin.settings.js).
  */
-export function noticeReachesRing(n, inRing) {
+export function noticeReaches(n, { inRing = false, told = false } = {}) {
   if (isHubNotice(n)) return true;
   if (n?.audience === ROLLOUT_ORGANIZATIONS) return !!inRing;
-  if (n?.widenedAt) return !inRing;
+  if (n?.widenedAt) return !told;
   return true;
 }
 
@@ -609,9 +629,10 @@ export function noticeReachesRing(n, inRing) {
  * they hold a live licence for it (its audienceKeys), the Installation
  * Center's when they hold a live licence for software it installs
  * (HUB_AUDIENCE_KEYS). `inRing` says whether this account is one of the firms
- * that get builds first (noticeReachesRing above).
+ * that get builds first, and `told` is the set of notice keys this account has
+ * already been MAILED (noticeReaches above; toldFor builds it).
  */
-export function updatesFor(user, notices = [], now = new Date(), { inRing = false } = {}) {
+export function updatesFor(user, notices = [], now = new Date(), { inRing = false, told = null } = {}) {
   const keys = new Set(
     (user?.entitlements || []).filter((e) => licenceLive(e, now)).map((e) => String(e.productKey).trim().toLowerCase()),
   );
@@ -619,9 +640,49 @@ export function updatesFor(user, notices = [], now = new Date(), { inRing = fals
   const installsSoftware = HUB_AUDIENCE_KEYS.some((k) => keys.has(k));
   return notices.filter(
     (n) =>
-      noticeReachesRing(n, inRing) &&
+      noticeReaches(n, { inRing, told: !!told?.has(n.key) }) &&
       (isHubNotice(n) ? installsSoftware : productOfNotice(n).audienceKeys.some((k) => keys.has(k))),
   );
+}
+
+/**
+ * Who has already been MAILED each widened notice in `notices`, from the
+ * ledgers rather than from a recomputed ring (noticeReaches explains why).
+ *
+ * Both ledgers, because the firms' round may have gone out either way: the
+ * digest's own rows record what each email LISTED (sentNoticeKeys, written when
+ * the send succeeds), and the per-notice rows cover a round sent before the
+ * digest existed or with bypassDigest. By userId AND by address, so a customer
+ * who changed their email, or two accounts sharing one inbox, still counts as
+ * told. A week with no widened notice reads nothing.
+ */
+export async function toldAlready(store, notices = []) {
+  const wanted = new Set(notices.filter((n) => !isHubNotice(n) && n?.widenedAt).map((n) => n.key));
+  const out = { byUser: new Map(), byEmail: new Map() };
+  if (!wanted.size) return out;
+  const rows = (await store.sentNoticeRecipients([...wanted])) || [];
+  const add = (map, k, noticeKey) => {
+    const id = String(k || "");
+    if (!id) return;
+    if (!map.has(id)) map.set(id, new Set());
+    map.get(id).add(noticeKey);
+  };
+  for (const r of rows) {
+    for (const k of r?.noticeKeys || []) {
+      if (!wanted.has(k)) continue;
+      add(out.byUser, r.userId, k);
+      add(out.byEmail, r.emailHash, k);
+    }
+  }
+  return out;
+}
+
+/** The notices this one account (by id and by address) has already been mailed. */
+export function toldFor(told, userId, emailHash) {
+  const byUser = told?.byUser?.get(String(userId || "")) || null;
+  const byEmail = told?.byEmail?.get(String(emailHash || "")) || null;
+  if (!byUser && !byEmail) return null;
+  return new Set([...(byUser || []), ...(byEmail || [])]);
 }
 
 /**
@@ -683,6 +744,36 @@ const staleBefore = (now) => new Date(new Date(now).getTime() - IN_FLIGHT_STALE_
 const mailedElsewhere = (x, digestKey) =>
   x.status === "done" || x.status === "sending" || (x.status === "digesting" && x.digestKey !== digestKey);
 
+/** A build that has only gone to firms (util/releaseRollout.js). The hub has no rollout. */
+const forFirms = (n) => !isHubNotice(n) && n?.audience === ROLLOUT_ORGANIZATIONS;
+
+/**
+ * May `newer` take `older`'s place? The same rule as the record side
+ * (util/releaseNotifier.js, closeOpenNotices): a newer version of the same
+ * product supersedes an older one, EXCEPT that a firms-only build replaces only
+ * older firms-only builds. An email to everyone about a hotfix still has to go,
+ * even when the firms are already on a higher build only they can get.
+ *
+ * Without the exception the digest undid that guard one step later: firms on
+ * QUIV 4.0.0 by early access and everyone else owed hotfix 3.1.12 produced one
+ * "best per product" — 4.0.0 — and 3.1.12 was marked superseded, so the only
+ * announcement of the hotfix was never sent, in that week or any later one.
+ */
+const supersedesNotice = (newer, older) =>
+  String(newer?.productKey || "") === String(older?.productKey || "") &&
+  compareVersions(newer?.version, older?.version) > 0 &&
+  (!forFirms(newer) || forFirms(older));
+
+/** The newest of `list` that may supersede `n`, or null. */
+const supersederOf = (n, list) => {
+  let by = null;
+  for (const m of list) {
+    if (m === n || m.key === n.key || !supersedesNotice(m, n)) continue;
+    if (!by || compareVersions(m.version, by.version) > 0) by = m;
+  }
+  return by;
+};
+
 /**
  * The newest version of `n`'s product that customers have been, or are being,
  * told about outside `digestKey` ("" for none), when it is newer than `n`:
@@ -692,12 +783,12 @@ async function newerAnnounced(store, n, digestKey, cache) {
   const pk = String(n.productKey || "");
   if (!cache.byProduct) cache.byProduct = new Map();
   if (!cache.byProduct.has(pk)) cache.byProduct.set(pk, (await store.noticesForProduct(pk)) || []);
-  let best = null;
-  for (const x of cache.byProduct.get(pk)) {
-    if (x.key === n.key || !mailedElsewhere(x, digestKey)) continue;
-    if (compareVersions(x.version, n.version) > 0 && (!best || compareVersions(x.version, best.version) > 0)) best = x;
-  }
-  return best;
+  // Reach matters as much as the number: a firms-only 4.0.0 already going out
+  // does not make an everyone-hotfix 3.1.12 stale for the accounts owed it.
+  return supersederOf(
+    n,
+    cache.byProduct.get(pk).filter((x) => x.key !== n.key && mailedElsewhere(x, digestKey)),
+  );
 }
 
 /**
@@ -733,14 +824,13 @@ export async function evaluateCandidates(store, { now = new Date(), holdMs = 0 }
     }
     live.push(n);
   }
-  const best = new Map();
+  // One notice per product AND per reach (supersedesNotice): a week may carry
+  // both a firms-only build and a hotfix for everybody, and both must go.
+  const chosen = [];
   for (const n of live) {
-    const cur = best.get(n.productKey);
-    if (!cur || compareVersions(n.version, cur.version) > 0) best.set(n.productKey, n);
-  }
-  const chosen = [...best.values()];
-  for (const n of live) {
-    if (best.get(n.productKey) !== n) superseded.push({ notice: n, by: best.get(n.productKey).key });
+    const by = supersederOf(n, live);
+    if (by) superseded.push({ notice: n, by: by.key });
+    else chosen.push(n);
   }
   return { chosen, held, withdrawn, superseded };
 }
@@ -827,11 +917,15 @@ function digestMessageFor({ user, email, updates, unsubscribeUserId }) {
  *
  * Enrolment, the preview and the send all go through here, so the three answer
  * the same question the same way: a row enrolled for a firms-only build must
- * still pass the licence re-check at send time (noticeReachesRing), and would
- * not if the send assumed nobody was in the ring.
+ * still pass the licence re-check at send time (noticeReaches), and would not if
+ * the send assumed nobody was in the ring.
+ *
+ * Only the firms' OWN round asks for it. A widened notice is decided from the
+ * ledger (toldAlready), never from a ring recomputed three months after the
+ * round it is meant to describe.
  */
 export async function ringFor(store, notices, now) {
-  const needed = notices.some((n) => !isHubNotice(n) && (n.audience === ROLLOUT_ORGANIZATIONS || n.widenedAt));
+  const needed = notices.some((n) => !isHubNotice(n) && n.audience === ROLLOUT_ORGANIZATIONS);
   return needed ? new Set((await store.earlyRingUserIds(now)).map(String)) : new Set();
 }
 
@@ -845,18 +939,23 @@ async function audienceRows(store, digestKey, notices, now) {
     ]),
   ];
   const ring = await ringFor(store, notices, now);
+  const told = await toldAlready(store, notices);
   const users = await store.digestAudience(keys, now);
   const byEmail = new Map();
   for (const u of users) {
     const email = String(u.email || "").trim().toLowerCase();
     if (!email) continue;
-    const updates = updatesFor(u, notices, now, { inRing: ring.has(String(u._id)) });
+    const emailHash = hashRecipient(email);
+    const updates = updatesFor(u, notices, now, {
+      inRing: ring.has(String(u._id)),
+      told: toldFor(told, u._id, emailHash),
+    });
     const why = classifyDigestRecipient(u, updates);
     const row = {
       digestKey,
       userId: u._id,
       email,
-      emailHash: hashRecipient(email),
+      emailHash,
       noticeKeys: updates.map((n) => n.key),
       status: why === "send" ? "pending" : "skipped",
       skipReason: why === "send" ? "" : why,
@@ -1022,7 +1121,11 @@ export async function previewDigest({
   }
   if (who) {
     const ring = await ringFor(store, notices, now());
-    const updates = updatesFor(who, listed, now(), { inRing: ring.has(String(who._id)) });
+    const told = await toldAlready(store, notices);
+    const updates = updatesFor(who, listed, now(), {
+      inRing: ring.has(String(who._id)),
+      told: toldFor(told, who._id, hashRecipient(String(who.email || "").trim().toLowerCase())),
+    });
     const why = classifyDigestRecipient(who, updates);
     if (!updates.length) {
       sampleNote = `${who.email || userId} holds no live licence for anything in this digest.`;
@@ -1197,7 +1300,10 @@ export async function sendDigest(
   // Read once for the whole run: the licence re-check below has to know which
   // accounts are in the firms' ring, or it would drop every row enrolled for a
   // build that has only gone to firms (ringFor above).
-  const ring = await ringFor(store, await store.noticesInDigest(key), now());
+  const carried = await store.noticesInDigest(key);
+  const ring = await ringFor(store, carried, now());
+  // And, for a widened build, who the firms' round already mailed (toldAlready).
+  const told = await toldAlready(store, carried);
 
   /**
    * The notices this digest still announces, each read again now: a build
@@ -1242,7 +1348,12 @@ export async function sendDigest(
     for (const row of batch) {
       const user = byId.get(String(row.userId));
       const listed = (row.noticeKeys || []).map((k) => live.get(k)).filter(Boolean);
-      const updates = user ? updatesFor(user, listed, now(), { inRing: ring.has(String(row.userId)) }) : [];
+      const updates = user
+        ? updatesFor(user, listed, now(), {
+            inRing: ring.has(String(row.userId)),
+            told: toldFor(told, row.userId, row.emailHash),
+          })
+        : [];
       let why = user ? classifyDigestRecipient(user, updates) : "no-address";
       if (why === "no-entitlement" && !listed.length && (row.noticeKeys || []).length) {
         // Everything it listed has gone: "superseded" only when all of it was.
@@ -2060,7 +2171,12 @@ export const digestMongoStore = {
 
   async insertDigest(doc) {
     // The unique key is the week's guarantee, so the index must exist first.
-    await ReleaseDigest.init();
+    // Model.init() is a no-op once autoIndex is off (util/mongoTimeouts.js), so
+    // this builds it explicitly, exactly as the per-release store does
+    // (util/releaseNotifier.js insertNotice): without it a brand-new collection
+    // has no unique key until the daily index job happens to run, and two
+    // containers that both got past the job lock would each send the week.
+    await indexesReady(ReleaseDigest);
     try {
       const created = await ReleaseDigest.create(doc);
       return { digest: created.toObject(), created: true };
@@ -2112,9 +2228,37 @@ export const digestMongoStore = {
     return ReleaseNotice.find({ digestKey }).sort({ createdAt: 1 }).lean();
   },
 
-  /** Every notice of one product, for "has a newer version already gone out?". */
+  /**
+   * Every notice of one product, for "has a newer version already gone out?".
+   * `audience` and `kind` come too: supersedesNotice needs the reach, not just
+   * the number.
+   */
   noticesForProduct(productKey) {
-    return ReleaseNotice.find({ productKey }).select("key version status digestKey enrolledAt").lean();
+    return ReleaseNotice.find({ productKey })
+      .select("key version status digestKey enrolledAt audience widenedAt kind productKey")
+      .lean();
+  },
+
+  /**
+   * Who has already been MAILED one of `noticeKeys`, from both ledgers
+   * (toldAlready): the digest rows whose sent email LISTED the notice, and the
+   * per-notice rows of a round sent outside a digest.
+   */
+  async sentNoticeRecipients(noticeKeys = []) {
+    const keys = [...new Set((noticeKeys || []).filter(Boolean).map(String))];
+    if (!keys.length) return [];
+    const [inDigests, perNotice] = await Promise.all([
+      ReleaseDigestRecipient.find({ status: "sent", sentNoticeKeys: { $in: keys } })
+        .select("userId emailHash sentNoticeKeys")
+        .lean(),
+      ReleaseNoticeRecipient.find({ status: "sent", noticeKey: { $in: keys } })
+        .select("userId emailHash noticeKey")
+        .lean(),
+    ]);
+    return [
+      ...inDigests.map((r) => ({ userId: r.userId, emailHash: r.emailHash, noticeKeys: r.sentNoticeKeys || [] })),
+      ...perNotice.map((r) => ({ userId: r.userId, emailHash: r.emailHash, noticeKeys: [r.noticeKey] })),
+    ];
   },
 
   /**
@@ -2173,7 +2317,10 @@ export const digestMongoStore = {
 
   async enrolDigest(rows) {
     const ordered = [...rows].sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1));
-    await ReleaseDigestRecipient.init();
+    // Same reason as insertDigest: the unique (digestKey, userId) and
+    // (digestKey, emailHash) indexes are what make a second enrolment harmless,
+    // and Model.init() does not build them with autoIndex off.
+    await indexesReady(ReleaseDigestRecipient);
     for (let i = 0; i < ordered.length; i += 500) {
       try {
         await ReleaseDigestRecipient.insertMany(ordered.slice(i, i + 500), { ordered: false });

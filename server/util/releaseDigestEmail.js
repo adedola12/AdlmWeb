@@ -23,6 +23,14 @@
 //   one product    "QUIV 3.1.11 is ready — update from the Installation Center"
 //   several        "This week's ADLM updates: QUIV 3.1.11, RateGen 2.9.2"
 //   hub only       "A new ADLM Installation Center is ready"
+//
+// A subject is kept inside SUBJECT_BUDGET characters (updateList). A mail client
+// shows about seventy on a desktop row and about half that on a phone, and the
+// 2026 version freeze spends fourteen of them per update ("4.0.0 · build
+// 2610.1"), so an uncapped list of labels pushed every product name past the cut
+// for anyone holding two or more: "This week's ADLM updates: Installation Center
+// 1.0.0 · bu…". It drops the versions first, which the headings carry anyway,
+// and only then counts the rest.
 
 import { wrapEmail } from "./emailLayout.js";
 import {
@@ -131,16 +139,52 @@ export function hubSteps() {
  */
 export const CADENCE_LINE = "We usually send product updates once a week.";
 
+/** What a mail client shows of a subject line; past this it is cut off. */
+export const SUBJECT_BUDGET = 70;
+/** The same for the preview line beside it, which gets a little more room. */
+export const PREHEADER_BUDGET = 100;
+
+const SUBJECT_LEAD = "This week's ADLM updates: ";
+const PREHEADER_TAIL = ": what is new, and how to update.";
+
+/** The product alone, without its version: what a long list falls back to. */
+const updateName = (item) => (isHub(item) ? HUB_PRODUCT.shortName : item?.product?.name || "");
+
+/**
+ * The updates named in at most `budget` characters, `used` of which are already
+ * spent on the words around them. Full labels with versions when they fit, then
+ * names alone, then as many names as fit and a count of the rest. Always
+ * bounded: a customer holding eight products reads "QUIV, RateGen and 6 more",
+ * not a line cut off before any product is named.
+ */
+export function updateList(items = [], budget = SUBJECT_BUDGET, used = 0) {
+  const ordered = orderUpdates(items);
+  const room = Math.max(0, budget - used);
+  const full = ordered.map(updateLabel).join(", ");
+  if (full.length <= room) return full;
+  const names = ordered.map(updateName);
+  const plain = names.join(", ");
+  if (plain.length <= room) return plain;
+  for (let keep = Math.min(2, names.length); keep >= 1; keep -= 1) {
+    const rest = names.length - keep;
+    const some = names.slice(0, keep).join(", ");
+    const line = rest ? `${some} and ${rest} more` : some;
+    if (line.length <= room) return line;
+  }
+  return `${names.length} updates`;
+}
+
 /** The subject for a set of updates (already filtered to what this customer holds). */
 export function digestSubject(items = []) {
   const ordered = orderUpdates(items);
   const products = ordered.filter((i) => !isHub(i));
   if (!products.length) return "A new ADLM Installation Center is ready";
   if (ordered.length === 1) {
+    // One product: the per-release subject, word for word, leading with its name.
     const [only] = ordered;
     return `${only.product.name} ${shownVersion(only.version)} is ready — update from the Installation Center`;
   }
-  return `This week's ADLM updates: ${ordered.map(updateLabel).join(", ")}`;
+  return `${SUBJECT_LEAD}${updateList(ordered, SUBJECT_BUDGET, SUBJECT_LEAD.length)}`;
 }
 
 const P = (html) => `<p style="margin:0 0 14px">${html}</p>`;
@@ -313,7 +357,7 @@ export function buildDigestMessage({ firstName, items = [], unsubscribeUrl, repl
   const title = hubOnly ? `ADLM Installation Center ${shownVersion(hub.version)} is ready` : "This week's ADLM updates";
   const preheader = hubOnly
     ? "Download it from your dashboard."
-    : `${labels.join(", ")}: what is new, and how to update.`;
+    : `${updateList(ordered, PREHEADER_BUDGET, PREHEADER_TAIL.length)}${PREHEADER_TAIL}`;
   const cta = hubOnly
     ? { label: "Open your dashboard", href: esc(hubDownloadPageUrl()) }
     : { label: "See everything new", href: esc(whatsNewUrl("")) };

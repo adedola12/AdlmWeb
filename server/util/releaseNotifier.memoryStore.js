@@ -340,6 +340,25 @@ export function memoryStore({
       Object.assign(r, clone(set));
       return true;
     },
+    // Who has already been MAILED one of these notices, from BOTH ledgers, as
+    // the Mongo store reads it (util/releaseDigest.js sentNoticeRecipients): the
+    // digest rows whose sent email listed the notice, and the per-notice rows of
+    // a round sent outside a digest.
+    async sentNoticeRecipients(noticeKeys = []) {
+      const want = new Set((noticeKeys || []).filter(Boolean).map(String));
+      if (!want.size) return [];
+      const out = [];
+      for (const r of digestRows) {
+        if (r.status !== "sent") continue;
+        const hit = (r.sentNoticeKeys || []).filter((k) => want.has(k));
+        if (hit.length) out.push({ userId: r.userId, emailHash: r.emailHash, noticeKeys: hit });
+      }
+      for (const r of rows) {
+        if (r.status !== "sent" || !want.has(r.noticeKey)) continue;
+        out.push({ userId: r.userId, emailHash: r.emailHash, noticeKeys: [r.noticeKey] });
+      }
+      return out;
+    },
     async digestCounts(key) {
       const groups = new Map();
       for (const r of digestRows.filter((x) => x.digestKey === key)) {
