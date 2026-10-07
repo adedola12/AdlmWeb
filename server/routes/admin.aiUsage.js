@@ -30,6 +30,8 @@ import { AiAllocation } from "../models/AiAllocation.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import { Setting } from "../models/Setting.js";
+import { HandoverReview } from "../models/HandoverReview.js";
+import { summariseReviews } from "../services/handoverReview.js";
 import {
   AI_FEATURES,
   AI_FEATURE_KEYS,
@@ -250,6 +252,31 @@ router.get("/overview", async (req, res) => {
 
     const credit = buildCredit(creditDoc, awsAllTime, monthTotals[0]);
 
+    // QUIV auto take-off: of the steps runs saved, how many the estimator kept.
+    // Separate collection, because a review is not an AI call (see
+    // models/HandoverReview.js); a failure here must not blank the page.
+    let handoverReview = summariseReviews(null);
+    try {
+      const [row] = await HandoverReview.aggregate([
+        { $match: { at: { $gte: since } } },
+        {
+          $group: {
+            _id: null,
+            runs: { $sum: 1 },
+            stepsSaved: { $sum: "$stepsSaved" },
+            stepsKept: { $sum: "$stepsKept" },
+            stepsRejected: { $sum: "$stepsRejected" },
+            linesKept: { $sum: "$linesKept" },
+            linesRejected: { $sum: "$linesRejected" },
+            undoneWhole: { $sum: { $cond: ["$undoneWhole", 1, 0] } },
+          },
+        },
+      ]);
+      handoverReview = summariseReviews(row);
+    } catch (err) {
+      console.error("[/admin/ai-usage/overview] handover review:", err?.message || err);
+    }
+
     res.json({
       days,
       window,
@@ -272,6 +299,7 @@ router.get("/overview", async (req, res) => {
         ...shapeTotals(r),
       })),
       credit,
+      handoverReview,
     });
   } catch (err) {
     console.error("[/admin/ai-usage/overview] error:", err);

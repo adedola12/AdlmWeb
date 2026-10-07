@@ -32,6 +32,7 @@ import "../models/Flyer.js";
 import "../models/FollowUp.js";
 import "../models/FreeVideoWatch.js";
 import "../models/Freebie.js";
+import "../models/HandoverReview.js";
 import "../models/HelpBotLog.js";
 import "../models/IdealCustomerProfile.js";
 import "../models/Invoice.js";
