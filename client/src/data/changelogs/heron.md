@@ -24,6 +24,91 @@ summary: 2D takeoff with automatic material + labour budgets, RateGen pricing an
   items from the plugin changelog are folded into Improved here.
 -->
 
+## 3.0 — 1 October 2026 — HERON 3, rebuilt around your take-off
+
+HERON 3 is a complete redesign: start from your take-offs, read the PlanSwift job once, check every item before it is billed, then price, export and save from one place. Underneath, roof timber, steel frames, column bases and bill wording are now measured and described correctly across the bill, the Budget and Excel.
+
+### ✨ New
+
+- **Your take-offs, in one place.** HERON opens on the job PlanSwift has open and the take-offs kept on this PC, as a gallery or a list. Make a project from the open job, rename or delete take-offs, and bring your ADLM Cloud projects across once.
+- **Read the job, then check it.** HERON reads every folder of the job and flags what needs attention before it reaches the bill: no quantity, no unit, a broken form field, an item outside a folder, or empty sub-items. Group the take-off by folder, trade or element, search it, and filter by any of those checks.
+- **Correct the bill description on the item.** Pick any item to see its figures and its bill description, and fix the wording right there. Your wording is what goes to ADLM Cloud.
+- **Show in PlanSwift.** From an item, HERON opens the page it is drawn on, frames its shapes and selects it in PlanSwift. Items drawn on several pages get a page stepper, and Follow in PlanSwift does this on every pick.
+- **A Budget card for every tool.** Each tool's sub-items sit inside its card. A sub-item that appears under two tools (Blinding under Girth and under Column Base, say) is no longer merged into one line.
+- **Fill a client's bill.** On the Excel screen, open a client's own BoQ workbook, old .xls files included. HERON matches its lines to your take-off and writes the quantities into a copy, with a note on every cell it filled. The client's file is never changed.
+- **Open the Excel Takeoff Link from HERON.** The Excel screen lists the workbooks open in Excel and opens the Takeoff Link pane in the one you pick, in a new workbook or in a file, docked left or right.
+- **Take-off time log.** When you export or save a take-off, HERON shows how long it took. You can stop sharing timings in Settings.
+- **Dock beside PlanSwift.** Dock turns HERON into a narrow column on the right of the screen, kept on top of PlanSwift. Full screen puts it back. Light and dark themes are one click away.
+
+### 🔧 Improved
+
+- **Roof timber is billed once.** On a job with a Roof Covering calculator, rafters, purlins, tie beams, king posts and struts come from the calculator by length. The ROOF MEMBERS Rafter, Noggings and Tie Beam tools stay in the take-off as aids and no longer bill the same timber a second time as an area.
+- **Pit excavation is measured net (BESMM4).** Counted pits and pits measured by area no longer add a working-space volume or a flat 20% uplift. Earthwork support is measured on the net faces.
+- **Steel Tonnage covers more of the job.** The STEEL TRUSS tools (UC column, UB beam, SHS/RHS, Z purlin, bracing) are added from the weight the template already computes.
+- **Better bill wording.** Ridge Cap reads as ridge capping, not eave angle. Earthwork support follows the excavation depth ("not exceeding 2m" or "exceeding 2m"). Walls of any thickness, lighting fittings, column concrete, landing soffit formwork and stair tread formwork now get ADLM wording instead of their raw PlanSwift names, and the wording's typos are gone.
+- **Budget prices follow your Rate Gen licence.** Without Rate Gen, the Budget says where prices come from instead of showing ₦0.00 everywhere. Lifetime Rate Gen licences are recognised.
+
+### 🐛 Fixed
+
+- **Items outside a folder, or in a sub-folder, went missing from the bill.** HERON now reads every folder, plus a "Not in a folder" group, so those quantities reach the bill, the Budget, the cloud save and Excel.
+- **Measured pad concrete was recomputed.** Concrete in Column Base (and ground beam, pile cap and lift base concrete) is billed as you measured it, not replaced by a computed figure with an extra formwork line.
+- **Counted column bases and lift bases.** Every part of them (rebar, formwork, bars, excavation) now follows the number of bases, not just one.
+- **Timber tie beams and steel beams were given concrete formwork and rebar.** Only linear concrete beams get them now.
+- **Steel frame columns and beams weighed 0 t.** The ADLM STEEL FRAME sections are recognised and weighed.
+- **Bulk excavation, site area and wire runs were measured in feet on metric jobs.** They now measure in metres, like every other tool.
+- **Parts named from a blank form field disappeared** (tiling and lighting points, for example). They keep their quantity and are listed under the item's name.
+- **Deleting a line in Review & save lost its sub-items.** They now move up into the same folder.
+- **Data Cable and Coaxial Cable could not be drawn, and detector and camera tools lost their Type.** Both are repaired.
+- **Starting HERON hid the ADLM template from PlanSwift** until you signed out and in again. The template now stays in place.
+- **Two copies of the ADLM template.** The template now installs into PlanSwift's own template folder, and an older duplicate copy is moved aside, so PlanSwift no longer warns about it when you open a job.
+- **Review & save failed silently when PlanSwift was closed or restarted.** It now says so, reconnects where it can, and asks you to re-read the job when it cannot.
+
+## 2.9.5 — 4 September 2026 — Rates when you ask for them
+
+You decide when a job gets priced, and an item priced below cost no longer blocks your save. This update also fixes a start-up lockout and stops the installer leaving the ADLM take-off package on your desktop.
+
+### ✨ New
+
+- **Rates load only when you ask.** The Bill, the Budget and the Budget cloud review open with every rate at 0. A **Load rates** button on each screen prices the job from your rate library (it becomes *Reload rates* afterwards). Manual edits, the inline rate search and "BoQ rate ← budget" still work on an unpriced job.
+- **Loading rates on the Bill prices the Budget too.** One click does both. Each Budget item carries its material recipe, one Labour line and a single **Other materials** line for whatever the recipe does not cover, so the margin left is the rate's real overhead and profit.
+
+### 🔧 Improved
+
+- **Items priced below cost no longer block the save.** They are still highlighted in amber and listed in the save confirmation, but the take-off always saves.
+- **An unpriced take-off saves unpriced.** If you save without loading rates, the cloud budget carries the quantities at 0 and no Profit line, so the job no longer shows online as a total loss.
+- **"Other materials" is always shown.** It used to be dropped when the gap was large, which hid cost exactly where the recipe covered least.
+- **The ADLM take-off package stays off your desktop.** Installs no longer place it on the shared Public Desktop. HERON removes copies left by earlier versions, and may ask once for administrator permission to do it. The desktop shortcut is now named **ADLM HERON**.
+- **Every message has a title.** HERON's message boxes now say what they are about, so none of them looks like a blank window.
+
+### 🐛 Fixed
+
+- **HERON froze on the loading screen after a hardware change.** A new dock, VPN, network adapter or firmware update could stop HERON at start-up behind an untitled message. HERON now asks you to sign in again and carries on.
+
+## 2.9.4 — 12 August 2026 — An install that always finishes
+
+HERON now registers the Excel Takeoff Link itself, so the install never depends on your version of the Installer Hub.
+
+### 🐛 Fixed
+
+- **"The executable to run could not be found after deployment."** On older versions of the Installer Hub, the step that registered the Excel add-in could not run, and it stopped the whole install, so you also lost the desktop shortcut and the PlanSwift import package. That step is gone, and every install now finishes.
+- **Connect Excel reported the add-in as not installed when it was.** HERON was checking the wrong registry entry.
+
+### 🔧 Improved
+
+- **HERON registers the Excel add-in itself.** It checks each time it starts and registers the add-in for the person who actually opens Excel, not the administrator account the installer runs as.
+
+## 2.9.3 — 12 August 2026 — One HERON, and a cloud that reconnects
+
+HERON now reconnects to ADLM Cloud after a restart, and opening it twice brings back the window you already have.
+
+### 🐛 Fixed
+
+- **Save to Cloud was greyed out after restarting HERON.** If you stayed signed in, HERON came back without its cloud connection, so every Save to Cloud button did nothing. It now reconnects on start. When there is genuinely no cloud connection, Save tells you so.
+
+### 🔧 Improved
+
+- **One HERON per PC.** Opening HERON a second time brings the open window to the front instead of starting another copy. Two copies could feed the Excel Takeoff Link from the wrong window and overwrite each other's settings.
+
 ## 2.9.2 — 9 August 2026 — The Excel Takeoff Link, ready on install
 
 The Excel Takeoff Link registers itself as part of the install, so the ribbon is there the first time you open Excel.

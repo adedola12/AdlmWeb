@@ -1,6 +1,6 @@
 ---
 slug: mep
-name: ADLM MEP
+name: SERVIQ
 tagline: MEP quantity takeoff for Autodesk Revit
 category: Revit MEP Plugin
 accent: sky
@@ -10,6 +10,36 @@ compatibility: Revit 2024, 2025, 2026 & 2027
 order: 4
 summary: Mechanical, electrical & plumbing quantity takeoff right inside Revit — covers ductwork, pipework, electrical and plumbing disciplines in a dockable, cloud-connected workspace.
 ---
+
+## 2.0 — 1 October 2026 — ADLM MEP becomes SERVIQ, with auto take-off
+
+The MEP plugin is now SERVIQ, rebuilt on the same docked panel as QUIV 4.0, and it can measure every MEP item on every level in one run. Saving to ADLM Cloud keeps your bill and budget together, with your rates and build-ups, and brings them all back when you reopen the project.
+
+### ✨ New
+
+- **One SERVIQ button, one panel.** The SERVIQ tab in Revit has a single SERVIQ button that opens a docked panel. You sign in there, see the take-off list, and open each item. The nine discipline buttons and the other ribbon buttons are reached from the panel.
+- **The same steps for every discipline.** Ductwork, duct fittings, air terminals, HVAC equipment, plumbing fixtures, pipework, lighting, power, and cable and containment all use one item screen: choose a level, see the lines from the model, check the results, and add them to the take-off.
+- **Auto take-off.** Pick the items not measured yet and SERVIQ measures each one on every level and adds it to the take-off. A progress card shows elapsed time and time left, and Stop keeps what is already saved. Running it again does not double count an item and level already taken off.
+- **Check before you save.** Each auto-measured item gets a confidence. Accept the sure ones in one click, or open the rest and press Accept and complete. Review will not save until every result is accepted.
+- **Save to ADLM Cloud the way QUIV 4.0 does.** The bill and the budget, each line's material and labour, are saved together and linked, so the Budget tab on the web fills in. Your rates and build-ups go with them, and the model goes up for the web viewer.
+- **Saving again updates the same project.** If the project was changed on another device, SERVIQ tells you instead of overwriting it.
+
+### 🔧 Improved
+
+- **Reopening a cloud project brings everything back:** line names, levels, rates and build-ups.
+- **Signing in from the panel.** SERVIQ renews an expired session by itself where it can, and no longer reports an expired session as "No projects found".
+- **Light and dark** follow Revit's theme, and the panel repaints when you switch.
+- **Keyboard shortcuts in the full bill.** Ctrl+1 to 5 switch views, Ctrl+S saves to the cloud, F5 refreshes and Ctrl+E exports.
+
+### 🐛 Fixed
+
+- **The budget never reached the cloud.** Each line's material and labour build-up is now saved with the bill, so the web Budget tab fills in.
+- **Line names came back blank** from every cloud project you reopened.
+- **The rate build-up window crashed when it opened.**
+- **Adding to the take-off put its last line in twice.**
+- **A rate typed into a rate cell went into the project name.**
+- **The cloud save failed while exporting the model** in Revit 2026.
+- **The docked pane showed as an empty black box at startup** in Revit's dark theme, and Revit's add-in prompt now names the plugin "ServiQ 2.0".
 
 ## 1.8.3 — 31 July 2026 — Sign-in that follows the service
 

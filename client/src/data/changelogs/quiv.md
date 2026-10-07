@@ -39,15 +39,57 @@ summary: Model-based quantity takeoff, priced budgets and a dockable workspace �
   ────────────────────────────────────────────────────────────────────────
 -->
 
-## 3.1.11 — 15 September 2026 — A model linked twice is measured once
+## 4.0 — 1 October 2026 — A new QUIV, from sign-in to save
 
-If the same file is linked into your model more than once, QUIV was measuring it once for every time it was linked. It now measures it once and tells you it found the duplicate.
+QUIV has been rebuilt as a single panel inside Revit: sign in, choose what to measure, measure each item or let auto take-off do it and review the results, then save to ADLM Cloud, where the rates are added. Many quantities are corrected too, and since launch you can search your quantities, tile skirting is measured, and paint, ceiling board and soil treatment quantities match the rest of ADLM.
+
+### ✨ New
+
+- **A new QUIV panel.** QUIV now docks in Revit as one panel that you can take full screen or minimise: Home, New project, the take-off list, one screen per item, Review, and Save to ADLM Cloud. It comes in light and dark.
+- **Sign in inside the panel.** Sign in where you work, with no separate window. Sign out really signs you out, so the next person is asked to sign in.
+- **One screen per item.** For each of the 20 elements, select it in Revit and see the quantities read from the model. You only enter what a QS knows, such as thicknesses, bar sizes and spacing, and you get the results and the material breakdown at the mix ratio you set. Mark it complete and QUIV moves you to the next item.
+- **Auto take-off, then you decide.** Choose the items, then follow a progress card with a running clock, a time estimate and the latest result. Stop at any point and keep what has been saved. Each result shows how sure QUIV is and counts only once you accept it; accept all the sure ones in one click.
+- **Your list, your way.** Start a project with one foundation type, several or none, and remove anything the job does not need from the take-off list (with Undo).
+- **Curtain walling measured in full.** Mullions by the metre (posts and transoms separately), glazing by the square metre per panel type, opening lights by area and by number, plus gaskets, brackets, sealant and flashing. Before, the bill had only the elevation area.
+- **External works billed the way a QS bills them.** Fencing, gates, drains and paving now come with their full build-up: for a fence, trench, disposal, blinding, footing, blockwork, DPC and gates; for a drain, trench, concrete, reinforcement and covers; for paving, hardcore, sand bed and kerbs.
+- **Bar lap and waste in your Material Constants.** Set the lap and waste allowance for beam and staircase bars yourself.
+- **Search your quantities on Review.** A search box above the bill lines filters them as you type, words in any order, such as "lintel 230 basement". Clicking a line you found still takes you to it in the model. *(3 October 2026)*
+- **Tile skirting is measured.** For every tiled floor, Finishes measures skirting in metres: each room's perimeter less the width of its doors. It is billed as its own line in metres, never as square metres of tiling. *(3 October 2026)*
+- **Room-by-room finishes on ADLM Cloud.** A save also sends each room's floor area, skirting length and floor finish, so you can ask about a single room. Your bill lines do not change. *(3 October 2026)*
+- **Add rates on ADLM Cloud.** The button on Review opens this project's page on ADLM Cloud, where the rates are added. *(3 October 2026)*
+
+### 🔧 Improved
+
+- **QUIV measures and ADLM Cloud prices.** A save sends quantities and the material schedule only. Rates are added on ADLM Cloud with Rate Gen, and rates and budget prices you already set on the website are kept when you save again.
+- **Material quantities match real practice.** Concrete, blinding, mortar, formwork, fill, mesh and tile defaults were recalibrated against real Nigerian QS bills.
+- **Clear about where prices come from.** Without a Rate Gen licence, Review says so plainly and shows where to get it, instead of showing zeros.
+- **The save tells you what happened.** If the bill saved but the budget did not reach the cloud, the message now says so.
+- **Each item is measured by one trade only.** Fence and boundary walls are left out of Walls, gates out of Doors, paving out of slabs and finishes, and stair handrails out of Staircase, so nothing lands on the bill twice.
+- **QUIV is called QUIV everywhere.** The Revit tab, the ribbon button and Revit's add-in list now say QUIV instead of "ADLM Calculator".
 
 ### 🐛 Fixed
 
-- **A model linked twice was measured twice.** One linked Revit file can sit in a host model as several link instances: the link gets copy-pasted, mirrored, arrayed, or linked a second time when it looks like it has gone missing. QUIV read the whole linked file once per instance, so every beam, column and slab inside a structural link placed twice landed on the bill at exactly double, and three placements tripled it. It now reads each linked file once however many times it was placed. Slabs, beams, columns, raft foundations and steelwork were all affected, as was picking elements inside a link without picking individual ones.
-- **Why two people measuring the same model got different totals.** Whether a link is loaded is remembered per person, not saved in the model. One QS can have both copies of a link loaded while a colleague on the same central model has them unloaded. The colleague measured the link once, or not at all, and got the right number; whoever had both loaded got double. Same model, same button, two different bills, and nothing on screen said why.
-- **QUIV now says when it finds a duplicated link.** The first time a takeoff runs against a model that links one file more than once, QUIV names the file, says how many times it is linked, and tells you it measured it once. Check Manage Links in Revit and remove the instances you do not need. If the placements are genuinely separate blocks, measure them as separate projects and merge them on the web app.
+- **Strip foundation backfill and disposal were swapped.** Backfill now equals the excavation less everything placed below ground, and disposal is the rest. Blinding uses the footing's real width; before, a 0.6 m footing got 67% more blinding than was laid.
+- **Oversite filling ignored the walls on the slab.** Hardcore and laterite now leave out the footprint of the walls standing on the slab.
+- **A full check of every module's quantities.** Pad volumes are no longer multiplied twice, beam formwork is (2 × depth + width) × length, manual slab reinforcement is in kg both ways, staircase concrete includes the steps, the roof follows the walls it bears on, doors are grouped by type and size, and totals are no longer billed on top of the lines they are made from.
+- **A reopened project showed nothing measured.** Opening a saved project from ADLM Cloud now shows the items you measured as done.
+- **Measured items stayed unticked,** and **Mark complete stayed greyed out** after picking walls. Both are fixed.
+- **QUIV showed all dark on some Revit 2024 machines.** QUIV now loads its own colours whatever else is installed.
+- **Clicking a bill line shows its elements in Revit.** On Review, clicking a line selects the elements behind it and zooms to them. *(3 October 2026)*
+- **Curtain walling reopened from the cloud added its lines together.** It now keeps its mullion, panel and fixing lines. *(3 October 2026)*
+- **Fence walls modelled from ground level missed their blockwork below ground.** It is now billed. *(3 October 2026)*
+- **Paint was about five times short in the Finishes tool.** It now uses the same coverage as the material schedule, the website and HERON: 100 m² of paint comes to 52 litres, not 10. A coverage you had set yourself is converted, not thrown away. *(4 October 2026)*
+- **POP ceiling boards were under-counted.** The Ceiling tool now uses the 1.2 m × 1.2 m board with 30% allowance that the schedule and the website use. A board size you set yourself is kept. *(4 October 2026)*
+- **Pile cap soil treatment was badly over-counted.** It now uses 20 m² per unit, so 10 m² is 1 unit, not 56. *(4 October 2026)*
+
+## 3.1.11 — 19 September 2026 — Popups that fit the dock
+
+A small fix for QUIV in a narrow dock: popups now fit the panel and close with Esc.
+
+### 🐛 Fixed
+
+- **Popups ran off a narrow dock.** Take-off popups now size themselves to the panel, so their buttons stay on screen.
+- **Esc closes a popup.** Every QUIV popup now closes from the keyboard.
 
 ## 3.1.9 — 28 August 2026 — Linked models, the whole takeoff in one go & a much faster run
 

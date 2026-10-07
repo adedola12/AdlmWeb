@@ -10,6 +10,54 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
+## 3.0 - October 2026 - The suite design, services in four trades, and carbon on every rate
+
+Rate Gen now looks and works like every other ADLM product, services are split into Mechanical, Electrical, Plumbing and Fire, and every priced rate shows its upfront carbon. Two pricing fixes move some rates: blockwork and render go up because mortar was under-measured, and some services rates come down because an uplift was being charged twice.
+
+### ✨ New
+
+- **Mechanical, Electrical, Plumbing and Fire.** The single MEP Works list is now four services screens on the left rail, and the cloud's services rates are filed under the right one.
+- **Built-up plumbing rates.** PPR pipework, isolating and stop valves, uPVC soil and waste pipe, rainwater downpipe, and shower and tray, each priced from your library's supply prices plus its published labour outputs.
+- **Carbon on every priced rate.** Carbon & Others shows the upfront embodied carbon of each rate (RICS whole life carbon, modules A1 to A5), worked out from the same materials and quantities as its price. Open a rate to see each line's carbon, its factor and where the factor was published. A rate with cement shows a range, from the Nigerian producers' own cement figures to the full cradle-to-gate figure.
+- **Carbon for services cables and pipes.** Copper cable and earthing are weighed from their cores and size, and PP-R and uPVC pipe from their standard sizes. Fittings and manufactured items such as AC units, pumps and sanitaryware have no carbon yet, because they need the maker's own figure.
+- **Coverage, stated on the rate.** Each carbon figure says how much of the rate's cost it accounts for, and * marks a rate that uses an assumed weight.
+- **Open ADLM Cloud.** "To CM App" is now Open ADLM Cloud, which opens Rate Gen in your ADLM account on the web.
+- **Keyboard shortcuts, the same as every ADLM product.** Ctrl+1 to 9 open the trades in rail order, Ctrl+F searches, F5 syncs, Ctrl+E exports, Ctrl+B folds the rail and Ctrl+Shift+L switches theme. F1 or Ctrl+/ lists them.
+
+### 🔧 Improved
+
+- **A new look, the same as every ADLM product.** The left rail holds the Library, every trade, the services, Carbon and your Saved Rates with a count. Every trade screen shares one layout: find, sort (bill order, most expensive, A to Z) and one table, where a click or Enter opens a rate's build-up and quantities are edited in place.
+- **The Library uses the same table, find and sort.** Sorting the library now works; before, it did nothing.
+- **Fits any screen.** The window fits any size and display scaling down to 860 px wide, and the rail folds to icons below 1100 px.
+- **Loading says what it is doing,** such as "Preparing your library", and ADLM messages replace Windows message boxes.
+
+### 🐛 Fixed
+
+- **Mortar was a quarter of what a wall actually buys.** A 225 mm wall carried 0.054 bags of cement per m², against about 0.20 in practice. Mortar mixes now allow for dry materials shrinking when mixed, so a 225 wall buys 0.195 bags per m² and 12 mm render 0.146. Blockwork, render, screeds and tile beds go up. A quantity you edited yourself keeps your figure.
+- **Some services rates were charged overhead and profit twice.** Published services rates already carried a 35% uplift, and your own overhead and profit went on top. Services now apply only yours, so those rates come down.
+- **Some services lines priced at zero.** A line such as "PPR pipe 15mm incl. 5% waste" is now priced from the library item it names, not looked up by its wording.
+- **Opening one trade could wipe the rates saved for the others.** It now adds to the saved list instead of replacing it.
+
+## 2.9.2 - August 2026 - Build with AI, without the duplicates
+
+Build with AI now tells you what kind of request it expects, and an AI-drafted rate no longer adds a second copy of a material you already have.
+
+### 🐛 Fixed
+
+- **The same material could end up in your library twice.** Library names were matched exactly, so when the AI wrote "Cement (Portland 42.5 R)" and your library held "Cement (Portland 42.5R)", the line missed your row, kept the AI's price, and saving the rate added it as a new item. Names are now compared with case, spacing and stylistic punctuation set aside, so a line that differs only in how it was written finds the row you already have. An exact match still wins over a near one.
+- **Sizes and mixes are deliberately kept apart.** 1.2mm and 12mm roofing sheet stay separate, as do mortar (1:6) and (1:3), and Cement and Coloured Cement. Merging those would misprice a rate rather than tidy a library.
+
+### 🔧 Improved
+
+- **The AI now knows what is in your library.** Each build request sends the names of your library items, your own additions first, and the AI is asked to name a component exactly as you hold it. Only names and units are sent. Your prices never leave your machine.
+- **Build with AI expects you to ask for a rate.** Every request uses part of your AI allowance, so a request now needs to ask for a rate build-up, for example "Build a rate for 225mm hollow sandcrete blockwork in cement-sand mortar (1:6)". It is checked before anything is sent, so a refused request costs nothing, and the panel heading shows an example.
+
+## 2.9.1 - August 2026 - Build with AI is back
+
+### 🐛 Fixed
+
+- **Build with AI was missing after the 2.9.0 update.** The AI section on the Custom Rate form did not appear on any installed copy. Rate Gen now knows where the ADLM AI service is by itself, so the panel is there after updating with nothing to configure and no reinstall. You still need to be signed in with an active subscription.
+
 ## 2.9.0 - August 2026 - What a rate is meant to produce
 
 Every labour and plant rate now shows what the item is and what it produces in a day, so a day rate can be checked against the work it has to cover. Cloud sync is fixed, and the library is easier to move around.
