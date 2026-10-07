@@ -206,3 +206,180 @@ describe("the Services tab", () => {
     expect(within(c).queryByText(/Linking is done in the full workspace/)).toBe(null);
   });
 });
+
+/* ───────────────── Loading, as distinct from empty ───────────────── */
+
+// WHY THESE EXIST
+//
+// WorkProjectShell holds two documents: a rollup that arrives with the projects
+// list, and the full project fetched per id. Until the second lands it renders
+// `project` as the rollup — which carries the head but NO models, NO linked
+// services and NO bill lines. So for the whole of that fetch these three tabs
+// read an empty array off a project that is not empty and announce "No model
+// attached" / "No services linked" / "0 places", then change their minds.
+//
+// That is what the owner meant by a tab feeling stuck: not slowness, but the
+// screen stating the wrong thing confidently while it waits. The fix is one
+// `loading` prop, and the thing that can silently regress is the ORDER — put the
+// check after the empty-list branch and it never runs.
+
+describe("while the full project is still loading", () => {
+  it("the Model tab says it is reading, not that there is no model", () => {
+    const { getByText, queryByText } = render(<WorkProjectModel project={{}} loading />);
+    expect(getByText(/Loading/)).toBeTruthy();
+    expect(queryByText("No model attached")).toBeNull();
+  });
+
+  it("the Services tab says it is reading, not that nothing is linked", () => {
+    const { getByText, queryByText } = render(<WorkProjectServices project={{}} loading />);
+    expect(getByText(/Loading/)).toBeTruthy();
+    expect(queryByText("No services linked")).toBeNull();
+  });
+
+  it("the Drawings tab does not claim zero places", () => {
+    const { getByText, queryByText } = render(<WorkProjectDrawings project={{}} loading />);
+    expect(getByText(/Loading/)).toBeTruthy();
+    expect(queryByText(/0 places/)).toBeNull();
+  });
+
+  it("does not hide content it already has", () => {
+    // The rollup can be superseded mid-flight by a cached full document. If
+    // loading hid real rows the screen would flicker backwards.
+    const { getByText, queryByText } = render(<WorkProjectModel project={modelled()} loading />);
+    expect(getByText(/ikoyi-arch\.ifc/)).toBeTruthy();
+    // Matched on StillLoading's own words, not on /Loading/: this fixture has a
+    // model url, so the 3D viewer below also renders and its Suspense fallback
+    // says "Loading the model…" quite legitimately. A loose matcher here would
+    // fail on that and look like a regression in the tab.
+    expect(queryByText(/Reading this project/)).toBeNull();
+  });
+});
+
+describe("once loading is done", () => {
+  it("a genuinely empty project still says so", () => {
+    // The loading state must not swallow the real empty state — somebody with
+    // no model needs to be told how to add one.
+    const { getByText } = render(<WorkProjectModel project={{}} loading={false} />);
+    expect(getByText("No model attached")).toBeTruthy();
+  });
+
+  it("a genuinely empty services list still says so", () => {
+    const { getByText } = render(<WorkProjectServices project={{}} loading={false} />);
+    expect(getByText("No services linked")).toBeTruthy();
+  });
+});
+
+describe("the classic workspace is reachable, not just named", () => {
+  it("the Model tab links it rather than only mentioning it", () => {
+    const href = "/projects/revit?project=abc&classic=1";
+    const { getByText } = render(
+      <WorkProjectModel project={{}} canEdit classicHref={href} />,
+    );
+    const link = getByText("the classic workspace");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe(href);
+  });
+
+  it("the Services tab does too", () => {
+    const href = "/projects/revit?project=abc&classic=1";
+    const { getByText } = render(
+      <WorkProjectServices project={{}} canEdit classicHref={href} />,
+    );
+    const link = getByText("the classic workspace");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe(href);
+  });
+
+  it("without an href it is still a sentence, not a broken link", () => {
+    const { queryByText, getByText } = render(<WorkProjectModel project={{}} canEdit />);
+    expect(getByText(/Uploading is done in/)).toBeTruthy();
+    const maybe = queryByText("the classic workspace");
+    if (maybe) expect(maybe.tagName).not.toBe("A");
+  });
+});
+
+/* ───────────────── The model, drawn ───────────────── */
+
+// The viewer (lib/ifcViewer.js + features/projects/ModelViewer.jsx) worked and
+// was mounted on the classic project view, the work area and the 4D workspace —
+// everywhere except the tab called Model, which listed the files and drew none
+// of them. Somebody opening it to look at their model found a table.
+//
+// It is lazy, so these assert the SUSPENSE BOUNDARY and the conditions, not the
+// three.js canvas: pulling the real viewer into jsdom would test WebGL, not this
+// decision. What can regress here is mounting it when there is nothing to draw
+// (a row is "attached" on a filename alone, with no url to fetch) and paying the
+// three.js download on a tab that cannot use it.
+
+describe("the 3D viewer on the Model tab", () => {
+  const withUrl = () => ({
+    models: {
+      architectural: {
+        sourceFile: "ikoyi-arch.ifc",
+        url: "https://r2/x.ifc",
+        format: "ifc",
+        validation: { status: "valid", requiredCount: 5, matchedCount: 5 },
+      },
+    },
+  });
+  const noUrl = () => ({
+    models: {
+      architectural: {
+        sourceFile: "ikoyi-arch.ifc",
+        format: "ifc",
+        validation: { status: "valid", requiredCount: 5, matchedCount: 5 },
+      },
+    },
+  });
+
+  it("is mounted when there is a model to draw", () => {
+    // No heading of our own: the viewer is itself a .wk-panel with his .wk-ph
+    // and a discipline switcher, so wrapping it in a second header would give
+    // the column two. The lazy chunk has not resolved in this tick, so what is
+    // on screen is the suspense boundary.
+    const { getByText } = render(<WorkProjectModel project={withUrl()} />);
+    expect(getByText(/Loading the model/)).toBeTruthy();
+  });
+
+  it("uses his two-column layout, which was never wired up", () => {
+    // .pj-model (ds-work-proj.css:472) is the grid his design defines for this
+    // tab, and nothing in the client referenced it — so .ds .pj-model .vv never
+    // matched and every model row rendered unstyled. This is the assertion that
+    // keeps the wrapper there.
+    const { container } = render(<WorkProjectModel project={withUrl()} />);
+    const grid = container.querySelector(".pj-model");
+    expect(grid).toBeTruthy();
+    // Two children: the viewport column and the side column. His grid defines
+    // exactly two tracks, so a third child would wrap onto a new row.
+    expect(grid.children.length).toBe(2);
+  });
+
+  it("fills the second column even when there is nothing to draw", () => {
+    const { container, getByText } = render(<WorkProjectModel project={noUrl()} />);
+    expect(container.querySelector(".pj-model").children.length).toBe(2);
+    expect(getByText("Nothing to draw")).toBeTruthy();
+  });
+
+  it("is NOT mounted when the row has no url to fetch", () => {
+    // A model row counts as attached on a filename alone. Mounting the viewer
+    // for one would download three.js to render nothing.
+    const { queryByText, getByText } = render(<WorkProjectModel project={noUrl()} />);
+    expect(queryByText("The model")).toBeNull();
+    expect(queryByText(/Loading the model/)).toBeNull();
+    // ...and the list is still there, so the tab has not lost anything.
+    expect(getByText(/ikoyi-arch\.ifc/)).toBeTruthy();
+  });
+
+  it("says what is downloading, not just that something is", () => {
+    // A bare rectangle on a slow connection is indistinguishable from a failure,
+    // which is the complaint this tab started with.
+    const { getByText } = render(<WorkProjectModel project={withUrl()} />);
+    expect(getByText(/large download/i)).toBeTruthy();
+  });
+
+  it("is not mounted on a project with no models at all", () => {
+    const { queryByText, getByText } = render(<WorkProjectModel project={{}} />);
+    expect(queryByText("The model")).toBeNull();
+    expect(getByText("No model attached")).toBeTruthy();
+  });
+});

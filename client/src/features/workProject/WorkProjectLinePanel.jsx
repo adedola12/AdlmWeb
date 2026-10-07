@@ -36,6 +36,7 @@ import {
   showActuals as actualsShowing,
   varianceOf,
   withActualQty,
+  withActualRate,
 } from "./actualsModel.js";
 
 /** His progress steps (work-proj.js:920). */
@@ -44,6 +45,7 @@ const STEPS = [0, 25, 50, 75, 100];
 export default function WorkProjectLinePanel({
   project,
   index,
+  ratesMasked = false,
   canEdit = false,
   drift = null,
   contractLocked = false,
@@ -93,6 +95,11 @@ export default function WorkProjectLinePanel({
   const [looking, setLooking] = React.useState(false);
   // Why a measurement was not taken. Cleared on the next good one.
   const [refused, setRefused] = React.useState("");
+  // The progress box needs its own, because `refused` is rendered inside the
+  // "Measured on site" section — which is not there at all on an unlocked
+  // project, where this box still is. A shared one would put a refused
+  // percentage either in the wrong section or nowhere.
+  const [pctRefused, setPctRefused] = React.useState("");
   // FINDING A RATE BY NAME.
   //
   // The suggestions answer "what would price this line?". This answers "I know
@@ -225,6 +232,13 @@ export default function WorkProjectLinePanel({
   const showActuals =
     contractLocked && isLocked(project) && actualsShowing(project);
   const actualQty = actualQtyOf(it);
+  // The RAW stored rate, not actualRateOf — that one falls back to the contract
+  // rate when nothing is measured, which is right for working out an amount and
+  // wrong for a box. Pre-filled with the contract rate, an unmeasured line would
+  // read as "measured, and it came in exactly on the rate", and the blur
+  // comparison below would treat typing that very figure as no change and never
+  // save it.
+  const actualRateRaw = actualsOf(it?.actualRate);
   const actualAmount = actualAmountOf(it);
   const variance = varianceOf(it);
   const measured = measuredWhen(it);
@@ -495,15 +509,30 @@ export default function WorkProjectLinePanel({
           <label className="pn-num">
             <span>Actual quantity</span>
             <input
-              // KEYED ON THE LINE, so Previous/Next gives a fresh box.
+              // KEYED ON THE LINE **AND THE VALUE**.
               //
-              // The panel keeps its place in the tree as the reader moves
-              // between lines, so React reuses this input — and defaultValue is
-              // read on mount only. Without the key, moving from a line
-              // measured at 134 to an unmeasured one leaves 134 sitting in the
-              // box, which reads as that line's measurement. The key forces a
-              // remount, so the box always shows the line it belongs to.
-              key={code}
+              // The panel keeps its place in the tree as the reader moves between
+              // lines, so React reuses this input — and defaultValue is read on
+              // mount only, and is ignored entirely once the reader has typed in
+              // the box (the HTML dirty-value flag). Two separate bugs follow, and
+              // the key has to answer both:
+              //
+              //   the LINE   `code` alone is not identity. The item schema
+              //              defaults code to "" and code-less bill lines are a
+              //              real case this file already handles elsewhere, so two
+              //              consecutive code-less lines shared one key and
+              //              Previous/Next carried the first line's typed figure
+              //              onto the second. `index` IS the line's identity
+              //              everywhere else on this page.
+              //   the VALUE  the same field can be written from outside this box —
+              //              the progress steps do it for percentComplete — and
+              //              then the stale typed figure sits on screen and is
+              //              saved back on the next blur, overwriting the newer
+              //              value with the older one.
+              //
+              // Keying on the value is safe precisely because these save on BLUR:
+              // by the time a save can change the value, focus has already left.
+              key={`${index}-qty-${actualQty ?? ""}`}
               type="number"
               min="0"
               step="any"
@@ -540,6 +569,63 @@ export default function WorkProjectLinePanel({
               placeholder={`${num(it.qty)} in the contract`}
             />
           </label>
+          {/* THE RATE THAT WAS ACTUALLY PAID.
+              withActualRate has existed, exported and unit-tested, since the
+              actuals shipped, and nothing called it — so a QS could record that
+              100m3 was dug and not that it cost more per cubic metre than the
+              bill says, which is half of what a measured variance is made of.
+              Below the quantity because the quantity is the commoner edit, and
+              because a rate against an unmeasured quantity says less.
+
+              NOT OFFERED WHEN RATES ARE HIDDEN. actualRate is in
+              MASKED_MONEY_BLANKS (projects.js:121-128), so for a collaborator
+              without RateGen the server restores the stored value before the save
+              lands and answers 200. The box would take a figure, the indicator
+              would say "Saved", and nothing would be recorded — while the amount
+              on the next line kept showing what the server actually holds. The
+              Actual quantity box above is NOT masked, so it does save, which is
+              why only this one goes away. */}
+          {ratesMasked ? (
+            <p className="hint">
+              The rate paid cannot be recorded here while this project&rsquo;s rates are
+              hidden from you. An active RateGen subscription lifts that; the measured
+              quantity above is unaffected.
+            </p>
+          ) : (
+          <label className="pn-num">
+            <span>Actual rate</span>
+            <input
+              // Keyed on the line and the value, for both reasons given above.
+              key={`${index}-rate-${actualRateRaw ?? ""}`}
+              type="number"
+              min="0"
+              step="any"
+              inputMode="decimal"
+              disabled={!canEdit || saving}
+              defaultValue={actualRateRaw === null ? "" : actualRateRaw}
+              onBlur={(e) => {
+                const typed = e.target.value;
+                const next = actualsOf(typed);
+                if (next === actualRateRaw) {
+                  setRefused("");
+                  return;
+                }
+                const patch = withActualRate(project, index, typed);
+                if (patch) {
+                  setRefused("");
+                  onSave?.(patch);
+                  return;
+                }
+                setRefused(
+                  next !== null && next < 0
+                    ? "A rate that was paid cannot be negative. Record a credit as a variation, not as a negative rate."
+                    : "That rate could not be recorded.",
+                );
+              }}
+              placeholder={`${money(it.rate)} in the contract`}
+            />
+          </label>
+          )}
           <p className="amt">
             {actualQty === null ? (
               // Not the same as agreeing. Said plainly so an empty row is not
@@ -602,6 +688,60 @@ export default function WorkProjectLinePanel({
             ))}
           </div>
         ) : null}
+
+        {/* HIS FIVE STEPS CANNOT SAY 60.
+            A QS valuing monthly measures what is actually built, and this figure
+            is the multiplier in valuationFactor — so it is the basis of the
+            interim certificate, the earned value and the PM dashboard. Rounding a
+            measured 60% to 50 or 75 is not a rounding of the display; it changes
+            what the client is asked to pay. The steps stay, because most lines
+            really are at one of them and a tap beats typing. */}
+        {canEdit ? (
+          <label className="pn-num">
+            <span>Or type the measured figure</span>
+            <input
+              // Keyed on the line and the value. THIS one is where it bit: the
+              // five step buttons below write percentComplete too, so after
+              // tapping 100% the box still read the 60 that had been typed into
+              // it, and the next blur compared that stale 60 against the fresh
+              // 100 and saved 60 back over it.
+              key={`${index}-pct-${done}`}
+              type="number"
+              min="0"
+              max="100"
+              step="any"
+              inputMode="decimal"
+              disabled={saving}
+              defaultValue={done}
+              onBlur={(e) => {
+                const typed = e.target.value.trim();
+                // Empty is not 0 here. withLineProgress reads a blank as 0, and
+                // "I cleared the box" is not "none of it is built" — 0% is a
+                // claim, and it drops the line out of the next valuation.
+                if (typed === "") {
+                  setPctRefused("");
+                  return;
+                }
+                const next = Number(typed);
+                if (!Number.isFinite(next)) {
+                  setPctRefused("That is not a figure. Type a percentage between 0 and 100.");
+                  return;
+                }
+                if (next < 0 || next > 100) {
+                  // Held rather than clamped, so the box can never show one figure
+                  // while the line stands at another.
+                  setPctRefused("Progress is a percentage between 0 and 100.");
+                  return;
+                }
+                setPctRefused("");
+                if (next === done) return;
+                onSave?.(withLineProgress(project, index, next));
+              }}
+            />
+          </label>
+        ) : null}
+
+        {pctRefused ? <p className="pn-bad">{pctRefused}</p> : null}
 
         <p className="hint">
           {contractLocked

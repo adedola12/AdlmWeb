@@ -508,3 +508,137 @@ describe("the actual columns, after a contract lock", () => {
     expect(within(c).getByText("Hide actuals").disabled).toBe(true);
   });
 });
+
+describe("renaming a section", () => {
+  // withSectionRenamed has been written, exported and unit-tested since the
+  // sections landed, and nothing called it — while add and reorder, the other two
+  // thirds of the same feature, are both wired. A QS who mis-typed a section name
+  // had to re-file every line under it by hand.
+  const arranged = () => ({
+    customCategories: ["Substructure", "Frame"],
+    items: [
+      { code: "BQ-1", description: "Excavate", unit: "m3", qty: 10, rate: 100, category: "Substructure" },
+      { code: "BQ-2", description: "Columns", unit: "m3", qty: 5, rate: 200, category: "Frame" },
+    ],
+  });
+
+  const draw = (props = {}) =>
+    render(<WorkProjectBill project={arranged()} canEdit onSave={vi.fn()} {...props} />).container;
+
+  const renamer = (c, name) => within(c).getByLabelText(`Rename ${name}`);
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("offers a rename control on each section", () => {
+    const c = draw();
+    expect(renamer(c, "Substructure")).toBeTruthy();
+    expect(renamer(c, "Frame")).toBeTruthy();
+  });
+
+  it("renames the section AND re-files every line under it", () => {
+    // Both, or the lines re-appear under the old name the moment orderedSections
+    // reads the bill again.
+    vi.spyOn(window, "prompt").mockReturnValue("Foundations");
+    const onSave = vi.fn();
+    const c = draw({ onSave });
+    fireEvent.click(renamer(c, "Substructure"));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const patch = onSave.mock.calls[0][0];
+    expect(patch.customCategories).toEqual(["Foundations", "Frame"]);
+    expect(patch.items[0].category).toBe("Foundations");
+    expect(patch.items[1].category).toBe("Frame");
+  });
+
+  it("does nothing at all when the prompt is cancelled", () => {
+    // null is "cancel". Treating it as an empty name would scold somebody who
+    // changed their mind.
+    vi.spyOn(window, "prompt").mockReturnValue(null);
+    const onSave = vi.fn();
+    const c = draw({ onSave });
+    fireEvent.click(renamer(c, "Frame"));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).queryByText("A section needs a name.")).toBe(null);
+  });
+
+  it("says a section needs a name rather than saving a blank one", () => {
+    vi.spyOn(window, "prompt").mockReturnValue("   ");
+    const onSave = vi.fn();
+    const c = draw({ onSave });
+    fireEvent.click(renamer(c, "Frame"));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).getByText("A section needs a name.")).toBeTruthy();
+  });
+
+  it("refuses a name the bill already uses, and says which", () => {
+    // Two sections with one name is two sections a line cannot be told apart by.
+    vi.spyOn(window, "prompt").mockReturnValue("Frame");
+    const onSave = vi.fn();
+    const c = draw({ onSave });
+    fireEvent.click(renamer(c, "Substructure"));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).getByText(/already has a section called "Frame"/)).toBeTruthy();
+  });
+
+  it("does not call a CASE-ONLY change a collision, because it is not one", () => {
+    // withSectionRenamed compares case-insensitively, so "frames" -> "Frames"
+    // returns null. The handler reported every null as a duplicate, and a group
+    // takes its name from the bill LINES while the ordered list keeps the
+    // project's spelling — so the section a QS SEES as lower case is exactly the
+    // one they would try to capitalise, and they were sent hunting for a duplicate
+    // that does not exist.
+    vi.spyOn(window, "prompt").mockReturnValue("FRAME");
+    const onSave = vi.fn();
+    const c = draw({ onSave });
+    fireEvent.click(renamer(c, "Frame"));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).queryByText(/already has a section called/)).toBe(null);
+    expect(
+      within(c).getByText("A section's capitalisation cannot be changed on its own."),
+    ).toBeTruthy();
+  });
+
+  it("does not wear the drag handle's cursor", () => {
+    // .grip sets cursor:grab and touch-action:none because it was written for
+    // dragging a section. The pencil has no pointer handlers at all, so it invited
+    // a drag it cannot do, beside a handle that can.
+    const c = draw();
+    expect(renamer(c, "Frame").className).toContain("rnm");
+  });
+
+  it("cannot fire a second save while one is in flight", () => {
+    // "Add a section" and "Suggest an arrangement" both pass disabled={saving};
+    // this was the only one of the three that did not, so it could build a patch
+    // from a project the server had already moved past.
+    vi.spyOn(window, "prompt").mockReturnValue("Foundations");
+    const onSave = vi.fn();
+    const c = draw({ onSave, saving: true });
+    const pencil = renamer(c, "Substructure");
+    expect(pencil.getAttribute("tabindex")).toBe("-1");
+    expect(pencil.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(pencil);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet when the name is typed back unchanged", () => {
+    vi.spyOn(window, "prompt").mockReturnValue("Frame");
+    const onSave = vi.fn();
+    const c = draw({ onSave });
+    fireEvent.click(renamer(c, "Frame"));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).queryByText(/already has a section/)).toBe(null);
+  });
+
+  it("is not offered inside a search or a filter", () => {
+    // Renaming a section while looking at a subset is the same hazard as
+    // reordering one — it is the gate the drag grip already uses.
+    const c = draw({ initialQuery: "Excavate" });
+    expect(within(c).queryByLabelText("Rename Substructure")).toBe(null);
+  });
+
+  it("is not offered to a reader who cannot edit", () => {
+    const c = render(<WorkProjectBill project={arranged()} canEdit={false} />).container;
+    expect(within(c).queryByLabelText("Rename Frame")).toBe(null);
+  });
+});

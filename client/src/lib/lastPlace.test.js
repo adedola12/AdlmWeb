@@ -54,3 +54,46 @@ describe("continue where you left off (P0.4)", () => {
     expect(readPlaces().map((p) => p.key)).toEqual(["new", "old"]);
   });
 });
+
+describe("the address a remembered place reopens at, on the new build", () => {
+  // DsWorkHome's first three rows are remembered places. They were built with
+  // the classic address by construction — placeHref had no other shape — so
+  // "Pick up where you left off" was a link back into the old build on the one
+  // screen the whole flip was about.
+  it("gives the new project page, at the tab", () => {
+    expect(
+      placeHref(
+        { productKey: "revit", key: "block-a", tab: "valuation" },
+        { newBuild: true },
+      ),
+    ).toBe("/work/project/revit/block-a?tab=valuations");
+  });
+
+  it("carries a remembered bill line as a search, when we kept its label", () => {
+    // The new Bill has no notion of a line key and searches description and
+    // element only, so the label is the only part of a remembered line that
+    // means anything on the other side.
+    expect(
+      placeHref(
+        { productKey: "revit", key: "block-a", tab: "bill", line: "k42", lineLabel: "Mass concrete" },
+        { newBuild: true },
+      ),
+    ).toBe("/work/project/revit/block-a?tab=bill&q=Mass+concrete");
+  });
+
+  it("does not hand the search box a line key it cannot match", () => {
+    // Searching for "k42" filters the bill down to nothing, and an empty bill
+    // reads as a project whose lines are gone rather than as a missed jump.
+    expect(
+      placeHref({ productKey: "revit", key: "block-a", tab: "bill", line: "k42" }, { newBuild: true }),
+    ).toBe("/work/project/revit/block-a?tab=bill");
+  });
+
+  it("still gives the classic address when nobody asks for the new one", () => {
+    // The classic build reads its own places; the translation is at the point of
+    // use, not baked into what was stored.
+    expect(placeHref({ productKey: "revit", key: "block-a", tab: "valuation" })).toBe(
+      "/projects/revit?project=block-a&tab=valuation",
+    );
+  });
+});

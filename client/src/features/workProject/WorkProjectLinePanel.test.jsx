@@ -367,6 +367,79 @@ describe("recording what was measured on site", () => {
     expect(patch.items[1]).toEqual(p.items[1]);
   });
 
+  it("offers a box for the rate that was actually paid", () => {
+    // withActualRate was exported and unit-tested from the day the actuals
+    // shipped and called by nothing, so a QS could record that 100m3 was dug and
+    // not that it cost more per cubic metre than the bill says — which is half of
+    // what a measured variance is made of.
+    const c = draw(locked());
+    expect(within(c).getByText("Actual rate")).toBeTruthy();
+  });
+
+  it("leaves that box EMPTY on an unmeasured line, not filled with the contract rate", () => {
+    // actualRateOf falls back to the contract rate when nothing is measured,
+    // which is right for working out an amount and wrong for a box: pre-filled,
+    // an unmeasured line reads as "measured, and it came in exactly on the rate".
+    const c = draw(locked());
+    const box = within(c).getByPlaceholderText(/4,500 in the contract/);
+    expect(box.value).toBe("");
+  });
+
+  it("records the rate without touching the contract rate", () => {
+    const onSave = vi.fn();
+    const p = locked();
+    const c = draw(p, { onSave });
+    fireEvent.blur(within(c).getByPlaceholderText(/4,500 in the contract/), {
+      target: { value: "4800" },
+    });
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const patch = onSave.mock.calls[0][0];
+    expect(patch.items[0].actualRate).toBe(4_800);
+    expect(patch.items[0].rate).toBe(4_500);
+    expect(patch.items[1]).toEqual(p.items[1]);
+  });
+
+  it("sends the recorded-at, so the server cannot promote the figure into rate", () => {
+    // The trap: on an unpriced line, sanitizeItems moves actualRate into rate and
+    // clears the actuals when nothing says when it was recorded. Recording what
+    // an unpriced line actually cost is exactly when a QS would hit it.
+    const onSave = vi.fn();
+    const p = locked({
+      items: [{ code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 0 }],
+    });
+    const c = draw(p, { onSave });
+    fireEvent.blur(within(c).getByLabelText("Actual rate"), { target: { value: "4800" } });
+    const patch = onSave.mock.calls.at(-1)[0];
+    expect(patch.items[0].actualRate).toBe(4_800);
+    expect(patch.items[0].actualRecordedAt).toBeTruthy();
+  });
+
+  it("explains a refused negative rate instead of going quiet", () => {
+    const onSave = vi.fn();
+    const c = draw(locked(), { onSave });
+    fireEvent.blur(within(c).getByPlaceholderText(/4,500 in the contract/), {
+      target: { value: "-1" },
+    });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).getByText(/cannot be negative/)).toBeTruthy();
+  });
+
+  it("does not save when the rate is typed back to what it already was", () => {
+    // Each save is a whole-project write. A blur that changed nothing must not be
+    // one of them.
+    const onSave = vi.fn();
+    const p = locked({
+      items: [
+        { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, actualRate: 4_800 },
+      ],
+    });
+    const c = draw(p, { onSave });
+    fireEvent.blur(within(c).getByPlaceholderText(/4,500 in the contract/), {
+      target: { value: "4800" },
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("shows the variance once a line is measured", () => {
     const c = draw(
       locked({
@@ -792,5 +865,210 @@ describe("a suggested rate in another unit", () => {
     expect(within(conv).getByLabelText("Thickness (mm)").value).toBe("230");
     fireEvent.click(within(conv).getByText("Apply"));
     expect(onApplyRate.mock.calls[0][1]).toMatchObject({ rateId: "c20", unit: "m3", convert: { thickness: 0.23 } });
+  });
+});
+
+describe("typing a measured percentage", () => {
+  const job = (over = {}) => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items: [
+      { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, percentComplete: 50 },
+      { code: "BQ-2", description: "Columns", qty: 40, unit: "m3", rate: 72_000 },
+    ],
+    ...over,
+  });
+
+  const draw = (project, props = {}) =>
+    render(
+      <WorkProjectLinePanel project={project} index={0} canEdit contractLocked {...props} />,
+    ).container;
+
+  const box = (c) => within(c).getByLabelText("Or type the measured figure");
+
+  it("offers a box beside the five steps", () => {
+    // His five steps cannot say 60, and this figure is the multiplier in
+    // valuationFactor — so it is the basis of the interim certificate and EVM.
+    // Rounding a measured 60 to 50 or 75 changes what the client is asked to pay.
+    const c = draw(job());
+    expect(box(c)).toBeTruthy();
+    expect(box(c).value).toBe("50");
+    // And the steps are still there.
+    expect(within(c).getByText("75%")).toBeTruthy();
+  });
+
+  it("records a figure the steps cannot express", () => {
+    const onSave = vi.fn();
+    const c = draw(job(), { onSave });
+    fireEvent.blur(box(c), { target: { value: "60" } });
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const patch = onSave.mock.calls[0][0];
+    expect(patch.items[0].percentComplete).toBe(60);
+    // Every other line goes back whole, because the PUT replaces the array.
+    expect(patch.items[1]).toEqual(job().items[1]);
+  });
+
+  it("takes a part figure, which is the whole point", () => {
+    const onSave = vi.fn();
+    const c = draw(job(), { onSave });
+    fireEvent.blur(box(c), { target: { value: "62.5" } });
+    expect(onSave.mock.calls[0][0].items[0].percentComplete).toBe(62.5);
+  });
+
+  it("HOLDS a figure outside 0-100 rather than clamping it quietly", () => {
+    // Clamped, the box would show 150 while the line stood at 100 — one figure on
+    // screen and another in the valuation.
+    const onSave = vi.fn();
+    const c = draw(job(), { onSave });
+    fireEvent.blur(box(c), { target: { value: "150" } });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).getByText("Progress is a percentage between 0 and 100.")).toBeTruthy();
+
+    fireEvent.blur(box(c), { target: { value: "-5" } });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("does not read an emptied box as 0% built", () => {
+    // withLineProgress reads a blank as 0, and 0% is a CLAIM — it drops the line
+    // out of the next valuation. "I cleared the box" is not that claim.
+    const onSave = vi.fn();
+    const c = draw(job(), { onSave });
+    fireEvent.blur(box(c), { target: { value: "" } });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("does not save a figure typed back to what it already was", () => {
+    const onSave = vi.fn();
+    const c = draw(job(), { onSave });
+    fireEvent.blur(box(c), { target: { value: "50" } });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("says so where the reader is looking, on an UNLOCKED project too", () => {
+    // The shared `refused` line lives in the "Measured on site" section, which is
+    // not rendered at all before the contract is locked — while this box still is.
+    const c = render(
+      <WorkProjectLinePanel
+        project={job({ contract: {} })}
+        index={0}
+        canEdit
+        contractLocked={false}
+      />,
+    ).container;
+    expect(within(c).queryByText("Measured on site")).toBe(null);
+    fireEvent.blur(box(c), { target: { value: "150" } });
+    expect(within(c).getByText("Progress is a percentage between 0 and 100.")).toBeTruthy();
+  });
+
+  it("is not offered to a reader who cannot edit", () => {
+    const c = draw(job(), { canEdit: false });
+    expect(within(c).queryByLabelText("Or type the measured figure")).toBe(null);
+  });
+});
+
+describe("the three measured boxes, when the value changes from elsewhere", () => {
+  // All three are uncontrolled, with defaultValue — which React reads on mount
+  // only, and which it ignores entirely once the reader has typed (the HTML
+  // dirty-value flag). Two bugs followed, and neither had a test.
+  const job = (over = {}) => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items: [
+      { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, percentComplete: 50 },
+      { code: "BQ-2", description: "Columns", qty: 40, unit: "m3", rate: 72_000 },
+    ],
+    ...over,
+  });
+
+  const draw = (project, props = {}) =>
+    render(
+      <WorkProjectLinePanel project={project} index={0} canEdit contractLocked {...props} />,
+    );
+
+  it("DOES NOT keep a typed percentage after a step button writes a new one", () => {
+    // The data-loss case. Type 60, blur, save. The line completes, so tap 100%.
+    // The box kept reading 60, and the next blur compared that stale 60 against
+    // the fresh 100 and saved 60 back over it.
+    const typed = job();
+    const view = draw(typed);
+    const box = () => within(view.container).getByLabelText("Or type the measured figure");
+    fireEvent.change(box(), { target: { value: "60" } });
+    fireEvent.blur(box(), { target: { value: "60" } });
+
+    // The step button's save comes back as a new project, which is how the shell
+    // feeds this panel.
+    const after = job({
+      items: [{ ...typed.items[0], percentComplete: 100 }, typed.items[1]],
+    });
+    view.rerender(
+      <WorkProjectLinePanel project={after} index={0} canEdit contractLocked />,
+    );
+    expect(box().value).toBe("100");
+  });
+
+  it("does not carry one line's figures onto the next when neither has a code", () => {
+    // code defaults to "" in the schema and code-less lines are a real case this
+    // file handles elsewhere, so two consecutive ones shared a key and
+    // Previous/Next reused the same input.
+    const codeless = job({
+      items: [
+        { code: "", description: "First", qty: 10, unit: "m3", rate: 100, actualQty: 7 },
+        { code: "", description: "Second", qty: 20, unit: "m3", rate: 200 },
+      ],
+    });
+    const view = draw(codeless);
+    expect(within(view.container).getByLabelText("Actual quantity").value).toBe("7");
+    view.rerender(
+      <WorkProjectLinePanel project={codeless} index={1} canEdit contractLocked />,
+    );
+    // The second line is unmeasured, so its box must be empty — not showing 7.
+    expect(within(view.container).getByLabelText("Actual quantity").value).toBe("");
+  });
+
+  it("refreshes the rate box when the stored rate changes under it", () => {
+    const before = job();
+    const view = draw(before);
+    expect(within(view.container).getByLabelText("Actual rate").value).toBe("");
+    const after = job({
+      items: [{ ...before.items[0], actualRate: 4_800 }, before.items[1]],
+    });
+    view.rerender(
+      <WorkProjectLinePanel project={after} index={0} canEdit contractLocked />,
+    );
+    expect(within(view.container).getByLabelText("Actual rate").value).toBe("4800");
+  });
+});
+
+describe("a reader whose rates are hidden", () => {
+  // Shared at "full" without RateGen: canEdit TRUE, canSeeRates FALSE. They may
+  // measure and may not price. actualRate is in MASKED_MONEY_BLANKS, so the server
+  // restores the stored value and answers 200 — the box took a figure, the
+  // indicator said "Saved", and nothing was recorded.
+  const job = () => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items: [{ code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 0 }],
+  });
+
+  const draw = (props = {}) =>
+    render(
+      <WorkProjectLinePanel project={job()} index={0} canEdit contractLocked {...props} />,
+    ).container;
+
+  it("is not offered the rate box, and is told why", () => {
+    const c = draw({ ratesMasked: true });
+    expect(within(c).queryByLabelText("Actual rate")).toBe(null);
+    expect(within(c).getByText(/rate paid cannot be recorded here/)).toBeTruthy();
+  });
+
+  it("keeps the measured QUANTITY box, which is not masked and does save", () => {
+    // actualQty is not in MASKED_MONEY_BLANKS, so it is recorded normally. Taking
+    // it away would remove a capability the reader actually has.
+    const c = draw({ ratesMasked: true });
+    expect(within(c).getByLabelText("Actual quantity")).toBeTruthy();
+  });
+
+  it("still offers the rate box to everybody else", () => {
+    expect(within(draw()).getByLabelText("Actual rate")).toBeTruthy();
   });
 });

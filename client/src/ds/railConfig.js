@@ -107,6 +107,12 @@ export const PAGE_ALIAS = {
   "work-rate": "work-library",
   "work-programme": "work-home",
   "dash-product": "dash-products",
+  // The activity trail is not a rail destination of its own — it is reached
+  // from "All activity" on the overview and from the Activity log button in
+  // settings. Without an alias the rail would highlight nothing at all, which
+  // reads as "you have left the app". The overview is the primary door, so the
+  // rail keeps pointing there.
+  "dash-activity": "dash-home",
 };
 
 /** Every leaf item, in rail order. */

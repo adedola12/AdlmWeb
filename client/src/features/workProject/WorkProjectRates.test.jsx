@@ -1,7 +1,13 @@
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent, within } from "@testing-library/react";
+import { render as rtlRender, cleanup, fireEvent, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import WorkProjectRates from "./WorkProjectRates.jsx";
+
+// "Open in RateGen" is a Link now, because the library is a route and not a tab
+// — it used to call onGo("library"), which resolveTab answered with Overview.
+// So every render here needs a router around it.
+const render = (ui) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 // His Rates & budget tab (work-proj.js:975-1040). WORK.md §13: it IS RateGen
 // inside the project.
@@ -318,4 +324,25 @@ describe("an absence that is not a fact", () => {
     const c = draw({ rateMap: { byCode: {}, truncated: false, considered: 1, unpriced: 1 } });
     expect(within(c).getByText(/No suggestion/)).toBeTruthy();
   });
+});
+
+describe("Open in RateGen", () => {
+  it("sends Open in RateGen to the library, not to the project Overview", () => {
+    // It called onGo("library"). "library" is not in tabsFor, so resolveTab
+    // answered "overview" and the control quietly returned the reader to the
+    // project summary — the third control on this page to fail that exact way.
+    const c = render(<WorkProjectRates project={project()} canEdit />).container;
+    const link = within(c).getByText("Open in RateGen");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("/work/library");
+  });
+
+  it("does not ask the tab switcher for a tab that does not exist", () => {
+    // The assertion that fails if somebody turns it back into a button.
+    const onGo = vi.fn();
+    const c = render(<WorkProjectRates project={project()} canEdit onGo={onGo} />).container;
+    fireEvent.click(within(c).getByText("Open in RateGen"));
+    expect(onGo).not.toHaveBeenCalledWith("library");
+  });
+
 });

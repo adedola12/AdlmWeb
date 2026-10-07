@@ -108,6 +108,22 @@ export default function DsCheckoutWire() {
   });
   const [method, setMethod] = React.useState("card");
 
+  // A DISCOUNT CODE, WHICH THIS SCREEN COULD NOT TAKE.
+  //
+  // POST /purchase/cart has read req.body.couponCode all along
+  // (server/routes/purchase.js) and applies it through
+  // validateAndComputeDiscount. This checkout simply never sent it, so a code
+  // that worked on the classic page did nothing here — silently, because the
+  // order still created and still charged, just at full price.
+  //
+  // Checked against POST /coupons/validate BEFORE the order is created, which
+  // is the same call the classic page makes. Nobody should have to commit to an
+  // order to find out whether their code was accepted.
+  const [couponCode, setCouponCode] = React.useState("");
+  const [coupon, setCoupon] = React.useState(null); // { coupon, discount } or null
+  const [couponBusy, setCouponBusy] = React.useState(false);
+  const [couponErr, setCouponErr] = React.useState("");
+
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState(null);
   const [order, setOrder] = React.useState(null); // { purchaseId, totalAmount, ... }
@@ -129,6 +145,54 @@ export default function DsCheckoutWire() {
   const total = order?.totalAmount ?? order?.total ?? null;
 
   // ── create the order ─────────────────────────────────────────────────────
+  /**
+   * Check a discount code before the order exists.
+   *
+   * The same POST /coupons/validate the classic checkout calls, with the same
+   * body, so a code behaves identically on both. The server is the authority
+   * either way — it re-validates on /purchase/cart — but asking now is what
+   * lets somebody find out their code is expired while they can still do
+   * something about it, rather than from the amount they are charged.
+   */
+  async function applyCoupon() {
+    const code = couponCode.trim();
+    if (!code || couponBusy) return;
+    if (!items.length) {
+      setCouponErr("Add something to the order before applying a code.");
+      return;
+    }
+    setCouponBusy(true);
+    setCouponErr("");
+    try {
+      const out = await apiAuthed("/coupons/validate", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          currency,
+          subtotal: total ?? undefined,
+          productKeys: items
+            .map((e) => String(e.productKey || e.key || "").trim())
+            .filter(Boolean),
+        }),
+      });
+      if (!out?.coupon) {
+        // A 200 with no coupon is a refusal, and treating it as acceptance
+        // would show "applied" over a code that changes nothing.
+        setCoupon(null);
+        setCouponErr("That code was not accepted.");
+        return;
+      }
+      setCoupon({ coupon: out.coupon, discount: Number(out.discount) || 0 });
+    } catch (e) {
+      setCoupon(null);
+      setCouponErr(e?.message || "That code could not be checked just now.");
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
   const createOrder = React.useCallback(async () => {
     const payload = {
       currency,
@@ -141,6 +205,11 @@ export default function DsCheckoutWire() {
         seats: Math.max(1, parseInt(e.seats ?? 1, 10) || 1),
         periods: Math.max(1, parseInt(e.periods ?? e.qty ?? 1, 10) || 1),
         firstTime: !!e.firstTime,
+        // Dropped by this mapping until now, so cloud storage somebody had
+        // chosen and been quoted for was not on the order they paid. The
+        // server reads it per item (purchase.js, i.storageBlocks) and prices
+        // it; it only ever arrived as undefined.
+        storageBlocks: Math.max(0, parseInt(e.storageBlocks ?? 0, 10) || 0),
       })),
       licenseType: billing.company ? "organization" : "personal",
       organization: billing.company
@@ -152,6 +221,10 @@ export default function DsCheckoutWire() {
         : null,
       autoRenew: false,
       paymentMethod: method,
+      // Only when one was actually accepted. Sending a rejected or half-typed
+      // code would have the server quietly reject it a second time, and the
+      // buyer would find out from the amount rather than from the screen.
+      ...(coupon?.coupon ? { couponCode: couponCode.trim() } : {}),
     };
 
     // On-site training rides along from the quotation. The server only accepts
@@ -174,7 +247,11 @@ export default function DsCheckoutWire() {
     // the callback closed over a stale copy of the rest: typing a billing email
     // and pressing the button sent the previous value, so the invoice went to
     // the wrong address while the screen said it had gone to the right one.
-  }, [accessToken, billing, currency, items, meta, method, user?.email]);
+    // The coupon belongs here for the same reason billing does: without it the
+    // callback closes over the code as it was when the callback was last made,
+    // so applying a code and pressing Pay in the same breath would create the
+    // order at full price while the screen said the code was applied.
+  }, [accessToken, billing, coupon, couponCode, currency, items, meta, method, user?.email]);
 
   const onPay = async () => {
     setMsg(null);
@@ -549,6 +626,52 @@ export default function DsCheckoutWire() {
           )}
         </div>
       )}
+
+      {/* A discount code. Checked before the order exists, so nobody has to
+          commit to a purchase to find out whether their code was any good. */}
+      {!order ? (
+        <div className="ds-field" style={{ marginTop: "18px" }}>
+          <label htmlFor="chk-coupon">Discount code</label>
+          <div className="frow">
+            <input
+              id="chk-coupon"
+              type="text"
+              value={couponCode}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="If you were given one"
+              disabled={couponBusy || !!coupon}
+              onChange={(e) => {
+                setCouponCode(e.target.value);
+                setCouponErr("");
+                // Changing the code drops the accepted one: otherwise somebody
+                // edits an applied code and the order carries the old one.
+                if (coupon) setCoupon(null);
+              }}
+            />
+            <button
+              type="button"
+              className="ds-btn btn-o ds-btn-sm"
+              disabled={couponBusy || !couponCode.trim() || !items.length}
+              onClick={coupon ? () => { setCoupon(null); setCouponCode(""); } : applyCoupon}
+            >
+              {coupon ? "Remove" : couponBusy ? "Checking…" : "Apply"}
+            </button>
+          </div>
+          {coupon ? (
+            <p className="ds-sub" style={{ marginTop: "6px" }}>
+              {coupon.coupon?.code || couponCode.trim()} applied
+              {coupon.discount ? ` — ${fmt(coupon.discount, currency)} off` : ""}. The
+              total below is recalculated by the server when the order is created.
+            </p>
+          ) : null}
+          {couponErr ? (
+            <p className="chk-msg is-err" style={{ marginTop: "6px" }}>
+              {couponErr}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {msg && (
         <p className={msg.kind === "err" ? "chk-msg is-err" : "chk-msg is-ok"} role="status">

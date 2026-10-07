@@ -39,19 +39,43 @@ export default function WorkProjectValuations({
   view = "certs",
   onView,
   onGo,
-  drift = null,
-}) {
+  onIssueCert,
+  onRaiseVariation,
+  onOpenVariation,
+  onLock,
+  ratesMasked = false,
+  drift = null, classicHref = "" }) {
   const locked = contractIsLocked(project);
 
   if (!locked) {
-    return <LockedOut project={project} canEdit={canEdit} drift={drift} onGo={onGo} />;
+    return (
+      <LockedOut
+        project={project}
+        canEdit={canEdit}
+        drift={drift}
+        onGo={onGo}
+        onLock={onLock}
+        classicHref={classicHref}
+      />
+    );
   }
 
-  return <Unlocked project={project} canEdit={canEdit} view={view} onView={onView} />;
+  return (
+    <Unlocked
+      project={project}
+      canEdit={canEdit}
+      view={view}
+      onView={onView}
+      onIssueCert={onIssueCert}
+      onRaiseVariation={onRaiseVariation}
+      onOpenVariation={onOpenVariation}
+      ratesMasked={ratesMasked}
+    />
+  );
 }
 
 /** His .pj-lock — the gate, and the checklist that explains it. */
-function LockedOut({ project, canEdit, drift, onGo }) {
+function LockedOut({ project, canEdit, drift, onGo, onLock, classicHref = "" }) {
   const checks = lockChecklist(project, { drift });
   const ready = readyToLock(project);
 
@@ -80,20 +104,52 @@ function LockedOut({ project, canEdit, drift, onGo }) {
           </li>
         ))}
       </ul>
+      {/* IT IS THE CONTROL NOW, NOT A LINK AWAY FROM HERE.
+          It read "Lock the contract on the classic workspace", because locking
+          needed a step-up re-authentication that only the classic build drove.
+          Before that it was worse: it called onGo("overview"), so somebody who
+          had worked through the checklist arrived at a summary of their own
+          project with no idea where the lock was.
+          The step-up hook is reusable (features/security/useStepUp) and the
+          checklist above is already the right gate, so the lock happens here.
+          The link stays as the fallback for a build with no handler wired. */}
       {canEdit ? (
-        <button
-          type="button"
-          className={ready ? "ds-btn btn-p ds-btn-sm" : "ds-btn btn-o ds-btn-sm"}
-          onClick={() => onGo?.("overview")}
-        >
-          {ready ? "Lock the contract on the classic workspace" : "See the project stages"}
-        </button>
+        ready ? (
+          onLock ? (
+            <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={onLock}>
+              Lock the contract
+            </button>
+          ) : classicHref ? (
+            <a className="ds-btn btn-p ds-btn-sm" href={classicHref}>
+              Lock the contract on the classic workspace
+            </a>
+          ) : (
+            // Same sentence, not a link. Without an href there is nowhere to
+            // send anybody, and a dead button is what this change exists to
+            // remove — but the reader still needs to be told the same thing, so
+            // the wording does not change with whether we happen to have a URL.
+            <p className="ds-sub">Lock the contract on the classic workspace.</p>
+          )
+        ) : (
+          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => onGo?.("overview")}>
+            See the project stages
+          </button>
+        )
       ) : null}
     </div>
   );
 }
 
-function Unlocked({ project, canEdit, view, onView }) {
+function Unlocked({
+  project,
+  canEdit,
+  view,
+  onView,
+  onIssueCert,
+  onRaiseVariation,
+  onOpenVariation,
+  ratesMasked = false,
+}) {
   const mode = resolveValuationView(view);
   const totals = React.useMemo(() => totalsFor(project), [project]);
   // completePercent is value-weighted and returns 0 before the contract is
@@ -182,12 +238,45 @@ function Unlocked({ project, canEdit, view, onView }) {
           Retention {Number(settings.retentionPct) || 0}% · VAT {Number(settings.vatPct) || 0}% ·
           WHT {Number(settings.withholdingPct) || 0}%
         </span>
+
+        {/* The monthly act, and until now the one thing this tab could not do.
+            Only on the certificates view: raising one from the variations list or
+            the final account would be a button about something else. */}
+        {canEdit && mode === "certs" && onIssueCert ? (
+          <button type="button" className="pj-lnk" onClick={onIssueCert}>
+            Issue a certificate
+          </button>
+        ) : null}
+
+        {/* On the variations view only: a control about variations, on a list of
+            certificates, would be a control about something else.
+            ratesMasked refuses it rather than offering it and letting the server
+            say no — a variation is a VALUE, and this is the one route where a new
+            one is born, so there is no stored figure to fall back on and the
+            server answers 403 RATES_MASKED outright. */}
+        {canEdit && mode === "variations" && onRaiseVariation ? (
+          ratesMasked ? (
+            <span className="pj-by">
+              Raising a variation needs rates you cannot see on this project
+            </span>
+          ) : (
+            <button type="button" className="pj-lnk" onClick={onRaiseVariation}>
+              Raise a variation
+            </button>
+          )
+        ) : null}
       </div>
 
       {mode === "certs" ? (
-        <Certificates bars={bars} certs={certs} contractSum={contractSum} canEdit={canEdit} />
+        <Certificates
+          bars={bars}
+          certs={certs}
+          contractSum={contractSum}
+          canEdit={canEdit}
+          onIssueCert={onIssueCert}
+        />
       ) : mode === "variations" ? (
-        <WorkProjectVariationsView project={project} />
+        <WorkProjectVariationsView project={project} onOpenVariation={onOpenVariation} />
       ) : (
         <WorkProjectFinalView
           project={project}
@@ -200,7 +289,7 @@ function Unlocked({ project, canEdit, view, onView }) {
   );
 }
 
-function Certificates({ bars, certs, contractSum, canEdit }) {
+function Certificates({ bars, certs, contractSum, canEdit, onIssueCert }) {
   return (
     <div className="pj-vals">
       <div className="ch" aria-hidden="true">
@@ -239,9 +328,17 @@ function Certificates({ bars, certs, contractSum, canEdit }) {
             <b>No valuations yet</b>
             <p>
               {canEdit
-                ? "Record progress on the bill, then raise the first certificate in the classic workspace."
+                ? "Record progress on the bill, then certify what has been built."
                 : "Nothing has been certified on this contract yet."}
             </p>
+            {/* It said "raise the first certificate in the classic workspace",
+                and gave no link — so the one instruction on an empty Valuations
+                tab was to leave, with nowhere to go. It can be done here now. */}
+            {canEdit && onIssueCert ? (
+              <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={onIssueCert}>
+                Issue the first certificate
+              </button>
+            ) : null}
           </div>
         )}
       </div>

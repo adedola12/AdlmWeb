@@ -116,6 +116,11 @@ const EXACT = Object.freeze({
   "/manage/guides": "/whats-new",
   // Classic's account screen.
   "/manage/settings": "/profile",
+  // The full activity trail. Classic renders it on the Profile page
+  // (features/account/AccountActivity.jsx, mounted by pages/Profile.jsx), which
+  // is the exact same log off the same /me/activity route — so this one is a
+  // true counterpart rather than a nearest-neighbour.
+  "/manage/activity": "/profile",
   // Classic's support desk. Signed-in, like the screen it replaces.
   "/manage/support": "/support/request",
   // The Work overview is the new build's home for the work surface. Classic's

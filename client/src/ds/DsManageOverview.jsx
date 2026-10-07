@@ -603,7 +603,7 @@ export default function DsManageOverview() {
             <section className="dsh-panel">
               <div className="dsh-ph">
                 <h2>Recent activity</h2>
-                <Link className="more" to="/profile">
+                <Link className="more" to="/manage/activity">
                   All activity
                 </Link>
               </div>

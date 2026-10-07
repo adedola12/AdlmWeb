@@ -40,14 +40,41 @@ describe("programme dates are judged on the WAT calendar day", () => {
 });
 
 describe("where a decision opens", () => {
-  it("opens the tabbed workspace at the tab that resolves it", () => {
+  it("opens the NEW project page at the tab that resolves it", () => {
+    // Both halves of projectTabHref went to the classic workspace, for
+    // everybody including staff, because { newBuild: true } was never passed.
+    // Every row on the Work home is a thing waiting on a person, so every row
+    // was a link somebody follows.
     expect(projectTabHref({ productKey: "revit", slug: "block-a" }, "valuation")).toBe(
-      "/projects/revit?project=block-a&tab=valuation",
+      "/work/project/revit/block-a?tab=valuations",
     );
+  });
+
+  it("translates the tab name, because the two builds do not spell them alike", () => {
+    // resolveTab answers a name it does not know with Overview, silently. Of
+    // the names this screen asks for, only bill and pm match as spelt — so an
+    // untranslated "valuation" landed a QS on the project summary, where a
+    // certificate waiting for them is nowhere on screen.
+    const p = { productKey: "revit", slug: "block-a" };
+    expect(projectTabHref(p, "valuation")).toContain("?tab=valuations");
+    expect(projectTabHref(p, "budget")).toContain("?tab=rates");
+    expect(projectTabHref(p, "bill")).toContain("?tab=bill");
+    expect(projectTabHref(p, "pm")).toContain("?tab=pm");
+    // Overview is the absence of ?tab=, which is how the shell writes it.
+    expect(projectTabHref(p, "dashboard")).toBe("/work/project/revit/block-a");
   });
 
   it("sends ArchiCAD to its own screen rather than a tab it does not have", () => {
     expect(projectTabHref({ productKey: "archicad", slug: "villa" }, "pm")).toBe("/archicad/villa/boq");
+  });
+
+  it("opens a RateGen project (a priced bill) at its tab, like any project", () => {
+    // A RateGen project saved from Rate Gen's "Price a bill" has a workspace
+    // now (3cc7b1d8); RateGen with no project still means the rates page.
+    expect(projectTabHref({ productKey: "rategen", slug: "lib" }, "bill")).toBe(
+      "/work/project/rategen/lib?tab=bill",
+    );
+    expect(projectTabHref({ productKey: "rategen" }, "bill")).toBe("/rategen");
   });
 });
 
@@ -87,7 +114,7 @@ describe("needs a decision", () => {
       now: NOW,
     });
     expect(d.rows[0].text).toBe("IPC 3 is a draft, not yet approved");
-    expect(d.rows[0].href).toBe("/projects/planswift?project=moremi&tab=valuation");
+    expect(d.rows[0].href).toBe("/work/project/planswift/moremi?tab=valuations");
   });
 
   it("only counts a variation that is explicitly pending", () => {

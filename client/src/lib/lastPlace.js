@@ -8,6 +8,8 @@
 // key. The single-object shape written before this change is still read, as
 // one entry, so nobody's remembered place is lost by the upgrade.
 
+import { newBuildPlaceHref } from "./projectLinks.js";
+
 const KEY = "adlm-last-place";
 
 /** How many places are kept. Beyond this, the oldest is dropped. */
@@ -66,8 +68,17 @@ export function rememberPlace(place) {
   }
 }
 
-/** The workspace address that reopens a place: the project, its tab, its line. */
-export function placeHref(place) {
+/**
+ * The workspace address that reopens a place: the project, its tab, its line.
+ *
+ * `newBuild` gives his project page instead of the classic workspace, and is
+ * what every caller in the app now passes. It is not the default because the
+ * two addresses spell their tabs differently and a place is stored, not
+ * computed: a row written by one build is read by the other, so the
+ * translation belongs at the point of use rather than baked into storage.
+ */
+export function placeHref(place, { newBuild = false } = {}) {
+  if (newBuild) return newBuildPlaceHref(place);
   const q = new URLSearchParams({ project: place.key });
   if (place.tab) q.set("tab", place.tab);
   if (place.tab === "bill" && place.line) q.set("line", place.line);

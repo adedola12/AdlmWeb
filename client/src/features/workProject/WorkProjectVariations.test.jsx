@@ -95,6 +95,45 @@ describe("the Variations view", () => {
     expect(onOpenVariation).toHaveBeenCalledWith(3);
   });
 
+  it("is not a button when there is nowhere for it to go", () => {
+    // WorkProjectValuations renders this view with no handler, and the row was a
+    // <button> regardless — so a real contract showed twenty rows that took
+    // focus, lit up on hover and did nothing. A control that does nothing reads
+    // as a broken product; a plain row reads as "the action is elsewhere",
+    // which is the truth until the raise/decide form exists.
+    const c = vars();
+    const rows = c.querySelectorAll(".pj-vars .vr");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.tagName).toBe("DIV");
+      expect(row.getAttribute("type")).toBe(null);
+    }
+  });
+
+  it("does not LOOK clickable either, which was half the bug", () => {
+    // .vr carries cursor:pointer and a hover border because it was written for a
+    // row that IS a button. Turning the element into a div took the focus and the
+    // keyboard away and left the hand cursor and the hover lift behind — so a QS
+    // still moused over a row, still saw it light up, still clicked, still got
+    // nothing. .vr-flat (ds-local.css) puts both back.
+    for (const row of vars().querySelectorAll(".pj-vars .vr")) {
+      expect(row.className).toContain("vr-flat");
+    }
+  });
+
+  it("drops the flat class when it is a control again", () => {
+    for (const row of vars({ onOpenVariation: vi.fn() }).querySelectorAll(".pj-vars .vr")) {
+      expect(row.className).not.toContain("vr-flat");
+    }
+  });
+
+  it("is a button again the moment there is somewhere to go", () => {
+    for (const row of vars({ onOpenVariation: vi.fn() }).querySelectorAll(".pj-vars .vr")) {
+      expect(row.tagName).toBe("BUTTON");
+      expect(row.getAttribute("type")).toBe("button");
+    }
+  });
+
   it("says there are none rather than drawing four zeros", () => {
     const c = render(<WorkProjectVariationsView project={{ variations: [] }} />).container;
     expect(within(c).getByText("No variations yet")).toBeTruthy();

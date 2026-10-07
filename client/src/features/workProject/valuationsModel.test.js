@@ -279,13 +279,43 @@ describe("what a certificate percentage is measured against", () => {
   });
 
   it("counts approved variations, which are certifiable", () => {
+    // QTY AND RATE, which is what a variation actually stores.
+    //
+    // This test used to pass `{ status, amount }` — and so did the code, which read
+    // `v.amount ?? v.total`. VariationSchema has neither field
+    // (server/models/TakeoffProject.js:256-303), so the term was zero on every
+    // real project while the test was green: the test and the code agreed on a
+    // field the database never produces, which is the one way a dead branch keeps
+    // its coverage.
     const p = locked({
       variations: [
-        { status: "approved", amount: 10_000_000 },
-        { status: "pending", amount: 50_000_000 },
+        { status: "approved", qty: 1, unit: "item", rate: 10_000_000 },
+        { status: "pending", qty: 1, unit: "item", rate: 50_000_000 },
       ],
     });
     expect(worksBaseFor(p, { contractSum: 112_875_000 })).toBe(110_000_000);
+  });
+
+  it("counts an omission against the base, because an omission is certifiable too", () => {
+    const p = locked({
+      variations: [{ status: "approved", qty: 1, unit: "item", rate: -4_000_000 }],
+    });
+    expect(worksBaseFor(p, { contractSum: 112_875_000 })).toBe(96_000_000);
+  });
+
+  it("reads a variation with NO status as approved, like the rest of the build", () => {
+    // The server's own default, variationsModel.variationStatus and
+    // features/projects/lib/projectTotals.js all read an absent status as approved.
+    // A strict === "approved" here excluded every grandfathered row.
+    const p = locked({ variations: [{ qty: 1, unit: "item", rate: 10_000_000 }] });
+    expect(worksBaseFor(p, { contractSum: 112_875_000 })).toBe(110_000_000);
+  });
+
+  it("ignores a rejected variation", () => {
+    const p = locked({
+      variations: [{ status: "rejected", qty: 1, unit: "item", rate: 10_000_000 }],
+    });
+    expect(worksBaseFor(p, { contractSum: 112_875_000 })).toBe(100_000_000);
   });
 
   it("a contract locked before those figures existed keeps its old base", () => {

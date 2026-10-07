@@ -38,10 +38,42 @@ export const DISCIPLINES = Object.freeze([
 
 const VALIDATION = Object.freeze({
   valid: { label: "Matches the bill", tone: "ok" },
+  // Reserved. server/models/TakeoffProject.js:400 keeps it for "a previously
+  // stored model failed a re-check", and no re-check route exists yet, so
+  // nothing writes this today and the drift note below cannot fire. Kept rather
+  // than deleted: it is the prepared landing for that check, and removing it
+  // would quietly make adding one a bigger change than it should be.
   invalid: { label: "Does not match the bill", tone: "warn" },
   "no-quantities": { label: "Nothing measured from it yet", tone: "" },
   unchecked: { label: "Not checked yet", tone: "" },
 });
+
+/**
+ * "Not checked yet" is a promise, and for one kind of model it is a lie.
+ *
+ * The server stores status "unchecked" in two quite different situations, and
+ * the stored word is the same for both:
+ *
+ *   * a .frag upload — pre-converted fragments carry no STEP tags, so the id
+ *     gate CANNOT run (server/routes/projects.js, isFragUpload). This is final.
+ *     Nothing will ever check it, because there is nothing in the file to check
+ *     against. It is written WITH a checkedAt, because the check did run and
+ *     concluded it could not apply.
+ *   * an older model stored before validation existed, which has no validation
+ *     object at all, so attachedModels defaults the status and checkedAt is null.
+ *
+ * Only the second is "yet". Telling somebody who uploaded fragments that their
+ * model is "not checked yet" leaves them waiting for something that is never
+ * coming — which is exactly what a screen looks like when it is stuck.
+ */
+function uncheckedLabel({ checkedAt, format }) {
+  if (!checkedAt) return { label: "Not checked yet", tone: "" };
+  const frag = String(format || "").toLowerCase() === "frag";
+  return {
+    label: frag ? "Fragments — no ids to check" : "Cannot be checked against the bill",
+    tone: "",
+  };
+}
 
 /** Every model attached to this project, with what its check found. */
 export function attachedModels(project) {
@@ -50,17 +82,26 @@ export function attachedModels(project) {
     const m = models[key] || {};
     const v = m.validation || {};
     const status = String(v.status || "unchecked").toLowerCase();
+    const format = m.format || "ifc";
+    // "unchecked" is two different facts wearing one word — see uncheckedLabel.
+    const shown =
+      status === "unchecked"
+        ? uncheckedLabel({ checkedAt: v.checkedAt, format })
+        : { label: VALIDATION[status]?.label, tone: VALIDATION[status]?.tone };
     return {
       key,
       label,
       attached: Boolean(m.sourceFile || m.url),
       sourceFile: m.sourceFile || "",
-      format: m.format || "ifc",
+      format,
       sizeBytes: safeNum(m.sizeBytes),
       uploadedAt: m.uploadedAt || null,
       status,
-      statusLabel: VALIDATION[status]?.label || VALIDATION.unchecked.label,
-      tone: VALIDATION[status]?.tone || "",
+      // `checkable` says whether waiting for a check is a reasonable thing to
+      // do. The Model tab uses it to explain the tag rather than leave it bare.
+      checkable: !(status === "unchecked" && v.checkedAt),
+      statusLabel: shown.label || VALIDATION.unchecked.label,
+      tone: shown.tone || "",
       requiredCount: safeNum(v.requiredCount),
       matchedCount: safeNum(v.matchedCount),
       missingCount: safeNum(v.missingCount),

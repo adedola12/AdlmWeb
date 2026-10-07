@@ -86,4 +86,10 @@ describe("what a card links to", () => {
     auth = { user: null };
     expect(hrefFor(p)).toBe("/work/project/planswift/ikoyi-complex");
   });
+
+  it("still leaves ArchiCAD and RateGen-without-a-project on their own screens", () => {
+    auth = { user: { _id: "u1", role: "user" } };
+    expect(hrefFor({ productKey: "archicad", slug: "tower" })).toBe("/archicad/tower/boq");
+    expect(hrefFor({ productKey: "rategen" })).toBe("/rategen");
+  });
 });

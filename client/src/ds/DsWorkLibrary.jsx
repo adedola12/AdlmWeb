@@ -30,6 +30,13 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { useFeedback } from "./feedback/feedbackContext.js";
 import WkDropdown from "./WkDropdown.jsx";
+// The custom-rate builder and its draft helpers are deliberately NOT imported.
+// A rate is built and edited in Rate Gen desktop and nowhere else (owner's
+// rule), so the button that opened the builder is gone and so is the code
+// behind it. ds/rategen/CustomRateBuilder.jsx and customRateDraft.js are left
+// on disk rather than deleted: the admin rate builder still uses that
+// machinery, and the server route it posted to is unchanged, so nothing that
+// Rate Gen desktop or an administrator relies on has moved.
 import { componentsOf, toNum, unexplainedNet } from "./rategen/rateMath.js";
 import { mergeRateRows } from "./rategen/mergeRateRows.js";
 import { fetchAllRates } from "./rategen/fetchRates.js";
@@ -445,14 +452,20 @@ export default function DsWorkLibrary() {
           <p>
             One library for the practice. Published rates, your own corrections to them and the
             rates you build yourself, in the same place — and Rate Gen, QUIV and HERON read the
-            same library through this account.
+            same library through this account. Rates are built and edited in{" "}
+            <b>Rate Gen desktop</b>; what you change there appears here.
           </p>
         </div>
-        <div className="wk-acts">
-          <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
-            Full library
-          </Link>
-        </div>
+        {/* NO BUILD, NO EDIT, HERE.
+            Owner's rule: a rate is built and edited in Rate Gen desktop and
+            nowhere else. This screen reads the library — published rates, your
+            corrections to them and your own rates — so you can see what QUIV
+            and HERON will price with. Two controls used to sit here, "Build a
+            custom rate" and "Edit the library", and both have gone with the
+            code behind them rather than being hidden behind a flag that would
+            quietly come back. The sentence above says where to do it instead,
+            because removing a button without saying where it went just makes
+            the screen look broken. */}
       </div>
 
       <div className="wk-bar">

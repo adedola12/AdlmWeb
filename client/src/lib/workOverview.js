@@ -43,16 +43,28 @@ export function taskState(t, now = Date.now(), dueWithinDays = 14) {
   return { late: false, dueSoon: false, label: "In progress" };
 }
 
-/** Where a project opens, at a tab when the workspace has tabs. */
+/**
+ * Where a project opens, at a tab when the workspace has tabs.
+ *
+ * Every row on this screen is a thing waiting on a person, so every row is a
+ * link somebody is going to follow — and both halves of this answer went to
+ * the classic workspace, for EVERYBODY including staff, because the newBuild
+ * option was simply never passed. It was the last place on the Work home still
+ * handing out old addresses after the 5 Oct flip.
+ *
+ * The tab names are translated on the way (newBuildTab): this screen asks for
+ * the classic "valuation", and of the names it uses only "bill" and "pm" are
+ * spelt the same on both builds.
+ */
 export function projectTabHref(p, tab) {
   const productKey = String(p?.productKey || "").toLowerCase();
   const key = p?.slug || p?.id || p?.projectId || "";
   // ArchiCAD does not open in the tabbed workspace, so a tab would be a link to
   // a screen that does not exist. A RateGen project (a priced bill) does.
   if (!tab || !key || productKey === "archicad") {
-    return projectWorkspaceHref({ ...p, id: p?.id || p?.projectId });
+    return projectWorkspaceHref({ ...p, id: p?.id || p?.projectId }, { newBuild: true });
   }
-  return placeHref({ productKey, key, tab });
+  return placeHref({ productKey, key, tab }, { newBuild: true });
 }
 
 const nameOf = (p) => p?.name || "Untitled project";

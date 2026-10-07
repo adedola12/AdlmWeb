@@ -64,20 +64,30 @@ const css = (f) =>
     .readFileSync(path.join(HERE, "..", "styles", f), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "");
 
-/** Every rule whose selector mentions the full-screen class. */
-function fsRules(file) {
+/** Every rule whose selector mentions the full-screen class.
+ *
+ * Reads more than one sheet, because none of these rules is Richard's. They
+ * were written into ds-dash.css and ds-work-proj.css, which are GENERATED from
+ * his stylesheets, so `node scripts/port-ds-css.mjs` deleted them on its next
+ * run. They live in ds-local.css now, the hand-authored companion. The pair is
+ * searched rather than just the new file so that this stays a test of "the
+ * rule exists and says the right thing" — which is what full screen rests on —
+ * and not a test of which file someone filed it under. */
+function fsRules(...files) {
   const out = [];
-  const re = /([^{}]+)\{([^{}]*)\}/g;
-  let m;
-  while ((m = re.exec(css(file)))) {
-    const sel = m[1].trim();
-    if (sel.includes(".dsh-fs")) out.push({ sel, body: m[2] });
+  for (const file of files) {
+    const re = /([^{}]+)\{([^{}]*)\}/g;
+    let m;
+    while ((m = re.exec(css(file)))) {
+      const sel = m[1].trim();
+      if (sel.includes(".dsh-fs")) out.push({ sel, body: m[2] });
+    }
   }
   return out;
 }
 
 describe("what full screen actually does to the layout", () => {
-  const dash = fsRules("ds-dash.css");
+  const dash = fsRules("ds-dash.css", "ds-local.css");
 
   it("hides the rail and the app bar", () => {
     const hidden = dash
@@ -107,7 +117,9 @@ describe("what full screen actually does to the layout", () => {
   });
 
   it("re-sticks his tab strip to the top, where the bar was", () => {
-    const tabs = fsRules("ds-work-proj.css").find((r) => r.sel.includes(".pj-tabs"));
+    const tabs = fsRules("ds-work-proj.css", "ds-local.css").find((r) =>
+      r.sel.includes(".pj-tabs"),
+    );
     expect(tabs?.body.replace(/\s/g, "")).toContain("top:0");
   });
 });

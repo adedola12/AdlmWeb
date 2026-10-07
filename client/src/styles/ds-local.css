@@ -1905,3 +1905,643 @@
 }
 .ds .auth2-linkbtn:hover { text-decoration: underline; }
 .ds .auth2-linkbtn:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+
+/* ── the activity trail (DsActivity) ──────────────────────────────────────
+ *
+ * His dashboard sheet has .dsh-feed for a six-item preview, which is all the
+ * overview needed. The full log is a screen rather than a panel: it filters, it
+ * pages, and it says when as well as how long ago. These three fill exactly that
+ * gap and nothing else — his .dsh-chips, button.dsh-chip.on and .dsh-feed are
+ * reused as they are. */
+
+/* A quiet line for "loading", "nothing yet" and the error. Matches the empty
+ * state his .dsh-body already uses for an empty panel rather than introducing a
+ * second voice for the same job. */
+.ds .dsh-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.ds .dsh-note.err { color: var(--bad, #C0362C); }
+
+/* The exact timestamp, under the description. .dsh-feed .ago in the corner is
+ * the glanceable form; this is the one somebody quotes in a dispute, which is
+ * what the log is for, so it is present but subordinate. */
+.ds .dsh-when {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Prev / position / next. His sheet has no pager because nothing in his
+ * dashboard pages; the buttons themselves are his .ds-btn so only the row
+ * needs describing. */
+.ds .dsh-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-weight: 300;
+}
+.ds .dsh-pager button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 520px) {
+  /* The position text is the least important of the three on a phone. */
+  .ds .dsh-pager { gap: 8px; }
+  .ds .dsh-pager span { font-size: 11.5px; text-align: center; }
+}
+
+/* ── an editable number inside a table row (DsConstants) ──────────────────
+ *
+ * His .wk-tbl rows carry read-only figures in .wk-n, and every input he styles
+ * is a form field with a label above it (.ds-field, .adm-f, .ada-f) — none of
+ * which belongs inside a 5-column grid row. The Material Constants library is
+ * the one screen where the number in the row IS the control, so these three
+ * fill that gap and nothing else.
+ *
+ * Deliberately quiet: it borrows .wk-n's right alignment and tabular figures so
+ * a column of values still reads as a column, and only shows a border on hover
+ * or focus. A library of 122 rows each drawing a boxed input is a wall of
+ * boxes; the number should look like the figure it is until you go to change it. */
+.ds .wk-val {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  font: 400 13px var(--font);
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 150ms var(--e-out), background 150ms var(--e-out);
+}
+.ds .wk-val:hover:not(:disabled) { border-color: var(--line-2); }
+.ds .wk-val:focus {
+  outline: 0;
+  border-color: var(--action);
+  background: var(--bg);
+}
+/* Out of range. Uses --accent, the same colour .ds-field.bad uses, so an
+ * invalid figure here looks like an invalid figure anywhere else. */
+.ds .wk-val.bad { border-color: var(--accent); }
+.ds .wk-val-err {
+  display: block;
+  margin-top: 3px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--accent);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* The row's reset control, in the 26px .wk-go column his rates table ends with.
+ * Shown only on a row the firm has actually overridden. */
+.ds .wk-undo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 150ms var(--e-out), color 150ms var(--e-out);
+}
+.ds .wk-undo svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ds .wk-undo:hover:not(:disabled) { background: var(--bg-alt); color: var(--ink); }
+.ds .wk-undo:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.ds .wk-undo:disabled { opacity: .4; cursor: not-allowed; }
+/* ── brightness, over the 3D view (ModelViewer) ───────────────────────────
+ *
+ * Sits on the canvas, so it has to be legible over whatever the model happens
+ * to be behind it — hence the blur and the translucent plate rather than a
+ * plain background colour. It is the only control of its kind in the product;
+ * his sheet has no pattern for something floating over a viewport. */
+.ds .mv-bright {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+.ds .mv-bright svg {
+  width: 15px; height: 15px; flex: none;
+  fill: none; stroke: var(--ink-3); stroke-width: 1.7; stroke-linecap: round;
+}
+.ds .mv-bright input[type="range"] {
+  width: 104px;
+  accent-color: var(--action);
+  cursor: pointer;
+}
+@media (max-width: 520px) {
+  /* The slider is the first thing to lose room on a phone, and a 60px one is
+   * not usable anyway — the icon alone still says what it is. */
+  .ds .mv-bright input[type="range"] { width: 72px; }
+}
+
+/* The bill line the 3D view is currently showing (WorkProjectFourD).
+ * His .fd-line has a hover state but nothing for "this is the one you picked",
+ * because until now clicking one only opened a panel. Now it drives the model,
+ * so which one is selected has to be visible after the pointer has moved away. */
+.ds .fd-line.on {
+  background: color-mix(in srgb, var(--action) 9%, transparent);
+  box-shadow: inset 2px 0 0 var(--action);
+}
+.ds .fd-line.on .ds b { color: var(--action); font-weight: 500; }
+
+/* The bill line the 3D view is currently showing (WorkProjectFourD).
+ * His .fd-line has a hover state but nothing for "this is the one you picked",
+ * because until now clicking one only opened a panel. Now it drives the model,
+ * so which one is selected has to be visible after the pointer has moved away. */
+.ds .fd-line.on {
+  background: color-mix(in srgb, var(--action) 9%, transparent);
+  box-shadow: inset 2px 0 0 var(--action);
+}
+.ds .fd-line.on .ds b { color: var(--action); font-weight: 500; }
+
+/* THE HERON BUDGET CARD — one card per bill line, its material and labour beneath.
+ *
+ * THIS LIVED IN ds-work-proj.css, WHICH IS GENERATED.
+ *
+ * It is not in Richard's work-proj.css at all (nothing of .pj-budline is), so it
+ * was hand-written into a file whose own first line says hand edits are lost. It
+ * survived only because nobody had re-run scripts/port-ds-css.mjs since — and the
+ * script exists precisely to be re-run when Richard changes a stylesheet, which
+ * he is actively doing.
+ *
+ * That was survivable while the markup still said .pj-vars .vr: a porter run
+ * dropped the card back to his variations row, which is wrong but is styling. It
+ * stopped being survivable when the markup was moved onto .pj-budline, because
+ * then a porter run leaves the card with no rules at all. So it is here, where it
+ * belongs, and the markup it styles can be trusted.
+ *
+ * (It is not alone. Around sixty hand-written classes are still sitting in that
+ * generated sheet — the whole .fd-* 4D playback family, the line panel's .pn-num
+ * boxes and rate suggestions, .pn-bad, the bill's .grip and .shw, .pj-actsum.
+ * Every one of them vanishes on the next port. Moving them is its own job.)
+ *
+ * It used to borrow .pj-vars .vr — a four-column row built for variations — and
+ * force display:block over it inline, which left it with no rules of its own at
+ * any width.
+ */
+.ds .pj-budline{border:1px solid var(--line);border-radius:14px;background:var(--bg);overflow:hidden}
+.ds .pj-budline + .pj-budline{margin-top:8px}
+.ds .pj-budline .hd{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;
+  padding:12px 16px;background:var(--bg-alt);border-bottom:1px solid var(--line)}
+.ds .pj-budline .hd .no{font-size:12px;font-weight:500;color:var(--ink)}
+.ds .pj-budline .hd .ds{min-width:0}
+.ds .pj-budline .hd .ds b{display:block;font-size:13.5px;font-weight:400;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .pj-budline .hd .ds em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3)}
+/* No inner scroll. .pj-bud caps itself at 420px, which is right for the QUIV
+   budget's one long list and wrong for a card that is already one line's worth. */
+.ds .pj-budline .pj-bud{max-height:none}
+
+/* One line per material: what it is, how much, what it costs.
+   It read as three stacked lines, which is three eye movements for one fact and
+   makes two materials impossible to compare. Quantity gets its own column so the
+   figures line up down the card; the NAME is what gives when there is not enough
+   room, because a QS scanning a budget is comparing the numbers.
+
+   Scoped to .pj-budline like the frame. These three were left behind on
+   .pj-vars .vr when the card was given its own class, so moving the markup
+   without them dropped the rows to the three-column .pj-bud .br and took the
+   quantity column with it. */
+.ds .pj-budline .pj-bud .br{grid-template-columns:20px minmax(0,1fr) auto auto;gap:14px}
+.ds .pj-budline .pj-bud .br .ds b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .pj-budline .pj-bud .br .q{font-size:12px;color:var(--ink-3);white-space:nowrap;
+  font-variant-numeric:tabular-nums;text-align:right}
+
+@media (max-width:900px){
+  /* The status chip and the description give first, because on a phone the
+     figures are what a QS is comparing. */
+  .ds .pj-budline .hd{grid-template-columns:auto minmax(0,1fr);row-gap:6px}
+  .ds .pj-budline .hd .pj-stage, .ds .pj-budline .hd .tag{grid-column:2;justify-self:start}
+  .ds .pj-budline .hd .ds b{white-space:normal}
+}
+
+/* A ROW THAT IS NOT A CONTROL MUST NOT LOOK LIKE ONE.
+ *
+ * .pj-vars .vr is his variations row and it is styled as a button —
+ * cursor:pointer, and a border that lifts on hover. That is right while the row
+ * opens something. WorkProjectValuations renders the variations list with no
+ * handler, because there is nowhere to open yet, so those rows render as plain
+ * divs; the element changed and the affordance did not, which left a QS mousing
+ * over twenty rows that lit up under the hand cursor and did nothing when
+ * clicked. Exactly the complaint the change set out to answer.
+ *
+ * In ds-local.css because ds-work-proj.css is generated from Richard's own
+ * stylesheet and .vr-flat is ours.
+ */
+.ds .pj-vars .vr.vr-flat{cursor:default}
+.ds .pj-vars .vr.vr-flat:hover{border-color:var(--line)}
+
+/* The section RENAME control, which is not the drag handle beside it.
+ *
+ * It borrowed .grip to avoid writing any CSS, and .grip sets cursor:grab and
+ * touch-action:none because it was written for dragging a section. So the pencil
+ * invited a drag it cannot do, two inches from a handle that can. Same box, same
+ * hover, honest cursor.
+ *
+ * .rnm.rnm, DOUBLED, and not for tidiness.
+ *
+ * The element carries both classes, so these declarations compete head-on with
+ * `.ds .pj-bill .grip` — and at equal specificity THIS FILE LOSES. ds-local.css
+ * rides in the ENTRY bundle while every per-screen sheet (ds-work-proj.css here)
+ * is imported by a React.lazy'd screen, so Vite emits it as its own chunk and the
+ * browser appends it AFTER the entry stylesheet. The header of this file reads as
+ * though it loads last; that is true only of ds.css and ds-feedback.css, which
+ * main.jsx imports just above it.
+ *
+ * So a same-specificity override here does nothing at all, silently. Doubling the
+ * class is the idiom already used further up this file for exactly this reason.
+ */
+.ds .pj-bill .rnm.rnm{cursor:pointer;touch-action:auto}
+
+/* The lock checklist, inside the side panel.
+ *
+ * His own checklist is styled under .pj-lock (ds-work-proj.css:448-451), and
+ * .pj-lock is a 560px centred card with 34px of padding — right for the gate that
+ * fills the Valuations tab, wrong inside a 380px panel. These are the same list
+ * rules without the card, so the reader sees the identical ticks and warnings in
+ * both places and does not have to work out whether they mean the same thing.
+ *
+ * In ds-local.css because ds-work-proj.css is generated from Richard's own
+ * stylesheet and this list is ours.
+ */
+.ds .pn-checks{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:8px;text-align:left}
+.ds .pn-checks li{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink-2);line-height:1.45}
+.ds .pn-checks li svg{width:16px;height:16px;flex:none;margin-top:1px;fill:none;
+  stroke:var(--fb-warn);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ds .pn-checks li.ok svg{stroke:var(--fb-ok)}
+.ds .pn-checks li.ok{color:var(--ink-3)}
+
+/* ===========================================================================
+ * RECLAIMED FROM THE GENERATED SHEETS
+ *
+ * Everything below this line was hand-written straight into ds-work-proj.css,
+ * ds-dash.css or ds-work.css - files whose own first line reads "GENERATED - do
+ * not edit by hand ... hand edits here are lost". None of it is in Richard's
+ * stylesheets, so the next `node scripts/port-ds-css.mjs` deleted all of it and
+ * left the screens it dresses with no rules at all. .pj-budline above was moved
+ * for exactly that reason (632f1873); this is the rest of it - 62 class names
+ * across three sheets, which a porter run was one command away from erasing.
+ *
+ * A NOTE ON THE CASCADE, BECAUSE IT IS NOT WHAT IT LOOKS LIKE.
+ *
+ * main.jsx imports this file after ds.css and ds-feedback.css, so against those
+ * two it wins a tie on order. It does NOT against the three sheets below.
+ * ds-work-proj.css, ds-dash.css and ds-work.css are imported by screens that are
+ * React.lazy'd (main.jsx, lazyScreen), so Vite emits them as their own CSS
+ * chunks and the browser appends those AFTER the entry stylesheet that carries
+ * this file. Between this file and those three, a tie is now won by the
+ * GENERATED rule, which is the opposite of the arrangement these blocks were
+ * written under.
+ *
+ * It costs almost nothing, because almost nothing here collides: 62 of the
+ * class names do not occur in his sheets at all, and the rest sit under a
+ * parent that does not either. Exactly four rules did collide at equal
+ * specificity. Each is marked ORDER-PROOF below and carries its class twice, so
+ * it out-specifies his by one and no longer depends on which chunk the browser
+ * parsed first. Everything else is moved verbatim, comments and all.
+ * =========================================================================== */
+
+/* --------------------------------------------------------------------------
+ * FROM ds-dash.css
+ * ------------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------ full screen
+   A screen that has asked for the whole viewport (DsAppShell's `full`). The
+   rail and the app bar go and the grid drops to one column; nothing else about
+   the screen changes, so it is the same screen in both modes rather than a
+   second layout to keep in step.
+
+   --dash-bar goes to 0 with them, because a dozen rules elsewhere reserve
+   space for a bar that is no longer there — sticky offsets, scroll-margin for
+   #anchors, the lesson sidebar's height. One variable, not a dozen overrides.
+
+   The rail drawer's scrim goes too: its burger is in the bar, so nothing can
+   open it, and a scrim left behind would swallow clicks. */
+.ds.dsh-fs{--dash-bar:0px}
+.ds.dsh-fs .dsh{grid-template-columns:1fr}
+.ds.dsh-fs .dsh-rail,
+.ds.dsh-fs .dsh-top,
+.ds.dsh-fs .dsh-scrim{display:none}
+
+/* Sample models — course files and software demos, on Downloads and on a course. */
+.ds .sm-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.ds .sm-row{display:flex;gap:14px;align-items:center;justify-content:space-between;
+  padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.ds .sm-row.locked{background:var(--bg-alt)}
+.ds .sm-what{min-width:0}
+.ds .sm-what b{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .sm-what span{display:block;font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.ds .sm-why{flex:none;max-width:46%;font-size:11.5px;color:var(--ink-3);text-align:right;line-height:1.45}
+.ds .sm-none{margin:0;font-size:13px;font-weight:300;color:var(--ink-2);line-height:1.6}
+.ds .sm-said{margin:10px 0 0;font-size:12px;color:var(--fb-bad,#b3261e)}
+
+/* --------------------------------------------------------------------------
+ * FROM ds-work.css
+ * ------------------------------------------------------------------------ */
+
+/* Issuing an interim certificate: the period it covers, and any notes.
+   Was unreachable — the button posted nothing, so every certificate stored
+   periodStart: null and the document could only print its issue date. */
+.ds .pcp-issue{margin:12px 0 4px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--bg-alt)}
+.ds .pcp-issue-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.ds .pcp-issue-fields label{display:grid;gap:5px;min-width:0}
+.ds .pcp-issue-fields label.wide{grid-column:1/-1}
+.ds .pcp-issue-fields span{font-size:11.5px;color:var(--ink-3)}
+.ds .pcp-issue-fields input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);font:400 13px var(--font);color:var(--ink)}
+.ds .pcp-issue-hint{margin:10px 0 0;font-size:11.5px;color:var(--ink-3);line-height:1.5}
+.ds .pcp-issue-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.ds .pcp-issue-bad{margin:8px 0 0;font-size:11.5px;color:var(--fb-bad,#b3261e);line-height:1.5}
+
+/* --------------------------------------------------------------------------
+ * FROM ds-work-proj.css
+ * ------------------------------------------------------------------------ */
+
+/* In an empty state the text is centred and the buttons sat left: .pj-acts is
+   built for a right-aligned toolbar (margin-left:auto), which is the opposite
+   case. Three classes, so it beats the rule above without !important. */
+.ds .pj-empty .pj-acts{justify-content:center;margin-left:0;margin-right:0}
+
+/* His tab strip sticks below the app bar. In full screen there is no app bar,
+   so it sticks to the top of the scroller instead - otherwise it parks 64px
+   down and the bill scrolls through the gap above it. */
+.ds.dsh-fs .pj-tabs{top:0}
+
+/* the section grip: a finger cannot use native drag-and-drop, so this takes the pointer */
+.ds .pj-bill .shw{display:flex;align-items:stretch}
+.ds .pj-bill .shw .sh{flex:1;min-width:0}
+.ds .pj-bill .grip{display:grid;place-items:center;width:36px;flex:none;background:var(--bg-alt);border-bottom:1px solid var(--line);
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;color:var(--ink-3)}
+.ds .pj-bill .grip svg{width:16px;height:16px;fill:currentColor}
+.ds .pj-bill .grip:hover,.ds .pj-bill .grip:focus-visible{color:var(--ink)}
+.ds .pj-bill .grip:focus-visible{outline:2px solid var(--action);outline-offset:-2px}
+.ds .pj-bill .grip + .sh{padding-left:4px}
+.ds .pj-bill .bsec.dragging{opacity:.55}
+.ds .pj-bill .bsec.drop{box-shadow:inset 0 3px var(--action)}
+
+/* THE BUY SCHEDULE'S SIXTH COLUMN.  ORDER-PROOF.
+   His row is five columns. Ours is six: the work-project Buy schedule gives the
+   amount a column of its own, read like the Budget, because that is the figure
+   a QS compares when deciding what to order first (WorkProjectBudget.jsx:294).
+   Only the track list differs from his rule - display, gap, align-items and
+   padding are his and are left to him, so a change he makes to those still
+   arrives. The class is doubled because his rule is the same three classes and
+   now loads after this file; without the extra class the sixth column would
+   silently fold back to five and the amount would wrap onto its own row. */
+.ds .pj-buy.pj-buy .hd, .ds .pj-buy.pj-buy .rw{grid-template-columns:34px 120px minmax(0,1.2fr) 120px 120px minmax(0,1fr)}
+
+@media (max-width:900px){
+  /* A variation row kept its four columns at every width, so on a phone the
+     description was squeezed between the number, the amount and the status.
+     The amount and the chip take a second row instead.
+     ORDER-PROOF: his .pj-vars .vr is not in a media query at all, so it is
+     still live at this width and matches this selector exactly. */
+  .ds .pj-vars.pj-vars .vr{grid-template-columns:44px minmax(0,1fr);row-gap:8px;padding:12px 14px}
+  /* DIRECT children only.
+     The HERON budget reuses .pj-vars > .vr as its per-bill-line card, so a
+     descendant selector here reached the material rows nested inside it and
+     forced their amount into column 2 - which put it on a line of its own
+     below the quantity. A variation's own .n and chip ARE direct children
+     (WorkProjectVariations.jsx:104), so `>` keeps this rule doing its job and
+     stops it reaching into somebody else's. */
+  .ds .pj-vars .vr > .n{grid-column:2;justify-self:start}
+  .ds .pj-vars .vr > .pj-stage{grid-column:2;justify-self:start}
+
+  /* On a phone the row keeps the three things an order decision needs - when to
+     buy, what it is, what it costs - and drops the quantity and the bill line to
+     a second line rather than squeezing six columns into 375px.
+     ORDER-PROOF: his phone rule is this same selector. Its padding is identical
+     to ours and stays his; the track list and the row-gap are the difference. */
+  .ds .pj-buy.pj-buy .rw{grid-template-columns:28px minmax(0,1fr) auto;row-gap:2px}
+  .ds .pj-buy .rw .by{grid-column:2}
+  /* ORDER-PROOF: his sends .m across to the last column (2 / -1), which would
+     sit it under the amount instead of beside it. */
+  .ds .pj-buy.pj-buy .rw .m{grid-column:2}
+  .ds .pj-buy .rw .n:not(:last-of-type){grid-column:3;text-align:right}
+}
+
+/* ------------------------------------------------- the full workspace (4D)
+   One screen, one date. The viewport and the rail across the top, the scrubber
+   between, the three panels below. It only ever renders inside full screen, so
+   it may assume the whole viewport and does not compete with the rail. */
+.ds .fd{display:flex;flex-direction:column;gap:12px;min-height:0}
+.ds .fd-top{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;align-items:start}
+.ds .fd-view{min-width:0;border:1px solid var(--line);border-radius:16px;background:var(--bg-alt);overflow:hidden;min-height:420px}
+.ds .fd-load{display:grid;place-items:center;height:420px;font-size:13px;color:var(--ink-3)}
+.ds .fd-nomodel{display:flex;flex-direction:column;justify-content:center;gap:8px;height:420px;padding:0 28px;text-align:center}
+.ds .fd-nomodel b{font-size:15px;font-weight:500;color:var(--ink)}
+.ds .fd-nomodel p{margin:0;font-size:13px;color:var(--ink-3);max-width:46ch;margin-inline:auto}
+.ds .fd-nomodel span{font-size:12px;color:var(--ink-2)}
+
+.ds .fd-rail{display:grid;gap:8px;align-content:start}
+.ds .fd-stat{border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:9px 12px}
+.ds .fd-stat span{display:block;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.ds .fd-stat b{display:block;font-size:17px;font-weight:500;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .fd-stat em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.ds .fd-stat.warn{border-color:color-mix(in srgb,var(--fb-err) 40%,var(--line))}
+.ds .fd-stat.warn b{color:var(--fb-err)}
+.ds .fd-stat.ok b{color:var(--fb-ok)}
+
+/* The scrubber. Deliberately a real <input type=range>: it is keyboard
+   operable, it announces its value, and a QS can drag it with a trackpad. */
+.ds .fd-bar{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:8px 12px}
+.ds .fd-play{flex:none;width:34px;height:34px;border-radius:10px;border:1px solid var(--line-2);background:var(--bg-alt);color:var(--ink);cursor:pointer;font-size:12px;line-height:1}
+.ds .fd-play:hover{border-color:var(--action)}
+.ds .fd-date{flex:none;min-width:130px;font-size:13px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .fd-scrub{flex:1 1 auto;min-width:0;accent-color:var(--action)}
+.ds .fd-speed{flex:none;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:12px;padding:0 6px}
+
+.ds .fd-bottom{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr);gap:12px;align-items:start}
+.ds .fd-panel{border:1px solid var(--line);border-radius:16px;background:var(--bg);overflow:hidden;min-width:0}
+.ds .fd-hd{display:flex;align-items:baseline;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ds .fd-hd b{font-size:13px;font-weight:500;color:var(--ink)}
+.ds .fd-hd em{font-style:normal;font-size:11.5px;color:var(--ink-3);margin-left:auto}
+
+.ds .fd-curve{padding:12px 14px 10px}
+.ds .fd-curve svg{width:100%;height:150px;display:block;overflow:visible}
+.ds .fd-curve polyline{fill:none;stroke-width:1.6;vector-effect:non-scaling-stroke}
+.ds .fd-curve polyline.pl{stroke:var(--action)}
+.ds .fd-curve polyline.sp{stroke:var(--fb-ok);stroke-dasharray:4 3}
+.ds .fd-curve line.nw{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.ds .fd-curve .lg{display:flex;gap:14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
+.ds .fd-curve .lg span::before{content:"";display:inline-block;width:12px;height:2px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.ds .fd-curve .lg .pl::before{background:var(--action)}
+.ds .fd-curve .lg .sp::before{background:var(--fb-ok)}
+
+.ds .fd-gantt{max-height:210px;overflow-y:auto;padding:8px 14px 12px}
+.ds .fd-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:10px;align-items:center;padding:3px 0}
+.ds .fd-row .nm{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .fd-row .tr{position:relative;height:14px;border-radius:7px;background:var(--bg-alt)}
+.ds .fd-row .br{position:absolute;top:2px;height:10px;border-radius:5px;background:var(--line-2);overflow:hidden}
+.ds .fd-row .br.on{background:color-mix(in srgb,var(--action) 45%,var(--line-2))}
+.ds .fd-row .br u{display:block;height:100%;background:var(--fb-ok);text-decoration:none}
+.ds .fd-row .nw{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--ink-3);text-decoration:none}
+
+.ds .fd-lines{max-height:210px;overflow-y:auto}
+.ds .fd-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;
+  padding:8px 14px;border:0;border-top:1px solid var(--line);background:none;text-align:left;cursor:pointer;font:inherit}
+.ds .fd-line:first-child{border-top:0}
+.ds .fd-line:hover{background:var(--bg-alt)}
+.ds .fd-line .ds{min-width:0}
+.ds .fd-line .ds b{display:block;font-size:12.5px;font-weight:400;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .fd-line .ds em{display:block;font-style:normal;font-size:11px;color:var(--ink-3)}
+.ds .fd-line .n{font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ds .fd-none{margin:0;padding:16px 14px;font-size:12.5px;color:var(--ink-3)}
+
+@media (max-width:1100px){
+  .ds .fd-top{grid-template-columns:1fr}
+  .ds .fd-rail{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .ds .fd-bottom{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .ds .fd-bar{flex-wrap:wrap}
+  .ds .fd-date{min-width:0;order:-1}
+  .ds .fd-scrub{flex-basis:100%;order:1}
+}
+
+/* ------------------------------------------------ labour activity schedule */
+.ds .ac-load{border:1px solid var(--line);border-radius:16px;background:var(--bg);padding:12px 14px;margin-bottom:14px}
+.ds .ac-load .hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.ds .ac-load .hd b{font-size:13px;font-weight:500;color:var(--ink)}
+.ds .ac-load .hd em{font-style:normal;font-size:11.5px;color:var(--ink-3);margin-left:auto}
+.ds .ac-load .bars{display:flex;align-items:flex-end;gap:2px;height:64px}
+.ds .ac-load .b{flex:1 1 0;min-width:2px;border-radius:3px 3px 0 0;background:color-mix(in srgb,var(--action) 40%,var(--line-2))}
+.ds .ac-load .b.pk{background:var(--action)}
+.ds .ac-load .ft{display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--ink-3)}
+
+.ds .ac-list{border:1px solid var(--line);border-radius:16px;background:var(--bg);overflow:hidden}
+.ds .ac-list .hd, .ds .ac-list .rw{display:grid;
+  grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 110px 120px 84px 84px 52px;
+  gap:12px;align-items:center;padding:0 16px;text-align:left}
+.ds .ac-list .hd{height:34px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);background:var(--bg-alt);border-bottom:1px solid var(--line)}
+.ds .ac-list .rw{min-height:50px;width:100%;border:0;border-top:1px solid var(--line);background:none;font:inherit;color:inherit;cursor:pointer}
+.ds .ac-list .rw:first-of-type{border-top:0}
+.ds .ac-list .rw:hover{background:var(--bg-alt)}
+.ds .ac-list .rw.un{background:color-mix(in srgb,var(--fb-warn,#c98a00) 5%,transparent)}
+.ds .ac-list .rw.un .dt{color:var(--ink-3)}
+.ds .ac-list .ac{min-width:0}
+.ds .ac-list .ac b{display:block;font-size:13px;font-weight:400;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .ac-list .ac em{display:block;font-style:normal;font-size:11px;color:var(--ink-3)}
+.ds .ac-list .td{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .ac-list .n{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--ink);white-space:nowrap}
+.ds .ac-list .dt{font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+
+@media (max-width:900px){
+  .ds .ac-list .hd{display:none}
+  .ds .ac-list .rw{grid-template-columns:minmax(0,1fr) auto;row-gap:2px;padding:10px 14px}
+  .ds .ac-list .rw .td{grid-column:1}
+  .ds .ac-list .rw .n{grid-column:2;text-align:right}
+  .ds .ac-list .rw .dt{grid-column:1;font-size:11.5px;color:var(--ink-3)}
+}
+
+/* Pricing a bill line from the QS's own rate library, in the side panel.
+   The panel is narrow, so each rate is a stacked button rather than a row:
+   price first, then what the rate is for, then why it was offered. */
+.ds .pn-rates{margin-top:12px;display:grid;gap:6px}
+.ds .pn-rates-k{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+.ds .pn-rate{display:grid;gap:1px;width:100%;text-align:left;padding:9px 11px;border:1px solid var(--line);border-radius:11px;background:var(--bg);font:inherit;color:inherit;cursor:pointer}
+.ds .pn-rate:hover:not(:disabled){border-color:var(--ink-3);background:var(--bg-alt)}
+.ds .pn-rate:disabled{opacity:.55;cursor:default}
+.ds .pn-rate b{font-size:13.5px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .pn-rate .d{font-size:12px;color:var(--ink-2);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .pn-rate .w{font-size:11px;color:var(--ink-3)}
+.ds .pn-bad{margin-top:10px;font-size:12px;color:var(--fb-bad,#b3261e)}
+/* the same item on other levels, ticked to be priced together */
+.ds .pn-similar{margin-top:12px;padding:10px 11px;border:1px solid var(--line);border-radius:11px;background:var(--bg-alt)}
+.ds .pn-similar ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:2px}
+.ds .pn-similar li{display:flex;align-items:center;gap:8px;min-height:32px}
+.ds .pn-similar label{display:flex;align-items:center;gap:8px;flex:1;min-width:0;font-size:12.5px;cursor:pointer}
+.ds .pn-similar input{width:16px;height:16px;accent-color:var(--action);flex:none}
+.ds .pn-similar .lv{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.ds .pn-similar .q{color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ds .pn-similar .hint{margin-top:6px}
+.ds .pn-similar + .ds-btn{margin-top:8px}
+.ds .pn-done{margin-top:10px;font-size:12.5px;color:var(--ink)}
+/* a rate in another unit: the conversion, confirmed before it is applied */
+.ds .pn-conv{margin-top:12px;padding:11px 12px;border:1px solid var(--action);border-radius:11px;background:color-mix(in srgb,var(--action) 6%,var(--bg));display:grid;gap:8px}
+.ds .pn-conv p{margin:0;font-size:12.5px;color:var(--ink-2)}
+.ds .pn-conv p b{font-weight:500;color:var(--ink)}
+.ds .pn-conv .amt b{font-size:15px;font-variant-numeric:tabular-nums}
+.ds .pn-conv-act{display:flex;gap:8px;flex-wrap:wrap}
+.ds .pj-need-bad{margin:0 16px 10px;font-size:12px;color:var(--fb-bad,#b3261e)}
+.ds .pj-need-notes,.ds .pn-notes{margin:8px 0 0;padding-left:18px;list-style:disc}
+.ds .pj-need-notes{margin:0 16px 10px}
+.ds .pj-need-notes li,.ds .pn-notes li{font-size:11.5px;color:var(--fb-warn,#c98a00);line-height:1.5}
+
+/* THE BILL WITH ITS ACTUAL COLUMNS, after a contract lock.
+   Six columns become nine, so the grid is redefined rather than stretched: at
+   the original widths the description collapses to nothing. Below 1200px the
+   table scrolls sideways instead of crushing every number, because a bill read
+   at two characters a column is not read. */
+.ds .pj-bill.act{overflow-x:auto}
+.ds .pj-bill.act .hd, .ds .pj-bill.act .rw{
+  grid-template-columns:46px minmax(190px,1fr) 104px 96px 112px 104px 112px 112px 92px;
+  gap:10px;min-width:1140px}
+.ds .pj-bill.act .n{font-size:12.5px}
+/* A variation reads as a direction first and a figure second. */
+.ds .pj-bill .vr{font-size:12px;color:var(--ink-3)}
+.ds .pj-bill .vr.up{color:var(--fb-bad,#b3261e)}
+.ds .pj-bill .vr.dn{color:var(--fb-ok,#1b7f4d)}
+
+/* Contract against measured, under the bill. */
+.ds .pj-actsum{margin-top:14px;border:1px solid var(--line);border-radius:16px;background:var(--bg);overflow:hidden}
+.ds .pj-actsum .r{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;
+  padding:12px 18px;border-top:1px solid var(--line)}
+.ds .pj-actsum .r:first-child{border-top:0}
+.ds .pj-actsum .l{font-size:13px;color:var(--ink-2);min-width:0}
+.ds .pj-actsum .l em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:3px;line-height:1.5}
+.ds .pj-actsum b{font-size:14px;font-weight:500;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ds .pj-actsum .r.t{background:var(--bg-alt)}
+.ds .pj-actsum .r.t.up b{color:var(--fb-bad,#b3261e)}
+.ds .pj-actsum .r.t.dn b{color:var(--fb-ok,#1b7f4d)}
+/* The measured-quantity box in the side panel. */
+.ds .pn-num{display:grid;gap:5px;margin-top:10px}
+.ds .pn-num > span{font-size:12px;color:var(--ink-2)}
+.ds .pn-num input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);font:400 13.5px var(--font);color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .pn-num input:focus{outline:2px solid color-mix(in srgb,var(--action) 45%,transparent);outline-offset:1px}
+.ds .pn-num input:disabled{opacity:.6}
+.ds .pj-need-note{margin:0 16px 10px;font-size:11.5px;color:var(--ink-3);line-height:1.55}
+/* Finding a rate by name, in the side panel. A rate in the wrong unit is shown
+   but dimmed and unclickable — visible so nobody hunts for it, inert so nobody
+   prices a line with it. */
+.ds .pn-find{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.ds .pn-find .pn-num{margin-top:0}
+.ds .pn-find input[type="search"]{width:100%;padding:8px 11px;border:1px solid var(--line);
+  border-radius:10px;background:var(--bg);font:400 13px var(--font);color:var(--ink)}
+.ds .pn-rate.off{opacity:.5;cursor:not-allowed}
+.ds .pn-rate.off .w{color:var(--fb-warn,#c98a00)}
+
+/* THE EXPORT MENU, grouped and scrollable.  RECLAIMED, like the block above.
+ *
+ * Hand-written into ds-work-proj.css, which is GENERATED, so the next porter
+ * run (scripts/port-ds-css.mjs) would delete it and WorkProjectHead's Export
+ * menu would lose its grouping and scroll cap. .pj-pop is Richard's; the -x, -g
+ * and -h modifiers are ours and appear in none of his sheets, so nothing here
+ * competes whichever chunk the browser parses first.
+ */
+.ds .pj-pop.pj-pop-x{max-height:min(70vh,560px);overflow-y:auto;min-width:280px}
+.ds .pj-pop .pj-pop-g{margin:8px 10px 2px;font:600 10.5px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.ds .pj-pop .pj-pop-g:first-child{margin-top:4px}
+.ds .pj-pop .pj-pop-g span{margin-left:6px;font-weight:400;letter-spacing:0;text-transform:none}
+.ds .pj-pop .pj-pop-h{margin:0 10px 4px;font:400 12px var(--font);color:var(--ink-3)}
+.ds .pj-pop > button span i{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:2px}

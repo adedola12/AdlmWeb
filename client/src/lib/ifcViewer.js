@@ -11,12 +11,27 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { getIfcApi } from "./ifcElements.js";
 import { elongatedFrame } from "./modelFraming.js";
 
 const HIGHLIGHT_COLOR = new THREE.Color(0xf97316); // orange-500
 const HIGHLIGHT_EMISSIVE = new THREE.Color(0x7c2d12);
 const DIM_OPACITY = 0.16;
+
+/**
+ * Exposure, and the range the control may set it to.
+ *
+ * Tone mapping means brightness is one number rather than a set of light
+ * intensities, so this is the only thing the control touches. The bounds are
+ * not arbitrary: below about 0.45 a dark IFC loses the shading that tells one
+ * surface from another, and above about 2.2 a pale one — which most buildings
+ * are — clips to flat white and loses the same thing at the other end. Both
+ * ends are "cannot read the model", so the control stops before them.
+ */
+export const DEFAULT_EXPOSURE = 1;
+export const MIN_EXPOSURE = 0.45;
+export const MAX_EXPOSURE = 2.2;
 
 export class IfcViewer {
   constructor(container) {
@@ -37,16 +52,44 @@ export class IfcViewer {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(width, height);
+    // Filmic tone mapping, which is what makes the brightness control possible
+    // at all: without it there is no exposure to turn, only light intensities to
+    // multiply, and multiplying those blows out the white surfaces that most of
+    // a building is made of before it brightens the dark ones.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = DEFAULT_EXPOSURE;
     container.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
 
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8d99ae, 1.0));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.3);
+    // AN ENVIRONMENT, NOT JUST LAMPS.
+    //
+    // Three lights on a Lambert material gave every surface the same flat wash,
+    // which is why a model read as a cardboard cut-out: nothing anywhere in the
+    // scene for a surface to reflect, so every face of a wall came back the same
+    // value whatever direction it pointed. RoomEnvironment is three's own
+    // procedural room — a few emissive planes — and PMREM turns it into the
+    // irradiance map a physical material samples. It costs one render at
+    // startup and nothing per frame.
+    //
+    // environment only, NOT background: the room is a room, and showing it
+    // behind a building would look like the building is indoors.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    pmrem.compileEquirectangularShader();
+    this._envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    this.scene.environment = this._envRT.texture;
+    pmrem.dispose();
+
+    // The lamps stay, turned down. The environment does the filling now, so
+    // these are only for direction — the shading that tells you which way a
+    // surface faces. At their old strength on top of an environment every pale
+    // surface clipped to white.
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8d99ae, 0.35));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.75);
     dir.position.set(50, 80, 30);
     this.scene.add(dir);
-    const dir2 = new THREE.DirectionalLight(0xffffff, 0.5);
+    const dir2 = new THREE.DirectionalLight(0xffffff, 0.25);
     dir2.position.set(-40, 30, -50);
     this.scene.add(dir2);
 
@@ -157,11 +200,26 @@ export class IfcViewer {
 
     const c = pg.color || { x: 0.6, y: 0.6, z: 0.6, w: 1 };
     const transparent = c.w < 0.98;
-    const material = new THREE.MeshLambertMaterial({
+    // STANDARD, NOT LAMBERT.
+    //
+    // Lambert has no specular term and ignores scene.environment entirely, so
+    // every surface returned the same flat value whichever way it faced and the
+    // model read as a cut-out. MeshStandardMaterial is physical: it samples the
+    // environment above, so a wall picks up a little more light on the side
+    // facing the room's bright plane, and an edge reads as an edge.
+    //
+    // roughness 0.82 and metalness 0: a building is plaster, concrete and
+    // blockwork. Anything shinier looks like a render of a car. envMapIntensity
+    // is held at 1 so the environment fills rather than takes over, and the
+    // brightness control moves exposure instead — one number, one meaning.
+    const material = new THREE.MeshStandardMaterial({
       color: new THREE.Color(c.x, c.y, c.z),
       side: THREE.DoubleSide,
       transparent,
       opacity: c.w,
+      roughness: 0.82,
+      metalness: 0,
+      envMapIntensity: 1,
     });
     const mesh = new THREE.Mesh(bg, material);
     mesh.matrixAutoUpdate = false;
@@ -202,6 +260,28 @@ export class IfcViewer {
 
   clearHighlight() {
     this.highlight([]);
+  }
+
+  /**
+   * How bright the view is, as one number.
+   *
+   * Clamped rather than trusted: this is driven by a control, and a control is
+   * driven by whatever ends up in the state behind it. An exposure of 0 renders
+   * a black rectangle, which is indistinguishable from the viewer having failed
+   * — the one thing the loading work earlier was all about not doing.
+   */
+  setExposure(value) {
+    const v = Number(value);
+    const safe = Number.isFinite(v)
+      ? Math.min(MAX_EXPOSURE, Math.max(MIN_EXPOSURE, v))
+      : DEFAULT_EXPOSURE;
+    this.renderer.toneMappingExposure = safe;
+    return safe;
+  }
+
+  /** What it is now, so a control can start where the viewer actually is. */
+  getExposure() {
+    return this.renderer.toneMappingExposure;
   }
 
   /** Count how many of the given Element IDs actually exist in this model. */
@@ -295,6 +375,11 @@ export class IfcViewer {
     window.removeEventListener("resize", this._onResize);
     if (this._ro) this._ro.disconnect();
     this.renderer.domElement.removeEventListener("click", this._onClick);
+    // The environment is a render target on the GPU, and this viewer is mounted
+    // and unmounted every time somebody opens the Model tab. Without this it
+    // leaks one per visit.
+    this.scene.environment = null;
+    this._envRT?.dispose?.();
     this.modelGroup.traverse((obj) => {
       if (obj.isMesh) {
         obj.geometry?.dispose?.();

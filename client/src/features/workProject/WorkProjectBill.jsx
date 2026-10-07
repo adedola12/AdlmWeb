@@ -34,6 +34,7 @@ import {
   suggestedArrangement,
   withSectionAdded,
   withSectionMoved,
+  withSectionRenamed,
 } from "./sectionsModel.js";
 // The actual columns, after a lock. Every rule about what a null means and what
 // a variance is worth is in actualsModel.js, tested without a project.
@@ -121,6 +122,11 @@ export default function WorkProjectBill({
 
   const anyShown = groups.some((g) => g.indexes.length > 0);
   const canArrange = canEdit && !query && filter === "all" && by === "element";
+  // Why a rename can be refused, said where the reader is. Three different
+  // refusals — no name, a name the bill already uses, a name that cannot be
+  // applied — and going quiet on any of them reads as a control that does
+  // nothing, which is the thing this screen has been losing.
+  const [sectionError, setSectionError] = React.useState("");
 
   function moveSection(from, to) {
     setDragFrom(null);
@@ -139,6 +145,49 @@ export default function WorkProjectBill({
   const sectionAt = (x, y) => {
     const el = document.elementFromPoint?.(x, y)?.closest?.("[data-sec]");
     return el ? sectionIndex(order, el.getAttribute("data-sec")) : null;
+  };
+
+  /**
+   * Rename a section, and re-file every line under it.
+   *
+   * withSectionRenamed refuses a blank name, an unchanged one, and one that
+   * would collide with a section the bill already has. Each refusal is a
+   * different thing to say, and saying nothing would read as a broken control —
+   * which is what the rest of this branch has been about.
+   */
+  const renameSection = (from) => {
+    const to = window.prompt(`Rename "${from}" to`, from);
+    // Cancelled, not answered with nothing.
+    if (to === null) return;
+    const wanted = String(to).trim();
+    if (!wanted) {
+      setSectionError("A section needs a name.");
+      return;
+    }
+    if (wanted === from) {
+      setSectionError("");
+      return;
+    }
+    // A CASE-ONLY CHANGE IS NOT A COLLISION, AND SAYING IT IS SENDS THEM HUNTING.
+    //
+    // withSectionRenamed answers null for two different reasons and this reported
+    // both as the second. It compares names case-insensitively, so "frames" ->
+    // "Frames" returns null — and a group takes its name from the bill LINES while
+    // the ordered list keeps the project's own spelling, so a section a QS SEES as
+    // "frames" is exactly the one they would try to capitalise. They were told the
+    // bill already had a section called "Frames". It does not; it is the one they
+    // are renaming.
+    if (wanted.toLowerCase() === String(from).toLowerCase()) {
+      setSectionError("A section's capitalisation cannot be changed on its own.");
+      return;
+    }
+    const patch = withSectionRenamed(project, from, wanted);
+    if (!patch) {
+      setSectionError(`This bill already has a section called "${wanted}".`);
+      return;
+    }
+    setSectionError("");
+    onSave?.(patch);
   };
   const gripProps = (name) => ({
     onPointerDown: (e) => {
@@ -262,6 +311,7 @@ export default function WorkProjectBill({
                 Suggest an arrangement
               </button>
             ) : null}
+            {sectionError ? <span className="pn-bad">{sectionError}</span> : null}
           </>
         ) : null}
 
@@ -391,6 +441,59 @@ export default function WorkProjectBill({
                 </em>
                 <span>{money(g.total)}</span>
               </button>
+              {/* RENAME — the missing third of a shipped feature.
+                  withSectionRenamed has been written and tested since the
+                  sections landed, and nothing called it, while the other two
+                  thirds (add and reorder) are both wired above. It renames the
+                  list entry AND re-files every line under it in one patch,
+                  because doing only one makes the lines re-appear under the old
+                  name the moment orderedSections reads the bill again.
+
+                  window.prompt, like "Add a section" beside it. Not because a
+                  prompt is good, but because a second way of naming a section
+                  on the same screen would be worse, and a dialog is design
+                  Richard has not drawn.
+
+                  Gated on canArrange, the same condition as the grip: renaming a
+                  section while looking at a filtered subset is the same hazard
+                  as reordering one. */}
+              {canArrange ? (
+                <span
+                  // .grip for the box and the hover, .rnm for an honest cursor:
+                  // .grip alone says cursor:grab, which invited a drag this
+                  // control cannot do, beside a handle that can.
+                  className="grip rnm"
+                  role="button"
+                  // Not focusable or clickable mid-save, like the two controls
+                  // above it — a second patch fired over a save in flight would
+                  // be built from a project the server has already moved past.
+                  tabIndex={saving ? -1 : 0}
+                  aria-disabled={saving || undefined}
+                  aria-label={`Rename ${g.name}`}
+                  title="Rename this section"
+                  onClick={() => {
+                    if (!saving) renameSection(g.name);
+                  }}
+                  onKeyDown={(e) => {
+                    if (saving) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      renameSection(g.name);
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3Z"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              ) : null}
               </div>
 
               {open && g.empty ? (

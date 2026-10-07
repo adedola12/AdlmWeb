@@ -1426,6 +1426,23 @@ function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTIN
       typeof source.showActualColumns === "boolean"
         ? source.showActualColumns
         : Boolean(base.showActualColumns),
+    // EVERY FIELD THE SCHEMA DEFINES HAS TO BE LISTED HERE.
+    //
+    // The caller does `project.valuationSettings = normalizeValuationSettings(...)`,
+    // which REPLACES the sub-document rather than merging into it, so a field
+    // this function forgets is not left alone — it is dropped, and mongoose
+    // puts the schema default back in its place.
+    //
+    // rateSyncEnabled was forgotten, and the cost was silent: turning the
+    // actual columns on, or changing retention, or saving any other setting on
+    // this screen, quietly switched rate sync off on that project. Nothing said
+    // so, and the next person to notice would have found it off with no idea
+    // when or why. Everything else the schema declares was already here; this
+    // was the only one missing.
+    rateSyncEnabled:
+      typeof source.rateSyncEnabled === "boolean"
+        ? source.rateSyncEnabled
+        : Boolean(base.rateSyncEnabled),
     dashboardChartMode: normalizeChartMode(
       source.dashboardChartMode,
       normalizeChartMode(base.dashboardChartMode),

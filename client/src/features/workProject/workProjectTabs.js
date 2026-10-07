@@ -81,3 +81,59 @@ export function tabNeedsAttention(tabKey, project) {
   if (tabKey === "pm") return Number(project.overdueTasks) > 0;
   return false;
 }
+
+/**
+ * What each tab is waiting for, in words, for the loading state.
+ *
+ * Here rather than passed in per tab so that a tab added to tabsFor() above has
+ * exactly one place to name itself — and the test beside this file fails if it
+ * does not, which is the only reason this cannot silently rot.
+ */
+const LOADING_NOUN = Object.freeze({
+  overview: "figures",
+  bill: "bill",
+  rates: "rates and budget",
+  pm: "programme",
+  activity: "labour schedule",
+  valuations: "valuations",
+  model: "model",
+  drawings: "drawings",
+  services: "services",
+});
+
+/** The noun for a tab, falling back to something true rather than blank. */
+export const loadingNoun = (tabKey) => LOADING_NOUN[String(tabKey || "")] || "details";
+
+/** Exported for the test that pins every tab to a noun. */
+export { LOADING_NOUN };
+
+/**
+ * What to store as "where this reader last was", for the Work home's first
+ * three rows (lib/lastPlace.js).
+ *
+ * Out here rather than inline in the shell for one reason: this was DEAD. Only
+ * the classic workspace ever wrote a place (ProjectOpenView.jsx), and since the
+ * 5 Oct flip a customer never opens the classic workspace — so the Work home's
+ * "Pick up where you left off" froze on whatever that build last recorded, and
+ * for anybody who has only ever used this one it was never populated at all. The
+ * section fell back to "Recently updated" for everybody and looked perfectly
+ * fine doing it. A feature that dies silently should not be able to die again
+ * without a test noticing.
+ *
+ * The tab is stored under THIS build's name for it; placeHref translates in the
+ * reading direction and passes both builds' names through unchanged, so a place
+ * written here and one written there are read the same way.
+ *
+ * @returns {null} when there is nothing worth storing yet.
+ */
+export function placeToRemember({ productKey, id, name = "", tab = "" } = {}) {
+  if (!id || !productKey) return null;
+  const key = String(productKey).trim().toLowerCase();
+  return {
+    productKey: key,
+    key: String(id),
+    name: name || "",
+    tab,
+    tabLabel: tabsFor(key).find((t) => t.key === tab)?.label || "",
+  };
+}

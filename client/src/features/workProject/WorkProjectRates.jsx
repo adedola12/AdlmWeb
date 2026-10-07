@@ -8,6 +8,7 @@
 // is the same panel the Bill tab opens a line into.
 
 import React from "react";
+import { Link } from "react-router-dom";
 import {
   RATE_VIEWS,
   lineAmount,
@@ -68,9 +69,16 @@ export default function WorkProjectRates({
 
         <span className="pj-by">Priced with RateGen</span>
 
-        <button type="button" className="pj-lnk" onClick={() => onGo?.("library")}>
+        {/* This called onGo("library"), and "library" is not a tab — tabsFor
+            does not list it, so resolveTab answered Overview and the button
+            quietly dumped the reader on the project summary. The third control
+            on this page to fail that exact way.
+            The library is a ROUTE, not a tab, so it is a link: a QS comparing a
+            rate against a bill wants it in another tab, which a button could
+            never give them. */}
+        <Link className="pj-lnk" to="/work/library">
           Open in RateGen
-        </button>
+        </Link>
       </div>
 
       {mode === "rates" ? (

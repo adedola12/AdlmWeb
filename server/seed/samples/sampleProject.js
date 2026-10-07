@@ -457,6 +457,80 @@ export function itemIdentity(item, index) {
 }
 
 // Mirrors computeValueToDate() in routes/projects.js for a takeoff project.
+/**
+ * Record a measured quantity or rate on a handful of a sample's bill lines.
+ *
+ * Writes ONLY the actual fields. It never touches it.qty, it.rate or
+ * contract.baseItems, because that is the whole distinction the feature rests
+ * on: the contract figure is frozen and the re-measure sits beside it, so the
+ * difference between them is a variation somebody has to agree. Overwriting the
+ * contract quantity would make the variation disappear and the contract sum
+ * drift with nothing to show why.
+ *
+ * actualRecordedAt is not decoration. sanitizeItems in routes/projects.js
+ * promotes actualRate into rate and clears the actual fields when a rate is 0
+ * and no recorded-at date is present, so an actual seeded without one would be
+ * quietly eaten the first time the project was saved.
+ *
+ * Proportions, not absolutes: the samples are priced from a shared price book
+ * and their quantities differ by design, so a fixed "add 12 m³" would be a
+ * rounding error on one sample and double the line on another.
+ */
+function applySampleActuals(project, { measuredOn }) {
+  const items = Array.isArray(project?.items) ? project.items : [];
+  // Lines worth re-measuring: a real quantity and a real rate. A provisional
+  // sum or a zero-rated line has nothing to compare against.
+  const candidates = items
+    .map((it, index) => ({ it, index }))
+    .filter(({ it }) => Number(it?.qty) > 0 && Number(it?.rate) > 0);
+  if (candidates.length < 5) return;
+
+  // Spread across the bill rather than the first five rows, so the actual
+  // columns are not all empty below the fold on a 60-line sample.
+  const at = (fraction) => candidates[Math.floor((candidates.length - 1) * fraction)];
+  const round3 = (v) => Math.round(Number(v) * 1000) / 1000;
+
+  const set = ({ it }, patch) => {
+    Object.assign(it, patch, {
+      actualRecordedAt: measuredOn,
+      actualUpdatedAt: measuredOn,
+    });
+  };
+
+  // Over: the excavation went deeper than the drawing said. The commonest
+  // variation on a real job, and the one a QS most wants to see priced.
+  set(at(0.1), { actualQty: round3(at(0.1).it.qty * 1.084) });
+
+  // Under: less of it than was measured off the drawing.
+  set(at(0.3), { actualQty: round3(at(0.3).it.qty * 0.942) });
+
+  // Agrees exactly. Worth seeding on purpose — it is the case that proves the
+  // column means "measured" and not "changed", and without one every filled
+  // row looks like a problem.
+  set(at(0.5), { actualQty: round3(at(0.5).it.qty) });
+
+  // Omitted entirely. Measured, and there is none of it: the client dropped the
+  // item. A null here would mean "not measured yet" and the line would stand at
+  // its contract figure, so the zero is the whole point and is the reason
+  // actualQty is nullable rather than defaulting to 0.
+  set(at(0.7), { actualQty: 0 });
+
+  // Re-priced, quantity unchanged. actualQty stays null — the measure agreed,
+  // the price did not — which is how the two columns are meant to be
+  // independent. 6.5% is about what a cement movement does to a rate.
+  set(at(0.9), { actualRate: Math.round(at(0.9).it.rate * 1.065) });
+
+  // One line revised after it was first measured, so measuredWhen() has
+  // something to say ("measured on the 1st, revised on the 3rd"). Only this
+  // one, because a whole bill revised on the same day says nothing.
+  // Two days later. Not day(), which takes an ISO date STRING and builds a Date
+  // from it — handing it a Date produces "Mon Aug 01 2026 ...T09:00:00.000Z"
+  // and an Invalid Date, which reaches the document as null and silently costs
+  // the revision this line exists to show.
+  const revised = at(0.3).it;
+  revised.actualUpdatedAt = new Date(measuredOn.getTime() + 2 * 24 * 60 * 60 * 1000);
+}
+
 export function valueToDate(project) {
   const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
   let measured = 0;
@@ -651,7 +725,10 @@ export function assembleSampleProject(scheme, productKey, { modelUrls = {} } = {
     valuationSettings: {
       showDailyLog: true,
       showValuationSettings: true,
-      showActualColumns: false,
+      // On, because a sample whose actual columns are hidden demonstrates
+      // nothing about actuals, and nobody can switch them on: samples refuse
+      // every non-GET (util/sampleProjects.js).
+      showActualColumns: true,
       dashboardChartMode: "pie",
       retentionPct: 5,
       vatPct: 7.5,
@@ -701,6 +778,46 @@ export function assembleSampleProject(scheme, productKey, { modelUrls = {} } = {
     notes: `Contract sum agreed with ${design.clientName} on ${isoDay(approvedAt)}. Sample project, read-only.`,
     lockPinHash: "",
   };
+
+  // ── What was actually measured on site ──────────────────────────────────
+  //
+  // WHY A SAMPLE CARRIES THESE AT ALL
+  //
+  // Half the product only means something once a job has been re-measured: the
+  // actual columns on the bill, the planned-against-actual line on the
+  // dashboard chart, CPI on the PM dashboard, the over-budget tip, and the
+  // measured-work figure in the final account. With every actual null, all of
+  // those sat at their empty state or at exactly 1.00, and somebody opening a
+  // sample to learn what the product does could not see any of it.
+  //
+  // Samples are read-only (util/sampleProjects.js refuses every non-GET), so
+  // nobody can type one in to find out. Seeding is the only way these screens
+  // are ever demonstrated.
+  //
+  // IT MUST RUN BEFORE THE CERTIFICATES BELOW
+  //
+  // valueToDate (:460) resolves `actualQty ?? qty` and `actualRate ?? rate`, so
+  // the certificate loop values the work from whatever is set here. Running
+  // after it would leave the certificates priced off the contract while the
+  // bill showed something else — the project would not add up. Running before
+  // means the whole certified history is recomputed consistently, which is also
+  // why an omitted line cannot drive a certificate negative: there is no
+  // earlier certificate that was issued at the old figure.
+  //
+  // THE SPREAD IS THE POINT
+  //
+  // One line over, one under, one that agrees exactly, one omitted outright and
+  // one re-priced. Each teaches a different thing — a variation due to
+  // over-measure, one due to under-measure, the case where the measure confirms
+  // the contract, a full omission, and a rate that moved while the quantity did
+  // not. A set of round numbers all in the same direction teaches none of it.
+  // Six days before the last certificate, so the measure falls INSIDE that
+  // certificate's period — the period report filters its "this period" lines on
+  // actualRecordedAt, and a date outside the window leaves that page empty.
+  // isoDay on the fallback because day() takes a date string, not a Date.
+  applySampleActuals(project, {
+    measuredOn: day(stage.certs.at(-1)?.date || isoDay(approvedAt), -6),
+  });
 
   // ── Variations (design changes and site instructions) ──
   const lineRate = (key) => project.items[lines.findIndex((l) => l.key === key)]?.rate || 0;

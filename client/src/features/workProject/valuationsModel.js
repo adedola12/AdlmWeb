@@ -14,6 +14,7 @@
 import { safeNum } from "../projects/lib/projectTotals.js";
 import { isPriced } from "./billModel.js";
 import { stageIndex } from "./overviewModel.js";
+import { variationAmount, variationStatus } from "./variationsModel.js";
 
 /** His three views (work-proj.js:1533). */
 export const VALUATION_VIEWS = Object.freeze([
@@ -177,9 +178,24 @@ export function worksBaseFor(project, { worksValue = 0, contractSum = 0 } = {}) 
   const atLock =
     safeNum(c.measuredAtLock) + safeNum(c.provisionalAtLock) + safeNum(c.preliminaryAtLock);
   if (atLock > 0) {
+    // variationAmount AND variationStatus, not two hand-rolled reads of the row.
+    //
+    // This said `safeNum(v?.amount ?? v?.total)`, and a stored variation has
+    // NEITHER field — VariationSchema carries qty and rate
+    // (server/models/TakeoffProject.js:256-303) and there is no virtual. So the
+    // term was zero for every variation on every project, and the sentence above
+    // this function — "plus variations approved since, which ARE certifiable" —
+    // described something the code did not do. Every cumulative percentage on
+    // this tab was taken against a base that left approved variations out, which
+    // reads the works as further along than they are.
+    //
+    // The status filter was wrong the same way: a strict === "approved" excluded
+    // the grandfathered rows that have no status at all, where the server's own
+    // default and the rest of this build (variationsModel.variationStatus,
+    // features/projects/lib/projectTotals.js) read an absent status as approved.
     const variations = (Array.isArray(project?.variations) ? project.variations : [])
-      .filter((v) => String(v?.status || "").toLowerCase() === "approved")
-      .reduce((a, v) => a + safeNum(v?.amount ?? v?.total), 0);
+      .filter((v) => variationStatus(v) === "approved")
+      .reduce((a, v) => a + variationAmount(v), 0);
     return atLock + variations;
   }
   // A contract locked before those figures were stored keeps the behaviour it

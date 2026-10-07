@@ -62,6 +62,40 @@ describe("where a classic project URL should actually go", () => {
       "/work/project/revit/a%20b%26c",
     );
   });
+
+  it("carries the tab over, translated to the new build's name for it", () => {
+    // This threw away every parameter but `project`, and since the flip it is
+    // the busiest door into the new page: every bookmark and every deep link
+    // the classic build ever wrote comes through here. A QS following their own
+    // link to a certificate arrived at the project summary.
+    expect(classicProjectTarget({ ...staff, tab: "valuation" })).toBe(
+      "/work/project/revit/sample-duplex-strip?tab=valuations",
+    );
+    expect(classicProjectTarget({ ...staff, tab: "budget" })).toBe(
+      "/work/project/revit/sample-duplex-strip?tab=rates",
+    );
+    expect(classicProjectTarget({ ...staff, tab: "bill" })).toBe(
+      "/work/project/revit/sample-duplex-strip?tab=bill",
+    );
+  });
+
+  it("writes the Overview as no tab at all, the way the shell does", () => {
+    expect(classicProjectTarget({ ...staff, tab: "dashboard" })).toBe(
+      "/work/project/revit/sample-duplex-strip",
+    );
+    expect(classicProjectTarget({ ...staff, tab: "" })).toBe(
+      "/work/project/revit/sample-duplex-strip",
+    );
+  });
+
+  it("keeps the Work area's reader on a screen that exists", () => {
+    // The classic Work area put the model, the bill, the schedule and Ada on
+    // one screen. The new build has no such tab, so Overview is the honest
+    // answer rather than a guess at which half they wanted.
+    expect(classicProjectTarget({ ...staff, tab: "work" })).toBe(
+      "/work/project/revit/sample-duplex-strip",
+    );
+  });
 });
 
 describe("the two screens cannot bounce a reader between them", () => {
@@ -136,6 +170,15 @@ describe("the route a staff member actually lands on", () => {
     expect(screen.getByText("new project page")).toBeTruthy();
   });
 
+  it("still lets anyone ask for the classic workspace on purpose", () => {
+    // ?classic=1 is the way to anything the new workspace cannot do yet, so it
+    // must work for a customer, not only staff.
+    auth.user = { email: "customer@example.com", role: "user" };
+    auth.accessToken = "t";
+    at("/projects/planswift?project=ysa&classic=1");
+    expect(screen.getByText("classic workspace")).toBeTruthy();
+  });
+
   it("shows the classic gallery when no project is named", () => {
     auth.user = { email: "staff@adlmstudio.net", role: "admin" };
     auth.accessToken = "t";
@@ -148,6 +191,16 @@ describe("the route a staff member actually lands on", () => {
     auth.accessToken = "t";
     at("/projects/planswift?project=ysa&classic=1");
     expect(screen.getByText("classic workspace")).toBeTruthy();
+  });
+
+  it("lands on the tab the old address asked for", () => {
+    auth.user = { email: "customer@example.com", role: "user" };
+    auth.accessToken = "t";
+    at("/projects/planswift?project=ysa&tab=valuation&line=k42");
+    // The tab arrives; the line cannot (it is a key, and the new Bill addresses
+    // a line by position and searches by text). Right bill at the top beats the
+    // wrong screen.
+    expect(screen.getByText("new project page")).toBeTruthy();
   });
 
   it("renders neither screen while the session is still hydrating", () => {

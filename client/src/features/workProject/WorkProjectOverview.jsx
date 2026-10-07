@@ -26,10 +26,54 @@ import { EN_DASH, safeNum } from "../projects/lib/projectTotals.js";
 import { compact, initials, money } from "./workProjectFormat.js";
 import { Bar, Donut } from "./workProjectBits.jsx";
 
-export default function WorkProjectOverview({ project, toolName, canEdit = false, onGo }) {
+export default function WorkProjectOverview({
+  project,
+  toolName,
+  canEdit = false,
+  onGo,
+  onTender,
+}) {
   const p = project || {};
   const si = stageIndex(p);
   const next = nextStage(p);
+  // What actually moves this project on, and the tab where it is done.
+  //
+  // Keyed on the stage the project is AT, not the one it is going to. A stage with
+  // no entry simply shows no link, which is honest — the strip still says where
+  // the project has got to.
+  //
+  // "Mark as tendered" used to be absent on the grounds that the new build had
+  // nowhere to do it. It does now: the route records a date and moves no money, so
+  // it carries no step-up, and it is the thing standing in front of the lock —
+  // lockChecklist wants a tender date and nothing here could set one, so a project
+  // that had only ever been opened in this build could never reach the stage where
+  // locking is offered at all. It is an ACT rather than a destination, so it runs
+  // here instead of sending the reader to a tab.
+  const NEXT_STEP = {
+    takeoff: { label: "Price the bill", tab: "rates" },
+    priced: { label: "Mark as tendered", act: "tender" },
+    tendered: { label: "Lock the contract", tab: "valuations" },
+    locked: { label: "Issue a valuation", tab: "valuations" },
+    valuing: { label: "Agree the final account", tab: "valuations" },
+  };
+  const nextStep = NEXT_STEP[STAGES[si]?.id];
+  const [tendering, setTendering] = React.useState(false);
+  const [tenderFailed, setTenderFailed] = React.useState("");
+  const runTender = async () => {
+    if (tendering) return;
+    setTendering(true);
+    setTenderFailed("");
+    try {
+      await onTender?.(true);
+    } catch (err) {
+      // The server's own sentence. "This contract is already locked, which is past
+      // the tender stage." is the one that matters, and it means the copy on screen
+      // is behind — so it is said rather than swallowed.
+      setTenderFailed(String(err?.message || "The tender mark could not be recorded."));
+    } finally {
+      setTendering(false);
+    }
+  };
   const split = pricedSplit(p.items);
   const t = totalsFor(p);
   const sections = valueBySection(p.items);
@@ -46,10 +90,40 @@ export default function WorkProjectOverview({ project, toolName, canEdit = false
             <span>{s.name}</span>
           </div>
         ))}
-        {next && canEdit ? (
-          <button type="button" className="ds-btn btn-o ds-btn-sm">
-            Move to {next.name}
-          </button>
+        {/* THERE IS NO "MOVE TO NEXT STAGE", AND THERE SHOULD NOT BE.
+            This was a button reading "Move to <stage>" with no onClick at all —
+            it did nothing when pressed, which is worse than not being there,
+            because somebody clicks it and concludes the product is broken
+            rather than that the action is elsewhere.
+            It could not have been wired either: nothing in the codebase writes
+            project.stage. No server route accepts it and no client sets it,
+            because, as valuationsModel.js puts it, the stage is a label and the
+            lock is the fact. A project reaches "Contract locked" by the
+            contract being locked, not by somebody announcing it.
+            So the dead button is replaced by the thing that actually moves it
+            on, pointing at the tab where that is done. */}
+        {next && canEdit && nextStep ? (
+          nextStep.act === "tender" ? (
+            onTender ? (
+              <button
+                type="button"
+                className="pj-lnk"
+                disabled={tendering}
+                onClick={runTender}
+              >
+                {tendering ? "Recording…" : `${nextStep.label} ${EN_DASH} reaches ${next.name}`}
+              </button>
+            ) : null
+          ) : (
+            <button type="button" className="pj-lnk" onClick={() => onGo?.(nextStep.tab)}>
+              {nextStep.label} {EN_DASH} reaches {next.name}
+            </button>
+          )
+        ) : null}
+        {tenderFailed ? (
+          <p className="pn-bad" role="status">
+            {tenderFailed}
+          </p>
         ) : null}
       </section>
 

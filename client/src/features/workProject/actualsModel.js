@@ -206,13 +206,53 @@ export function withActualQty(project, index, value) {
   };
 }
 
-/** The same, for a rate that was actually paid. */
+/**
+ * The same, for a rate that was actually paid.
+ *
+ * actualRecordedAt RIDES ALONG, AND IT IS NOT COSMETIC.
+ *
+ * The server carries an accommodation for the QUIV Revit plugin, whose takeoff
+ * DTO has no rate field and sends the planned rate in actualRate instead. It
+ * detects that case as "rate is 0, actualRate has a value, and nothing says when
+ * it was recorded" and PROMOTES actualRate into rate, clearing the actual fields
+ * (sanitizeItems, server/routes/projects.js:1457).
+ *
+ * Website saves go straight through it: updateProject runs sanitizeItems at
+ * :3998, before applyValuationTracking at :4078 stamps the date itself. So on any
+ * UNPRICED line — and an unpriced line is exactly where somebody records what the
+ * work actually cost — a measured rate sent without a date would be moved into
+ * the contract rate and the measurement destroyed, silently, with the screen then
+ * showing the figure in the wrong column.
+ *
+ * Sending a date makes the payload say "a person recorded this on the website",
+ * which is what the condition is really asking. The value sent is not the value
+ * stored: applyValuationTracking keeps the line's existing recorded-at if it has
+ * one and stamps `now` if it does not, so the server still owns the provenance.
+ * An existing one is passed back anyway rather than replaced, so nothing here
+ * depends on that.
+ *
+ * Clearing the rate sends null for both, because a line with no measurement has
+ * no date on which it was measured — and leaving a date behind would keep the
+ * promotion from ever firing for a plugin payload on that line again.
+ */
 export function withActualRate(project, index, value) {
   const items = Array.isArray(project?.items) ? project.items : [];
   if (index < 0 || index >= items.length) return null;
   const rate = optional(value);
   if (rate !== null && rate < 0) return null;
+  const qty = optional(items[index]?.actualQty);
+  const stillMeasured = rate !== null || qty !== null;
   return {
-    items: items.map((it, i) => (i === index ? { ...it, actualRate: rate } : it)),
+    items: items.map((it, i) =>
+      i === index
+        ? {
+            ...it,
+            actualRate: rate,
+            actualRecordedAt: stillMeasured
+              ? it.actualRecordedAt || new Date().toISOString()
+              : null,
+          }
+        : it,
+    ),
   };
 }

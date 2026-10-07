@@ -55,6 +55,9 @@ export default function ClassicProjectRedirect({ children }) {
   const to = classicProjectTarget({
     tool,
     project: params.get("project"),
+    // Translated to the new build's own spelling on the way, and dropped if
+    // this product has no such tab — not passed through raw.
+    tab: params.get("tab") || "",
     wantsClassic: params.get(CLASSIC_PARAM) === "1",
     newBuild: seesNewBuild(user),
   });
