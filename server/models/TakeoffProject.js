@@ -335,6 +335,73 @@ const ContractBaseItemSchema = new mongoose.Schema(
 // util/certificateMaths.js, tested over the whole six-valuation sequence. Retention / VAT / WHT are captured
 // at the moment of issue so historical certs remain reproducible even if
 // the project settings change later.
+// One bill line AS IT STOOD when a certificate was issued.
+//
+// A certificate used to store two integers about its lines — how many were
+// complete and how many there were — and nothing else. So the question "which
+// lines does this certificate cover, and what did each earn in its period?" had no
+// answer the document could give, and the per-line log that could answer it is
+// keyed by calendar day rather than by the certificate's period.
+//
+// Worse, nothing was durable. A line certified at 60% in June reads 100% in July,
+// because percentComplete is one current value — so June's certificate could never
+// be reprinted as June saw it, and the exported breakdown was rebuilt from today's
+// project and contradicted its own row A.
+//
+// This is the snapshot that fixes all of it. It is written once, at issue, and
+// never touched again.
+//
+// ONLY THE LINES THAT MOVED IN THE PERIOD ARE STORED. A certificate is a claim for
+// a period, so a line standing where it stood last month is not part of it — and a
+// row per bill line per certificate is unbounded: at 284 bytes a row, a 2,000-line
+// bill with three years of monthly certificates reaches 19.5MB and breaches the
+// 16MB document limit, at which point the project stops saving altogether. Storing
+// movement makes the size follow work done instead. previousSnapshotLines therefore
+// merges each line's last position across ALL previous certificates rather than
+// reading the newest one, or a line untouched for a month would lose its position
+// and be certified twice.
+//
+// The bound is not absolute: a project that advances every line of a large bill in
+// every one of many periods still grows without limit. It fails loudly if it ever
+// gets there — Mongo refuses the save — rather than quietly truncating the record a
+// certificate is reprinted from.
+//
+// WHY THE FIGURES AND NOT JUST THE PERCENTAGE
+//
+// earnedLineValue takes the quantity and rate from actualQty/actualRate when they
+// are recorded, so the money depends on all four numbers. Storing the percentage
+// alone would leave the same hole one level down: a July re-measure would restate
+// what June earned. qty and rate here are THE ONES THE MONEY WAS WORKED OUT AT —
+// the actuals where they existed, the contract figures where they did not — and
+// `earned` is the result, so the document can be reprinted without recomputing
+// anything.
+const CertificateLineSchema = new mongoose.Schema(
+  {
+    // itemKey pairs this row back to the bill line. It is the same identity
+    // applyValuationTracking and the daily log use, so a certificate's lines and
+    // the day log's rows can be matched to each other and to the bill.
+    itemKey: { type: String, default: "" },
+    sn: { type: Number, default: 0 },
+    description: { type: String, default: "" },
+    unit: { type: String, default: "" },
+    // The quantity and rate the earned figure was computed from.
+    qty: { type: Number, default: 0 },
+    rate: { type: Number, default: 0 },
+    // Whether those came from the actuals, so a reader can tell a re-measured line
+    // from one certified at its contract figures.
+    fromActuals: { type: Boolean, default: false },
+    // 0-100, as at this certificate.
+    percentComplete: { type: Number, default: 0 },
+    // Cumulative earned on this line at this certificate: qty × rate × percent.
+    earned: { type: Number, default: 0 },
+    // Earned on this line in THIS certificate's period — cumulative here less
+    // cumulative on the previous certificate. This is the figure the owner asked
+    // for: on the 4 June certificate the 60%, on the 5 July one the balance.
+    earnedThisPeriod: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
 const CertificateSchema = new mongoose.Schema(
   {
     number: { type: Number, required: true },
@@ -369,6 +436,10 @@ const CertificateSchema = new mongoose.Schema(
     // Snapshot of which items were counted toward this cert, for audit:
     snapshotCompletedCount: { type: Number, default: 0 },
     snapshotTotalCount: { type: Number, default: 0 },
+    // The lines themselves, as at issue. Empty on every certificate issued before
+    // this existed, which is what readers test for rather than assuming a
+    // breakdown is always there.
+    lines: { type: [CertificateLineSchema], default: [] },
   },
   { _id: false },
 );

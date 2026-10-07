@@ -270,6 +270,73 @@ export async function exportCertificate({
   applyMoneyFormat(netPay.getCell(3));
   ws.mergeCells(netPay.number, 3, netPay.number, 4);
 
+  // THE LINE BREAKDOWN — what this certificate actually covers.
+  //
+  // The document had none. It printed one cumulative gross figure, minus what was
+  // previously certified, and a line that moved from 60% to 100% survived only as
+  // an undifferentiated part of "This certificate (A - B)". A QS could not tell a
+  // client which work the payment was for.
+  //
+  // These rows are the certificate's OWN stored snapshot, taken at issue, so
+  // reprinting June's certificate in July prints what June certified. Certificates
+  // issued before the snapshot existed carry no lines and simply get no table,
+  // rather than one rebuilt from today's project — which is how the breakdown block
+  // above came to contradict row A.
+  const certLines = Array.isArray(certificate.lines) ? certificate.lines : [];
+  if (certLines.length) {
+    ws.addRow([]);
+    const lhdr = ws.addRow(["What this certificate covers"]);
+    lhdr.font = { bold: true };
+    lhdr.fill = ACCENT_FILL;
+    ws.mergeCells(lhdr.number, 1, lhdr.number, 6);
+
+    const lineHead = ws.addRow([
+      "S/N",
+      "Description",
+      "Progress",
+      "Qty",
+      "Rate (NGN)",
+      "This period (NGN)",
+    ]);
+    lineHead.font = { bold: true };
+    lineHead.fill = SUB_FILL;
+
+    let periodTotal = 0;
+    for (const l of certLines) {
+      const thisPeriod = safeNum(l?.earnedThisPeriod);
+      periodTotal += thisPeriod;
+      const r = ws.addRow([
+        safeNum(l?.sn),
+        String(l?.description || ""),
+        `${safeNum(l?.percentComplete).toFixed(1)}%`,
+        safeNum(l?.qty),
+        safeNum(l?.rate),
+        thisPeriod,
+      ]);
+      applyMoneyFormat(r.getCell(5));
+      applyMoneyFormat(r.getCell(6));
+      // A re-measured line is marked, because the rate beside it is the one paid
+      // rather than the one in the bill, and the two are different documents.
+      if (l?.fromActuals) r.getCell(5).note = "Rate as measured on site, not the contract rate";
+    }
+
+    const ltot = ws.addRow([null, "Total earned this period", null, null, null, periodTotal]);
+    ltot.font = { bold: true };
+    applyMoneyFormat(ltot.getCell(6));
+
+    // Said plainly when the parts cannot be trusted to sum to the whole, rather
+    // than leaving a reader to add them up and wonder.
+    const expected = safeNum(certificate.thisCertificate);
+    if (Math.abs(periodTotal - expected) > 0.01) {
+      const note = ws.addRow([
+        null,
+        `These lines account for ${periodTotal.toFixed(2)} of this certificate's ${expected.toFixed(2)}. The difference is variations, provisional sums or preliminaries, which are not bill lines.`,
+      ]);
+      note.font = { italic: true, size: 9 };
+      ws.mergeCells(note.number, 2, note.number, 6);
+    }
+  }
+
   // Previous-certificates history
   if (previousCerts.length) {
     ws.addRow([]);
