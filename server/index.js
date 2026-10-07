@@ -55,6 +55,7 @@ import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
+import projectsOpenIntentRoutes from "./routes/projects.openIntent.js";
 import projectsPmRoutes from "./routes/projects.pm.js";
 import reportsRoutes from "./routes/reports.js";
 import archicadRoutes from "./routes/archicad.routes.js";
@@ -294,6 +295,11 @@ app.use("/products", productsPublic);
 import { getPublicDashboard } from "./routes/projects.js";
 app.get("/projects/public/:token", getPublicDashboard);
 app.get("/api/projects/public/:token", getPublicDashboard);
+
+// "Open in QUIV / HERON" tickets. Ahead of the projects router so
+// "open-intent" is never captured as a :productKey.
+app.use("/projects/open-intent", projectsOpenIntentRoutes);
+app.use("/api/projects/open-intent", projectsOpenIntentRoutes);
 
 app.use("/projects", projectRoutes);
 app.use("/api/projects", projectRoutes);

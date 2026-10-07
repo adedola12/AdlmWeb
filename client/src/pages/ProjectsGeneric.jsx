@@ -5868,6 +5868,8 @@ export default function ProjectsGeneric() {
               <>
               <SampleProjectsStrip samples={samples} onOpenProject={view} productKey={normTool(tool)} />
               <ProjectExplorerGrid
+                productKey={toolNorm}
+                accessToken={accessToken}
                 rowsShown={rowsShown}
                 selectedIdsCount={selectedIds.length}
                 bulkBusy={bulkBusy}

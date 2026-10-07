@@ -13,6 +13,7 @@ import PricePreviewPanel from "./PricePreviewPanel.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
+import OpenInDesktopButton from "./OpenInDesktopButton.jsx";
 import { projectTotals } from "./lib/projectTotals.js";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
@@ -886,6 +887,16 @@ export default function ProjectOpenView({
           >
             {copiedId ? "✓ Copied" : "Copy project ID"}
           </button>
+
+          {/* "Open in QUIV / HERON": hands the project to the desktop
+              product through the Installer Hub. Samples stay on the web. */}
+          {!isSample ? (
+            <OpenInDesktopButton
+              productKey={productKey}
+              projectId={selectedId}
+              accessToken={accessToken}
+            />
+          ) : null}
 
           {canManage ? (
             <button

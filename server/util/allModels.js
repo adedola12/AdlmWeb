@@ -41,6 +41,7 @@ import "../models/LessonNote.js";
 import "../models/MailEvent.js";
 import "../models/MaterialConstantProfile.js";
 import "../models/ModelCheck.js";
+import "../models/OpenIntent.js";
 import "../models/OrgVideo.js";
 import "../models/OutreachDraft.js";
 import "../models/PTrainingEnrollment.js";
