@@ -38,7 +38,17 @@ const { REPOS, BUCKET, PARAM_PREFIX, FROM, OWNER_EMAIL } = process.env;
 // ~2 API calls per commit. Unauthenticated GitHub allows 60 calls an hour, so
 // a quiet hour across three repos stays well under it; a busy one carries over.
 const MAX_COMMITS_PER_REPO = 8;
-const LEGACY_STATE = { "adedola12/AdlmWeb": "last-main-sha" };
+// The repo moved to the ADLM-Studio org on 7 Oct 2026. Both names map to
+// the key this function has written since 22 Sep, so it keeps its place.
+const LEGACY_STATE = {
+  "adedola12/AdlmWeb": "last-main-sha",
+  "ADLM-Studio/AdlmWeb": "last-main-sha",
+  // The other two were written under the old org name as well, so they keep
+  // their place instead of restarting at the current head and skipping
+  // whatever had not been vetted yet.
+  "ADLM-Studio/adlm-ai-service": "last-sha--adedola12--adlm-ai-service",
+  "ADLM-Studio/ADLMRateGen-SingleUser": "last-sha--adedola12--ADLMRateGen-SingleUser",
+};
 
 export function parseRepos(raw) {
   return String(raw || "")
