@@ -106,3 +106,32 @@ test("userObjectId reads either id shape and refuses junk", () => {
   assert.equal(userObjectId({}), null);
   assert.equal(userObjectId(null), null);
 });
+
+test("R4b: the owner's switch hides money from a collaborator, RateGen or not", async () => {
+  const uid = oid();
+  const project = {
+    userId: oid(),
+    collaborators: [{ userId: uid, accessLevel: "full", showMoney: false }],
+  };
+  let asked = false;
+  const a = await resolveProjectAccess(uid, project, {
+    hasRateGen: async () => {
+      asked = true;
+      return true;
+    },
+  });
+  assert.equal(a.canSeeRates, false);
+  assert.equal(a.moneyHiddenByOwner, true);
+  assert.equal(a.canEdit, true, "the switch changes money only, not the access level");
+  assert.equal(asked, false, "no entitlement lookup when the owner already said no");
+});
+
+test("R4b: a collaborator record without showMoney keeps today's RateGen rule", async () => {
+  const uid = oid();
+  const project = { userId: oid(), collaborators: [{ userId: uid, accessLevel: "view" }] };
+  const a = await resolveProjectAccess(uid, project, withRateGen);
+  assert.equal(a.canSeeRates, true);
+  assert.equal(a.moneyHiddenByOwner, false);
+  const on = { userId: oid(), collaborators: [{ userId: uid, accessLevel: "view", showMoney: true }] };
+  assert.equal((await resolveProjectAccess(uid, on, withoutRateGen)).canSeeRates, false);
+});

@@ -15,6 +15,7 @@ import {
 } from "../util/exportAccess.js";
 import { readerMaySeeRates } from "../util/sharedMoney.js";
 import { isApprovedVariation } from "../util/variationStatus.js";
+import { ownerAllowsMoney } from "../util/ownerMoney.js";
 import { isFolderMarker } from "../util/folderMarker.js";
 import { User } from "../models/User.js";
 import { carbonForUser } from "../services/rateCarbon.js";
@@ -194,6 +195,17 @@ async function findProjectDoc({ tool, id, userId }) {
       const err = new Error("View-only access cannot export this project.");
       err.statusCode = 403;
       err.code = "VIEW_ONLY";
+      throw err;
+    }
+    // Both exports are priced workbooks. When the owner has hidden the
+    // project's money from this collaborator (R4b), exporting it would hand
+    // over every rate the project page hides, so it is refused.
+    if (!ownerAllowsMoney(direct, userId)) {
+      const err = new Error(
+        "The project owner has hidden this project's money from you, so it cannot be exported.",
+      );
+      err.statusCode = 403;
+      err.code = "MONEY_HIDDEN_BY_OWNER";
       throw err;
     }
     // Both exports are priced workbooks: every rate and total on the bill.

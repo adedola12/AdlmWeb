@@ -19,6 +19,8 @@
 // database: buildWorkOverviewPipeline() makes the stages, shapeWorkOverview()
 // turns the raw facet result into the JSON the client reads.
 
+import { ownerHidesMoneyExpr } from "./ownerMoney.js";
+
 /**
  * The product a stored project key BELONGS to, as a Mongo expression.
  *
@@ -284,6 +286,9 @@ const ROW_IDENTITY = {
   // Somebody else's project, reached as a collaborator. Money on these rows is
   // masked unless the reader may see rates — see shapeWorkOverview().
   shared: "$shared",
+  // The owner switched money off for this reader (R4b). Read by
+  // shapeWorkOverview() and never sent on.
+  ownerHidesMoney: "$ownerHidesMoney",
 };
 
 // What a $facet branch keeps BEFORE it unwinds and sorts.
@@ -302,6 +307,7 @@ const scope = (field) => ({
     productKey: 1,
     baseProductKey: 1,
     shared: 1,
+    ownerHidesMoney: 1,
     [field]: 1,
   },
 });
@@ -413,6 +419,7 @@ export function buildWorkOverviewPipeline(userId, opts = {}) {
         productKey: 1,
         baseProductKey: baseProductKeyExpr(),
         shared: { $ne: ["$userId", userId] },
+        ownerHidesMoney: ownerHidesMoneyExpr(userId),
         certificates: { $ifNull: ["$certificates", []] },
         variations: { $ifNull: ["$variations", []] },
         tasks: { $ifNull: ["$projectManagement.tasks", []] },
@@ -660,11 +667,19 @@ export function shapeWorkOverview(raw, opts = {}) {
   const facet = Array.isArray(raw) ? raw[0] || {} : raw || {};
   const list = (k) => (Array.isArray(facet[k]) ? facet[k] : []);
   const canSeeRates = opts.canSeeRates === true;
-  const hidden = (r) => r.shared === true && !canSeeRates;
+  // Read off the RAW row: the shaped row does not carry ownerHidesMoney. A row
+  // is hidden when the reader lacks RateGen OR its owner switched money off
+  // for them (R4b), and `moneyHiddenBy` says which.
+  const byOwner = (r) => r.shared === true && r.ownerHidesMoney === true;
+  const hidden = (r) => r.shared === true && (!canSeeRates || byOwner(r));
+  const why = (r) => ({ moneyHiddenBy: byOwner(r) ? "owner" : "rategen" });
 
-  const certs = (k) => list(k).map(certificate).map((c) => (hidden(c) ? hideCertMoney(c) : c));
+  const certs = (k) =>
+    list(k).map((r) => (hidden(r) ? { ...hideCertMoney(certificate(r)), ...why(r) } : certificate(r)));
   const vars = (k) =>
-    list(k).map(variation).map((v) => (hidden(v) ? hideVariationMoney(v) : v));
+    list(k).map((r) =>
+      hidden(r) ? { ...hideVariationMoney(variation(r)), ...why(r) } : variation(r),
+    );
 
   const counts = list("counts")[0] || {};
 

@@ -27,6 +27,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { User } from "../models/User.js";
+import { ownerAllowsMoney } from "../util/ownerMoney.js";
 import { ActivityLog } from "../models/ActivityLog.js";
 import {
   buildProjectReport,
@@ -112,6 +113,16 @@ async function loadProjectForReport(req, res) {
   }
 
   const isOwner = project.userId && userId.equals(project.userId);
+  // Every report is priced, so the owner's money switch (R4b) blocks it for a
+  // collaborator the owner hid the money from, whatever they subscribe to.
+  if (!isOwner && !ownerAllowsMoney(project, userId)) {
+    res.status(403).json({
+      error:
+        "The project owner has hidden this project's money from you, so its reports are not available.",
+      code: "MONEY_HIDDEN_BY_OWNER",
+    });
+    return null;
+  }
   if (!isOwner && !(await userHasActiveEntitlement(userId, "rategen"))) {
     res.status(403).json({
       error:
@@ -246,7 +257,8 @@ async function getManagementReport(req, res) {
       return {
         project,
         role: isOwner ? "owner" : "collaborator",
-        canSeeMoney: isOwner || hasRateGen,
+        // The owner's switch (R4b) narrows the RateGen rule per project.
+        canSeeMoney: isOwner || (hasRateGen && ownerAllowsMoney(project, userId)),
       };
     });
 

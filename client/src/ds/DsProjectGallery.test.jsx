@@ -80,6 +80,25 @@ describe("the project gallery's money", () => {
     expect(line).toContain("1 with money hidden is not counted");
   });
 
+  it("says when it is the OWNER who hid the money (R4b)", async () => {
+    mount([
+      project({
+        id: "p2",
+        slug: "ikeja",
+        name: "IKEJA OFFICES",
+        shared: true,
+        moneyHidden: true,
+        moneyHiddenBy: "owner",
+        estimatedTotal: 0,
+        totalCost: 0,
+      }),
+    ]);
+    const card = (await screen.findByText("IKEJA OFFICES")).closest(".pj-card");
+    expect(within(card).getByText("Money hidden by owner")).toBeTruthy();
+    expect(within(card).getByText("–")).toBeTruthy();
+    expect(within(card).queryByText("₦0")).toBeNull();
+  });
+
   it("has no total at all when every project's money is hidden", async () => {
     mount([project({ moneyHidden: true })]);
     await screen.findByText("MOREMI ESTATE BLOCK A");
