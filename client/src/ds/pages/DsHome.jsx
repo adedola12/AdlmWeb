@@ -74,7 +74,7 @@ export default function DsHome() {
             </span>
             Trusted by{" "}
             <b>
-              3,100+
+              800+
             </b>
             {" "}QS professionals across{" "}
             <b>
@@ -197,8 +197,8 @@ export default function DsHome() {
                 </svg>
               </div>
               {" "}
-              <b data-count="3100" data-suffix="+">
-                3,100+
+              <b data-count="800" data-suffix="+">
+                800+
               </b>
               <span>
                 Professionals trained
@@ -248,8 +248,8 @@ export default function DsHome() {
                 </svg>
               </div>
               {" "}
-              <b data-count="7" data-suffix="+">
-                7+
+              <b data-count="8" data-suffix="+">
+                8+
               </b>
               <span>
                 Years in practice
@@ -781,7 +781,7 @@ export default function DsHome() {
             <article className="pslide">
               {" "}
               <div className="pslide-bg">
-                <img src="/ds/bg-mep.jpg" alt="Revit MEP" loading="lazy" />
+                <img src="/ds/bg-mep.jpg" alt="SERVIQ" loading="lazy" />
               </div>
               {" "}
               <div className="pslide-in">
@@ -791,7 +791,7 @@ export default function DsHome() {
                 </span>
                 {" "}
                 <h3>
-                  Revit MEP
+                  SERVIQ
                 </h3>
                 {" "}
                 <p className="desc">
@@ -840,7 +840,7 @@ export default function DsHome() {
                 {" "}
                 <div>
                   <Link to="/product/mep" data-ds-page="mep" className="ds-btn btn-p">
-                    Explore Revit MEP{" "}
+                    Explore SERVIQ{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-arrow" />
                     </svg>
@@ -1454,7 +1454,7 @@ export default function DsHome() {
                 </h4>
                 {" "}
                 <p>
-                  An instructor comes to your team. 30 events delivered, 3,100+ professionals trained across NIQS chapters, universities and firms.
+                  An instructor comes to your team. 30 events delivered, 800+ professionals trained across NIQS chapters, universities and firms.
                 </p>
                 {" "}
               </div>

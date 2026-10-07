@@ -113,7 +113,7 @@ export default function DsRail({ d }) {
               <li>
                 <Link className="off" to="/work/tool?t=mep" data-ds-page="work-tool">
                   <img src="/ds/ic-mep.png" alt="" />
-                  Revit MEP{" "}
+                  SERVIQ{" "}
                   <span className="add">
                     Add
                   </span>

@@ -10,6 +10,7 @@ import {
   readyToLock,
   resolveValuationView,
   valuationKpis,
+  worksBaseFor,
 } from "./valuationsModel.js";
 
 // His valuations() (work-proj.js:1508-1575). WORK.md §13: "Valuations stay
@@ -237,5 +238,68 @@ describe("the list", () => {
   it("gives each row its cumulative percentage", () => {
     expect(cumulativePercent({ cumulativeValue: 45_000_000 }, 100_000_000)).toBe(45);
     expect(cumulativePercent({ cumulativeValue: 45_000_000 }, 0)).toBe(0);
+  });
+});
+
+describe("what a certificate percentage is measured against", () => {
+  // contract.contractSum is subtotal + contingency + tax. Dividing certified
+  // money by it counts VAT the contractor never certifies and a contingency
+  // usually never spent: a job that had earned 80% of everything a certificate
+  // can ever pay reported ~71%, and could never reach 100% however finished.
+
+  const locked = (over = {}) => ({
+    contract: {
+      locked: true,
+      measuredAtLock: 100_000_000,
+      provisionalAtLock: 0,
+      preliminaryAtLock: 0,
+      contingencyAtLock: 5_000_000,
+      taxAtLock: 7_875_000,
+      contractSum: 112_875_000,
+    },
+    variations: [],
+    certificates: [],
+    ...over,
+  });
+
+  it("uses the works figures the LOCK stored, not the contract sum", () => {
+    expect(worksBaseFor(locked(), { contractSum: 112_875_000 })).toBe(100_000_000);
+  });
+
+  it("so 80,000,000 certified reads as 80%, not 71%", () => {
+    const p = locked({
+      certificates: [
+        { number: 1, cumulativeValue: 80_000_000, thisCertificate: 80_000_000, status: "approved" },
+      ],
+    });
+    const k = valuationKpis(p, { contractSum: 112_875_000, progressPercent: 80 });
+    expect(Math.round(k.certifiedPercent)).toBe(80);
+    // And the contract sum is still reported — it IS the contract value.
+    expect(k.contractSum).toBe(112_875_000);
+  });
+
+  it("counts approved variations, which are certifiable", () => {
+    const p = locked({
+      variations: [
+        { status: "approved", amount: 10_000_000 },
+        { status: "pending", amount: 50_000_000 },
+      ],
+    });
+    expect(worksBaseFor(p, { contractSum: 112_875_000 })).toBe(110_000_000);
+  });
+
+  it("a contract locked before those figures existed keeps its old base", () => {
+    // Not the live bill: that moves after a lock, so a denominator taken from
+    // it would make last month's percentage change by itself.
+    const legacy = { contract: { locked: true, contractSum: 100_000_000 }, variations: [] };
+    expect(worksBaseFor(legacy, { worksValue: 2_000_000, contractSum: 100_000_000 })).toBe(
+      100_000_000,
+    );
+  });
+
+  it("never divides by nothing", () => {
+    const k = valuationKpis({ certificates: [] }, { contractSum: 0, progressPercent: 0 });
+    expect(Number.isFinite(k.certifiedPercent)).toBe(true);
+    expect(k.certifiedPercent).toBe(0);
   });
 });

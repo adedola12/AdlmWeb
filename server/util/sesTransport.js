@@ -1,12 +1,7 @@
 // server/util/sesTransport.js
 //
-// SES directly, instead of through a reseller.
-//
-// This is less of a change than it looks. Resend already sends this domain's
-// mail through SES — `send.adlmstudio.net` publishes an SPF of
-// `include:amazonses.com` and an MX of `feedback-smtp.eu-west-1.amazonses.com`,
-// which is SES in Ireland wearing somebody else's name. What this file removes
-// is the middleman and the API key, not the mail platform.
+// Amazon SES: the only way mail leaves the studio (util/mailer.js). There is
+// no other provider and no fallback; owner's rule, 6 Oct 2026.
 //
 // THE REGION IS NOT A DETAIL
 //
@@ -19,10 +14,9 @@
 // THERE IS NO CREDENTIAL
 //
 // The Lambda's execution role is the credential. Nothing to put in SSM,
-// nothing to rotate, nothing that can leak out of a log line — which is the
-// real reason to prefer this over both the Resend key and the Gmail app
-// password it currently falls back to. Locally it picks up whatever the AWS
-// CLI is configured with, and fails loudly if that is nothing.
+// nothing to rotate, nothing that can leak out of a log line. Locally it picks
+// up whatever the AWS CLI is configured with, and fails loudly if that is
+// nothing.
 //
 // SIMPLE CONTENT, NOT RAW MIME
 //
@@ -223,8 +217,8 @@ export function sesSendInput({
   }
 
   if (Array.isArray(attachments) && attachments.length) {
-    // The rest of the app passes attachment bodies as base64 strings, because
-    // that is what the Resend API wanted. The SDK wants bytes and does its own
+    // The rest of the app passes attachment bodies as base64 strings, a habit
+    // from an earlier provider. The SDK wants bytes and does its own
     // encoding, so decode here rather than changing twenty call sites.
     Simple.Attachments = attachments.map((a) => ({
       FileName: a.filename,

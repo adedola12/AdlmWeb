@@ -108,22 +108,68 @@ export function chipCounts(items, driftByIndex = null) {
  * `letter` is his A · B · C section prefix, and a row's ref is letter.position,
  * numbered within the FILTERED set exactly as his `letter + '.' + (k + 1)` does.
  */
-export function groupBill(items, { by = "element", query = "", filter = "all", driftByIndex = null } = {}) {
+
+/** Stable sort in place by a rank function — ties keep the order they had. */
+function order_stable(list, rankOf) {
+  list
+    .map((name, i) => ({ name, i, r: rankOf(name) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .forEach((x, i) => {
+      list[i] = x.name;
+    });
+}
+export function groupBill(
+  items,
+  { by = "element", query = "", filter = "all", driftByIndex = null, order = null } = {},
+) {
   const list = Array.isArray(items) ? items : [];
   const key = by === "trade" ? tradeOf : elementOf;
 
-  const order = [];
+  const orderList = [];
   const bucket = new Map();
   list.forEach((it, i) => {
     const name = key(it);
     if (!bucket.has(name)) {
       bucket.set(name, []);
-      order.push(name);
+      orderList.push(name);
     }
     bucket.get(name).push(i);
   });
 
-  return order.map((name, gi) => {
+  // A section the project NAMES but no line uses yet.
+  //
+  // Without this, "Add a section" saves the name and nothing appears: the
+  // buckets above are built from the items alone, so a section with no lines
+  // never exists to be drawn, and the button reads as broken. It is drawn only
+  // on the unfiltered element view — inside a search, an empty section is noise,
+  // and it is the same condition under which the add/arrange controls are
+  // offered at all (WorkProjectBill.jsx:148).
+  if (by === "element" && Array.isArray(order) && !String(query || "").trim() && filter === "all") {
+    const have = new Set([...bucket.keys()].map((n) => String(n).trim().toLowerCase()));
+    for (const raw of order) {
+      const name = String(raw || "").trim();
+      if (!name || have.has(name.toLowerCase())) continue;
+      have.add(name.toLowerCase());
+      bucket.set(name, []);
+      orderList.push(name);
+    }
+  }
+
+  // The project's own arrangement, when it has one. A section it does not name
+  // keeps its place after the ones it does, in the order the bill uses it —
+  // dropping it would hide every line filed under it. Sections are only ever
+  // ordered by `element`: "by trade" is a different question about the same
+  // lines, and answering it in the bill's element order would be nonsense.
+  if (by === "element" && Array.isArray(order) && order.length) {
+    const rank = new Map(order.map((n, i) => [String(n).trim().toLowerCase(), i]));
+    const at = (n) => {
+      const r = rank.get(String(n).trim().toLowerCase());
+      return r == null ? Number.MAX_SAFE_INTEGER : r;
+    };
+    order_stable(orderList, at);
+  }
+
+  return orderList.map((name, gi) => {
     const all = bucket.get(name);
     const shown = all.filter((i) =>
       matches(list[i], { query, filter, changed: driftByIndex?.[i] || null }),
@@ -131,6 +177,9 @@ export function groupBill(items, { by = "element", query = "", filter = "all", d
     return {
       name,
       letter: String.fromCharCode(65 + gi),
+      // No lines at all, as opposed to lines that a filter hid. The bill draws
+      // the first and skips the second.
+      empty: all.length === 0,
       // His sub total is over the WHOLE section, not the filtered rows: a
       // section's value does not change because you searched.
       total: all.reduce((a, i) => a + amountOf(list[i]), 0),
@@ -162,6 +211,32 @@ export function foldLabel(groups, openMap = {}) {
   const names = (groups || []).map((g) => g.name);
   const allShut = names.length > 0 && names.every((n) => openMap?.[n] === false);
   return allShut ? "Expand all" : "Collapse all";
+}
+
+/**
+ * The code inside a bill identity.
+ *
+ * A bill identity is a composite — `sn::code::description::takeoffLine::
+ * materialName::unit` — and the code is the second field. A programme task
+ * stores whole identities in `linkedBoqIdentities`, so anything joining a task
+ * back to its bill lines has to take them apart the same way.
+ *
+ * Two places were doing it two ways: taskStartsByLine (budgetModel) split on
+ * `::` and took [1], which is right and is why the buy schedule worked, while
+ * taskLines (pmModel) compared the WHOLE identity against item.code, which can
+ * never match a generated task — so every task appeared to cover no bill lines,
+ * and everything derived from that read zero: task progress, task value,
+ * planned value, and the uncovered-lines figure on the PM dashboard.
+ *
+ * A bare code is still accepted, because a task written before identities were
+ * composite stores exactly that.
+ */
+export function identityCode(identity) {
+  const raw = String(identity || "").trim();
+  if (!raw) return "";
+  const parts = raw.split("::");
+  // A composite always has the six fields; anything else is a bare code.
+  return (parts.length > 1 ? parts[1] : parts[0]).trim().toLowerCase();
 }
 
 /**

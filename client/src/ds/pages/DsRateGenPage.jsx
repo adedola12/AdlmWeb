@@ -323,7 +323,7 @@ export default function DsRateGenPage({ d }) {
                       </span>
                       {" "}
                       <span className="vz-chip on">
-                        Revit MEP
+                        SERVIQ
                       </span>
                     </span>
                   </div>
@@ -348,7 +348,7 @@ export default function DsRateGenPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Change a rate once and it reaches QUIV, HERON and Revit MEP through your ADLM account. No copies, no version arguments.
+                  Change a rate once and it reaches QUIV, HERON and SERVIQ through your ADLM account. No copies, no version arguments.
                 </p>
                 {" "}
               </div>
@@ -811,7 +811,7 @@ export default function DsRateGenPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                No. It prices. Measuring is QUIV, HERON or Revit MEP: RateGen is the library they all read from.
+                No. It prices. Measuring is QUIV, HERON or SERVIQ: RateGen is the library they all read from.
               </div>
               {" "}
             </details>

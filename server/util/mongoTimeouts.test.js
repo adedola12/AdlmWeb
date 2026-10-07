@@ -17,24 +17,41 @@ test("the API fails a stalled operation well inside Lambda's 60s kill", () => {
   assert.equal(o.socketTimeoutMS, 25000);
   assert.equal(o.waitQueueTimeoutMS, 10000);
   assert.ok(o.socketTimeoutMS < 60000);
+  // One connection is kept ready, so a cleared pool refills in the background.
+  assert.equal(o.minPoolSize, 1);
 });
 
 test("either limit can be tuned or switched off from SSM without a code change", () => {
   assert.deepEqual(
     apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "15000", MONGO_WAIT_QUEUE_TIMEOUT_MS: "5000" }),
-    { socketTimeoutMS: 15000, waitQueueTimeoutMS: 5000, autoIndex: false, autoCreate: false },
+    {
+      socketTimeoutMS: 15000,
+      waitQueueTimeoutMS: 5000,
+      minPoolSize: 1,
+      autoIndex: false,
+      autoCreate: false,
+    },
   );
   // 0 means "no limit", i.e. the driver default, so the option is left out.
-  assert.deepEqual(apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "0", MONGO_WAIT_QUEUE_TIMEOUT_MS: "0" }), {
-    autoIndex: false,
-    autoCreate: false,
-  });
+  assert.deepEqual(
+    apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "0", MONGO_WAIT_QUEUE_TIMEOUT_MS: "0", MONGO_MIN_POOL: "0" }),
+    { autoIndex: false, autoCreate: false },
+  );
 });
 
 test("a nonsense value falls back to the default rather than disabling the limit", () => {
   const o = apiMongoOptions({ MONGO_SOCKET_TIMEOUT_MS: "soon", MONGO_WAIT_QUEUE_TIMEOUT_MS: "-1" });
   assert.equal(o.socketTimeoutMS, 25000);
   assert.equal(o.waitQueueTimeoutMS, 10000);
+});
+
+test("the minimum pool is tunable and can never exceed the maximum", () => {
+  assert.equal(apiMongoOptions({ MONGO_MIN_POOL: "2" }).minPoolSize, 2);
+  // A minimum above the maximum would make the driver refuse to connect.
+  assert.equal(apiMongoOptions({ MONGO_MIN_POOL: "9", MONGO_MAX_POOL: "5" }).minPoolSize, 5);
+  assert.equal(apiMongoOptions({ MONGO_MIN_POOL: "3", MONGO_MAX_POOL: "2" }).minPoolSize, 2);
+  assert.equal(apiMongoOptions({ MONGO_MIN_POOL: "junk" }).minPoolSize, 1);
+  assert.equal(apiMongoOptions({ MONGO_MIN_POOL: "1.7" }).minPoolSize, 1);
 });
 
 // ── No index building from API containers ──────────────────────────────────
@@ -106,8 +123,11 @@ test("connectDB hands the API's options to mongoose, and nothing extra otherwise
   assert.equal(seen[0].waitQueueTimeoutMS, 10000);
   // The existing options are untouched.
   assert.equal(seen[0].serverSelectionTimeoutMS, 10000);
+  assert.equal(seen[0].minPoolSize, 1);
   assert.equal(seen[0].autoIndex, false);
   assert.equal(seen[1].socketTimeoutMS, undefined);
+  // Jobs and scripts keep an empty minimum.
+  assert.equal(seen[1].minPoolSize, 0);
   assert.equal(seen[1].waitQueueTimeoutMS, undefined);
   // Jobs and scripts keep mongoose's index building.
   assert.equal(seen[1].autoIndex, undefined);

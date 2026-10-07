@@ -8,7 +8,7 @@
 //
 // Raising a variation is not here. It is a measured item with a quantity, a
 // rate, a reference and an approval trail, and the place that does all of that
-// is the full workspace; a second form for it would be two ways to create the
+// is the classic workspace; a second form for it would be two ways to create the
 // same row.
 
 import React from "react";

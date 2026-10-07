@@ -4,8 +4,19 @@ import { tabsFor, resolveTab, tabCount, tabNeedsAttention } from "./workProjectT
 const keys = (k) => tabsFor(k).map((t) => t.key);
 
 describe("which tabs a project gets", () => {
-  it("gives every project the five that always have something to show", () => {
-    expect(keys("rategen")).toEqual(["overview", "bill", "rates", "pm", "valuations"]);
+  it("gives every project the six that always have something to show", () => {
+    // Activity schedule sits beside the PM dashboard: the dashboard is about
+    // tasks and money, the schedule is about which trade is on site and when.
+    // Both are derived from the bill and the programme, so every project can
+    // have them whatever tool it was measured in.
+    expect(keys("rategen")).toEqual([
+      "overview",
+      "bill",
+      "rates",
+      "pm",
+      "activity",
+      "valuations",
+    ]);
   });
 
   it("gives a Revit job the Model tab and a PlanSwift job the Drawings tab, not both", () => {

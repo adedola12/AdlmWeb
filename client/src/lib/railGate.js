@@ -1,5 +1,12 @@
 // The rail, pointed at screens the viewer can actually open.
 //
+// SINCE GO-LIVE (1 October 2026) THIS IS A NO-OP. Everyone signed in can open
+// /manage/* and /work/*, so DsAppShell passes `canSeeNewBuild` true for all of
+// them (lib/newBuildAccess.js) and gets Richard's rail back untouched. It stays
+// so that raising GATE_NEW_BUILD again rewrites the rail in the same deploy,
+// instead of leaving fifteen links that bounce off the gate. The reasoning below
+// is why the rewrite existed while the gate was up.
+//
 // DsAppShell is not only the new build's frame. WorkShellRoute wraps ELEVEN
 // classic screens in it — /projects/:tool, /time-management, /pm-tracker,
 // /revit-projects, /portfolio, /portfolio-dashboard, /archicad/*, /j/:code and
@@ -40,7 +47,7 @@ function rewriteItem(item) {
 /**
  * The rail a given viewer should see.
  *
- * `canSeeNewBuild` is the same answer the route gate gives (canViewPreview).
+ * `canSeeNewBuild` is the same answer the route gate gives (seesNewBuild).
  * When it is true the rail is returned untouched — the same array, not a copy —
  * so staff get exactly the config Richard wrote and nothing re-renders for it.
  */

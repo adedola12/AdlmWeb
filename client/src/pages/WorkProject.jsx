@@ -1,6 +1,6 @@
 // The /work/project/:productKey/:id route.
 //
-// It used to be a bare redirect: every project opened in the full workspace at
+// It used to be a bare redirect: every project opened in the classic workspace at
 // /projects/:tool, which is where the bill, budget, valuation, PM views and
 // the Work area are. That is still true for everyone who is not staff, so old
 // links and bookmarks keep working exactly as they did.
@@ -27,8 +27,9 @@ import WorkProjectShell from "../features/workProject/WorkProjectShell.jsx";
  * This screen used to decide for itself: canViewPreview on a preview host, and
  * isStaff on adlmstudio.net, on the reasoning that "on adlmstudio.net nothing
  * has gated the request". That is no longer true. components/NewBuildGate.jsx
- * now gates every /work/* and /manage/* route until launch, using canViewPreview
- * — so a second rule here could only disagree with it, and did: it bounced Tech
+ * gates every /work/* and /manage/* route (open to everyone since go-live,
+ * lib/newBuildAccess.js) — so a second rule here could only disagree with it,
+ * and did: it bounced Tech
  * Support, whose whole role is the "preview" area and who is deliberately not
  * isStaff (utils/roles.js). One rule, in one place.
  *

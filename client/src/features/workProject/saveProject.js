@@ -69,6 +69,26 @@ export function buildSavePayload(project, patch = {}) {
   return payload;
 }
 
+/**
+ * The id a WRITE has to use.
+ *
+ * The new project page's route is /work/project/:productKey/:id where :id is a
+ * SLUG (planswift-takeoff). Reading copes: /projects/:key/by-slug/:slug exists
+ * for exactly that. Writing does not — every write route runs isValidObjectId
+ * on its :id param (routes/projects.js:3732 for the PUT,
+ * routes/projects.pm.js:280 for the PM generator) and answers
+ * 400 "Invalid id" to anything that is not 24 hex characters.
+ *
+ * Passing the route's :id straight through therefore broke EVERY save on that
+ * page — progress, rates, a section moved, a line dragged, the procurement
+ * ticks — with nothing to show for it but "Not saved". The loaded document
+ * carries the real _id, so this prefers it and falls back to the route only
+ * when there is no document yet (the classic page, where :id already IS the
+ * ObjectId).
+ */
+export const writeIdFor = (project, routeId) =>
+  String(project?._id || project?.id || routeId || "");
+
 /** The address ProjectsGeneric saves to, so there is one shape, not two. */
 export const projectUrl = (productKey, id) =>
   `/projects/${encodeURIComponent(String(productKey || "").toLowerCase())}/${encodeURIComponent(id)}`;

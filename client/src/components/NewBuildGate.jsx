@@ -1,9 +1,11 @@
-// Who may use the new build before it launches.
+// Who may use the new build — held back before launch, open since.
 //
-// Richard's redesign ships 1 Oct 2026 10:00 WAT. Until then its dashboard and
-// project workspace — /manage/* and /work/* — are staff only: a customer who
-// reaches one is sent to the classic screen that does the same job
-// (lib/classicPaths.js), because classic is still the site they are using.
+// Richard's redesign shipped 1 Oct 2026, and since then this gate is a
+// pass-through. Before that, its dashboard and project workspace — /manage/*
+// and /work/* — were staff only: a customer who reached one was sent to the
+// classic screen that does the same job (lib/classicPaths.js). Raising
+// GATE_NEW_BUILD (lib/newBuildAccess.js) brings that back, for this gate and
+// for every link that points through it.
 //
 // The learning screens (/dash-learning, /dash-certificates, /dash-assignments,
 // /dash-course/:sku) are deliberately NOT behind this gate even though they are
@@ -24,17 +26,13 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { canViewPreview } from "../utils/roles.js";
+import { GATE_NEW_BUILD, seesNewBuild } from "../lib/newBuildAccess.js";
 import { classicFallbackFor } from "../lib/classicPaths.js";
 
-// The one switch. Flip it to false as part of the go-live change on 1 Oct and
-// the whole gate becomes a pass-through; delete the file in the commit after.
-//
-// Deliberately NOT derived from the launch date: this decides which dashboard a
-// customer sees, and a browser with a wrong clock would switch them early or
-// leave them behind. Go-live is a deploy either way (see docs/CLASSIC-BUILD.md),
-// so the flip is a reviewed line rather than something nobody can see coming.
-export const GATE_NEW_BUILD = true;
+// The switch itself, GATE_NEW_BUILD, and the reasoning for it live in
+// lib/newBuildAccess.js: the rail, the project cards and the classic-project
+// redirect have to give the same answer as this gate, and at go-live they did
+// not (the gate came down, they kept sending customers to classic).
 
 export default function NewBuildGate({ children }) {
   const { user } = useAuth();
@@ -61,11 +59,8 @@ export default function NewBuildGate({ children }) {
   // line that cannot change the outcome would only look load bearing.
   if (!user) return null;
 
-  // canViewPreview, not isStaff: Tech Support holds only the "preview" area and
-  // is deliberately not staff (utils/roles.js), and locking the people who
-  // handle support tickets out of the screens customers ask about would defeat
-  // the point of the role.
-  if (canViewPreview(user)) return children;
+  // Same answer the rail and the project links give (lib/newBuildAccess.js).
+  if (seesNewBuild(user)) return children;
 
   return <Navigate to={classicFallbackFor(loc.pathname)} replace />;
 }

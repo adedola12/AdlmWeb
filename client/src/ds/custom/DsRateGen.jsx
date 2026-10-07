@@ -17,7 +17,7 @@ import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsRateGen() {
-  const price = useProductPricing("rategen", { monthly: 8000, yearly: 70000, install: 0 });
+  const price = useProductPricing("rategen", { monthly: 20000, yearly: 200000, install: 0 });
   return (
     <DsRateGenPage
       d={{

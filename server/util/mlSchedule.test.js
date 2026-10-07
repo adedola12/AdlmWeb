@@ -12,14 +12,14 @@ import { resolveConstants, MC, clampConstant } from "./materialConstants.js";
 import {
   classifyWork,
   deriveMaterials,
-  labourRateFor,
   generateMlSchedule,
-  normalizeUnit,
-  mepDiscipline,
   isGeneratedRow,
+  labourRateFor,
   measureBasis,
-  plantRateFor,
+  mepDiscipline,
+  normalizeUnit,
   parseGirthMetres,
+  plantRateFor,
 } from "./mlSchedule.js";
 
 const K = resolveConstants();
@@ -158,6 +158,21 @@ test("services lines are routed to the right discipline", () => {
   for (const [description, expected] of cases) {
     assert.equal(mepDiscipline(item({ description })), expected, description);
   }
+});
+
+test("a services line priced from an all-in installed item gets no labour on top", () => {
+  const wc = item({ code: "BQ-wc", description: "Water closet with low level cistern", unit: "nr", qty: 2, rate: 150000 });
+  const serviceRateFor = (allIn) => ({
+    material: () => 112000,
+    labour: () => 5000,
+    allIn: () => allIn,
+  });
+  const labourOf = (rows) =>
+    rows.filter((r) => r.billIdentity === "BQ-wc" && r.componentKind === "Labour").reduce((s, r) => s + (r.qty || 0) * (r.rate || 0), 0);
+  const installed = generateMlSchedule([wc], [], K, { serviceRateFor: serviceRateFor(true) }).budgetItems;
+  const supplyOnly = generateMlSchedule([wc], [], K, { serviceRateFor: serviceRateFor(false) }).budgetItems;
+  assert.equal(labourOf(installed), 0);
+  assert.ok(labourOf(supplyOnly) > 0);
 });
 
 test("a bill sheet named Elect makes its lines electrical", () => {
@@ -554,4 +569,73 @@ test("rebuilding the schedule does not move a bill the QS has priced", async () 
   // And the QS's price is still there afterwards.
   const after = budget.find((b) => /cement/i.test(b.materialName || ""));
   assert.equal(Number(after.rate), 12000, "the typed rate survives the rebuild");
+});
+
+// ── Two work items the classifier used to lose ──
+//
+// Both found by running every family through the real engine and checking the
+// result against Nigerian QS practice. Both are the silent kind: the bill still
+// totals correctly, so nothing downstream complains.
+
+test("formwork with STRUTTING is formwork, not excavation", () => {
+  // "planking and strutting" is an excavation term of art. Bare "strutting"
+  // reads in formwork items, and listing it as an excavation verb sent
+  // "Sawn formwork, props and strutting to slab soffit" to labour-only: no
+  // board, no bracing, no nails, and labour at the excavation rate — which is
+  // per CUBIC metre, applied to SQUARE metres of soffit.
+  const K = resolveConstants();
+  for (const d of [
+    "Sawn formwork, props and strutting to slab soffit",
+    "Formwork including planking and strutting",
+    "Sawn formwork with strutting",
+    "Formwork to staircase soffit with strutting",
+    "Sawn formwork to soffit of suspended slab including props and strutting",
+  ]) {
+    const it = { code: "F1", description: d, takeoffLine: "", unit: "m2", qty: 100, rate: 0 };
+    assert.equal(classifyWork(it, K), "formwork", d);
+    assert.equal(deriveMaterials(it, "formwork", K).length, 3, `${d} must carry board, bracing and nails`);
+  }
+});
+
+test("REAL excavation support is still labour-only", () => {
+  // The fix must not swing the other way: planking and strutting to a trench is
+  // exactly what the phrase is for.
+  const K = resolveConstants();
+  for (const d of [
+    "Excavate trench including planking and strutting",
+    "Earthwork support to sides of excavation",
+    "Excavate oversite to remove topsoil average 150mm deep",
+  ]) {
+    const it = { code: "E1", description: d, takeoffLine: "", unit: "m3", qty: 100, rate: 0 };
+    assert.equal(classifyWork(it, K), "labour-only", d);
+  }
+});
+
+test("BS 4483 fabric is recognised by ref across the A-series", () => {
+  // Only "brc", "mesh" and the single ref "a142" were matched, so
+  // "Fabric reinforcement ref A252 in raft slab" came back unknown — and
+  // generateMlSchedule SKIPS an unknown line, so 500 m2 of fabric was ordered
+  // as nothing at all while the bill still totalled.
+  const K = resolveConstants();
+  for (const d of [
+    "BRC mesh A142 in slab",
+    "Fabric reinforcement ref A252 in slab",
+    "Fabric reinforcement ref A393 in raft",
+    "A193 fabric to ground floor slab",
+    "Welded wire fabric to slab",
+    "Steel fabric reinforcement in slab",
+  ]) {
+    const it = { code: "M1", description: d, takeoffLine: "", unit: "m2", qty: 500, rate: 0 };
+    assert.equal(classifyWork(it, K), "mesh", d);
+    assert.ok(deriveMaterials(it, "mesh", K).length > 0, `${d} must order fabric`);
+  }
+});
+
+test("a stem alternative is not killed by a trailing word boundary", () => {
+  // The first version of the fabric pattern ended the whole group with \b, so
+  // `fabric\s*reinforc` could never match "reinforcement" — the ref alternative
+  // was silently carrying every passing case.
+  const K = resolveConstants();
+  const it = { code: "M1", description: "Steel fabric reinforcement in slab", takeoffLine: "", unit: "m2", qty: 1, rate: 0 };
+  assert.equal(classifyWork(it, K), "mesh");
 });

@@ -6,6 +6,7 @@ import {
   elementOf,
   foldLabel,
   groupBill,
+  identityCode,
   isPriced,
   matches,
   measuredAt,
@@ -223,5 +224,132 @@ describe("the fold button", () => {
 
   it("does not claim everything is shut when there is nothing", () => {
     expect(foldLabel([], {})).toBe("Collapse all");
+  });
+});
+
+describe("the bill follows the project's arrangement", () => {
+  const items = [
+    { code: "BQ-1", category: "Roofing", qty: 1, rate: 1 },
+    { code: "BQ-2", category: "Substructure", qty: 1, rate: 1 },
+    { code: "BQ-3", category: "Frames", qty: 1, rate: 1 },
+  ];
+
+  it("orders the sections the way the project arranges them", () => {
+    const g = groupBill(items, { order: ["Substructure", "Frames", "Roofing"] });
+    expect(g.map((x) => x.name)).toEqual(["Substructure", "Frames", "Roofing"]);
+  });
+
+  it("keeps first-appearance order when the project has no arrangement", () => {
+    expect(groupBill(items, {}).map((x) => x.name)).toEqual([
+      "Roofing",
+      "Substructure",
+      "Frames",
+    ]);
+  });
+
+  it("never hides a section the arrangement does not name", () => {
+    // It goes after the named ones, in the order the bill uses it. Dropping it
+    // would hide every line filed under it.
+    const g = groupBill(items, { order: ["Frames"] });
+    expect(g.map((x) => x.name)).toEqual(["Frames", "Roofing", "Substructure"]);
+  });
+
+  it("ignores casing when matching a section to the arrangement", () => {
+    const g = groupBill(items, { order: ["substructure", "frames"] });
+    expect(g.map((x) => x.name).slice(0, 2)).toEqual(["Substructure", "Frames"]);
+  });
+
+  it("leaves 'by trade' alone — that is a different question", () => {
+    const g = groupBill(items, { by: "trade", order: ["Substructure", "Frames", "Roofing"] });
+    expect(g.length).toBeGreaterThan(0);
+  });
+});
+
+// THE BUG THIS PINS
+//
+// "Add a section" writes the name to customCategories and the bill never drew
+// it: groupBill built its buckets from the ITEMS alone, so a section with no
+// lines did not exist to render. The save worked; the button looked broken.
+describe("a section the project names but no line uses", () => {
+  const items = [
+    { code: "BQ-1", category: "Frames", description: "Column", qty: 1, rate: 100 },
+    { code: "BQ-2", category: "Substructure", description: "Excavate", qty: 1, rate: 50 },
+  ];
+  const order = ["Substructure", "Frames", "Finishes"];
+
+  it("is drawn, so adding one is visible", () => {
+    const names = groupBill(items, { order }).map((g) => g.name);
+    expect(names).toContain("Finishes");
+  });
+
+  it("is marked empty, so the bill can tell it from one a filter emptied", () => {
+    const g = groupBill(items, { order }).find((x) => x.name === "Finishes");
+    expect(g.empty).toBe(true);
+    expect(g.indexes).toEqual([]);
+    expect(g.total).toBe(0);
+  });
+
+  it("keeps its place in the arrangement", () => {
+    const p2 = groupBill(items, { order: ["Finishes", "Substructure", "Frames"] });
+    expect(p2.map((g) => g.name)).toEqual(["Finishes", "Substructure", "Frames"]);
+  });
+
+  it("does not appear inside a search — there, an empty section is noise", () => {
+    const names = groupBill(items, { order, query: "column" }).map((g) => g.name);
+    expect(names).not.toContain("Finishes");
+  });
+
+  it("does not appear under a filter either", () => {
+    const names = groupBill(items, { order, filter: "unpriced" }).map((g) => g.name);
+    expect(names).not.toContain("Finishes");
+  });
+
+  it("never duplicates a section the lines already use, whatever the casing", () => {
+    const names = groupBill(items, { order: ["frames", "SUBSTRUCTURE"] }).map((g) => g.name);
+    expect(names.filter((n) => n.toLowerCase() === "frames")).toHaveLength(1);
+    expect(names.filter((n) => n.toLowerCase() === "substructure")).toHaveLength(1);
+  });
+
+  it("a section a filter emptied is NOT marked empty", () => {
+    const g = groupBill(items, { order, filter: "unpriced" }).find((x) => x.name === "Frames");
+    expect(g?.empty).toBe(false);
+  });
+});
+
+// THE BUG THIS PINS
+//
+// A programme task stores WHOLE bill identities in linkedBoqIdentities —
+// `sn::code::description::takeoffLine::materialName::unit`. Two places joined a
+// task back to its lines and they disagreed: the buy schedule split on `::` and
+// took [1] (right), while pmModel.taskLines compared the whole string to
+// item.code (never matches). Every generated task therefore appeared to cover
+// no bill lines, so task progress, task value, planned value and the PM
+// dashboard's uncovered-lines figure all read zero on a real programme.
+describe("the code inside a bill identity", () => {
+  const REAL =
+    "2::gf:vibrated hollow sancrete blocks in cement mortar (1:6)|guid:01a861ac::vibrated hollow::::::sq m";
+
+  it("takes the second field of a composite", () => {
+    expect(identityCode(REAL)).toBe(
+      "gf:vibrated hollow sancrete blocks in cement mortar (1:6)|guid:01a861ac",
+    );
+  });
+
+  it("keeps a bare code, which is what older tasks store", () => {
+    expect(identityCode("BQ-1")).toBe("bq-1");
+  });
+
+  it("lower-cases, because the join is case-insensitive either side", () => {
+    expect(identityCode("1::BQ-1::Excavate::::::m3")).toBe("bq-1");
+  });
+
+  it("answers empty for nothing, rather than matching the first line", () => {
+    expect(identityCode("")).toBe("");
+    expect(identityCode(null)).toBe("");
+    expect(identityCode(undefined)).toBe("");
+  });
+
+  it("copes with an identity whose code field is empty", () => {
+    expect(identityCode("1::::--- gf ---::::::")).toBe("");
   });
 });

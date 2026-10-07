@@ -21,6 +21,20 @@ export const HUB_REQUIRES_PAID = "HUB_REQUIRES_PAID";
 export const HUB_REQUIRES_PAID_MESSAGE =
   "The Installer Hub is for accounts with an active licence for one of our desktop products. Buy or renew one to download it.";
 
+// Where an email or any other link outside a signed-in page sends someone for
+// the Hub: their dashboard, whose Installer Hub card only carries a link for a
+// paid account, so the check above runs when they open it. Never the file's
+// own URL, which would outlive the licence and work for whoever the email is
+// forwarded to. /dashboard, not /manage/downloads: customers stay on the
+// classic dashboard until go-live (lib/afterSignIn.js), and on 1 Oct
+// /dashboard redirects to Manage, so this link is right on both sides.
+export const INSTALLER_HUB_PAGE = "/dashboard";
+
+/** The Downloads screen on the site at `webUrl`. */
+export function installerHubPageUrl(webUrl) {
+  return `${String(webUrl || "").replace(/\/+$/, "")}${INSTALLER_HUB_PAGE}`;
+}
+
 /** True when this (lean) user holds at least one live, unexpired entitlement. */
 export function hasAnyLiveEntitlement(user, now = Date.now()) {
   const t = now instanceof Date ? now.getTime() : Number(now);

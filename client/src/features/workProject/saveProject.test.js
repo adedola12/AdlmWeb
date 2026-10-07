@@ -4,6 +4,7 @@ import {
   projectUrl,
   withLineElement,
   withLineProgress,
+  writeIdFor,
 } from "./saveProject.js";
 
 // The PUT has two rules and they pull in opposite directions:
@@ -159,5 +160,41 @@ describe("where it saves to", () => {
 
   it("lowercases the product and escapes the id", () => {
     expect(projectUrl("PlanSwift", "a b&c")).toBe("/projects/planswift/a%20b%26c");
+  });
+});
+
+// THE BUG THIS PINS
+//
+// The new project page's route carries a slug. Every write route validates its
+// :id as an ObjectId, so passing the route param through made the server answer
+// 400 "Invalid id" to every save from that page — and the only sign of it was
+// the indicator reading "Not saved". Found on preview 29 Sep 2026 by watching
+// the PUT: /projects/planswift/planswift-takeoff -> 400 {"error":"Invalid id"}.
+describe("which id a write uses", () => {
+  const SLUG = "planswift-takeoff";
+  const OID = "68c9b1f2a4d3e5b7c1a20934";
+
+  it("prefers the loaded document's _id over the slug in the address bar", () => {
+    expect(writeIdFor({ _id: OID, slug: SLUG }, SLUG)).toBe(OID);
+  });
+
+  it("never sends a slug when a document is in hand", () => {
+    expect(writeIdFor({ _id: OID }, SLUG)).not.toBe(SLUG);
+  });
+
+  it("accepts `id` as well as `_id` — the rollup spells it the other way", () => {
+    expect(writeIdFor({ id: OID }, SLUG)).toBe(OID);
+  });
+
+  it("falls back to the route when nothing is loaded yet", () => {
+    // The classic page's route param already IS the ObjectId, so this is the
+    // right answer there rather than an empty request.
+    expect(writeIdFor(null, OID)).toBe(OID);
+  });
+
+  it("builds a write URL that carries the ObjectId, not the slug", () => {
+    const url = projectUrl("planswift", writeIdFor({ _id: OID, slug: SLUG }, SLUG));
+    expect(url).toBe(`/projects/planswift/${OID}`);
+    expect(url).not.toContain(SLUG);
   });
 });

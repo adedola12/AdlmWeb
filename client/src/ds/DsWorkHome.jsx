@@ -92,7 +92,7 @@ const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
   rategen: "RateGen",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   "qs-takeoff": "Time Pro",
   civil3d: "CIVIQ",
   archicad: "ArchiCAD",
@@ -400,7 +400,18 @@ export default function DsWorkHome() {
           return (
             <tr key={r.id}>
               <td className="tw">
-                <Link className="oh-p b" to={`/work/rate/${encodeURIComponent(r.id)}`}>
+                {/* ADDRESSED AS A CUSTOM RATE, which is what every row here is.
+                    This panel is fed only by GET /rategen-v2/library/custom-rates,
+                    and DsWorkRate reads a custom rate only from the
+                    `custom:<id>` form — a bare id is looked up among the MASTER
+                    rates by ObjectId, which a slug like "concrete-1-2-4-k3p9x"
+                    never matches. Every row led to "That rate is not in this
+                    library", about a rate the reader had just built. Same shape
+                    as rategen/mergeRateRows.js builds. */}
+                <Link
+                  className="oh-p b"
+                  to={`/work/rate/custom:${encodeURIComponent(r.customRateId || r.id)}`}
+                >
                   {r.title || r.description || "Untitled rate"}
                 </Link>
                 {r.sectionLabel ? <em>{r.sectionLabel}</em> : null}

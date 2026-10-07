@@ -253,7 +253,7 @@ export default function DsLearnPage({ d }) {
                     <svg viewBox="0 0 24 24">
                       <use href="#i-check" />
                     </svg>
-                    Revit MEP + clash detection in Navisworks
+                    SERVIQ + clash detection in Navisworks
                   </li>
                   {" "}
                   <li>
@@ -450,12 +450,12 @@ export default function DsLearnPage({ d }) {
             <h2>
               Thirty events,{" "}
               <span className="tone">
-                3,100+ trained
+                800+ trained
               </span>
             </h2>
             {" "}
             <p className="ds-lede">
-              Conferences, chapter workshops, university sessions and in-office programmes since 2022. Six are featured below, and every one of the thirty is listed underneath.
+              Conferences, chapter workshops, university sessions and in-office programmes since 2018. Six are featured below, and every one of the thirty is listed underneath.
             </p>
             {" "}
           </div>
@@ -1517,7 +1517,7 @@ export default function DsLearnPage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Illustrated, step-by-step, and written for people doing the work.
+              Step-by-step, written for people doing the work, and updated with every release.
             </p>
             {" "}
           </div>
@@ -1536,7 +1536,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  21 pages · PDF
+                  30 pages · PDF
                 </span>
                 {" "}
                 <h4>
@@ -1544,7 +1544,7 @@ export default function DsLearnPage({ d }) {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "46ch" }}>
-                  Signing in, installing your products, applying updates, and fixing the things that go wrong.
+                  Signing in, installing your products, applying updates, freeing a machine, and fixing the things that go wrong.
                 </p>
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
@@ -1576,7 +1576,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  22 pages · PDF
+                  30 pages · PDF
                 </span>
                 {" "}
                 <h4>
@@ -1584,7 +1584,7 @@ export default function DsLearnPage({ d }) {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "46ch" }}>
-                  Opening your model, the Model Checker, taking off every element, and turning it into a priced bill.
+                  The Model Checker, taking off every element, the whole take-off in one run, pricing with Rate Gen and saving to ADLM Cloud.
                 </p>
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
@@ -1618,7 +1618,7 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  19 pages · PDF
+                  24 pages · PDF
                 </span>
                 {" "}
                 <h4>
@@ -1626,7 +1626,7 @@ export default function DsLearnPage({ d }) {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "46ch" }}>
-                  Rate build-ups, material and labour libraries, custom rates, and how rates reach QUIV and HERON.
+                  Rate build-ups, the material, labour and plant libraries, custom rates, and how rates reach QUIV and HERON.
                 </p>
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
@@ -1658,27 +1658,27 @@ export default function DsLearnPage({ d }) {
                 </span>
                 {" "}
                 <span className="eyebrow" style={{ color: "var(--accent)", marginTop: "14px" }}>
-                  48 pages · PDF
+                  280 pages · PDF
                 </span>
                 {" "}
                 <h4>
-                  Installer Hub &amp; HERON
+                  The complete user guide
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "46ch" }}>
-                  The combined book: the Hub end to end, then HERON: scaling drawings, measuring, pricing and export.
+                  Every product in one book, plus the sample projects and the QS handbook of formulas, constants and conversions.
                 </p>
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
                   {" "}
-                  <a href="/docs/ADLM-Complete-User-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
+                  <a href="/docs/ADLM-Software-Complete-Guide.pdf" className="ds-btn btn-p ds-btn-sm" download="">
                     Download{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#i-down" />
                     </svg>
                   </a>
                   {" "}
-                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-Complete-User-Guide.pdf" data-title="Installer Hub &amp; HERON">
+                  <button type="button" className="ds-btn btn-o ds-btn-sm" data-doc="/docs/ADLM-Software-Complete-Guide.pdf" data-title="The complete user guide">
                     Preview
                   </button>
                   {" "}

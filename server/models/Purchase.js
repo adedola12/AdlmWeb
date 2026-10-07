@@ -24,6 +24,11 @@ const LineSchema = new mongoose.Schema(
     unit: { type: Number, default: 0 },
     install: { type: Number, default: 0 },
     subtotal: { type: Number, default: 0 },
+
+    // All-products bundle (util/bundleDiscount.js): the % and amount taken off
+    // this line's subscription. 0 when the order is not the whole bundle.
+    bundlePercent: { type: Number, default: 0 },
+    bundleDiscount: { type: Number, default: 0 },
   },
   { _id: false },
 );
@@ -114,6 +119,8 @@ const PurchaseSchema = new mongoose.Schema(
     },
 
     totalBeforeDiscount: { type: Number, default: 0 },
+    // All-products bundle discount, taken before any coupon (util/bundleDiscount.js).
+    bundleDiscount: { type: Number, default: 0 },
     // Tax/VAT applied to (subtotal − discount). Stored on the purchase so
     // the rate at time of order is preserved even if global VAT changes later.
     vatPercent: { type: Number, default: 0, min: 0, max: 100 },

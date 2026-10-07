@@ -2,9 +2,20 @@
 // Ported from RichardEnoch/adlm-studio-site index.html
 // Re-run the script to pick up his changes; hand edits here are lost.
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { linkFrom } from "../../lib/newBuildPaths.js";
 
 export default function DsFooter() {
+  // WHERE THIS IS MOUNTED DECIDES WHERE ITS LINKS GO.
+  //
+  // DsShell renders this on BOTH gated redesign pages (/fit, /preview/*)
+  // and genuinely public ones (/certificate, /privacy, /terms,
+  // /licensing - see main.jsx). On a redesign page a classic link drops
+  // the reader out of the build they are in; on a public page a /preview
+  // link puts a member of the public in front of a staff gate. So each
+  // link asks where it is rather than being repointed wholesale.
+  const { pathname } = useLocation();
+  const href = (to) => linkFrom(pathname, to);
   return (
     <>
       <footer className="foot">
@@ -60,33 +71,33 @@ export default function DsFooter() {
               <ul>
                 {" "}
                 <li>
-                  <Link to="/product/revit" data-ds-page="quiv">
+                  <Link to={href("/product/revit")} data-ds-page="quiv">
                     QUIV
                   </Link>
                 </li>
                 <li>
-                  <Link to="/product/planswift" data-ds-page="heron">
+                  <Link to={href("/product/planswift")} data-ds-page="heron">
                     HERON
                   </Link>
                 </li>
                 <li>
-                  <Link to="/product/rategen" data-ds-page="rategen">
+                  <Link to={href("/product/rategen")} data-ds-page="rategen">
                     RateGen
                   </Link>
                 </li>
                 {" "}
                 <li>
-                  <Link to="/product/mep" data-ds-page="mep">
-                    Revit MEP
+                  <Link to={href("/product/mep")} data-ds-page="mep">
+                    SERVIQ
                   </Link>
                 </li>
                 <li>
-                  <Link to="/product/qs-takeoff" data-ds-page="timepro">
+                  <Link to={href("/product/qs-takeoff")} data-ds-page="timepro">
                     Time Pro
                   </Link>
                 </li>
                 <li>
-                  <Link to="/product/civil3d" data-ds-page="civiq">
+                  <Link to={href("/product/civil3d")} data-ds-page="civiq">
                     CIVIQ
                   </Link>
                 </li>
@@ -101,34 +112,34 @@ export default function DsFooter() {
               <ul>
                 {" "}
                 <li>
-                  <Link to="/solutions/firms" data-ds-page="solutions-firms">
+                  <Link to={href("/solutions/firms")} data-ds-page="solutions-firms">
                     For firms
                   </Link>
                 </li>
                 <li>
-                  <Link to="/solutions/professionals" data-ds-page="solutions-professionals">
+                  <Link to={href("/solutions/professionals")} data-ds-page="solutions-professionals">
                     For individual QS
                   </Link>
                 </li>
                 {" "}
                 <li>
-                  <Link to="/solutions/students" data-ds-page="solutions-students">
+                  <Link to={href("/solutions/students")} data-ds-page="solutions-students">
                     For students
                   </Link>
                 </li>
                 <li>
-                  <Link to="/solutions/institutions" data-ds-page="solutions-institutions">
+                  <Link to={href("/solutions/institutions")} data-ds-page="solutions-institutions">
                     For institutions
                   </Link>
                 </li>
                 {" "}
                 <li>
-                  <Link to="/pricing" data-ds-page="pricing">
+                  <Link to={href("/pricing")} data-ds-page="pricing">
                     Pricing
                   </Link>
                 </li>
                 <li>
-                  <Link to="/quote" data-ds-page="quote">
+                  <Link to={href("/quote")} data-ds-page="quote">
                     Build a quotation
                   </Link>
                 </li>
@@ -142,29 +153,29 @@ export default function DsFooter() {
               <ul>
                 {" "}
                 <li>
-                  <Link to="/learn#courses" data-ds-page="learn">
+                  <Link to={href("/learn#courses")} data-ds-page="learn">
                     Courses
                   </Link>
                 </li>
                 <li>
-                  <Link to="/learn#lessons" data-ds-page="learn">
+                  <Link to={href("/learn#lessons")} data-ds-page="learn">
                     Free lessons
                   </Link>
                 </li>
                 {" "}
                 <li>
-                  <Link to="/learn#events" data-ds-page="learn">
+                  <Link to={href("/learn#events")} data-ds-page="learn">
                     Events &amp; training
                   </Link>
                 </li>
                 <li>
-                  <Link to="/learn#guides" data-ds-page="learn">
+                  <Link to={href("/learn#guides")} data-ds-page="learn">
                     Guides &amp; docs
                   </Link>
                 </li>
                 {" "}
                 <li>
-                  <Link to="/whats-new" data-ds-page="whats-new">
+                  <Link to={href("/whats-new")} data-ds-page="whats-new">
                     What's New
                   </Link>
                 </li>
@@ -178,39 +189,39 @@ export default function DsFooter() {
               <ul>
                 {" "}
                 <li>
-                  <Link to="/about" data-ds-page="about">
+                  <Link to={href("/about")} data-ds-page="about">
                     About
                   </Link>
                 </li>
                 <li>
-                  <Link to="/testimonials" data-ds-page="customers">
+                  <Link to={href("/testimonials")} data-ds-page="customers">
                     Customers
                   </Link>
                 </li>
                 <li>
-                  <Link to="/careers" data-ds-page="careers">
+                  <Link to={href("/careers")} data-ds-page="careers">
                     Careers
                   </Link>
                 </li>
                 {" "}
                 <li>
-                  <Link to="/press" data-ds-page="press">
+                  <Link to={href("/press")} data-ds-page="press">
                     Press
                   </Link>
                 </li>
                 <li>
-                  <Link to="/contact" data-ds-page="contact">
+                  <Link to={href("/contact")} data-ds-page="contact">
                     Contact
                   </Link>
                 </li>
                 <li>
-                  <Link to="/contact#support" data-ds-page="contact">
+                  <Link to={href("/contact#support")} data-ds-page="contact">
                     Support
                   </Link>
                 </li>
                 {" "}
                 <li>
-                  <Link to="/privacy" data-ds-page="privacy">
+                  <Link to={href("/privacy")} data-ds-page="privacy">
                     Legal
                   </Link>
                 </li>

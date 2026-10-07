@@ -638,6 +638,19 @@ import {
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
 import {
+  certificateMoney,
+  certifiedSoFar,
+  earnedLineValue,
+} from "../util/certificateMaths.js";
+import { sendMail } from "../util/mailer.js";
+import { contractLocked } from "../util/emailContent.js";
+import {
+  isShared,
+  lockedByName,
+  lockNoticeRecipients,
+  maySeeMoney,
+} from "../util/contractLockNotice.js";
+import {
   maskSharedMoney,
   readerMaySeeRates,
   PROJECT_LIST_MONEY_FIELDS,
@@ -673,12 +686,33 @@ import {
   buildBoqTemplateWorkbook,
 } from "../util/boqExcelImport.js";
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
-import { generateMlSchedule } from "../util/mlSchedule.js";
+import { generateMlSchedule, isGeneratedRow } from "../util/mlSchedule.js";
 import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { mergeRatesWithUserData } from "../util/rategenUserRates.js";
-import { buildRateBudgetRows, applyRateRows } from "../util/rateToBudget.js";
+import {
+  lineKey,
+  suggestRatesForLine,
+  suggestionMapForBill,
+  usageIndex,
+  worthOffering,
+} from "../util/rateSuggestions.js";
+import { RateUsage } from "../models/RateUsage.js";
+import { conversionFactor } from "../util/unitConversion.js";
+import { unitsAgree } from "../util/rateSuggestions.js";
+import {
+  applyRateRows,
+  buildRateBudgetRows,
+  isRateGenRow,
+  whyRateCannotPrice,
+} from "../util/rateToBudget.js";
+import {
+  buildUserRateRows,
+  isUserRateLine,
+  resolveUserRate,
+  setUserRateOnItem,
+} from "../util/priceByArea.js";
 import {
   collectBudgetEdits,
   reapplyBudgetEdits,
@@ -690,10 +724,14 @@ import {
   finalAccountSavings,
 } from "../util/finalAccountMath.js";
 import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
+import { carryCloudRateLocks } from "../util/cloudRateLocks.js";
+import { priceBudgetFromCloud } from "../util/cloudBudgetPricing.js";
+import { sanitizeRoomFinishes } from "../util/roomFinishes.js";
 import {
   sanitizeResourceItems,
   applyResourceRows,
   buildResourcesFromRate,
+  RESOURCE_SOURCE_RATE,
 } from "../util/projectResources.js";
 import {
   BOQ_IMPORT_PRODUCTS,
@@ -860,6 +898,17 @@ function requestedProductKey(req) {
   return normalizeProductKey(req.productKeyOriginal ?? req.params.productKey);
 }
 
+// QUIV's per-room finishes (QUIV 4.0.2+). Revit take-offs only: no other
+// plugin measures rooms, and the "-materials" twin never carries them.
+// Returns undefined when the body did not send the list, which every save
+// path reads as "keep what is stored" - an older QUIV, or a website save of
+// the bill, must not wipe the rooms.
+export function roomFinishesFromBody(productKey, body) {
+  if (productKey !== "revit") return undefined;
+  const list = body?.roomFinishes;
+  return Array.isArray(list) ? sanitizeRoomFinishes(list) : undefined;
+}
+
 // ── Collaborator access resolution ───────────────────────────────────────
 // True when `userId` holds an active, unexpired entitlement for `key`. Mirrors
 // requireEntitlement() — used for the RateGen rate-mask decision and the
@@ -874,6 +923,26 @@ async function userHasActiveEntitlement(userId, key) {
   if (!e) return false;
   if (e.expiresAt && new Date(e.expiresAt).getTime() < Date.now()) return false;
   return true;
+}
+
+// QUIV measures, ADLM Cloud prices (owner, 1 and 4 Oct 2026). QUIV sends its
+// material and labour schedule as quantities; for an account with RateGen the
+// cloud prices the unpriced rows and builds the lines QUIV did not cover (see
+// util/cloudBudgetPricing.js). Without RateGen the budget stays quantities only,
+// the 24 Sep rule. Runs after preserveBudgetUserEdits, so anything the QS priced
+// is already back and is never changed. Never fails the save.
+async function cloudPriceQuivBudget(project, productKey, userId, tag) {
+  if (productKey !== "revit" || !project) return;
+  try {
+    if (!(await userHasActiveEntitlement(userId, "rategen"))) return;
+    const ctx = await buildMlScheduleContext(userId);
+    const r = priceBudgetFromCloud(project.items, project.budgetItems, ctx);
+    if (!r.priced && !r.generated) return;
+    project.budgetItems = ensureBillItemCoverage(project.items, sanitizeBudgetItems(r.budgetItems));
+    console.log(`[${tag}] cloud priced the QUIV budget: ${r.priced} rows priced, ${r.covered} lines built (${r.generated} rows)`);
+  } catch (e) {
+    console.error(`[${tag}] cloud pricing failed:`, e?.message || e);
+  }
 }
 
 // Mongo filter matching a project the requester may READ: they own it OR are a
@@ -2031,7 +2100,15 @@ function buildValuationLogs(project, productKey) {
       : Math.max(0, Math.min(100, safeNum(it?.percentComplete)));
     if (!ratified && pct <= 0) continue; // nothing earned on this line
 
-    const amount = safeNum(it?.qty) * safeNum(it?.rate) * (pct / 100);
+    // THE SAME RULE THE CERTIFICATE USES.
+    //
+    // This read qty * rate — the frozen CONTRACT figures — while
+    // computeValueToDate, which feeds the interim certificate, reads the
+    // actuals. On a line re-measured from 120 m³ to 134 the certificate said
+    // ₦11,390,000 and the printed Interim Payment Application said
+    // ₦10,200,000, for the same work on the same day. Whichever the client saw
+    // first was the one they believed.
+    const amount = earnedLineValue(it, pct);
     if (amount <= 0) continue;
 
     const when =
@@ -2394,6 +2471,9 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
   // qty/rate to the baseline and divert post-lock changes to actualQty/actualRate, push brand-new
   // lines to variations, and re-insert omitted base items — so a plugin (HERON) re-save via the
   // unified /full or per-key POST can never overwrite a locked contract. No-op when unlocked/new.
+  // A rate the QS set on the website keeps its lock through a plugin re-save
+  // (the plugins' payload has no rateLockedAt; see util/cloudRateLocks.js).
+  if (!created) carryCloudRateLocks(project.items, items);
   const sanitizedNext = sanitizeItems(items, productKey);
   const { lockedItems, extraVariations } = enforceContractLock({ project, sanitizedNext });
 
@@ -2443,6 +2523,8 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
       project.valuationSettings || DEFAULT_VALUATION_SETTINGS,
     );
   }
+  const rooms = roomFinishesFromBody(productKey, payload);
+  if (rooms) project.roomFinishes = rooms;
 
   if (!created) project.version += 1;
   await project.save();
@@ -2548,6 +2630,7 @@ async function createProject(req, res) {
             : true,
       checklistCompositeKeys: normalizeChecklistKeys(checklistCompositeKeys),
       valuationSettings: normalizeValuationSettings(valuationSettings),
+      roomFinishes: roomFinishesFromBody(productKey, req.body) || [],
     });
 
     recordActivity(req, project, ACT.PROJECT_CREATED, "Created the project", {
@@ -2629,6 +2712,8 @@ async function saveProjectFull(req, res) {
         ...sharedMeta,
         items: Array.isArray(takeoffItems) ? takeoffItems : [],
         origin: origin || "",
+        // Rooms belong to the take-off only, never the materials twin.
+        roomFinishes: body.roomFinishes,
       },
     });
 
@@ -2690,6 +2775,7 @@ async function saveProjectFull(req, res) {
           );
         }
         takeoffRes.project.budgetItems = freshBudget;
+        await cloudPriceQuivBudget(takeoffRes.project, takeoffKey, userId, "full");
         deriveBillRatesFromBudget(takeoffRes.project);
         reconcileItemsFromBudget(takeoffRes.project);
         await takeoffRes.project.save();
@@ -3900,7 +3986,16 @@ async function updateProject(req, res) {
 
     if (name !== undefined) project.name = String(name).trim();
 
+    // Sent: replaced whole (QUIV sends every room on each save). Not sent:
+    // kept, so a website edit or an older QUIV never wipes the rooms.
+    const rooms = roomFinishesFromBody(productKey, req.body);
+    if (rooms) project.roomFinishes = rooms;
+
     if (Array.isArray(items)) {
+      // A rate the QS set on the website keeps its lock through a plugin re-save
+      // (QUIV's PUT has no rateLockedAt; see util/cloudRateLocks.js).
+      carryCloudRateLocks(project.items, items);
+
       // Self-learning category model — augment items missing an explicit
       // category with the user's learned mapping before sanitizing. This
       // only affects items the client didn't supply a category for.
@@ -4152,6 +4247,15 @@ async function updateProject(req, res) {
           }
           budget = kept.rows.map((b) => ({ ...b, lineId: keepLineId(b.lineId) }));
         }
+        // previousBudget (read at the top of this block, before anything
+        // replaced it) is what the QS owns on these rows: procurement and typed
+        // rates. QUIV saves its budget through this PUT, so without restoring
+        // it every QUIV re-save put the plugin's prices back over the website's
+        // and the bill rates followed.
+        // previousBudget is read once, above, before anything replaces it.
+        // QUIV saves its budget through this PUT, so without that read every
+        // QUIV re-save put the plugin's prices back over the website's and the
+        // bill rates followed.
         backfillBudgetLinks(project.items, budget);
         const freshBudget = ensureBillItemCoverage(project.items, budget);
         // After coverage, so the synthesised rows get their edits back too.
@@ -4165,6 +4269,9 @@ async function updateProject(req, res) {
           );
         }
         project.budgetItems = freshBudget;
+        // A viewer who cannot see rates never gets prices added on his save.
+        if (access?.canSeeRates !== false)
+          await cloudPriceQuivBudget(project, productKey, userId, "update");
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
       }
@@ -4609,9 +4716,87 @@ async function lockContract(req, res) {
       contractSum,
     });
     res.json({ ok: true, contract: contractOut, version: project.version });
+
+    // TELL EVERYBODY ELSE ON THE PROJECT.
+    //
+    // Locking changes what editing MEANS: a re-measure stops moving the contract
+    // quantity and records an actual beside it, new scope becomes a variation,
+    // and progress starts feeding the valuations. A collaborator who carries on
+    // without knowing believes they are correcting the contract and is in fact
+    // recording a variation against it. The activity trail records the lock, but
+    // nobody reads an activity trail to find out the rules changed under them.
+    //
+    // AFTER res.json, and never awaited. A mail outage must not fail a contract
+    // lock, and a notification must not sit in a request somebody is waiting on
+    // — the God-login OTP did exactly that until it was fixed.
+    notifyContractLocked(project, userId, contractSum).catch((e) => {
+      console.error("[contract-lock] notice:", e?.message || e);
+    });
   } catch (err) {
     console.error("POST lock error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+}
+
+/**
+ * Mail the collaborators that a contract is now locked.
+ *
+ * Who and what is decided in util/contractLockNotice.js, which is pure and
+ * tested. This part is only the reads and the send, and it never throws at its
+ * caller: everything here is after the response.
+ *
+ * SES only. If SES refuses, this reports and stops — it does not try another
+ * way (standing rule, 15 September).
+ */
+async function notifyContractLocked(project, lockedByUserId, contractSum) {
+  // The overwhelming majority of projects have no collaborators. Nothing to
+  // send, so not even the user reads are done.
+  if (!isShared(project)) return;
+
+  const ids = [
+    String(project.userId || ""),
+    ...(project.collaborators || []).map((c) => String(c?.userId || "")),
+  ].filter(Boolean);
+
+  const [locker, people] = await Promise.all([
+    User.findById(lockedByUserId, { name: 1, firstName: 1, lastName: 1, email: 1 }).lean(),
+    User.find({ _id: { $in: ids } }, { email: 1, name: 1, firstName: 1 }).lean(),
+  ]);
+  const byId = new Map(people.map((u) => [String(u._id), u]));
+
+  const to = lockNoticeRecipients(project, locker, byId);
+  if (!to.length) return;
+
+  const href = `${process.env.CLIENT_URL || "https://www.adlmstudio.net"}/projects/${encodeURIComponent(
+    String(project.productKey || "revit"),
+  )}`;
+  const by = lockedByName(locker);
+
+  // One at a time rather than one mail to everybody: each is addressed by name,
+  // a BCC list would show every collaborator that the others exist — and each
+  // one is asked separately whether they may be told what the contract is
+  // worth, which a single shared message could not do.
+  for (const r of to) {
+    // THE MAIL MUST NOT SAY WHAT THE SCREEN HIDES. A collaborator without
+    // RateGen sees contractSum: 0 and _ratesMasked: true on every read of this
+    // project; posting the real figure to them would hand over in writing the
+    // one number the product withholds. They still get the message, without it.
+    const showMoney = await maySeeMoney(r, (uid) => userHasActiveEntitlement(uid, "rategen"));
+    const { subject, html } = contractLocked({
+      firstName: r.firstName,
+      projectName: String(project.name || "your project"),
+      lockedBy: by,
+      contractSum,
+      currency: String(project.currency || "NGN"),
+      href,
+      showMoney,
+    });
+    try {
+      await sendMail({ to: r.email, subject, html });
+    } catch (e) {
+      // One bad address must not stop the rest being told.
+      console.error(`[contract-lock] could not tell ${r.email}: ${e?.message || e}`);
+    }
   }
 }
 
@@ -4781,9 +4966,9 @@ function computeValueToDate(project) {
   for (const it of items) {
     const factor = valuationFactor(it, statusField);
     if (factor <= 0) continue;
-    const q = safeNum(it?.actualQty != null ? it.actualQty : it.qty);
-    const r = safeNum(it?.actualRate != null ? it.actualRate : it.rate);
-    measured += q * r * factor;
+    // Same helper the daily valuation log uses, so the certificate and the
+    // printed application cannot quote different figures for the same line.
+    measured += earnedLineValue(it, factor * 100);
   }
 
   // Variations and PC sums each carry a `completed` flag. Both contribute
@@ -4885,10 +5070,10 @@ async function issueCertificate(req, res) {
     const previousCerts = (project.certificates || []).filter(
       (c) => c.status !== "draft" || Number.isFinite(Number(c.thisCertificate)),
     );
-    const lessPrevious = previousCerts.reduce(
-      (acc, c) => acc + safeNum(c.thisCertificate),
-      0,
-    );
+    // Each certificate's OWN share, summed. A recovery (a negative one)
+    // subtracts, so the next certificate starts from the corrected position
+    // instead of carrying an overpayment forward for ever.
+    const lessPrevious = certifiedSoFar(previousCerts);
 
     // A viewer who cannot see rates was served a certificate panel of zeros,
     // so the figures they send back are those zeros. Ignore the body's money
@@ -4900,8 +5085,6 @@ async function issueCertificate(req, res) {
     const cumulativeValue = moneyFromClient
       ? safeNum(req.body?.cumulativeValue ?? rollup.cumulativeValue)
       : safeNum(rollup.cumulativeValue);
-    const thisCertificate = Math.max(0, cumulativeValue - lessPrevious);
-
     // Rates default to the project's valuation settings.
     const valSettings = project.valuationSettings || {};
     const retentionPct =
@@ -4918,11 +5101,30 @@ async function issueCertificate(req, res) {
         : safeNum(valSettings.withholdingPct) || 2.5;
     const retentionReleased = moneyFromClient ? safeNum(req.body?.retentionReleased) : 0;
 
-    const retentionAmount = (thisCertificate * retentionPct) / 100;
-    const netBeforeTax = thisCertificate - retentionAmount + retentionReleased;
-    const vatAmount = (netBeforeTax * vatPct) / 100;
-    const whtAmount = (netBeforeTax * whtPct) / 100;
-    const netPayable = netBeforeTax + vatAmount - whtAmount;
+    // Every figure on the certificate, in one tested place. In particular
+    // `thisCertificate` is NO LONGER CLAMPED AT ZERO: when the value earned
+    // falls below what has already been certified — a certified variation later
+    // rejected, or a downward re-measure — the true figure is negative, and a
+    // negative interim certificate is how an overpayment is recovered. The
+    // clamp printed ₦0 payable, ₦0 retention and ₦0 VAT, with nothing anywhere
+    // saying the over-certified amount was outstanding.
+    const {
+      thisCertificate,
+      retentionAmount,
+      netBeforeTax,
+      vatAmount,
+      whtAmount,
+      netPayable,
+      overCertified,
+      overCertifiedBy,
+    } = certificateMoney({
+      cumulativeValue,
+      lessPrevious,
+      retentionPct,
+      retentionReleased,
+      vatPct,
+      whtPct,
+    });
 
     const number =
       (project.certificates || []).reduce((acc, c) => Math.max(acc, Number(c.number) || 0), 0) + 1;
@@ -4956,6 +5158,10 @@ async function issueCertificate(req, res) {
       notes,
       snapshotCompletedCount: rollup.markedItems,
       snapshotTotalCount: rollup.totalItems,
+      // So a screen and a PDF can both explain a negative certificate rather
+      // than printing a figure nobody expects.
+      overCertified,
+      overCertifiedBy,
     };
 
     project.certificates = [...(project.certificates || []), cert];
@@ -6789,6 +6995,138 @@ async function putProjectResources(req, res) {
 // The body says WHICH rate, not what it costs. The rate is re-resolved from
 // this user's own merged library server-side, so a client cannot post a price
 // into a project.
+/**
+ * The QS's own rates that could price this line.
+ *
+ * The new build's rate list has said "No suggestion — price it from the
+ * build-up" since it was written, on the reasoning that inventing a figure is
+ * not a small liberty on a bill. That reasoning holds; the mistake was assuming
+ * there was no honest source. RateGen holds the master rates plus this user's
+ * overrides and custom rates, and priceLineFromRate already resolves a pick
+ * against exactly that merged set — so a suggestion is the QS's own decision,
+ * found, not a number put in their mouth.
+ *
+ * Read-only, and masked the same way pricing is: a collaborator who may not see
+ * rates may not be shown them here either.
+ */
+async function rateSuggestionsForLine(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const code = String(req.params.code || "").trim();
+    if (!code) return res.status(400).json({ error: "A bill line code is required" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) {
+      // Not an error: an empty list with the reason, so the screen says why
+      // rather than looking broken.
+      return res.json({ ok: true, suggestions: [], masked: true });
+    }
+
+    const item = (project.items || []).find(
+      (it) => String(it?.code || "").trim().toLowerCase() === code.toLowerCase(),
+    );
+    if (!item) return res.status(404).json({ error: "That bill line is not on this project" });
+
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+      Array.isArray(lib?.customRates) ? lib.customRates : [],
+    );
+
+    const usage = await loadRateUsage(userId);
+    // Converted offers only for a screen that can show a conversion: the panel
+    // asks with ?convert=1. An older screen would show a converted figure as if
+    // it were the rate's own, and its Apply would be refused for want of the
+    // dimension.
+    const convert = String(req.query?.convert || "") === "1";
+    const suggestions = suggestRatesForLine(item, merged, {
+      limit: 5,
+      usage,
+      convert,
+    }).filter(worthOffering);
+    res.json({
+      ok: true,
+      suggestions,
+      // So the screen can say "none of your rates match" rather than "none".
+      libraryCount: merged.length,
+    });
+  } catch (err) {
+    console.error("GET rate-suggestions error:", err);
+    res.status(500).json({ error: "Could not look for a rate." });
+  }
+}
+
+/**
+ * A rate for EVERY line on this project that has none, in one read.
+ *
+ * WHY BULK AND NOT FIVE HUNDRED CALLS
+ *
+ * The Rates tab lists every unpriced line at once, and its "suggested rate"
+ * slot has read "No suggestion" since it was written. Filling it per line would
+ * be one request each, and each one re-reads the whole rate library — which is
+ * the expensive part. Loading the library once and matching in memory is both
+ * cheaper and the only version that does not fall over on a bill with four
+ * hundred unpriced lines.
+ *
+ * Returns the BEST match per line only. The panel offers the full five when a
+ * line is opened; a list needs one figure, not five.
+ */
+async function rateSuggestionsForProject(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canSeeRates) {
+      return res.json({ ok: true, byCode: {}, masked: true });
+    }
+
+    // Only the lines that need one. A priced line's rate is the QS's decision
+    // and must not be second-guessed in a list.
+    const [masterRates, lib] = await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenLibrary.findOne({ userId }).lean(),
+    ]);
+    const merged = mergeRatesWithUserData(
+      masterRates,
+      Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+      Array.isArray(lib?.customRates) ? lib.customRates : [],
+    );
+
+    // Every rule — which lines, the lowercased key, the ceiling — is in
+    // util/rateSuggestions.js, where it is tested without a database.
+    const usage = await loadRateUsage(userId);
+    const found = suggestionMapForBill(project.items, merged, {
+      usage,
+      convert: String(req.query?.convert || "") === "1",
+    });
+    res.json({ ok: true, ...found, libraryCount: merged.length });
+  } catch (err) {
+    console.error("GET project rate-suggestions error:", err);
+    res.status(500).json({ error: "Could not look for rates." });
+  }
+}
+
 async function priceLineFromRate(req, res) {
   try {
     const userId = getUserObjectId(req);
@@ -6816,12 +7154,10 @@ async function priceLineFromRate(req, res) {
       return refuseRateMaskedWrite(res, "price a bill line from a rate");
     }
 
-    const item = (project.items || []).find(
-      (it) => String(it?.code || "").trim().toLowerCase() === code.toLowerCase(),
-    );
+    const item = findBillLine(project, code);
     if (!item) return res.status(404).json({ error: "No bill line with that code" });
 
-    const rate = await resolvePickedRate(userId, req.body || {});
+    const rate = findPickedRate(await loadMergedRates(userId), req.body || {});
     if (!rate) {
       return res.status(404).json({
         error: "That rate is not in your Rate Gen library.",
@@ -6830,45 +7166,23 @@ async function priceLineFromRate(req, res) {
     }
 
     const ctx = await buildMlScheduleContext(userId);
-    const built = buildRateBudgetRows(item, rate, ctx.K, {
-      priceFor: ctx.priceFor,
-      unitCost: Number(req.body?.unitCost) || 0,
-    });
-    if (!built) {
-      return res.status(422).json({
-        error:
-          "That rate carries no build-up, so it cannot be split into material, labour and plant.",
-        code: "RATE_HAS_NO_BUILDUP",
-      });
-    }
+    const unitCost = Number(req.body?.unitCost) || 0;
+    const convert = cleanConvert(req.body?.convert);
+    const one = priceBillLine(project, item, rate, ctx, { unitCost, convert });
+    if (one.error) return res.status(422).json({ error: one.error.message, code: one.error.code });
 
-    project.budgetItems = sanitizeBudgetItems(
-      applyRateRows(project.budgetItems, code, built.rows),
-    );
-    // The gang and plant behind that one Labour row and one Plant row. Into
-    // resourceItems, never budgetItems — deriveBillRatesFromBudget below sums
-    // every budget row under this code, so filing the gang there would count
-    // the labour twice and raise the client's bill.
-    project.resourceItems = sanitizeResourceItems(
-      applyResourceRows(project.resourceItems, code, buildResourcesFromRate(item, rate)),
-    );
-    backfillBudgetLinks(project.items, project.budgetItems);
-    project.budgetItems = ensureBillItemCoverage(project.items, project.budgetItems);
-    // The build-up now reproduces the picked rate, so this sets the bill line
-    // to exactly what the QS chose instead of reverting it.
-    deriveBillRatesFromBudget(project);
-    reconcileItemsFromBudget(project);
-    project.version = (Number(project.version) || 0) + 1;
+    settlePricedProject(project);
     await project.save();
 
     recordActivity(req, project, ACT.BUDGET_UPDATED, "Priced a bill line from a rate", {
       code,
       rate: String(rate.description || "").slice(0, 200),
     });
+    recordRateUsage(userId, project, [{ item, rate, convert }], "panel");
 
     return res.json({
       ...projectForClient(project, access),
-      _rateWarnings: built.warnings,
+      _rateWarnings: one.warnings,
     });
   } catch (err) {
     console.error("priceLineFromRate error:", err);
@@ -6876,29 +7190,362 @@ async function priceLineFromRate(req, res) {
   }
 }
 
-// The picked rate, re-read from the caller's own merged library. Matched by
-// rateId first; a custom rate the desktop app created has no master id, so a
+// PRICE MANY LINES IN ONE WRITE.
+//
+// Two callers. The line panel, when a QS prices "Lintel Concrete [L:01]" and
+// leaves the 35 other levels of it ticked; and Ada, after the QS confirms the
+// rates she proposed for a whole bill. Each line says which rate, never what it
+// costs, exactly as the single-line endpoint does; every rate is re-resolved
+// from the caller's own library.
+//
+// A line can instead say `sameAs: <code>`: "price this at whatever rate that
+// line got". That reads the rate from RateUsage, so it only works for a line
+// that was itself priced from a rate on the web; a rate typed into a plugin
+// has no rate behind it to copy, and the line is skipped with that reason.
+//
+// A line can also carry a rate THE USER STATED to Ada and confirmed on her
+// card (3 Oct 2026): `{ code, userRate, unit?, split? }` for "set blockwork to
+// 9,500 per m2", or `{ code, ratePerM2, split? }` for "windows are 88,000 per
+// m2", where the server reads the opening's size off the bill line itself and
+// works the line's rate out (util/priceByArea.js). `split` is the material /
+// labour / overhead-and-profit percentages, 60/20/20 when absent. See
+// applyUserRate for what such a line writes.
+//
+// One save at the end, not one per line: a save per line on a 300-line bill
+// is 300 whole-project writes, and a failure half way would leave half a bill
+// priced with nothing to say which half. Lines that cannot be priced are
+// skipped and reported; the rest go through.
+const PRICE_MANY_MAX = 500;
+
+async function priceManyFromRates(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+    if (!lines.length) return res.status(400).json({ error: "No lines to price" });
+    if (lines.length > PRICE_MANY_MAX) {
+      return res
+        .status(400)
+        .json({ error: `At most ${PRICE_MANY_MAX} lines can be priced at once.` });
+    }
+    const via = ["panel", "similar", "ada"].includes(req.body?.via) ? req.body.via : "similar";
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res
+        .status(403)
+        .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+    if (!access.canSeeRates) {
+      return refuseRateMaskedWrite(res, "price bill lines from rates");
+    }
+
+    // A stated rate needs neither the library nor the constants: only lines
+    // that name a Rate Gen rate pay for reading them.
+    const needsLibrary = lines.some((l) => !isUserRateLine(l));
+    const [merged, ctx] = needsLibrary
+      ? await Promise.all([loadMergedRates(userId), buildMlScheduleContext(userId)])
+      : [[], null];
+
+    // The rate each `sameAs` line points at, read once for all of them.
+    const sameAsCodes = [
+      ...new Set(lines.map((l) => String(l?.sameAs || "").trim()).filter(Boolean)),
+    ];
+    const copied = new Map();
+    if (sameAsCodes.length) {
+      const rows = await RateUsage.find({
+        projectId: project._id,
+        code: { $in: sameAsCodes },
+      })
+        .sort({ createdAt: -1 })
+        .select("code rateId rateDescription rateUnit convert unit")
+        .lean();
+      for (const r of rows) {
+        const k = String(r.code || "").toLowerCase();
+        if (!copied.has(k)) copied.set(k, r);
+      }
+    }
+
+    const priced = [];
+    const skipped = [];
+    const warnings = new Set();
+    const used = [];
+    const seen = new Set();
+    const stated = [];
+    let changed = false;
+
+    for (const line of lines) {
+      const code = String(line?.code || "").trim();
+      if (!code) continue;
+      if (seen.has(code.toLowerCase())) continue;
+      seen.add(code.toLowerCase());
+
+      const item = findBillLine(project, code);
+      if (!item) {
+        skipped.push({ code, reason: "No bill line with that code" });
+        continue;
+      }
+
+      // A RATE THE USER STATED (Ada's "windows are 88,000 per m2", "set
+      // blockwork to 9,500"). See applyUserRate below.
+      if (isUserRateLine(line)) {
+        const r = resolveUserRate(item, line);
+        if (!r.ok) {
+          skipped.push({ code, reason: r.reason });
+          continue;
+        }
+        if (applyUserRate(project, item, r.rate, r.split)) changed = true;
+        priced.push(code);
+        stated.push({ code, rate: r.rate, split: r.split });
+        continue;
+      }
+
+      let pick = line;
+      const sameAs = String(line?.sameAs || "").trim();
+      if (sameAs) {
+        const from = copied.get(sameAs.toLowerCase());
+        if (!from) {
+          skipped.push({
+            code,
+            reason: `Line ${sameAs} was not priced from a Rate Gen rate here, so there is no rate to copy`,
+          });
+          continue;
+        }
+        pick = {
+          rateId: from.rateId,
+          description: from.rateDescription,
+          unit: from.rateUnit || "",
+          // The same conversion the copied line was priced with. Lines of one
+          // item share a type, so they share its thickness.
+          convert: line?.convert || from.convert || null,
+        };
+      }
+
+      const rate = findPickedRate(merged, pick);
+      if (!rate) {
+        skipped.push({ code, reason: "That rate is not in your Rate Gen library" });
+        continue;
+      }
+      const convert = cleanConvert(pick?.convert);
+      const one = priceBillLine(project, item, rate, ctx, { convert });
+      if (one.error) {
+        skipped.push({ code, reason: one.error.message });
+        continue;
+      }
+      one.warnings.forEach((w) => warnings.add(String(w)));
+      priced.push(code);
+      used.push({ item, rate, convert });
+      changed = true;
+    }
+
+    // Applying the same stated rates twice changes nothing, so it writes
+    // nothing either: no save, no version bump, no activity entry.
+    if (priced.length && changed) {
+      if (stated.length && typeof project.markModified === "function") {
+        project.markModified("items");
+        project.markModified("budgetItems");
+      }
+      settlePricedProject(project);
+      await project.save();
+      const fromLibrary = priced.length - stated.length;
+      if (fromLibrary) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Priced ${fromLibrary} bill ${fromLibrary === 1 ? "line" : "lines"} from rates`,
+          { codes: used.map((u) => String(u.item?.code || "")).slice(0, 50), count: fromLibrary, via },
+        );
+        recordRateUsage(userId, project, used, via);
+      }
+      if (stated.length) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Set ${stated.length} bill ${stated.length === 1 ? "line" : "lines"} to a stated rate`,
+          { codes: stated.map((x) => x.code).slice(0, 50), count: stated.length, via },
+        );
+      }
+    }
+
+    return res.json({
+      ...projectForClient(project, access),
+      _priced: priced,
+      _skipped: skipped,
+      _rateWarnings: [...warnings].slice(0, 20),
+    });
+  } catch (err) {
+    console.error("priceManyFromRates error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+/**
+ * Put a rate the USER stated on one bill line, in memory.
+ *
+ * The line gets the rate and its lock (rateLockedAt), so neither a plugin
+ * re-save (util/cloudRateLocks.js) nor the budget heal moves it. Its Budget
+ * gets ONE Material and ONE Labour row at the bill quantity, priced by the
+ * split, with the overhead/profit share as their overhead %. Those rows sit in
+ * the Rate Gen sn band, so they replace any automatic rows the line had (a
+ * previous pick, the constants generator) and a later Rate Gen pick replaces
+ * them; a row the QS typed survives. The gang a previous pick wrote is cleared:
+ * it described a rate that is no longer the line's.
+ *
+ * Row ids and procurement marks carry across a re-apply, so applying the same
+ * rate twice leaves the project exactly as it was.
+ *
+ * @returns {boolean} whether anything changed
+ */
+function applyUserRate(project, item, rate, split) {
+  const code = String(item?.code || "").trim();
+  const key = code.toLowerCase();
+  const mine = (b) => String(b?.billIdentity || "").trim().toLowerCase() === key;
+  const plain = (b) => (b?.toObject ? b.toObject() : b);
+  const before = (project.budgetItems || []).filter(mine).map(plain);
+  const rows = buildUserRateRows(item, rate, split).map((r) => {
+    const prior = before.find((b) => Number(b?.sn) === r.sn && isRateGenRow(b));
+    return prior?.lineId ? { ...r, lineId: prior.lineId } : r;
+  });
+
+  // What this line's Budget would hold afterwards: everything applyRateRows
+  // keeps (rows the QS typed, plugin rows, coverage rows) and the new rows.
+  const automatic = (b) => isRateGenRow(b) || isGeneratedRow(b);
+  const sig = (list) =>
+    JSON.stringify(
+      list.map((b) => [
+        b.sn, b.componentKind, b.description, b.unit, Number(b.qty), Number(b.rate),
+        Number(b.overheadPercent), Number(b.profitPercent), b.rateSource,
+      ]),
+    );
+  const budgetChanges = sig(before) !== sig(before.filter((b) => !automatic(b)).concat(rows));
+  const staleGang = (project.resourceItems || []).some(
+    (r) => mine(r) && r?.rateSource === RESOURCE_SOURCE_RATE,
+  );
+
+  // Only touch what changes, so a re-apply writes nothing at all.
+  if (budgetChanges) {
+    project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, rows));
+  }
+  if (staleGang) {
+    project.resourceItems = sanitizeResourceItems(
+      applyResourceRows(project.resourceItems, code, []),
+    );
+  }
+  const itemChanged = setUserRateOnItem(item, rate, split);
+  return itemChanged || budgetChanges || staleGang;
+}
+
+/** A bill line by its code, case-insensitively, the way every caller addresses it. */
+function findBillLine(project, code) {
+  const want = String(code || "").trim().toLowerCase();
+  return (project.items || []).find((it) => String(it?.code || "").trim().toLowerCase() === want);
+}
+
+/**
+ * Write one line's rate into the project, IN MEMORY.
+ *
+ * The rate's build-up becomes the line's material, labour and plant rows, and
+ * its gang and plant go to resourceItems (never budgetItems: the bill rate is
+ * derived by summing budget rows, so filing them there would count labour
+ * twice). The caller settles the project and saves it once.
+ */
+function priceBillLine(project, item, rate, ctx, { unitCost = 0, convert = null } = {}) {
+  const code = String(item?.code || "").trim();
+
+  // A RATE IN ANOTHER UNIT. The factor is worked out here from the two units
+  // and the dimension the QS confirmed; a factor is never taken from a client.
+  // Units that do not agree and cannot be converted are refused, because the
+  // alternative is a line priced wrong by a thickness, which looks right.
+  let scale = 1;
+  if (!unitsAgree(item?.unit, rate?.unit)) {
+    const c = conversionFactor(item?.unit, rate?.unit, convert || {});
+    if (!c.ok) return { error: { code: c.code, message: c.message } };
+    scale = c.factor;
+    if (!(Number(unitCost) > 0)) unitCost = Number(rate?.totalCost ?? rate?.unitPrice ?? 0) * scale;
+  }
+
+  const built = buildRateBudgetRows(item, rate, ctx.K, {
+    priceFor: ctx.priceFor,
+    unitCost,
+    scale,
+  });
+  if (!built) {
+    // Three unrelated causes used to share one message, so a line with no
+    // quantity was told the RATE had no build-up, and the QS would go and
+    // rebuild a rate that was never the problem.
+    const why = whyRateCannotPrice(item, rate, { unitCost }) || {
+      code: "RATE_HAS_NO_BUILDUP",
+      message:
+        "That rate carries no build-up, so it cannot be split into material, labour and plant.",
+    };
+    return { error: why };
+  }
+  project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, built.rows));
+  project.resourceItems = sanitizeResourceItems(
+    applyResourceRows(project.resourceItems, code, buildResourcesFromRate(item, rate, { scale })),
+  );
+  return { warnings: Array.isArray(built.warnings) ? built.warnings : [], scale };
+}
+
+/** After one or many lines are priced: links, coverage, and the bill rates derived from the budget. */
+function settlePricedProject(project) {
+  backfillBudgetLinks(project.items, project.budgetItems);
+  project.budgetItems = ensureBillItemCoverage(project.items, project.budgetItems);
+  // The build-up now reproduces the picked rate, so this sets the bill line
+  // to exactly what the QS chose instead of reverting it.
+  deriveBillRatesFromBudget(project);
+  reconcileItemsFromBudget(project);
+  project.version = (Number(project.version) || 0) + 1;
+}
+
+/**
+ * The dimensions a client sent for a unit conversion, as plain numbers, and
+ * nothing else. conversionFactor() checks their range.
+ */
+function cleanConvert(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  for (const k of ["thickness", "width", "depth", "kgPerM", "perItem"]) {
+    const n = Number(raw[k]);
+    if (Number.isFinite(n) && n > 0) out[k] = n;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** The caller's merged rate set: master rates plus their overrides and custom rates. */
+async function loadMergedRates(userId) {
+  const [masterRates, lib] = await Promise.all([
+    RateGenRate.find({}).lean(),
+    RateGenLibrary.findOne({ userId }).lean(),
+  ]);
+  return mergeRatesWithUserData(
+    masterRates,
+    Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
+    Array.isArray(lib?.customRates) ? lib.customRates : [],
+  );
+}
+
+// The picked rate, found in the caller's own merged library. Matched by rateId
+// first; a custom rate the desktop app created has no master id, so a
 // description + unit match is the fallback.
-async function resolvePickedRate(userId, body) {
+function findPickedRate(merged, body) {
   const wantedId = String(body?.rateId || "").trim();
   const wantedDesc = String(body?.description || "").trim().toLowerCase();
   const wantedUnit = String(body?.unit || "").trim().toLowerCase();
   if (!wantedId && !wantedDesc) return null;
 
-  const [masterRates, lib] = await Promise.all([
-    RateGenRate.find({}).lean(),
-    RateGenLibrary.findOne({ userId }).lean(),
-  ]);
-  const merged = mergeRatesWithUserData(
-    masterRates,
-    Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [],
-    Array.isArray(lib?.customRates) ? lib.customRates : [],
-  );
-
   if (wantedId) {
-    const byId = merged.find(
-      (r) => String(r?.rateId || r?.id || "") === wantedId,
-    );
+    const byId = merged.find((r) => String(r?.rateId || r?.id || "") === wantedId);
     if (byId) return byId;
   }
   if (!wantedDesc) return null;
@@ -6908,6 +7555,48 @@ async function resolvePickedRate(userId, body) {
         String(r?.description || "").trim().toLowerCase() === wantedDesc &&
         (!wantedUnit || String(r?.unit || "").trim().toLowerCase() === wantedUnit),
     ) || null
+  );
+}
+
+/**
+ * What this user has chosen before, for the suggestions. Never throws: a
+ * suggestion without history is still a suggestion.
+ */
+async function loadRateUsage(userId) {
+  try {
+    const rows = await RateUsage.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(3000)
+      .select("key unit rateId projectId projectName createdAt")
+      .lean();
+    return usageIndex(rows.map((r) => ({ ...r, at: r.createdAt })));
+  } catch (err) {
+    console.warn("loadRateUsage failed:", err?.message || err);
+    return null;
+  }
+}
+
+/** Record which rate priced which line. Fire-and-forget; never fails the pricing. */
+function recordRateUsage(userId, project, used, via) {
+  const docs = (Array.isArray(used) ? used : [])
+    .map(({ item, rate, convert }) => ({
+      userId,
+      projectId: project?._id || null,
+      projectName: String(project?.name || "").slice(0, 200),
+      productKey: String(project?.productKey || "").toLowerCase(),
+      code: String(item?.code || "").trim(),
+      key: lineKey(item?.description),
+      unit: String(item?.unit || "").trim(),
+      rateId: String(rate?.rateId || rate?.id || "").trim(),
+      rateDescription: String(rate?.description || "").slice(0, 300),
+      rateUnit: String(rate?.unit || "").trim(),
+      convert: convert || null,
+      via,
+    }))
+    .filter((d) => d.key && d.rateId);
+  if (!docs.length) return;
+  RateUsage.insertMany(docs, { ordered: false }).catch((err) =>
+    console.warn("recordRateUsage failed:", err?.message || err),
   );
 }
 
@@ -7989,11 +8678,34 @@ router.put(
 // client sends WHICH rate was picked, never what it costs — the server
 // re-resolves the rate from that user's own merged library, so a price can
 // only ever be one they already hold.
+router.get(
+  "/:productKey/:id/rate-suggestions",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  rateSuggestionsForProject,
+);
+
+router.get(
+  "/:productKey/:id/bill/:code/rate-suggestions",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  rateSuggestionsForLine,
+);
+
 router.post(
   "/:productKey/:id/bill/:code/price-from-rate",
   mapEntitlementParam,
   requireEntitlementParam,
   priceLineFromRate,
+);
+
+// Several lines at once: the lines like the one just priced, or the rates Ada
+// proposed and the QS confirmed. Same rules as above, one write.
+router.post(
+  "/:productKey/:id/bill/price-many",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  priceManyFromRates,
 );
 
 // Price all services bill lines from RateGen (MEP web Budget view).

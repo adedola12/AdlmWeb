@@ -39,6 +39,7 @@ import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import { designMode } from "./middleware/designMode.js";
+import { originVerify } from "./middleware/originVerify.js";
 import adminRoutes from "./routes/admin.js";
 import { demoModeGuard } from "./middleware/demoMode.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
@@ -144,6 +145,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.set("trust proxy", 1);
+
+/* -------- only CloudFront may call in (see middleware/originVerify.js) -------- */
+app.use(originVerify());
 
 /* -------- CORS (MUST be BEFORE body parsers) -------- */
 // CORS_ORIGINS from env, the vetted production origins, and the API's own
@@ -481,11 +485,15 @@ import adminLearnQueues from "./routes/admin.learnQueues.js";
 import adminCommerce from "./routes/admin.commerce.js";
 import adminCatalogue from "./routes/admin.catalogue.js";
 import adminLearnContent from "./routes/admin.learnContent.js";
+import adminDemoModels from "./routes/admin.demoModels.js";
+import adminReferrals from "./routes/admin.referrals.js";
+import meDemoModels from "./routes/me.demoModels.js";
 import adminDocuments from "./routes/admin.documents.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
+app.use("/admin/referrals", adminReferrals);
 app.use("/admin/org-videos", adminOrgVideos);
 app.use("/me/org-videos", meOrgVideos);
 app.use("/admin/today", adminToday);
@@ -499,6 +507,9 @@ app.use("/admin/commerce", adminCommerce);
 app.use("/admin/catalogue", adminCatalogue);
 app.use("/admin/lc", adminLearnContent);
 app.use("/admin/docs", adminDocuments);
+// Before the /admin catch-all below, or the catch-all answers first.
+app.use("/admin/demo-models", adminDemoModels);
+app.use("/me/demo-models", meDemoModels);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);
 

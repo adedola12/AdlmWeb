@@ -267,7 +267,14 @@ function buildWorkbookValuationSheet({
   certificate.previousEntries.forEach((previousEntry, index) => {
     aoa.push([
       `Valuation No. ${index + 1} (${formatDate(previousEntry?.date)})`,
-      safeNum(previousEntry?.totalAmount),
+      // netAmount, NOT totalAmount. These sub-rows sit under "Less previous
+      // payments", which is each earlier certificate net of its own retention —
+      // the model computes netAmount for exactly that reason. Printing the
+      // gross made the sub-rows disagree with the line above them: at 10%
+      // retention a first valuation of ₦100m showed "₦100,000,000" beneath a
+      // total of "₦90,000,000". The PDF already used netAmount; this export and
+      // the screen did not, and the spreadsheet is the one a QS reconciles in.
+      safeNum(previousEntry?.netAmount),
     ]);
   });
 
@@ -691,7 +698,10 @@ export default function ProjectValuationSummary({
                     <span style={{ paddingLeft: 14 }}>
                       Valuation No. {index + 1} ({formatDate(entry.date)})
                     </span>
-                    <b style={{ color: "var(--ink-3)" }}>{money(entry.totalAmount)}</b>
+                    {/* netAmount: this sits under "Less previous payments",
+                        which is net of each earlier certificate's own
+                        retention. The gross does not add up to the line above. */}
+                    <b style={{ color: "var(--ink-3)" }}>{money(entry.netAmount)}</b>
                   </div>
                 ))}
                 <div>

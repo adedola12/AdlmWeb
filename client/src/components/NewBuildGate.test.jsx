@@ -1,3 +1,25 @@
+// The gate after go-live: a pass-through.
+//
+// Until 1 October 2026 this gate held /manage/* and /work/* back from customers
+// and sent them to the classic screen that did the same job. GATE_NEW_BUILD is
+// now false, so it returns its children for everybody, and that is what this
+// file tests — a regression here means somebody raised the gate again and put
+// every customer back on the classic site.
+//
+// WHAT MOVED, AND WHERE IT IS STILL COVERED
+//
+// The redirect targets this file used to assert (/manage -> /dashboard,
+// /manage/settings -> /profile, /work/tool/:t -> /projects/:tool, ...) are the
+// classicFallbackFor mapping, and lib/classicPaths.test.js covers that mapping
+// directly and still does. Nothing about it is unverified; it simply is not
+// reachable through the gate while the gate is down.
+//
+// The <Navigate replace> check stays, because the redirect branch is still in
+// the file: if the gate is ever raised again, Back must not bounce the customer
+// forward into the wall. See newBuildGate.golive.test.js for the invariant that
+// ties the gate to the /dashboard redirect and to AFTER_SIGN_IN — raising this
+// flag without moving those two makes a customer's home an infinite loop.
+
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, screen } from "@testing-library/react";
@@ -11,9 +33,11 @@ let auth = { accessToken: null, user: null };
 vi.mock("../store.jsx", () => ({ useAuth: () => auth }));
 
 const { default: NewBuildGate } = await import("./NewBuildGate.jsx");
+const { GATE_NEW_BUILD } = await import("../lib/newBuildAccess.js");
 
-// Render the gate at a given URL, with stand-ins for the classic screens it can
-// redirect to, so a redirect is observable as "which screen won".
+// Render the gate at a given URL, with stand-ins for the classic screens it
+// would redirect to if it were raised, so a redirect would be observable as
+// "which screen won" rather than as a blank render.
 function at(url) {
   return render(
     <MemoryRouter initialEntries={[url]}>
@@ -52,103 +76,70 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("who gets through", () => {
-  it("a full administrator sees the new build", () => {
-    auth = { accessToken: "t", user: { _id: "a", role: "admin" } };
-    at("/manage");
-    expect(screen.getByText("NEW BUILD")).toBeTruthy();
-  });
-
-  it("a mini-admin sees the new build", () => {
-    auth = { accessToken: "t", user: { _id: "a", role: "mini_admin" } };
-    at("/manage");
-    expect(screen.getByText("NEW BUILD")).toBeTruthy();
-  });
-
-  it("a Design Access session sees the new build", () => {
-    auth = { accessToken: "t", user: { _id: "a", designAccess: true } };
-    at("/manage");
-    expect(screen.getByText("NEW BUILD")).toBeTruthy();
-  });
-
-  it("Tech Support sees the new build, holding only the preview area", () => {
-    // tech_support is deliberately NOT isStaff (utils/roles.js), so a gate built
-    // on isStaff would lock out the people who answer tickets about these very
-    // screens. The gate uses canViewPreview for that reason.
-    auth = { accessToken: "t", user: { _id: "a", role: "tech_support", permissions: ["preview"] } };
-    at("/manage");
-    expect(screen.getByText("NEW BUILD")).toBeTruthy();
-  });
-
-  it("a customer does not, and lands on classic instead", () => {
-    auth = { accessToken: "t", user: CUSTOMER };
-    at("/manage");
-    expect(screen.queryByText("NEW BUILD")).toBe(null);
-    expect(screen.getByText("CLASSIC DASHBOARD")).toBeTruthy();
+describe("the gate is down", () => {
+  it("is actually down, which every test below depends on", () => {
+    expect(GATE_NEW_BUILD).toBe(false);
   });
 });
 
-describe("the hydrating frame", () => {
-  it("waits rather than redirecting while the user is still being withheld", () => {
-    // AuthProvider withholds `user` for exactly one frame so the first client
-    // render agrees with the server-rendered HTML (store.jsx:145). A gate that
-    // decides on that frame bounces the studio's own staff to /dashboard on
-    // every single load — the exact bug DsPreviewGate carries a comment about.
-    auth = { accessToken: "t", user: null };
-    at("/manage");
-    expect(screen.queryByText("NEW BUILD")).toBe(null);
-    expect(screen.queryByText("CLASSIC DASHBOARD")).toBe(null);
-  });
+describe("who gets through", () => {
+  // Everyone, now. The four staff cases are kept because they were the reason
+  // the gate used canViewPreview rather than isStaff, and because they are what
+  // would break first if the flag came back.
+  const VIEWERS = [
+    ["a full administrator", { _id: "a", role: "admin" }],
+    ["a mini-admin", { _id: "a", role: "mini_admin" }],
+    ["a Design Access session", { _id: "a", designAccess: true }],
+    ["Tech Support, holding only the preview area", { _id: "a", role: "tech_support", permissions: ["preview"] }],
+    ["a customer, who used to be sent to classic", CUSTOMER],
+  ];
 
-  it("then lets the administrator in once the user arrives", () => {
+  for (const [who, user] of VIEWERS) {
+    it(`${who} sees the new build`, () => {
+      auth = { accessToken: "t", user };
+      at("/manage");
+      expect(screen.getByText("NEW BUILD")).toBeTruthy();
+      expect(screen.queryByText("CLASSIC DASHBOARD")).toBe(null);
+    });
+  }
+
+  it("a customer reaches every screen the gate used to divert", () => {
+    for (const url of [
+      "/manage/settings",
+      "/manage/support",
+      "/work/tool/heron",
+      "/work/project/planswift/ikoyi-tower",
+    ]) {
+      auth = { accessToken: "t", user: CUSTOMER };
+      const { unmount } = at(url);
+      expect(screen.getByText("NEW BUILD"), `${url} should render the new build`).toBeTruthy();
+      unmount();
+    }
+  });
+});
+
+describe("the frames with no user", () => {
+  // With the gate down these render the children rather than waiting, because
+  // the flag is checked before `user` is looked at. Signing out is still
+  // ProtectedRoute's job, not this one's.
+  it("renders the new build while the user is still being withheld", () => {
     auth = { accessToken: "t", user: null };
-    const { unmount } = at("/manage");
-    expect(screen.queryByText("CLASSIC DASHBOARD")).toBe(null);
-    unmount();
-    auth = { accessToken: "t", user: { _id: "a", role: "admin" } };
     at("/manage");
     expect(screen.getByText("NEW BUILD")).toBeTruthy();
   });
 
-  it("renders nothing when signed out, leaving that to ProtectedRoute", () => {
-    // ProtectedRoute wraps this gate and has already sent them to sign in with a
-    // ?next back to here. Redirecting as well would have the two gates fighting
-    // over the same frame, and would lose the ?next.
+  it("does not redirect when signed out, leaving that to ProtectedRoute", () => {
     auth = { accessToken: null, user: null };
     at("/manage");
-    expect(screen.queryByText("NEW BUILD")).toBe(null);
     expect(screen.queryByText("CLASSIC DASHBOARD")).toBe(null);
   });
 });
 
-describe("where a customer lands", () => {
-  beforeEach(() => {
-    auth = { accessToken: "t", user: CUSTOMER };
-  });
-
-  it("account settings go to the classic account screen", () => {
-    at("/manage/settings");
-    expect(screen.getByText("CLASSIC PROFILE")).toBeTruthy();
-  });
-
-  it("support goes to the classic support desk", () => {
-    at("/manage/support");
-    expect(screen.getByText("CLASSIC SUPPORT")).toBeTruthy();
-  });
-
-  it("a tool page goes to that tool's classic workspace", () => {
-    at("/work/tool/heron");
-    expect(screen.getByText("CLASSIC WORKSPACE")).toBeTruthy();
-  });
-
-  it("one project goes to the classic workspace with the project on it", () => {
-    at("/work/project/planswift/ikoyi-tower");
-    expect(screen.getByText("CLASSIC WORKSPACE")).toBeTruthy();
-  });
-
-  it("replaces the history entry, so Back does not return to the wall", () => {
+describe("if the gate is ever raised again", () => {
+  it("still replaces the history entry, so Back does not return to the wall", () => {
     // <Navigate replace>: without it, pressing Back lands on the gated URL
-    // again and bounces straight forward, trapping the customer.
+    // again and bounces straight forward, trapping the customer. The branch is
+    // dormant, not gone, so this stays a source check.
     const here = path.dirname(
       new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"),
     );

@@ -45,7 +45,7 @@ export const FREE_VIDEO_SECTIONS = [
   {
     slug: "mep",
     filter: "Revit",
-    label: "Revit MEP plugin",
+    label: "SERVIQ for Revit",
     productKey: "mep",
     blurb: "HVAC, plumbing and electrical takeoff from the services model.",
   },

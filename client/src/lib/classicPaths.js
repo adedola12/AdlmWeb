@@ -1,10 +1,14 @@
-// Where a customer goes when a new-build screen is not open to them yet.
+// Where a customer goes when a new-build screen is not open to them.
 //
-// The redesign ships 1 Oct 2026. Until then the new build's dashboard and
-// project workspace — /manage/* and /work/* — are staff only, and a customer
-// who reaches one is sent to the CLASSIC screen that does the same job rather
-// than shown a wall. See components/NewBuildGate.jsx for the gate itself and
-// GATED_PREFIXES below for exactly what is gated.
+// SINCE GO-LIVE (1 October 2026) NOBODY IS SENT HERE. The redesign shipped and
+// /manage/* and /work/* — /work/programme included — are open to everyone
+// signed in; lib/newBuildAccess.js answers that once for the route gate, the
+// rail, the project cards and the classic-project redirect. This table is what
+// all four fall back on if GATE_NEW_BUILD is raised again: it held the new
+// build's dashboard and project workspace back to staff before launch, sending
+// a customer to the CLASSIC screen that does the same job rather than a wall.
+// See components/NewBuildGate.jsx for the gate and GATED_PREFIXES below for
+// exactly what it would hold back.
 //
 // WHAT IS DELIBERATELY *NOT* GATED: /dash-learning, /dash-certificates,
 // /dash-assignments and /dash-course/:sku.
@@ -36,11 +40,14 @@ import { SOURCES } from "./projectGallery.js";
 // worse than landing someone on their dashboard.
 export const CLASSIC_HOME = "/dashboard";
 
-// Only these two families are gated. Matched on a path SEGMENT boundary, so
+// The two families the gate holds back WHEN IT IS UP. With GATE_NEW_BUILD false
+// (since go-live) membership here restricts nobody: it only marks which routes
+// main.jsx wraps in the pass-through gate and which rail links railGate.js
+// would rewrite if the gate were raised. Matched on a path SEGMENT boundary, so
 // "/workshop" or "/managed-thing" could never be caught by accident.
 export const GATED_PREFIXES = Object.freeze(["/manage", "/work"]);
 
-/** Is this path one of the new-build screens held back until launch? */
+/** Is this path one of the new-build screens the gate holds back when it is up? */
 export function isGatedPath(pathname) {
   const p = String(pathname || "");
   return GATED_PREFIXES.some((g) => p === g || p.startsWith(`${g}/`));
@@ -79,6 +86,12 @@ function classicToolPath(storageKey) {
 
 // Fixed one-to-one moves. Everything not listed falls through to CLASSIC_HOME.
 const EXACT = Object.freeze({
+  // The Material Constants library. /work/constants is the same editor inside
+  // the app frame; the classic route has always existed, is open to any signed
+  // -in customer, and is what the Budget tab already links to. Without this the
+  // rail entry falls through to the dashboard, which is the exact failure the
+  // whole rewrite exists to prevent.
+  "/work/constants": "/rategen/material-constants",
   "/manage": CLASSIC_HOME,
   "/manage/products": CLASSIC_HOME,
   "/manage/team": CLASSIC_HOME,

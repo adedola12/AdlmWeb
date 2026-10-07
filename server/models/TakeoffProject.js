@@ -321,7 +321,8 @@ const ContractBaseItemSchema = new mongoose.Schema(
 // One numbered interim certificate. Cumulative-less-previous arithmetic:
 // each certificate carries its own cumulative value-to-date; the amount due
 // this period is derived as cumulativeValue minus the sum of all previous
-// certificates' `thisCertificate` totals. Retention / VAT / WHT are captured
+// certificates' `thisCertificate` totals. The arithmetic itself is in
+// util/certificateMaths.js, tested over the whole six-valuation sequence. Retention / VAT / WHT are captured
 // at the moment of issue so historical certs remain reproducible even if
 // the project settings change later.
 const CertificateSchema = new mongoose.Schema(
@@ -341,6 +342,14 @@ const CertificateSchema = new mongoose.Schema(
     whtPct: { type: Number, default: 2.5 },
     whtAmount: { type: Number, default: 0 },
     netPayable: { type: Number, default: 0 },
+    // A certificate can be NEGATIVE: when the value earned falls below what has
+    // already been certified (a certified variation later rejected, a downward
+    // re-measure), the interim certificate recovers the difference. That is
+    // ordinary practice, and it used to be clamped to zero — which printed ₦0
+    // payable and said nothing about the amount outstanding. Recorded so a
+    // screen and a PDF can both explain it.
+    overCertified: { type: Boolean, default: false },
+    overCertifiedBy: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ["draft", "approved", "paid"],
@@ -877,6 +886,26 @@ const SampleInfoSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// One Revit room as QUIV measures it (QUIV 4.0.2+): floor finish, floor area,
+// skirting run and, when the model has one, the wall finish area. Sent as the
+// top-level `roomFinishes` list on a Revit save and read by Ada's
+// get_room_finishes tool. Numbers are rounded to 2 dp by the save routes
+// (util/roomFinishes.js); wallFinishAreaM2 stays null when the room has none.
+const RoomFinishSchema = new mongoose.Schema(
+  {
+    roomId: { type: Number, default: 0 },
+    name: { type: String, default: "" },
+    number: { type: String, default: "" },
+    level: { type: String, default: "" },
+    floorFinish: { type: String, default: "" },
+    floorAreaM2: { type: Number, default: 0 },
+    skirtingM: { type: Number, default: 0 },
+    wallFinishAreaM2: { type: Number, default: null },
+    elementIds: { type: [Number], default: [] },
+  },
+  { _id: false },
+);
+
 const TakeoffProjectSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -995,6 +1024,10 @@ const TakeoffProjectSchema = new mongoose.Schema(
       default: () => ({ ...DefaultValuationSettings }),
     },
     valuationEvents: { type: [ValuationEventSchema], default: [] },
+    // Per-room finishes from QUIV (Revit only). Replaced whole by a save that
+    // sends the field; kept as stored by a save that does not. Capped at 5000
+    // rooms by the route sanitiser.
+    roomFinishes: { type: [RoomFinishSchema], default: [] },
     version: { type: Number, default: 1 },
   },
   { timestamps: true },

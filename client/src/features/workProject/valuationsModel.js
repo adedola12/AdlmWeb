@@ -104,7 +104,7 @@ const counts = (c) => ["approved", "paid"].includes(String(c?.status || "").toLo
  * documents that have been issued, and a screen that disagreed with the
  * certificate it is summarising would be worse than no screen.
  */
-export function valuationKpis(project, { contractSum = 0, progressPercent = 0 } = {}) {
+export function valuationKpis(project, { contractSum = 0, worksValue = 0, progressPercent = 0 } = {}) {
   const certs = Array.isArray(project?.certificates) ? project.certificates : [];
   const settled = certs.filter(counts);
 
@@ -121,13 +121,24 @@ export function valuationKpis(project, { contractSum = 0, progressPercent = 0 } 
     ? Math.max(...certs.map((c) => safeNum(c.cumulativeValue)))
     : 0;
   const sum = safeNum(contractSum);
-  const lastPercent = sum > 0 ? (lastCumulative / sum) * 100 : 0;
+  // MEASURED AGAINST THE WORKS, NOT THE BILL PLUS TAX.
+  //
+  // contract.contractSum is `subtotal + contingency + tax` (lockContract), so
+  // dividing certified money by it counts VAT the contractor never certifies
+  // and a contingency that is usually never spent. A project that had earned
+  // 80% of everything a certificate can ever pay reported ~71% complete, and
+  // could never reach 100% however finished it was. The contract sum is still
+  // shown — it IS the contract value — but the percentage uses the base the
+  // certificates are actually drawn against.
+  const base = worksBaseFor(project, { worksValue, contractSum: sum });
+  const lastPercent = base > 0 ? (lastCumulative / base) * 100 : 0;
   const progress = Math.max(0, Math.min(100, safeNum(progressPercent)));
 
   return {
     contractSum: sum,
+    worksValue: base,
     certified,
-    certifiedPercent: sum > 0 ? (certified / sum) * 100 : 0,
+    certifiedPercent: base > 0 ? (certified / base) * 100 : 0,
     retained,
     paid,
     progress,
@@ -139,14 +150,57 @@ export function valuationKpis(project, { contractSum = 0, progressPercent = 0 } 
 }
 
 /**
+ * What a certificate is drawn against, for a LOCKED contract.
+ *
+ * WHY NOT contract.contractSum
+ *
+ * That figure is `subtotal + contingency + tax` (lockContract), so dividing
+ * certified money by it counts VAT the contractor never certifies and a
+ * contingency that is usually never spent. A project that had earned 80% of
+ * everything a certificate can ever pay reported about 71% complete — and could
+ * never reach 100% however finished it was — with nothing looking wrong,
+ * because both numbers are real.
+ *
+ * WHY NOT THE LIVE BILL EITHER
+ *
+ * Locking freezes the contract, and the bill moves afterwards: re-measures,
+ * added lines, re-pricing. A denominator recomputed from today's bill would
+ * make last month's certificate percentage change by itself.
+ *
+ * So: the works figures the lock itself stored — measured + provisional +
+ * preliminaries, as they were at lock — plus variations approved since, which
+ * ARE certifiable. Falls back to the live works figure, and then to the
+ * contract sum, so a project locked before those fields existed still reads.
+ */
+export function worksBaseFor(project, { worksValue = 0, contractSum = 0 } = {}) {
+  const c = project?.contract || {};
+  const atLock =
+    safeNum(c.measuredAtLock) + safeNum(c.provisionalAtLock) + safeNum(c.preliminaryAtLock);
+  if (atLock > 0) {
+    const variations = (Array.isArray(project?.variations) ? project.variations : [])
+      .filter((v) => String(v?.status || "").toLowerCase() === "approved")
+      .reduce((a, v) => a + safeNum(v?.amount ?? v?.total), 0);
+    return atLock + variations;
+  }
+  // A contract locked before those figures were stored keeps the behaviour it
+  // has always had. The live bill is NOT used as a middle fallback: it moves
+  // after a lock — re-measures, added lines, re-pricing — so it can be
+  // unrelated to what was signed, and a denominator that drifts would make last
+  // month's certificate percentage change by itself.
+  return safeNum(contractSum) || safeNum(worksValue);
+}
+
+/**
  * The bars in his little chart: one per certificate, plus "Now".
  *
  * Height is the cumulative percentage the certificate reached, so the chart
  * reads as a staircase up to where the work actually is.
  */
-export function certificateBars(project, { contractSum = 0, progressPercent = 0 } = {}) {
+export function certificateBars(project, { contractSum = 0, worksValue = 0, progressPercent = 0 } = {}) {
   const certs = Array.isArray(project?.certificates) ? project.certificates : [];
-  const sum = safeNum(contractSum);
+  // Same base as the KPIs above, for the same reason: a staircase drawn
+  // against the bill plus VAT never reaches the top of its own chart.
+  const sum = worksBaseFor(project, { worksValue, contractSum });
   const bars = certs
     .slice()
     .sort((a, b) => safeNum(a.number) - safeNum(b.number))

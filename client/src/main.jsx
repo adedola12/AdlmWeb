@@ -1,8 +1,11 @@
 // src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-// `Navigate` went with the /dashboard redirect — that was its only use here.
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+// `Navigate` is back with the /dashboard redirect at go-live; that redirect is
+// still its only use here. Without the import the route renders undefined and
+// white-screens the page, which eslint's react/jsx-no-undef catches and a
+// module-load test does not.
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./store.jsx";
 import { StepUpProvider } from "./features/security/useStepUp.jsx";
 import { ThemeProvider, initThemeBeforeRender } from "./theme.jsx";
@@ -45,6 +48,8 @@ const AdminPeople = lazyScreen(() => import("./pages/AdminPeople.jsx"));
 const AdminEnrolments = lazyScreen(() => import("./pages/AdminEnrolments.jsx"));
 const AdminSubmissions = lazyScreen(() => import("./pages/AdminSubmissions.jsx"));
 const AdminFollowUpsDesk = lazyScreen(() => import("./pages/AdminFollowUpsDesk.jsx"));
+const AdminReferrals = lazyScreen(() => import("./pages/AdminReferrals.jsx"));
+const AdminDemoModels = lazyScreen(() => import("./pages/AdminDemoModels.jsx"));
 const AdminDsOrganisations = lazyScreen(() => import("./pages/AdminDsOrganisations.jsx"));
 const AdminDsRoles = lazyScreen(() => import("./pages/AdminDsRoles.jsx"));
 const AdminDsSupport = lazyScreen(() => import("./pages/AdminDsSupport.jsx"));
@@ -88,9 +93,9 @@ const ChangePassword = lazyScreen(() => import("./pages/ChangePassword.jsx"));
 const Profile = lazyScreen(() => import("./pages/Profile.jsx"));
 // The classic dashboard, still the one customers use until 1 October (#30).
 // It came back to main as an eager import because that is how main loads its
-// screens; here it is lazy like every other screen behind a sign-in, which is
-// the only difference between the two sides of this merge.
-const Dashboard = lazyScreen(() => import("./pages/Dashboard.jsx"));
+// pages/Dashboard.jsx is no longer routed — /dashboard redirects to /manage
+// from go-live — so it is no longer imported either. The file itself stays in
+// the tree and in the classic-build-final tag; it is not deleted.
 import Learn from "./pages/Learn.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
 const Admin = lazyScreen(() => import("./pages/Admin.jsx"));
@@ -139,6 +144,7 @@ const AdminAddRate = lazyScreen(() => import("./pages/AdminAddRate.jsx"));
 const RateGenUpdates = lazyScreen(() => import("./pages/RateGenUpdates.jsx"));
 const ServiceConstants = lazyScreen(() => import("./pages/ServiceConstants.jsx"));
 const MaterialConstants = lazyScreen(() => import("./pages/MaterialConstants.jsx"));
+const WorkConstants = lazyScreen(() => import("./pages/WorkConstants.jsx"));
 const Receipt = lazyScreen(() => import("./pages/Receipt.jsx"));
 const OrderDetail = lazyScreen(() => import("./pages/OrderDetail.jsx"));
 import AuthCallback from "./pages/AuthCallback.jsx";
@@ -223,6 +229,41 @@ const dsPage = (slug) => {
   const Page = DS_PAGES.find((p) => p.slug === slug)?.Component;
   return Page ? <Page /> : null;
 };
+
+/**
+ * One of Richard's pages at a real public path, inside his shell.
+ *
+ * These stay CHILDREN of <App /> rather than becoming top-level routes like
+ * /pricing and /contact did. App is where AnalyticsTracker is mounted — "so it
+ * sees every route change", because before it a session recorded its first
+ * pageview and nothing after — and it also carries the ErrorBoundary, scroll
+ * restoration and the unconfirmed-email notice. Lifting the six busiest public
+ * pages out of App would have quietly taken analytics off exactly the pages
+ * whose traffic matters most.
+ *
+ * App drops the classic nav, footer, launch strip and coupon banner, and the
+ * padding on <main>, for any path in lib/dsPublicPaths.js. So his chrome is
+ * the only chrome, and his full-bleed layouts are not boxed in.
+ */
+// Sign in and create account: his design on our authentication, wired by hand
+// in ds/custom. NOT ds/pages/DsLogin.jsx — that file is generated from his
+// login.html and its form is <form action="/manage" method="get">, so it posts
+// the password into a query string, never calls /auth/login, and has no second
+// step for an OTP account. Routing it would have locked every customer out.
+const DsLoginPage = lazyScreen(() => import("./ds/custom/DsLoginPage.jsx"));
+const DsSignupPage = lazyScreen(() => import("./ds/custom/DsSignupPage.jsx"));
+// His design for the two training screens and the release desk. DsTrainings
+// renders inside DsShell because every class it uses is .ds-scoped — mounted
+// bare it is unstyled markup.
+const DsTrainings = lazyScreen(() => import("./ds/custom/DsTrainings.jsx"));
+const DsTrainingSignup = lazyScreen(() => import("./ds/custom/DsTrainingSignup.jsx"));
+const DsAdminReleases = lazyScreen(() => import("./ds/DsAdminReleases.jsx"));
+
+const dsPublic = (slug) => (
+  <React.Suspense fallback={null}>
+    <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+  </React.Suspense>
+);
 const BEYOND_BIM_SOON = (
   <DsComingSoon
     eyebrow="Beyond BIM · coming soon"
@@ -241,7 +282,8 @@ const router = createBrowserRouter([
     element: <App />,
     errorElement: <AppError />,
     children: [
-      { index: true, element: <Home /> },
+      // Richard's home page ("Measure it. Price it. Defend it."), his chrome.
+      { index: true, element: dsPublic("home") },
 
       {
         path: "time-management",
@@ -259,8 +301,8 @@ const router = createBrowserRouter([
         ),
       },
 
-      { path: "products", element: <Products /> },
-      { path: "quote", element: <Quote /> },
+      { path: "products", element: dsPublic("products") },
+      { path: "quote", element: dsPublic("quote") },
       { path: "product/:key", element: <ProductDetail /> },
 
       ...landingRoutes,
@@ -268,31 +310,42 @@ const router = createBrowserRouter([
       // Public client-facing proposal view
       { path: "proposal/:token", element: <PublicProposal /> },
 
-      { path: "login", element: <Login /> },
+      { path: "login", element: <DsLoginPage /> },
       // Enter the six-digit code sign-up emailed (pages/VerifyEmail.jsx).
       { path: "verify-email", element: <VerifyEmail /> },
       // A separate door, deliberately. His reasoning, kept: an admin session
       // is not a customer session with a flag on it, so it is not reached by
       // adding ?admin to the customer sign-in.
       { path: "admin/login", element: <AdminLogin /> },
-      { path: "signup", element: <Signup /> },
+      { path: "signup", element: <DsSignupPage /> },
 
-      { path: "learn", element: <Learn /> },
+      // His /learn. The player below it stays classic and keeps the classic
+      // chrome, which is why dsPublicPaths matches exactly and not by prefix.
+      { path: "learn", element: dsPublic("learn") },
       // The player moved to /dash-course/:sku. This resolves rather than
       // 404s, because the URL is in emails and in people's history.
       { path: "learn/course/:sku", element: <LearnCourseRedirect /> },
       { path: "learn/free/:id", element: <FreeVideoDetail /> },
 
-      { path: "about", element: <AboutADLM /> },
+      { path: "about", element: dsPublic("about") },
 
       // Public product changelogs / "What's New".
       // Hub lists every product; each links to its own detail page.
       // Content lives in src/data/changelogs/*.md (one file per product).
-      { path: "whats-new", element: <WhatsNew /> },
+      { path: "whats-new", element: dsPublic("whats-new") },
       { path: "whats-new/:slug", element: <WhatsNewProduct /> },
 
       // Online trainings
-      { path: "trainings", element: <Trainings /> },
+      {
+        path: "trainings",
+        element: (
+          <React.Suspense fallback={null}>
+            <DsShellLazy>
+              <DsTrainings />
+            </DsShellLazy>
+          </React.Suspense>
+        ),
+      },
       { path: "trainings/:id", element: <TrainingDetail /> },
       {
         path: "trainings/enrollment/:enrollmentId",
@@ -304,7 +357,7 @@ const router = createBrowserRouter([
       },
 
       // ✅ Physical trainings (Public detail by slug OR id + Protected portal)
-      { path: "ptrainings/:key", element: <PTrainingDetail /> },
+      { path: "ptrainings/:key", element: <DsTrainingSignup /> },
       {
         path: "ptrainings/enrollment/:enrollmentId",
         element: (
@@ -338,26 +391,20 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      // The dashboard customers actually use. /manage is his Manage overview
-      // and it is the one that replaces this — but only once the new build is
-      // the build, and that is 1 October. PR #24 merged on 24 September, six
-      // days early, and this route was a redirect to /manage from that moment:
-      // everybody who opened their dashboard landed on a screen they had never
-      // seen. Restored here rather than reverting the merge, because the rest
-      // of the new site is fine to be early and this is the one screen people
-      // are working in today.
+      // Retired at go-live, 1 October 2026. /manage is the account overview
+      // now — his screen, on real data — and two dashboards competing for the
+      // same job is how one of them quietly goes stale.
       //
-      // /manage keeps its own routes and is still reachable. Nothing about the
-      // new overview is removed; it simply stops being where customers are
-      // sent. Swap the two back on 1 October.
-      {
-        path: "dashboard",
-        element: (
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        ),
-      },
+      // A redirect rather than a deletion, and permanently so: this path is in
+      // receipts, in enrolment emails and in people's history, and the same
+      // reasoning already keeps /learn/course/:sku alive a few lines below.
+      // pages/Dashboard.jsx stays in the tree and in the classic-build-final
+      // tag; it is simply no longer routed.
+      //
+      // This moves together with AFTER_SIGN_IN in lib/afterSignIn.js. Twice
+      // before, one changed without the other and the site contradicted
+      // itself — sign-in went one way, every receipt pointed the other.
+      { path: "dashboard", element: <Navigate to="/manage" replace /> },
       {
         path: "freebies",
         element: (
@@ -371,8 +418,8 @@ const router = createBrowserRouter([
         // lands. Added alongside rather than over it: /dashboard keeps working
         // and keeps its data until this one is proven on real accounts.
         //
-        // NewBuildGate is what "alongside" means until 1 Oct: staff see this,
-        // a customer is sent to the classic screen that does the same job.
+        // NewBuildGate held it to staff until 1 Oct; since go-live it is a
+        // pass-through and everyone signed in lands here (lib/newBuildAccess.js).
         path: "manage",
         element: (
           <ProtectedRoute>
@@ -402,6 +449,10 @@ const router = createBrowserRouter([
         { path: "work/tool/:t", el: <WorkTool /> },
         { path: "manage/support", el: <ManageSupport /> },
         { path: "work/library", el: <WorkLibrary /> },
+        // The constants behind every budget, in the app frame so the rail
+        // survives. /rategen/material-constants still answers for the link
+        // the classic Budget tab has always used.
+        { path: "work/constants", el: <WorkConstants /> },
         { path: "work/rate/:id", el: <WorkRate /> },
         { path: "work/project/:productKey/:id", el: <WorkProject /> },
         { path: "work/programme", el: <WorkProgramme /> },
@@ -411,9 +462,10 @@ const router = createBrowserRouter([
         { path: "dash-course/:sku", el: <LearningCourse /> },
       ].map(({ path, el }) => ({
         path,
-        // The Manage and Work screens are the unfinished new build and are held
-        // back to staff until launch; a customer reaching one lands on the
-        // classic equivalent (lib/classicPaths.js).
+        // The Manage and Work screens sit behind NewBuildGate, which held them
+        // back to staff until launch and has been a pass-through since go-live
+        // (1 Oct 2026). Raise GATE_NEW_BUILD and a customer reaching one lands
+        // on the classic equivalent again (lib/classicPaths.js).
         //
         // The four dash-* learning routes below are in this same list and are
         // deliberately NOT gated: they are the only learning surface there is,
@@ -722,6 +774,29 @@ const router = createBrowserRouter([
         ),
       },
       {
+        // The sample models a course works through, and the demos somebody
+        // evaluating a product can open. The API for these has existed since
+        // they were built and nothing could reach it, so an admin could not
+        // add one at all. `learn`, matching the route's own permission.
+        path: "admin/sample-models",
+        element: (
+          <AdminRoute permission="learn">
+            <AdminDemoModels />
+          </AdminRoute>
+        ),
+      },
+      {
+        // Who referred whom, and whether they subscribed. The purchases
+        // queue shows "referred by" on an order; it cannot show a referral
+        // that never became one, which is the half a referrer waits on.
+        path: "admin/referrals",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminReferrals />
+          </AdminRoute>
+        ),
+      },
+      {
         path: "admin/active",
         element: (
           <AdminRoute permission="adminhub">
@@ -822,7 +897,28 @@ const router = createBrowserRouter([
         ),
       },
       {
+        // THE REAL SETTINGS EDITOR, NOT THE READ-ONLY REGISTER.
+        //
+        // This path rendered <AdminDocSystem />, which is
+        // <DsAdminDocuments screen="system" /> — the System register. That
+        // register's own "Open the settings editor" button points here, so the
+        // button navigated from the register to the register and looked dead,
+        // and the actual editor (site settings, the exchange rate, the mobile
+        // app link and the Installer Hub upload) was reachable from nowhere at
+        // all. The Hub could not be given its Setup.exe because the only screen
+        // that uploads one had no route.
         path: "admin/settings",
+        element: (
+          <AdminRoute permission="adminhub">
+            <Admin section="settings" />
+          </AdminRoute>
+        ),
+      },
+      {
+        // The register keeps its own address — SCREENS.system in
+        // ds/DsAdminDocuments.jsx has always declared this path, and nothing
+        // was mounted at it.
+        path: "admin/docs/system",
         element: (
           <AdminRoute permission="adminhub">
             <AdminDocSystem />
@@ -1118,7 +1214,7 @@ const router = createBrowserRouter([
         path: "admin/releases",
         element: (
           <AdminRoute permission="releases">
-            <AdminReleases />
+            <DsAdminReleases />
           </AdminRoute>
         ),
       },
@@ -1292,6 +1388,47 @@ const router = createBrowserRouter([
   // has these pages, so they render in its shell, like /certificate: not through
   // DsPreview, which would turn every link on them into a staff-only /preview
   // one. Nothing else of the redesign is exposed by this.
+  // THE SAME BUG, ELEVEN MORE PAGES.
+  //
+  // /privacy, /terms and /licensing were "Page not found" because only the
+  // redesign had them and nothing was mounted at the real path. Exactly the
+  // same is true of these eleven — and they are worse, because the redesign's
+  // own nav and footer LINK to them, and that chrome renders on the four public
+  // DsShell pages above. So a visitor reading the privacy policy clicked
+  // Pricing, Contact or any Solutions link and got Page not found.
+  //
+  // Same remedy, same reason: they render in his shell at their real public
+  // path, not through DsPreview, which would turn every link on them into a
+  // staff-only /preview one.
+  ...[
+    "pricing",
+    "contact",
+    "how-it-works",
+    "mobile",
+    "careers",
+    "press",
+    "ada",
+  ].map((slug) => ({
+    path: `/${slug}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(slug)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
+
+  // The four Solutions pages, whose public path has a segment the slug does not.
+  ...["firms", "professionals", "students", "institutions"].map((who) => ({
+    path: `/solutions/${who}`,
+    element: (
+      <React.Suspense fallback={null}>
+        <DsShellLazy>{dsPage(`solutions-${who}`)}</DsShellLazy>
+      </React.Suspense>
+    ),
+    errorElement: <AppError />,
+  })),
+
   ...["privacy", "terms", "licensing"].map((slug) => ({
     path: `/${slug}`,
     element: (

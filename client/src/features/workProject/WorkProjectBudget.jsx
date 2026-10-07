@@ -7,7 +7,7 @@
 //
 // His one change on these screens is here: ticking a material as bought. A
 // budget row's cost rate, its supplier and its target date are all editable in
-// the full workspace, and a second place to type a cost rate is how two screens
+// the classic workspace, and a second place to type a cost rate is how two screens
 // come to disagree about what a job costs.
 
 import React from "react";
@@ -292,11 +292,16 @@ export function WorkProjectBuyView({
       </div>
 
       <div className="pj-buy" role="table">
+        {/* Read like the Budget: material, how much, what it costs — one line,
+            in columns that line up down the list. The amount used to be buried
+            in the material cell's sub-line as a compact figure, which is the
+            one number a QS is comparing when deciding what to order first. */}
         <div className="hd" role="row">
           <span />
           <span>Buy by</span>
           <span>Material</span>
           <span className="n">Quantity</span>
+          <span className="n">Amount</span>
           <span>For</span>
         </div>
         {rows.map((r) => {
@@ -312,16 +317,14 @@ export function WorkProjectBuyView({
               </span>
               <span className="m">
                 <b>{r.name}</b>
-                <em>
-                  {compact(r.amount)}
-                  {!r.done && r.procuredPercent > 0
-                    ? ` · ${Math.round(r.procuredPercent)}% ordered`
-                    : ""}
-                </em>
+                {!r.done && r.procuredPercent > 0 ? (
+                  <em>{Math.round(r.procuredPercent)}% ordered</em>
+                ) : null}
               </span>
               <span className="n">
                 {num(Math.ceil(r.qty * 100) / 100)} {r.unit}
               </span>
+              <span className="n">{r.amount ? money(r.amount) : EN_DASH}</span>
               <span className="f">
                 {r.forLine || EN_DASH}
                 {r.taskName ? <em>{r.taskName}</em> : null}

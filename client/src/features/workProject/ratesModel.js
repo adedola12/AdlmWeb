@@ -110,3 +110,25 @@ export function pricedBySummary(items) {
     fromProject: priced.length - fromLibrary,
   };
 }
+
+/**
+ * The rate the server offered for this line, out of the project's bulk lookup.
+ *
+ * WHY THE KEY IS LOWERCASED
+ *
+ * The map comes back keyed on the bill code, lowercased, because that is how
+ * the endpoint that applies a pick matches a line ("06.02" and "06.02" are the
+ * same line; "A1" and "a1" are too). Looking it up with the code as written
+ * would find nothing for every line whose code carries a letter, and the screen
+ * would say "No suggestion" while the server had one — a silent miss, not an
+ * error. Hence one function, tested.
+ */
+export function suggestionFor(byCode, item) {
+  // null means "not asked yet", which a screen says differently from "none".
+  if (!byCode) return null;
+  const code = String(item?.code || "").trim().toLowerCase();
+  // A line with no code cannot be addressed by the apply endpoint at all, so
+  // offering it a rate would produce a button that always fails.
+  if (!code) return null;
+  return byCode[code] || null;
+}

@@ -15,6 +15,10 @@ const BASE = [
   { key: "bill", label: "Bill" },
   { key: "rates", label: "Rates & budget" },
   { key: "pm", label: "PM dashboard" },
+  // The labour side of the plan: which trade is on site, doing what, when, and
+  // how many of them at once. The PM dashboard is about tasks and money; this
+  // is about people, which is the question a planner opens a programme with.
+  { key: "activity", label: "Activity schedule" },
   { key: "valuations", label: "Valuations" },
 ];
 

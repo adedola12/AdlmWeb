@@ -127,27 +127,6 @@ test("the same collaborator WITH RateGen sees the shared figures", async () => {
   assert.equal(res.body[0].moneyHidden, undefined);
 });
 
-test("measured work, valued and remaining are withheld on a shared row too", async () => {
-  me = { _id: USER_ID, email: "qs@example.com", entitlements: [planswift()] };
-  rows = [row({ shared: true })];
-  const res = await list();
-  // These three were left unmasked here because "the plugins read them".
-  // They do — and every one of the three bindings in ADLMPlanswiftApp
-  // (MainWindow.xaml 442, 505, 762) is a OneWay display of
-  // CloudProjectListItem.TotalCost in a "Total (NGN): …" badge. No plugin
-  // branches on the value, so withholding it shows 0.00 on a project the
-  // reader is not entitled to price, and breaks nothing.
-  assert.equal(res.body[0].totalCost, 0);
-  assert.equal(res.body[0].valuedAmount, 0);
-  assert.equal(res.body[0].remainingAmount, 0);
-  assert.equal(res.body[0].moneyHidden, true);
-});
-
-test("a shared row still reports whether it is priced", async () => {
-  me = { _id: USER_ID, email: "qs@example.com", entitlements: [planswift()] };
-  rows = [row({ shared: true })];
-  const res = await list();
-  assert.equal(res.body[0].priced, true);
 test("measured work, value to date and balance are withheld too", async () => {
   me = { _id: USER_ID, email: "qs@example.com", entitlements: [planswift()] };
   rows = [row({ shared: true })];

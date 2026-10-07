@@ -524,7 +524,6 @@ const EXTRACT_BODY = {
 };
 
 test("a view-only collaborator reads the bill but every write and export answers 403 PROJECT_ACCESS_DENIED", async () => {
-test("a view-only collaborator reads the bill but every write answers 403 VIEW_ONLY", async () => {
   reset();
   await withServer(async (base) => {
     const read = await call(base, `/boq/${PROJECT_ID}`, { as: VIEWER });
@@ -544,7 +543,6 @@ test("a view-only collaborator reads the bill but every write answers 403 VIEW_O
       const r = await call(base, path, { as: VIEWER, method, body });
       assert.equal(r.status, 403, `${method} ${path}`);
       assert.equal(r.body.code, "PROJECT_ACCESS_DENIED", `${method} ${path}`);
-      assert.equal(r.body.code, "VIEW_ONLY", `${method} ${path}`);
     }
     assert.deepEqual(saves, { project: 0, version: 0 }, "nothing was written");
     assert.equal(createdVersions.length, 0, "no version was made");

@@ -15,6 +15,7 @@ import {
   rateNotes,
   resolveRateView,
   splitByRate,
+  suggestionFor,
 } from "./ratesModel.js";
 import { descOf, measuredAt, unitOf } from "./billModel.js";
 import { EN_DASH, money, num } from "./workProjectFormat.js";
@@ -31,6 +32,11 @@ export default function WorkProjectRates({
   onGo,
   onSave,
   saving = false,
+  rateMap = null,
+  onApplyRate,
+  pricing = false,
+  priceFailed = "",
+  priceNotes = [],
 }) {
   const items = React.useMemo(
     () => (Array.isArray(project?.items) ? project.items : []),
@@ -76,6 +82,12 @@ export default function WorkProjectRates({
           total={totals.total}
           canEdit={canEdit}
           onOpenLine={onOpenLine}
+          rateMap={rateMap}
+          onApplyRate={onApplyRate}
+          pricing={pricing}
+          saving={saving}
+          priceFailed={priceFailed}
+          priceNotes={priceNotes}
         />
       ) : mode === "budget" ? (
         // HERON 3.0's shape: cost against value per bill line, with the margin
@@ -102,7 +114,21 @@ export default function WorkProjectRates({
   );
 }
 
-function RatesView({ items, unpriced, priced, notes, total, canEdit, onOpenLine }) {
+function RatesView({
+  items,
+  unpriced,
+  priced,
+  notes,
+  total,
+  canEdit,
+  onOpenLine,
+  rateMap = null,
+  onApplyRate,
+  pricing = false,
+  saving = false,
+  priceFailed = "",
+  priceNotes = [],
+}) {
   return (
     <>
       {notes.size ? (
@@ -125,8 +151,36 @@ function RatesView({ items, unpriced, priced, notes, total, canEdit, onOpenLine 
               Needs a rate <em>{unpriced.length}</em>
             </h2>
           </div>
+          {priceFailed ? <p className="pj-need-bad">{priceFailed}</p> : null}
+          {rateMap?.masked ? (
+            <p className="pj-need-note">
+              Rates are not shown on this project for your account, so no suggestions can be
+              offered.
+            </p>
+          ) : null}
+          {rateMap?.failed ? (
+            <p className="pj-need-note">
+              Your rate library could not be read just now, so nothing is suggested below. That is
+              not the same as having no matching rate.
+            </p>
+          ) : null}
+          {rateMap?.truncated ? (
+            <p className="pj-need-note">
+              The first {rateMap.considered} of {rateMap.unpriced} unpriced lines were looked at.
+              The rest are not shown as &ldquo;no suggestion&rdquo; below &mdash; they were not
+              checked. Price some of these and reopen the tab to look at the next batch.
+            </p>
+          ) : null}
+          {priceNotes.length ? (
+            <ul className="pj-need-notes">
+              {priceNotes.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
           {unpriced.map((i) => {
             const it = items[i];
+            const sg = suggestionFor(rateMap?.byCode, it);
             return (
               <div className="nr" key={i}>
                 <div className="ds">
@@ -136,15 +190,37 @@ function RatesView({ items, unpriced, priced, notes, total, canEdit, onOpenLine 
                     {measuredAt(it) ? ` · ${measuredAt(it)}` : ""}
                   </em>
                 </div>
-                {/* His design puts a SUGGESTED library rate here. Nothing in our
-                    data suggests one, and inventing a figure a QS has not chosen
-                    is not a small liberty on a bill — so the slot says what it
-                    is rather than standing empty. */}
-                <div className="sg none">
-                  <span>No suggestion — price it from the build-up</span>
-                </div>
+                {/* His design puts a SUGGESTED library rate here, and for a
+                    long time this said there was no honest source for one. There
+                    is: RateGen holds this QS's own rates, and a rate they built
+                    themselves, for work whose description matches, in the same
+                    unit, is not a figure put in their mouth. The server does the
+                    matching and re-resolves the pick before writing, so nothing
+                    a screen sends can become a price. */}
+                {sg ? (
+                  <div className="sg">
+                    <b>{money(sg.unitPrice)}</b>
+                    <span>
+                      per {sg.unit} &middot; {sg.why}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="sg none">
+                    <span>{noSuggestionText(rateMap, i, unpriced)}</span>
+                  </div>
+                )}
                 {canEdit ? (
                   <div className="ac">
+                    {sg ? (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-sm"
+                        disabled={pricing || saving}
+                        onClick={() => onApplyRate?.(String(it?.code || "").trim(), sg)}
+                      >
+                        Use this rate
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="ds-btn btn-o ds-btn-sm"
@@ -219,4 +295,30 @@ function RatesView({ items, unpriced, priced, notes, total, canEdit, onOpenLine 
       </section>
     </>
   );
+}
+
+/**
+ * What the empty suggestion slot says, which is not always the same thing.
+ *
+ * Three different states used to print one sentence:
+ *   - the lookup has not landed yet
+ *   - the server looked and found nothing
+ *   - the server STOPPED before reaching this line (its 600-line ceiling), or
+ *     could not look at all
+ *
+ * "No suggestion — price it from the build-up" is only true for the second. On
+ * a 900-line bill it appeared against 300 lines nobody had looked at, and a QS
+ * pricing those by hand would be doing work the library could have done.
+ */
+function noSuggestionText(rateMap, index, unpriced) {
+  if (!rateMap) return "Checking your rate library…";
+  if (rateMap.failed) return "Could not check — not the same as no match";
+  if (rateMap.masked) return "Rates are not shown on this project";
+  // `considered` counts from the top of the unpriced list, so anything past it
+  // was never looked at.
+  const position = unpriced.indexOf(index);
+  if (rateMap.truncated && position >= 0 && position >= rateMap.considered) {
+    return "Not checked yet — beyond the first " + rateMap.considered;
+  }
+  return "No suggestion — price it from the build-up";
 }

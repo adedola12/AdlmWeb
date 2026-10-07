@@ -22,7 +22,7 @@ const head = (props = {}) =>
         projects={PROJECTS}
         projectId="a1"
         tab="bill"
-        fullWorkspaceHref="/projects/planswift?project=a1"
+        classicWorkspaceHref="/projects/planswift?project=a1"
         {...props}
       />
     </MemoryRouter>,
@@ -126,10 +126,29 @@ describe("the … overflow", () => {
     expect(document.querySelector(".pj-pop")).toBe(null);
   });
 
-  it("sends the full workspace through as a link, not an action", () => {
+  it("sends the classic workspace through as a link, not an action", () => {
     openMore();
-    const link = screen.getByText("Open the full workspace");
+    const link = screen.getByText("Open the classic workspace");
     expect(link.getAttribute("href")).toBe("/projects/planswift?project=a1");
+  });
+
+  // It is a mode on this page, so it must NOT be a link — a link was the bug.
+  it("asks for full screen as an action, not a navigation", () => {
+    const onAction = vi.fn();
+    openMore({ onAction });
+    const item = screen.getByText("Open the full workspace");
+    expect(item.getAttribute("href")).toBe(null);
+    fireEvent.click(item);
+    expect(onAction).toHaveBeenCalledWith("full");
+  });
+
+  it("puts a way out on the page once full screen is on", () => {
+    const c = head({ fullScreen: true, onAction: vi.fn() });
+    expect(within(c).getByText("Leave full screen")).toBeTruthy();
+  });
+
+  it("does not offer a way out when it is not on", () => {
+    expect(within(head()).queryByText("Leave full screen")).toBe(null);
   });
 
   it("only ever has one popover open", () => {
@@ -153,7 +172,7 @@ describe("the collaborators panel", () => {
   const people = (p = project) =>
     render(
       <MemoryRouter>
-        <WorkProjectPeople project={p} fullWorkspaceHref="/projects/planswift?project=a1" />
+        <WorkProjectPeople project={p} classicWorkspaceHref="/projects/planswift?project=a1" />
       </MemoryRouter>,
     ).container;
 
@@ -188,5 +207,32 @@ describe("the collaborators panel", () => {
 
   it("does not throw on a project that has not loaded", () => {
     expect(() => people(null)).not.toThrow();
+  });
+});
+
+describe("the Export menu", () => {
+  it("offers every workbook and the PDF reports, and says which was picked", () => {
+    const onAction = vi.fn();
+    const c = head({ onAction });
+    fireEvent.click(within(c).getByRole("button", { name: "Export" }));
+    for (const g of ["Bill & budget, Excel", "Elemental BoQ, Excel", "Trade BoQ, Excel", "Milestone BoQ, Excel", "Reports, PDF"]) {
+      expect(screen.getByText(g)).toBeTruthy();
+    }
+    fireEvent.click(screen.getByText("Bill & budget by trade"));
+    expect(onAction).toHaveBeenCalledWith("export", "bb-trade");
+  });
+
+  it("opens the PDF report through the same action the overflow uses", () => {
+    const onAction = vi.fn();
+    const c = head({ onAction });
+    fireEvent.click(within(c).getByRole("button", { name: "Export" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Project report/ }));
+    expect(onAction).toHaveBeenCalledWith("report", "report");
+  });
+
+  it("is busy while a file is on its way, so it is not fetched twice", () => {
+    const c = head({ exporting: "bb-cat" });
+    const b = within(c).getByRole("button", { name: "Exporting…" });
+    expect(b.disabled).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import express from "express";
+import { recordReferral } from "../services/referrals.js";
 import { mustVerifyEmail } from "../util/emailGate.js";
 import {
   verifyEmail,
@@ -51,6 +52,8 @@ import { getPrivateKey, getKid } from "../util/jwks.js";
 import { isGodUser, isGodEmail } from "../util/godAccount.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
 import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import { checkAddressReachable } from "../util/emailReachable.js";
+import { isPlausiblePhone } from "../util/phonePlausible.js";
 import {
   verifySocialIdentity,
   configuredProviders,
@@ -122,7 +125,7 @@ function buildAuthPayload(user) {
   };
 }
 
-// What goes INSIDE the access token: buildAuthPayload without the entitlements.
+// What goes INSIDE the access token: buildAuthPayload with slim entitlements.
 //
 // The token rides on every request's Authorization header, and the API edge
 // refuses a request whose headers pass ~10 KB before it reaches Express: the
@@ -131,14 +134,31 @@ function buildAuthPayload(user) {
 // token at 16,923 characters (network check Y8XQZV, 28 Sep 2026) and locked
 // them out of every signed-in page on web and Hub for two months.
 //
-// Nothing reads entitlements from the token: every gate loads them from the
-// database, the AI service fetches them from /api/entitlements, and clients
-// read them from the `user` body of the login / refresh reply, which still
-// carries them. An uploaded avatar can be a data: URL of any size, so only a
-// plain link is kept; /me reads the real one from the database.
+// The desktop plugins DO read entitlements from the token: QUIV, HERON and the
+// other Revit/WPF products decode the JWT and look up productKey / status /
+// expiresAt before they open. Dropping the list outright (PR #77) made every
+// QUIV sign-in say "No subscription information found" (29 Sep 2026). So each
+// entitlement keeps its plain scalar fields and loses only its arrays and
+// objects (the per-seat devices rows), which is what made the token big.
+// Server gates still load entitlements from the database. An uploaded avatar
+// can be a data: URL of any size, so only a plain link is kept; /me reads the
+// real one from the database.
 const MAX_TOKEN_AVATAR_URL = 512;
+const isScalar = (v) => v === null || ["string", "number", "boolean"].includes(typeof v);
+export function tokenEntitlements(entitlements) {
+  return (Array.isArray(entitlements) ? entitlements : []).map((ent) => {
+    const src = ent && typeof ent.toObject === "function" ? ent.toObject() : ent || {};
+    const slim = {};
+    for (const [key, value] of Object.entries(src)) {
+      if (isScalar(value)) slim[key] = value;
+      else if (value instanceof Date) slim[key] = value.toISOString();
+    }
+    return slim;
+  });
+}
 export function accessTokenClaims(payload) {
   const { entitlements, avatarUrl, ...claims } = payload;
+  claims.entitlements = tokenEntitlements(entitlements);
   const avatar = String(avatarUrl || "");
   claims.avatarUrl = avatar.length <= MAX_TOKEN_AVATAR_URL && !avatar.startsWith("data:") ? avatar : "";
   return claims;
@@ -317,6 +337,17 @@ router.post("/signup", async (req, res) => {
         .json({ error: "firstName, lastName and whatsapp are required" });
     }
 
+    // Required and then unchecked is barely required at all: normalizeWhatsApp
+    // strips to digits and `+` without a length check, so 15 accounts in the
+    // list have a one-digit telephone number. See util/phonePlausible.js for
+    // where the threshold comes from.
+    if (!isPlausiblePhone(whatsapp)) {
+      return res.status(400).json({
+        error: "Enter a WhatsApp number we can actually reach you on, including the country or network code.",
+        code: "IMPLAUSIBLE_PHONE",
+      });
+    }
+
     const pwError = validatePasswordStrength(password);
     if (pwError) {
       return res.status(400).json({ error: pwError, code: "WEAK_PASSWORD" });
@@ -329,6 +360,19 @@ router.post("/signup", async (req, res) => {
     if (!emailRx.test(normalizedEmail)) {
       return res.status(400).json({ error: "Invalid email format" });
     }
+
+    // Matching that pattern only proves the string has an @ in it. `gmail.con`
+    // matches it, and three people who typed exactly that were given accounts,
+    // sent a code that evaporated, and then locked out by util/emailGate.js
+    // waiting for a code they could never receive. Telling them now is the fix.
+    // Fails open if DNS is unreachable — see util/emailReachable.js.
+    const reach = await checkAddressReachable(normalizedEmail, { log: console });
+    if (!reach.ok) {
+      return res
+        .status(400)
+        .json({ error: reach.message, code: "EMAIL_UNREACHABLE", reason: reach.reason });
+    }
+
     const normalizedUsername = String(
       username || normalizedEmail.split("@")[0],
     ).trim();
@@ -360,6 +404,21 @@ router.post("/signup", async (req, res) => {
         whatsapp: normalizeWhatsApp(whatsapp),
         entitlements: [],
       });
+
+      // WHO SENT THEM. A referral is an attribution, never a gate: recordReferral
+      // swallows every failure and returns a reason, so nothing here can stop an
+      // account being created. The code rides in the body from the ?ref= the
+      // browser held on to (client/src/lib/referralRef.js).
+      if (user?._id) {
+        const ref = await recordReferral({
+          code: req.body?.ref,
+          newUser: user,
+          signupMethod: "password",
+        });
+        if (!ref.ok && ref.reason !== "no-code") {
+          console.warn(`[referrals] signup capture skipped: ${ref.reason}`);
+        }
+      }
     } catch (createErr) {
       await slot.release().catch(() => {});
       throw createErr;
@@ -1377,8 +1436,39 @@ router.post("/social", authLimiter, async (req, res) => {
           lastName: identity.lastName,
           [field]: identity.subject,
           entitlements: [],
+          // THE PROVIDER HAS ALREADY VERIFIED THIS ADDRESS.
+          //
+          // util/socialIdentity.js refuses the sign-in outright when the
+          // provider reports email_verified false, so by the time we are here
+          // Google or Microsoft has confirmed the address — a stronger check
+          // than our own six-digit code, which only proves the person can read
+          // the inbox once.
+          //
+          // Omitting this was not harmless. util/emailGate.js refuses EVERY
+          // signed-in request from an unconfirmed account except the /auth
+          // ones, so a customer who signed up with Google was created
+          // unverified, never sent a code (only POST /auth/signup sends one),
+          // and then met the "confirm your email" screen asking for a code
+          // that had never been sent. They could press resend and escape, but
+          // the first thing the product did was block them. It is also why 270
+          // accounts sat unmailable: the broadcast audience requires a verified
+          // address, and on this site most sign-ups come through a provider.
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
         });
         created = true;
+        // The SECOND place an account is made. A referral captured only in the
+        // password path loses every Google and Microsoft signup, which on this
+        // site is most of them. The code survived the provider round trip in the
+        // browser's own storage and comes back in this request's body.
+        const ref = await recordReferral({
+          code: req.body?.ref,
+          newUser: user,
+          signupMethod: "social",
+        });
+        if (!ref.ok && ref.reason !== "no-code") {
+          console.warn(`[referrals] social capture skipped: ${ref.reason}`);
+        }
       }
     }
 

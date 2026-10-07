@@ -20,7 +20,8 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import DsSurfaceSwitch from "./DsSurfaceSwitch.jsx";
 import { useAuth } from "../store.jsx";
-import { canViewPreview, isStaff } from "../utils/roles.js";
+import { isStaff } from "../utils/roles.js";
+import { seesNewBuild } from "../lib/newBuildAccess.js";
 import { railForViewer } from "../lib/railGate.js";
 import { classicFallbackFor } from "../lib/classicPaths.js";
 import { apiAuthed } from "../api.js";
@@ -76,27 +77,35 @@ function initialsOf(text, fallback) {
  *                                          would. Two tab rows stacked is not a
  *                                          spacing problem, it is two different
  *                                          navigations in the same place.
+ * @param {boolean} [props.full]             full screen: the rail and the app
+ *                                          bar go and the screen takes the
+ *                                          viewport. Only the project
+ *                                          workspace asks for it — a bill of
+ *                                          280 lines beside a 264px rail is
+ *                                          the reason — and the screen that
+ *                                          asks owns the way back out of it.
  */
 export default function DsAppShell({
   children,
   title = "",
   page = "",
   sectionTabs = true,
+  full = false,
 }) {
   const { user, accessToken, clear } = useAuth();
   const staff = isStaff(user);
 
   // This shell wraps ELEVEN CLASSIC screens as well as the new build
-  // (WorkShellRoute, App.jsx:41), so for a customer the rail and the section
-  // tabs above them are full of destinations the route gate will bounce —
-  // fifteen of the seventeen leaf items. Each gated `to` is rewritten to the
-  // classic screen that does the same job, so the navigation still works
-  // instead of quietly throwing them onto /dashboard. See lib/railGate.js.
-  // Staff get the array untouched.
-  const mayUseNewBuild = canViewPreview(user);
+  // (WorkShellRoute, App.jsx:41). Before go-live a customer could not open the
+  // /manage and /work destinations in the rail, so each was rewritten to the
+  // classic screen that does the same job (lib/railGate.js). Since 1 October
+  // the new build is the build and everyone gets the rail untouched — this
+  // used to ask canViewPreview and kept customers on classic after launch.
+  // Raising GATE_NEW_BUILD (lib/newBuildAccess.js) brings the rewrite back.
+  const mayUseNewBuild = seesNewBuild(user);
   const rail = React.useMemo(() => railForViewer(RAIL, mayUseNewBuild), [mayUseNewBuild]);
-  // A new-build destination for staff, its classic counterpart for everyone
-  // else. Used for the links that are not in the rail config.
+  // The new-build destination, or its classic counterpart while the gate is
+  // up for this viewer. Used for the links that are not in the rail config.
   const href = React.useCallback(
     (to) => (mayUseNewBuild ? to : classicFallbackFor(to)),
     [mayUseNewBuild],
@@ -250,7 +259,7 @@ export default function DsAppShell({
   };
 
   return (
-    <div className="ds">
+    <div className={full ? "ds dsh-fs" : "ds"}>
       {/* Every screen inside this shell is behind ProtectedRoute: a crawler
           that reaches one can only be redirected to /login, so indexing it
           spends crawl budget to publish a page nobody can open. robots.txt
@@ -361,7 +370,7 @@ export default function DsAppShell({
                 {/* His switcher, shown only to somebody who holds both
                     surfaces — the same `both` test his dash.js makes. */}
                 {staff && <DsSurfaceSwitch at="account" />}
-                {/* Same rule as the rail: a customer cannot open these yet, so
+                {/* Same rule as the rail: while the gate is up for this viewer
                     they point at the classic screens that answer them. "Billing
                     & invoices" in particular has to reach the invoices, which on
                     classic are on the profile, not the dashboard. */}

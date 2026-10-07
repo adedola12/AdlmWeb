@@ -86,7 +86,7 @@ function LockedOut({ project, canEdit, drift, onGo }) {
           className={ready ? "ds-btn btn-p ds-btn-sm" : "ds-btn btn-o ds-btn-sm"}
           onClick={() => onGo?.("overview")}
         >
-          {ready ? "Lock the contract on the full workspace" : "See the project stages"}
+          {ready ? "Lock the contract on the classic workspace" : "See the project stages"}
         </button>
       ) : null}
     </div>
@@ -101,14 +101,18 @@ function Unlocked({ project, canEdit, view, onView }) {
   // renders once it IS locked.
   const progress = React.useMemo(() => completePercent(project), [project]);
   const contractSum = Number(project?.contract?.contractSum) || totals.total;
+  // What a certificate is drawn against: measured work, sums, preliminaries and
+  // approved variations — not contingency, not VAT. One definition, in
+  // projectTotals, so this screen and the certificate cannot disagree.
+  const worksValue = Number(totals.works) || 0;
 
   const k = React.useMemo(
-    () => valuationKpis(project, { contractSum, progressPercent: progress }),
-    [project, contractSum, progress],
+    () => valuationKpis(project, { contractSum, worksValue, progressPercent: progress }),
+    [project, contractSum, worksValue, progress],
   );
   const bars = React.useMemo(
-    () => certificateBars(project, { contractSum, progressPercent: progress }),
-    [project, contractSum, progress],
+    () => certificateBars(project, { contractSum, worksValue, progressPercent: progress }),
+    [project, contractSum, worksValue, progress],
   );
   const certs = React.useMemo(() => certificatesNewestFirst(project), [project]);
   const settings = project?.valuationSettings || {};
@@ -235,7 +239,7 @@ function Certificates({ bars, certs, contractSum, canEdit }) {
             <b>No valuations yet</b>
             <p>
               {canEdit
-                ? "Record progress on the bill, then raise the first certificate in the full workspace."
+                ? "Record progress on the bill, then raise the first certificate in the classic workspace."
                 : "Nothing has been certified on this contract yet."}
             </p>
           </div>

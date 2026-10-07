@@ -250,6 +250,7 @@ export async function runJob(job, jobs, context) {
     } catch (err) {
       console.error("[scheduled] rollout reminders failed:", err?.message || err);
       out.rolloutReminders = { ok: false, error: String(err?.message || err) };
+    }
     // Build any index a model declares that Atlas does not have yet. The API
     // no longer does this at cold start (util/indexSync.js explains why), so
     // this is where a new index lands, within a day. Own try/catch.
