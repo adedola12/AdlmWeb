@@ -13,6 +13,15 @@ import mongoose from "mongoose";
 const ReleaseCandidateSchema = new mongoose.Schema(
   {
     productKey: { type: String, required: true, trim: true, lowercase: true, index: true },
+
+    // What this release changes. "deployment" is a plugin package (the
+    // original and the default). "setting" is a Setting field that ships to
+    // customers by itself - today only installerHubUrl, which repoints every
+    // customer at a new Installer Hub the moment it is saved.
+    kind: { type: String, enum: ["deployment", "setting"], default: "deployment", index: true },
+    // For kind "setting": the field being changed, and what it is now.
+    settingField: { type: String, trim: true, default: "" },
+    settingPrevious: { type: String, trim: true, default: "" },
     displayName: { type: String, trim: true, default: "" },
     fromVersion: { type: String, trim: true, default: "" },
     toVersion: { type: String, trim: true, default: "" },

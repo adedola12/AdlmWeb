@@ -686,7 +686,7 @@ import {
   buildBoqTemplateWorkbook,
 } from "../util/boqExcelImport.js";
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
-import { generateMlSchedule } from "../util/mlSchedule.js";
+import { generateMlSchedule, isGeneratedRow } from "../util/mlSchedule.js";
 import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
@@ -704,8 +704,15 @@ import { unitsAgree } from "../util/rateSuggestions.js";
 import {
   applyRateRows,
   buildRateBudgetRows,
+  isRateGenRow,
   whyRateCannotPrice,
 } from "../util/rateToBudget.js";
+import {
+  buildUserRateRows,
+  isUserRateLine,
+  resolveUserRate,
+  setUserRateOnItem,
+} from "../util/priceByArea.js";
 import {
   collectBudgetEdits,
   reapplyBudgetEdits,
@@ -719,10 +726,12 @@ import {
 import { resolveProjectAccess as resolveSharedProjectAccess } from "../util/projectAccess.js";
 import { carryCloudRateLocks } from "../util/cloudRateLocks.js";
 import { priceBudgetFromCloud } from "../util/cloudBudgetPricing.js";
+import { sanitizeRoomFinishes } from "../util/roomFinishes.js";
 import {
   sanitizeResourceItems,
   applyResourceRows,
   buildResourcesFromRate,
+  RESOURCE_SOURCE_RATE,
 } from "../util/projectResources.js";
 import {
   BOQ_IMPORT_PRODUCTS,
@@ -887,6 +896,17 @@ function mapEntitlementParam(req, _res, next) {
 
 function requestedProductKey(req) {
   return normalizeProductKey(req.productKeyOriginal ?? req.params.productKey);
+}
+
+// QUIV's per-room finishes (QUIV 4.0.2+). Revit take-offs only: no other
+// plugin measures rooms, and the "-materials" twin never carries them.
+// Returns undefined when the body did not send the list, which every save
+// path reads as "keep what is stored" - an older QUIV, or a website save of
+// the bill, must not wipe the rooms.
+export function roomFinishesFromBody(productKey, body) {
+  if (productKey !== "revit") return undefined;
+  const list = body?.roomFinishes;
+  return Array.isArray(list) ? sanitizeRoomFinishes(list) : undefined;
 }
 
 // ── Collaborator access resolution ───────────────────────────────────────
@@ -1911,46 +1931,100 @@ function applyValuationTracking({
       statusUpdatedAt: previousStatus !== nextStatus ? now : previousUpdatedAt,
     };
 
-    // Emit a valuation event whenever the line's "earned" position changes
-    // — either a binary status flip OR a percent-complete movement. The
-    // event captures the SIGNED value delta so summing positive amounts
-    // gives a daily "value of work done" rollup.
+    // Emit a valuation event whenever the line's "earned" position changes.
+    //
+    // TWO THINGS CAN MOVE IT, AND BOTH HAVE TO BE RECORDED.
+    //
+    //   progress   the percent complete, or a binary status flip
+    //   the price  actualQty or actualRate — a re-measure or a re-rate
+    //
+    // Only the first used to emit anything, and the amount was computed from
+    // the CONTRACT qty x rate. Both were wrong in the same direction, and
+    // together they meant the per-line log could not be reconciled against the
+    // certificate sitting above it:
+    //
+    //   * The certificate values work at the ACTUAL figures when they are
+    //     recorded (earnedLineValue, util/certificateMaths.js:148, which the
+    //     certificate reaches through computeValueToDate). The event valued the
+    //     same transition at the contract rate, so on any re-measured line the
+    //     two documents disagreed — the exact divergence earnedLineValue's own
+    //     docblock claims to have removed.
+    //   * A change to actualQty/actualRate emitted NOTHING, while the
+    //     certificate total absorbed it in full. A QS could record a rate, see
+    //     a real certificate move, and find the period's line log empty.
+    //
+    // So the delta is split in two, and the pair of them always sums to the
+    // true change in this line's cumulative value:
+    //
+    //   progress  earned(new figures, new %) - earned(new figures, old %)
+    //   re-rate   earned(new figures, old %) - earned(old figures, old %)
+    //   -------------------------------------------------------------------
+    //   together  earned(new figures, new %) - earned(old figures, old %)
+    //
+    // which is exactly what the certificate's cumulative-less-previous reads.
+    // The old isPureBinary special case is gone: expressing a status flip as
+    // 0% -> 100% gives the same signed full-line amount it used to, through the
+    // same arithmetic as everything else.
     const previousFactor = previousStatus ? 1 : previousPct / 100;
     const nextFactor = nextStatus ? 1 : nextPct / 100;
-    const factorDelta = nextFactor - previousFactor;
     // Guard against floating-point noise where pct didn't actually change.
     const PCT_EPSILON = 0.001;
     const pctChanged = Math.abs(nextPct - previousPct) > PCT_EPSILON;
     const statusChanged = previousStatus !== nextStatus;
+    const isPureBinary =
+      statusChanged && !pctChanged && previousPct === 0 && nextPct === 0;
+
+    // The percentages the two sides are valued at, so a status flip and a
+    // percent move go through one path.
+    const oldPct = previousFactor * 100;
+    const newPct = nextFactor * 100;
+    const earnedNow = earnedLineValue(nextItem, newPct);
+    const earnedAtOldPct = earnedLineValue(nextItem, oldPct);
+    const earnedBefore = earnedLineValue(previousItem, oldPct);
+    const progressDelta = earnedNow - earnedAtOldPct;
+    const reRateDelta = earnedAtOldPct - earnedBefore;
+
+    // The figures the log prints beside the money, so the columns and the
+    // amount cannot describe different rates.
+    const shownQty = nextActualQty != null ? nextActualQty : safeNum(item?.qty);
+    const shownRate = nextActualRate != null ? nextActualRate : safeNum(item?.rate);
+    const lineIdentity = {
+      itemKey: key,
+      itemSn: safeNum(item?.sn) || index + 1,
+      description: String(item?.description || ""),
+      takeoffLine: String(item?.takeoffLine || ""),
+      materialName: String(item?.materialName || ""),
+      qty: shownQty,
+      unit: String(item?.unit || ""),
+      rate: shownRate,
+      statusField,
+      markedAt: now,
+      markedDay: isoDay(now),
+    };
 
     if (pctChanged || statusChanged) {
-      const lineAmount = safeNum(item?.qty) * safeNum(item?.rate);
-      // For pure binary flips with no percent change recorded, fall back to
-      // the historical behaviour (amount = full line value when ratified,
-      // signed negative when un-ratified) so old reports stay readable.
-      const isPureBinary =
-        statusChanged && !pctChanged && previousPct === 0 && nextPct === 0;
-      const deltaAmount = isPureBinary
-        ? lineAmount * (nextStatus ? 1 : -1)
-        : lineAmount * factorDelta;
-
       valuationEvents.push({
-        itemKey: key,
-        itemSn: safeNum(item?.sn) || index + 1,
-        description: String(item?.description || ""),
-        takeoffLine: String(item?.takeoffLine || ""),
-        materialName: String(item?.materialName || ""),
-        qty: safeNum(item?.qty),
-        unit: String(item?.unit || ""),
-        rate: safeNum(item?.rate),
-        amount: deltaAmount,
-        statusField,
+        ...lineIdentity,
+        amount: progressDelta,
         markedValue: nextStatus || nextFactor > previousFactor,
         previousPercent: previousPct,
         nextPercent: nextPct,
         eventType: pctChanged && !isPureBinary ? "partial" : "binary",
-        markedAt: now,
-        markedDay: isoDay(now),
+      });
+    }
+
+    // A re-rate is not work done, so markedValue is false and the percentages
+    // do not move. Emitted only when it actually changes the money: a recorded
+    // actual that happens to equal the contract figure moves nothing and should
+    // not put a zero row in anybody's valuation.
+    if (Math.abs(reRateDelta) > 0.005) {
+      valuationEvents.push({
+        ...lineIdentity,
+        amount: reRateDelta,
+        markedValue: false,
+        previousPercent: previousPct,
+        nextPercent: previousPct,
+        eventType: "rerate",
       });
     }
 
@@ -1994,14 +2068,26 @@ function buildValuationLogs(project, productKey) {
     if (!day) continue;
 
     const eventKey = String(event?.itemKey || "");
-    const eventType = event?.eventType === "partial" ? "partial" : "binary";
+    // A stored type this reader does not know falls back to "binary", which is
+    // what every event written before these three existed was. "rerate" has to be
+    // named here or it is coerced to binary at the door and nothing below can
+    // tell a re-rate from a ratification.
+    const raw = String(event?.eventType || "");
+    const eventType = raw === "partial" || raw === "rerate" ? raw : "binary";
 
     // Staleness filter — different rule per event type:
     //   • binary: drop unless the item is still ratified
     //   • partial: drop unless the item still has progress (any %)
+    //   • rerate:  same test as partial. It is not progress, but a re-rate on a
+    //     line since zeroed is as stale as the progress that earned it, and
+    //     leaving it in would show money against a line showing none.
     if (eventKey) {
       if (eventType === "binary" && !currentlyMarked.has(eventKey)) continue;
-      if (eventType === "partial" && !currentlyInProgress.has(eventKey)) continue;
+      if (
+        (eventType === "partial" || eventType === "rerate") &&
+        !currentlyInProgress.has(eventKey)
+      )
+        continue;
     }
 
     const byItem = logsByDay.get(day) || new Map();
@@ -2019,22 +2105,48 @@ function buildValuationLogs(project, productKey) {
       // Multiple updates to the same line in one day: aggregate the value
       // delta and span the full % range across the day.
       existing.amount += eventAmount;
-      existing.previousPercent = Math.min(existing.previousPercent, eventPrevPct);
-      existing.nextPercent = Math.max(existing.nextPercent, eventNextPct);
+      // A rerate claims no progress, so it must not drag the row's span down to
+      // its own flat previousPercent === nextPercent. It contributes money only.
+      if (eventType !== "rerate") {
+        existing.previousPercent = Math.min(existing.previousPercent, eventPrevPct);
+        existing.nextPercent = Math.max(existing.nextPercent, eventNextPct);
+      }
       // Latest-event-wins for the markedAt timestamp; if any event in the
       // day ratified the item, the row's eventType escalates to 'binary'
       // so the UI shows the ratified badge.
       existing.markedAt = eventMarkedAtIso;
       existing.markedValue = existing.markedValue || eventMarked;
-      if (eventType === "binary" || eventMarked || eventNextPct >= 100) {
+      existing.reRated = existing.reRated || eventType === "rerate";
+      // Same rule as the first-time branch below, but tested against the row's
+      // AGGREGATED span rather than this one event's. Two moves on one line in one
+      // day — 0% to 60%, then 60% to 100% — are between them a line taken from
+      // nothing to finished, and read as one Completed row; testing the incoming
+      // event alone (60 -> 100) would never see that.
+      if (
+        eventType === "binary" ||
+        (existing.previousPercent <= 0 && existing.nextPercent >= 100)
+      ) {
         existing.eventType = "binary";
       }
     } else {
-      // First time this item appears in this day's log. Escalate the
-      // display type to "binary" when the move lands at 100% (ratified)
-      // so the UI shows a single 'Completed' badge instead of "0 → 100%".
+      // First time this item appears in this day's log.
+      //
+      // `eventMarked` USED TO BE IN THIS CONDITION, AND IT HID EVERY TRANSITION.
+      //
+      // markedValue is set to `nextStatus || nextFactor > previousFactor`
+      // (applyValuationTracking), so it is true for ANY forward move. With it in
+      // the test, every progress row collapsed to the flat "ratified" badge and
+      // the "60% → 100%" chip the client renders for a partial row was
+      // unreachable — the only row that ever showed its percentages was a
+      // REVERSAL, which is the one case where markedValue is false.
+      //
+      // The comment it carried said the escalation was so a move landing at 100%
+      // reads as "Completed" rather than "0 → 100%". That intent is kept, and
+      // narrowed to what it describes: a line taken straight from nothing to
+      // finished. A line that was already part-earned keeps its transition,
+      // which is the whole point of a partial valuation.
       const displayType =
-        eventType === "binary" || eventMarked || eventNextPct >= 100
+        eventType === "binary" || (eventPrevPct <= 0 && eventNextPct >= 100)
           ? "binary"
           : "partial";
       byItem.set(key, {
@@ -2049,6 +2161,10 @@ function buildValuationLogs(project, productKey) {
         nextPercent: eventNextPct,
         eventType: displayType,
         markedValue: eventMarked,
+        // So a screen can say "includes a re-rate" on this row. Nothing renders
+        // it yet; the row's AMOUNT is already right either way, because the two
+        // events for one line on one day aggregate above.
+        reRated: eventType === "rerate",
         markedAt: eventMarkedAtIso,
       });
     }
@@ -2503,6 +2619,8 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
       project.valuationSettings || DEFAULT_VALUATION_SETTINGS,
     );
   }
+  const rooms = roomFinishesFromBody(productKey, payload);
+  if (rooms) project.roomFinishes = rooms;
 
   if (!created) project.version += 1;
   await project.save();
@@ -2608,6 +2726,7 @@ async function createProject(req, res) {
             : true,
       checklistCompositeKeys: normalizeChecklistKeys(checklistCompositeKeys),
       valuationSettings: normalizeValuationSettings(valuationSettings),
+      roomFinishes: roomFinishesFromBody(productKey, req.body) || [],
     });
 
     recordActivity(req, project, ACT.PROJECT_CREATED, "Created the project", {
@@ -2689,6 +2808,8 @@ async function saveProjectFull(req, res) {
         ...sharedMeta,
         items: Array.isArray(takeoffItems) ? takeoffItems : [],
         origin: origin || "",
+        // Rooms belong to the take-off only, never the materials twin.
+        roomFinishes: body.roomFinishes,
       },
     });
 
@@ -3960,6 +4081,11 @@ async function updateProject(req, res) {
     }
 
     if (name !== undefined) project.name = String(name).trim();
+
+    // Sent: replaced whole (QUIV sends every room on each save). Not sent:
+    // kept, so a website edit or an older QUIV never wipes the rooms.
+    const rooms = roomFinishesFromBody(productKey, req.body);
+    if (rooms) project.roomFinishes = rooms;
 
     if (Array.isArray(items)) {
       // A rate the QS set on the website keeps its lock through a plugin re-save
@@ -5631,19 +5757,46 @@ async function exportCertificateXlsx(req, res) {
     const previous = certs.filter((c) => Number(c.number) < number);
     const { exportCertificate } = await import("../util/certificateExporter.js");
 
-    // Rebuild the value-to-date breakdown so the cert workbook can show it.
+    // THE BREAKDOWN IS ONLY PRINTED WHEN IT EXPLAINS *THIS* CERTIFICATE.
+    //
+    // computeValueToDate reads the project as it stands TODAY. The certificate
+    // is a stored document from the day it was issued. Handing the first to the
+    // second produced a workbook that contradicted itself: row A, "Gross value
+    // of work done to date", printed the certificate's own stored
+    // cumulativeValue, while the "Cumulative value breakdown" block beneath it
+    // printed today's figures. Export June's certificate after a July valuation
+    // and the two halves of one page disagreed — on a document that goes to a
+    // client.
+    //
+    // cumulativeValue is exactly measured + variations + provisional +
+    // preliminaryDone (computeValueToDate), so the four parts either add up to
+    // the certificate's own total or they are describing a different day. When
+    // they add up, the breakdown is a true explanation of row A and is printed.
+    // When they do not, it is omitted: the certificate's own totals are
+    // untouched and still correct, and a missing explanation is a great deal
+    // better than a contradictory one.
+    //
+    // Reconstructing the breakdown as it stood at issue needs a per-line
+    // snapshot on the certificate, which it does not carry. That is the next
+    // piece of work, not something to guess at here.
     const rollup = computeValueToDate(project);
+    const stored = cert.toObject ? cert.toObject() : cert;
+    // A tenth of a kobo, to absorb floating-point drift rather than a real move.
+    const explainsThisCertificate =
+      Math.abs(safeNum(rollup.cumulativeValue) - safeNum(stored.cumulativeValue)) < 0.001;
 
     const out = await exportCertificate({
       projectName: project.name || "Project",
-      certificate: cert.toObject ? cert.toObject() : cert,
+      certificate: stored,
       previousCerts: previous.map((c) => (c.toObject ? c.toObject() : c)),
-      breakdown: {
-        measured: rollup.measured,
-        variations: rollup.variationsAmount,
-        provisional: rollup.provisionalAmount,
-        preliminaryDone: rollup.preliminaryDone,
-      },
+      breakdown: explainsThisCertificate
+        ? {
+            measured: rollup.measured,
+            variations: rollup.variationsAmount,
+            provisional: rollup.provisionalAmount,
+            preliminaryDone: rollup.preliminaryDone,
+          }
+        : null,
     });
     return sendXlsx(res, out);
   } catch (err) {
@@ -7173,6 +7326,14 @@ async function priceLineFromRate(req, res) {
 // that was itself priced from a rate on the web; a rate typed into a plugin
 // has no rate behind it to copy, and the line is skipped with that reason.
 //
+// A line can also carry a rate THE USER STATED to Ada and confirmed on her
+// card (3 Oct 2026): `{ code, userRate, unit?, split? }` for "set blockwork to
+// 9,500 per m2", or `{ code, ratePerM2, split? }` for "windows are 88,000 per
+// m2", where the server reads the opening's size off the bill line itself and
+// works the line's rate out (util/priceByArea.js). `split` is the material /
+// labour / overhead-and-profit percentages, 60/20/20 when absent. See
+// applyUserRate for what such a line writes.
+//
 // One save at the end, not one per line: a save per line on a 300-line bill
 // is 300 whole-project writes, and a failure half way would leave half a bill
 // priced with nothing to say which half. Lines that cannot be priced are
@@ -7210,10 +7371,12 @@ async function priceManyFromRates(req, res) {
       return refuseRateMaskedWrite(res, "price bill lines from rates");
     }
 
-    const [merged, ctx] = await Promise.all([
-      loadMergedRates(userId),
-      buildMlScheduleContext(userId),
-    ]);
+    // A stated rate needs neither the library nor the constants: only lines
+    // that name a Rate Gen rate pay for reading them.
+    const needsLibrary = lines.some((l) => !isUserRateLine(l));
+    const [merged, ctx] = needsLibrary
+      ? await Promise.all([loadMergedRates(userId), buildMlScheduleContext(userId)])
+      : [[], null];
 
     // The rate each `sameAs` line points at, read once for all of them.
     const sameAsCodes = [
@@ -7239,6 +7402,8 @@ async function priceManyFromRates(req, res) {
     const warnings = new Set();
     const used = [];
     const seen = new Set();
+    const stated = [];
+    let changed = false;
 
     for (const line of lines) {
       const code = String(line?.code || "").trim();
@@ -7249,6 +7414,20 @@ async function priceManyFromRates(req, res) {
       const item = findBillLine(project, code);
       if (!item) {
         skipped.push({ code, reason: "No bill line with that code" });
+        continue;
+      }
+
+      // A RATE THE USER STATED (Ada's "windows are 88,000 per m2", "set
+      // blockwork to 9,500"). See applyUserRate below.
+      if (isUserRateLine(line)) {
+        const r = resolveUserRate(item, line);
+        if (!r.ok) {
+          skipped.push({ code, reason: r.reason });
+          continue;
+        }
+        if (applyUserRate(project, item, r.rate, r.split)) changed = true;
+        priced.push(code);
+        stated.push({ code, rate: r.rate, split: r.split });
         continue;
       }
 
@@ -7287,19 +7466,38 @@ async function priceManyFromRates(req, res) {
       one.warnings.forEach((w) => warnings.add(String(w)));
       priced.push(code);
       used.push({ item, rate, convert });
+      changed = true;
     }
 
-    if (priced.length) {
+    // Applying the same stated rates twice changes nothing, so it writes
+    // nothing either: no save, no version bump, no activity entry.
+    if (priced.length && changed) {
+      if (stated.length && typeof project.markModified === "function") {
+        project.markModified("items");
+        project.markModified("budgetItems");
+      }
       settlePricedProject(project);
       await project.save();
-      recordActivity(
-        req,
-        project,
-        ACT.BUDGET_UPDATED,
-        `Priced ${priced.length} bill ${priced.length === 1 ? "line" : "lines"} from rates`,
-        { codes: priced.slice(0, 50), count: priced.length, via },
-      );
-      recordRateUsage(userId, project, used, via);
+      const fromLibrary = priced.length - stated.length;
+      if (fromLibrary) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Priced ${fromLibrary} bill ${fromLibrary === 1 ? "line" : "lines"} from rates`,
+          { codes: used.map((u) => String(u.item?.code || "")).slice(0, 50), count: fromLibrary, via },
+        );
+        recordRateUsage(userId, project, used, via);
+      }
+      if (stated.length) {
+        recordActivity(
+          req,
+          project,
+          ACT.BUDGET_UPDATED,
+          `Set ${stated.length} bill ${stated.length === 1 ? "line" : "lines"} to a stated rate`,
+          { codes: stated.map((x) => x.code).slice(0, 50), count: stated.length, via },
+        );
+      }
     }
 
     return res.json({
@@ -7312,6 +7510,62 @@ async function priceManyFromRates(req, res) {
     console.error("priceManyFromRates error:", err);
     return res.status(500).json({ error: "Server error" });
   }
+}
+
+/**
+ * Put a rate the USER stated on one bill line, in memory.
+ *
+ * The line gets the rate and its lock (rateLockedAt), so neither a plugin
+ * re-save (util/cloudRateLocks.js) nor the budget heal moves it. Its Budget
+ * gets ONE Material and ONE Labour row at the bill quantity, priced by the
+ * split, with the overhead/profit share as their overhead %. Those rows sit in
+ * the Rate Gen sn band, so they replace any automatic rows the line had (a
+ * previous pick, the constants generator) and a later Rate Gen pick replaces
+ * them; a row the QS typed survives. The gang a previous pick wrote is cleared:
+ * it described a rate that is no longer the line's.
+ *
+ * Row ids and procurement marks carry across a re-apply, so applying the same
+ * rate twice leaves the project exactly as it was.
+ *
+ * @returns {boolean} whether anything changed
+ */
+function applyUserRate(project, item, rate, split) {
+  const code = String(item?.code || "").trim();
+  const key = code.toLowerCase();
+  const mine = (b) => String(b?.billIdentity || "").trim().toLowerCase() === key;
+  const plain = (b) => (b?.toObject ? b.toObject() : b);
+  const before = (project.budgetItems || []).filter(mine).map(plain);
+  const rows = buildUserRateRows(item, rate, split).map((r) => {
+    const prior = before.find((b) => Number(b?.sn) === r.sn && isRateGenRow(b));
+    return prior?.lineId ? { ...r, lineId: prior.lineId } : r;
+  });
+
+  // What this line's Budget would hold afterwards: everything applyRateRows
+  // keeps (rows the QS typed, plugin rows, coverage rows) and the new rows.
+  const automatic = (b) => isRateGenRow(b) || isGeneratedRow(b);
+  const sig = (list) =>
+    JSON.stringify(
+      list.map((b) => [
+        b.sn, b.componentKind, b.description, b.unit, Number(b.qty), Number(b.rate),
+        Number(b.overheadPercent), Number(b.profitPercent), b.rateSource,
+      ]),
+    );
+  const budgetChanges = sig(before) !== sig(before.filter((b) => !automatic(b)).concat(rows));
+  const staleGang = (project.resourceItems || []).some(
+    (r) => mine(r) && r?.rateSource === RESOURCE_SOURCE_RATE,
+  );
+
+  // Only touch what changes, so a re-apply writes nothing at all.
+  if (budgetChanges) {
+    project.budgetItems = sanitizeBudgetItems(applyRateRows(project.budgetItems, code, rows));
+  }
+  if (staleGang) {
+    project.resourceItems = sanitizeResourceItems(
+      applyResourceRows(project.resourceItems, code, []),
+    );
+  }
+  const itemChanged = setUserRateOnItem(item, rate, split);
+  return itemChanged || budgetChanges || staleGang;
 }
 
 /** A bill line by its code, case-insensitively, the way every caller addresses it. */
@@ -8766,6 +9020,18 @@ router.delete(
   requireStepUp,
   deleteProject,
 );
+
+// Exported for tests only, following the convention in routes/me.js and
+// routes/admin.broadcast.js. These three carry the valuation arithmetic a
+// certificate and its per-line log both depend on, and until now neither could
+// be exercised without standing up a database and a signed-in session — which is
+// why a divergence between them survived as long as it did.
+export const __test = {
+  applyValuationTracking,
+  buildValuationLogs,
+  computeValueToDate,
+  valuationFactor,
+};
 
 export default router;
 

@@ -41,8 +41,12 @@ import * as eventTargets from "aws-cdk-lib/aws-events-targets";
 import * as logs from "aws-cdk-lib/aws-logs";
 
 export interface AdlmReleaseGateStackProps extends StackProps {
-  /** owner/name of the GitHub repository the gate protects. */
-  repo: string;
+  /**
+   * The repositories the gate protects, each with the branch that ships:
+   * "owner/name@branch". The watcher checks every one hourly, and each one's
+   * release-watch.yml may assume the alert role from that branch only.
+   */
+  repos: string[];
   /** SES-verified domain the watcher sends from. */
   mailDomain: string;
   /** Sender address on that domain. */
@@ -106,7 +110,7 @@ export class AdlmReleaseGateStack extends Stack {
       // One run at a time, so two runs never both advance the last-seen commit.
       reservedConcurrentExecutions: 1,
       environment: {
-        REPO: props.repo,
+        REPOS: props.repos.join(","),
         BUCKET: bucket.bucketName,
         PARAM_PREFIX,
         FROM: props.fromAddress,
@@ -141,8 +145,13 @@ export class AdlmReleaseGateStack extends Stack {
       maxSessionDuration: Duration.hours(1),
       assumedBy: new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
         StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-        // Only workflows running from main of this one repository.
-        StringLike: { "token.actions.githubusercontent.com:sub": `repo:${props.repo}:ref:refs/heads/main` },
+        // Only workflows running from the shipping branch of a watched repo.
+        StringLike: {
+          "token.actions.githubusercontent.com:sub": props.repos.map((r) => {
+            const [repo, branch] = r.split("@");
+            return `repo:${repo}:ref:refs/heads/${branch || "main"}`;
+          }),
+        },
       }),
     });
     bucket.grantPut(githubRole, "github/*");

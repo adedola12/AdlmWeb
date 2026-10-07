@@ -78,10 +78,18 @@ const ValuationEventSchema = new mongoose.Schema(
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },
     rate: { type: Number, default: 0 },
-    // For 'binary' events (legacy semantic) amount = qty × rate when ratified,
-    // 0 when unratified. For 'partial' events amount = the value delta moved
-    // by this transition, i.e. qty × rate × (nextPercent − previousPercent) / 100.
-    // Summing positive amounts gives "value of work done in this period".
+    // The SIGNED value this event moved, valued the way the certificate values
+    // it — earnedLineValue, which prefers actualQty/actualRate over the contract
+    // figures. Summing every event for a period therefore reconciles against
+    // that period's certificate, which it did not before: the amount used to be
+    // computed from the contract qty × rate while the certificate used the
+    // actuals, so the two disagreed on any re-measured line.
+    //
+    //   binary / partial   the value moved by a change in PROGRESS
+    //   rerate             the value moved by a change in the PRICE — a
+    //                      re-measure or a re-rate — applied to the portion
+    //                      already earned. previousPercent === nextPercent on
+    //                      these, because no work was done.
     amount: { type: Number, default: 0 },
     statusField: {
       type: String,
@@ -95,7 +103,9 @@ const ValuationEventSchema = new mongoose.Schema(
     nextPercent: { type: Number, default: 0 },
     eventType: {
       type: String,
-      enum: ["binary", "partial"],
+      // "rerate" is additive: every stored event predates it, so nothing needs
+      // migrating and an older reader simply never sees one.
+      enum: ["binary", "partial", "rerate"],
       default: "binary",
     },
     markedAt: { type: Date, default: Date.now },
@@ -886,6 +896,26 @@ const SampleInfoSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// One Revit room as QUIV measures it (QUIV 4.0.2+): floor finish, floor area,
+// skirting run and, when the model has one, the wall finish area. Sent as the
+// top-level `roomFinishes` list on a Revit save and read by Ada's
+// get_room_finishes tool. Numbers are rounded to 2 dp by the save routes
+// (util/roomFinishes.js); wallFinishAreaM2 stays null when the room has none.
+const RoomFinishSchema = new mongoose.Schema(
+  {
+    roomId: { type: Number, default: 0 },
+    name: { type: String, default: "" },
+    number: { type: String, default: "" },
+    level: { type: String, default: "" },
+    floorFinish: { type: String, default: "" },
+    floorAreaM2: { type: Number, default: 0 },
+    skirtingM: { type: Number, default: 0 },
+    wallFinishAreaM2: { type: Number, default: null },
+    elementIds: { type: [Number], default: [] },
+  },
+  { _id: false },
+);
+
 const TakeoffProjectSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -1004,6 +1034,10 @@ const TakeoffProjectSchema = new mongoose.Schema(
       default: () => ({ ...DefaultValuationSettings }),
     },
     valuationEvents: { type: [ValuationEventSchema], default: [] },
+    // Per-room finishes from QUIV (Revit only). Replaced whole by a save that
+    // sends the field; kept as stored by a save that does not. Capped at 5000
+    // rooms by the route sanitiser.
+    roomFinishes: { type: [RoomFinishSchema], default: [] },
     version: { type: Number, default: 1 },
   },
   { timestamps: true },

@@ -15,7 +15,7 @@
 // goes to a provider, and there is no way to ask for it without either sending
 // something or mocking the whole transport — at which point the test asserts
 // what the mock was told rather than what the studio sends. So it reads the
-// fallbacks out of the file. That is a blunter instrument, and it catches
+// default senders out of the file. That is a blunter instrument, and it catches
 // exactly the regression that happened here: somebody types the wrong name.
 
 import { test } from "node:test";
@@ -34,21 +34,19 @@ const mailerSrc =
   ].join("\n");
 
 test("the hard-coded sender names say ADLM Studio", () => {
-  // Both of them: the primary fallback used when EMAIL_FROM is unset, and the
-  // resend.dev one used when the domain is not verified. The second is the one
-  // that gets forgotten, and it is the one a customer sees on the day the
-  // domain verification lapses.
+  // Both defaults: the receipts sender and the announcements sender used when
+  // EMAIL_FROM (or its marketing twin) is unset.
   assert.ok(!/ADLM Services/.test(mailerSrc), 'no "ADLM Services" in mailer.js or senders.js');
 
   const senders = [...mailerSrc.matchAll(/ADLM [A-Za-z]+ </g)].map((m) => m[0]);
-  assert.ok(senders.length >= 2, `expected both fallbacks, found ${senders.length}`);
+  assert.ok(senders.length >= 2, `expected both defaults, found ${senders.length}`);
   for (const s of senders) {
     assert.match(s, /^ADLM Studio </, `sender reads "${s}"`);
   }
 });
 
 test("EMAIL_FROM, where it is set, is a name plus an address", () => {
-  // Resend and nodemailer both accept `Name <addr>`, and both accept a bare
+  // SES accepts `Name <addr>`, and it also accepts a bare
   // address — which is the failure worth catching, because a bare address is
   // not an error anywhere, it just arrives in the inbox with no name on it.
   const envPath = path.join(here, "..", ".env");
