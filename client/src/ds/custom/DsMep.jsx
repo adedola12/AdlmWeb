@@ -7,8 +7,8 @@
 //   d.monthly     the price headline, from GET /products key "mep"
 //   d.priceLine   his yearly / saving / install sentence, rebuilt from the same
 //
-// The fallbacks are his own published figures, so the page reads correctly
-// before the fetch lands and if it fails.
+// The fallback is the shared table in ../catalogueFallback.js, so the page
+// reads correctly before the fetch lands and if it fails.
 
 import React from "react";
 import DsMepPage from "../pages/DsMepPage.jsx";
@@ -17,10 +17,9 @@ import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsMep() {
-  // The fallback is the CATALOGUE value, not his page's. His said "No install
-  // fee" while the catalogue charges ₦20,000; falling back to his figure would
-  // reprint that wrong price every time the API is unreachable.
-  const price = useProductPricing("mep", { monthly: 45000, yearly: 450000, install: 20000 });
+  // The fallback is the CATALOGUE value (../catalogueFallback.js), not his
+  // page's. His said "No install fee" while the catalogue charges ₦20,000.
+  const price = useProductPricing("mep");
   return (
     <DsMepPage
       d={{
