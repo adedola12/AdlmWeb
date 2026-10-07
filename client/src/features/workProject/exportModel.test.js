@@ -1,5 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { exportsFor, noExportsReason } from "./exportModel.js";
+import {
+  exportsFor,
+  noExportsReason,
+  exportMenu,
+  workbookRequest,
+  filenameFrom,
+  safeName,
+} from "./exportModel.js";
+
+// BOTH SIDES WROTE THIS FILE, independently, and both sets of tests are kept.
+// exportModel.js is an add/add from the same merge and exports the union of the
+// two APIs: exportsFor/noExportsReason drive the Exports PANEL
+// (WorkProjectExports.jsx), exportMenu/workbookRequest/filenameFrom drive the
+// Export MENU on the head (WorkProjectHead.jsx, WorkProjectShell.jsx,
+// downloadWorkbook.js). Both have live callers, so neither set is redundant.
+//
+// The merge concatenated the two test files and lost the closing `});` of the
+// last describe on the first side, which left the second side's import inside a
+// block — "'import' and 'export' may only appear at the top level".
 
 // What is OFFERED is the thing to pin. The seven documents are the server's
 // work; the only decision made on the client is which of them this project
@@ -132,7 +150,8 @@ describe("the addresses it builds", () => {
       expect(r.note.length).toBeGreaterThan(10);
       expect(r.label.length).toBeGreaterThan(3);
     }
-import { exportMenu, workbookRequest, filenameFrom, safeName } from "./exportModel.js";
+  });
+});
 
 // The Export menu on the project head calls the same server exports as the
 // classic workspace, so these pin the paths those routes read.

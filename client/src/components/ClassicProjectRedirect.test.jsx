@@ -162,11 +162,8 @@ describe("the route a staff member actually lands on", () => {
     //
     // This is the assertion that would fail if the gate were quietly put back,
     // which is the way a change like this gets reverted: somebody restores a
-    // role check while fixing something nearby.
-  it("opens the new page for a customer too, since go-live", () => {
-    // Until 1 October a customer was left on classic here. That branch outlived
-    // the gate and kept customers' bookmarks and share links on the old screen
-    // after launch (lib/newBuildAccess.js).
+    // role check while fixing something nearby. The answer itself now comes
+    // from lib/newBuildAccess.js, which the route gate and the rail also ask.
     auth.user = { email: "customer@example.com", role: "user" };
     auth.accessToken = "t";
     at("/projects/planswift?project=ysa");

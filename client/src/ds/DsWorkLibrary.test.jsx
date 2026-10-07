@@ -294,72 +294,22 @@ describe("a library bigger than one page", () => {
   });
 });
 
-// ── S18 review, finding 5 ───────────────────────────────────────────────────
-// The server caps one bulk change and skips rows whose price does not move.
-// The screen reported "N prices raised" either way, so a change that half
-// happened read as a change that worked.
-describe("what a bulk price change reports", () => {
-  const catalogue = {
-    materials: [
-      { sn: 1, description: "Cement", unit: "bag", price: 9000, category: "Concrete" },
-      { sn: 2, description: "Sharp sand", unit: "m3", price: 20000, category: "Concrete" },
-    ],
-    labour: [],
-    state: "lagos",
-  };
-
-  function stubWithBulk(bulk) {
-    apiAuthed.mockImplementation(async (path, init) => {
-      if (path.includes("rates/sync")) return { items: [masterRate] };
-      if (path.includes("user-rates"))
-        return { rateOverrides: [], customRates: [], meta: { ratesVersion: 1 } };
-      if (path.includes("price-overrides/bulk")) return bulk;
-      if (path.includes("/rategen/master")) return catalogue;
-      throw new Error(`unstubbed ${path} ${init?.method || ""}`);
-    });
-  }
-
-  async function applyChange() {
-    const r = render(
-      <MemoryRouter initialEntries={["/work/library"]}>
-        <FeedbackProvider>
-          <DsWorkLibrary />
-        </FeedbackProvider>
-      </MemoryRouter>,
-    );
-    await r.findByText("Blockwork 225mm in cement mortar");
-    fireEvent.click(r.getByText("Materials"));
-    await waitFor(() => expect(r.getByText("Update prices").disabled).toBe(false));
-    fireEvent.click(r.getByText("Update prices"));
-    await waitFor(() => expect(document.querySelector(".fb-card")).toBeTruthy());
-    fireEvent.click(document.querySelector(".fb-card .p"));
-    await waitFor(() => expect(document.querySelector(".fb-toast")).toBeTruthy());
-    return document.querySelector(".fb-toast").textContent;
-  }
-
-  it("says how many of the matched rows actually moved", async () => {
-    stubWithBulk({ ok: true, changed: 800, matched: 1400, capped: true, limit: 1000, previous: [] });
-    const said = await applyChange();
-    expect(said).toContain("800 of 1400 prices raised");
-    expect(said).toContain("1400 rows matched");
-    expect(said).toContain("400 were not looked at");
-  });
-
-  it("does not claim a cap that did not happen", async () => {
-    stubWithBulk({ ok: true, changed: 2, matched: 2, capped: false, limit: 1000, previous: [] });
-    const said = await applyChange();
-    expect(said).toContain("2 prices raised by 5%");
-    expect(said).not.toContain("not looked at");
-    expect(said).not.toContain("of 2 prices");
-  });
-
-  it("accounts for rows that matched but did not move", async () => {
-    stubWithBulk({ ok: true, changed: 1, matched: 2, capped: false, limit: 1000, previous: [] });
-    const said = await applyChange();
-    expect(said).toContain("1 of 2 price");
-    expect(said).toContain("1 came to the same figure once rounded");
-  });
-});
+// THE BULK PRICE CHANGE IS GONE, AND SO ARE ITS TESTS.
+//
+// It let a QS change every material in a category by a percentage, via
+// PUT /rategen/price-overrides/bulk. The owner's rule (4 Oct 2026, reaffirmed
+// 6 Oct) is that a rate is built and edited in ADLM Rate Gen desktop and
+// nowhere else, and changing a material price changes what every rate built on
+// it costs, so it is a rate edit too. server/middleware/rateGenOnlyWrites.js
+// names that endpoint explicitly and REFUSES it from a browser, so the control
+// could only ever have failed with "Open Rate Gen on your computer".
+//
+// Three tests covered what it reported (how many rows moved, and not claiming
+// a cap that did not happen). They are removed rather than skipped: the
+// function they drove is gone from DsWorkLibrary.jsx, and a skipped test for a
+// deleted control is an invitation to put it back. What replaces them is the
+// pair below, "building and editing rates is not offered here", which pins the
+// absence instead.
 
 /* ──────── rates are built and edited in Rate Gen desktop ──────── */
 
