@@ -2156,8 +2156,21 @@
  * touch-action:none because it was written for dragging a section. So the pencil
  * invited a drag it cannot do, two inches from a handle that can. Same box, same
  * hover, honest cursor.
+ *
+ * .rnm.rnm, DOUBLED, and not for tidiness.
+ *
+ * The element carries both classes, so these declarations compete head-on with
+ * `.ds .pj-bill .grip` — and at equal specificity THIS FILE LOSES. ds-local.css
+ * rides in the ENTRY bundle while every per-screen sheet (ds-work-proj.css here)
+ * is imported by a React.lazy'd screen, so Vite emits it as its own chunk and the
+ * browser appends it AFTER the entry stylesheet. The header of this file reads as
+ * though it loads last; that is true only of ds.css and ds-feedback.css, which
+ * main.jsx imports just above it.
+ *
+ * So a same-specificity override here does nothing at all, silently. Doubling the
+ * class is the idiom already used further up this file for exactly this reason.
  */
-.ds .pj-bill .rnm{cursor:pointer;touch-action:auto}
+.ds .pj-bill .rnm.rnm{cursor:pointer;touch-action:auto}
 
 /* The lock checklist, inside the side panel.
  *
