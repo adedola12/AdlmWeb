@@ -153,8 +153,28 @@ function classifyText(item) {
 // rendering, not blockwork, so finishes are tested before the structural
 // branches.
 
+
+// "PLANKING AND STRUTTING" IS THE TERM OF ART; BARE "STRUTTING" IS NOT.
+//
+// This listed `planking` and `strutting` as separate excavation verbs, and the
+// test for it runs BEFORE the formwork branch. So "Sawn formwork, props and
+// strutting to slab soffit" — ordinary wording on a Nigerian bill — classified
+// as excavation: no formwork board, no bracing timber, no nails, and labour at
+// the excavation rate, which is per CUBIC metre, applied to SQUARE metres of
+// soffit.
+//
+// What made it invisible is the reconciliation. On a priced line the engine
+// back-solves the gap, so 100 m2 at NGN 4,500 produced ONE labour row at
+// NGN 1,350 with profitPercent 223 — NGN 3,150/m2 booked as profit instead of
+// as board, bracing and nails that have to be bought. The bill still totalled
+// correctly, so the invariant that guards everything else here could not catch
+// it.
+//
+// Only the gerunds triggered it: "...including all necessary struts and props"
+// and "...including propping" were always fine. So the fix is the phrase, plus
+// the guard below.
 const LABOUR_ONLY_RE =
-  /\b(?:excavat|disposal|dispose|cart\s*away|compact|levell?ing|earthwork[\s-]?support|planking|strutting|backfill|back\s*fill|setting[\s-]?out|site\s*clearance|clearing|topsoil|ramming|grading|hand[\s-]?trim)/i;
+  /\b(?:excavat|disposal|dispose|cart\s*away|compact|levell?ing|earthwork[\s-]?support|planking\s*(?:and|&|\/)?\s*strutting|backfill|back\s*fill|setting[\s-]?out|site\s*clearance|clearing|topsoil|ramming|grading|hand[\s-]?trim)/i;
 
 // Discipline detection runs strongest-signal-first. The order matters more than
 // the patterns do: a "PVC pipe to receive underground cables" is electrical
@@ -242,7 +262,15 @@ export function classifyWork(item, K = null) {
   const mep = mepDiscipline(item);
   if (mep) return `mep-${mep}`;
 
-  if (LABOUR_ONLY_RE.test(text)) return "labour-only";
+  // A FORMWORK LINE IS NEVER LABOUR-ONLY.
+  //
+  // Belt and braces beside the phrase fix above: shuttering carries board,
+  // bracing and nails by definition, so whatever excavation verb a QS also
+  // wrote on the line ("strutting", "levelling the soffit", "compacted"), it
+  // cannot be work with no materials. Without this, the next excavation stem
+  // somebody adds to the list silently empties formwork again.
+  const isFormworkText = /\b(?:formwork|shutter|shuttering|soffit|mou?ld)/i.test(text);
+  if (!isFormworkText && LABOUR_ONLY_RE.test(text)) return "labour-only";
 
   // ── area finishes (before the structural branches) ──
   if (unit === "m2") {
@@ -264,7 +292,19 @@ export function classifyWork(item, K = null) {
     )
       return "dpm";
     if (has(text, "poison", "termite", "dieldr")) return "soil-poison";
-    if (has(text, "brc", "mesh", "a142")) return "mesh";
+    // BS 4483 FABRIC IS SPECIFIED BY REF, RIGHT ACROSS THE A-SERIES.
+    //
+    // This matched only "brc", "mesh" and the single ref "a142", so
+    // "Fabric reinforcement ref A252 in raft slab" — routine wording in a
+    // Nigerian structural bill — came back kind=unknown. generateMlSchedule
+    // SKIPS an unknown line, so the mesh carried no material, no labour and no
+    // plant while the bill still totalled correctly: 500 m2 of fabric ordered
+    // as nothing at all.
+    if (
+      has(text, "brc", "mesh") ||
+      /\b(?:fabric\s*reinforc|welded\s*wire\s*fabric|a\s?(?:98|142|193|252|393)\b)/i.test(text)
+    )
+      return "mesh";
     if (has(text, "roof") && has(text, "covering", "sheet", "longspan", "aluminium", "aluminum"))
       return "roof-covering";
   }
@@ -630,8 +670,10 @@ function deriveServiceRows(item, discipline, K, opts) {
   const c =
     opts.serviceConstants?.[type] || SERVICE_TYPE_DEFAULTS[type] || SERVICE_TYPE_DEFAULTS.pipe;
 
-  const libMaterial = num(opts.serviceRateFor?.material?.(name));
-  const libLabour = num(opts.serviceRateFor?.labour?.(name));
+  const libMaterial = num(opts.serviceRateFor?.material?.(name, unit));
+  // an "(installed)" library item is supply-and-fix: its labour is already in it
+  const allIn = libMaterial > 0 && Boolean(opts.serviceRateFor?.allIn?.(name, unit));
+  const libLabour = allIn ? 0 : num(opts.serviceRateFor?.labour?.(name, unit));
   const priced = libMaterial > 0;
 
   const buildup = computeServiceBuildup({
@@ -649,8 +691,8 @@ function deriveServiceRows(item, discipline, K, opts) {
     },
     rates: {
       materialRate: priced ? libMaterial : rate * mShare,
-      labourRate: libLabour > 0 ? libLabour : rate * lShare,
-      connectorRate: priced ? num(opts.serviceRateFor?.material?.("connector")) : 0,
+      labourRate: allIn ? 0 : libLabour > 0 ? libLabour : rate * lShare,
+      connectorRate: priced ? num(opts.serviceRateFor?.material?.("connector", "nr")) : 0,
     },
   });
 
@@ -847,6 +889,30 @@ export function generateMlSchedule(items, budgetItems, K, opts = {}) {
 
     if (!rows.length) continue;
 
+    // A price the QS typed on a generated row is PART OF THE BUILD-UP, so it
+    // has to be here before the markup is solved against it.
+    //
+    // It used to be restored further down, after the solve, which quietly
+    // broke this module's own invariant: the overhead and profit were solved
+    // for one net and then stored against a bigger one, so
+    // deriveBillRatesFromBudget pushed the difference into the bill — and did
+    // it again on every rebuild, because each rebuild solved against the
+    // constants-priced net while the bill kept climbing. Measured on a 100 m³
+    // line at ₦185,000 with cement repriced 9,500 -> 12,000: ₦223,208 after
+    // the edit (right), then ₦269,309, ₦324,931, ₦392,040 on three clicks of
+    // "Rebuild schedule" with nothing else touched. ₦18.5m of work became
+    // ₦39.2m.
+    //
+    // rateToBudget.js:304-312 already restores in this order.
+    for (const r of rows) {
+      const prior = priorEdits.get(
+        [code, r.name, r.unit, r.kind]
+          .map((v) => String(v || "").trim().toLowerCase())
+          .join("|"),
+      );
+      if (prior && num(prior.rate) > 0) r.rate = num(prior.rate);
+    }
+
     // ── reconcile to the bill ──
     // net = what the build-up costs. The bill rate is the sell price. The gap
     // between them IS the overhead and profit, so back-solving it keeps the
@@ -915,7 +981,11 @@ export function generateMlSchedule(items, budgetItems, K, opts = {}) {
       // regenerating the schedule must never wipe their work.
       const prior = priorEdits.get(editKey(row));
       if (prior) {
-        if (num(prior.rate) > 0) row.rate = num(prior.rate);
+        // The rate is NOT restored here. It was put back before the markup
+        // was solved (see above), and restoring it a second time after the
+        // solve is what inflated the bill on every rebuild. It would also
+        // resurrect rates the underpriced branch above deliberately took off,
+        // which is the same mistake wearing a different hat.
         row.procured = Boolean(prior.procured);
         row.procuredAt = prior.procuredAt ?? null;
         row.procuredPercent = num(prior.procuredPercent);

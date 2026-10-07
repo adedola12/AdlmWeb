@@ -165,3 +165,97 @@ test("a brand new rate has nothing to preserve", () => {
   const incoming = normalizeCustomRate(desktopPush());
   assert.equal(preservePlantLines(incoming, null, {}), incoming);
 });
+
+// ── Plant survives a desktop push ──
+//
+// The rate builder files a plant line ONLY in breakdown[] with refKind "plant"
+// — it says so itself: "Plant has no master library of its own (deferred), so a
+// plant line lives in the breakdown with refKind 'plant'." materials[] holds
+// kind === "material" and labour[] holds kind === "labour", nothing else.
+//
+// preservePlantLines looked only at those two arrays, so it found no plant on
+// any rate built on the website, returned the push untouched, and Rate Gen
+// desktop — which cannot send plant back — silently dropped it.
+
+const breakdownPlantRate = () => ({
+  customRateId: "concrete-124",
+  materials: [
+    { description: "Cement", unit: "bag", quantity: 6.4, unitPrice: 800, totalCost: 5120, rateType: "material" },
+  ],
+  labour: [
+    { description: "Mason", unit: "day", quantity: 1, unitPrice: 1000, totalCost: 1000, rateType: "labour" },
+  ],
+  breakdown: [
+    { componentName: "Cement", unit: "bag", quantity: 6.4, unitPrice: 800, lineTotal: 5120, refKind: "material" },
+    { componentName: "Mason", unit: "day", quantity: 1, unitPrice: 1000, lineTotal: 1000, refKind: "labour" },
+    { componentName: "Concrete mixer 10/7", unit: "hr", quantity: 1, unitPrice: 1000, lineTotal: 1000, refKind: "plant" },
+  ],
+  netCost: 7120,
+  overheadPercent: 10,
+  profitPercent: 10,
+  totalCost: 8544,
+});
+
+/** What the desktop sends back: material and labour only. */
+const pushWithoutPlant = () => ({
+  customRateId: "concrete-124",
+  materials: breakdownPlantRate().materials,
+  labour: breakdownPlantRate().labour,
+  netCost: 6120,
+  overheadPercent: 10,
+  profitPercent: 10,
+  totalCost: 7344,
+});
+
+test("a plant line filed in the BREAKDOWN is preserved", () => {
+  const out = preservePlantLines(pushWithoutPlant(), breakdownPlantRate());
+  assert.equal(out.netCost, 7120, "the mixer is still in the net");
+  assert.equal(out.totalCost, 8544, "and in the total");
+  assert.ok(
+    (out.materials || []).some((l) => String(l.rateType) === "plant"),
+    "the plant line is carried",
+  );
+  assert.equal((out.breakdown || []).length, 3, "and the breakdown is rebuilt whole");
+});
+
+test("without the fix the rate would be worth the plant less", () => {
+  // The figures this exists to prevent: 8,544 -> 7,344 on one sync.
+  const stripped = { ...breakdownPlantRate(), breakdown: [], materials: breakdownPlantRate().materials };
+  const out = preservePlantLines(pushWithoutPlant(), stripped);
+  assert.equal(out.netCost, 6120, "nothing to preserve, so the push stands");
+});
+
+test("a client that understands plant stays authoritative", () => {
+  // Including a deliberate deletion — that is the whole point of the flag.
+  const out = preservePlantLines(pushWithoutPlant(), breakdownPlantRate(), { clientSupportsPlant: true });
+  assert.equal(out.netCost, 6120);
+});
+
+test("plant already in the push is not preserved TWICE", () => {
+  const push = {
+    ...pushWithoutPlant(),
+    materials: [
+      ...pushWithoutPlant().materials,
+      { description: "Concrete mixer 10/7", unit: "hr", quantity: 1, unitPrice: 1000, totalCost: 1000, rateType: "plant" },
+    ],
+  };
+  const out = preservePlantLines(push, breakdownPlantRate());
+  const mixers = (out.materials || []).filter((l) =>
+    String(l.description).startsWith("Concrete mixer"),
+  );
+  assert.equal(mixers.length, 1);
+});
+
+test("plant the push carries in its own BREAKDOWN is not duplicated either", () => {
+  const push = {
+    ...pushWithoutPlant(),
+    breakdown: [
+      { componentName: "Concrete mixer 10/7", unit: "hr", quantity: 1, unitPrice: 1000, lineTotal: 1000, refKind: "plant" },
+    ],
+  };
+  const out = preservePlantLines(push, breakdownPlantRate());
+  const mixers = [...(out.materials || []), ...(out.labour || [])].filter((l) =>
+    String(l.description).startsWith("Concrete mixer"),
+  );
+  assert.equal(mixers.length, 0, "already present, so nothing added");
+});

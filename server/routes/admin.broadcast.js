@@ -48,9 +48,8 @@ const DEFAULT_BATCH = 50;
 /**
  * Messages per second, and how many at a time.
  *
- * The old default was two per second with a hard cap of twenty, both invented:
- * Resend and SMTP throttle at rates neither of them publishes, so timid was
- * the only defensible guess. An explicit BROADCAST_RATE_PER_SEC still wins,
+ * The old default was two per second with a hard cap of twenty, both invented
+ * back when mail went through providers that did not publish their rates. An explicit BROADCAST_RATE_PER_SEC still wins,
  * because somebody who has set it has a reason.
  *
  * SES publishes its rate, so on SES the guess is replaced by the real number

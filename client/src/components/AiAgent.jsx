@@ -1,8 +1,17 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
 import ChatMarkdown from "../lib/chatMarkdown.jsx";
+import { agentPageContext } from "../lib/agentPageContext.js";
+import { AdaPricingCard, AdaReportCard } from "../features/ada/AdaCards.jsx";
+import { ADA_OPEN_EVENT } from "../features/ada/adaCardsModel.js";
+// The report a card opens. Lazy, as on every other page that offers it: the
+// report renderer and its PDF exporter are not worth loading for a chat.
+const ReportModal = React.lazy(() => import("../features/reports/ReportModal.jsx"));
+
+// Actions that render as a card under the reply rather than as a link.
+const CARD_TYPES = new Set(["price-proposal", "project-report"]);
 
 /**
  * ADLM AI Agent ("Ada") — a conversion-focused conversational assistant that
@@ -77,27 +86,58 @@ function getSessionId() {
 
 export default function AiAgent() {
   const navigate = useNavigate();
+  // Which project the reader is looking at, so a question about "this job"
+  // does not have to name it. A hint only — the server resolves it against the
+  // caller's own projects (lib/agentPageContext.js).
+  const location = useLocation();
   const { user, accessToken } = useAuth();
 
   const [open, setOpen] = React.useState(false);
 
+  const [input, setInput] = React.useState("");
+  const inputRef = React.useRef(null);
+
+  // Opening with a question already in the box. Used by the live tips ("Ask
+  // Ada to price them") so the user lands on a sentence they only have to
+  // send. Never sent for them: a tip is a suggestion, not a request.
+  const openWith = React.useCallback((prompt) => {
+    setOpen(true);
+    const text = String(prompt || "").trim();
+    if (!text) return;
+    setInput(text);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }, []);
+
   // Richard's screens carry "Ask Ada" buttons marked data-ada-open (the rail,
-  // Guides & docs). Any of them opens this panel.
+  // Guides & docs). Any of them opens this panel; one that also carries
+  // data-ada-prompt puts that question in the box. The tips dispatch
+  // ADA_OPEN_EVENT instead, so they need no element in the DOM.
   React.useEffect(() => {
     const onClick = (e) => {
-      if (e.target.closest?.("[data-ada-open]")) setOpen(true);
+      const el = e.target.closest?.("[data-ada-open]");
+      if (el) openWith(el.getAttribute("data-ada-prompt") || "");
     };
+    const onOpenEvent = (e) => openWith(e?.detail?.prompt || "");
     document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
-  }, []);
-  const [input, setInput] = React.useState("");
+    window.addEventListener(ADA_OPEN_EVENT, onOpenEvent);
+    return () => {
+      document.removeEventListener("click", onClick);
+      window.removeEventListener(ADA_OPEN_EVENT, onOpenEvent);
+    };
+  }, [openWith]);
+  // The report a card asked for: { productKey, projectId, from, to }.
+  const [reportFor, setReportFor] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [messages, setMessages] = React.useState(() => [
     { role: "assistant", text: GREETING, actions: [] },
   ]);
 
   const sessionRef = React.useRef(getSessionId());
-  const inputRef = React.useRef(null);
   const scrollRef = React.useRef(null);
   const idRef = React.useRef(0);
 
@@ -140,8 +180,12 @@ export default function AiAgent() {
           message: text,
           history,
           sessionId: sessionRef.current,
+          ...agentPageContext(location),
           // This chat renders light Markdown (lib/chatMarkdown.jsx).
           format: "markdown",
+          // ...and the pricing and report cards (features/ada), so the API
+          // may offer the estimator tools.
+          cards: true,
         }),
       });
 
@@ -259,11 +303,24 @@ export default function AiAgent() {
                   <div style={{ whiteSpace: "pre-line" }}>{m.text}</div>
                 )}
 
+                {/* Cards first: the pricing confirm list and the report
+                    button. Built only by the server's own tools, never from
+                    anything the model typed. */}
                 {m.role === "assistant" &&
                   Array.isArray(m.actions) &&
-                  m.actions.length > 0 && (
+                  m.actions.map((a, idx) =>
+                    a?.type === "price-proposal" ? (
+                      <AdaPricingCard key={`card-${idx}`} card={a} token={accessToken} />
+                    ) : a?.type === "project-report" ? (
+                      <AdaReportCard key={`card-${idx}`} card={a} onOpen={setReportFor} />
+                    ) : null,
+                  )}
+
+                {m.role === "assistant" &&
+                  Array.isArray(m.actions) &&
+                  m.actions.some((a) => !CARD_TYPES.has(a?.type)) && (
                     <div className="ada-links">
-                      {m.actions.map((a, idx) => (
+                      {m.actions.filter((a) => !CARD_TYPES.has(a?.type)).map((a, idx) => (
                         <a
                           key={idx}
                           href="#"
@@ -358,6 +415,20 @@ export default function AiAgent() {
           </p>
         </section>
       </div>
+
+      {reportFor ? (
+        <React.Suspense fallback={null}>
+          <ReportModal
+            open
+            type="project"
+            productKey={reportFor.productKey}
+            projectId={reportFor.projectId}
+            from={reportFor.from}
+            to={reportFor.to}
+            onClose={() => setReportFor(null)}
+          />
+        </React.Suspense>
+      ) : null}
     </div>
   );
 }

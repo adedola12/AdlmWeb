@@ -1,4 +1,9 @@
 import express from "express";
+import {
+  TRAVEL_RATE_FIELDS,
+  trainingCostEstimate,
+  travelPatch,
+} from "../util/trainingCost.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { TrainingLocation } from "../models/TrainingLocation.js";
 
@@ -12,7 +17,14 @@ router.get("/", async (_req, res) => {
     const locations = await TrainingLocation.find()
       .sort({ createdAt: -1 })
       .lean();
-    return res.json({ ok: true, locations });
+    // Each row carries its own estimate, so the screen can show what a training
+    // there costs to run beside what it is sold for, and flag the ones whose
+    // rates have never been set.
+    return res.json({
+      ok: true,
+      fields: TRAVEL_RATE_FIELDS,
+      locations: locations.map((loc) => ({ ...loc, estimate: trainingCostEstimate(loc) })),
+    });
   } catch (e) {
     console.error("admin training-locations list error:", e);
     return res.status(500).json({ error: "Failed to load training locations" });
@@ -27,6 +39,7 @@ router.post("/", async (req, res) => {
       trainingCostNGN, trainingCostUSD,
       bimInstallCostNGN, bimInstallCostUSD,
       durationDays, isActive,
+      travel,
     } = req.body || {};
 
     if (!name?.trim()) {
@@ -44,9 +57,18 @@ router.post("/", async (req, res) => {
       bimInstallCostUSD: Number(bimInstallCostUSD || 0),
       durationDays: Math.max(Number(durationDays || 1), 1),
       isActive: isActive !== false,
+      // The travel rates on the way in, so a location can be set up in one pass
+      // rather than created and then edited. Dropping them here meant a form
+      // that offered the fields and quietly lost them.
+      travel: travelPatch(travel),
     });
 
-    return res.json({ ok: true, location: loc });
+    return res.json({
+      ok: true,
+      location: loc,
+      // So the form can show what a trip works out to without a second read.
+      estimate: trainingCostEstimate(loc.toObject()),
+    });
   } catch (e) {
     console.error("admin training-locations create error:", e);
     return res.status(500).json({ error: "Failed to create training location" });
@@ -80,11 +102,46 @@ router.put("/:id", async (req, res) => {
       }
     }
 
+    // The travel rates, as a block. Each is a rate somebody maintains, so an
+    // empty string clears it to 0 and util/trainingCost.js then reports it as
+    // missing rather than counting it as free.
+    const patch = travelPatch(req.body.travel);
+    if (patch) Object.assign(loc.travel, patch);
+
     await loc.save();
-    return res.json({ ok: true, location: loc });
+    return res.json({ ok: true, location: loc, estimate: trainingCostEstimate(loc.toObject()) });
   } catch (e) {
     console.error("admin training-locations update error:", e);
     return res.status(500).json({ error: "Failed to update training location" });
+  }
+});
+
+/**
+ * What one training at this location would cost to run.
+ *
+ * Read-only, and it names every rate that is missing rather than quietly
+ * treating it as free — a total that is too low is worse than no total.
+ * people / rooms / days / nights can be overridden for a one-off.
+ */
+router.get("/:id/estimate", async (req, res) => {
+  try {
+    const loc = await TrainingLocation.findById(req.params.id).lean();
+    if (!loc) return res.status(404).json({ error: "Location not found" });
+    const n = (v) => (v === undefined ? undefined : Number(v));
+    return res.json({
+      ok: true,
+      location: { id: String(loc._id), name: loc.name, city: loc.city, state: loc.state },
+      fields: TRAVEL_RATE_FIELDS,
+      ...trainingCostEstimate(loc, {
+        people: n(req.query.people),
+        rooms: n(req.query.rooms),
+        days: n(req.query.days),
+        nights: n(req.query.nights),
+      }),
+    });
+  } catch (e) {
+    console.error("admin training-locations estimate error:", e);
+    return res.status(500).json({ error: "Failed to estimate" });
   }
 });
 

@@ -2,7 +2,7 @@
 //
 // His argument, which the port keeps: nothing gets measured twice. The screen
 // does not ask anybody to type a duration. It reads the quantities QUIV,
-// HERON, Revit MEP and CIVIQ already measured, divides each by the gang output
+// HERON, SERVIQ and CIVIQ already measured, divides each by the gang output
 // for that kind of work, and sequences the trades. Change the crews and the
 // bar moves; every bar is arithmetic on the bill, and the money beside it is
 // the bill's own money.
@@ -52,8 +52,13 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkDropdown from "./WkDropdown.jsx";
 import WkPrefs from "./WkPrefs.jsx";
-import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { useProjectHref } from "../lib/useProjectHref.js";
 import { isMoneyHidden } from "../lib/projectGallery.js";
+
+// Placeholder for a figure this reader may not see. En dash, like everywhere
+// else a value is absent.
+const DASH = "–";
+import { normaliseRollup } from "../lib/projectLinks.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -75,7 +80,7 @@ const when = (d) =>
 const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   civil3d: "CIVIQ",
   archicad: "ArchiCAD",
   "qs-takeoff": "Time Pro",
@@ -339,6 +344,7 @@ const writeStore = (key, value) => {
 };
 
 export default function DsWorkProgramme() {
+  const projectHref = useProjectHref();
   const { accessToken } = useAuth();
   const [params, setParams] = useSearchParams();
   const [projects, setProjects] = React.useState(null);
@@ -367,7 +373,7 @@ export default function DsWorkProgramme() {
         // products nobody had used. But a HERON schedule carries the real
         // trade, quantity and original wording on each labour line, and a
         // CIVIQ road carries its operation in the description — both are
-        // programmes. A Revit MEP schedule is a list of diffuser part numbers
+        // programmes. A SERVIQ schedule is a list of diffuser part numbers
         // with no trade anywhere, and is not.
         //
         // tradedItems is counted server-side in /me/projects-rollup, because
@@ -408,7 +414,11 @@ export default function DsWorkProgramme() {
       }
       f.count += 1;
       f.items += Number(p.itemCount) || 0;
-      f.value += Number(p.totalCost) || 0;
+      // A row whose money is withheld contributes nothing to the value: it now
+      // reads 0 from the API anyway, and adding it would let this total claim
+      // to cover work whose figures the reader is not entitled to.
+      if (!isMoneyHidden(p)) f.value += Number(p.totalCost) || 0;
+      else f.valueHidden = true;
       if (!f.touched || new Date(p.updatedAt) > new Date(f.touched)) f.touched = p.updatedAt;
     }
     return [...by.values()]
@@ -790,7 +800,9 @@ export default function DsWorkProgramme() {
                 </div>
                 <div>
                   <b>{money(f.value)}</b>
-                  <span>value</span>
+                  {/* Say so when the figure covers fewer projects than the
+                      count beside it, rather than letting it read as the whole. */}
+                  <span>{f.valueHidden ? "value (some hidden)" : "value"}</span>
                 </div>
               </div>
             </button>
@@ -798,7 +810,7 @@ export default function DsWorkProgramme() {
           {schedules > 0 && (
             <p className="wk-note prg-aside">
               {schedules} project{schedules === 1 ? " is" : "s are"} not shown, because no line on
-              {schedules === 1 ? " it" : " them"} carries a trade — mostly Revit MEP equipment
+              {schedules === 1 ? " it" : " them"} carries a trade — mostly SERVIQ equipment
               schedules, which are lists of parts rather than work. A programme is a sequence of
               trades, and there is nothing in them to sequence.
             </p>
@@ -831,9 +843,9 @@ export default function DsWorkProgramme() {
               </p>
               <div className="f">
                 <div>
-                  {/* R4b: a row whose money is withheld arrives as zero; say
-                      so with the en dash, never a figure. */}
-                  <b>{isMoneyHidden(p) ? "–" : money(p.totalCost)}</b>
+                  {/* Withheld money arrives as zero; show the en dash, never ₦0.
+                      R4b: say so when it was the owner who withheld it. */}
+                  <b>{isMoneyHidden(p) ? DASH : money(p.totalCost)}</b>
                   <span>{isMoneyHidden(p) && p.moneyHiddenBy === "owner" ? "hidden by the owner" : "bill value"}</span>
                 </div>
                 <div>
@@ -987,7 +999,7 @@ export default function DsWorkProgramme() {
                 r.items.map((g, i) => (
                   <div className="wk-qr" key={`${r.trade}-${i}`}>
                     <span className="d">
-                      <Link to={projectWorkspaceHref(current)}>
+                      <Link to={projectHref(current)}>
                         {g.name}
                       </Link>
                       <em>

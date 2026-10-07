@@ -8,6 +8,7 @@ import { resolveMergedProject } from "../services/projectMerge.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import {
   canExportProject,
+  mayExportRates,
   normalizeId,
   requestUserId,
   userOwnsDoc,
@@ -15,6 +16,7 @@ import {
 import { readerMaySeeRates } from "../util/sharedMoney.js";
 import { isApprovedVariation } from "../util/variationStatus.js";
 import { ownerAllowsMoney } from "../util/ownerMoney.js";
+import { isFolderMarker } from "../util/folderMarker.js";
 
 const router = express.Router();
 
@@ -122,9 +124,12 @@ async function normalizeProjectDoc(doc) {
 // against anyway, so filtering on it only ever produced false "not found"s.
 async function findInTakeoffProjects(id, userId) {
   if (!mongoose.Types.ObjectId.isValid(String(id))) return null;
+  // Samples have no owner (userId null) and are open to every subscriber, read
+  // only. Their banner has always said they can be exported, but this filter
+  // never matched one, so an export depended on the slow legacy scan below.
   const doc = await TakeoffProject.findOne({
     _id: new mongoose.Types.ObjectId(String(id)),
-    $or: [{ userId }, { "collaborators.userId": userId }],
+    $or: [{ userId }, { "collaborators.userId": userId }, { isSample: true }],
   }).lean();
   return doc || null;
 }
@@ -176,6 +181,9 @@ async function findProjectDoc({ tool, id, userId }) {
   if (!userId) return null;
 
   const direct = await findInTakeoffProjects(id, userId);
+  // A sample is for looking at, rates and all, by anyone (util/projectAccess.js
+  // gives it canExport and canSeeRates): neither check below is about a sample.
+  if (direct?.isSample) return normalizeProjectDoc(direct);
   if (direct) {
     // Found and access-filtered by the query. A view-only collaborator can read
     // the project but must not export it.
@@ -264,6 +272,21 @@ async function loadProjectForExport(req, res) {
     });
     return null;
   }
+  // Reaching the project and being allowed its money are two questions. The
+  // second was never asked here, so a full collaborator without RateGen saw
+  // zeroed rates on screen and downloaded the real ones in the workbook.
+  if (!(await mayExportRates(project, userId, { hasRateGen: readerMaySeeRates }))) {
+    res.status(403).json({
+      error:
+        "This project's rates are not visible to you, so its bill cannot be " +
+        "exported. An active RateGen subscription lifts this.",
+      code: "RATES_NOT_VISIBLE",
+    });
+    return null;
+  }
+  // HERON's "--- GF ---" folder markers are not bill lines: left in, the elemental
+  // export files them under "Other items" and the bill-budget export lists them.
+  if (Array.isArray(project.items)) project.items = project.items.filter((it) => !isFolderMarker(it));
   return { project, tool };
 }
 

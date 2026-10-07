@@ -12,7 +12,6 @@ import ServicesPricingPanel from "./ServicesPricingPanel.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
-import { approvedVariationsEarned } from "../../lib/variations.js";
 import { projectTotals } from "./lib/projectTotals.js";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
@@ -711,18 +710,11 @@ export default function ProjectOpenView({
     ],
   );
 
-  // The share of the preliminary pool earned by the preliminary items ticked
-  // complete, pro-rated by allocation. The server does the same sum.
-  const preliminaryEarned = React.useMemo(() => {
-    const rows = Array.isArray(preliminaryItems) ? preliminaryItems : [];
-    const allocated = rows.reduce((acc, p) => acc + (Number(p?.allocation) || 0), 0);
-    const base = allocated > 0 ? allocated : 100;
-    return rows.reduce(
-      (acc, p) =>
-        p?.completed ? acc + (totals.prelims * (Number(p?.allocation) || 0)) / base : acc,
-      0,
-    );
-  }, [preliminaryItems, totals.prelims]);
+  // The share of the preliminary pool earned by the completed preliminary items
+  // used to be recomputed here and added to actualSpent. ProjectsGeneric
+  // already folds it into the valuedAmount it passes down (as
+  // prelimDoneAmountForOverview), so doing it again double-counted it — see
+  // the actualSpent prop below. Removed rather than left unused.
 
   // Budget tab is available for every source (QUIV/Revit, Heron/PlanSwift,
   // MEP, CIVIQ). It shows whatever material/labour breakdown the plugin
@@ -1285,22 +1277,24 @@ export default function ProjectOpenView({
           tax={totals.tax}
           contingencyPercent={contingencyPct}
           taxPercent={taxPct}
-          // Actual spent — measured-valued + executed PC + completed
-          // prelims + executed variations. Drives the over-run vs
-          // planned comparison so the final-account figure reflects
-          // real spend, not BoQ drift. A variation counts here only when it
-          // is BOTH approved and executed, which is the server's rule too
-          // (approvedVariationsEarned in util/variationStatus.js).
-          actualSpent={
-            (valuedAmount || 0) +
-            (provisionalSums || []).reduce(
-              (acc, s) =>
-                s?.completed ? acc + (Number(s?.amount) || 0) : acc,
-              0,
-            ) +
-            approvedVariationsEarned(variations) +
-            preliminaryEarned
-          }
+          // Actual spent — measured-valued + executed PC + completed prelims +
+          // executed variations. Drives the over-run vs planned comparison so
+          // the final-account figure reflects real spend, not BoQ drift.
+          //
+          // That is exactly what `valuedAmount` already is. ProjectsGeneric
+          // passes fullValuedAmount, which it builds as
+          //
+          //   valuedAmount + provDoneAmount + prelimDoneAmountForOverview
+          //     + variationsDoneAmount
+          //
+          // so adding those three again counted every one of them twice and
+          // manufactured an over-run on any job with provisional sums, earned
+          // preliminaries or executed variations — the very phantom over-run the
+          // comment above claimed to have removed. A variation counts here only
+          // when it is BOTH approved and executed, which is the server's rule
+          // too (approvedVariationsEarned in util/variationStatus.js) and is
+          // already how ProjectsGeneric builds variationsDoneAmount.
+          actualSpent={valuedAmount || 0}
           // S18 valuations: the variation rows, and who may act on them.
           variationRows={variations}
           onRaiseVariation={onRaiseVariation}

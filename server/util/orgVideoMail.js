@@ -30,7 +30,7 @@ const SEATS_PATH = process.env.ACCOUNT_SEATS_PATH || "/dashboard";
 const PRODUCT_NAMES = {
   revit: "QUIV (Revit)",
   planswift: "HERON (PlanSwift)",
-  mep: "Revit MEP plugin",
+  mep: "SERVIQ (Revit)",
   civil3d: "CIVIQ (Civil 3D)",
   rategen: "RateGen",
   "qs-takeoff": "ADLM Time Pro",

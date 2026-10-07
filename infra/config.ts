@@ -334,6 +334,30 @@ export interface AdlmConfig {
    *           function. Tighter. Switch to this after the soak.
    */
   functionUrlAuth: "NONE" | "AWS_IAM";
+
+  /**
+   * Give the API FILES_BUCKET (the AdlmFiles stack's bucket), so
+   * server/util/fileStore.js stores NEW private uploads in S3 instead of
+   * Cloudflare R2. Files already in R2 carry storage "r2" and are still read
+   * from there. AdlmApi depends on AdlmFiles, so the bucket exists first.
+   */
+  filesBucket: boolean;
+
+  /**
+   * Only CloudFront may reach the API (owner item 0c, 2026-09-26). CloudFront
+   * adds a secret origin header; server/middleware/originVerify.js checks it.
+   * Used instead of functionUrlAuth "AWS_IAM": CloudFront OAC needs an
+   * x-amz-content-sha256 body hash on every POST/PUT and signs with its own
+   * Authorization header, and no ADLM client sends the hash or anything but
+   * "Authorization: Bearer", so OAC would break every write and sign-in.
+   *
+   * "off"     no header, no check.
+   * "report"  header added; the app logs requests that arrive without it
+   *           ("[origin-verify] would refuse ...") and lets them through.
+   * "enforce" the app refuses them with 403. Move here only after the report
+   *           log shows nothing legitimate calling the Function URL direct.
+   */
+  originVerify: "off" | "report" | "enforce";
 }
 
 export const config: AdlmConfig = {
@@ -372,7 +396,13 @@ export const config: AdlmConfig = {
 
   // Two environments always initialised (~$38.50/month; see the interface).
   // Founder approved keep-warm 2026-09-27. 0 switches it off.
-  apiProvisionedConcurrency: 2,
+  // Parked at 0 on 29 Sep 2026. Turning this on moves the Function URL onto
+  // a new `live` alias, and CloudFormation does that by REPLACING the URL and
+  // its two permissions (plus the scheduler target role). The deploy guard
+  // refuses that - 5 live resources would go - so every API deploy from main
+  // fails and no server change can reach production.
+  // Turn warm environments back on as its own watched deploy.
+  apiProvisionedConcurrency: 0,
 
   // This subscription had LAPSED by September 2026: the topic had no
   // subscribers, so no alarm reached anyone. dolapo836@gmail.com was
@@ -419,6 +449,10 @@ export const config: AdlmConfig = {
     "arn:aws:acm:us-east-1:065634457992:certificate/b8b2a821-6e72-4911-8a12-ba0bdbffcf76",
 
   functionUrlAuth: "NONE",
+
+  filesBucket: true,
+
+  originVerify: "report",
 };
 
 /**

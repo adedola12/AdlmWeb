@@ -15,7 +15,7 @@ export default function DsWorkProjects() {
         <div>
           <h1>Projects</h1>
           <p>
-            Every project starts where its quantities were extracted: QUIV or Revit MEP in Revit, HERON in
+            Every project starts where its quantities were extracted: QUIV or SERVIQ in Revit, HERON in
             PlanSwift, CIVIQ in Civil 3D. From then on it lives here.
           </p>
         </div>

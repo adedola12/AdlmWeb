@@ -1,5 +1,6 @@
 // server/routes/webhooks.js
 import express from "express";
+import { creditReferral } from "../services/referrals.js";
 import { paystackKeys } from "../util/paystackKeys.js";
 import crypto from "crypto";
 import { Purchase } from "../models/Purchase.js";
@@ -86,6 +87,10 @@ router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
       );
       await applyEntitlementsFromPurchase(purchase);
       await autoEnrollFromPurchase(purchase);
+      // The other half of the race with the thank-you page, and the path
+      // Paystack re-delivers. creditReferral is an atomic claim, so whichever
+      // arrives second does nothing.
+      await creditReferral(purchase, "webhook");
     } catch (e) {
       // Crediting failed — clear the applied flag so admin can finish it via
       // the installation-complete flow. Payment itself stays recorded.

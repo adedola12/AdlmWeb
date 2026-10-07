@@ -9,6 +9,12 @@
 //                                           products the user owns or
 //                                           collaborates on
 //
+// The two project reports also take an OPTIONAL ?from=YYYY-MM-DD&to=YYYY-MM-DD.
+// With it, the payload gains `period`: what moved on the job inside that
+// window (services/reportPeriod.js). Without it the payload is byte-for-byte
+// what it always was, so nothing that reads these today changes. A range that
+// does not parse is a 400 rather than a silently unfiltered report.
+//
 // Access mirrors projects.pm.js: reports are cost documents end to end, so
 // the per-project reports require the product entitlement, and a non-owner
 // collaborator additionally needs an active RateGen subscription. The
@@ -22,11 +28,13 @@ import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { User } from "../models/User.js";
 import { ownerAllowsMoney } from "../util/ownerMoney.js";
+import { ActivityLog } from "../models/ActivityLog.js";
 import {
   buildProjectReport,
   buildPmReport,
   buildManagementReport,
 } from "../services/reportEngine.js";
+import { parseReportRange, buildPeriodSummary } from "../services/reportPeriod.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -126,13 +134,55 @@ async function loadProjectForReport(req, res) {
   return project;
 }
 
+// The requested window, or null when none was asked for. Sends the 400 itself
+// and returns false when the range is unreadable, so the caller just stops.
+function readRange(req, res) {
+  const from = req.query?.from;
+  const to = req.query?.to;
+  if (!from && !to) return null;
+  const range = parseReportRange(from, to);
+  if (range.error) {
+    res.status(400).json({ error: range.error, code: "BAD_RANGE" });
+    return false;
+  }
+  return range;
+}
+
+// `period` for a project report. The activity rows are this project's own
+// trail inside the window; capped because a report prints, it does not page.
+async function periodFor(project, range) {
+  const where = { projectId: project._id };
+  if (range.from || range.to) where.createdAt = {};
+  if (range.from) where.createdAt.$gte = range.from;
+  if (range.to) where.createdAt.$lte = range.to;
+  const activity = await ActivityLog.find(where, {
+    createdAt: 1,
+    summary: 1,
+    category: 1,
+    actorName: 1,
+  })
+    .sort({ createdAt: -1 })
+    .limit(300)
+    .lean();
+  // loadProjectForReport already refused a non-owner without RateGen, so
+  // anybody who reaches here may see the money.
+  return {
+    ...buildPeriodSummary(project, { from: range.from, to: range.to, activity }),
+    fromDay: range.fromDay,
+    toDay: range.toDay,
+  };
+}
+
 // ── GET /reports/project/:productKey/:id ──────────────────────────────────
 async function getProjectReport(req, res) {
   try {
+    const range = readRange(req, res);
+    if (range === false) return;
     const project = await loadProjectForReport(req, res);
     if (!project) return;
     const user = await loadReportUser(req);
     const report = buildProjectReport(project);
+    if (range) report.period = await periodFor(project, range);
     report.preparedBy = {
       name:
         [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
@@ -151,10 +201,13 @@ async function getProjectReport(req, res) {
 // ── GET /reports/pm/:productKey/:id ───────────────────────────────────────
 async function getPmReport(req, res) {
   try {
+    const range = readRange(req, res);
+    if (range === false) return;
     const project = await loadProjectForReport(req, res);
     if (!project) return;
     const user = await loadReportUser(req);
     const report = buildPmReport(project);
+    if (range) report.period = await periodFor(project, range);
     report.preparedBy = {
       name:
         [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||

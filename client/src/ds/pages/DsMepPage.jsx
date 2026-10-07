@@ -12,7 +12,7 @@ export default function DsMepPage({ d }) {
       <header className="phero">
         {" "}
         <div className="phero-bg">
-          <img src="/ds/bg-mep.jpg" alt="Revit MEP" />
+          <img src="/ds/bg-mep.jpg" alt="SERVIQ" />
         </div>
         {" "}
         <div className="phero-in">
@@ -56,7 +56,7 @@ export default function DsMepPage({ d }) {
           <div className="hero-cta">
             {" "}
             <Link to="/purchase" data-ds-page="cart" className="ds-btn btn-p">
-              Get Revit MEP
+              Get SERVIQ
             </Link>
             {" "}
             <Link to="/pricing" data-ds-page="pricing" className="ds-btn btn-o">
@@ -86,7 +86,7 @@ export default function DsMepPage({ d }) {
             </span>
             {" "}
             <h2>
-              What Revit MEP does{" "}
+              What SERVIQ does{" "}
               <span className="tone">
                 and how it does it
               </span>
@@ -585,7 +585,7 @@ export default function DsMepPage({ d }) {
             </span>
             {" "}
             <h2>
-              Where Revit MEP{" "}
+              Where SERVIQ{" "}
               <span className="tone">
                 fits in your setup
               </span>
@@ -689,7 +689,7 @@ export default function DsMepPage({ d }) {
             <div className="hero-cta" style={{ justifyContent: "center" }}>
               {" "}
               <Link to="/purchase" data-ds-page="cart" className="ds-btn btn-p">
-                Get Revit MEP
+                Get SERVIQ
               </Link>
               {" "}
               <Link to="/quote" data-ds-page="quote" className="ds-btn btn-o">
@@ -742,7 +742,7 @@ export default function DsMepPage({ d }) {
             </span>
             {" "}
             <h2>
-              About Revit MEP
+              About SERVIQ
             </h2>
             {" "}
           </div>
@@ -756,7 +756,7 @@ export default function DsMepPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes: separate licence, same workspace. QUIV measures the building fabric, Revit MEP measures the services. Many teams run both.
+                Yes: separate licence, same workspace. QUIV measures the building fabric, SERVIQ measures the services. Many teams run both.
               </div>
               {" "}
             </details>
@@ -792,7 +792,7 @@ export default function DsMepPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Not in this plugin. That is Navisworks. Revit MEP is measurement and cost, and it is covered in the MEP course.
+                Not in this plugin. That is Navisworks. SERVIQ is measurement and cost, and it is covered in the MEP course.
               </div>
               {" "}
             </details>
@@ -832,13 +832,13 @@ export default function DsMepPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run Revit MEP against one of your live jobs: your drawings, your rates, your bill format.
+          We'll run SERVIQ against one of your live jobs: your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">
           {" "}
           <Link to="/purchase" data-ds-page="cart" className="ds-btn btn-p">
-            Get Revit MEP
+            Get SERVIQ
           </Link>
           {" "}
           <Link to="/products" data-ds-page="products" className="ds-btn btn-o">

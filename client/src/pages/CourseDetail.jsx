@@ -2,6 +2,7 @@ import React from "react";
 import { uploadSubmission, SUBMISSION_ACCEPT } from "../lib/submissionUpload.js";
 import dayjs from "dayjs";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import DsSampleModels from "../ds/DsSampleModels.jsx";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 import { useFeedback } from "../ds/feedback/feedbackContext.js";
@@ -773,6 +774,14 @@ export default function CourseDetail() {
 
             {tabOn === "resources" ? (
               <>
+                {/* THE COURSE'S MODEL FILE.
+                    The sample-model library had no reader screen at all: an
+                    admin could attach a Revit model to this course and publish
+                    it, and no learner could ever reach it. Filed with the other
+                    resources, scoped to this course, and `quiet` so a course
+                    that ships no model shows nothing rather than an empty box. */}
+                <DsSampleModels courseSku={sku} title="Model files" quiet />
+
                 <div className="lx-res">
                   {softwares.map((s) => {
                     const mb = s.fileSize ? (s.fileSize / (1024 * 1024)).toFixed(1) : null;

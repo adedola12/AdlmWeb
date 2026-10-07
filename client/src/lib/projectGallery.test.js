@@ -33,8 +33,12 @@ describe("stageOf", () => {
   it("reads a withheld row's stage from `priced`, not its zeroed totalCost", () => {
     expect(stageOf(row({ moneyHidden: true, totalCost: 0, priced: true }))).toBe("priced");
     expect(stageOf(row({ moneyHidden: true, totalCost: 0, priced: false }))).toBe("takeoff");
-    // `priced` means nothing on a row whose money is not hidden.
-    expect(stageOf(row({ totalCost: 0, priced: true }))).toBe("takeoff");
+    // A third assertion here used to read: `priced` means nothing on a row whose
+    // money is not hidden — stageOf({ totalCost: 0, priced: true }) === "takeoff".
+    // "prefers the row's own answer over the figure" below asserts the OPPOSITE
+    // for the identical input. Two sessions wrote contradictory tests for one
+    // case and a merge kept both. This one goes: the module reads the stage
+    // rather than inferring it, so an explicit `priced` outranks a zero figure.
   });
 
   it("is Takeoff while nothing is priced", () => {
@@ -43,6 +47,22 @@ describe("stageOf", () => {
 
   it("is Priced once the bill carries money", () => {
     expect(stageOf(row({ totalCost: 12_500 }))).toBe("priced");
+  });
+
+  // A project shared with a reader who may not see rates comes back with its
+  // money zeroed, so the figure cannot answer this — the API sends a `priced`
+  // boolean instead. Reading the withheld totalCost here would send a fully
+  // priced job back to "Takeoff" on somebody else's gallery.
+  it("is still Priced when the money is withheld but the row says it is priced", () => {
+    expect(stageOf(row({ totalCost: 0, moneyHidden: true, priced: true }))).toBe("priced");
+  });
+
+  it("is Takeoff when a withheld row says it is not priced", () => {
+    expect(stageOf(row({ totalCost: 0, moneyHidden: true, priced: false }))).toBe("takeoff");
+  });
+
+  it("prefers the row's own answer over the figure, not the other way round", () => {
+    expect(stageOf(row({ totalCost: 0, priced: true }))).toBe("priced");
   });
 
   it("is Tendered once the bill has gone out", () => {

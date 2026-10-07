@@ -45,6 +45,25 @@ export function apiMongoOptions(env = process.env) {
   const waitQueue = num(env.MONGO_WAIT_QUEUE_TIMEOUT_MS, 10000);
   if (socket > 0) out.socketTimeoutMS = socket;
   if (waitQueue > 0) out.waitQueueTimeoutMS = waitQueue;
+
+  // Keep one pooled connection open (MONGO_MIN_POOL, default 1; 0 = the old
+  // behaviour).
+  //
+  // What this does and does not change: with maxIdleTimeMS unset the driver
+  // never closes an idle connection, so a warm container's pool does not
+  // drain on its own. It is empty only in a new container and right after the
+  // driver CLEARS the pool on a network error, which since the socket
+  // timeout above includes a stalled operation. With a minimum of 1 the driver
+  // reopens a connection in the background straight after connect and after
+  // every clear, so the next request finds one ready instead of paying the
+  // TCP + TLS + auth handshake itself.
+  //
+  // Connection budget is unchanged: the minimum can never exceed maxPoolSize
+  // (MONGO_MAX_POOL), and reserved concurrency in infra/config.ts is already
+  // sized as if every container held its maximum.
+  const maxPool = num(env.MONGO_MAX_POOL, 5);
+  const minPool = Math.min(Math.floor(num(env.MONGO_MIN_POOL, 1)), maxPool);
+  if (minPool > 0) out.minPoolSize = minPool;
   // No index or collection building from API containers. With these on, every
   // cold container queued ~324 createCollection/createIndex commands in its
   // pool ahead of real queries, and a deploy's wave of cold containers made

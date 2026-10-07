@@ -26,7 +26,7 @@ import { ensureRolesSeededOnce } from "./util/rbac.js";
 import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
-import { buildCorsOptions } from "./util/corsPolicy.js";
+import { buildCorsOptions, corsRejectionHandler } from "./util/corsPolicy.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
@@ -39,6 +39,7 @@ import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import { designMode } from "./middleware/designMode.js";
+import { originVerify } from "./middleware/originVerify.js";
 import adminRoutes from "./routes/admin.js";
 import { demoModeGuard } from "./middleware/demoMode.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
@@ -111,6 +112,7 @@ import releaseGatePublic from "./routes/releaseGatePublic.js";
 import adminWork from "./routes/admin.work.js";
 
 import freebiesPublic from "./routes/freebies.js";
+import templateKeysRoutes from "./routes/templateKeys.js";
 import adminFreebies from "./routes/admin.freebies.js";
 import adminFlyers from "./routes/admin.flyers.js";
 import entitlementsRouter from "./routes/entitlements.js";
@@ -143,6 +145,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.set("trust proxy", 1);
+
+/* -------- only CloudFront may call in (see middleware/originVerify.js) -------- */
+app.use(originVerify());
 
 /* -------- CORS (MUST be BEFORE body parsers) -------- */
 // CORS_ORIGINS from env, the vetted production origins, and the API's own
@@ -452,6 +457,8 @@ app.use("/api/telemetry", telemetryTakeoff);
 app.use("/admin/takeoff", adminTakeoff);
 
 app.use("/freebies", freebiesPublic);
+// Content keys for encrypted desktop templates; licence-gated (util/templateKeys.js).
+app.use("/templates", templateKeysRoutes);
 app.use("/admin/freebies", adminFreebies);
 app.use("/admin/flyers", adminFlyers);
 app.use("/admin/training-locations", adminTrainingLocations);
@@ -475,11 +482,15 @@ import adminLearnQueues from "./routes/admin.learnQueues.js";
 import adminCommerce from "./routes/admin.commerce.js";
 import adminCatalogue from "./routes/admin.catalogue.js";
 import adminLearnContent from "./routes/admin.learnContent.js";
+import adminDemoModels from "./routes/admin.demoModels.js";
+import adminReferrals from "./routes/admin.referrals.js";
+import meDemoModels from "./routes/me.demoModels.js";
 import adminDocuments from "./routes/admin.documents.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
+app.use("/admin/referrals", adminReferrals);
 app.use("/admin/org-videos", adminOrgVideos);
 app.use("/me/org-videos", meOrgVideos);
 app.use("/admin/today", adminToday);
@@ -493,6 +504,9 @@ app.use("/admin/commerce", adminCommerce);
 app.use("/admin/catalogue", adminCatalogue);
 app.use("/admin/lc", adminLearnContent);
 app.use("/admin/docs", adminDocuments);
+// Before the /admin catch-all below, or the catch-all answers first.
+app.use("/admin/demo-models", adminDemoModels);
+app.use("/me/demo-models", meDemoModels);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);
 
@@ -561,6 +575,11 @@ if (SERVE_CLIENT && hasClientBuild) {
 }
 
 /* -------- helpful error handling -------- */
+// A refused browser origin: 403 "Not allowed by CORS: <origin>", plus one
+// rate-limited "cors_rejected" log line, because the request never reached
+// morgan above. A malformed or oversized body goes on to the 400 and 413
+// below, whatever it says. See util/corsPolicy.js.
+app.use(corsRejectionHandler());
 app.use((err, _req, res, next) => {
   if (err?.type === "entity.too.large") {
     return res.status(413).json({
@@ -570,9 +589,6 @@ app.use((err, _req, res, next) => {
   }
   if (err?.type === "entity.parse.failed") {
     return res.status(400).json({ error: "Invalid JSON body." });
-  }
-  if (err && /Not allowed by CORS/.test(err.message)) {
-    return res.status(403).json({ error: err.message });
   }
   next(err);
 });

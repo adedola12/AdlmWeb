@@ -12,7 +12,7 @@
 // stored reference is that key, never a public URL. Pure, so it is tested
 // without storage or a database.
 
-import { DOWNLOADS } from "./downloadLinks.js";
+import { DOWNLOADS, isPublicHubCopy } from "./downloadLinks.js";
 
 /** The old public prefix, in R2 and in Cloudinary. Nothing new is written here. */
 export const HUB_PUBLIC_PREFIX = "adlm/installer-hub";
@@ -57,16 +57,10 @@ export const PUBLIC_HUB_COPY_REFUSED =
 /**
  * True when `url` is a public copy under the old Hub prefix (R2's public
  * bucket or Cloudinary). Such a link skips the paid gate, so it must not be
- * saved as the Hub's download reference.
+ * saved as the Hub's download reference — and, since 30 Sep 2026, must not be
+ * SERVED as one either: resolveDownload refuses it on the way out too, because
+ * a value saved before this guard existed kept being handed to customers.
+ *
+ * The test itself lives in downloadLinks.js, beside the references it is about.
  */
-export function isPublicHubCopy(url) {
-  const s = String(url || "").trim();
-  if (!s) return false;
-  let path = s;
-  try {
-    path = decodeURIComponent(new URL(s).pathname);
-  } catch {
-    /* not a URL: check the raw text */
-  }
-  return new RegExp(`(^|/)${HUB_PUBLIC_PREFIX}/`, "i").test(path);
-}
+export { isPublicHubCopy };

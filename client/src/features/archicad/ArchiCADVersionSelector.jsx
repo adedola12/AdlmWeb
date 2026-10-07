@@ -40,7 +40,7 @@ export default function ArchiCADVersionSelector({
             <option key={v.versionId} value={v.versionId}>
               {`v${v.versionNumber}, ${
                 v.extractedAt ? dayjs(v.extractedAt).format("DD MMM YYYY HH:mm") : "unknown date"
-              }, ${fmtMoney(v.grandTotal, currency)}`}
+              }, ${v.moneyHidden ? "–" : fmtMoney(v.grandTotal, currency)}`}
             </option>
           ))}
       </select>

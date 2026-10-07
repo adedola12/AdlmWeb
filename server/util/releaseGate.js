@@ -205,4 +205,15 @@ export function describeCandidate(c) {
   return `<strong>${esc(c.displayName || c.productKey)}</strong> (${esc(c.productKey)}): ${from} &rarr; <strong>v${esc(c.toVersion || "?")}</strong>`;
 }
 
+/** One line describing a staged setting change, for the approver's email. */
+export function describeSettingChange({ label, what, previous, value }) {
+  const from = previous ? `<br>Now: <code>${esc(previous)}</code>` : "";
+  return (
+    `<strong>${esc(label)}</strong>` +
+    (what ? ` — ${esc(what)}.` : "") +
+    from +
+    `<br>Proposed: <code>${esc(value)}</code>`
+  );
+}
+
 export { esc };

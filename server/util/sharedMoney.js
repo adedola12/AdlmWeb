@@ -104,6 +104,14 @@ export {
  * `ownerHidesMoney` flag is always stripped, so it never reaches a client.
  */
 export function maskSharedMoney(rows, canSeeRates, fields = ROLLUP_MONEY_FIELDS) {
+  // Nothing to hide and no internal flag to strip: hand the rows back as they
+  // came (the same array), as before R4b.
+  if (
+    canSeeRates &&
+    !rows.some((p) => p && typeof p === "object" && Object.prototype.hasOwnProperty.call(p, "ownerHidesMoney"))
+  ) {
+    return rows;
+  }
   return rows.map((p) => {
     if (!p || typeof p !== "object") return p;
     const hasFlag = Object.prototype.hasOwnProperty.call(p, "ownerHidesMoney");
@@ -113,7 +121,12 @@ export function maskSharedMoney(rows, canSeeRates, fields = ROLLUP_MONEY_FIELDS)
     const out = { ...p };
     delete out.ownerHidesMoney;
     if (!hide) return out;
-    if ("totalCost" in p) out.priced = Number(p.totalCost) > 0;
+    // Priced means the job carries money at all, not that it has measured
+    // lines: a locked contract with nothing measured yet is still priced. Both
+    // figures are about to be zeroed, so the question is answered first.
+    if ("totalCost" in p || "contractSum" in p) {
+      out.priced = Number(p.totalCost) > 0 || Number(p.contractSum) > 0;
+    }
     for (const f of fields) out[f] = 0;
     out.moneyHidden = true;
     out.moneyHiddenBy = byOwner ? "owner" : "rategen";

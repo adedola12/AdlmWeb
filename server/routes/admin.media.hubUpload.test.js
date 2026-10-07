@@ -49,6 +49,19 @@ Setting.findOneAndUpdate = async (_q, update) => {
   return { installerHubUrl: update.installerHubUrl ?? storedHubUrl };
 };
 
+// The release gate stages a CHANGED Installer Hub link instead of saving it
+// (docs/RELEASE_GATE.md), so the desk and its mail are stubbed too: this file
+// is about the public-copy fail-safe, not about the gate.
+const { ReleaseCandidate } = await import("../models/ReleaseCandidate.js");
+const { ReleaseGateConfig } = await import("../models/ReleaseGateConfig.js");
+let stagedUrl = null;
+ReleaseCandidate.updateMany = async () => ({});
+ReleaseCandidate.create = async (doc) => {
+  stagedUrl = doc.payload?.installerHubUrl ?? null;
+  return { ...doc, _id: "staged-1" };
+};
+ReleaseGateConfig.findById = () => ({ lean: async () => ({ approverEmail: "approver@example.com" }) });
+
 const PUBLIC_BASE = process.env.R2_PUBLIC_BASE_URL;
 
 async function call(path, body) {
@@ -195,11 +208,13 @@ test("an existing value is kept as it stands, so saving the video link does not 
   assert.equal(r.status, 200, r.text);
   assert.equal(saved.installerHubVideoUrl, "https://youtu.be/abc");
 
-  // Clearing it, or a non-public link, is always allowed.
+  // Clearing it is always allowed and is not a release: taking the download
+  // away is the safety action, like switching a product off.
   assert.equal((await call("/admin/settings/installer-hub", { installerHubUrl: "" })).status, 200);
-  assert.equal(
-    (await call("/admin/settings/installer-hub", { installerHubUrl: "https://drive.google.com/file/d/1abcdefghijk/view" })).status,
-    200,
-  );
+  // A different link IS a release now: staged for the approver, not saved.
+  const changed = await call("/admin/settings/installer-hub", { installerHubUrl: "https://drive.google.com/file/d/1abcdefghijk/view" });
+  assert.equal(changed.status, 202, changed.text);
+  assert.equal(changed.body.pendingApproval, true);
+  assert.equal(stagedUrl, "https://drive.google.com/file/d/1abcdefghijk/view");
   storedHubUrl = "";
 });

@@ -608,6 +608,195 @@ const SECTION_META = {
   settings: { label: "Settings", slug: "settings" },
 };
 
+// The rates a trip estimate is built from, in the order somebody fills them.
+// Mirrors server/util/trainingCost.js TRAVEL_RATE_FIELDS — the server is the
+// authority and does the arithmetic; this is the form over it.
+const TRIP_RATES = [
+  {
+    k: "flightNGN",
+    label: "Return airfare, per person",
+    hint: "Leave at 0 for a city the team drives to.",
+  },
+  { k: "hotelPerNightNGN", label: "Hotel, per room per night" },
+  { k: "feedingPerDayNGN", label: "Feeding, per person per day" },
+  {
+    k: "localFareNGN",
+    label: "Local fare, one way",
+    hint: "Bolt or taxi. Used INSTEAD of flights on a road trip.",
+  },
+  { k: "otherNGN", label: "Anything else, per training" },
+];
+
+const naira = (n) =>
+  new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  }).format(Number(n) || 0);
+
+/**
+ * What a physical training costs ADLM to run at this location.
+ *
+ * WHY THE TOTAL IS NOT COMPUTED HERE
+ *
+ * server/util/trainingCost.js already does it — two people, a week, a hotel
+ * unless it is a road trip, feeding over the nights away — and it is tested.
+ * Re-implementing the same arithmetic in the browser so the figure could move
+ * while typing is exactly how two screens come to quote different numbers for
+ * the same trip. So the total shown is the SAVED one, from the server, and it
+ * refreshes on save.
+ *
+ * A missing rate is named rather than treated as zero: a zero silently makes a
+ * trip look cheaper than it is, which is the opposite of the point.
+ */
+function TripCostFields({ form, setForm, supported = true, unknown = false }) {
+  const travel = form.travel || {};
+  const est = form.estimate;
+  const set = (k, v) =>
+    setForm((f) => ({ ...f, travel: { ...(f.travel || {}), [k]: v } }));
+
+  // THE API MAY NOT HAVE THIS YET.
+  //
+  // The client deploys on every push to its branch; the API deploys separately.
+  // In the window between the two, this form renders and the server's PUT does
+  // not read `travel` at all — so a rate typed here would be accepted, saved
+  // with a 200, and silently lost. That is precisely the failure this codebase
+  // keeps producing, so it is said out loud instead. The list response carries
+  // `fields` only when the server knows about travel rates, which is how this
+  // is detected rather than guessed.
+  // The list never loaded, so whether the server supports travel rates is
+  // UNKNOWN. Saying "not available on this server" would be a guess dressed as
+  // a fact — and the wrong one whenever the read simply failed.
+  if (unknown) {
+    return (
+      <div className="mt-4 rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3">
+        <h4 className="font-semibold text-sm">What the trip costs us</h4>
+        <p className="text-xs text-slate-600 mt-1">
+          The location list could not be read, so it is not known whether this server stores
+          travel rates. Reload the page before entering any &mdash; if it does not, what you type
+          here would be saved with a success message and dropped.
+        </p>
+      </div>
+    );
+  }
+
+  if (!supported) {
+    return (
+      <div className="mt-4 rounded-lg bg-amber-50 ring-1 ring-amber-200 p-3">
+        <h4 className="font-semibold text-sm">What the trip costs us</h4>
+        <p className="text-xs text-amber-900 mt-1">
+          Not available on this server yet. The flight, hotel, feeding and local-fare rates are
+          ready in the app but the API has not been deployed with them, and anything typed here
+          would be saved with a success message and quietly dropped. The fields are hidden until
+          the API is updated, rather than taking figures it will lose.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-lg bg-white ring-1 ring-slate-200 p-3">
+      <h4 className="font-semibold text-sm">What the trip costs us</h4>
+      <p className="text-xs text-slate-600 mt-1">
+        The Training Cost above is what the client pays. This is what it costs to send two people
+        for a week. Every figure is a rate maintained here &mdash; there is no flight or hotel
+        feed &mdash; and a rate left at 0 is reported as missing rather than counted as free.
+      </p>
+
+      <div className="grid sm:grid-cols-2 gap-3 text-sm mt-3">
+        {TRIP_RATES.map((f) => (
+          <label key={f.k}>
+            {f.label}
+            <input
+              type="number"
+              min="0"
+              className="input mt-1"
+              value={travel[f.k] ?? 0}
+              onChange={(e) => set(f.k, Math.max(0, Number(e.target.value)))}
+            />
+            {f.hint ? <span className="block text-xs text-slate-500 mt-1">{f.hint}</span> : null}
+          </label>
+        ))}
+
+        <label>
+          Label for &ldquo;anything else&rdquo;
+          <input
+            className="input mt-1"
+            placeholder="Venue hire, printing&hellip;"
+            value={travel.otherLabel || ""}
+            onChange={(e) => set("otherLabel", e.target.value)}
+          />
+        </label>
+
+        <label>
+          How the team gets there
+          {/* Lagos is a Bolt fare, not an airfare, and the difference is two
+              orders of magnitude. The server works it out from the city, so
+              "Decide from the city" is the right default; this is the override
+              for a second base or a city that is a drive away. */}
+          <select
+            className="input mt-1"
+            value={
+              travel.byRoad === true ? "road" : travel.byRoad === false ? "air" : ""
+            }
+            onChange={(e) =>
+              set("byRoad", e.target.value === "road" ? true : e.target.value === "air" ? false : "")
+            }
+          >
+            <option value="">Decide from the city (Lagos drives)</option>
+            <option value="road">By road &mdash; no flights, no hotel</option>
+            <option value="air">By air</option>
+          </select>
+        </label>
+      </div>
+
+      {est ? (
+        <div className="mt-3 border-t pt-3 text-sm">
+          <div className="flex items-baseline justify-between">
+            <b>Two people, {est.assumptions?.days ?? 7} days</b>
+            <b>{naira(est.total)}</b>
+          </div>
+          <ul className="mt-2 space-y-1 text-xs text-slate-600">
+            {(est.lines || []).map((l) => (
+              <li key={l.key} className="flex justify-between gap-3">
+                <span>
+                  {l.label}
+                  <em className="not-italic text-slate-400"> &middot; {l.detail}</em>
+                </span>
+                <span className={l.missing ? "text-rose-600" : ""}>
+                  {l.missing ? "rate not set" : naira(l.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {est.fee ? (
+            <p className="mt-2 text-xs">
+              Fee {naira(est.fee)} &middot;{" "}
+              <b className={est.coversItself ? "text-emerald-700" : "text-rose-600"}>
+                {est.coversItself
+                  ? `covers it, ${naira(est.margin)} over`
+                  : `short by ${naira(-est.margin)}`}
+              </b>
+            </p>
+          ) : null}
+          {est.missing?.length ? (
+            <p className="mt-2 text-xs text-rose-600">
+              Still needs {est.missing.join(", ")}. Until then the total above is too low.
+            </p>
+          ) : null}
+          <p className="mt-2 text-xs text-slate-500">
+            This is the saved estimate. Save to see it change.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-slate-500">
+          Save the location to see what a trip works out to.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Admin({ section = null }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -677,6 +866,10 @@ export default function Admin({ section = null }) {
   const [tLocBusy, setTLocBusy] = React.useState(false);
   const [tLocMsg, setTLocMsg] = React.useState("");
   const [tLocForm, setTLocForm] = React.useState(null); // null = closed, {} = new, {_id} = edit
+  // Whether THIS server can store the travel rates. See loadTLocations.
+  const [tLocTravel, setTLocTravel] = React.useState(false);
+  // Why the list could not be read. "" when it was.
+  const [tLocFailed, setTLocFailed] = React.useState("");
   const [trainingDateModal, setTrainingDateModal] = React.useState({ open: false, purchaseId: null });
   const [trainingDateVal, setTrainingDateVal] = React.useState("");
   const [trainingEndDateVal, setTrainingEndDateVal] = React.useState("");
@@ -840,10 +1033,26 @@ export default function Admin({ section = null }) {
 
   // ── Training Locations helpers ──
   const loadTLocations = React.useCallback(async () => {
+    setTLocFailed("");
     try {
       const data = await apiAuthed("/admin/training-locations", { token: accessToken });
       setTLocations(Array.isArray(data?.locations) ? data.locations : []);
-    } catch { /* ignore */ }
+      // Does this server know about travel rates at all? It says so by sending
+      // TRAVEL_RATE_FIELDS back with the list. Asked rather than assumed,
+      // because the client and the API deploy separately and in between the two
+      // this form would take rates the server drops without a word.
+      setTLocTravel(Array.isArray(data?.fields) && data.fields.length > 0);
+    } catch (e) {
+      // A FAILED READ IS NOT AN EMPTY LIST. Swallowing this left tLocations at
+      // [] with no flag, so the table stated "No training locations yet." — and
+      // a 403 (an adminhub-only role reaching a `trainings` route) read as
+      // "somebody deleted them all". It also left tLocTravel false, so the trip
+      // -cost panel claimed the API lacked the feature when nobody had asked it.
+      setTLocFailed(
+        String(e?.message || "").trim() ||
+          "The training locations could not be read just now.",
+      );
+    }
   }, [accessToken]);
 
   React.useEffect(() => {
@@ -856,13 +1065,16 @@ export default function Admin({ section = null }) {
     setTLocMsg("");
     try {
       const isEdit = !!tLocForm._id;
+      // `estimate` is the SERVER's arithmetic, handed to this form to display.
+      // Posting it back would invite somebody to believe a client could set it.
+      const { estimate: _estimate, ...body } = tLocForm;
       await apiAuthed(
         isEdit ? `/admin/training-locations/${tLocForm._id}` : "/admin/training-locations",
         {
           token: accessToken,
           method: isEdit ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(tLocForm),
+          body: JSON.stringify(body),
         },
       );
       setTLocForm(null);
@@ -4513,6 +4725,23 @@ export default function Admin({ section = null }) {
                   Active
                 </label>
               </div>
+
+              {/* WHAT THE TRIP COSTS US.
+                  The Training Cost above is what the CLIENT pays and does not
+                  move. This is the other side: getting two people there for a
+                  week and keeping them there, so a fee can be set against a real
+                  number. server/util/trainingCost.js does the arithmetic; these
+                  are the rates it reads, and until they were enterable anywhere
+                  every estimate came out at zero with every rate listed as
+                  missing. There is no flight API and no live hotel pricing — a
+                  rate is a figure somebody here maintains. */}
+              <TripCostFields
+                form={tLocForm}
+                setForm={setTLocForm}
+                supported={tLocTravel}
+                unknown={Boolean(tLocFailed)}
+              />
+
               <div className="flex gap-2 mt-3">
                 <button
                   className="btn btn-sm"
@@ -4531,6 +4760,13 @@ export default function Admin({ section = null }) {
             </div>
           )}
 
+          {tLocFailed ? (
+            <div className="mb-3 rounded-lg bg-rose-50 ring-1 ring-rose-200 p-3 text-sm text-rose-900">
+              {tLocFailed} This is not the same as there being none &mdash; nothing below is a
+              complete list until it loads.
+            </div>
+          ) : null}
+
           {/* Locations table */}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -4543,6 +4779,10 @@ export default function Admin({ section = null }) {
                   <th className="py-2 pr-3 text-right">BIM NGN</th>
                   <th className="py-2 pr-3 text-right">BIM USD</th>
                   <th className="py-2 pr-3 text-right">Days</th>
+                  {/* What a training there costs US, beside what it is sold for.
+                      A location whose travel rates have never been set says so
+                      rather than showing 0, which would read as free. */}
+                  <th className="py-2 pr-3 text-right">Trip cost</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Actions</th>
                 </tr>
@@ -4569,6 +4809,43 @@ export default function Admin({ section = null }) {
                     </td>
                     <td className="py-2 pr-3 text-right">
                       {loc.durationDays || 1}
+                    </td>
+                    <td className="py-2 pr-3 text-right whitespace-nowrap">
+                      {loc.estimate?.complete ? (
+                        <span
+                          className={
+                            loc.estimate.fee && !loc.estimate.coversItself ? "text-rose-600" : ""
+                          }
+                          title={
+                            loc.estimate.fee
+                              ? loc.estimate.coversItself
+                                ? `Fee covers it, ${naira(loc.estimate.margin)} over`
+                                : `Fee is short by ${naira(-loc.estimate.margin)}`
+                              : "No fee set against it"
+                          }
+                        >
+                          {Number(loc.estimate.total || 0).toLocaleString()}
+                        </span>
+                      ) : !tLocTravel ? (
+                        // The server predates travel rates entirely. "rates not
+                        // set" would blame the reader for a deploy that has not
+                        // happened.
+                        <span className="text-xs text-slate-400">–</span>
+                      ) : (
+                        // Named, not zeroed. A 0 here would read as "costs
+                        // nothing to run", which is how a trip gets
+                        // under-budgeted.
+                        <span
+                          className="text-xs text-amber-700"
+                          title={
+                            loc.estimate?.missing?.length
+                              ? `Needs ${loc.estimate.missing.join(", ")}`
+                              : undefined
+                          }
+                        >
+                          rates not set
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 pr-3">
                       {loc.isActive ? (
