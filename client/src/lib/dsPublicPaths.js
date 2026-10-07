@@ -24,7 +24,7 @@
 // trainings.html and the manifest has no such slug), so there is nothing to
 // switch it to. It stays classic until he designs one.
 //
-// /product/:key, /quote's thank-you, the course player, checkout and every
+// /quote's thank-you, the course player, checkout and every
 // signed-in screen are out of scope: this list is only the public marketing
 // pages that had a classic page AND have a ported replacement.
 
@@ -47,6 +47,16 @@ export const DS_PUBLIC_PATHS = new Set([
   // has no trainings.html. It renders in DsShell like the rest, so the classic
   // nav and footer must not sit around it.
   "/trainings",
+
+  // His product pages, at the path every link already used (7 Oct 2026).
+  // Listed one by one, not as a /product/ prefix: any other key redirects
+  // (ds/DsProductRoute.jsx), so only these six ever render.
+  "/product/revit",
+  "/product/planswift",
+  "/product/rategen",
+  "/product/mep",
+  "/product/qs-takeoff",
+  "/product/civil3d",
 ]);
 
 /** The slug in ds/pages/manifest.js that serves a given public path. */
