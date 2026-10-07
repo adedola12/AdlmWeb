@@ -91,11 +91,14 @@ describe("ds-local.css against the lazy per-screen sheets", () => {
   for (const c of CONTESTED) {
     it(`out-specifies ${c.what}`, () => {
       const mine = find(local, c.mine, c.prop);
-      const theirs = find(workProj, c.theirs, c.prop);
+      // The bill's .grip was moved out of the generated sheet into ds-local.css
+      // itself (4a5cdaab), further DOWN this file than the pencil's rule, so it
+      // still competes and still wins a tie, on source order this time.
+      const theirs = find(workProj, c.theirs, c.prop) || find(local, c.theirs, c.prop);
       expect(mine, `ds-local.css should carry a ${c.prop} rule matching ${c.mine}`).toBeTruthy();
       expect(
         theirs,
-        `ds-work-proj.css should carry a ${c.prop} rule matching ${c.theirs}`,
+        `ds-work-proj.css or ds-local.css should carry a ${c.prop} rule matching ${c.theirs}`,
       ).toBeTruthy();
       expect(
         specificity(mine.sel),

@@ -2530,3 +2530,18 @@
   border-radius:10px;background:var(--bg);font:400 13px var(--font);color:var(--ink)}
 .ds .pn-rate.off{opacity:.5;cursor:not-allowed}
 .ds .pn-rate.off .w{color:var(--fb-warn,#c98a00)}
+
+/* THE EXPORT MENU, grouped and scrollable.  RECLAIMED, like the block above.
+ *
+ * Hand-written into ds-work-proj.css, which is GENERATED, so the next porter
+ * run (scripts/port-ds-css.mjs) would delete it and WorkProjectHead's Export
+ * menu would lose its grouping and scroll cap. .pj-pop is Richard's; the -x, -g
+ * and -h modifiers are ours and appear in none of his sheets, so nothing here
+ * competes whichever chunk the browser parses first.
+ */
+.ds .pj-pop.pj-pop-x{max-height:min(70vh,560px);overflow-y:auto;min-width:280px}
+.ds .pj-pop .pj-pop-g{margin:8px 10px 2px;font:600 10.5px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.ds .pj-pop .pj-pop-g:first-child{margin-top:4px}
+.ds .pj-pop .pj-pop-g span{margin-left:6px;font-weight:400;letter-spacing:0;text-transform:none}
+.ds .pj-pop .pj-pop-h{margin:0 10px 4px;font:400 12px var(--font);color:var(--ink-3)}
+.ds .pj-pop > button span i{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:2px}

@@ -466,11 +466,6 @@ export default function DsWorkLibrary() {
             quietly come back. The sentence above says where to do it instead,
             because removing a button without saying where it went just makes
             the screen look broken. */}
-        <div className="wk-acts">
-          <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
-            Full library
-          </Link>
-        </div>
       </div>
 
       <div className="wk-bar">

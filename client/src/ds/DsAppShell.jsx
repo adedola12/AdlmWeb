@@ -95,35 +95,6 @@ export default function DsAppShell({
   const { user, accessToken, clear } = useAuth();
   const staff = isStaff(user);
 
-  // EVERY VIEWER GETS THE REAL RAIL (owner, 5 Oct 2026).
-  //
-  // This used to be canViewPreview(user), and for a customer railForViewer
-  // rewrote fifteen of the seventeen leaf items to their classic counterparts
-  // while href() did the same to the brand mark and all three account-menu
-  // items. Nine of those rewrites landed on genuinely classic screens — the
-  // tool pages to /projects/*, the library to /rategen, billing and settings
-  // and activity to /profile, support to /support/request, the programme to
-  // /time-management.
-  //
-  // So flipping where a project OPENS (ClassicProjectRedirect) was half a fix:
-  // a customer landed on the new project page and then every click afterwards
-  // took them back out. This is the other half, and it is the larger one —
-  // it is the whole navigation of the signed-in app.
-  //
-  // The rewriting existed because the route gate used to bounce customers off
-  // the new screens. It no longer does: NewBuildGate returns its children
-  // untouched while GATE_NEW_BUILD is false, so there is nothing left to
-  // protect them from and the rewrite only hides the build they are meant to
-  // be using.
-  //
-  // It was already incoherent, which is the tell. The app-bar search below uses
-  // the RAW rail, so a customer pressing Enter on "Billing" reached
-  // /manage/billing while clicking the menu item beside it went to /profile.
-  //
-  // `staff` above is untouched: that still gates DsSurfaceSwitch, which is a
-  // different question from which build a customer sees.
-  const rail = RAIL;
-  const href = React.useCallback((to) => to, []);
   // This shell wraps ELEVEN CLASSIC screens as well as the new build
   // (WorkShellRoute, App.jsx:41). Before go-live a customer could not open the
   // /manage and /work destinations in the rail, so each was rewritten to the

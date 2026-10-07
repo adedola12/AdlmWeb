@@ -79,13 +79,21 @@ describe("where a project opens at a tab, on the new build", () => {
     );
   });
 
-  it("leaves ArchiCAD and RateGen on their own screens, tab or no tab", () => {
-    // Neither has a page under /work/project, so a tab on the end would be a
+  it("leaves ArchiCAD on its own screen, tab or no tab", () => {
+    // It has no page under /work/project, so a tab on the end would be a
     // parameter a screen that does not read it would ignore.
     expect(newBuildPlaceHref({ productKey: "archicad", key: "villa", tab: "pm" })).toBe(
       "/archicad/villa/boq",
     );
-    expect(newBuildPlaceHref({ productKey: "rategen", key: "x", tab: "bill" })).toBe("/rategen");
+  });
+
+  it("opens a RateGen project (a priced bill) at its tab, like any project", () => {
+    // Since 3cc7b1d8 a RateGen project has a workspace; RateGen with no project
+    // still means the rates page.
+    expect(newBuildPlaceHref({ productKey: "rategen", key: "x", tab: "bill" })).toBe(
+      "/work/project/rategen/x?tab=bill",
+    );
+    expect(newBuildPlaceHref({ productKey: "rategen", key: "", tab: "bill" })).toBe("/rategen");
   });
 
   it("agrees with the plain helper when there is no tab", () => {

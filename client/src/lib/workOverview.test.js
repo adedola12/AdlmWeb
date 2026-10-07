@@ -68,8 +68,13 @@ describe("where a decision opens", () => {
     expect(projectTabHref({ productKey: "archicad", slug: "villa" }, "pm")).toBe("/archicad/villa/boq");
   });
 
-  it("sends RateGen to its own screen too", () => {
-    expect(projectTabHref({ productKey: "rategen", slug: "lib" }, "bill")).toBe("/rategen");
+  it("opens a RateGen project (a priced bill) at its tab, like any project", () => {
+    // A RateGen project saved from Rate Gen's "Price a bill" has a workspace
+    // now (3cc7b1d8); RateGen with no project still means the rates page.
+    expect(projectTabHref({ productKey: "rategen", slug: "lib" }, "bill")).toBe(
+      "/work/project/rategen/lib?tab=bill",
+    );
+    expect(projectTabHref({ productKey: "rategen" }, "bill")).toBe("/rategen");
   });
 });
 

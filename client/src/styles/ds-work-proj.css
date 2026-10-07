@@ -94,13 +94,6 @@
 .ds .pj-pop > button svg{width:15px;height:15px;fill:none;stroke:var(--ink-3);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ds .pj-pop hr{border:0;border-top:1px solid var(--line);margin:5px 4px}
 .ds .pj-pop img{width:22px;height:22px;flex:none}
-/* the Export menu: grouped, and long enough to scroll on a short screen */
-.ds .pj-pop.pj-pop-x{max-height:min(70vh,560px);overflow-y:auto;min-width:280px}
-.ds .pj-pop .pj-pop-g{margin:8px 10px 2px;font:600 10.5px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
-.ds .pj-pop .pj-pop-g:first-child{margin-top:4px}
-.ds .pj-pop .pj-pop-g span{margin-left:6px;font-weight:400;letter-spacing:0;text-transform:none}
-.ds .pj-pop .pj-pop-h{margin:0 10px 4px;font:400 12px var(--font);color:var(--ink-3)}
-.ds .pj-pop > button span i{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:2px}
 .ds .pj-pop .ls{max-height:300px;overflow-y:auto;margin-top:4px}
 .ds .pj-pop .ls b{display:block;font-weight:500;font-size:13px}
 .ds .pj-pop .ls em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3)}

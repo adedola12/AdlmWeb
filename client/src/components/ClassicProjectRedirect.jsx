@@ -59,27 +59,6 @@ export default function ClassicProjectRedirect({ children }) {
     // this product has no such tab — not passed through raw.
     tab: params.get("tab") || "",
     wantsClassic: params.get(CLASSIC_PARAM) === "1",
-    // EVERYBODY, not just staff (owner, 5 Oct 2026).
-    //
-    // This read canViewPreview(user), so the new project page was staff-only
-    // and every paying customer opening a project landed on the classic
-    // workspace — by far the largest remaining route into the old build, and
-    // not one a link sweep would ever have found.
-    //
-    // Two things make the flip safe to make here. The route it sends people to
-    // is not gated: NewBuildGate returns its children untouched while
-    // GATE_NEW_BUILD is false, so there is nothing to bounce back off and no
-    // loop. And classicProjectTarget only redirects when projectWorkspaceHref
-    // answers with a /work/project/ address, which it does not for ArchiCAD or
-    // RateGen — those have no page on the new build and are left exactly where
-    // they are rather than being sent somewhere that does not exist.
-    //
-    // What it does NOT make safe is the gaps. The new workspace cannot upload
-    // an IFC, cannot lock a contract and has no actual-rate input, and those
-    // are being filled after this rather than before it, on the owner's
-    // decision. ?classic=1 below is the way to each of them in the meantime and
-    // must keep working until they are filled — it is the only route to a
-    // capability the new build has not got yet.
     newBuild: seesNewBuild(user),
   });
 

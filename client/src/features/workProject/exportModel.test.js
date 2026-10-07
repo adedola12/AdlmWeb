@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { exportsFor, noExportsReason } from "./exportModel.js";
+import { exportMenu, workbookRequest, filenameFrom, safeName } from "./exportModel.js";
 
 // What is OFFERED is the thing to pin. The seven documents are the server's
 // work; the only decision made on the client is which of them this project
@@ -157,7 +158,9 @@ describe("the addresses it builds", () => {
       expect(r.note.length).toBeGreaterThan(10);
       expect(r.label.length).toBeGreaterThan(3);
     }
-import { exportMenu, workbookRequest, filenameFrom, safeName } from "./exportModel.js";
+  });
+});
+
 
 // The Export menu on the project head calls the same server exports as the
 // classic workspace, so these pin the paths those routes read.
