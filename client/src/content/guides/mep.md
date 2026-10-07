@@ -14,7 +14,7 @@ SERVIQ is ADLM's Revit add-in for measuring the services in a building: ductwork
 
 This guide covers **SERVIQ 2.0** (ServiQ 2.0.0), the new version built on the same design as QUIV 4.0. In Revit it adds a tab called **SERVIQ** with one **ServiQ** button. In the Installer Hub the product is listed as the **Revit MEP Plugin**. It is the same subscription as the old ADLM Revit MEP Suite.
 
-> **Note:** SERVIQ 2.0 is rolling out to every customer at once from 3 October 2026, through the Installer Hub. If your Hub still shows version 1.8.3 and no update, 2.0 has not reached your account yet: click **Refresh** in the Hub later. Version 1.8.3 has the older **ADLM MEP & HVAC** tab with one button per service; see [If you are still on 1.8.3](#if-you-are-still-on-183) at the end of this guide.
+> **Note:** SERVIQ 2.0 is rolling out to every customer at once from 3 October 2026, through the Installer Hub. If your Hub still shows version 1.8.3 and no update, 2.0 has not reached your account yet: click **Refresh** in the Hub later. Version 1.8.3 has the older **ADLM MEP & HVAC** tab with one button per service; see [If you are still on 1.8.3](#if-you-are-still-on-1-8-3) at the end of this guide.
 
 ## What's new in 2.0
 
@@ -85,7 +85,7 @@ The panel opens on its home screen and greets you by name. You sign in once each
 
 No ADLM account yet? Click **Create an account** under "New to ADLM?". It opens the sign-up page on the website.
 
-> **Important:** Your subscription is tied to the computer you first sign in on. To move to a new computer, free the old one first. See [Moving to a new computer](/guides/installer-hub#moving-to-a-new-computer) in the Installer Hub guide.
+> **Important:** Your subscription is tied to the computer you first sign in on. To move to a new computer, free the old one first. See [Moving to a new computer](/guides/installer-hub#move-a-licence-to-a-new-computer) in the Installer Hub guide.
 
 ## Find your way around the panel
 
@@ -367,7 +367,7 @@ How it finds a price:
 
 SERVIQ itself does not show carbon. Carbon for services comes from your Rate Gen rates:
 
-- In Rate Gen 3.0.1, every built-up rate gets an upfront carbon figure in kgCO2e (stages A1 to A5). Building-services rates are listed under **Mechanical**, **Electrical**, **Plumbing** and **Fire**.
+- In Rate Gen 3.0, build 3.0.2610.1, every built-up rate gets an upfront carbon figure in kgCO2e (stages A1 to A5). Building-services rates are listed under **Mechanical**, **Electrical**, **Plumbing** and **Fire**.
 - Copper cable and earthing are weighed from their own names (cores × size of conductor). Insulation and sheath are not counted, so a cable's figure is a minimum.
 - PP-R pressure pipe and uPVC soil pipe are weighed from their sizes.
 - Fittings and manufactured items (AC units, pumps, fans, sanitaryware, light fittings, accessories, fire equipment, tanks) have no carbon figure yet. They need the maker's own figure.
@@ -417,7 +417,7 @@ Where they are switched on:
 
 ### I still see the ADLM MEP & HVAC tab
 
-You are on version 1.8.3. Update from the Hub when it offers 2.0. See [If you are still on 1.8.3](#if-you-are-still-on-183).
+You are on version 1.8.3. Update from the Hub when it offers 2.0. See [If you are still on 1.8.3](#if-you-are-still-on-1-8-3).
 
 ### The docked panel shows only a short hint
 
@@ -429,7 +429,7 @@ Check your email and password by signing in at [adlmstudio.net](/). If you have 
 
 ### "No active MEP subscription or device mismatch."
 
-Either your SERVIQ subscription is not active, or your licence is in use on another computer. Check your [dashboard](/dashboard). If the subscription is active, free the other computer as described in [Moving to a new computer](/guides/installer-hub#moving-to-a-new-computer), then sign in again. Remember that QUIV and SERVIQ are separate subscriptions.
+Either your SERVIQ subscription is not active, or your licence is in use on another computer. Check your [dashboard](/dashboard). If the subscription is active, free the other computer as described in [Moving to a new computer](/guides/installer-hub#move-a-licence-to-a-new-computer), then sign in again. Remember that QUIV and SERVIQ are separate subscriptions.
 
 ### "Internet is required to sign in" or "Network error"
 

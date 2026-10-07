@@ -2,7 +2,7 @@
 id: rategen
 title: ADLM Rate Gen
 tagline: Build defensible rates from material, labour and plant prices for your location, see the upfront carbon of every rate, and price QUIV, HERON, SERVIQ and ADLM Cloud projects from one library.
-version: "3.0.1"
+version: "3.0, build 3.0.2610.1"
 updated: 2026-10-04
 platform: Windows desktop app, plus the read-only RateGen pages on adlmstudio.net
 productKeys: [rategen]
@@ -12,17 +12,17 @@ order: 6
 
 ADLM Rate Gen is ADLM's rate build-up tool for quantity surveyors and estimators. It holds a library of material prices, labour day rates and plant hire rates, priced for the part of Nigeria you work in, and builds up a rate for every item of work: ground works, concrete, blockwork, finishes, roofs, painting, steel, windows and doors, and the four building services. Every rate shows exactly what it is made of, so you can check it, change it and defend it. Every priced rate also carries an upfront carbon figure in kgCO2e. Your library lives on your ADLM account, so QUIV, HERON, SERVIQ and your ADLM Cloud projects all price from the same rates.
 
-This guide covers **Rate Gen 3.0.1**, the new suite design. Rate Gen 3.0.1 is staged for sign-off and reaches you through the Installer Hub. Where a feature arrived in 3.0.0 or 3.0.1, this guide says so.
+This guide covers **Rate Gen 3.0, build 3.0.2610.1**, the new suite design. Rate Gen keeps the version 3.0 through 2026; each release changes only its build number. Build 3.0.2610.1 is staged for sign-off and reaches you through the Installer Hub. Where a feature arrived with this build, this guide says so.
 
 > **Important:** Rates are built only in the Rate Gen desktop app. The RateGen pages on the ADLM website are **read-only**. They show your library and every rate's build-up, but they cannot build a rate, edit a rate, delete a rate or change a material or labour price. To change anything, open Rate Gen on your computer. Your change appears on the website after Rate Gen's next sync.
 
-## What's new in 3.0.1
+## What's new in build 3.0.2610.1
 
-- **Custom rates now download.** Before 3.0.1, Rate Gen never downloaded your custom rates. A rate made on another PC, or on the website before the website became read-only, could be removed from your account at the next sync. Rate Gen now brings every custom rate on your account into **Saved Rates**, at sign-in and at every sync, with its own prices, unit and section. A rate is deleted from your account only when you delete it in Rate Gen. See [Custom rates and sync](#custom-rates-and-sync).
+- **Custom rates now download.** Before build 3.0.2610.1, Rate Gen never downloaded your custom rates. A rate made on another PC, or on the website before the website became read-only, could be removed from your account at the next sync. Rate Gen now brings every custom rate on your account into **Saved Rates**, at sign-in and at every sync, with its own prices, unit and section. A rate is deleted from your account only when you delete it in Rate Gen. See [Custom rates and sync](#custom-rates-and-sync).
 - **Carbon for services cables and pipes.** Copper cable and earthing, PP-R pressure pipe and uPVC soil pipe are now weighed from their own names, so services rates that use them get a carbon figure.
 - **Build with AI is on by default** for everyone signed in. See [AI in Rate Gen](#ai-in-rate-gen).
 
-For everything that changed in 3.0.0, see [What's new in 3.0.0](#whats-new-in-300).
+For everything that changed in 3.0.0, see [What's new in 3.0.0](#what-s-new-in-3-0-0).
 
 ## Before you start
 
@@ -280,7 +280,7 @@ Custom rates are priced from your library, so they follow when you change a libr
 
 ### Custom rates and sync
 
-From version 3.0.1, custom rates sync both ways:
+From build 3.0.2610.1, custom rates sync both ways:
 
 - Rates on your account that this PC does not have are **downloaded** into **Saved Rates**, at sign-in and at every sync.
 - A rate is deleted from your account **only when you delete it in Rate Gen**.
@@ -293,7 +293,7 @@ So a new PC, or a fresh install, brings back all your custom rates when you sign
 
 ## Carbon: kgCO2e on every rate
 
-From version 3.0.0, every priced rate has an upfront carbon figure, worked out from the same materials and quantities as its price. Change a quantity and the price and the carbon move together.
+From version 3.0, every priced rate has an upfront carbon figure, worked out from the same materials and quantities as its price. Change a quantity and the price and the carbon move together.
 
 ### What the figure is
 
@@ -316,7 +316,7 @@ From version 3.0.0, every priced rate has an upfront carbon figure, worked out f
 
 ### Services carbon factors
 
-From version 3.0.1, services rates that use these materials get a carbon figure:
+From build 3.0.2610.1, services rates that use these materials get a carbon figure:
 
 | Material | How it is weighed |
 |---|---|
@@ -341,7 +341,7 @@ ADLM AI suggests; you decide. Nothing it drafts is saved until you save it. For 
 
 ### Build with AI
 
-**Availability:** on for everyone signed in, from version 3.0.1, on by default. It draws on your account's monthly AI allowance (a rate build-up costs 1 unit).
+**Availability:** on for everyone signed in, from build 3.0.2610.1, on by default. It draws on your account's monthly AI allowance (a rate build-up costs 1 unit).
 
 Describe an item of work in one sentence and ADLM AI drafts a full build-up into the custom rate form, for you to check, edit and save.
 
@@ -367,7 +367,7 @@ How it works:
 
 ### Coming: Price a bill
 
-A **Price a bill** screen, which proposes one of your Rate Gen rates for each item in a client's bill, is built but not yet released. It is not in 3.0.1.
+A **Price a bill** screen, which proposes one of your Rate Gen rates for each item in a client's bill, is built but not yet released. It is not in build 3.0.2610.1.
 
 ## Exporting your rates
 
@@ -396,7 +396,7 @@ When you sync by hand, a **Library checked** box lists each step, for example **
 
 ## Connection and working offline
 
-Rate Gen 3.0.1 has no signal bars in the top bar. You can tell how your connection is doing in three ways:
+Rate Gen 3.0, build 3.0.2610.1 has no signal bars in the top bar. You can tell how your connection is doing in three ways:
 
 - **Hover over the sync button.** It shows the last result, such as **Cloud sync: done** or **Cloud sync: failed**.
 - **At start-up,** if ADLM Cloud cannot be reached, a **Working offline** message says that Rate Gen works with the library already on the PC, and that sign-in and sync will work again once the connection allows. It ends with a line for your IT support.
@@ -446,7 +446,7 @@ The build-up page lays one rate out in full under **The build-up**: its material
 
 If a rate's stored net cost is more than its lines add up to, the difference is shown as **Not itemised**. It is part of the rate and is never dropped.
 
-Under **Changing it**, the page explains that it reads the rate and does not change it. The **Open in Rate Gen** link there does not open Rate Gen 3.0.1 yet. Open Rate Gen yourself and search for the rate's name.
+Under **Changing it**, the page explains that it reads the rate and does not change it. The **Open in Rate Gen** link there does not open Rate Gen (build 3.0.2610.1) yet. Open Rate Gen yourself and search for the rate's name.
 
 ### The account view (`/rategen`)
 
@@ -549,7 +549,7 @@ You were offline, or the server did not answer. Your edit is saved on the PC and
 
 ### A custom rate is missing on a new PC
 
-Update to Rate Gen 3.0.1 and sign in. From 3.0.1, Rate Gen downloads every custom rate on your account into **Saved Rates**. Older versions did not.
+Update to Rate Gen 3.0, build 3.0.2610.1, and sign in. From build 3.0.2610.1, Rate Gen downloads every custom rate on your account into **Saved Rates**. Older versions did not.
 
 ### Build with AI turns my request away
 

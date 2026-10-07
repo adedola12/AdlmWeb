@@ -1049,7 +1049,7 @@ From Rate Gen 3.0.0, every built-up rate has a carbon figure, worked out from th
 - **Labour and plant hire carry no material carbon.** Site fuel in a build-up is counted as A5a.
 - **Cement gives a range.** A rate with cement shows a low end and a high end. The high end takes the full cradle-to-gate cement factor. The low end takes the Nigerian producers' own reported figure, which covers only the kiln and its fuel, so it is a floor.
 - **An asterisk (*) marks an assumed mass**, for example a sandcrete block weighed from its standard size rather than from a stated weight.
-- **Services cables and pipes, from Rate Gen 3.0.1.** Copper cable and earth conductor are weighed from the cores and size in their own names, counting the copper only. PP-R pressure pipe and 110 mm uPVC soil pipe are weighed from their standard sizes. Manufactured items such as air conditioners, pumps, sanitaryware and light fittings are left without carbon in Rate Gen, on purpose, because they need the maker's own figure.
+- **Services cables and pipes, from Rate Gen 3.0, build 3.0.2610.1.** Copper cable and earth conductor are weighed from the cores and size in their own names, counting the copper only. PP-R pressure pipe and 110 mm uPVC soil pipe are weighed from their standard sizes. Manufactured items such as air conditioners, pumps, sanitaryware and light fittings are left without carbon in Rate Gen, on purpose, because they need the maker's own figure.
 
 **The factor sources** Rate Gen names are: CIDB Malaysia (2021) *Embodied Carbon Inventory Data for Construction Materials*; IStructE (2020) Table 2.3 (from ICE v3.0 and product EPDs); the UK Government GHG Conversion Factors 2024 for fuels; CARES EPD 0060 (2026) for rebar; and the Dangote Cement and Lafarge Africa 2024 annual reports for the cement low end.
 
@@ -1323,7 +1323,7 @@ One library on your account, priced for your location, with your own build-ups a
 
 ### Tips
 
-> **Important:** Rates are built only in the ADLM Rate Gen desktop app. The website shows your library and every rate's build-up, but it cannot build, edit or delete a rate or change a price. From Rate Gen 3.0.1 your custom rates download to every PC you sign in on, so a rate built on one PC appears on the others.
+> **Important:** Rates are built only in the ADLM Rate Gen desktop app. The website shows your library and every rate's build-up, but it cannot build, edit or delete a rate or change a price. From Rate Gen 3.0, build 3.0.2610.1 your custom rates download to every PC you sign in on, so a rate built on one PC appears on the others.
 
 - Change prices in the library, and quantities in the build-up. A price is shared by every rate that uses it. A quantity belongs to one rate.
 - A project you have already priced keeps its rates. A library change reaches it only when the line is priced again, or when **Follow RateGen changes** is on.
