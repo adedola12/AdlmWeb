@@ -47,9 +47,9 @@ export function taskState(t, now = Date.now(), dueWithinDays = 14) {
 export function projectTabHref(p, tab) {
   const productKey = String(p?.productKey || "").toLowerCase();
   const key = p?.slug || p?.id || p?.projectId || "";
-  // ArchiCAD and RateGen do not open in the tabbed workspace, so a tab would
-  // be a link to a screen that does not exist.
-  if (!tab || !key || productKey === "archicad" || productKey === "rategen") {
+  // ArchiCAD does not open in the tabbed workspace, so a tab would be a link to
+  // a screen that does not exist. A RateGen project (a priced bill) does.
+  if (!tab || !key || productKey === "archicad") {
     return projectWorkspaceHref({ ...p, id: p?.id || p?.projectId });
   }
   return placeHref({ productKey, key, tab });
