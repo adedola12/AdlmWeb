@@ -90,15 +90,34 @@ async function withServer(fn) {
 
 const token = signAccess({ id: String(USER), _id: String(USER), email: "qs@example.com", role: "user" });
 
-const call = (base, path, { method = "GET", body } = {}) =>
-  fetch(`${base}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
+// node:http, not fetch: Node's fetch adds Sec-Fetch-Mode to every request,
+// which the rate write guard (middleware/rateGenOnlyWrites.js) rightly reads
+// as a browser. Rate Gen desktop sends no Sec-Fetch-* and no Origin, and
+// neither does this unless a test passes them.
+const call = (base, path, { method = "GET", body, headers: extra = {} } = {}) => {
+  const headers = { Authorization: `Bearer ${token}`, ...extra };
+  const payload = body ? JSON.stringify(body) : null;
+  if (payload) {
+    headers["Content-Type"] = "application/json";
+    headers["Content-Length"] = Buffer.byteLength(payload);
+  }
+  return new Promise((resolve, reject) => {
+    const req = http.request(`${base}${path}`, { method, headers }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (text += c));
+      res.on("end", () =>
+        resolve({
+          status: res.statusCode,
+          json: async () => (text ? JSON.parse(text) : {}),
+        }),
+      );
+    });
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
   });
+};
 
 // ── rates need a Rate Gen licence ─────────────────────────────────────────
 
@@ -275,4 +294,28 @@ test("compute: a customer's trade default beats the item default; a figure on th
     tradeDefaults: { overheadPercent: 12, profitPercent: 20 },
   });
   assert.deepEqual([given.overheadPercent, given.profitPercent, given.totalCost], [12, 5, 9360]);
+});
+
+// Rates are built in Rate Gen (owner's rule, 4 Oct 2026): the website reads
+// the trade table and the plant library but cannot change them.
+test("a browser may read the trade table and plant library but not write them", async () => {
+  await withServer(async (base) => {
+    const browser = { Origin: "https://adlmstudio.net", "Sec-Fetch-Mode": "cors" };
+    assert.equal(
+      (await call(base, "/rategen-v2/library/trade-margins", { headers: browser })).status,
+      200,
+    );
+    const put = await call(base, "/rategen-v2/library/trade-margins", {
+      method: "PUT",
+      body: { rows: [] },
+      headers: browser,
+    });
+    assert.equal(put.status, 403);
+    assert.equal((await put.json()).code, "RATES_BUILT_IN_RATEGEN");
+    const del = await call(base, "/rategen-v2/library/plant/anything", {
+      method: "DELETE",
+      headers: browser,
+    });
+    assert.equal(del.status, 403);
+  });
 });
