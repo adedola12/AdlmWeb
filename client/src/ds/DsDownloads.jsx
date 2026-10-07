@@ -20,6 +20,7 @@ import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
 import { useAuth } from "../store.jsx";
+import DsSampleModels from "./DsSampleModels.jsx";
 
 const ICONS = {
   revit: "/ds/ic-quiv.png",
@@ -217,8 +218,8 @@ export default function DsDownloads() {
         </p>
         {hubLocked ? (
           <p className="meta">
-            The Installer Hub comes with a paid licence. <Link to="/products">See the products</Link>{" "}
-            to buy or renew one, then download it here.
+            The Installer Hub comes with a licence for one of our desktop products.{" "}
+            <Link to="/products">See the products</Link> to buy or renew one, then download it here.
           </p>
         ) : hub.downloadUrl ? (
           <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl} onClick={freshHub}>
@@ -346,6 +347,12 @@ export default function DsDownloads() {
               </p>
             </div>
           </section>
+
+          {/* The Revit and IFC files courses and demos are built on. The whole
+              reader half of that library had no screen at all: an admin could
+              publish a model and no learner could ever reach it. `quiet` so a
+              practice with none sees nothing rather than an empty panel. */}
+          <DsSampleModels quiet />
 
           <section className="dsh-panel">
             <div className="dsh-ph">

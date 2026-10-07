@@ -167,13 +167,19 @@ test("the same collaborator WITH RateGen sees the shared figures", async () => {
   assert.equal(res.body.projects[0].moneyHidden, undefined);
 });
 
-test("the figures that were always on this route are left exactly as they were", async () => {
+test("measured work, value to date and balance are withheld from a collaborator without RateGen", async () => {
   me = { _id: USER_ID, email: "qs@example.com", entitlements: [] };
-  rows = [project({ shared: true })];
+  rows = [project({ shared: true }), project()];
   const res = await get("/me/projects-rollup");
-  // Masking is limited to what this change added; measured work has been on
-  // this route (and on the per-product list) since long before it.
-  assert.equal(res.body.projects[0].totalCost, 40_000_000);
+  const [theirs, mine] = res.body.projects;
+  // These were left unmasked when the rollup's masking was added, so the
+  // dashboard leaked the value of a job whose rates the project page hides.
+  assert.equal(theirs.totalCost, 0);
+  assert.equal(theirs.valuedAmount, 0);
+  assert.equal(theirs.remainingAmount, 0);
+  assert.equal(theirs.priced, true, "the stage can still tell priced from takeoff");
+  // Their own project is untouched.
+  assert.equal(mine.totalCost, 40_000_000);
 });
 
 test("the estimate is withheld from a collaborator who may not see rates", async () => {

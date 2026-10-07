@@ -754,6 +754,24 @@ export async function parseBoqWorkbook(buffer) {
     if (!n) warnings.push(`Sheet "${sched.ws.name}": no schedule rows found.`);
   }
 
+  // A schedule row whose "Bill S/N" does not resolve to an imported line is
+  // stranded: it belongs to no bill line, so it prices nothing, the line still
+  // reads as unpriced, and the material & labour engine then generates a whole
+  // synthetic schedule on top of the one the QS supplied. Nothing said so — the
+  // import reported the row count and looked like a success. It is said here.
+  const orphans = ctx.budgetItems.filter((b) => !String(b.billIdentity || "").trim());
+  if (orphans.length) {
+    const shown = orphans
+      .slice(0, 3)
+      .map((b) => `"${b.description}"`)
+      .join(", ");
+    warnings.push(
+      `${orphans.length} material/labour row(s) could not be tied to a bill line ` +
+        `and will not price one — check the "Bill S/N" column against the BoQ ` +
+        `sheet's S/N. ${shown}${orphans.length > 3 ? ", …" : ""}`,
+    );
+  }
+
   if (!ctx.items.length) {
     throw importError(
       "No bill lines found in the workbook. Each line needs a Description; download the import template for the expected layout.",

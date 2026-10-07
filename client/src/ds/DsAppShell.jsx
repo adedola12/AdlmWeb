@@ -21,6 +21,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import DsSurfaceSwitch from "./DsSurfaceSwitch.jsx";
 import { useAuth } from "../store.jsx";
 import { isStaff } from "../utils/roles.js";
+import { seesNewBuild } from "../lib/newBuildAccess.js";
+import { railForViewer } from "../lib/railGate.js";
+import { classicFallbackFor } from "../lib/classicPaths.js";
 import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
@@ -65,10 +68,48 @@ function initialsOf(text, fallback) {
  * @param {string} [props.page]              his page name for the current
  *                                          screen, when the route it lives at
  *                                          is not the one the rail links to
+ * @param {boolean} [props.sectionTabs]      false on a screen that carries its
+ *                                          own tab strip. The project page is
+ *                                          the one: his work-project.html is a
+ *                                          bare <div id="pj-app"> in the shell,
+ *                                          and its .pj-tabs (Overview, Bill,
+ *                                          Rates & budget …) sit where these
+ *                                          would. Two tab rows stacked is not a
+ *                                          spacing problem, it is two different
+ *                                          navigations in the same place.
+ * @param {boolean} [props.full]             full screen: the rail and the app
+ *                                          bar go and the screen takes the
+ *                                          viewport. Only the project
+ *                                          workspace asks for it — a bill of
+ *                                          280 lines beside a 264px rail is
+ *                                          the reason — and the screen that
+ *                                          asks owns the way back out of it.
  */
-export default function DsAppShell({ children, title = "", page = "" }) {
+export default function DsAppShell({
+  children,
+  title = "",
+  page = "",
+  sectionTabs = true,
+  full = false,
+}) {
   const { user, accessToken, clear } = useAuth();
   const staff = isStaff(user);
+
+  // This shell wraps ELEVEN CLASSIC screens as well as the new build
+  // (WorkShellRoute, App.jsx:41). Before go-live a customer could not open the
+  // /manage and /work destinations in the rail, so each was rewritten to the
+  // classic screen that does the same job (lib/railGate.js). Since 1 October
+  // the new build is the build and everyone gets the rail untouched — this
+  // used to ask canViewPreview and kept customers on classic after launch.
+  // Raising GATE_NEW_BUILD (lib/newBuildAccess.js) brings the rewrite back.
+  const mayUseNewBuild = seesNewBuild(user);
+  const rail = React.useMemo(() => railForViewer(RAIL, mayUseNewBuild), [mayUseNewBuild]);
+  // The new-build destination, or its classic counterpart while the gate is
+  // up for this viewer. Used for the links that are not in the rail config.
+  const href = React.useCallback(
+    (to) => (mayUseNewBuild ? to : classicFallbackFor(to)),
+    [mayUseNewBuild],
+  );
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -218,7 +259,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
   };
 
   return (
-    <div className="ds">
+    <div className={full ? "ds dsh-fs" : "ds"}>
       {/* Every screen inside this shell is behind ProtectedRoute: a crawler
           that reaches one can only be redirected to /login, so indexing it
           spends crawl budget to publish a page nobody can open. robots.txt
@@ -253,6 +294,8 @@ export default function DsAppShell({ children, title = "", page = "" }) {
           }}
         >
           <DsRailNav
+            rail={rail}
+            homeHref={href("/work")}
             activeId={activeId}
             d={d}
             dots={alertN ? { assignments: { label: `${alertN} assignment${alertN === 1 ? "" : "s"} need${alertN === 1 ? "s" : ""} you` } } : null}
@@ -327,9 +370,13 @@ export default function DsAppShell({ children, title = "", page = "" }) {
                 {/* His switcher, shown only to somebody who holds both
                     surfaces — the same `both` test his dash.js makes. */}
                 {staff && <DsSurfaceSwitch at="account" />}
-                <Link to="/manage">Dashboard</Link>
-                <Link to="/manage/settings">Account settings</Link>
-                <Link to="/manage/billing">Billing &amp; invoices</Link>
+                {/* Same rule as the rail: while the gate is up for this viewer
+                    they point at the classic screens that answer them. "Billing
+                    & invoices" in particular has to reach the invoices, which on
+                    classic are on the profile, not the dashboard. */}
+                <Link to={href("/manage")}>Dashboard</Link>
+                <Link to={href("/manage/settings")}>Account settings</Link>
+                <Link to={href("/manage/billing")}>Billing &amp; invoices</Link>
                 {/* His rule mutes it: .dsh-menu a.out { color: var(--ink-3) }.
                     Sign out is the one item nobody should hit by accident, so
                     it reads quieter than the things you came here to do. */}
@@ -340,8 +387,12 @@ export default function DsAppShell({ children, title = "", page = "" }) {
             </span>
           </header>
 
-          {/* R03: this section's destinations as tabs, from the rail config. */}
-          <DsSectionTabs activeId={activeId} owned={owned} />
+          {/* R03: this section's destinations as tabs, from the rail config.
+              Suppressed on a screen that has its own tab strip — see the
+              sectionTabs prop. The rail still carries every destination. */}
+          {sectionTabs ? (
+            <DsSectionTabs rail={rail} activeId={activeId} owned={owned} />
+          ) : null}
           {children}
         </div>
 

@@ -125,7 +125,8 @@ export default function ArchiCADLanding() {
               </p>
               <div className="f">
                 <div>
-                  <b>{fmtMoney(p.grandTotal)}</b>
+                  {/* A shared project whose prices are hidden from this reader. */}
+                  <b>{p.moneyHidden ? "–" : fmtMoney(p.grandTotal)}</b>
                   <span>estimate</span>
                 </div>
               </div>

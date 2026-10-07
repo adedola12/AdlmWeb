@@ -5,6 +5,7 @@ import {
   applyVerdict,
   boardSummary,
   decideBlock,
+  partitionDecidable,
   initialDecision,
   missingBusinessCase,
   resubmitIfNeeded,
@@ -84,4 +85,46 @@ test("the summary counts what needs the approver", () => {
   assert.equal(s.awaitingSignoff, 1);
   assert.equal(s.inDesign, 1);
   assert.equal(s.designNeeded, 1);
+});
+
+// Deciding many at once must never approve what one-at-a-time would refuse.
+//
+// The dangerous failure here is silent: forty-five proposals go in, forty-five
+// come back "approved", and nobody notices that some were never the caller's to
+// decide. So the batch is split by the same rule as a single decision, and the
+// refused ones come back named.
+test("partitionDecidable applies the single-decision rule to every item", () => {
+  const approver = "approver@adlm";
+  const owner = "owner@adlm";
+  const feature = (over = {}) => ({ _id: "x", kind: "feature", title: "t", ...over });
+
+  const byOwner = feature({ _id: "a", submittedBy: owner });
+  const byApprover = feature({ _id: "b", submittedBy: approver });
+  const notNeedingApproval = feature({ _id: "c", kind: "fix", submittedBy: owner });
+
+  // The approver: may decide the owner's proposal, may NOT decide their own,
+  // and a fix needs no approval at all.
+  const asApprover = partitionDecidable([byOwner, byApprover, notNeedingApproval], {
+    isApprover: true,
+    email: approver,
+    approverEmail: approver,
+  });
+  assert.deepEqual(asApprover.decidable.map((i) => i._id), ["a"]);
+  assert.deepEqual(asApprover.blocked.map((b) => b.item._id).sort(), ["b", "c"]);
+  // Every refusal carries its reason, so the reply can say which and why.
+  assert.ok(asApprover.blocked.every((b) => typeof b.reason === "string" && b.reason.length > 0));
+
+  // A super-admin who is NOT the approver decides nothing of the owner's here:
+  // this is the case that matters, because it is the account a batch would most
+  // likely be fired from.
+  const asSuperAdmin = partitionDecidable([byOwner, byApprover], {
+    isSuperAdmin: true,
+    email: owner,
+    approverEmail: approver,
+  });
+  assert.deepEqual(asSuperAdmin.decidable.map((i) => i._id), ["b"]);
+  assert.deepEqual(asSuperAdmin.blocked.map((b) => b.item._id), ["a"]);
+
+  // Nothing in, nothing out — and it does not throw on a non-array.
+  assert.deepEqual(partitionDecidable(null, { isApprover: true }), { decidable: [], blocked: [] });
 });

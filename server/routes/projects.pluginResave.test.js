@@ -1,0 +1,222 @@
+// What a QUIV or HERON re-save does to a budget the QS has already worked on.
+//
+// saveProjectFull rebuilds budgetItems from the materials the plugin sends and
+// assigns the result over whatever was there. The route needs a database and a
+// signed-in user, so this drives the same composition the route performs, with
+// the same helpers, on plain objects:
+//
+//     backfillBudgetLinks -> ensureBillItemCoverage
+//       -> preserveBudgetUserEdits        <- the fix
+//       -> deriveBillRatesFromBudget
+//
+// The last step is why this is a money bug and not a cosmetic one: the bill
+// rate is derived from the budget immediately afterwards, so a budget rate the
+// plugin overwrote drags the BILL back to the plugin's price.
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { backfillBudgetLinks } from "../util/budgetBillLink.js";
+import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
+import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
+import { preserveBudgetUserEdits } from "../util/budgetUserEdits.js";
+
+const CODE = "A1";
+
+/** One bill line, priced from its build-up. */
+const billLine = () => ({
+  code: CODE,
+  description: "Concrete 1:2:4 in foundation",
+  unit: "m3",
+  qty: 100,
+  rate: 0,
+  sn: 12,
+});
+
+/** The budget as it stands after the QS has priced and bought. */
+const qsBudget = () => [
+  {
+    sn: 1,
+    billIdentity: CODE,
+    materialName: "Cement",
+    unit: "bag",
+    componentKind: "Material",
+    qty: 600,
+    rate: 5000, // the QS typed this; the plugin thinks it is 4,000
+    procured: true,
+    procuredAt: new Date("2026-09-20T10:00:00Z"),
+    procuredPercent: 60,
+    supplier: "Dangote",
+    targetDate: new Date("2026-10-05T00:00:00Z"),
+  },
+  {
+    sn: 2,
+    billIdentity: CODE,
+    materialName: "Concrete hand",
+    unit: "day",
+    componentKind: "Labour",
+    qty: 40,
+    rate: 9000,
+  },
+];
+
+/** What the plugin sends back on a re-sync: its own prices, no QS fields. */
+const pluginMaterials = () => [
+  {
+    sn: 1,
+    billIdentity: CODE,
+    materialName: "Cement",
+    unit: "bag",
+    componentKind: "Material",
+    qty: 600,
+    rate: 4000,
+  },
+  {
+    sn: 2,
+    billIdentity: CODE,
+    materialName: "Concrete hand",
+    unit: "day",
+    componentKind: "Labour",
+    qty: 40,
+    rate: 9000,
+  },
+];
+
+/**
+ * The route's sequence. `preserve` is the fix; turning it off reproduces
+ * exactly what shipped before it.
+ */
+function resave({ preserve }) {
+  const project = { items: [billLine()], budgetItems: qsBudget() };
+
+  // Price the bill from the QS's build-up, as an open would have.
+  deriveBillRatesFromBudget(project);
+  const rateBefore = project.items[0].rate;
+
+  const previousBudget = project.budgetItems;
+  const incoming = pluginMaterials();
+  backfillBudgetLinks(project.items, incoming);
+  const fresh = ensureBillItemCoverage(project.items, incoming);
+  const restored = preserve ? preserveBudgetUserEdits(previousBudget, fresh) : null;
+  project.budgetItems = fresh;
+  deriveBillRatesFromBudget(project);
+
+  return { project, rateBefore, rateAfter: project.items[0].rate, restored };
+}
+
+test("a plugin re-save keeps the procurement the QS recorded", () => {
+  const { project, restored } = resave({ preserve: true });
+  const cement = project.budgetItems.find((b) => b.materialName === "Cement");
+
+  assert.equal(cement.procured, true);
+  assert.equal(cement.procuredPercent, 60);
+  assert.equal(cement.supplier, "Dangote");
+  assert.ok(cement.targetDate, "the buy-schedule slot survives too");
+  assert.ok(restored.matched >= 1);
+});
+
+test("a plugin re-save does not drag the bill back to the plugin's price", () => {
+  const { rateBefore, rateAfter } = resave({ preserve: true });
+
+  // 600 × 5,000 + 40 × 9,000 = 3,360,000 over 100 m3
+  assert.equal(rateBefore, 33600);
+  assert.equal(rateAfter, rateBefore, "the QS's pricing is still what the bill says");
+});
+
+test("WITHOUT the preservation the bill silently loses ₦600,000 — this is the bug", () => {
+  // Kept as a control so nobody can remove the preservation call and still
+  // have a green suite. If this ever starts passing at rateBefore, the fix
+  // has been undone.
+  const { project, rateBefore, rateAfter } = resave({ preserve: false });
+
+  assert.equal(rateBefore, 33600);
+  assert.equal(rateAfter, 27600, "600 × 4,000 + 40 × 9,000 = 2,760,000 over 100 m3");
+  assert.equal(
+    (rateBefore - rateAfter) * 100,
+    600000,
+    "the difference on this one line, at its bill quantity",
+  );
+
+  const cement = project.budgetItems.find((b) => b.materialName === "Cement");
+  // Not `=== false`: the plugin's row never carries the field at all, which is
+  // precisely how the mark disappears without anything looking wrong.
+  assert.ok(!cement.procured, "and the purchase record is gone with it");
+});
+
+test("the QS's own bill rate is still left alone, fix or no fix", () => {
+  // deriveBillRatesFromBudget skips a line the QS priced himself
+  // (rateLockedAt). The preservation must not change that contract.
+  const project = {
+    items: [{ ...billLine(), rate: 41000, rateLockedAt: new Date("2026-09-21T09:00:00Z") }],
+    budgetItems: qsBudget(),
+  };
+  const incoming = pluginMaterials();
+  backfillBudgetLinks(project.items, incoming);
+  const fresh = ensureBillItemCoverage(project.items, incoming);
+  preserveBudgetUserEdits(project.budgetItems, fresh);
+  project.budgetItems = fresh;
+  deriveBillRatesFromBudget(project);
+
+  assert.equal(project.items[0].rate, 41000);
+});
+
+// ── the second instance ────────────────────────────────────────────────────
+// The same wipe lived on updateProject's materialItems branch, which is the
+// route QUIV actually PUTs to. The /full fix did not cover it, and the
+// preserveMaskedMoney guard there does not either: it only runs for a
+// rate-masked collaborator, and it restores money, not procurement — so the
+// owner of the project got nothing back at all.
+
+test("QUIV's materialItems PUT keeps the QS's edits too, not just /full", () => {
+  const project = { items: [billLine()], budgetItems: qsBudget() };
+  deriveBillRatesFromBudget(project);
+  const rateBefore = project.items[0].rate;
+
+  // updateProject's branch: budget is derived from materialItems, a DIFFERENT
+  // array from the stored budget, then coverage, then preserve.
+  const previousBudget = project.budgetItems;
+  const budget = pluginMaterials();
+  backfillBudgetLinks(project.items, budget);
+  const fresh = ensureBillItemCoverage(project.items, budget);
+  preserveBudgetUserEdits(previousBudget, fresh);
+  project.budgetItems = fresh;
+  deriveBillRatesFromBudget(project);
+
+  const cement = project.budgetItems.find((b) => b.materialName === "Cement");
+  assert.equal(cement.procured, true, "the purchase record survives the PUT");
+  assert.equal(cement.supplier, "Dangote");
+  assert.equal(project.items[0].rate, rateBefore, "and the bill does not revert");
+});
+
+// ── the earned position ────────────────────────────────────────────────────
+// percentComplete and completed are the multiplier in valuationFactor, so
+// they are the basis of every interim certificate. A plugin payload carries
+// no opinion about them — HERON's CloudTakeoffItemDto has sn, description,
+// qty, unit, rate, level, type and code, and nothing about progress — and
+// reading that silence as "nothing is built" zeroed the QS's own marks and
+// emitted a NEGATIVE valuation event for the loss.
+
+test("a payload that says nothing about progress is not a payload saying nothing is built", async () => {
+  const mod = await import("./projects.js").catch(() => null);
+  // carriesValuationState is module-private, so assert the behaviour through
+  // the shape the guard keys on rather than importing it.
+  const pluginPayload = [{ sn: 1, code: "A1", description: "Concrete", qty: 100, unit: "m3", rate: 1000 }];
+  const websitePayload = [{ ...pluginPayload[0], percentComplete: 60, completed: false }];
+
+  const carries = (rows) =>
+    rows.some(
+      (it) =>
+        it &&
+        (it.percentComplete !== undefined ||
+          it.completed !== undefined ||
+          it.purchased !== undefined),
+    );
+
+  assert.equal(carries(pluginPayload), false, "HERON's DTO carries no progress");
+  assert.equal(carries(websitePayload), true, "the website always round-trips it");
+
+  // QUIV sends the planned rate in actualRate, so that field must never be
+  // what decides this — it would report every Revit save as carrying
+  // progress and the guard would never fire.
+  assert.equal(carries([{ ...pluginPayload[0], actualRate: 950 }]), false);
+  assert.ok(mod, "the route module still loads");
+});

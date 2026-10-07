@@ -68,8 +68,14 @@ export function signRefresh(payload) {
 }
 
 
+// Scoped tokens (step_up, god_login below) share this secret but are never
+// access tokens. See the same check in middleware/auth.js.
 export function verifyAccess(token) {
-  return jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  if (decoded && typeof decoded === "object" && decoded.scope) {
+    throw new jwt.JsonWebTokenError("Not an access token");
+  }
+  return decoded;
 }
 
 // ── Step-up (re-authentication) tokens ──

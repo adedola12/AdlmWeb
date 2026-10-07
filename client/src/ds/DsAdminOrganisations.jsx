@@ -27,7 +27,7 @@ import { AdmTable, AdmTwo, AdmDim, AdmChip } from "./adminUi.jsx";
 const PRODUCT = {
   revit: "QUIV",
   planswift: "HERON",
-  mep: "Revit MEP",
+  mep: "SERVIQ",
   civil3d: "CIVIQ",
   rategen: "RateGen",
   "qs-takeoff": "Time Pro",

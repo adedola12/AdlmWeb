@@ -13,6 +13,15 @@ import mongoose from "mongoose";
 const ReleaseCandidateSchema = new mongoose.Schema(
   {
     productKey: { type: String, required: true, trim: true, lowercase: true, index: true },
+
+    // What this release changes. "deployment" is a plugin package (the
+    // original and the default). "setting" is a Setting field that ships to
+    // customers by itself - today only installerHubUrl, which repoints every
+    // customer at a new Installer Hub the moment it is saved.
+    kind: { type: String, enum: ["deployment", "setting"], default: "deployment", index: true },
+    // For kind "setting": the field being changed, and what it is now.
+    settingField: { type: String, trim: true, default: "" },
+    settingPrevious: { type: String, trim: true, default: "" },
     displayName: { type: String, trim: true, default: "" },
     fromVersion: { type: String, trim: true, default: "" },
     toVersion: { type: String, trim: true, default: "" },
@@ -22,6 +31,12 @@ const ReleaseCandidateSchema = new mongoose.Schema(
     payload: { type: mongoose.Schema.Types.Mixed, required: true },
     // Extras the release notifier reads (releaseNotes, notifySubscribers).
     notifyBody: { type: mongoose.Schema.Types.Mixed, default: null },
+    // Who it goes to on approval (util/releaseRollout.js): "organizations"
+    // (firms with more than 5 seats, everyone else three months later) or
+    // "everyone" (a hotfix). The approver can switch it when approving.
+    rollout: { type: String, enum: ["organizations", "everyone"], default: "organizations" },
+    // Where it actually went, set on approval.
+    appliedTo: { type: String, enum: ["", "organizations", "everyone"], default: "" },
 
     status: {
       type: String,

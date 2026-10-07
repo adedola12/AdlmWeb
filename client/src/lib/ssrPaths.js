@@ -27,7 +27,18 @@ export const SSR_PATHS = [
   "/whats-new",
   "/whats-new/:slug",
   "/support",
-  "/quote",
+
+  // NOT "/quote". DsQuoteBuilder throws under renderToString —
+  // "Cannot set properties of null (setting 'memoizedState')" — so the server
+  // rendered, failed, and fell back to the client shell on EVERY request: the
+  // visitor got the right page a moment later, and the Lambda did the work
+  // twice to get there. Listing it here only bought a guaranteed failure.
+  //
+  // Little is lost. /quote is an interactive builder that prices against the
+  // live catalogue, so there is no static content for a crawler to read, and
+  // its title, description and canonical still come from PAGE_META, which does
+  // not depend on the route being server-rendered. Put it back when the builder
+  // renders without touching a hook outside render.
 
   // Search landing pages
   "/quantity-surveying-software-nigeria",

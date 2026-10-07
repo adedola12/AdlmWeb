@@ -66,10 +66,26 @@ solutions pages got.
 28 Unsplash images added in August are all architecture and sites, no portraits. Needs real
 headshots.
 
-### A4. Learn — fourth course copy is provisional
+### A4. Learn — fourth course copy is provisional — **ANSWERED, pulled 26 September**
 `learn.html` carries a fourth course with a name, a **₦85,000 price** and a syllabus that your
 notes flag as written-from-real-products but unconfirmed. It must not ship as real. Either confirm
 it or pull it.
+
+**The owner pulled it.** There is no such course — `GET /learn/courses` returns two, BIM for
+Building Works and BIM for MEP & HVAC — and its "View course" button pointed at `learn#courses`,
+the section it was already in. Our porter now removes the `#course-4` article and switches that
+row from `.pgrid-4` to your `.pgrid`, so the three remaining cards sit in an even three-column
+row instead of leaving the fourth column empty. **Your `learn.html` still has it**, so it is worth
+removing upstream too; if the course is ever built, the card comes back and gets wired to the
+catalogue like the other two.
+
+### A4b. Learn and Beyond BIM still promise Google Classroom ⭐ *new, 26 September*
+`learn.html` says "100% online · Google Classroom · self-paced" on every course card and
+"delivered through Google Classroom" in the FAQ; `beyondbim.html` says courses are "self-paced
+through Google Classroom". **We retired Google Classroom** — courses run on the ADLM Studio
+platform now, and our own pages were corrected in September. Because your build predates that,
+every port run reinstated it, so the porter now rewrites all four. Upstream, the wording we use is
+"100% online · self-paced" and "delivered on the ADLM Studio platform".
 
 ---
 
@@ -108,6 +124,40 @@ anything reusing `.fgrid` expecting the documented 2 columns will come out unusa
 `2077a5271e5c1164bdd3fbe1744157a7`, 39,680 bytes each. The `@font-face` block declares five
 weights but serves one, so every weight renders identically. Either ship real per-weight files or
 declare a single variable font with a `font-weight: 100 900` range.
+
+### B7. The mobile menu collapses to a 126px sliver once the page is scrolled ⭐
+*Found 24 September 2026, reproduced in your build, not just in the port.*
+
+`.mnav` is `position:fixed;inset:0` and sits inside `<nav class="nav">`. As soon as the page
+is scrolled the nav takes `.stuck`, which adds `backdrop-filter:blur(18px) saturate(160%)` —
+and **a backdrop-filter other than `none` makes an element the containing block for its
+fixed-position descendants**. So `inset:0` stops meaning the viewport and starts meaning the
+63px header. The drawer's own padding is 86px top + 40px bottom, so the box cannot go below
+126px: the menu opens as a 126px sliver holding 812px of links, with an inner scrollbar and the
+page showing through underneath.
+
+**To reproduce**, in `site/` at 375px wide, on any page:
+
+```js
+document.querySelector('.nav').classList.add('stuck');   // what scrolling does
+document.querySelector('.burger').click();
+const m = document.querySelector('.mnav');
+m.getBoundingClientRect().height;   // 126 — should be 812
+m.scrollHeight;                     // 812
+```
+
+At the top of the page there is no `.stuck` and no blur, so the menu is correct — which is
+probably why it has not been caught.
+
+**The fix we are using**, in case you want the same one: drop the blur while the menu is open,
+which also gives the opaque header `.mnav-open .nav` is already asking for.
+
+```css
+.mnav-open .nav{backdrop-filter:none;-webkit-backdrop-filter:none;transition:none}
+```
+
+`transition:none` matters: `.nav` transitions backdrop-filter over 340ms, and a value part-way
+through that transition is still not `none`, so without it the sliver is simply animated.
 
 ### B6. Two corrupt images, unrecoverable from source
 `hd-engineer.jpg` and `hd-night.jpg` are truncated JPEGs that decode to flat grey over the bottom
