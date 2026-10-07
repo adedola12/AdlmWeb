@@ -29,9 +29,16 @@ import {
   certDraftProblem,
   retentionHeld,
 } from "./certificateDraft.js";
+import { Link } from "react-router-dom";
 import { money } from "./workProjectFormat.js";
 
-export default function WorkProjectIssueCert({ project, onIssue, onDone }) {
+export default function WorkProjectIssueCert({
+  project,
+  ratesMasked = false,
+  classicHref = "",
+  onIssue,
+  onDone,
+}) {
   const [draft, setDraft] = React.useState(blankCertDraft);
   const [busy, setBusy] = React.useState(false);
   const [failed, setFailed] = React.useState("");
@@ -105,24 +112,42 @@ export default function WorkProjectIssueCert({ project, onIssue, onDone }) {
 
       <div className="pn-sec">
         <span className="k">Retention</span>
-        <label className="pn-num">
-          <span>Release{held > 0 ? ` (${money(held)} held)` : ""}</span>
-          <input
-            type="number"
-            min="0"
-            max={held > 0 ? held : undefined}
-            step="any"
-            placeholder="0"
-            value={draft.retentionReleased}
-            disabled={busy}
-            onChange={set("retentionReleased")}
-          />
-        </label>
-        <p className="hint">
-          Released retention is added back on this certificate and taxed with the
-          rest. Leave it at nothing on an ordinary interim; half usually comes back
-          at practical completion and the rest at the final account.
-        </p>
+        {/* NOT OFFERED WHEN RATES ARE HIDDEN.
+            issueCertificate reads the body's money only when the caller can see
+            rates (moneyFromClient, projects.js:5045), so for a collaborator
+            without RateGen the figure is dropped and the certificate stores 0 —
+            while the toast says it was issued. Worse, the ceiling could not be
+            checked for them either: retentionHeld reads retentionAmount off
+            certificates maskCertForClient has already zeroed, so "held" would read
+            as nothing on a contract holding millions. */}
+        {ratesMasked ? (
+          <p className="hint">
+            Retention cannot be released here while this project&rsquo;s rates are hidden
+            from you — the figure would not be recorded. The certificate itself is
+            still worked out in full from the bill.
+          </p>
+        ) : (
+          <>
+            <label className="pn-num">
+              <span>Release{held > 0 ? ` (${money(held)} held)` : ""}</span>
+              <input
+                type="number"
+                min="0"
+                max={held > 0 ? held : undefined}
+                step="any"
+                placeholder="0"
+                value={draft.retentionReleased}
+                disabled={busy}
+                onChange={set("retentionReleased")}
+              />
+            </label>
+            <p className="hint">
+              Released retention is added back on this certificate and taxed with the
+              rest. Leave it at nothing on an ordinary interim; half usually comes back
+              at practical completion and the rest at the final account.
+            </p>
+          </>
+        )}
       </div>
 
       <div className="pn-sec">
@@ -152,9 +177,22 @@ export default function WorkProjectIssueCert({ project, onIssue, onDone }) {
         >
           {busy ? "Issuing…" : `Issue certificate ${nextNumber}`}
         </button>
+        {/* IT SAID "APPROVING IT IS A SEPARATE STEP" AND GAVE NOWHERE TO DO IT.
+            The step is real on the server — PUT .../certificates/:number takes
+            draft | approved | paid — and nothing in this build calls it; the
+            control lives only on the classic workspace. Promising a step with no
+            link is the same shape as the empty state this screen just fixed, and a
+            draft is excluded from every certified and paid figure until somebody
+            finds it (valuationsModel counts approved | paid only). */}
         <p className="hint">
-          It is issued as a draft. Approving it is a separate step, so a figure can
-          be checked before anybody is told it is payable.
+          It is issued as a draft, so a figure can be checked before anybody is told
+          it is payable. Approving it is done on the{" "}
+          {classicHref ? (
+            <Link to={classicHref}>classic workspace</Link>
+          ) : (
+            "classic workspace"
+          )}{" "}
+          for now, and a draft is not counted as certified until it is approved.
         </p>
       </div>
     </>

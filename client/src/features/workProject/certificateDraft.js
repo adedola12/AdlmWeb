@@ -51,6 +51,8 @@ const n = (v) => {
  * @param {object} p
  * @param {number} p.totalRetained  what is actually being held, so a release
  *   bigger than that can be refused before it pays out money never withheld.
+ *   Zero means nothing is held, not "unknown": the form only renders off a loaded
+ *   project, and the server supplies certificates as an array.
  */
 export function certDraftProblem(draft, { totalRetained = 0 } = {}) {
   const from = String(draft?.periodStart || "");
@@ -63,8 +65,22 @@ export function certDraftProblem(draft, { totalRetained = 0 } = {}) {
   if (release !== null && release < 0) {
     return "Retention released cannot be negative. A deduction is a smaller certificate, not a negative release.";
   }
-  if (release !== null && release > 0 && totalRetained > 0 && release > totalRetained) {
-    return "That is more than has been retained, so it would pay out money that was never withheld.";
+  if (release !== null && release > 0 && release > totalRetained) {
+    // NO `totalRetained > 0` GUARD HERE, and that is the point.
+    //
+    // It used to carry one, with a comment reasoning that 0 might mean "we have
+    // not been told" and that the server was the backstop either way. Both halves
+    // were wrong. The form only renders off a loaded project, whose certificates
+    // is an array from the server, so 0 means nothing has been retained — which
+    // is exactly the case on a first certificate, when a mis-keyed figure does
+    // the most damage. And the server has no ceiling at all: issueCertificate
+    // reads safeNum(req.body.retentionReleased) at projects.js:5064 and hands it
+    // straight to certificateMoney, where it is ADDED BACK before tax. So the
+    // check was switched off in the one case it was written for, and nothing
+    // behind it would have caught the result.
+    return totalRetained > 0
+      ? "That is more than has been retained, so it would pay out money that was never withheld."
+      : "Nothing has been retained on this contract yet, so there is nothing to release.";
   }
   return "";
 }

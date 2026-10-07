@@ -262,16 +262,70 @@ describe("the lock control goes where it says", () => {
     expect(within(c).getByText(/Lock the contract on the classic workspace/)).toBeTruthy();
   });
 
+  it("LOCKS IT HERE once there is a handler for it", () => {
+    // The lock is built in this workspace now: the step-up hook is reusable and the
+    // checklist above the control was always the right gate. The link stays as the
+    // fallback for a caller that wires nothing, which is what the two cases above
+    // still cover — they are not the end state.
+    const atTender = unlockedProject({ stage: "tendered" });
+    const onLock = vi.fn();
+    const c = render(
+      <WorkProjectValuations
+        project={atTender}
+        canEdit
+        onLock={onLock}
+        classicHref="/projects/revit?project=abc&classic=1"
+      />,
+    ).container;
+    const control = within(c).getByText("Lock the contract");
+    expect(control.tagName).toBe("BUTTON");
+    fireEvent.click(control);
+    expect(onLock).toHaveBeenCalled();
+  });
+
+  it("prefers the handler over the classic link when both are given", () => {
+    // Otherwise a build with the lock wired would still send people away.
+    const atTender = unlockedProject({ stage: "tendered" });
+    const c = render(
+      <WorkProjectValuations
+        project={atTender}
+        canEdit
+        onLock={vi.fn()}
+        classicHref="/projects/revit?project=abc&classic=1"
+      />,
+    ).container;
+    expect(within(c).queryByText(/on the classic workspace/)).toBe(null);
+  });
+
   it("never renders a lock control that does nothing when pressed", () => {
     // The shape of the original bug: a <button> whose only job was to navigate
-    // somewhere that cannot lock. Any button here must carry a handler.
+    // somewhere that cannot lock. Every button here must carry a handler — either
+    // the lock, or the one that goes to the stages.
     const atTender = unlockedProject({ stage: "tendered" });
-    const c = render(<WorkProjectValuations project={atTender} canEdit />).container;
-    for (const b of c.querySelectorAll("button")) {
-      if (/Lock the contract/.test(b.textContent || "")) {
-        throw new Error("the lock is a button again; it must be a link to where locking happens");
-      }
+    const onLock = vi.fn();
+    const onGo = vi.fn();
+    const c = render(
+      <WorkProjectValuations project={atTender} canEdit onLock={onLock} onGo={onGo} />,
+    ).container;
+    const buttons = [...c.querySelectorAll("button")];
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const b of buttons) {
+      fireEvent.click(b);
+      expect(
+        onLock.mock.calls.length + onGo.mock.calls.length,
+        `a control reading "${b.textContent}" did nothing when pressed`,
+      ).toBeGreaterThan(0);
+      onLock.mockClear();
+      onGo.mockClear();
     }
+  });
+
+  it("offers a view-only reader no lock at all", () => {
+    const atTender = unlockedProject({ stage: "tendered" });
+    const c = render(
+      <WorkProjectValuations project={atTender} canEdit={false} onLock={vi.fn()} />,
+    ).container;
+    expect(within(c).queryByText("Lock the contract")).toBe(null);
   });
 });
 
@@ -337,5 +391,78 @@ describe("offering to issue a certificate", () => {
     const c = draw(locked());
     expect(within(c).queryByText("Issue a certificate")).toBe(null);
     expect(within(c).queryByText("Issue the first certificate")).toBe(null);
+  });
+});
+
+describe("the variations view, now that it can do something", () => {
+  const locked = (over = {}) => ({
+    contract: { locked: true, contractSum: 80_000_000, tenderedAt: "2026-08-01" },
+    valuationSettings: { retentionPct: 5, vatPct: 7.5, withholdingPct: 2.5 },
+    certificates: [],
+    variations: [
+      { description: "Extra manholes", qty: 1, unit: "item", rate: 225_000, status: "pending" },
+    ],
+    items: [{ code: "BQ-1", description: "Excavate", unit: "m3", qty: 10, rate: 1000 }],
+    ...over,
+  });
+
+  const draw = (props = {}) =>
+    render(
+      <WorkProjectValuations project={locked()} canEdit view="variations" {...props} />,
+    ).container;
+
+  it("offers Raise a variation on this view", () => {
+    const onRaiseVariation = vi.fn();
+    const c = draw({ onRaiseVariation });
+    fireEvent.click(within(c).getByText("Raise a variation"));
+    expect(onRaiseVariation).toHaveBeenCalled();
+  });
+
+  it("does not offer it on the certificates view", () => {
+    // A control about variations, on a list of certificates, is a control about
+    // something else.
+    const c = render(
+      <WorkProjectValuations
+        project={locked()}
+        canEdit
+        view="certs"
+        onRaiseVariation={vi.fn()}
+      />,
+    ).container;
+    expect(within(c).queryByText("Raise a variation")).toBe(null);
+  });
+
+  it("refuses it to a reader whose rates are hidden, rather than letting the server say no", () => {
+    // A variation is a VALUE and this is the one route where a new one is born, so
+    // there is no stored figure to fall back on — the server answers 403
+    // RATES_MASKED outright.
+    const c = draw({ onRaiseVariation: vi.fn(), ratesMasked: true });
+    expect(within(c).queryByText("Raise a variation")).toBe(null);
+    expect(within(c).getByText(/needs rates you cannot see/)).toBeTruthy();
+  });
+
+  it("does not offer it to a reader who cannot edit", () => {
+    const c = draw({ onRaiseVariation: vi.fn(), canEdit: false });
+    expect(within(c).queryByText("Raise a variation")).toBe(null);
+  });
+
+  it("turns the rows back into buttons once there is somewhere to go", () => {
+    // They were made plain divs because nothing passed a handler. Passing one is
+    // what restores them — and the row still carries the STORED index, which is
+    // what the decide route keys on.
+    const onOpenVariation = vi.fn();
+    const c = draw({ onOpenVariation });
+    const rows = c.querySelectorAll(".pj-vars .vr");
+    expect(rows.length).toBe(1);
+    expect(rows[0].tagName).toBe("BUTTON");
+    expect(rows[0].className).not.toContain("vr-flat");
+    fireEvent.click(rows[0]);
+    expect(onOpenVariation).toHaveBeenCalledWith(0);
+  });
+
+  it("leaves them flat when no handler is given", () => {
+    const rows = draw().querySelectorAll(".pj-vars .vr");
+    expect(rows[0].tagName).toBe("DIV");
+    expect(rows[0].className).toContain("vr-flat");
   });
 });

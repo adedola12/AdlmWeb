@@ -581,6 +581,46 @@ describe("renaming a section", () => {
     expect(within(c).getByText(/already has a section called "Frame"/)).toBeTruthy();
   });
 
+  it("does not call a CASE-ONLY change a collision, because it is not one", () => {
+    // withSectionRenamed compares case-insensitively, so "frames" -> "Frames"
+    // returns null. The handler reported every null as a duplicate, and a group
+    // takes its name from the bill LINES while the ordered list keeps the
+    // project's spelling — so the section a QS SEES as lower case is exactly the
+    // one they would try to capitalise, and they were sent hunting for a duplicate
+    // that does not exist.
+    vi.spyOn(window, "prompt").mockReturnValue("FRAME");
+    const onSave = vi.fn();
+    const c = draw({ onSave });
+    fireEvent.click(renamer(c, "Frame"));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(c).queryByText(/already has a section called/)).toBe(null);
+    expect(
+      within(c).getByText("A section's capitalisation cannot be changed on its own."),
+    ).toBeTruthy();
+  });
+
+  it("does not wear the drag handle's cursor", () => {
+    // .grip sets cursor:grab and touch-action:none because it was written for
+    // dragging a section. The pencil has no pointer handlers at all, so it invited
+    // a drag it cannot do, beside a handle that can.
+    const c = draw();
+    expect(renamer(c, "Frame").className).toContain("rnm");
+  });
+
+  it("cannot fire a second save while one is in flight", () => {
+    // "Add a section" and "Suggest an arrangement" both pass disabled={saving};
+    // this was the only one of the three that did not, so it could build a patch
+    // from a project the server had already moved past.
+    vi.spyOn(window, "prompt").mockReturnValue("Foundations");
+    const onSave = vi.fn();
+    const c = draw({ onSave, saving: true });
+    const pencil = renamer(c, "Substructure");
+    expect(pencil.getAttribute("tabindex")).toBe("-1");
+    expect(pencil.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(pencil);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("stays quiet when the name is typed back unchanged", () => {
     vi.spyOn(window, "prompt").mockReturnValue("Frame");
     const onSave = vi.fn();

@@ -965,3 +965,110 @@ describe("typing a measured percentage", () => {
     expect(within(c).queryByLabelText("Or type the measured figure")).toBe(null);
   });
 });
+
+describe("the three measured boxes, when the value changes from elsewhere", () => {
+  // All three are uncontrolled, with defaultValue — which React reads on mount
+  // only, and which it ignores entirely once the reader has typed (the HTML
+  // dirty-value flag). Two bugs followed, and neither had a test.
+  const job = (over = {}) => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items: [
+      { code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 4_500, percentComplete: 50 },
+      { code: "BQ-2", description: "Columns", qty: 40, unit: "m3", rate: 72_000 },
+    ],
+    ...over,
+  });
+
+  const draw = (project, props = {}) =>
+    render(
+      <WorkProjectLinePanel project={project} index={0} canEdit contractLocked {...props} />,
+    );
+
+  it("DOES NOT keep a typed percentage after a step button writes a new one", () => {
+    // The data-loss case. Type 60, blur, save. The line completes, so tap 100%.
+    // The box kept reading 60, and the next blur compared that stale 60 against
+    // the fresh 100 and saved 60 back over it.
+    const typed = job();
+    const view = draw(typed);
+    const box = () => within(view.container).getByLabelText("Or type the measured figure");
+    fireEvent.change(box(), { target: { value: "60" } });
+    fireEvent.blur(box(), { target: { value: "60" } });
+
+    // The step button's save comes back as a new project, which is how the shell
+    // feeds this panel.
+    const after = job({
+      items: [{ ...typed.items[0], percentComplete: 100 }, typed.items[1]],
+    });
+    view.rerender(
+      <WorkProjectLinePanel project={after} index={0} canEdit contractLocked />,
+    );
+    expect(box().value).toBe("100");
+  });
+
+  it("does not carry one line's figures onto the next when neither has a code", () => {
+    // code defaults to "" in the schema and code-less lines are a real case this
+    // file handles elsewhere, so two consecutive ones shared a key and
+    // Previous/Next reused the same input.
+    const codeless = job({
+      items: [
+        { code: "", description: "First", qty: 10, unit: "m3", rate: 100, actualQty: 7 },
+        { code: "", description: "Second", qty: 20, unit: "m3", rate: 200 },
+      ],
+    });
+    const view = draw(codeless);
+    expect(within(view.container).getByLabelText("Actual quantity").value).toBe("7");
+    view.rerender(
+      <WorkProjectLinePanel project={codeless} index={1} canEdit contractLocked />,
+    );
+    // The second line is unmeasured, so its box must be empty — not showing 7.
+    expect(within(view.container).getByLabelText("Actual quantity").value).toBe("");
+  });
+
+  it("refreshes the rate box when the stored rate changes under it", () => {
+    const before = job();
+    const view = draw(before);
+    expect(within(view.container).getByLabelText("Actual rate").value).toBe("");
+    const after = job({
+      items: [{ ...before.items[0], actualRate: 4_800 }, before.items[1]],
+    });
+    view.rerender(
+      <WorkProjectLinePanel project={after} index={0} canEdit contractLocked />,
+    );
+    expect(within(view.container).getByLabelText("Actual rate").value).toBe("4800");
+  });
+});
+
+describe("a reader whose rates are hidden", () => {
+  // Shared at "full" without RateGen: canEdit TRUE, canSeeRates FALSE. They may
+  // measure and may not price. actualRate is in MASKED_MONEY_BLANKS, so the server
+  // restores the stored value and answers 200 — the box took a figure, the
+  // indicator said "Saved", and nothing was recorded.
+  const job = () => ({
+    contract: { locked: true },
+    valuationSettings: { showActualColumns: true },
+    items: [{ code: "BQ-1", description: "Excavate", qty: 120, unit: "m3", rate: 0 }],
+  });
+
+  const draw = (props = {}) =>
+    render(
+      <WorkProjectLinePanel project={job()} index={0} canEdit contractLocked {...props} />,
+    ).container;
+
+  it("is not offered the rate box, and is told why", () => {
+    const c = draw({ ratesMasked: true });
+    expect(within(c).queryByLabelText("Actual rate")).toBe(null);
+    expect(within(c).getByText(/rate paid cannot be recorded here/)).toBeTruthy();
+  });
+
+  it("keeps the measured QUANTITY box, which is not masked and does save", () => {
+    // actualQty is not in MASKED_MONEY_BLANKS, so it is recorded normally. Taking
+    // it away would remove a capability the reader actually has.
+    const c = draw({ ratesMasked: true });
+    expect(within(c).getByLabelText("Actual quantity")).toBeTruthy();
+  });
+
+  it("still offers the rate box to everybody else", () => {
+    expect(within(draw()).getByLabelText("Actual rate")).toBeTruthy();
+  });
+});

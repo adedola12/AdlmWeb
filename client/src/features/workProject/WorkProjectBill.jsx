@@ -168,6 +168,19 @@ export default function WorkProjectBill({
       setSectionError("");
       return;
     }
+    // A CASE-ONLY CHANGE IS NOT A COLLISION, AND SAYING IT IS SENDS THEM HUNTING.
+    //
+    // withSectionRenamed answers null for two different reasons and this reported
+    // both as the second. It compares names case-insensitively, so "frames" ->
+    // "Frames" returns null — and a group takes its name from the bill LINES while
+    // the ordered list keeps the project's own spelling, so a section a QS SEES as
+    // "frames" is exactly the one they would try to capitalise. They were told the
+    // bill already had a section called "Frames". It does not; it is the one they
+    // are renaming.
+    if (wanted.toLowerCase() === String(from).toLowerCase()) {
+      setSectionError("A section's capitalisation cannot be changed on its own.");
+      return;
+    }
     const patch = withSectionRenamed(project, from, wanted);
     if (!patch) {
       setSectionError(`This bill already has a section called "${wanted}".`);
@@ -446,13 +459,23 @@ export default function WorkProjectBill({
                   as reordering one. */}
               {canArrange ? (
                 <span
-                  className="grip"
+                  // .grip for the box and the hover, .rnm for an honest cursor:
+                  // .grip alone says cursor:grab, which invited a drag this
+                  // control cannot do, beside a handle that can.
+                  className="grip rnm"
                   role="button"
-                  tabIndex={0}
+                  // Not focusable or clickable mid-save, like the two controls
+                  // above it — a second patch fired over a save in flight would
+                  // be built from a project the server has already moved past.
+                  tabIndex={saving ? -1 : 0}
+                  aria-disabled={saving || undefined}
                   aria-label={`Rename ${g.name}`}
                   title="Rename this section"
-                  onClick={() => renameSection(g.name)}
+                  onClick={() => {
+                    if (!saving) renameSection(g.name);
+                  }}
                   onKeyDown={(e) => {
+                    if (saving) return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       renameSection(g.name);

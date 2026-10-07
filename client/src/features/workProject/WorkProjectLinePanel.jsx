@@ -45,6 +45,7 @@ const STEPS = [0, 25, 50, 75, 100];
 export default function WorkProjectLinePanel({
   project,
   index,
+  ratesMasked = false,
   canEdit = false,
   drift = null,
   contractLocked = false,
@@ -508,15 +509,30 @@ export default function WorkProjectLinePanel({
           <label className="pn-num">
             <span>Actual quantity</span>
             <input
-              // KEYED ON THE LINE, so Previous/Next gives a fresh box.
+              // KEYED ON THE LINE **AND THE VALUE**.
               //
-              // The panel keeps its place in the tree as the reader moves
-              // between lines, so React reuses this input — and defaultValue is
-              // read on mount only. Without the key, moving from a line
-              // measured at 134 to an unmeasured one leaves 134 sitting in the
-              // box, which reads as that line's measurement. The key forces a
-              // remount, so the box always shows the line it belongs to.
-              key={code}
+              // The panel keeps its place in the tree as the reader moves between
+              // lines, so React reuses this input — and defaultValue is read on
+              // mount only, and is ignored entirely once the reader has typed in
+              // the box (the HTML dirty-value flag). Two separate bugs follow, and
+              // the key has to answer both:
+              //
+              //   the LINE   `code` alone is not identity. The item schema
+              //              defaults code to "" and code-less bill lines are a
+              //              real case this file already handles elsewhere, so two
+              //              consecutive code-less lines shared one key and
+              //              Previous/Next carried the first line's typed figure
+              //              onto the second. `index` IS the line's identity
+              //              everywhere else on this page.
+              //   the VALUE  the same field can be written from outside this box —
+              //              the progress steps do it for percentComplete — and
+              //              then the stale typed figure sits on screen and is
+              //              saved back on the next blur, overwriting the newer
+              //              value with the older one.
+              //
+              // Keying on the value is safe precisely because these save on BLUR:
+              // by the time a save can change the value, focus has already left.
+              key={`${index}-qty-${actualQty ?? ""}`}
               type="number"
               min="0"
               step="any"
@@ -559,14 +575,28 @@ export default function WorkProjectLinePanel({
               100m3 was dug and not that it cost more per cubic metre than the
               bill says, which is half of what a measured variance is made of.
               Below the quantity because the quantity is the commoner edit, and
-              because a rate against an unmeasured quantity says less. */}
+              because a rate against an unmeasured quantity says less.
+
+              NOT OFFERED WHEN RATES ARE HIDDEN. actualRate is in
+              MASKED_MONEY_BLANKS (projects.js:121-128), so for a collaborator
+              without RateGen the server restores the stored value before the save
+              lands and answers 200. The box would take a figure, the indicator
+              would say "Saved", and nothing would be recorded — while the amount
+              on the next line kept showing what the server actually holds. The
+              Actual quantity box above is NOT masked, so it does save, which is
+              why only this one goes away. */}
+          {ratesMasked ? (
+            <p className="hint">
+              The rate paid cannot be recorded here while this project&rsquo;s rates are
+              hidden from you. An active RateGen subscription lifts that; the measured
+              quantity above is unaffected.
+            </p>
+          ) : (
           <label className="pn-num">
             <span>Actual rate</span>
             <input
-              // Keyed on the line for the same reason as the box above: the panel
-              // keeps its place in the tree, so defaultValue would otherwise
-              // carry one line's rate onto the next.
-              key={`${code}-rate`}
+              // Keyed on the line and the value, for both reasons given above.
+              key={`${index}-rate-${actualRateRaw ?? ""}`}
               type="number"
               min="0"
               step="any"
@@ -595,6 +625,7 @@ export default function WorkProjectLinePanel({
               placeholder={`${money(it.rate)} in the contract`}
             />
           </label>
+          )}
           <p className="amt">
             {actualQty === null ? (
               // Not the same as agreeing. Said plainly so an empty row is not
@@ -669,10 +700,12 @@ export default function WorkProjectLinePanel({
           <label className="pn-num">
             <span>Or type the measured figure</span>
             <input
-              // Keyed on the line, like the two boxes above: the panel keeps its
-              // place in the tree, so defaultValue would carry one line's figure
-              // onto the next.
-              key={`${code}-pct`}
+              // Keyed on the line and the value. THIS one is where it bit: the
+              // five step buttons below write percentComplete too, so after
+              // tapping 100% the box still read the 60 that had been typed into
+              // it, and the next blur compared that stale 60 against the fresh
+              // 100 and saved 60 back over it.
+              key={`${index}-pct-${done}`}
               type="number"
               min="0"
               max="100"
