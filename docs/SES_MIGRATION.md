@@ -1,5 +1,13 @@
 # Moving the mail to SES
 
+> **Done, 6 Oct 2026.** SES is now the only transport. Resend and the Gmail
+> SMTP fallback were removed from `server/util/mailer.js` on the owner's rule:
+> Resend is never used again, and when SES refuses a message the send fails
+> loudly (logged, recorded as failed, thrown) instead of falling back.
+> `MAIL_TRANSPORT` and `MAIL_FALLBACK` are no longer read by the mailer, and
+> there is no rollback to Resend. The rest of this page is the history of the
+> cutover.
+
 Everything the studio sends — receipts, licence activations, password resets,
 renewal notices, expiry warnings, campaigns, broadcasts, video announcements —
 goes through `server/util/mailer.js`. This is the plan for having SES carry it,
@@ -64,8 +72,8 @@ send as the studio if it leaks, because there is nothing in SSM.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `MAIL_TRANSPORT` | unset | Set to `ses` to put SES first. Unset = today's behaviour exactly. |
-| `MAIL_FALLBACK` | on | Set to `off` once you want an SES failure to be a failure, not a silent fall-through to Resend. |
+| `MAIL_TRANSPORT` | `ses` | No longer read by the mailer: SES carries every message whatever it says. Still read by the bulk senders' pacing, so keep it `ses`. |
+| `MAIL_FALLBACK` | removed | There is no fallback. An SES failure is a failure. |
 | `SES_CONFIGURATION_SET` | unset | Attach once there is one, for bounce/complaint events. |
 | `SES_REGION` | `AWS_REGION`, else `eu-west-1` | Only needed if SES ever lives somewhere other than the API. |
 | `MAIL_SEND_RATE_PER_SEC` | unset | Overrides the rate read from the account. For pinning it below the quota. |
@@ -128,8 +136,8 @@ starts at 50,000 a day.
    with it. An app password that can send as the studio is a credential nobody
    needs once the role can do the job.
 
-**Rollback is one parameter.** Unset `MAIL_TRANSPORT` and the next cold start is
-back on Resend.
+**There is no rollback to Resend** (removed 6 Oct 2026). If SES refuses, the send
+fails and the error is in CloudWatch.
 
 ---
 

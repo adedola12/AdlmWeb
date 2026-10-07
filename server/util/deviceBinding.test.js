@@ -631,7 +631,7 @@ test("rejectionMessage lists at most three holders and pluralises seats", () => 
   assert.match(msg, /^All 5 seats on this QUIV licence are in use: PC-1 \(QUIV app\); PC-2 \(QUIV app\); PC-3 \(QUIV app\); and 2 more\./);
   assert.match(
     rejectionMessage({ code: "DEVICE_MISMATCH", holder: [], productKey: "mep" }),
-    /^This ADLM MEP & HVAC licence is already in use on another computer: another computer\./,
+    /^This SERVIQ licence is already in use on another computer: another computer\./,
   );
 });
 

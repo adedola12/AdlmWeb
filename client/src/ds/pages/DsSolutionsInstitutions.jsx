@@ -96,7 +96,7 @@ export default function DsSolutionsInstitutions() {
               </div>
               {" "}
               <b>
-                3,100+
+                800+
               </b>
               <span>
                 professionals trained

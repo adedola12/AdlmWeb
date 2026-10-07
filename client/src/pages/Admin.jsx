@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { put as putPresigned } from "../lib/submissionUpload.js";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
@@ -607,6 +608,195 @@ const SECTION_META = {
   settings: { label: "Settings", slug: "settings" },
 };
 
+// The rates a trip estimate is built from, in the order somebody fills them.
+// Mirrors server/util/trainingCost.js TRAVEL_RATE_FIELDS — the server is the
+// authority and does the arithmetic; this is the form over it.
+const TRIP_RATES = [
+  {
+    k: "flightNGN",
+    label: "Return airfare, per person",
+    hint: "Leave at 0 for a city the team drives to.",
+  },
+  { k: "hotelPerNightNGN", label: "Hotel, per room per night" },
+  { k: "feedingPerDayNGN", label: "Feeding, per person per day" },
+  {
+    k: "localFareNGN",
+    label: "Local fare, one way",
+    hint: "Bolt or taxi. Used INSTEAD of flights on a road trip.",
+  },
+  { k: "otherNGN", label: "Anything else, per training" },
+];
+
+const naira = (n) =>
+  new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  }).format(Number(n) || 0);
+
+/**
+ * What a physical training costs ADLM to run at this location.
+ *
+ * WHY THE TOTAL IS NOT COMPUTED HERE
+ *
+ * server/util/trainingCost.js already does it — two people, a week, a hotel
+ * unless it is a road trip, feeding over the nights away — and it is tested.
+ * Re-implementing the same arithmetic in the browser so the figure could move
+ * while typing is exactly how two screens come to quote different numbers for
+ * the same trip. So the total shown is the SAVED one, from the server, and it
+ * refreshes on save.
+ *
+ * A missing rate is named rather than treated as zero: a zero silently makes a
+ * trip look cheaper than it is, which is the opposite of the point.
+ */
+function TripCostFields({ form, setForm, supported = true, unknown = false }) {
+  const travel = form.travel || {};
+  const est = form.estimate;
+  const set = (k, v) =>
+    setForm((f) => ({ ...f, travel: { ...(f.travel || {}), [k]: v } }));
+
+  // THE API MAY NOT HAVE THIS YET.
+  //
+  // The client deploys on every push to its branch; the API deploys separately.
+  // In the window between the two, this form renders and the server's PUT does
+  // not read `travel` at all — so a rate typed here would be accepted, saved
+  // with a 200, and silently lost. That is precisely the failure this codebase
+  // keeps producing, so it is said out loud instead. The list response carries
+  // `fields` only when the server knows about travel rates, which is how this
+  // is detected rather than guessed.
+  // The list never loaded, so whether the server supports travel rates is
+  // UNKNOWN. Saying "not available on this server" would be a guess dressed as
+  // a fact — and the wrong one whenever the read simply failed.
+  if (unknown) {
+    return (
+      <div className="mt-4 rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3">
+        <h4 className="font-semibold text-sm">What the trip costs us</h4>
+        <p className="text-xs text-slate-600 mt-1">
+          The location list could not be read, so it is not known whether this server stores
+          travel rates. Reload the page before entering any &mdash; if it does not, what you type
+          here would be saved with a success message and dropped.
+        </p>
+      </div>
+    );
+  }
+
+  if (!supported) {
+    return (
+      <div className="mt-4 rounded-lg bg-amber-50 ring-1 ring-amber-200 p-3">
+        <h4 className="font-semibold text-sm">What the trip costs us</h4>
+        <p className="text-xs text-amber-900 mt-1">
+          Not available on this server yet. The flight, hotel, feeding and local-fare rates are
+          ready in the app but the API has not been deployed with them, and anything typed here
+          would be saved with a success message and quietly dropped. The fields are hidden until
+          the API is updated, rather than taking figures it will lose.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-lg bg-white ring-1 ring-slate-200 p-3">
+      <h4 className="font-semibold text-sm">What the trip costs us</h4>
+      <p className="text-xs text-slate-600 mt-1">
+        The Training Cost above is what the client pays. This is what it costs to send two people
+        for a week. Every figure is a rate maintained here &mdash; there is no flight or hotel
+        feed &mdash; and a rate left at 0 is reported as missing rather than counted as free.
+      </p>
+
+      <div className="grid sm:grid-cols-2 gap-3 text-sm mt-3">
+        {TRIP_RATES.map((f) => (
+          <label key={f.k}>
+            {f.label}
+            <input
+              type="number"
+              min="0"
+              className="input mt-1"
+              value={travel[f.k] ?? 0}
+              onChange={(e) => set(f.k, Math.max(0, Number(e.target.value)))}
+            />
+            {f.hint ? <span className="block text-xs text-slate-500 mt-1">{f.hint}</span> : null}
+          </label>
+        ))}
+
+        <label>
+          Label for &ldquo;anything else&rdquo;
+          <input
+            className="input mt-1"
+            placeholder="Venue hire, printing&hellip;"
+            value={travel.otherLabel || ""}
+            onChange={(e) => set("otherLabel", e.target.value)}
+          />
+        </label>
+
+        <label>
+          How the team gets there
+          {/* Lagos is a Bolt fare, not an airfare, and the difference is two
+              orders of magnitude. The server works it out from the city, so
+              "Decide from the city" is the right default; this is the override
+              for a second base or a city that is a drive away. */}
+          <select
+            className="input mt-1"
+            value={
+              travel.byRoad === true ? "road" : travel.byRoad === false ? "air" : ""
+            }
+            onChange={(e) =>
+              set("byRoad", e.target.value === "road" ? true : e.target.value === "air" ? false : "")
+            }
+          >
+            <option value="">Decide from the city (Lagos drives)</option>
+            <option value="road">By road &mdash; no flights, no hotel</option>
+            <option value="air">By air</option>
+          </select>
+        </label>
+      </div>
+
+      {est ? (
+        <div className="mt-3 border-t pt-3 text-sm">
+          <div className="flex items-baseline justify-between">
+            <b>Two people, {est.assumptions?.days ?? 7} days</b>
+            <b>{naira(est.total)}</b>
+          </div>
+          <ul className="mt-2 space-y-1 text-xs text-slate-600">
+            {(est.lines || []).map((l) => (
+              <li key={l.key} className="flex justify-between gap-3">
+                <span>
+                  {l.label}
+                  <em className="not-italic text-slate-400"> &middot; {l.detail}</em>
+                </span>
+                <span className={l.missing ? "text-rose-600" : ""}>
+                  {l.missing ? "rate not set" : naira(l.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {est.fee ? (
+            <p className="mt-2 text-xs">
+              Fee {naira(est.fee)} &middot;{" "}
+              <b className={est.coversItself ? "text-emerald-700" : "text-rose-600"}>
+                {est.coversItself
+                  ? `covers it, ${naira(est.margin)} over`
+                  : `short by ${naira(-est.margin)}`}
+              </b>
+            </p>
+          ) : null}
+          {est.missing?.length ? (
+            <p className="mt-2 text-xs text-rose-600">
+              Still needs {est.missing.join(", ")}. Until then the total above is too low.
+            </p>
+          ) : null}
+          <p className="mt-2 text-xs text-slate-500">
+            This is the saved estimate. Save to see it change.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-slate-500">
+          Save the location to see what a trip works out to.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Admin({ section = null }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -676,6 +866,10 @@ export default function Admin({ section = null }) {
   const [tLocBusy, setTLocBusy] = React.useState(false);
   const [tLocMsg, setTLocMsg] = React.useState("");
   const [tLocForm, setTLocForm] = React.useState(null); // null = closed, {} = new, {_id} = edit
+  // Whether THIS server can store the travel rates. See loadTLocations.
+  const [tLocTravel, setTLocTravel] = React.useState(false);
+  // Why the list could not be read. "" when it was.
+  const [tLocFailed, setTLocFailed] = React.useState("");
   const [trainingDateModal, setTrainingDateModal] = React.useState({ open: false, purchaseId: null });
   const [trainingDateVal, setTrainingDateVal] = React.useState("");
   const [trainingEndDateVal, setTrainingEndDateVal] = React.useState("");
@@ -839,10 +1033,26 @@ export default function Admin({ section = null }) {
 
   // ── Training Locations helpers ──
   const loadTLocations = React.useCallback(async () => {
+    setTLocFailed("");
     try {
       const data = await apiAuthed("/admin/training-locations", { token: accessToken });
       setTLocations(Array.isArray(data?.locations) ? data.locations : []);
-    } catch { /* ignore */ }
+      // Does this server know about travel rates at all? It says so by sending
+      // TRAVEL_RATE_FIELDS back with the list. Asked rather than assumed,
+      // because the client and the API deploy separately and in between the two
+      // this form would take rates the server drops without a word.
+      setTLocTravel(Array.isArray(data?.fields) && data.fields.length > 0);
+    } catch (e) {
+      // A FAILED READ IS NOT AN EMPTY LIST. Swallowing this left tLocations at
+      // [] with no flag, so the table stated "No training locations yet." — and
+      // a 403 (an adminhub-only role reaching a `trainings` route) read as
+      // "somebody deleted them all". It also left tLocTravel false, so the trip
+      // -cost panel claimed the API lacked the feature when nobody had asked it.
+      setTLocFailed(
+        String(e?.message || "").trim() ||
+          "The training locations could not be read just now.",
+      );
+    }
   }, [accessToken]);
 
   React.useEffect(() => {
@@ -855,13 +1065,16 @@ export default function Admin({ section = null }) {
     setTLocMsg("");
     try {
       const isEdit = !!tLocForm._id;
+      // `estimate` is the SERVER's arithmetic, handed to this form to display.
+      // Posting it back would invite somebody to believe a client could set it.
+      const { estimate: _estimate, ...body } = tLocForm;
       await apiAuthed(
         isEdit ? `/admin/training-locations/${tLocForm._id}` : "/admin/training-locations",
         {
           token: accessToken,
           method: isEdit ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(tLocForm),
+          body: JSON.stringify(body),
         },
       );
       setTLocForm(null);
@@ -1054,34 +1267,42 @@ export default function Admin({ section = null }) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    if (!/\.exe$/i.test(file.name)) {
+      setIhMsg("Failed: choose the Installer Hub setup .exe (customers save it as ADLM-Installer-Hub-Setup.exe).");
+      return;
+    }
     setIhUploadProg(1);
 
     (async () => {
       try {
-        const contentType = file.type || "application/octet-stream";
-
-        // 1) Only this small JSON round-trip goes through the API. The API runs
-        //    on Lambda behind API Gateway, which caps request bodies at 10MB —
-        //    posting a 50MB installer through it is what made this slow.
+        // R3: the Hub is for paid accounts only, so it goes into ADLM's PRIVATE
+        // file store at the one key /me/downloads/installer-hub signs links
+        // for, never to a public URL. Only these small JSON calls touch the
+        // API (Lambda stops request bodies at 6 MB); the bytes go straight
+        // from this browser to storage.
         const signed = await apiAuthed("/admin/media/installer-upload-url", {
           token: accessToken,
           method: "POST",
-          body: { filename: file.name, contentType, size: file.size },
+          body: { filename: file.name, size: file.size },
         });
         if (!signed?.uploadUrl) throw new Error("No upload URL returned");
 
-        // 2) The server never sees the bytes now, so it can't hash them for us.
+        // The server never sees the bytes, so it can't hash them for us.
         const sha256 = await sha256HexOfFile(file);
 
-        // 3) Straight to R2 at the browser's own line speed. Content-Type must
-        //    match what was signed or R2 answers 403.
-        await putFileWithProgress(signed.uploadUrl, file, contentType, (pct) =>
+        // Content-Type must match what was signed or storage answers 403.
+        await putFileWithProgress(signed.uploadUrl, file, signed.contentType, (pct) =>
           setIhUploadProg(Math.max(1, pct)),
         );
 
-        setIhUrlDraft(signed.publicUrl);
+        const done = await apiAuthed("/admin/media/installer-uploaded", {
+          token: accessToken,
+          method: "POST",
+          body: {},
+        });
+        const mb = ((done?.bytes ?? file.size) / (1024 * 1024)).toFixed(1);
         setIhMsg(
-          `Installer uploaded (r2${sha256 ? `, SHA-256 ${sha256.slice(0, 12)}…` : ""}). Click Save to apply.`,
+          `Installer Hub uploaded (${mb} MB${sha256 ? `, SHA-256 ${sha256.slice(0, 12)}…` : ""}) to ADLM's private storage. Paid accounts now download it through a signed link; the link in the box is only a fail-safe. To drop it, clear the box and click Save.`,
         );
       } catch (err) {
         setIhMsg(err?.message || "Installer upload failed");
@@ -1091,32 +1312,44 @@ export default function Admin({ section = null }) {
     })();
   }
 
+  // The Android app goes straight from this browser into ADLM's private file
+  // store, at the one place the site serves it from. The API only signs the
+  // upload and then checks it arrived: sending a 70 MB file through the API
+  // failed, because Lambda stops request bodies at 6 MB. Once it is there,
+  // every "Download the app" button serves this file and the link in the box
+  // is only a fail-safe, so clearing the box drops Google Drive entirely.
   function handleApkUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    if (!/\.apk$/i.test(file.name)) {
+      setSettingsMsg("Failed: choose an .apk file (an .aab cannot be installed from the website).");
+      return;
+    }
     setSettingsBusy(true);
-    setSettingsMsg("Uploading APK…");
+    setSettingsMsg("Uploading the app… 0%");
 
     (async () => {
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await apiAuthed("/admin/media/upload-apk", {
+        const slot = await apiAuthed("/admin/media/apk-upload-url", {
           token: accessToken,
           method: "POST",
-          body: fd,
+          body: { filename: file.name, size: file.size },
         });
-        if (res?.secure_url) {
-          setSettingsMobileAppDraft(res.secure_url);
-          setSettingsMsg(
-            `APK uploaded (SHA-256 ${(res.sha256 || "").slice(0, 12)}…). Click Save to apply.`,
-          );
-        } else {
-          setSettingsMsg("Upload failed, no URL returned");
-        }
+        await putPresigned(slot.uploadUrl, file, slot.contentType, (pct) =>
+          setSettingsMsg(`Uploading the app… ${pct}%`),
+        );
+        const done = await apiAuthed("/admin/media/apk-uploaded", {
+          token: accessToken,
+          method: "POST",
+          body: {},
+        });
+        const mb = ((done?.bytes ?? file.size) / (1024 * 1024)).toFixed(1);
+        setSettingsMsg(
+          `App uploaded (${mb} MB) to ADLM storage. Every "Download the app" button now serves it; the link below is only a fail-safe. To drop it, clear the box and click Save.`,
+        );
       } catch (err) {
-        setSettingsMsg(err?.message || "APK upload failed");
+        setSettingsMsg(`Failed: ${err?.message || "the app upload did not finish"}`);
       } finally {
         setSettingsBusy(false);
       }
@@ -4492,6 +4725,23 @@ export default function Admin({ section = null }) {
                   Active
                 </label>
               </div>
+
+              {/* WHAT THE TRIP COSTS US.
+                  The Training Cost above is what the CLIENT pays and does not
+                  move. This is the other side: getting two people there for a
+                  week and keeping them there, so a fee can be set against a real
+                  number. server/util/trainingCost.js does the arithmetic; these
+                  are the rates it reads, and until they were enterable anywhere
+                  every estimate came out at zero with every rate listed as
+                  missing. There is no flight API and no live hotel pricing — a
+                  rate is a figure somebody here maintains. */}
+              <TripCostFields
+                form={tLocForm}
+                setForm={setTLocForm}
+                supported={tLocTravel}
+                unknown={Boolean(tLocFailed)}
+              />
+
               <div className="flex gap-2 mt-3">
                 <button
                   className="btn btn-sm"
@@ -4510,6 +4760,13 @@ export default function Admin({ section = null }) {
             </div>
           )}
 
+          {tLocFailed ? (
+            <div className="mb-3 rounded-lg bg-rose-50 ring-1 ring-rose-200 p-3 text-sm text-rose-900">
+              {tLocFailed} This is not the same as there being none &mdash; nothing below is a
+              complete list until it loads.
+            </div>
+          ) : null}
+
           {/* Locations table */}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -4522,6 +4779,10 @@ export default function Admin({ section = null }) {
                   <th className="py-2 pr-3 text-right">BIM NGN</th>
                   <th className="py-2 pr-3 text-right">BIM USD</th>
                   <th className="py-2 pr-3 text-right">Days</th>
+                  {/* What a training there costs US, beside what it is sold for.
+                      A location whose travel rates have never been set says so
+                      rather than showing 0, which would read as free. */}
+                  <th className="py-2 pr-3 text-right">Trip cost</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Actions</th>
                 </tr>
@@ -4548,6 +4809,43 @@ export default function Admin({ section = null }) {
                     </td>
                     <td className="py-2 pr-3 text-right">
                       {loc.durationDays || 1}
+                    </td>
+                    <td className="py-2 pr-3 text-right whitespace-nowrap">
+                      {loc.estimate?.complete ? (
+                        <span
+                          className={
+                            loc.estimate.fee && !loc.estimate.coversItself ? "text-rose-600" : ""
+                          }
+                          title={
+                            loc.estimate.fee
+                              ? loc.estimate.coversItself
+                                ? `Fee covers it, ${naira(loc.estimate.margin)} over`
+                                : `Fee is short by ${naira(-loc.estimate.margin)}`
+                              : "No fee set against it"
+                          }
+                        >
+                          {Number(loc.estimate.total || 0).toLocaleString()}
+                        </span>
+                      ) : !tLocTravel ? (
+                        // The server predates travel rates entirely. "rates not
+                        // set" would blame the reader for a deploy that has not
+                        // happened.
+                        <span className="text-xs text-slate-400">–</span>
+                      ) : (
+                        // Named, not zeroed. A 0 here would read as "costs
+                        // nothing to run", which is how a trip gets
+                        // under-budgeted.
+                        <span
+                          className="text-xs text-amber-700"
+                          title={
+                            loc.estimate?.missing?.length
+                              ? `Needs ${loc.estimate.missing.join(", ")}`
+                              : undefined
+                          }
+                        >
+                          rates not set
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 pr-3">
                       {loc.isActive ? (
@@ -4745,7 +5043,7 @@ export default function Admin({ section = null }) {
                 Mobile App Download URL (APK)
               </label>
               <p className="text-xs text-slate-500 mb-2">
-                Upload an APK directly (stored on Cloudflare R2) or paste a Google Drive / Play Store link. This is what the home page and footer "Download Mobile App" button uses.
+                Upload the APK here and the site serves it from ADLM's own storage. The link in the box is only used if no app has been uploaded; clear it and Save to stop using Google Drive.
               </p>
               <div className="flex gap-2 flex-wrap">
                 <input
@@ -4759,7 +5057,7 @@ export default function Admin({ section = null }) {
                   Upload APK
                   <input
                     type="file"
-                    accept=".apk,.aab,application/vnd.android.package-archive"
+                    accept=".apk,application/vnd.android.package-archive"
                     className="hidden"
                     onChange={handleApkUpload}
                   />
@@ -4899,7 +5197,7 @@ export default function Admin({ section = null }) {
                     Installer Hub Download URL
                   </label>
                   <p className="text-xs text-slate-500 mb-2">
-                    Upload the Hub setup file (.exe / .msi / .zip / .msix) directly: small files go to Cloudinary, larger ones to Cloudflare R2, or paste a hosted URL.
+                    Upload the Hub setup .exe here and the site keeps it in ADLM's private storage, handed only to paid accounts through a short-lived signed link. The link in the box is only used if no Hub has been uploaded; clear it and Save once the upload is done.
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     <input
@@ -4913,7 +5211,7 @@ export default function Admin({ section = null }) {
                       Upload installer
                       <input
                         type="file"
-                        accept=".exe,.msi,.zip,.7z,.appx,.appxbundle,.msix,.msixbundle"
+                        accept=".exe"
                         className="hidden"
                         onChange={handleIhInstallerUpload}
                       />

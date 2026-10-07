@@ -22,7 +22,7 @@ const BY_SLUG = Object.fromEntries(Object.entries(SOURCES).map(([key, s]) => [s.
 const STEPS = {
   revit: ["Open the model in Revit", "Run QUIV and extract", "Save to ADLM Cloud"],
   planswift: ["Open the drawings in PlanSwift", "Take off with HERON", "Save to ADLM Cloud"],
-  mep: ["Open the services model in Revit", "Run Revit MEP and extract", "Save to ADLM Cloud"],
+  mep: ["Open the services model in Revit", "Run SERVIQ and extract", "Save to ADLM Cloud"],
   civil3d: ["Open the corridor in Civil 3D", "Run CIVIQ and extract", "Save to ADLM Cloud"],
 };
 

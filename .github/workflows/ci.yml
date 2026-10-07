@@ -1,0 +1,86 @@
+# Pull-request checks: lint, tests and build for the client, tests for the
+# server, and a type check for the CDK app. Nothing here deploys and nothing
+# needs a secret or AWS credentials: tests that need live secrets already skip
+# themselves when the env var is missing.
+#
+# Making these checks REQUIRED before merge is a branch-protection setting on
+# main, done by the repo owner in GitHub settings, not in this file.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to the same PR (or branch) cancels the run it makes stale.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      # v7, matching deploy-api.yml (older majors run on the deprecated node20).
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      # `npm run lint` regenerates the What's New data first (prelint), then
+      # runs eslint. Any error fails the job; warnings are allowed.
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      # Builds with no VITE_* env set, so it falls back to the live API URL.
+      # The sitemap step tolerates the API being unreachable, and the IndexNow
+      # key file is skipped when INDEXNOW_KEY is unset.
+      - name: Build
+        run: npm run build
+
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # server/package.json requires >=22.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Test
+        run: npm test
+
+  infra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - run: npm ci
+      # Type check only (tsconfig has noEmit). No synth, no AWS credentials.
+      - name: Type check
+        run: npx tsc --noEmit

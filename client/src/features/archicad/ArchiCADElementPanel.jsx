@@ -65,6 +65,8 @@ export default function ArchiCADElementPanel({ element, units = "metric", projec
   const labour = element.labourProvenance || {};
   const gang = Array.isArray(labour.gangComposition) ? labour.gangComposition : [];
   const currency = element.currency || "NGN";
+  // Prices hidden from a shared reader (the server zeroes them): dashes, not ₦0.00.
+  const money = (v) => (element.moneyHidden ? "–" : fmtMoney(v, currency));
   const sharePct = safeNum(element.lineQuantityShare) * 100;
 
   return (
@@ -134,14 +136,14 @@ export default function ArchiCADElementPanel({ element, units = "metric", projec
           title="Cost breakdown"
           icon={<FaTag className="text-adlm-blue-600 dark:text-adlm-blue-300" />}
         >
-          <KV label="Unit rate" value={fmtMoney(element.unitRate, currency)} />
-          <KV label="Material" value={fmtMoney(element.materialAmount, currency)} />
-          <KV label="Labour" value={fmtMoney(element.labourAmount, currency)} />
-          <KV label="Margin" value={fmtMoney(element.marginAmount, currency)} />
+          <KV label="Unit rate" value={money(element.unitRate)} />
+          <KV label="Material" value={money(element.materialAmount)} />
+          <KV label="Labour" value={money(element.labourAmount)} />
+          <KV label="Margin" value={money(element.marginAmount)} />
           <KV
             label="Total"
             value={
-              <span className="font-semibold">{fmtMoney(element.totalAmount, currency)}</span>
+              <span className="font-semibold">{money(element.totalAmount)}</span>
             }
           />
           {Number.isFinite(Number(element.lineQuantityShare)) ? (
@@ -182,7 +184,7 @@ export default function ArchiCADElementPanel({ element, units = "metric", projec
           />
           <KV
             label="Labour unit rate"
-            value={fmtMoney(labour.labourUnitRate, currency)}
+            value={money(labour.labourUnitRate)}
           />
           {labour.sourceRateId ? (
             <KV label="Labour rate id" value={labour.sourceRateId} mono />
@@ -220,7 +222,7 @@ export default function ArchiCADElementPanel({ element, units = "metric", projec
                           {formatQty(g?.qtyPerUnit)}
                         </td>
                         <td className="py-1.5 text-right tabular-nums text-slate-900 dark:text-adlm-dark-text">
-                          {fmtMoney(g?.unitPrice, currency)}
+                          {money(g?.unitPrice)}
                         </td>
                       </tr>
                     ))}

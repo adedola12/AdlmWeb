@@ -1,24 +1,22 @@
 // RateGen: the rates, the materials, the labour and the plant behind them.
 //
-// Kept alongside /rategen rather than over it. That screen is 900 lines and
-// does things this one does not — master and user tabs, the per-row price
-// editing — and replacing working software with a redesign is a decision worth
-// making deliberately. What this adds is what /rategen has never had: one rate
-// opened and shown as what it is made of (see DsWorkRate), the customer's own
-// rates sitting in the same list as the published ones, and a way to build one.
+// Kept alongside /rategen rather than over it. That screen has master and user
+// tabs this one does not. What this adds is what /rategen has never had: one
+// rate opened and shown as what it is made of (see DsWorkRate), and the
+// customer's own rates sitting in the same list as the published ones.
 //
 // His markup: .wk-head / .wk-bar / .wk-find / .wk-tabs / .wk-dd / .wk-count,
 // .wk-tbl.wk-tbl-rates.rg for the seven-column rates table, .wk-tbl-mat for
 // materials, labour and plant, and .rg-op for the bar above them.
 //
-// WHAT IS CUSTOMER-LEVEL, AND WHY THAT IS THE WHOLE POINT
+// THIS SCREEN READS. RATES ARE BUILT IN RATE GEN.
 //
-// Everything this screen writes is the customer's own data: their own prices
-// (priceOverrides), their own copy of a published rate (rateOverrides) and
-// their own rates (customRates). Master material, labour and rate prices are
-// corrected in Rate Gen desktop and published from there; the website's master
-// write routes answer 405 MASTER_READ_ONLY. So the copy here never claims a
-// change reaches anybody else's library.
+// The owner's rule (4 Oct 2026): rates are built and edited only in ADLM Rate
+// Gen desktop. The custom rate builder and "Update prices" that used to live
+// here are gone, and the server refuses a browser's write to the rate library
+// (server/middleware/rateGenOnlyWrites.js, 403 RATES_BUILT_IN_RATEGEN). A
+// material or labour price is part of every rate built on it, so changing one
+// is a rate edit too. What is left in their place says where to go instead.
 //
 // THE LOCATION SWITCH IS STILL NOT REPRODUCED
 //
@@ -32,14 +30,6 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { useFeedback } from "./feedback/feedbackContext.js";
 import WkDropdown from "./WkDropdown.jsx";
-import CustomRateBuilder from "./rategen/CustomRateBuilder.jsx";
-import {
-  draftProblem,
-  draftToPayload,
-  draftTotals,
-  emptyDraft,
-  newCustomRateId,
-} from "./rategen/customRateDraft.js";
 import { componentsOf, toNum, unexplainedNet } from "./rategen/rateMath.js";
 import { mergeRateRows } from "./rategen/mergeRateRows.js";
 import { fetchAllRates } from "./rategen/fetchRates.js";
@@ -107,16 +97,9 @@ export default function DsWorkLibrary() {
         .then((d) => ({
           overrides: Array.isArray(d.rateOverrides) ? d.rateOverrides : [],
           customs: Array.isArray(d.customRates) ? d.customRates : [],
-          ratesVersion: d?.meta?.ratesVersion ?? 1,
-          customRatesVersion: d?.meta?.customRatesVersion ?? 1,
         }))
         // Having no library of your own is the normal state on day one.
-        .catch(() => ({
-          overrides: [],
-          customs: [],
-          ratesVersion: 1,
-          customRatesVersion: 1,
-        })),
+        .catch(() => ({ overrides: [], customs: [] })),
     ]).then(([paged, own]) => {
       setRates(paged.items);
       setRatesTruncated(paged.truncated);
@@ -148,8 +131,7 @@ export default function DsWorkLibrary() {
   }, [accessToken, loadRates]);
 
   // The catalogue is hundreds of rows and most visits never leave the rates
-  // tab, so it is fetched when something first needs it — a tab, or the
-  // builder's line pickers.
+  // tab, so it is fetched when one of its tabs is first opened.
   const needMaster = tab === "materials" || tab === "labour";
   React.useEffect(() => {
     if (!accessToken || !needMaster || master || masterFailed) return;
@@ -349,210 +331,6 @@ export default function DsWorkLibrary() {
     });
   }
 
-  /* ── update prices by category (RG-08) ─────────────────────────────────── */
-
-  async function updatePrices() {
-    const cats = [...new Set(itemRows.map((m) => (m.category || "").trim()).filter(Boolean))].sort();
-    const form = { category: "all", percent: "5" };
-
-    const answer = await fb.card({
-      tone: "info",
-      noIcon: true,
-      title: "Update your prices",
-      msg: "Change every material in a category by a percentage. This changes YOUR prices, not the published ones.",
-      body: (
-        <div className="rg-edit">
-          <label>
-            <span>Category</span>
-            <select
-              defaultValue="all"
-              onChange={(e) => {
-                form.category = e.target.value;
-              }}
-            >
-              <option value="all">All materials</option>
-              {cats.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Change by</span>
-            <input
-              type="number"
-              step="0.5"
-              defaultValue="5"
-              onChange={(e) => {
-                form.percent = e.target.value;
-              }}
-            />
-            <em>% — negative to reduce</em>
-          </label>
-        </div>
-      ),
-      secondary: "Cancel",
-      primary: "Apply",
-    });
-    if (answer !== "primary") return;
-
-    const percent = Number(form.percent);
-    if (!Number.isFinite(percent) || percent === 0) {
-      fb.toast({ tone: "error", title: "Give a percentage to change by" });
-      return;
-    }
-
-    try {
-      const res = await apiAuthed("/rategen/price-overrides/bulk", {
-        method: "PUT",
-        token: accessToken,
-        body: {
-          kind: "material",
-          category: form.category === "all" ? null : form.category,
-          percent,
-        },
-      });
-      // What ACTUALLY changed, not what was asked for. The server caps a single
-      // change (MAX_BULK_ROWS) and skips a row whose price does not move once
-      // it is rounded, so "N prices raised" on its own could be a report of a
-      // change that half happened.
-      const changed = Number(res?.changed) || 0;
-      const matched = Number(res?.matched) || 0;
-      const cap = Number(res?.limit) || 0;
-      const capped = Boolean(res?.capped);
-      const notLookedAt = capped && cap ? Math.max(0, matched - cap) : 0;
-      const unmoved = Math.max(0, matched - changed - notLookedAt);
-      const rest = [
-        notLookedAt
-          ? `${matched} rows matched and one change covers at most ${cap}, so ${notLookedAt} were not looked at — change them by category to reach the rest.`
-          : "",
-        unmoved
-          ? `${unmoved} came to the same figure once rounded, so nothing was written for them.`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      if (!changed) {
-        fb.toast({
-          title: "Nothing changed",
-          msg: rest || "No price in that category moved at this percentage.",
-          ms: rest ? 7000 : undefined,
-        });
-        return;
-      }
-      setMaster(null);
-      setMasterFailed(false);
-      await loadMaster();
-      fb.toast({
-        title: `${changed}${matched && changed !== matched ? ` of ${matched}` : ""} price${
-          changed === 1 ? "" : "s"
-        } ${percent > 0 ? "raised" : "reduced"} by ${Math.abs(percent)}%`,
-        // His copy said every rate using them follows. Ours must not: a rate
-        // stores the cost it was built at, so a price change reaches a rate
-        // only when that rate is priced again.
-        msg: `These are your own prices. Rates already built keep the cost they were built at until they are priced again.${
-          rest ? ` ${rest}` : ""
-        }`,
-        ms: rest ? 9000 : 6000,
-        action: Array.isArray(res?.previous)
-          ? {
-              label: "Undo",
-              run: async () => {
-                try {
-                  await apiAuthed("/rategen/price-overrides/restore", {
-                    method: "PUT",
-                    token: accessToken,
-                    body: { items: res.previous },
-                  });
-                  setMaster(null);
-                  setMasterFailed(false);
-                  await loadMaster();
-                  fb.toast({ title: "Put back" });
-                } catch {
-                  fb.toast({ tone: "error", title: "That could not be undone" });
-                }
-              },
-            }
-          : undefined,
-      });
-    } catch (e) {
-      fb.toast({
-        tone: "error",
-        title: "Prices were not changed",
-        msg: String(e?.message || "Please try again."),
-      });
-    }
-  }
-
-  /* ── build a custom rate (RG-09) ───────────────────────────────────────── */
-
-  async function buildRate() {
-    if (!master && !masterFailed) await loadMaster();
-    const draftRef = { current: null };
-
-    const answer = await fb.card({
-      tone: "info",
-      noIcon: true,
-      title: "Build a custom rate",
-      msg: "Name it, set overhead and profit, and add what goes into it. It is saved to your own library.",
-      body: (
-        <CustomRateBuilder
-          draftRef={draftRef}
-          materials={master?.materials || []}
-          labour={master?.labour || []}
-          sections={sections}
-          initial={emptyDraft(
-            cat !== "all"
-              ? { sectionKey: cat, sectionLabel: sections.find((s) => s.key === cat)?.label || "" }
-              : {},
-          )}
-        />
-      ),
-      secondary: "Cancel",
-      primary: "Save rate",
-      validate: () => {
-        const problem = draftProblem(draftRef.current || {});
-        if (problem) {
-          fb.toast({ tone: "error", title: problem });
-          return false;
-        }
-        return true;
-      },
-    });
-    if (answer !== "primary") return;
-
-    const draft = draftRef.current;
-    const id = newCustomRateId(draft.name);
-    try {
-      await apiAuthed(`/rategen-v2/library/custom-rates/${encodeURIComponent(id)}`, {
-        method: "PUT",
-        token: accessToken,
-        body: draftToPayload(draft, id, mine?.customRatesVersion ?? 1),
-      });
-      await loadRates();
-      const t = draftTotals(draft);
-      const opened = await fb.card({
-        tone: "success",
-        title: "New rate saved",
-        msg: `${draft.name.trim()} · ${money(t.totalCost)} per ${draft.unit}`,
-        secondary: "Back to the library",
-        primary: "Open the build-up",
-      });
-      if (opened === "primary") navigate(`/work/rate/custom:${id}`);
-    } catch (e) {
-      const conflict = String(e?.message || "").toLowerCase().includes("conflict");
-      fb.toast({
-        tone: "error",
-        title: conflict ? "Your library moved underneath this" : "That did not save",
-        msg: conflict
-          ? "Refresh the page and build it again — nothing was written."
-          : String(e?.message || "Nothing was written."),
-      });
-    }
-  }
-
   /* ── render ────────────────────────────────────────────────────────────── */
 
   if (failed) {
@@ -605,13 +383,8 @@ export default function DsWorkLibrary() {
           </p>
         </div>
         <div className="wk-acts">
-          {tab === "rates" ? (
-            <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={buildRate}>
-              Build a custom rate
-            </button>
-          ) : null}
           <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
-            Edit the library
+            Full library
           </Link>
         </div>
       </div>
@@ -663,30 +436,20 @@ export default function DsWorkLibrary() {
 
       <p className="wk-count">{count}</p>
 
-      {tab === "materials" ? (
-        <div className="rg-op">
-          <b>Prices</b>
-          <em>
-            Market prices move. Change a category by a percentage and your own prices follow.
-            Rates already built keep the cost they were built at until they are priced again.
-          </em>
-          <button
-            type="button"
-            className="ds-btn btn-o ds-btn-sm"
-            onClick={updatePrices}
-            disabled={!master || !itemRows.length}
-          >
-            Update prices
-          </button>
-        </div>
-      ) : null}
+      <div className="rg-op" role="note">
+        <b>Build and edit rates in ADLM Rate Gen</b>
+        <em>
+          This page shows your library. New rates, changes to a rate and material or labour
+          prices are made in Rate Gen on your computer, and appear here after its next sync.
+        </em>
+      </div>
 
       {tab === "rates" ? (
         !rows.length ? (
           <div className="wk-empty">
             Nothing in the library yet. Rate Gen fills this as rates are published to your
-            account, and every product on the account prices against it. You can also build a
-            rate of your own here and it behaves exactly like a published one.
+            account, and every product on the account prices against it. Rates of your own are
+            built in Rate Gen and appear here after it syncs.
           </div>
         ) : !shownRates.length ? (
           <p className="wk-empty">

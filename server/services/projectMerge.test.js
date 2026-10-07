@@ -26,6 +26,9 @@
 // two could silently drift apart again.
 
 import test from "node:test";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 
 process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "test-access-secret";
@@ -42,6 +45,8 @@ import {
 import { TakeoffProject } from "../models/TakeoffProject.js";
 
 const { guardMaskedWrite, sanitizeVariations } = await import("../routes/projects.js");
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 const CONTAINER_ID = "6512aa000000000000000001";
 const ARCH_ID = "6512aa000000000000000002";
@@ -436,4 +441,62 @@ test("a container whose source was deleted still reports it rather than pretendi
       [STRUCT_ID],
     );
   });
+});
+
+/* ── A source's own variations on an ordinary save ────────────────────────── */
+//
+// applyMergedWrite (routes/projects.js) applied a SOURCE's variations only when
+// the payload carried no items:
+//
+//   if (Array.isArray(bucket.variations) && !Array.isArray(bucket.items)) { … }
+//
+// A save from the project screen sends the whole bill AND the whole variations
+// list together (saveRatesToCloud, ProjectsGeneric.jsx), which is every
+// ordinary save. So the guard was false every time and the QS's variation edits
+// on a merged project were silently discarded: approve a variation, save, and
+// the approval was gone on the next load.
+//
+// These pin both halves of the premise — that the two arrive together in one
+// bucket, and that nothing in the route conditions one on the other.
+
+test("an ordinary save routes a source's items and its variations into one bucket", () => {
+  const body = {
+    items: [{ code: namespacedIdentity(ARCH_ID, "BQ-1"), description: "Excavate", qty: 10, rate: 2500 }],
+    variations: [
+      {
+        // A variation carries no code of its own, so it routes by the source tag
+        // the read stamped on it (ownerOf reads sourceProjectId first).
+        sourceProjectId: ARCH_ID,
+        description: "Extra manholes",
+        qty: 1,
+        unit: "item",
+        rate: 900_000,
+        status: "approved",
+      },
+    ],
+  };
+  const { bySource, unroutable } = splitMergedWrite(container(), body);
+  assert.deepEqual(unroutable, []);
+  const bucket = bySource.get(ARCH_ID);
+  assert.ok(bucket, "expected a bucket for the architectural source");
+  assert.equal(bucket.items.length, 1, "the bill came through");
+  assert.equal(bucket.variations.length, 1, "and so did the variations, in the SAME bucket");
+  assert.equal(bucket.variations[0].status, "approved");
+});
+
+test("nothing in the merged write applies a source's variations only when items are absent", () => {
+  // A source scan, because applyMergedWrite is not exported and the guard was a
+  // single condition. If it comes back, this says so.
+  const src = fs.readFileSync(
+    path.join(here, "..", "routes", "projects.js"),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    src,
+    /bucket\.variations\) && !Array\.isArray\(bucket\.items\)/,
+    "a source's variations must not be conditioned on the payload having no items",
+  );
+  // And the composition that replaced it is still there: the payload sets the
+  // list, the lock's own diverted variations append on top.
+  assert.match(src, /lockVariations/, "expected the lock diversions to be composed, not inlined");
 });

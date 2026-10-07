@@ -311,7 +311,7 @@ export default function DsPricingPage({ d }) {
             <article className="pcard2 tilt rise">
               {" "}
               <div className="pcard2-top">
-                <img src="/ds/bg-mep.jpg" alt="Revit MEP" />
+                <img src="/ds/bg-mep.jpg" alt="SERVIQ" />
               </div>
               {" "}
               <div className="pcard2-body">
@@ -323,7 +323,7 @@ export default function DsPricingPage({ d }) {
                 </span>
                 {" "}
                 <h3>
-                  Revit MEP
+                  SERVIQ
                 </h3>
                 {" "}
                 <p className="blurb">
@@ -371,7 +371,7 @@ export default function DsPricingPage({ d }) {
                 </ul>
                 {" "}
                 <Link to="/product/mep" data-ds-page="mep" className="ds-btn btn-p btn-full">
-                  Explore Revit MEP
+                  Explore SERVIQ
                 </Link>
                 {" "}
               </div>
@@ -613,7 +613,7 @@ export default function DsPricingPage({ d }) {
                       <img src="/ds/ic-mep.png" alt="" />
                       {" "}
                       <b>
-                        Revit MEP
+                        SERVIQ
                       </b>
                       <span>
                         Revit
@@ -1029,7 +1029,7 @@ export default function DsPricingPage({ d }) {
                       <svg viewBox="0 0 24 24">
                         <use href="#i-check" />
                       </svg>
-                      Revit MEP + clash detection
+                      SERVIQ + clash detection
                     </li>
                     {" "}
                     <li>
@@ -1097,7 +1097,7 @@ export default function DsPricingPage({ d }) {
                       <svg viewBox="0 0 24 24">
                         <use href="#i-check" />
                       </svg>
-                      3,100+ professionals trained
+                      800+ professionals trained
                     </li>
                     {" "}
                     <li>

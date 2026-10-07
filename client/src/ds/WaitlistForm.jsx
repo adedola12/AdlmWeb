@@ -33,6 +33,44 @@ const KNOWN_TOPICS = new Set([
   "Institutions",
 ]);
 
+// Forms recognised by their own id instead of a hidden `topic` field.
+//
+// The Beyond BIM registration page is generated from his markup and must never
+// be hand edited, so a hidden input cannot be added to it. Its form had no
+// action and no handler either, so pressing "Register for Beyond BIM" simply
+// reloaded the page: every registration for a ₦180,000 programme went nowhere,
+// and the visitor was given no reason to think otherwise. `id="bb-form"` is
+// stable in his markup, so that is the hook.
+const FORMS_BY_ID = new Map([["bb-form", "Beyond BIM registration"]]);
+
+// The Beyond BIM form asks fourteen questions and the waitlist row holds
+// name / email / org / message. Rather than drop the rest — a phone number and
+// a country on a paid registration are the two things whoever works the list
+// needs most — they are written into `message` as labelled lines, in the order
+// the form asks them. Nothing the visitor typed is lost, and no schema changes.
+const BB_DETAIL_FIELDS = [
+  ["phone", "Phone"],
+  ["country", "Country"],
+  ["role", "Role"],
+  ["experience", "Experience"],
+  ["organisation", "Organisation"],
+  ["membership", "NIQS membership"],
+  ["revit", "Revit / model experience"],
+  ["adlm", "ADLM tools used"],
+  ["seats", "Seats"],
+  ["heard", "Heard about us via"],
+  ["goal", "What they want from it"],
+];
+
+function beyondBimMessage(data) {
+  const lines = [];
+  for (const [field, label] of BB_DETAIL_FIELDS) {
+    const v = String(data.get(field) || "").trim();
+    if (v) lines.push(`${label}: ${v}`);
+  }
+  return lines.join("\n");
+}
+
 export default function WaitlistForm({ children }) {
   const [state, setState] = React.useState({ status: "idle", message: "" });
   // The container the confirmation is portalled into — the form's own parent,
@@ -46,9 +84,11 @@ export default function WaitlistForm({ children }) {
       if (!form) return;
 
       const data = new FormData(form);
-      const topic = String(data.get("topic") || "").trim();
+      const hiddenTopic = String(data.get("topic") || "").trim();
+      const byId = FORMS_BY_ID.get(String(form.id || ""));
+      const topic = KNOWN_TOPICS.has(hiddenTopic) ? hiddenTopic : byId;
       // Not one of ours — let the browser do whatever his markup says.
-      if (!KNOWN_TOPICS.has(topic)) return;
+      if (!topic) return;
 
       e.preventDefault();
       if (state.status === "sending") return;
@@ -57,13 +97,17 @@ export default function WaitlistForm({ children }) {
       setHost(form.parentElement);
       setState({ status: "sending", message: "" });
 
+      const isBeyondBim = topic === "Beyond BIM registration";
       const payload = {
         topic,
         name: String(data.get("name") || "").trim(),
         email: String(data.get("email") || "").trim(),
-        org: String(data.get("org") || "").trim(),
+        // His Beyond BIM field is "organisation"; the solutions forms use "org".
+        org: String(data.get("org") || data.get("organisation") || "").trim(),
         civil3d: String(data.get("civil3d") || "").trim(),
-        message: String(data.get("message") || "").trim(),
+        message: isBeyondBim
+          ? beyondBimMessage(data)
+          : String(data.get("message") || "").trim(),
         sourcePath: window.location.pathname,
       };
 

@@ -350,7 +350,7 @@ export default function DsDashProduct() {
                 <li>
                   <Link className="off" to="/work/tool?t=mep" data-ds-page="work-tool">
                     <img src="/ds/ic-mep.png" alt="" />
-                    Revit MEP{" "}
+                    SERVIQ{" "}
                     <span className="add">
                       Add
                     </span>
@@ -602,7 +602,7 @@ export default function DsDashProduct() {
               </button>
               {" "}
               <button type="button" data-f="mep">
-                Revit MEP
+                SERVIQ
               </button>
               {" "}
               <button type="button" data-f="timepro">

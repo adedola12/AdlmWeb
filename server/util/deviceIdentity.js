@@ -56,7 +56,7 @@ const HUB_DEFERRED_PRODUCTS = new Set(["revit", "archicad"]);
 const PRODUCT_LABELS = {
   revit: "QUIV",
   archicad: "QUIV for ArchiCAD",
-  mep: "ADLM MEP & HVAC",
+  mep: "SERVIQ",
   planswift: "HERON",
   rategen: "RateGen",
 };

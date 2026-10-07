@@ -21,11 +21,17 @@ describe("section tabs (R03)", () => {
   });
 
   it("opens My tools out into the Work tabs, only for tools the account owns", () => {
+    // Constants sits beside RateGen and is shown to everyone: it is the library
+    // of waste factors, mixes and labour and plant outputs that decides what a
+    // budget costs, so it belongs with the rates rather than in account
+    // settings — and it is useful to anyone with a project, not only to a
+    // particular tool's owner.
     expect(labels("work-home", new Set(["revit", "planswift"]))).toEqual([
       "Overview",
       "QUIV",
       "HERON",
       "RateGen",
+      "Constants",
       "Projects",
     ]);
   });

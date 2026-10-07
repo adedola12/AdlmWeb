@@ -80,6 +80,17 @@ const ProductDeploymentSchema = new mongoose.Schema(
     localRandomVars: { type: [String], default: [] },
 
     enabled: { type: Boolean, default: true },
+
+    /**
+     * A newer build that has gone to firms with more than 5 seats but not yet
+     * to everyone (util/releaseRollout.js). The fields above stay what
+     * everybody else is offered. { version, payload, candidateId, approvedBy,
+     * approvedAt, startedAt, unlocksAt, firstVersion, unlockNotifiedAt }.
+     * payload is the approved candidate's deployment, envVars included, so it
+     * is stripped from every response that is not an admin's.
+     */
+    earlyAccess: { type: mongoose.Schema.Types.Mixed, default: null },
+
     notes: { type: String, trim: true, default: "" },
     createdBy: { type: String, trim: true, default: "" },
     updatedBy: { type: String, trim: true, default: "" },

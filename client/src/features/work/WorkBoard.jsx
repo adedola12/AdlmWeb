@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../store.jsx";
 import { apiAuthed } from "../../http.js";
 
+// eslint-disable-next-line react-refresh/only-export-components -- a hook shared by the board and the in-flight strip; only affects dev hot reload
 export function useWorkBoard() {
   const { accessToken } = useAuth();
   const [data, setData] = React.useState(null);
@@ -438,6 +439,129 @@ function ItemCard({ item, data, call, setMsg }) {
   );
 }
 
+/**
+ * Decide a whole stack of proposals at once.
+ *
+ * WHY THIS EXISTS
+ *
+ * The approver decides in batches — he reads the board, or settles a dozen on
+ * a call — and then has to register it. Forty-five proposals one at a time is
+ * forty-five round trips and, before the server grew /decide-many, forty-five
+ * emails to the owner and the submitters.
+ *
+ * WHAT IT DOES NOT DO
+ *
+ * It does not decide anything the approver could not decide one at a time.
+ * The server applies decideBlock per item (util/workBoard.js,
+ * partitionDecidable) and hands back the ones it refused WITH the reason —
+ * including the rule that nobody approves their own proposal. Those are named
+ * here rather than silently dropped, because the dangerous failure is the
+ * quiet one: forty-five go in, forty-five come back "approved", and nobody
+ * notices some were never his to decide.
+ *
+ * Only ever shown to the approver, and only when there is more than one thing
+ * waiting: for a single proposal the per-item buttons are clearer.
+ */
+function BulkDecide({ items, call, onDone }) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [note, setNote] = React.useState("");
+  const [result, setResult] = React.useState(null);
+  const [err, setErr] = React.useState("");
+
+  if (items.length < 2) return null;
+
+  async function decide(verdict) {
+    if (busy) return;
+    if (verdict !== "approved" && note.trim().length < 5) {
+      setErr("Say why, so it can be fixed.");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    setResult(null);
+    try {
+      const r = await call("/decide-many", "POST", {
+        ids: items.map((i) => i._id),
+        verdict,
+        note: note.trim(),
+      });
+      setResult(r);
+      setNote("");
+      if (onDone) await onDone();
+    } catch (e) {
+      setErr(e?.message || "That did not go through. Nothing was changed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card text-sm space-y-2">
+      {!open ? (
+        <button type="button" className="btn btn-sm" onClick={() => setOpen(true)}>
+          Decide all {items.length} at once
+        </button>
+      ) : (
+        <>
+          <div className="font-semibold">
+            Decide {items.length} proposal{items.length === 1 ? "" : "s"} together
+          </div>
+          <p className="text-slate-500">
+            The same answer goes to every one of them. Anything that is not yours to decide — your
+            own proposals, for instance — is left alone and listed below.
+          </p>
+          <textarea
+            className="w-full rounded border border-slate-300 dark:border-slate-700 bg-transparent p-2"
+            rows={2}
+            placeholder="A note, sent with the answer. Required unless you are approving."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          {err && <div className="text-red-700">{err}</div>}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn btn-sm bg-green-600 hover:bg-green-700 text-white"
+              disabled={busy}
+              onClick={() => decide("approved")}
+            >
+              {busy ? "Working…" : `Approve all ${items.length}`}
+            </button>
+            <button type="button" className="btn btn-sm" disabled={busy} onClick={() => decide("changes")}>
+              Ask for changes on all
+            </button>
+            <button type="button" className="btn btn-sm" disabled={busy} onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+          {result && (
+            <div className="space-y-1">
+              <div className="text-green-700">
+                {result.decided?.length || 0} decided.
+              </div>
+              {result.skipped?.length ? (
+                <div>
+                  <div className="text-amber-700">
+                    {result.skipped.length} left alone:
+                  </div>
+                  <ul className="list-disc pl-5 text-slate-500">
+                    {result.skipped.map((sk) => (
+                      <li key={sk.id}>
+                        {sk.title} — {sk.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function WorkBoard() {
   const { data, error, load, call } = useWorkBoard();
   const [msg, setMsg] = React.useState("");
@@ -473,6 +597,12 @@ export function WorkBoard() {
       </div>
 
       <SummaryTiles summary={data.summary} />
+
+      {/* Only the approver sees this, and only when more than one thing is
+          waiting: for a single proposal the per-item buttons are clearer. */}
+      {data.you?.isApprover && (
+        <BulkDecide items={items.filter((i) => i.stage === "proposed")} call={call} onDone={load} />
+      )}
 
       {msg && <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 p-3 text-sm">{msg}</div>}
 

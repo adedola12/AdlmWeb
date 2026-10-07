@@ -5,6 +5,7 @@
 // widget to render.
 
 import { createMessage, supportsTools } from "./aiClient.js";
+import { referralSummary } from "./referrals.js";
 import { getCatalog } from "./catalog.js";
 import { Lead } from "../models/Lead.js";
 import { syncLeadToNotion } from "../util/notion.js";
@@ -13,10 +14,18 @@ import {
   getProjectDetails,
   getAccountSummary,
   getResourceQuantity,
+  getProcurementSchedule,
   getProjectBudget,
   getProjectBill,
   getBillItemsForAi,
+  getPricingProposal,
+  getAreaPricingProposal,
+  getSetRatesProposal,
+  getProjectPeriodReport,
+  getProjectTipsForAgent,
 } from "./agentUserData.js";
+import { getRoomFinishes } from "./agentRoomFinishes.js";
+import { watToday } from "./reportPeriod.js";
 import {
   aiServiceEnabled,
   checkRatesAgainstMarket,
@@ -167,6 +176,40 @@ const ACCOUNT_TOOLS = [
     },
   },
   {
+    name: "get_my_referral_link",
+    description:
+      "Get the LOGGED-IN user's own referral/invite link, and how many people " +
+      "have signed up and subscribed through it. Use for 'can I get an invite " +
+      "link', 'refer a friend', 'my referral link', 'how many people have I " +
+      "referred'. ALWAYS print the link as a plain URL on its own line — never " +
+      "inside markdown brackets — so they can read and copy it. No arguments.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "get_procurement_schedule",
+    description:
+      "What the user still has to BUY on a project, and WHEN each thing must be " +
+      "ordered — soonest first, with anything already overdue called out. This is " +
+      "THE tool for 'what do I buy next', 'what should I be ordering this week', " +
+      "'my procurement list', 'what is late to order', 'next spend'. Order dates " +
+      "come from the programme: the earliest task that needs a material, less the " +
+      "lead time. Say which project, or omit it to use the one they are looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "Project name. Omit to use the project the user is viewing.",
+        },
+        leadDays: {
+          type: "number",
+          description: "Supplier lead time in days. Defaults to 14.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: "get_project_budget",
     description:
       "Get the full Material & Labour (Budget) breakdown for ONE of the logged-in " +
@@ -209,7 +252,256 @@ const ACCOUNT_TOOLS = [
       required: ["projectName"],
     },
   },
+  {
+    name: "get_room_finishes",
+    description:
+      "Get the PER-ROOM finishes QUIV measured from the Revit rooms of ONE of the " +
+      "logged-in user's projects (their own or shared with them): each room's " +
+      "number, name, level, floor finish, floor area (m2) and skirting length (m), " +
+      "plus totals and a room count. Use for any room or location question: " +
+      "'floor area and skirting for the toilets', 'tiles in the bathrooms', " +
+      "'how much skirting on the ground floor', 'area of room G01'. Omit `project` " +
+      "when the user is asking about the project they have open.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project: {
+          type: "string",
+          description:
+            "The project name (or closest phrase) or id. Omit to use the project the user has open.",
+        },
+        room: {
+          type: "string",
+          description:
+            "Optional room filter matched against room name or number, e.g. 'toilet', 'bathrooms', 'G01', 'toilets and stores'. Omit for every room.",
+        },
+        level: {
+          type: "string",
+          description: "Optional level filter, e.g. 'Ground Floor', 'Level 1'. Omit for every level.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
 ];
+
+/* ---- estimator & project-manager tools (logged-in, read-only) ---- */
+// Ada as the QS's estimator and PM, not only a reader of figures. All three
+// READ; none writes. propose_project_pricing builds a list the user confirms
+// on a card in the chat — the card, not Ada, calls the pricing endpoint, and
+// only after the user ticks the lines and presses Apply. project_report reads
+// what moved between two dates. project_tips runs the same rules as the tip
+// strip on the project's own tabs (util/projectTips.js).
+const ESTIMATOR_TOOLS = [
+  {
+    name: "propose_project_pricing",
+    description:
+      "PROPOSE a rate for every UNPRICED bill line on ONE of the logged-in user's " +
+      "projects, from their own RateGen library (master rates plus their overrides " +
+      "and custom rates), matched by description with the unit as a hard rule. " +
+      "Shows the user a confirm card with a tick box per line and an Apply button. " +
+      "It NEVER writes a price: nothing changes until the user presses Apply on the " +
+      "card. Use for 'price my bill', 'fill in the missing rates', 'which lines have " +
+      "no rate', 'suggest rates for this project'. Omit projectName to use the " +
+      "project the user is looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_price_by_area",
+    description:
+      "The user STATED a cost per square metre for windows or doors (\"the cost of " +
+      "windows per sqm is 88,000\", \"doors are 65k a square metre\"). PROPOSE a rate " +
+      "for every window (or door) line on the project from its own size in the " +
+      "description, e.g. \"Window W1 (1200×1500)\" = 1.8 m² → 1.8 × the rate, split " +
+      "60% material, 20% labour, 20% overhead and profit unless the user says " +
+      "otherwise. Shows a confirm card grouped by size; it NEVER writes. Nothing " +
+      "changes until the user presses Apply. Omit projectName to use the project " +
+      "the user is looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+        category: { type: "string", enum: ["windows", "doors"] },
+        ratePerM2: {
+          type: "number",
+          description: "The naira per m² the user stated, as a plain number (88000 for 88,000 or 88k).",
+        },
+        split: {
+          type: "object",
+          description:
+            "Only when the user gives one: percentages of the rate for material, labour and " +
+            "overhead/profit. Omit for the default 60 / 20 / 20. If they give material and " +
+            "labour only, the rest is overhead and profit.",
+          properties: {
+            material: { type: "number" },
+            labour: { type: "number" },
+            overheadProfit: { type: "number" },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ["category", "ratePerM2"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_set_rates",
+    description:
+      "The user STATED a rate for some bill lines (\"set blockwork to 9,500 per m2\", " +
+      "\"rate line 14 at 2,000\", \"put 45,000 on B2.3\"). PROPOSE that rate on the " +
+      "lines they named: by description words, bill code or line number. A line in " +
+      "another unit than the one they said is left off, never converted. The rate is " +
+      "split 60% material, 20% labour, 20% overhead and profit unless the user says " +
+      "otherwise. Shows a confirm card; it NEVER writes. Nothing changes until the " +
+      "user presses Apply. Omit projectName to use the project the user is looking at.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+        match: {
+          type: "object",
+          description:
+            "Which lines. Give what the user said: text (words from the description, e.g. " +
+            "\"blockwork 225\"), code (bill codes), or sn (line numbers, e.g. [14]).",
+          properties: {
+            text: { type: "string" },
+            code: { type: "array", items: { type: "string" } },
+            sn: { type: "array", items: { type: "number" } },
+          },
+          additionalProperties: false,
+        },
+        rate: {
+          type: "number",
+          description: "The naira rate the user stated, as a plain number (9500 for 9,500).",
+        },
+        unit: {
+          type: "string",
+          description: "The unit the user said the rate is per (m2, m3, nr, m...). Omit if they did not say.",
+        },
+        split: {
+          type: "object",
+          description:
+            "Only when the user gives one: percentages of the rate for material, labour and " +
+            "overhead/profit. Omit for the default 60 / 20 / 20. If they give material and " +
+            "labour only, the rest is overhead and profit.",
+          properties: {
+            material: { type: "number" },
+            labour: { type: "number" },
+            overheadProfit: { type: "number" },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ["match", "rate"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "project_report",
+    description:
+      "What happened on ONE of the logged-in user's projects between two dates: work " +
+      "valued, lines completed, actual cost against planned, certificates issued, " +
+      "variations raised and decided, materials bought, tasks finished or late, risks " +
+      "and issues, and the activity log. Also shows a card that opens the full Project " +
+      "report PDF for that range. Use for 'report for last month', 'what happened in " +
+      "September', 'progress this week', 'monthly report'. YOU must turn the user's " +
+      "words into dates using TODAY from the visitor section (Lagos, WAT). 'Last " +
+      "month' is the whole previous calendar month; 'this month' is the 1st to today; " +
+      "'1 to 30 September' is the 1st to the 30th of September of the current year " +
+      "unless they say otherwise.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+        from: { type: "string", description: "First day of the range, YYYY-MM-DD (Lagos)." },
+        to: {
+          type: "string",
+          description: "Last day of the range, YYYY-MM-DD (Lagos). Omit for today.",
+        },
+      },
+      required: ["from"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "project_tips",
+    description:
+      "What the user should do NEXT on ONE of their projects, most urgent first: " +
+      "unpriced lines, contract not locked, no progress recorded lately, overdue " +
+      "tasks, lines over budget, budget rows with no price, no programme. Use for " +
+      "'what should I do next', 'anything wrong with this job', 'what needs my " +
+      "attention', and proactively when the user starts talking about one project. " +
+      "Omit projectName to use the project the user is viewing.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name. Omit to use the project the user is viewing.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+];
+
+/* ---- what the chat says it can show ---- */
+// A chat declares the cards it renders in `capabilities` (strings) on
+// /agent/chat, next to `cards: true`. The API ships before the screens, so a
+// tool whose card an older chat cannot draw is only offered to a chat that
+// names it; otherwise Ada would show an Apply button that does nothing.
+//
+// "ada-user-rate-card": the confirm card for a rate the USER stated
+// (propose_price_by_area, propose_set_rates, 3 Oct 2026).
+export const CAP_USER_RATE_CARD = "ada-user-rate-card";
+const USER_RATE_TOOL_NAMES = new Set(["propose_price_by_area", "propose_set_rates"]);
+
+/** The declared capabilities, cleaned: short lowercase strings, at most 20. */
+export function agentCapabilities(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = new Set();
+  for (const c of raw) {
+    if (typeof c !== "string") continue;
+    const s = c.trim().toLowerCase().slice(0, 40);
+    if (s) out.add(s);
+    if (out.size >= 20) break;
+  }
+  return [...out];
+}
+
+/** Whether this chat can show the stated-rate card (and so get its tools). */
+export function canUseUserRateCard(opts = {}) {
+  return (
+    !!opts.user &&
+    opts.cards === true &&
+    agentCapabilities(opts.capabilities).includes(CAP_USER_RATE_CARD)
+  );
+}
+
+/** The estimator tools a chat may be offered, given what it can show. */
+export function estimatorToolsFor(opts = {}) {
+  if (opts.cards !== true) return [];
+  const userRates = agentCapabilities(opts.capabilities).includes(CAP_USER_RATE_CARD);
+  return ESTIMATOR_TOOLS.filter((t) => userRates || !USER_RATE_TOOL_NAMES.has(t.name));
+}
 
 /* ---- cost-intelligence tools (ADLM AI Service on AWS) ---- */
 // These call the separate serverless AI API (repo: adlm-ai-service), which is
@@ -320,7 +612,15 @@ const AI_SERVICE_TOOLS = [
 ];
 
 /* --------------------------- system prompt --------------------------- */
-function buildSystemPrompt({ knowledgePack, userContext, canReadAccount, canUseAiService, markdown = false }) {
+function buildSystemPrompt({
+  knowledgePack,
+  userContext,
+  canReadAccount,
+  canUseAiService,
+  canUseCards = false,
+  canUseUserRates = false,
+  markdown = false,
+}) {
   // Appended inside the logged-in account section: the ADLM AI Service (AWS)
   // features, offered only when the endpoint is configured and we hold a
   // forwardable token for this user.
@@ -351,6 +651,7 @@ This visitor is LOGGED IN, so you can also act as their account assistant using 
 - get_resource_quantity — the TOTAL QUANTITY and cost of one material, labour trade or resource (cement, sand, rebar, blocks, formwork, masons…) in one project or across all of them. This is the tool for ANY "how much / how many X do I need" question.
 - get_project_bill — the bill of quantities work items (qty, unit, rate, amount, % done), optionally filtered by a search phrase. Use for "what's in my bill", "rate for X", "biggest items".
 - get_project_budget — the whole Material & Labour breakdown for one project: total cost, Material vs Labour vs Plant split, procured vs still-to-buy, biggest resources. Use for "material budget", "what do I still need to buy".
+- get_room_finishes — per-room floor finish, floor area (m2) and skirting (m) measured from the Revit rooms in QUIV, with totals, filtered by room name/number and level. Use for ANY question about a room or location ("floor area and skirting for the toilets", "tiles in the bathrooms", "skirting on the ground floor"), NOT get_project_bill. Answer per room, then the totals. If it says the project has no room data, relay that it must be re-saved from QUIV 4.0.2 or later; never estimate room figures.
 Rules for account answers:
 - ALWAYS call the relevant tool and quote its numbers exactly — NEVER invent or estimate project figures, values, quantities or dates.
 - You CAN read their bill lines and their material & labour lines — never tell a user you have no access to them. If a tool finds nothing, say what was searched and ask how the item is worded in their bill.
@@ -358,7 +659,19 @@ Rules for account answers:
 - Quote money exactly as the tool returns it. If a figure is ₦0, say the bill has no rates yet rather than guessing.
 - If a project has no Material & Labour breakdown, explain it comes from the desktop plugin on save (MEP projects don't send one) — don't estimate one.
 - After answering, still be helpful commercially where natural (e.g. an expired sub → offer renewal; no RateGen → mention it) but don't force it.
-- For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.${aiSection}`
+- For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.
+${canUseUserRates ? "" : `- When the user STATES a cost or a rate for their own lines ("windows are 88,000 per sqm", "set blockwork to 9,500 per m2"): this chat cannot set rates from a message yet. Say plainly, in text, that pricing by message is coming soon, and that for now they can type the rate on the line in the project's Bill tab. Do not offer to do it, and NEVER say a rate was applied, set or saved.
+`}${canUseCards ? `
+# YOU ARE ALSO THEIR ESTIMATOR AND PROJECT MANAGER
+Act like a sharp senior QS and site PM working beside them, not a search box.
+- project_tips — what to do next on a project, most urgent first. When the user is on a project page or asks "what now", start here and lead with the top one or two.
+- propose_project_pricing — proposes a rate for every unpriced line from THEIR OWN RateGen library and shows a confirm card. You NEVER price anything yourself and NEVER say rates were applied: the user ticks the lines and presses Apply on the card. Explain the strong and weak matches, and that a match is by description and unit.
+${canUseUserRates ? `- propose_price_by_area — when the user STATES a cost per m² for windows or doors ("windows are 88,000 per sqm"), propose every window (or door) priced from its own size. propose_set_rates — when the user STATES a rate for lines ("set blockwork to 9,500 per m2", "rate line 14 at 2,000"). Whenever the user states a cost or a rate, call one of these straight away to PROPOSE it; do not just acknowledge it. Pass their figure exactly as a plain number (88k = 88000) and the unit they said. The split is 60% material, 20% labour, 20% overhead and profit unless they give another; pass theirs when they do. Never invent a rate they did not state, never convert units, and NEVER say a rate is applied, set or saved: the card applies it only when they press Apply.
+` : ""}- project_report — what moved between two dates (value done, certified, actual vs planned, variations, purchases, late tasks, activity), with a card that opens the PDF. Work out the dates from TODAY in the visitor section (Lagos time) before calling it. If the range is unclear, ask once.
+How to work:
+- Explain a rate when asked: what makes it up (material, labour, plant, overhead and profit) and what to check. Real build-ups come from suggest_rate when that tool is available; otherwise describe what a build-up for that item normally contains, clearly as general guidance, never as their figure.
+- Flag risks plainly when the data shows them: unpriced lines, lines over budget, no progress for weeks, overdue tasks, an unlocked contract on a job already on site.
+- End with one concrete next step, and offer the tool that does it.` : ""}${aiSection}`
     : `
 # NOT LOGGED IN
 This visitor is a guest, so you CANNOT read any personal projects or subscriptions. If they ask about "my projects", "my subscription", "what I've spent" etc., warmly explain they need to sign in first, then offer a 'signup' or 'nav' to login — never guess their data.`;
@@ -400,9 +713,13 @@ ${knowledgePack}`;
   return { cacheable, dynamic: userContext };
 }
 
-function buildUserContext(user) {
+export function buildUserContext(user, now = new Date(), page = {}) {
+  // Today in Lagos. In the per-visitor half so the cached prefix never changes
+  // at midnight; Ada needs it to turn "last month" into dates.
+  const today = `TODAY: ${watToday(now)} (Lagos, WAT, UTC+1). Use this for any date the user describes in words.`;
   if (!user) {
     return `# VISITOR
+${today}
 A guest who is NOT logged in. If they show buying intent, encourage creating an account (signup) as part of checkout.`;
   }
 
@@ -415,11 +732,38 @@ A guest who is NOT logged in. If they show buying intent, encourage creating an 
     ? `They ALREADY OWN (active): ${owned.join(", ")}. Do NOT try to re-sell these — instead upsell complementary products, trainings or courses they don't have.`
     : `They have no active subscriptions yet — a prime candidate for a first purchase.`;
 
+  // WHERE THEY ARE STANDING. The page reached the tools already, but nothing
+  // told the model, so on Project Aurora's own bill "price this project" was
+  // answered with "which project?". The reference is only ever a hint: every
+  // tool resolves it against the caller's OWN projects.
+  const ref = String(page?.projectRef || "").trim();
+  const onPage = ref
+    ? `
+ON A PROJECT PAGE: they are looking at one of their own projects right now (product: ${String(page?.productKey || "unknown")}, reference: ${ref}). When they say "this project", "this bill", "here", or name no project, it is THIS one: leave the project name out where a tool allows it (it then uses the page's project), and where a tool requires one, pass the reference above as the name. Do not ask which project.`
+    : "";
+
   return `# VISITOR
-A LOGGED-IN user${user.name ? ` named ${user.name}` : ""}${user.email ? ` (${user.email})` : ""}. ${ownedLine}`;
+${today}
+A LOGGED-IN user${user.name ? ` named ${user.name}` : ""}${user.email ? ` (${user.email})` : ""}. ${ownedLine}${onPage}`;
 }
 
 /* --------------------------- tool handlers --------------------------- */
+
+// The estimator tools return { text, card }. The text answers the model; the
+// card is queued for the chat to render under the reply. One card of each kind
+// per turn: if the model calls a tool twice, the later card replaces the
+// earlier, so the user never sees two Apply buttons for the same bill.
+export function withCard(out, ctx) {
+  if (!out || typeof out !== "object") return out;
+  if (out.card) {
+    // One card per kind per reply; a card with its own key (windows and doors
+    // proposed in one reply) keeps its siblings.
+    const key = (c) => c?.cardKey || c?.type;
+    ctx.pendingActions = ctx.pendingActions.filter((a) => key(a) !== key(out.card));
+    ctx.pendingActions.push(out.card);
+  }
+  return out.text || "";
+}
 async function handleSaveLead(input, ctx, outcome) {
   const email = String(input?.email || "").trim().toLowerCase();
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
@@ -521,14 +865,71 @@ async function handleAccountTool(name, input, ctx) {
   try {
     if (name === "get_my_projects") return await getPortfolioSummary(ctx.user._id);
     if (name === "get_my_account") return await getAccountSummary(ctx.user);
+    // ctx.page is the address the user is standing on. It is used only when
+    // they did not name a project — see resolveProject.
     if (name === "get_project_details")
-      return await getProjectDetails(ctx.user._id, input?.projectName);
+      return await getProjectDetails(ctx.user._id, input?.projectName, ctx.page);
     if (name === "get_resource_quantity")
-      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName);
+      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName, ctx.page);
     if (name === "get_project_budget")
-      return await getProjectBudget(ctx.user._id, input?.projectName);
+      return await getProjectBudget(ctx.user._id, input?.projectName, ctx.page);
+    if (name === "get_my_referral_link") {
+      const r = await referralSummary(ctx.user._id);
+      if (!r) return "Their referral link could not be made just now.";
+      // The bare URL on its own line: chatMarkdown renders a naked https link
+      // as a real anchor, while [text](url) would hide the code from the person
+      // who has to read it out or paste it somewhere else.
+      return [
+        `Referral link: ${r.link}`,
+        `Code: ${r.code}`,
+        `Signed up through it: ${r.signups}`,
+        `Of those, subscribed: ${r.converted}`,
+        "Print the link exactly as written above, on its own line, not as a markdown link.",
+      ].join("\n");
+    }
+    if (name === "get_procurement_schedule")
+      return await getProcurementSchedule(ctx.user._id, input?.projectName, ctx.page, {
+        leadDays: input?.leadDays,
+      });
     if (name === "get_project_bill")
-      return await getProjectBill(ctx.user._id, input?.projectName, input?.search);
+      return await getProjectBill(ctx.user._id, input?.projectName, input?.search, ctx.page);
+    if (name === "get_room_finishes")
+      return await getRoomFinishes(ctx.user._id, input, ctx.page);
+
+    // ── Estimator & PM ──
+    if (name === "propose_project_pricing")
+      return withCard(await getPricingProposal(ctx.user._id, input?.projectName, ctx.page), ctx);
+    // Only offered to a chat that draws their card; refused again here so a
+    // tool call the model makes up anyway never reaches an older chat.
+    if ((name === "propose_price_by_area" || name === "propose_set_rates") && !ctx.userRates)
+      return "Pricing by message is not available in this chat yet. Tell the user it is coming soon and that for now they can type the rate on the line in the project's Bill tab. Do not say any rate was set.";
+    if (name === "propose_price_by_area")
+      return withCard(
+        await getAreaPricingProposal(
+          ctx.user._id,
+          input?.projectName,
+          { category: input?.category, ratePerM2: input?.ratePerM2, split: input?.split },
+          ctx.page,
+        ),
+        ctx,
+      );
+    if (name === "propose_set_rates")
+      return withCard(
+        await getSetRatesProposal(
+          ctx.user._id,
+          input?.projectName,
+          { match: input?.match, rate: input?.rate, unit: input?.unit, split: input?.split },
+          ctx.page,
+        ),
+        ctx,
+      );
+    if (name === "project_report")
+      return withCard(
+        await getProjectPeriodReport(ctx.user._id, input?.projectName, input?.from, input?.to, ctx.page),
+        ctx,
+      );
+    if (name === "project_tips")
+      return await getProjectTipsForAgent(ctx.user._id, input?.projectName, ctx.page);
 
     // ── ADLM AI Service (AWS) — always fed the user's REAL bill lines ──
     if (name === "check_my_rates" || name === "find_project_errors") {
@@ -611,9 +1012,11 @@ export async function runSalesAgent(history, message, opts = {}) {
   const { knowledgePack, productIndex } = await getCatalog();
   const system = buildSystemPrompt({
     knowledgePack,
-    userContext: buildUserContext(opts.user),
+    userContext: buildUserContext(opts.user, opts.now || new Date(), opts.page),
     canReadAccount: !!opts.user,
     canUseAiService: !!opts.user && !!opts.accessToken && aiServiceEnabled(),
+    canUseCards: !!opts.user && opts.cards === true,
+    canUseUserRates: canUseUserRateCard(opts),
     markdown: opts.format === "markdown",
   });
 
@@ -630,8 +1033,22 @@ export async function runSalesAgent(history, message, opts = {}) {
     accessToken: opts.accessToken || "",
     sessionId: opts.sessionId || "",
     ip: opts.ip || "",
+    // WHERE THE USER IS STANDING.
+    //
+    // The widget is mounted on every route and used to send nothing about the
+    // page, so a user on their own project page asking "what is left to buy on
+    // this job" was asked which project they meant. The client now sends the
+    // reference its own address carries — an ObjectId on the classic workspace,
+    // a slug on the new one — and the tools fall back to it only when no
+    // project was named.
+    page: {
+      projectRef: String(opts.page?.projectRef || "").trim().slice(0, 120),
+      productKey: String(opts.page?.productKey || "").trim().toLowerCase().slice(0, 40),
+    },
     productIndex,
     pendingActions: [],
+    // The chat can show the stated-rate card (see CAP_USER_RATE_CARD).
+    userRates: canUseUserRateCard(opts),
   };
 
   // Seed messages from prior history (text only), then the new user turn.
@@ -657,11 +1074,16 @@ export async function runSalesAgent(history, message, opts = {}) {
   // configured endpoint; without either they're never offered.
   const canUseAiService = !!opts.user && !!opts.accessToken && aiServiceEnabled();
   const toolset = opts.user
-    ? [...TOOLS, ...ACCOUNT_TOOLS, ...(canUseAiService ? AI_SERVICE_TOOLS : [])]
+    ? [
+        ...TOOLS,
+        ...ACCOUNT_TOOLS,
+        ...estimatorToolsFor(opts),
+        ...(canUseAiService ? AI_SERVICE_TOOLS : []),
+      ]
     : TOOLS;
   const tools = supportsTools() ? toolset : undefined;
   const accountToolNames = new Set(
-    [...ACCOUNT_TOOLS, ...AI_SERVICE_TOOLS].map((t) => t.name),
+    [...ACCOUNT_TOOLS, ...ESTIMATOR_TOOLS, ...AI_SERVICE_TOOLS].map((t) => t.name),
   );
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {

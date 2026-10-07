@@ -24,6 +24,12 @@ import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+// Imported, not read from disk: on Lambda the API is one esbuild bundle and a
+// path relative to this file points at /var/assets/boq, which does not exist.
+// An import travels inside the bundle. The paths below remain for messages
+// and for callers (tests) that pass their own mappingPath.
+import elementalMappingJson from "../assets/boq/elemental-mapping.json" with { type: "json" };
+import tradeMappingJson from "../assets/boq/trade-mapping.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,8 +105,12 @@ function round2(n) {
   return Math.round(safeNum(n) * 100) / 100;
 }
 
-function loadMapping(mappingPath) {
+export function loadMapping(mappingPath) {
   const p = String(mappingPath || DEFAULT_MAPPING_PATH);
+  // A fresh copy each time, as a file read gave, so one export can never
+  // change the mapping another export sees.
+  if (p === DEFAULT_MAPPING_PATH) return structuredClone(elementalMappingJson);
+  if (p === TRADE_MAPPING_PATH) return structuredClone(tradeMappingJson);
   if (!fs.existsSync(p)) {
     throw new Error(`Elemental BoQ mapping not found at ${p}`);
   }

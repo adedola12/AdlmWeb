@@ -4,6 +4,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import DsPromoLive from "../DsPromoLive.jsx";
+import DsGridPrice from "../DsGridPrice.jsx";
 
 export default function DsProducts() {
   const DsPromoSlot = <DsPromoLive />;
@@ -114,9 +115,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦50,000
-                </b>
+                <DsGridPrice productKey="revit" fallback={50000} />
                 {" "}/ month
               </p>
               {" "}
@@ -150,9 +149,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦12,000
-                </b>
+                <DsGridPrice productKey="planswift" fallback={25000} />
                 {" "}/ month
               </p>
               {" "}
@@ -186,9 +183,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦8,000
-                </b>
+                <DsGridPrice productKey="rategen" fallback={20000} />
                 {" "}/ month
               </p>
               {" "}
@@ -204,7 +199,7 @@ export default function DsProducts() {
             <article className="gcard tilt rise">
               {" "}
               <div className="gcard-bg">
-                <img src="/ds/bg-mep.jpg" alt="Revit MEP" />
+                <img src="/ds/bg-mep.jpg" alt="SERVIQ" />
               </div>
               {" "}
               <span className="host">
@@ -213,7 +208,7 @@ export default function DsProducts() {
               {" "}
               <img className="picon" src="/ds/ic-mep.png" alt="" aria-hidden="true" />
               <h3>
-                Revit MEP
+                SERVIQ
               </h3>
               {" "}
               <p>
@@ -222,14 +217,12 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦18,000
-                </b>
+                <DsGridPrice productKey="mep" fallback={45000} />
                 {" "}/ month
               </p>
               {" "}
               <Link to="/product/mep" data-ds-page="mep" className="ds-btn btn-p ds-btn-sm">
-                Explore Revit MEP{" "}
+                Explore SERVIQ{" "}
                 <svg viewBox="0 0 24 24">
                   <use href="#i-arrow" />
                 </svg>
@@ -258,9 +251,7 @@ export default function DsProducts() {
               {" "}
               <p className="gprice">
                 from{" "}
-                <b>
-                  ₦2,000
-                </b>
+                <DsGridPrice productKey="qs-takeoff" fallback={5000} />
                 {" "}/ month
               </p>
               {" "}
@@ -583,7 +574,7 @@ export default function DsProducts() {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes for QUIV, Revit MEP and HERON. They are plugins that dock into software you already run. RateGen and Time Pro are standalone and need nothing else.
+                Yes for QUIV, SERVIQ and HERON. They are plugins that dock into software you already run. RateGen and Time Pro are standalone and need nothing else.
               </div>
               {" "}
             </details>

@@ -105,7 +105,7 @@ export default function DsLicensing() {
             </h3>
             {" "}
             <p>
-              QUIV and Revit MEP require your own Autodesk Revit licence. HERON requires your own PlanSwift licence. CIVIQ will require AutoCAD Civil 3D. We do not resell those.
+              QUIV and SERVIQ require your own Autodesk Revit licence. HERON requires your own PlanSwift licence. CIVIQ will require AutoCAD Civil 3D. We do not resell those.
             </p>
             {" "}
             <h3>
