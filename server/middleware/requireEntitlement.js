@@ -28,6 +28,19 @@ function isEntActive(e) {
   return true;
 }
 
+/**
+ * The same test requireEntitlement applies, for code that holds a user
+ * document rather than a request (the God account passes, as it does there).
+ */
+export function hasActiveEntitlement(user, productKey) {
+  if (!user) return false;
+  if (isGodUser(user)) return true;
+  const keys = acceptableKeysFor(entitlementKeyFor(productKey));
+  return (user.entitlements || []).some(
+    (e) => keys.includes(e?.productKey) && isEntActive(e),
+  );
+}
+
 /** requireEntitlement("revit" | "revitmep" | "planswift" | "rategen") */
 export function requireEntitlement(productKey) {
   return async (req, res, next) => {

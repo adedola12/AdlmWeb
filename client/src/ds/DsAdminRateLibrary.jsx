@@ -13,16 +13,21 @@
 //
 // WHAT THIS PAGE CANNOT DO, DELIBERATELY
 //
-// Nothing here edits. Rates are viewed on the website and edited in Rate Gen;
-// master material and labour prices are published from Rate Gen too. The one
-// thing the website owns is BUILDING a rate, which is why the only action on
-// this page is "New rate" and it goes to the builder.
+// Nothing here edits a rate or a material or labour price. Rates are viewed on
+// the website and edited in Rate Gen; master material and labour prices are
+// published from Rate Gen too. The website owns BUILDING a rate ("New rate"),
+// and, since R2, two things Rate Gen desktop has no store for: ADLM's default
+// overhead and profit per trade, and the plant library (Rate data → Plant).
 
 import React from "react";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { useAdmToast } from "./adminKit.jsx";
+import { useFeedback } from "./feedback/feedbackContext.js";
+import AdminPlantLibrary from "./rategen/AdminPlantLibrary.jsx";
+import TradeMarginsEditor from "./rategen/TradeMarginsEditor.jsx";
+import { marginRowsPayload } from "./rategen/tradeMargins.js";
 import "../styles/ds-work.css";
 
 const ZONES = [
@@ -116,6 +121,7 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
 
   const { accessToken } = useAuth();
   const [say, toast] = useAdmToast();
+  const fb = useFeedback();
 
   // rates | materials | labour — but a screen only ever offers its own half.
   const [tab, setTab] = React.useState(isData ? "materials" : "rates");
@@ -154,7 +160,7 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
      These DO move with the zone: the same cement is not the same money in
      Lagos and in Kano, which is the whole reason the master library is zoned. */
   React.useEffect(() => {
-    if (!accessToken || tab === "rates") return undefined;
+    if (!accessToken || tab === "rates" || tab === "plant") return undefined;
     let alive = true;
     setLib(null);
     setLibFailed(false);
@@ -266,10 +272,54 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
       .catch(() => say("That rate's build-up could not be read."));
   }
 
-  const loading = tab === "rates" ? !rates : !lib && !libFailed;
+  /* ── ADLM's default overhead and profit per trade (R2) ─────────────────
+     Read only when a master rate is CREATED without a percentage. Saving it
+     re-prices no published rate. */
+  async function openTradeMargins() {
+    let t;
+    try {
+      t = await apiAuthed("/admin/rategen-v2/trade-margins", { token: accessToken });
+    } catch {
+      say("The trade margins could not be read.");
+      return;
+    }
+    const draftRef = { current: null };
+    const answer = await fb.card({
+      tone: "info",
+      noIcon: true,
+      title: "Default margins by trade",
+      msg: "What a NEW master rate in each trade gets when it is built without an overhead or profit figure. Published rates keep their own: nothing here re-prices them.",
+      body: <TradeMarginsEditor draftRef={draftRef} trades={t.trades || []} scope="master" />,
+      secondary: "Cancel",
+      primary: "Save margins",
+      validate: () => {
+        const { problem } = marginRowsPayload(draftRef.current || []);
+        if (problem) {
+          fb.toast({ tone: "error", title: problem });
+          return false;
+        }
+        return true;
+      },
+    });
+    if (answer !== "primary") return;
+    try {
+      await apiAuthed("/admin/rategen-v2/trade-margins", {
+        method: "PUT",
+        token: accessToken,
+        body: { rows: marginRowsPayload(draftRef.current).rows },
+      });
+      fb.toast({ title: "Margins saved", msg: "No published rate was changed." });
+    } catch (e) {
+      fb.toast({ tone: "error", title: "Margins were not saved", msg: String(e?.message || "") });
+    }
+  }
+
+  const loading = tab === "rates" ? !rates : tab === "plant" ? false : !lib && !libFailed;
 
   const count =
-    tab === "rates"
+    tab === "plant"
+      ? "ADLM's machines · priced per day from their parts, used by the hour · not zoned yet"
+      : tab === "rates"
       ? `${rateRows.length} ${rateRows.length === 1 ? "rate" : "rates"}` +
         (cat === "all" ? "" : ` in ${cat}`) +
         " · built at the cost each was published with"
@@ -316,9 +366,14 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
               </select>
             </label>
           ) : (
-            <Link className="ds-btn btn-p ds-btn-sm" to="/admin/rategen/build">
-              New rate
-            </Link>
+            <>
+              <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={openTradeMargins}>
+                Default margins by trade
+              </button>
+              <Link className="ds-btn btn-p ds-btn-sm" to="/admin/rategen/build">
+                New rate
+              </Link>
+            </>
           )}
         </div>
       </div>
@@ -347,6 +402,7 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
             {[
               ["materials", "Materials"],
               ["labour", "Labour and plant"],
+              ["plant", "Plant library"],
             ].map(([k, label]) => (
               <button
                 key={k}
@@ -376,7 +432,9 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
 
       <p className="wk-count">{loading ? "Reading the library…" : count}</p>
 
-      {loading ? null : tab === "rates" ? (
+      {tab === "plant" ? (
+        <AdminPlantLibrary accessToken={accessToken} term={q} />
+      ) : loading ? null : tab === "rates" ? (
         rateRows.length ? (
           /* Same seven columns as the customer's RateGen library, so an admin
              and the estimator read the same shape. The figures are the ones
@@ -535,7 +593,9 @@ export default function DsAdminRateLibrary({ screen = "rates" }) {
       )}
 
       <p className="wk-count" style={{ marginTop: 18 }}>
-        {tab === "rates"
+        {tab === "plant"
+          ? "Plant is kept here: Rate Gen has no plant store to publish it from. A change reaches a rate when that rate is next built or priced."
+          : tab === "rates"
           ? "A rate is edited in Rate Gen, not here — open it there and the change reaches every user on their next update."
           : "Master prices are published from Rate Gen. Correct one there and every user in this zone gets it on their next price update."}
       </p>
