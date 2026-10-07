@@ -2,8 +2,8 @@
 id: archicad
 title: QUIV for ArchiCAD
 tagline: Measure walls, slabs, frames, footings, roofs and openings straight from your ArchiCAD model, then price, version and share the bill on adlmstudio.net.
-version: "1.0.0"
-updated: 2026-10-01
+version: "1.0"
+updated: 2026-10-07
 platform: Windows desktop app that works beside ArchiCAD 28, plus web pages in any browser
 productKeys: [archicad]
 order: 4
@@ -35,7 +35,7 @@ Your licence is tied to the computer you first sign in on. To move to a new PC, 
 
 ### Install the desktop app
 
-QUIV for ArchiCAD 1.0.0 is installed from the ADLM Installer Hub, the same way as the other ADLM products. See the [Installer Hub guide](/guides/installer-hub) if you have not used it before.
+QUIV for ArchiCAD 1.0 is installed from the ADLM Installer Hub, the same way as the other ADLM products. See the [Installer Hub guide](/guides/installer-hub) if you have not used it before.
 
 1. Install ArchiCAD 28 and, if you can, the Tapir add-on. Restart ArchiCAD after adding Tapir.
 2. Open the ADLM Installer Hub and sign in.
@@ -98,7 +98,7 @@ The sidebar on the left lists everything in the app, in groups:
 
 The take-off modules are greyed out until you start a project and choose what you are measuring (see the next section). **Dashboard**, **BoQ** and **Budget** are always available.
 
-> **Important:** In version 1.0.0, these modules measure from the model: **Oversite Qty**, **Strip Qty**, **Pad Foundation Qty**, **Beam Qty**, **Column Qty**, **Slab Qty**, **Wall Qty**, **Roof Qty**, **Curtain Wall Qty**, **Door Qty** and **Window Qty**. The others (**Pile Cap Qty**, **Raft Foundation Qty**, **Steelwork Qty**, **Ceiling Qty**, **Staircase Qty**, **Finishes Qty**, **Landscaping Qty** and **Model Items Qty**) open a **COMING SOON** page. Measure those items another way for now.
+> **Important:** In version 1.0, these modules measure from the model: **Oversite Qty**, **Strip Qty**, **Pad Foundation Qty**, **Beam Qty**, **Column Qty**, **Slab Qty**, **Wall Qty**, **Roof Qty**, **Curtain Wall Qty**, **Door Qty** and **Window Qty**. The others (**Pile Cap Qty**, **Raft Foundation Qty**, **Steelwork Qty**, **Ceiling Qty**, **Staircase Qty**, **Finishes Qty**, **Landscaping Qty** and **Model Items Qty**) open a **COMING SOON** page. Measure those items another way for now.
 
 ## Starting a project
 
@@ -115,7 +115,7 @@ When you sign in you land on the Dashboard. It greets you by name and shows two 
 1. Click **Bungalow** or **Multi-Story**.
 2. If you chose **Multi-Story**, the **Foundation type** window asks "What type of foundation is your multi-story project?". Click **Raft Foundation**, **Pad Foundation** or **Pile Foundation**.
 
-> **Tip:** For a multi-storey job, **Pad Foundation** is the choice that measures footings from the model in version 1.0.0. Raft and pile foundations open the take-off list, but their foundation modules are still coming soon.
+> **Tip:** For a multi-storey job, **Pad Foundation** is the choice that measures footings from the model in version 1.0. Raft and pile foundations open the take-off list, but their foundation modules are still coming soon.
 
 ### The Take off List
 
@@ -281,7 +281,7 @@ Every **Update To Cloud** saves a new version. Nothing you send ever overwrites 
 
 To carry on with a project you saved before, double-click it in **Recent Projects** on the Dashboard. QUIV links the bill to that project, so your next **Update To Cloud** adds a new version to it instead of starting a new project.
 
-**Export Excel** is not available in the desktop app in version 1.0.0. Hover over it and it reminds you that Excel export is on the web: use **View in Browser**.
+**Export Excel** is not available in the desktop app in version 1.0. Hover over it and it reminds you that Excel export is on the web: use **View in Browser**.
 
 ### Starting again
 
@@ -418,9 +418,9 @@ Both the app and the web pages have a **Metric** and **Imperial** switch. Imperi
 
 Your choice is saved to your account, so the app and the website remember it.
 
-## What's new in 1.0.0
+## What's new in 1.0
 
-QUIV for ArchiCAD 1.0.0 is the first release.
+QUIV for ArchiCAD 1.0 is the first release.
 
 - A Windows app that works beside ArchiCAD 28 and reads quantities from the open model, with the same guided start as QUIV for Revit: building type, foundation type and Take off List.
 - Eleven working take-off modules: oversite, strip footings, pad foundations, beams, columns, slabs, walls, roofs, curtain walls, doors and windows.
@@ -467,7 +467,7 @@ No rows are ticked. Tick at least one element, or click **Extract** first if the
 
 ### A module just says "COMING SOON"
 
-That module does not measure from ArchiCAD models yet in version 1.0.0. Measure those items another way for now.
+That module does not measure from ArchiCAD models yet in version 1.0. Measure those items another way for now.
 
 ### Update To Cloud fails
 

@@ -3,14 +3,14 @@ id: cloud-bill-budget
 title: ADLM Cloud: the bill and the budget
 tagline: Read and price the bill, pick Rate Gen rates, see the budget and buy schedule, and export your bills and reports.
 version: "2026.10"
-updated: 2026-10-05
+updated: 2026-10-07
 platform: Web, any browser (adlmstudio.net)
 productKeys: []
 pdf: ADLM-Cloud-Bill-and-Budget-Guide.pdf
 order: 10.2
 ---
 
-This is one part of the [ADLM Cloud guide](/guides/cloud). It covers a project's **Bill** and **Rates & budget** tabs, picking Rate Gen rates, your constants, and every export, including the ICMS 3 cost and carbon report. It describes the live site on 5 October 2026.
+This is one part of the [ADLM Cloud guide](/guides/cloud). It covers a project's **Bill** and **Rates & budget** tabs, picking Rate Gen rates, your constants, and every export, including the ICMS 3 cost and carbon report. It was last checked against the site on 7 October 2026.
 
 ## What's new in 2026.10
 
@@ -260,7 +260,7 @@ On a bill imported from Excel, the menu notes that the **Bill & budget** export 
 
 If the server refuses an export, for example because you can only view the project, or the export needs Rate Gen and you have none, a message says why.
 
-> **Note:** The **Generic BoQ** exports (**Export generic BoQ (by category)** and **Export generic BoQ (by trade)**) are on the classic workspace's **Export** menu only.
+> **Note:** The **Generic BoQ** exports (**Export generic BoQ (by category)** and **Export generic BoQ (by trade)**) and the **ICMS 3** exports are on the classic workspace's **Export** menu only. The project page's **Export** menu does not have them.
 
 ### The ICMS 3 cost and carbon report
 
@@ -271,7 +271,7 @@ The ICMS 3 exports are on the classic workspace's **Export** menu, in the **ICMS
 1. Open the project and click **More actions** > **Open the classic workspace**.
 2. Click **Export**.
 3. Under **ICMS 3**, click **ICMS 3 cost and carbon (Excel)**.
-4. Open the downloaded file, named after the project with "ICMS 3" on the end.
+4. Open the downloaded file, named after the project with "_ICMS3" on the end.
 
 The workbook has five sheets:
 
@@ -287,7 +287,7 @@ How the figures are worked out:
 
 - **The report total equals your contract total.** Preliminaries go in Group 08, contingency in 09.020 and VAT in 10.020, so nothing in the bill is left out.
 - **Carbon per line comes from your Rate Gen rates.** Every built-up rate in Rate Gen carries a carbon figure (kgCO2e). Where a line has no matching rate, its carbon is worked out from the work it measures, and the **Lines** sheet says what was assumed.
-- **Cost and carbon per m²** appear when the project has an IPMS 1 (gross external) or IPMS 2 (gross internal) floor area recorded. Without one, those columns stay empty.
+- **Cost and carbon per m²** appear only when the project has an IPMS 1 (gross external) or IPMS 2 (gross internal) floor area recorded. ADLM Cloud has no screen to record a floor area yet, so for now these figures are left out and you divide by the floor area yourself.
 - Details the bill does not carry, such as the country (Nigeria), currency (NGN) and base date (the day you export), are filled in and marked **Assumed** on the first sheet.
 
 **ICMS 3 cost and carbon (JSON)** gives the same report as data, with full ICMS 3 codes. It conforms to the RICS Data Standard 3.3.3, so a client's cost database can read it directly.
@@ -355,7 +355,7 @@ Read the message: you may only have view access, or the export needs a Rate Gen 
 
 ### The ICMS 3 report has no cost per m²
 
-The project has no IPMS 1 or IPMS 2 floor area recorded, so per-m² figures are left out.
+The project has no IPMS 1 or IPMS 2 floor area recorded, so per-m² figures are left out. ADLM Cloud has no screen to record a floor area yet, so divide the totals by the floor area yourself and say which area you used.
 
 ### Most of my bill is on the Not placed sheet
 
