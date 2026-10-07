@@ -129,3 +129,8 @@ test("an unknown product key still gets a sensible name and no invented host app
   assert.deepEqual(p.audienceKeys, ["newthing"]);
   assert.match(updateSteps(p, "1.0.1")[0], /close New Thing Pro if it is open/);
 });
+
+test("a 2026 build is mailed as the launch version and its build", () => {
+  const m = buildReleaseMessage({ firstName: "Ada Obi", product: productFor("revit"), version: "4.0.2610.1", notes, unsubscribeUrl: UNSUB });
+  assert.equal(m.subject, "QUIV 4.0.0 · build 2610.1 is ready — update from the Installation Center");
+});
