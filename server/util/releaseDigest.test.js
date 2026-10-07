@@ -43,7 +43,9 @@ import {
   HUB_AUDIENCE_KEYS,
   withNextDigest,
 } from "./releaseDigest.js";
-import { buildDigestMessage, digestSubject, HUB_PRODUCT } from "./releaseDigestEmail.js";
+import { buildDigestMessage, digestSubject, HUB_PRODUCT, shownVersion } from "./releaseDigestEmail.js";
+import { widenReleaseNotice } from "./releaseNotifier.js";
+import { ROLLOUT_ORGANIZATIONS, unlockDate } from "./releaseRollout.js";
 import { productFor, LEGAL_LINE } from "./releaseEmail.js";
 import { readTopicUnsubscribeToken } from "./campaigns.js";
 import {
@@ -1414,7 +1416,11 @@ test("withNextDigest adds the next digest's date to a queued notice only, and ne
 
 /* ══════════════════════════════════════════════════════ SES only, ever ══ */
 
-test("the digest uses SES directly and never the mailer that falls back to Resend", () => {
+// SES is the only transport in the studio (util/mailer.js, owner 6 Oct 2026, and
+// util/sesTransport.js). The digest goes straight to SES like the per-release
+// send, so it keeps its own claim-before-send ledger rather than mailer.js's
+// template override; this pins that there is no other way out.
+test("the digest reaches customers through SES alone, with no other provider anywhere near it", () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   for (const f of ["releaseDigest.js", "releaseDigestEmail.js"]) {
     const src = fs.readFileSync(path.join(here, f), "utf8");
@@ -1425,4 +1431,187 @@ test("the digest uses SES directly and never the mailer that falls back to Resen
   const digest = fs.readFileSync(path.join(here, "releaseDigest.js"), "utf8");
   assert.match(digest, /import \{[^}]*\bsendViaSesOnce\b[^}]*\} from "\.\/sesTransport\.js"/);
   assert.match(digest, /send = sendViaSesOnce/);
+});
+
+/* ══════════════════════════════════ the rollout: firms first, then the rest ══ */
+//
+// util/releaseRollout.js: an approved plugin release goes to firms of more than
+// five seats first and to everyone else three months later. One build therefore
+// produces two rounds of mail, and the digest must not mix them up.
+
+/** An account belonging to a firm with `seats` organisation seats. */
+const firmPerson = (n, { seats = 9, org = "Y.S. Associates", productKey = "revit" } = {}) =>
+  person(n, {
+    email: `user${n}@ys.test`,
+    entitlements: [live(productKey, { licenseType: "organization", organizationName: org, seats })],
+  });
+
+/** The deployment of a build that has only gone to firms (earlyAccess). */
+const withEarly = (liveItem, earlyItem) => ({
+  ...liveItem,
+  earlyAccess: {
+    version: earlyItem.version,
+    payload: earlyItem,
+    candidateId: "cand1",
+    startedAt: new Date(SAT_W39),
+    unlocksAt: unlockDate(new Date(SAT_W39)),
+  },
+});
+
+test("a build that has only gone to firms is in the digest for their accounts alone", async () => {
+  const store = memoryStore({ users: [firmPerson(1), quivOnly(2)] });
+  const ses = stubSes();
+  // Approval kept the live row at 3.1.10 and put 3.1.11 in earlyAccess.
+  store.deployments.set("revit", withEarly(put("3.1.10"), put("3.1.11")));
+  const rn = await recordDeploymentRelease({
+    previous: put("3.1.10"),
+    item: put("3.1.11"),
+    audience: ROLLOUT_ORGANIZATIONS,
+    store,
+    log: quiet,
+    now: at(SAT_W39),
+  });
+  assert.equal(rn.created, true);
+  assert.equal(store.notices.get("revit@3.1.11").audience, ROLLOUT_ORGANIZATIONS);
+
+  const out = await tick(store, ses, MON_W40);
+  assert.equal(out.status, "done");
+  // The firm hears; the single user, still on 3.1.10, does not.
+  assert.deepEqual(to(ses), ["user1@ys.test"]);
+  assert.match(mailTo(ses, "user1@ys.test")[0].subject, /3\.1\.11/);
+});
+
+test("a firms-only build is not mistaken for a rollback, because the live row is still the older version", async () => {
+  const store = memoryStore({ users: [firmPerson(1)] });
+  const ses = stubSes();
+  store.deployments.set("revit", withEarly(put("3.1.10"), put("3.1.11")));
+  await recordDeploymentRelease({
+    previous: put("3.1.10"),
+    item: put("3.1.11"),
+    audience: ROLLOUT_ORGANIZATIONS,
+    store,
+    log: quiet,
+    now: at(SAT_W39),
+  });
+
+  // Reading the live row alone would call 3.1.11 "rolled back to 3.1.10" and
+  // cancel it. newestOffered reads the top of the rollout instead.
+  const p = await previewDigest({ store, now: at(MON_W40), schedule: SCHEDULE });
+  assert.deepEqual(p.withdrawn, []);
+  assert.deepEqual(p.updates.map((u) => u.key), ["revit@3.1.11"]);
+
+  const out = await tick(store, ses, MON_W40);
+  assert.equal(out.status, "done");
+  assert.equal(store.notices.get("revit@3.1.11").status, "done");
+});
+
+test("released to everyone, the next digest reaches the accounts the firms' round did not", async () => {
+  const store = memoryStore({ users: [firmPerson(1), quivOnly(2)] });
+  const ses = stubSes();
+  store.deployments.set("revit", withEarly(put("3.1.10"), put("3.1.11")));
+  await recordDeploymentRelease({
+    previous: put("3.1.10"),
+    item: put("3.1.11"),
+    audience: ROLLOUT_ORGANIZATIONS,
+    store,
+    log: quiet,
+    now: at(SAT_W39),
+  });
+  await tick(store, ses, MON_W40);
+  assert.deepEqual(to(ses), ["user1@ys.test"]);
+
+  // Three months later the approver presses "Release to everyone": the live row
+  // moves and the notice is widened. Nothing is sent by widening.
+  store.deployments.set("revit", put("3.1.11"));
+  const w = await widenReleaseNotice({ productKey: "revit", version: "3.1.11", actor: "approver@adlm.test", store, now: at(MON_W41) });
+  assert.equal(w.widened, true);
+  const widened = store.notices.get("revit@3.1.11");
+  assert.equal(widened.status, "pending", "a candidate again");
+  assert.equal(widened.digestKey, "", "no longer held by the firms' digest");
+  assert.equal(ses.calls.length, 1, "widening sends nothing");
+
+  const out = await tick(store, ses, MON_W41);
+  assert.equal(out.status, "done");
+  // Only the single user: the firm already had it, and the digest ledger is
+  // keyed per week, so nothing but `widenedAt` could keep them out.
+  assert.deepEqual(to(ses), ["user1@ys.test", "user2@firm.test"]);
+  assert.equal(mailTo(ses, "user1@ys.test").length, 1, "the firm is not told twice");
+});
+
+test("a build taken back from firms drops out of the digest it is in", async () => {
+  const store = memoryStore({ users: [firmPerson(1)] });
+  const ses = stubSes();
+  store.deployments.set("revit", withEarly(put("3.1.10"), put("3.1.11")));
+  await recordDeploymentRelease({
+    previous: put("3.1.10"),
+    item: put("3.1.11"),
+    audience: ROLLOUT_ORGANIZATIONS,
+    store,
+    log: quiet,
+    now: at(SAT_W39),
+  });
+  // The digest takes it, but SES is throttling, so it pauses with nothing sent.
+  let throttle = true;
+  const throttled = stubSes({ failFor: () => (throttle ? sesErr("TooManyRequestsException", "Maximum sending rate exceeded.", 429) : null) });
+  const paused = await tick(store, throttled, MON_W40, { send: throttled.send });
+  assert.equal(paused.retryLater, true);
+  assert.equal(store.notices.get("revit@3.1.11").status, "digesting");
+  assert.equal(throttled.accepted?.length ?? 0, 0);
+
+  // Taken back from firms: earlyAccess cleared, so the build on offer is 3.1.10
+  // again and the notice is dropped from every email the digest has not sent.
+  throttle = false;
+  store.deployments.set("revit", put("3.1.10"));
+  await tick(store, ses, plus(MON_W40, 15));
+  assert.equal(store.notices.get("revit@3.1.11").status, "cancelled");
+  assert.match(store.notices.get("revit@3.1.11").cancelledReason, /rolled back|Dropped/);
+  assert.equal(ses.calls.length, 0, "nobody was told about a build that was taken back");
+});
+
+/* ════════════════════════════ the 2026 version freeze in what customers read ══ */
+//
+// Owner, 6-7 Oct 2026: every ADLM product keeps its launch version until 2027
+// and only the BUILD moves. QUIV ships builds as 4.0.YYMM.N so they still sort
+// above 4.0.1, and a customer must read "QUIV 4.0.0, build 2610.1".
+
+test("a 2026 build is announced as its launch version and its build, never as 4.0.2610.1", async () => {
+  assert.equal(shownVersion("4.0.2610.1"), "4.0.0 \u00b7 build 2610.1");
+  assert.equal(shownVersion("4.0.2610"), "4.0.0 \u00b7 build 2610");
+  assert.equal(shownVersion("3.1.11"), "3.1.11", "a pre-freeze version reads as written");
+
+  const quiv = productFor("revit", "");
+  const rate = productFor("rategen", "");
+  const items = [
+    { kind: "product", product: quiv, version: "4.0.2610.1", notes: null },
+    { kind: "product", product: rate, version: "4.0.2610.2", notes: null },
+  ];
+
+  // The subject of a one-product week, of a several-product week, and the body.
+  assert.match(digestSubject([items[0]]), /4\.0\.0 \u00b7 build 2610\.1 is ready/);
+  assert.ok(!/4\.0\.2610\.1/.test(digestSubject([items[0]])), "never the raw build string");
+  const subject = digestSubject(items);
+  assert.match(subject, /build 2610\.1/);
+  assert.ok(!/4\.0\.2610/.test(subject));
+
+  const m = buildDigestMessage({ firstName: "Adaeze", items, unsubscribeUrl: "https://api.test/u" });
+  for (const part of [m.subject, m.html, m.text]) {
+    assert.ok(!/4\.0\.2610/.test(part), "no raw YYMM build string anywhere in the email");
+    assert.match(part, /4\.0\.0 \u00b7 build 2610\.1/);
+  }
+});
+
+test("the whole weekly email obeys the freeze, end to end", async () => {
+  const store = memoryStore({ users: [both(1)] });
+  const ses = stubSes();
+  await deploy(store, put("4.0.2610.1"), { previous: put("4.0.2609.3") });
+  await deploy(store, rategen("4.0.2610.2"), { previous: rategen("4.0.2609.1") });
+
+  const out = await tick(store, ses, MON_W40);
+  assert.equal(out.status, "done");
+  const [mail] = mailTo(ses, "user1@firm.test");
+  assert.ok(!/4\.0\.2610/.test(mail.subject + mail.html + mail.text), mail.subject);
+  assert.match(mail.subject, /build 2610\.1/);
+
+  // The notice key, and so the dedupe, still use the version as deployed.
+  assert.ok(store.notices.has("revit@4.0.2610.1"));
 });

@@ -49,9 +49,12 @@
 //
 // `:id` is the notice's _id or its key, e.g. "revit@3.1.11".
 //
-// Notices are created by the deployment PUT (routes/admin.deployments.js),
-// and a hub notice by a change of the Installation Center link
-// (routes/admin.settings.js). They wait for the weekly digest. A release
+// Notices are created by the deployment PUT (routes/admin.deployments.js) or,
+// for a release that needed sign-off, by the approval
+// (util/releaseGateFlow.js applyCandidate) - which is also where a hub notice
+// comes from, when the approver makes a new Installation Center link live. A
+// change staged at POST /admin/settings/installer-hub creates nothing, so an
+// unapproved build is never in a digest. They wait for the weekly digest. A release
 // script calls /cancel when its own checks of the published build fail, so
 // nobody is mailed about a build that failed its release check; the digest
 // also re-reads every build before it mails it. With bypassDigest, each /send

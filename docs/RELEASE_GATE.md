@@ -164,16 +164,44 @@ nobody is approving. The visible emergency path still works for real outages.
 
 ## Customer release email
 
-Approving a plugin release (or forcing it with *Emergency release*) makes it
-live and records the customers' "new version is ready" notice
-(`server/util/releaseGateFlow.js` `applyCandidate`). Nothing is emailed to
-customers at that moment: the notice waits for the **weekly release digest**
-(`server/util/releaseDigest.js`, Monday 09:00 Lagos time by default), which
-sends each customer one email listing every update for the software they
-hold. The approve and emergency responses carry `releaseNotice.nextDigestLagos`
-with that date, as the deployment PUT does. The emergency send-now for the
-digest (`POST /admin/release-notifications/digest/send-now`) is admin-only and
-separate from this gate.
+Approving a plugin release (or forcing it with *Emergency release*) records the
+customers' "new version is ready" notice (`server/util/releaseGateFlow.js`
+`applyCandidate`). Nothing is emailed to customers at that moment: the notice
+waits for the **weekly release digest** (`server/util/releaseDigest.js`, Monday
+09:00 Lagos time by default), which sends each customer one email listing every
+update for the software they hold. The approve and emergency responses carry
+`releaseNotice.nextDigestLagos` with that date, as the deployment PUT does. The
+emergency send-now for the digest
+(`POST /admin/release-notifications/digest/send-now`) is admin-only and separate
+from this gate.
+
+**A staged build is never in a digest.** `applyCandidate` is the only place a
+candidate becomes a notice, and a notice is the only thing a digest can carry,
+so a build waiting on the release desk - or one the approver rejects - announces
+nothing. The same holds for `installerHubUrl`: the save only stages it, and the
+Installation Center's digest item is queued when the approver makes it live.
+
+**The rollout cuts the week's list in two** (`server/util/releaseRollout.js`).
+A notice carries the audience its build went to:
+
+| audience | who the digest mails |
+| --- | --- |
+| `organizations` | only accounts in firms of more than 5 seats |
+| `everyone`, widened | only accounts OUTSIDE that ring (the ring had it already) |
+| `everyone` | everybody with a live licence |
+
+A build that has only gone to firms sits in the deployment's `earlyAccess` while
+the live row still names the older version, so the digest checks the build at the
+TOP of the rollout (`newestOffered`) before announcing it - reading the live row
+alone would call it a rollback and cancel it. Taking a build back from firms
+cancels its notice, which drops it from every email that week's digest has not
+sent yet.
+
+**Versions in customer mail are frozen** (owner, 6-7 Oct 2026). Every ADLM
+product keeps its launch version until 2027 and only the build moves, so builds
+ship as `x.y.YYMM.N` and the email reads them as "4.0.0 build 2610.1"
+(`server/util/releaseVersion.js` `displayVersion`). The notice key, the version
+comparisons and the dedupe all keep the version exactly as deployed.
 
 ## Mail
 

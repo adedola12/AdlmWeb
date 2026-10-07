@@ -131,6 +131,7 @@ import { mapWithPool } from "./sendPool.js";
 import { productUpdatesUnsubscribeUrl, assertUnsubscribeLinksWork } from "./campaigns.js";
 import { compareVersions, normalizeVersion, parseVersion } from "./releaseVersion.js";
 import { PRODUCTS, productFor } from "./releaseEmail.js";
+import { ROLLOUT_ORGANIZATIONS, newestOffered } from "./releaseRollout.js";
 import { HUB_PRODUCT, buildDigestMessage, DIGEST_TEMPLATE_KEY } from "./releaseDigestEmail.js";
 import {
   BATCH_SIZE,
@@ -456,10 +457,15 @@ async function insertHubNotice({ version, previousVersion = "", releaseNotes, do
 }
 
 /**
- * Called by POST /admin/settings/installer-hub when installerHubUrl changes
- * (routes/admin.settings.js). Records at most one hub notice, never sends, and
- * never throws into the save. Emptying the link cancels unfinished hub
- * notices; pointing it at an older versioned file cancels the ones above it.
+ * Called when a new Installation Center link becomes LIVE: the release
+ * approver signing off the staged installerHubUrl change
+ * (util/releaseGateFlow.js applyCandidate, kind "setting"). Not by the save at
+ * POST /admin/settings/installer-hub, which only stages it - so a Hub link
+ * nobody approves announces nothing (docs/RELEASE_GATE.md).
+ *
+ * Records at most one hub notice, never sends, and never throws into the
+ * approval. Emptying the link cancels unfinished hub notices; pointing it at an
+ * older versioned file cancels the ones above it.
  */
 export async function recordInstallerHubChange({
   previousUrl = "",
@@ -572,19 +578,49 @@ const licenceLive = (ent, now) => {
 };
 
 /**
+ * Is this notice for an account in the firms' ring, or for everybody else?
+ *
+ * THE ROLLOUT (util/releaseRollout.js) CUTS THE WEEK'S LIST IN TWO
+ *
+ * An approved plugin release goes to firms of more than five seats first and to
+ * everyone else three months later, so one build produces two rounds of mail
+ * and neither may reach the other round's accounts:
+ *
+ *   audience "organizations"          -> only accounts in the ring
+ *   audience "everyone" + widenedAt   -> only accounts OUTSIDE the ring: the
+ *                                        ring had it in the firms' round, and
+ *                                        the digest ledger is unique per
+ *                                        (digestKey, address), so it cannot by
+ *                                        itself stop a second copy
+ *   audience "everyone", not widened  -> everybody (a hotfix, a first release)
+ *
+ * A hub notice has no rollout: a new Installation Center reaches everyone at
+ * once, as the gated setting does (routes/admin.settings.js).
+ */
+export function noticeReachesRing(n, inRing) {
+  if (isHubNotice(n)) return true;
+  if (n?.audience === ROLLOUT_ORGANIZATIONS) return !!inRing;
+  if (n?.widenedAt) return !inRing;
+  return true;
+}
+
+/**
  * The updates in `notices` this person should hear about: a product's when
  * they hold a live licence for it (its audienceKeys), the Installation
  * Center's when they hold a live licence for software it installs
- * (HUB_AUDIENCE_KEYS).
+ * (HUB_AUDIENCE_KEYS). `inRing` says whether this account is one of the firms
+ * that get builds first (noticeReachesRing above).
  */
-export function updatesFor(user, notices = [], now = new Date()) {
+export function updatesFor(user, notices = [], now = new Date(), { inRing = false } = {}) {
   const keys = new Set(
     (user?.entitlements || []).filter((e) => licenceLive(e, now)).map((e) => String(e.productKey).trim().toLowerCase()),
   );
   if (!keys.size) return [];
   const installsSoftware = HUB_AUDIENCE_KEYS.some((k) => keys.has(k));
-  return notices.filter((n) =>
-    isHubNotice(n) ? installsSoftware : productOfNotice(n).audienceKeys.some((k) => keys.has(k)),
+  return notices.filter(
+    (n) =>
+      noticeReachesRing(n, inRing) &&
+      (isHubNotice(n) ? installsSoftware : productOfNotice(n).audienceKeys.some((k) => keys.has(k))),
   );
 }
 
@@ -633,7 +669,11 @@ async function noticeWithdrawn(store, n, cache) {
     if (!cache.hub) cache.hub = (await store.hubState()) || { url: "" };
     return hubWithdrawnReason(cache.hub.url, n.version);
   }
-  return withdrawnReason(await store.deploymentFor(n.productKey), n.version);
+  // newestOffered, not the live row: a build that has only gone to firms
+  // (util/releaseRollout.js) sits in the deployment's `earlyAccess` while the
+  // live row still names the older version, and reading the live row would
+  // call that notice a rollback and cancel it.
+  return withdrawnReason(newestOffered(await store.deploymentFor(n.productKey)), n.version);
 }
 
 /** A per-release run that claimed a notice this long ago and never enrolled it is dead. */
@@ -779,6 +819,22 @@ function digestMessageFor({ user, email, updates, unsubscribeUserId }) {
 
 /* ────────────────────────────────────────────────────────── the audience ── */
 
+/**
+ * The firms' ring (util/releaseRollout.js), read once and only when the week's
+ * list needs it: a build that has only gone to firms is listed for their
+ * accounts alone, and a build widened to everyone for the accounts the firms'
+ * round did not reach. A week of plain releases reads nothing.
+ *
+ * Enrolment, the preview and the send all go through here, so the three answer
+ * the same question the same way: a row enrolled for a firms-only build must
+ * still pass the licence re-check at send time (noticeReachesRing), and would
+ * not if the send assumed nobody was in the ring.
+ */
+export async function ringFor(store, notices, now) {
+  const needed = notices.some((n) => !isHubNotice(n) && (n.audience === ROLLOUT_ORGANIZATIONS || n.widenedAt));
+  return needed ? new Set((await store.earlyRingUserIds(now)).map(String)) : new Set();
+}
+
 /** Rows for the ledger: one per address, the sendable account first. */
 async function audienceRows(store, digestKey, notices, now) {
   const hasHub = notices.some(isHubNotice);
@@ -788,12 +844,13 @@ async function audienceRows(store, digestKey, notices, now) {
       ...(hasHub ? HUB_AUDIENCE_KEYS : []),
     ]),
   ];
+  const ring = await ringFor(store, notices, now);
   const users = await store.digestAudience(keys, now);
   const byEmail = new Map();
   for (const u of users) {
     const email = String(u.email || "").trim().toLowerCase();
     if (!email) continue;
-    const updates = updatesFor(u, notices, now);
+    const updates = updatesFor(u, notices, now, { inRing: ring.has(String(u._id)) });
     const why = classifyDigestRecipient(u, updates);
     const row = {
       digestKey,
@@ -964,7 +1021,8 @@ export async function previewDigest({
     if (owed) listed = notices.filter((n) => first.noticeKeys.includes(n.key));
   }
   if (who) {
-    const updates = updatesFor(who, listed, now());
+    const ring = await ringFor(store, notices, now());
+    const updates = updatesFor(who, listed, now(), { inRing: ring.has(String(who._id)) });
     const why = classifyDigestRecipient(who, updates);
     if (!updates.length) {
       sampleNote = `${who.email || userId} holds no live licence for anything in this digest.`;
@@ -1136,6 +1194,11 @@ export async function sendDigest(
   let inDoubt = 0;
   let stop = null;
 
+  // Read once for the whole run: the licence re-check below has to know which
+  // accounts are in the firms' ring, or it would drop every row enrolled for a
+  // build that has only gone to firms (ringFor above).
+  const ring = await ringFor(store, await store.noticesInDigest(key), now());
+
   /**
    * The notices this digest still announces, each read again now: a build
    * pulled since is cancelled, and one a newer version already mailed (or
@@ -1179,7 +1242,7 @@ export async function sendDigest(
     for (const row of batch) {
       const user = byId.get(String(row.userId));
       const listed = (row.noticeKeys || []).map((k) => live.get(k)).filter(Boolean);
-      const updates = user ? updatesFor(user, listed, now()) : [];
+      const updates = user ? updatesFor(user, listed, now(), { inRing: ring.has(String(row.userId)) }) : [];
       let why = user ? classifyDigestRecipient(user, updates) : "no-address";
       if (why === "no-entitlement" && !listed.length && (row.noticeKeys || []).length) {
         // Everything it listed has gone: "superseded" only when all of it was.

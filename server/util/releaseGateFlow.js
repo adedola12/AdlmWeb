@@ -106,7 +106,8 @@ export async function stageRelease({ productKey, normalized, previous, body, act
  * digest (docs/RELEASE_GATE.md).
  *
  * `rollout` overrides the candidate's own choice (the approver's switch).
- * `deployments`, `record`, `recordHub` and `annotate` are for the tests.
+ * `deployments`, `applySetting`, `record`, `recordHub` and `annotate` are for
+ * the tests.
  * Returns { item, releaseNotice, appliedTo }.
  */
 export async function applyCandidate(
@@ -117,6 +118,7 @@ export async function applyCandidate(
     rollout,
     now = new Date(),
     deployments = ProductDeployment,
+    applySetting = applySettingCandidate,
     record = recordDeploymentRelease,
     recordHub = recordInstallerHubChange,
     annotate = withNextDigest,
@@ -130,7 +132,7 @@ export async function applyCandidate(
   // STAGES the link (routes/admin.settings.js), customers keep the current Hub
   // until here, and a staged link that is never approved announces nothing.
   if (candidate.kind === "setting") {
-    const out = await applySettingCandidate(candidate, { actor });
+    const out = await applySetting(candidate, { actor });
     let releaseNotice = { created: false, reason: "setting-change" };
     if (candidate.settingField === "installerHubUrl") {
       releaseNotice = await annotated(

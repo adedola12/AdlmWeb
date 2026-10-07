@@ -144,7 +144,7 @@ test("video-poll: new uploads are filed on the free shelves first, then the poll
     return { ok: true, added: 2 };
   };
   const out = await quietly(() => runJob("video-poll", jobs, context));
-  assert.deepEqual(calls.map((c) => c.name), ["free-library", "video-poll", "release-notices"]);
+  assert.deepEqual(calls.map((c) => c.name), ["free-library", "video-poll", "release-digest"]);
   assert.deepEqual(out.freeLibrary, { ok: true, added: 2 });
 });
 
@@ -178,6 +178,6 @@ test("a failing channel feed never stops the poll or the drain", async () => {
     throw new Error("feed timed out");
   };
   const out = await quietly(() => runJob("video-poll", jobs, context));
-  assert.deepEqual(calls.map((c) => c.name), ["video-poll", "release-notices"]);
+  assert.deepEqual(calls.map((c) => c.name), ["video-poll", "release-digest"]);
   assert.deepEqual(out.freeLibrary, { ok: false, error: "feed timed out" });
 });

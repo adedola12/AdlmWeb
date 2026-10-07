@@ -41,10 +41,11 @@
 // now an emergency path (POST .../:id/send with bypassDigest:true).
 //
 // A "hub" notice (kind "hub", productKey "hub") is a new Installation Center
-// build: recorded when an admin points Setting.installerHubUrl at a new
-// ADLMInstallerHub-vX.Y.Z file, or by hand, and told to everybody with a live
-// licence for software the Installation Center installs (not a course, not a
-// web-only key), inside the same weekly email. It is never sent on its own.
+// build: recorded when the release approver signs off a new
+// ADLMInstallerHub-vX.Y.Z link (the save only stages it, docs/RELEASE_GATE.md),
+// or by hand, and told to everybody with a live licence for software the
+// Installation Center installs (not a course, not a web-only key), inside the
+// same weekly email. It is never sent on its own.
 
 import mongoose from "mongoose";
 
@@ -120,7 +121,7 @@ const ReleaseNoticeSchema = new mongoose.Schema(
     digestedAt: { type: Date, default: null },
 
     // Where it came from: "deployment" (the PUT), "manual" (an admin),
-    // "installer-hub-setting" (Setting.installerHubUrl changed).
+    // "installer-hub-setting" (an approved installerHubUrl change).
     source: { type: String, default: "deployment" },
     createdBy: { type: String, default: "" },
 

@@ -36,6 +36,7 @@ import {
   updateSteps,
   whatsNewUrl,
 } from "./releaseEmail.js";
+import { displayVersion } from "./releaseVersion.js";
 
 export const DIGEST_TEMPLATE_KEY = "release.digest";
 
@@ -91,9 +92,19 @@ function capGroups(groups = [], max = MAX_ITEMS_PER_UPDATE) {
 
 const isHub = (item) => item?.kind === "hub";
 
-/** "QUIV 3.1.11" / "Installation Center 1.0.3": how an update is named in a list. */
+/**
+ * A version as a customer reads it: "4.0.0 · build 2610.1", never
+ * "4.0.2610.1". Every ADLM product launched in 2026 keeps its launch version
+ * until 2027 and only the build moves (owner, 6 Oct 2026, util/releaseVersion.js
+ * displayVersion). Display only: the notice key and every comparison still use
+ * the version as deployed.
+ */
+export const shownVersion = (version) =>
+  displayVersion(String(version || "").trim()) || String(version || "").trim();
+
+/** "QUIV 4.0.0 · build 2610.1": how an update is named in a list. */
 export const updateLabel = (item) =>
-  `${isHub(item) ? HUB_PRODUCT.shortName : item.product.name} ${String(item.version || "").trim()}`.trim();
+  `${isHub(item) ? HUB_PRODUCT.shortName : item.product.name} ${shownVersion(item.version)}`.trim();
 
 /** Hub first (the products' own steps open it), then products by name. */
 export function orderUpdates(items = []) {
@@ -127,7 +138,7 @@ export function digestSubject(items = []) {
   if (!products.length) return "A new ADLM Installation Center is ready";
   if (ordered.length === 1) {
     const [only] = ordered;
-    return `${only.product.name} ${String(only.version).trim()} is ready — update from the Installation Center`;
+    return `${only.product.name} ${shownVersion(only.version)} is ready — update from the Installation Center`;
   }
   return `This week's ADLM updates: ${ordered.map(updateLabel).join(", ")}`;
 }
@@ -175,7 +186,9 @@ const hubNotes = (version) => ({
   title: "",
   highlight: "",
   groups: [],
-  paragraphs: [`Version ${version} of the ADLM Installation Center, the app that installs and updates your ADLM software.`],
+  paragraphs: [
+    `Version ${shownVersion(version)} of the ADLM Installation Center, the app that installs and updates your ADLM software.`,
+  ],
 });
 
 /**
@@ -216,7 +229,7 @@ export function buildDigestMessage({ firstName, items = [], unsubscribeUrl, repl
   if (hubOnly) {
     body += P(
       `A new version of the <strong style="color:#0E1620">ADLM Installation Center</strong> is ready: ` +
-        `<strong style="color:#0E1620">${esc(hub.version)}</strong>. It is free with your licence.`,
+        `<strong style="color:#0E1620">${esc(shownVersion(hub.version))}</strong>. It is free with your licence.`,
     );
   } else {
     body += P(
@@ -233,7 +246,7 @@ export function buildDigestMessage({ firstName, items = [], unsubscribeUrl, repl
     if (isHub(item)) {
       const n = item.notes || hubNotes(item.version);
       const more = whatsNewUrl(HUB_PRODUCT.slug);
-      if (!hubOnly) body += H2(`${HUB_PRODUCT.name} ${item.version}`);
+      if (!hubOnly) body += H2(`${HUB_PRODUCT.name} ${shownVersion(item.version)}`);
       body += H("What is new");
       body += notesHtml(n, more, maxPer);
       body += H("How to get it");
@@ -247,7 +260,7 @@ export function buildDigestMessage({ firstName, items = [], unsubscribeUrl, repl
 
       textParts.push(
         "",
-        `${HUB_PRODUCT.name.toUpperCase()} ${item.version}`,
+        `${HUB_PRODUCT.name.toUpperCase()} ${shownVersion(item.version)}`,
         ...notesText(n, more, maxPer),
         "",
         "How to get it:",
@@ -258,18 +271,21 @@ export function buildDigestMessage({ firstName, items = [], unsubscribeUrl, repl
 
     const n = item.notes || genericNotes(item.product);
     const more = whatsNewUrl(item.product.slug);
-    const steps = updateSteps(item.product, item.version);
-    body += H2(`${item.product.name} ${item.version}`);
+    const steps = updateSteps(item.product, shownVersion(item.version));
+    body += H2(`${item.product.name} ${shownVersion(item.version)}`);
     body += notesHtml(n, more, maxPer);
     body += H(`How to update ${item.product.name}`);
     body += `<ol style="margin:0 0 14px;padding-left:20px">${steps
       .map((s) => `<li style="margin:0 0 6px">${esc(s)}</li>`)
       .join("")}</ol>`;
-    body += P(`<a href="${esc(more)}" style="color:#E86A27">Everything new in ${esc(item.product.name)} ${esc(item.version)}</a>`);
+    body += P(
+      `<a href="${esc(more)}" style="color:#E86A27">Everything new in ${esc(item.product.name)} ` +
+        `${esc(shownVersion(item.version))}</a>`,
+    );
 
     textParts.push(
       "",
-      `${item.product.name.toUpperCase()} ${item.version}`,
+      `${item.product.name.toUpperCase()} ${shownVersion(item.version)}`,
       ...notesText(n, more, maxPer),
       "",
       `How to update ${item.product.name}:`,
@@ -294,7 +310,7 @@ export function buildDigestMessage({ firstName, items = [], unsubscribeUrl, repl
     "(receipts, licence and support mail are not affected).<br>" +
     LEGAL_LINE;
 
-  const title = hubOnly ? `ADLM Installation Center ${hub.version} is ready` : "This week's ADLM updates";
+  const title = hubOnly ? `ADLM Installation Center ${shownVersion(hub.version)} is ready` : "This week's ADLM updates";
   const preheader = hubOnly
     ? "Download it from your dashboard."
     : `${labels.join(", ")}: what is new, and how to update.`;
@@ -309,7 +325,7 @@ export function buildDigestMessage({ firstName, items = [], unsubscribeUrl, repl
     `Hi ${firstNameOf(firstName)},`,
     "",
     hubOnly
-      ? `A new version of the ADLM Installation Center is ready: ${hub.version}. It is free with your licence.`
+      ? `A new version of the ADLM Installation Center is ready: ${shownVersion(hub.version)}. It is free with your licence.`
       : `This week's updates for the ADLM software on your licence are ready: ${joinAnd(labels)}. They are included in your licence.`,
     ...(!hubOnly && hub ? ["Update the Installation Center first, then use it to update your software."] : []),
     ...textParts,
