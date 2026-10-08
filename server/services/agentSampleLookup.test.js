@@ -25,6 +25,7 @@ const {
   SAMPLE_LABEL,
   SAMPLE_MARK,
   SAMPLE_RATE_NOT_TYPED,
+  SAMPLE_REPORT_TITLE,
   isSampleAnswer,
   labelSampleReply,
   mentionsSample,
@@ -144,7 +145,7 @@ test("cross-project answers still never count a sample, with samples readable", 
   assertNoSample(total);
 });
 
-test("no Proposed rates card and no period report on a named or opened sample", async () => {
+test("no Proposed rates card on a named or opened sample (pricing still refuses)", async () => {
   install();
   const named = await getPricingProposal(ME, "5-bedroom duplex sample", lookup());
   assert.equal(typeof named, "string");
@@ -152,9 +153,105 @@ test("no Proposed rates card and no period report on a named or opened sample", 
   const opened = await getPricingProposal(ME, "", lookup({ projectRef: SAMPLE.slug, productKey: "revit" }));
   assert.equal(typeof opened, "string");
   assert.match(opened, /read-only SAMPLE project/);
-  const report = await getProjectPeriodReport(ME, "5-bedroom duplex sample", "2026-09-01", "2026-09-30", lookup());
-  assert.equal(typeof report, "string");
-  assert.match(report, /Period reports cover the user's own projects only/);
+});
+
+// ── the period report on ONE sample (owner's decision, 8 Oct 2026) ─────────
+// Figures in September: the sample moved 50,000,000 (its raft, 500 m3 at
+// 100,000), the user's own job 250,000. Any sample figure in an own answer is a leak.
+const SEPT = new Date("2026-09-10T09:00:00Z");
+const SAMPLE_MOVED = {
+  ...SAMPLE,
+  items: SAMPLE.items.map((it) => (it.code === "S1" ? { ...it, completed: true, completedAt: SEPT } : it)),
+  valuationEvents: [{ itemKey: "S1", amount: 50000000, markedAt: SEPT }],
+};
+const OWN_MOVED = {
+  ...OWN,
+  valuationEvents: [{ itemKey: "A1", amount: 250000, markedAt: SEPT }],
+};
+const MOVED = [OWN_MOVED, SAMPLE_MOVED, SAMPLE_OWNED];
+
+test("period report: ONE named sample is allowed, labelled, and covers that sample only", async () => {
+  install(MOVED);
+  const out = await getProjectPeriodReport(ME, "5-bedroom duplex sample", "2026-09-01", "2026-09-30", lookup());
+  assert.equal(typeof out, "object", "a report with a card");
+  assert.ok(isSampleAnswer(out.text), "starts with the sample mark");
+  assert.ok(out.text.includes(SAMPLE_LABEL));
+  assert.ok(out.text.includes(SAMPLE_REPORT_TITLE));
+  assert.ok(out.text.indexOf(SAMPLE_REPORT_TITLE) < out.text.indexOf("50,000,000"), "label before any figure");
+  assert.match(out.text, /50,000,000/);
+  assert.doesNotMatch(out.text, /Lekki|250,000/, "none of the user's own projects in it");
+  assert.equal(out.card.type, "project-report");
+  assert.equal(out.card.sample, true);
+  assert.equal(out.card.title, "Sample project, figures are illustrative");
+  assert.equal(out.card.project.id, String(SAMPLE_MOVED._id));
+  assert.equal(out.card.summary.valued, 50000000);
+});
+
+test("period report: an opened sample (on its page, no name) is allowed and labelled", async () => {
+  install(MOVED);
+  const out = await getProjectPeriodReport(ME, "", "2026-09-01", "2026-09-30", lookup({ projectRef: SAMPLE.slug, productKey: "revit" }));
+  assert.equal(typeof out, "object");
+  assert.ok(isSampleAnswer(out.text));
+  assert.equal(out.card.sample, true);
+  assert.equal(out.card.title, SAMPLE_REPORT_TITLE);
+});
+
+test("period report: a sample needs a licence and the word 'sample' or its page", async () => {
+  install(MOVED);
+  const unlicensed = await getProjectPeriodReport(
+    ME,
+    "5-bedroom duplex sample",
+    "2026-09-01",
+    "2026-09-30",
+    lookup({ sampleViewer: NO_LICENCE }),
+  );
+  assert.equal(typeof unlicensed, "string");
+  assertNoSample(unlicensed);
+  // A name without "sample" never reaches it.
+  const plain = await getProjectPeriodReport(ME, "5-Bedroom Duplex - Raft Foundation", "2026-09-01", "2026-09-30", lookup());
+  assert.equal(typeof plain, "string");
+  assert.doesNotMatch(plain, /50,000,000/);
+});
+
+test("period report: the user's own project after a sample came up carries no sample figures", async () => {
+  install(MOVED);
+  const ctx = {
+    user: USER,
+    page: {},
+    lookup: lookup(),
+    pendingActions: [],
+    message: "report on the 5-bedroom duplex sample for September",
+    sampleInConversation: false,
+  };
+  const sampleOut = await handleAccountTool(
+    "project_report",
+    { projectName: "5-bedroom duplex sample", from: "2026-09-01", to: "2026-09-30" },
+    ctx,
+  );
+  assert.ok(isSampleAnswer(sampleOut), "the sample report reaches the chat, labelled");
+  assert.equal(ctx.pendingActions.length, 1);
+  assert.equal(ctx.pendingActions[0].sample, true);
+  assert.equal(ctx.pendingActions[0].title, SAMPLE_REPORT_TITLE);
+
+  ctx.message = "now the same for my Lekki Duplex";
+  ctx.sampleInConversation = true;
+  const mine = await handleAccountTool(
+    "project_report",
+    { projectName: "Lekki Duplex", from: "2026-09-01", to: "2026-09-30" },
+    ctx,
+  );
+  assert.ok(!isSampleAnswer(mine));
+  assertNoSample(mine);
+  assert.doesNotMatch(mine, /50,000,000|illustrative/);
+  assert.match(mine, /250,000/);
+  // One report card per reply: the own card replaces the sample's, so the two
+  // are never shown side by side.
+  assert.equal(ctx.pendingActions.length, 1);
+  const own = ctx.pendingActions[0];
+  assert.equal(own.project.id, String(OWN._id));
+  assert.equal(own.sample, undefined);
+  assert.equal(own.title, undefined);
+  assert.equal(own.summary.valued, 250000);
 });
 
 test("through the chat handler: stated rates and pricing refuse on an opened sample", async () => {

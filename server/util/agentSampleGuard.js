@@ -11,7 +11,13 @@
 //     sample that ever gained a userId (a copy, a bad seed, a migration) still
 //     cannot be counted.
 //   - A tool that writes, or proposes something to apply (the Proposed rates
-//     card), refuses on a sample. So does the period report.
+//     card), refuses on a sample.
+//   - The period report may run for ONE sample (owner's decision, 8 Oct 2026),
+//     under the same conditions as any other sample read (the user is on its
+//     page, or names it with the word "sample", and holds a licence for its
+//     product). It covers that sample only, and the text, the card and the PDF
+//     are labelled SAMPLE_REPORT_TITLE. A portfolio or multi-project report
+//     still never counts a sample.
 //   - Nothing Ada proposes for a real project is built from a sample: the rate
 //     proposals read the user's own RateGen library and own rate usage only.
 //
@@ -42,13 +48,26 @@ export function sampleProposalRefusal(project) {
   );
 }
 
-/** What Ada is told when the period report reaches a sample. */
+/**
+ * What Ada is told when the period report reaches a sample by any route other
+ * than the allowed one (opened, or named with "sample", by a licensed user).
+ */
 export function samplePeriodReportRefusal(project) {
   const name = String(project?.name || "This sample");
   return (
-    `"${name}" is a read-only SAMPLE project. Period reports cover the user's own projects only, ` +
-    "never a sample. Say so plainly, and offer the report for one of their own projects instead."
+    `"${name}" is a read-only SAMPLE project. A period report runs on a sample only when the user ` +
+    `is on that sample's page or names it with the word "sample", and holds a licence for its product. ` +
+    "Say so plainly, and offer the report for one of their own projects instead."
   );
+}
+
+/** The title on a sample's period report: the card's first line and the PDF's title. */
+export const SAMPLE_REPORT_TITLE = "Sample project, figures are illustrative";
+
+/** The PDF's project name for a sample: the label first, then the sample's own name. */
+export function sampleReportName(project) {
+  const name = String(project?.name || "").trim();
+  return name ? `${SAMPLE_REPORT_TITLE} (${name})` : SAMPLE_REPORT_TITLE;
 }
 
 // ── Read-only lookup of ONE sample (built on the guard above) ───────────────
