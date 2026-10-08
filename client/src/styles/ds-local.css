@@ -2550,3 +2550,114 @@
 .ds .pj-pop .pj-pop-g span{margin-left:6px;font-weight:400;letter-spacing:0;text-transform:none}
 .ds .pj-pop .pj-pop-h{margin:0 10px 4px;font:400 12px var(--font);color:var(--ink-3)}
 .ds .pj-pop > button span i{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:2px}
+/* ── the admin on a phone ────────────────────────────────────────────────────
+ * Ebun runs marketing and the mail from her phone, so every admin screen was
+ * walked at 375px and 414px. These are what broke there. All of them are under
+ * 720px only: on a desk nothing moves.
+ *
+ * Every selector carries .adm-shell. ds-admin.css is a lazy chunk that loads
+ * AFTER this sheet, so a rule written with his own selector loses to his on
+ * source order; the extra class wins on weight instead.
+ */
+@media (max-width: 720px) {
+  /* A row of tabs (Waitlist, Purchases, Support, Storage, AI usage...) kept one
+     line and pushed the whole page sideways. It scrolls inside its own strip. */
+  .ds .adm-shell .adm-tabs {
+    overflow-x: auto; overscroll-behavior-x: contain;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .ds .adm-shell .adm-tabs::-webkit-scrollbar { display: none; }
+  .ds .adm-shell .adm-tab { flex: none; min-height: 44px; white-space: nowrap; }
+
+  /* Thumb targets. A register's row buttons are 30px on a desk so they sit in
+     a line of text; under a thumb that is a mis-tap on the row below. */
+  .ds .adm-shell .ds-btn-sm,
+  .ds .adm-shell .adm-rowacts .ds-btn,
+  .ds .adm-shell .adm-table .ds-btn,
+  .ds .adm-shell .adm-b {
+    min-height: 40px; padding-top: 8px; padding-bottom: 8px;
+  }
+  .ds .adm-shell .adm-sel,
+  .ds .adm-shell select { min-height: 40px; }
+  .ds .adm-shell .adm-ord-b,
+  .ds .adm-shell .adm-drawer-x { width: 40px; height: 40px; }
+  .ds .adm-shell input[type="checkbox"],
+  .ds .adm-shell input[type="radio"] { width: 20px; height: 20px; }
+
+  /* A register heading's actions are flex:none so they never squash on a desk;
+     on a phone that ran Org videos' three buttons off the edge. They wrap. */
+  .ds .adm-shell .adm-pagehead { flex-wrap: wrap; }
+  .ds .adm-shell .adm-pagehead .adm-acts { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+
+  /* The composer's file picker: the browser's own file button and the hint
+     beside it were one unbreakable row. */
+  .ds .adm-shell .adm-file { flex-wrap: wrap; }
+  .ds .adm-shell .adm-file input { min-width: 0; max-width: 100%; }
+
+  /* iOS zooms the page into any field set under 16px and leaves it zoomed, so
+     the screen comes back wider than the phone after every search. */
+  .ds .adm-shell input:not([type="checkbox"]):not([type="radio"]),
+  .ds .adm-shell select,
+  .ds .adm-shell textarea { font-size: 16px; }
+
+  /* A two-column grid that becomes one column still sized that column to its
+     widest table (AI usage was 696px wide). Let it shrink; the table scrolls in
+     its own box. */
+  .ds .adm-shell .adm-cols2 { grid-template-columns: minmax(0, 1fr); }
+  .ds .adm-shell .adm-cols2 > * { min-width: 0; }
+
+  /* The composer's source and sheet are stacked here, but the column was sized
+     to the source pane's content and ran 100px off the screen. */
+  .ds .adm-shell .adm-compose .adm-split { grid-template-columns: minmax(0, 1fr); }
+  .ds .adm-shell .adm-compose .adm-src,
+  .ds .adm-shell .adm-compose .adm-out { min-width: 0; }
+
+  /* Submissions: "Open and mark" put the work under the whole queue, a long
+     scroll below where you tapped, so it looked as if nothing happened. On a
+     phone it opens over the screen instead, above Ada, with its own close. */
+  .ds .adm-shell .adm-view {
+    position: fixed; inset: 0; z-index: 900;
+    max-height: none; height: 100dvh; border: 0; border-radius: 0;
+  }
+  .ds .adm-shell .adm-view-head .adm-ico { width: 44px; height: 44px; }
+  .ds .adm-shell .adm-view-foot { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .ds .adm-shell .adm-view-foot .ds-btn { min-height: 44px; }
+  .ds .adm-shell .adm-view-foot input[type="number"] {
+    display: block; width: 100%; min-height: 44px; margin-top: 6px; padding: 8px 11px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--bg); color: var(--ink); font-family: var(--font);
+  }
+  .ds .adm-shell .adm-view-body iframe { height: 48dvh; }
+}
+
+/* The navigation drawer on a phone. His top bar sits above everything (z 70,
+   for the account menu), which put it over the open drawer and hid "Today";
+   while the drawer is open the bar goes under the veil. Ada floats above every
+   page and covered the bottom of the list, so she steps aside until it closes. */
+@media (max-width: 900px) {
+  .ds .adm-shell.adm-open .adm-top { z-index: 40; }
+  .ds .adm-shell .adm-rail {
+    z-index: 960; width: var(--adm-drawer-w);
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .ds .adm-shell .adm-veil { z-index: 950; }
+  .ds .adm-shell .adm-nav a,
+  .ds .adm-shell .adm-nav .adm-out { min-height: 44px; }
+  .ds .adm-shell .adm-rail-x { display: grid; }
+  body:has(.adm-shell.adm-open) .ada-w { display: none; }
+}
+/* 24px wider than his rail so the close sits clear of the logo and its tag.
+   Fixed rather than absolute: the rail is the scroll container and his logo
+   row is sticky over it, so an absolute button scrolled away under the logo.
+   While the drawer is shut the rail is transformed, which makes it the
+   containing block, and the button leaves with it. */
+.ds .adm-shell { --adm-drawer-w: min(288px, 86vw); }
+.ds .adm-rail-x {
+  display: none; place-items: center;
+  position: fixed; top: 14px; left: calc(var(--adm-drawer-w) - 52px); z-index: 3;
+  width: 40px; height: 40px; padding: 0; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg-alt); color: var(--ink-2);
+}
+.ds .adm-rail-x svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.ds .adm-rail-x:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
