@@ -796,6 +796,14 @@ const ItemSchema = new mongoose.Schema(
     // supplied explicitly by the plugin. Drives the per-discipline IFC
     // Element-ID validation gate.
     discipline: { type: String, default: "" },
+    // Which side of the building the line is on: "external" | "internal" for
+    // walls, wall faces (render / plaster / paint) and finishes; "" otherwise.
+    // Sent by QUIV, which tells an external wall (room on one side only) from an
+    // internal one. Lets the bill, budget and Ada price the two sides apart.
+    exposure: { type: String, default: "" },
+    // The finish named in the model for a finish line (Revit material or paint):
+    // "Weathershield Emulsion", "600x600 Porcelain Tile". "" when not a finish.
+    finishName: { type: String, default: "" },
 
     // ── Takeoff → Materials linkage (QUIV material-rate upgrade) ──
     // Set on derived material/labour lines so each one ties back to the

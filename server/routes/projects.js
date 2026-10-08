@@ -1274,6 +1274,12 @@ async function getProjectStorageInfo(req, res) {
   }
 }
 
+// "external" | "internal" from the plugin's exposure field; anything else is "".
+function normalizeExposure(value) {
+  const v = String(value || "").trim().toLowerCase();
+  return v === "external" || v === "internal" ? v : "";
+}
+
 function parseOptionalDate(value) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -1533,6 +1539,8 @@ function sanitizeItems(items, productKey = "") {
       category: item.category != null ? String(item.category) : "",
       trade: item.trade != null ? String(item.trade) : "",
       discipline: item.discipline != null ? String(item.discipline) : "",
+      exposure: normalizeExposure(item.exposure),
+      finishName: item.finishName != null ? String(item.finishName).trim().slice(0, 200) : "",
 
       // ── Takeoff → Materials linkage + margin inputs (QUIV upgrade) ──
       // Persist and echo these so derived material/labour lines stay linked
@@ -9092,6 +9100,8 @@ export const __test = {
   buildValuationLogs,
   carriesValuationState,
   computeValueToDate,
+  normalizeExposure,
+  sanitizeItems,
   valuationFactor,
 };
 
