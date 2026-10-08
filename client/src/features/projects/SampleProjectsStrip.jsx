@@ -56,6 +56,23 @@ function CardBody({ s }) {
           <b>{s.certificateCount}</b>
         </div>
       </div>
+      {s.carbon?.carbonKg > 0 ? (
+        // Upfront embodied carbon (A1-A5) of the bill, by the viewer's own RateGen
+        // rates (server/services/sampleCarbon.js), with how much of the cost it covers
+        <div
+          className="ft"
+          title={`Upfront carbon (A1-A5), worked out on ${Math.round((s.carbon.carbonShare || 0) * 100)}% of the bill's cost from your RateGen rates`}
+        >
+          <div>
+            <span>Carbon footprint</span>
+            <b>{`${(s.carbon.carbonKg / 1000).toFixed(1)} tCO2e`}</b>
+          </div>
+          <div>
+            <span>Covers</span>
+            <b>{`${Math.round((s.carbon.carbonShare || 0) * 100)}% of cost`}</b>
+          </div>
+        </div>
+      ) : null}
       {s.hasModel ? (
         <div className="fl">
           <span className="pj-flag mute" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
