@@ -31,10 +31,12 @@ summary: Log daily site output, turn it into realistic durations and crew sizes,
 
 ## 1.1.1 — August 2026 — Dark mode, a side menu you can actually read, and MS Project exports that open
 
-Time Pro gains a proper dark mode, a clearer side menu, and Microsoft Project exports that open straight into Project — priced in your own currency.
+Time Manager is now ADLM Time Pro, a paid subscription, and gains a proper dark mode, a clearer side menu, and Microsoft Project exports that open straight into Project, priced in your own currency.
 
 ### ✨ New
 
+- **ADLM Time Pro replaces the free Time Manager.** Time Pro is now a subscription, bought from the ADLM website like our other products. Your existing install, data and device carry straight over. It installs and updates from the Installer Hub under your subscriptions, not under Free Software.
+- **Sign in with your ADLM email and password.** Time Pro now signs you in with your password and checks that your subscription is active. If it is not, a Subscribe button takes you to the website. Once signed in, it keeps working offline on your saved licence.
 - **Dark mode, everywhere.** A full dark theme across every screen — sign-in, Task Log, Duration Summary, Current Weather, the task editor and the export dialogs. Time Pro follows your Windows light/dark setting the first time you open it, and remembers your choice after that. Switch any time from the moon icon at the bottom of the side menu.
 - **Sign out from the side menu.** Signing out no longer means hunting through the profile dropdown at the top of the window. It sits at the bottom of the side menu, under the theme switch.
 - **Choose the currency for your export.** The Microsoft Project export now asks which currency your rates are in — Naira, Dollar, Pound, Euro, Cedi, Shilling, Rand, CFA, Dirham, Riyal, Rupee and the Canadian and Australian dollars. Time Pro starts on the currency your Windows region uses and remembers your pick. The rate fields relabel to match, and the currency travels into the file, so Microsoft Project shows costs in the same money you typed.

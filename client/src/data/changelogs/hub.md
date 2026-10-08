@@ -23,6 +23,33 @@ summary: One signed-in desktop app that installs your ADLM products, keeps them 
   version, Data/installer-catalog.json for the product versions it ships).
 -->
 
+## 2.0 — October 2026 — A new Installer Hub, and Open for everything you own
+
+The Installer Hub is rebuilt on the new ADLM design: sign in on the splash, see what this PC has, install and update everything from one place, and press Open to start any ADLM software. It now downloads from your ADLM account as a normal Windows setup file.
+
+### ✨ New
+
+- **A new Hub, light or dark.** The splash becomes the sign-in, and a side rail takes you to Dashboard, Installation Center, Free software, Subscriptions, Install history, Profile, Settings and Help. Choose Light, Dark or Match Windows. On a small screen the rail folds to icons.
+- **Open, from the Hub.** Every installed product has an Open button. HERON, Rate Gen and Time Pro open themselves; QUIV and SERVIQ open the Revit version they are installed in. With an update waiting, the card shows Update, Open and More.
+- **A Dashboard that says what needs you.** Licences about to lapse and updates waiting come first, with what this PC has: Revit, PlanSwift, Excel, Civil 3D and Archicad, found and listed by version.
+- **Install history.** Every install, update and repair on this PC, with an export for support.
+- **Subscriptions and seats.** See your plan, your next renewal and the seats this PC holds.
+- **A setup file instead of a zip.** The Hub downloads as a standard Windows installer: run it and the Hub installs like any other app.
+- **Network signal.** The header shows your connection to ADLM, so a slow network can be told apart from a problem.
+
+### 🔧 Improved
+
+- **ADLM software only.** The Hub lists the software you own, never courses.
+- **One Hub per PC.** Opening it again brings the open window forward instead of starting a second copy.
+- **Your download link is private to you.** The Hub download sits in your ADLM account while you hold an active licence for one of our desktop products, and each link expires after an hour.
+- **HERON's PlanSwift import package is kept out of sight,** in a protected ADLM folder instead of on the shared Windows desktop.
+
+### 🐛 Fixed
+
+- **"Update available" that never went away.** The Hub now recognises the build you have installed and only offers an update when there really is a new one.
+- **A brand-new PC could not connect.** The Hub now reaches the current ADLM service from the first launch.
+- **Installs no longer go ahead when ADLM cannot be reached.** The Hub stops and asks you to try again, instead of installing an out-of-date copy it ships with.
+
 ## 1.0 — July 2026 — Everything you own, installed from one place
 
 Sign in once and the Hub shows every product your subscription covers, installs it, keeps it updated, and now ships with a full illustrated user guide.
