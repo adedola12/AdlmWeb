@@ -76,6 +76,20 @@ const CampaignSchema = new mongoose.Schema(
     sentAt: { type: Date, default: null },
     sentByEmail: { type: String, default: "", trim: true },
     error: { type: String, default: "" },
+
+    // --- resuming a send (util/campaignSend.js) ---------------------------
+    // Who pressed send, so the audit entry can still name them when the
+    // sweeper is the one that finishes the campaign.
+    sentById: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    // When it went to "sending". A send older than two weeks is not resumed.
+    sendStartedAt: { type: Date, default: null },
+    // Held by whichever run is sending, so two runs never work one campaign.
+    sweepLockedUntil: { type: Date, default: null },
+    // People SES refused. Kept so a failure is counted once and not retried
+    // by every resume.
+    failedIds: { type: [String], default: [] },
+    // Set once the "campaign.send" audit entry is written, so it is written once.
+    auditedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

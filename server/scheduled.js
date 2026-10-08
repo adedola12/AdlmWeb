@@ -64,6 +64,7 @@ function ready() {
       { runOpsDigest },
       { runReleaseNoticeDrain },
       { runFreeLibraryAuto },
+      { sweepStalledCampaigns },
       { FreeVideo },
       { Setting },
     ] = await Promise.all([
@@ -73,6 +74,7 @@ function ready() {
       import("./util/opsDigest.js"),
       import("./util/releaseNotifier.js"),
       import("./util/freeLibraryAuto.js"),
+      import("./util/campaignSend.js"),
       import("./models/Learn.js"),
       import("./models/Setting.js"),
     ]);
@@ -95,6 +97,7 @@ function ready() {
       runOpsDigest,
       runReleaseNoticeDrain,
       runFreeLibrary,
+      runCampaignSweep: sweepStalledCampaigns,
     };
   })().catch((err) => {
     _readyPromise = null;
@@ -115,6 +118,37 @@ function drainDeadline(context) {
       ? context.getRemainingTimeInMillis()
       : 9 * 60 * 1000;
   return Date.now() + Math.max(0, Math.min(budget, remaining - 60 * 1000));
+}
+
+/**
+ * How long the campaign sweep may run: five minutes at most, and always a
+ * minute short of what this invocation has left, measured when it starts (so
+ * after the requested job and anything riding on it).
+ */
+function campaignSweepBudget(context) {
+  const budget = Number(process.env.CAMPAIGN_SWEEP_BUDGET_MS || 5 * 60 * 1000);
+  const remaining =
+    typeof context?.getRemainingTimeInMillis === "function"
+      ? context.getRemainingTimeInMillis()
+      : 9 * 60 * 1000;
+  return Math.max(0, Math.min(budget, remaining - 60 * 1000));
+}
+
+/**
+ * Finish any marketing campaign the API could not (util/campaignSend.js).
+ * Never throws: a stuck campaign is not a reason to fail whatever job this
+ * invocation was for.
+ */
+async function runCampaignSweep(jobs, context) {
+  if (typeof jobs.runCampaignSweep !== "function") return undefined;
+  const deadlineMs = campaignSweepBudget(context);
+  if (deadlineMs < 15 * 1000) return { ok: true, skipped: true, reason: "no time left" };
+  try {
+    return await jobs.runCampaignSweep({ deadlineMs });
+  } catch (err) {
+    console.error("[scheduled] campaign sweep failed:", err?.message || err);
+    return { ok: false, error: String(err?.message || err) };
+  }
 }
 
 export async function handler(event, context) {
@@ -214,6 +248,10 @@ export async function runJob(job, jobs, context) {
     }
     if (runError) {
       console.log("[scheduled] release-notices:", JSON.stringify(releaseNotices));
+      // The campaign sweep is the fifteen-minute safety net for marketing
+      // mail, so a bad poll does not skip it either.
+      const campaignSweep = await runCampaignSweep(jobs, context);
+      if (campaignSweep) console.log("[scheduled] campaign-sweep:", JSON.stringify(campaignSweep));
       throw runError;
     }
     if (out && typeof out === "object") out.releaseNotices = releaseNotices;
@@ -261,6 +299,14 @@ export async function runJob(job, jobs, context) {
       out.indexes = { ok: false, error: String(err?.message || err) };
     }
   }
+
+  // A campaign the API answered for but could not finish (Lambda does not
+  // promise work after the response) is carried on here, on EVERY scheduled
+  // invocation, last, with what time is left. The video poll runs every
+  // fifteen minutes, so that is the longest a send waits, with no new
+  // schedule. Own lock per campaign, and it never throws.
+  const campaignSweep = await runCampaignSweep(jobs, context);
+  if (campaignSweep && out && typeof out === "object") out.campaignSweep = campaignSweep;
 
   console.log(
     `[scheduled] ${job} done in ${Date.now() - startedAt}ms:`,
