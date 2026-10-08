@@ -21,6 +21,7 @@ import React from "react";
 import { FaFolder, FaObjectGroup, FaTrash } from "../../components/icons.jsx";
 import ProjectSectionSummary from "./ProjectSectionSummary.jsx";
 import StorageBar from "../../components/StorageBar.jsx";
+import { driftRowTitle } from "./lib/modelDrift.js";
 
 function rowId(row) {
   return row?._id || row?.id || null;
@@ -197,7 +198,12 @@ export default function ProjectExplorerGrid({
             let amber = false;
             if (row?.mergeContainer) stage = "Merged project";
             else if (row?.mergedInto) stage = "Part of a merge";
-            else if (row?.shared) {
+            else if (row?.modelDriftOpen) {
+              // r2-model-drift-alerts: placeholder wording in his amber chip
+              // until the badge is designed.
+              stage = "Model changed";
+              amber = true;
+            } else if (row?.shared) {
               stage = sharedText;
               amber = true;
             } else if (!itemCount) stage = "Empty";
@@ -226,7 +232,9 @@ export default function ProjectExplorerGrid({
                 title={
                   row?.mergedInto && !row?.mergeContainer
                     ? "This project is part of a merged project. It still opens on its own in the plugin."
-                    : undefined
+                    : row?.modelDriftOpen
+                      ? driftRowTitle(row)
+                      : undefined
                 }
                 onClick={() => id && onOpenProject?.(id)}
                 onKeyDown={(e) => {

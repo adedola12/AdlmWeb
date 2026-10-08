@@ -40,6 +40,7 @@ import "../models/LessonNote.js";
 import "../models/MailEvent.js";
 import "../models/MaterialConstantProfile.js";
 import "../models/ModelCheck.js";
+import "../models/ModelDriftEvent.js";
 import "../models/OrgVideo.js";
 import "../models/PTrainingEnrollment.js";
 import "../models/PTrainingEvent.js";

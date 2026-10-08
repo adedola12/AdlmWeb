@@ -6032,6 +6032,7 @@ export default function ProjectsGeneric() {
                 accessToken={accessToken}
                 access={sel?._access}
                 sampleInfo={sel?.isSample ? sel?.sample || {} : null}
+                modelDrift={sel?.modelDrift || null}
                 linkedSummaries={sel?.linkedSummaries || []}
                 onLinkedChange={(updated) => setSel(updated)}
                 onDeleteItem={deleteItem}

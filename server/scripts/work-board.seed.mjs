@@ -541,4 +541,20 @@ export const SEED = [
     refs: "AdlmWeb PR #22 (feat/work-board, fix 6085fa0) · docs/WORK_BOARD.md",
     design: { status: "needed", surfaces: "This board: summary tiles, the proposal form, the decision buttons, the design track" },
   },
+  {
+    key: "r2-model-drift-alerts",
+    title: "Model drift alerts: warn when the Revit / ArchiCAD model has changed since the last take-off saved on the web",
+    products: ["quiv", "archicad", "website"],
+    kind: "feature",
+    stage: "proposed",
+    summary: "When a model linked to a cloud project changes after its last take-off (elements added, removed or resized), tell the QS before they price, value or certify from a stale bill. Phase 1 (desktop): QUIV compares the open model with the project's saved element IDs and quantities, shows the difference, and reports a drift summary to the website. Phase 2 (web): the project page and the /work dashboard show a 'Model changed since last take-off' badge, and the owner gets one SES email. ArchiCAD follows the same contract. DESKTOP DEPENDENCY: the detection must run in the plugins, because the website stores no model versions.",
+    progress: "Built locally on 27 Sep 2026 while approval is pending, NOT pushed. Website (AdlmWeb feat/r2-model-drift-alerts): POST /projects/:key/:id/model-drift + /dismiss, drift cleared on the next take-off save, ModelDriftEvent log for the success metric, one owner email via SES, badge data on the project, gallery, merged parts and /me/work-overview, placeholder chips; server and client tests pass. QUIV (RevitPluginArch feat/model-drift-alerts): bounded, cancellable check on project open (removed / resized / added, per bill line), local baseline after each save, Bill banner with 'Not a real change'; builds for Revit 2024-2027, 331 tests pass.",
+    pending: "Richard: approve, and design the surfaces. Then push both branches, open PRs, website ships before the QUIV release. ArchiCAD: its plugin (source/repos/quiv-archicad) is not under git and sends no model fingerprint yet, so it needs a model stamp first. Privacy policy needs a 'Model change checks' paragraph (Richard's ds/pages).",
+    blockedOn: "Richard: approval (work board).",
+    refs: "AdlmWeb feat/r2-model-drift-alerts · RevitPluginArch feat/model-drift-alerts · server/services/modelDrift.js · QUIV Services/ModelDrift",
+    design: {
+      status: "needed",
+      surfaces: "QUIV: drift panel on model open (what changed, per bill line; 'retake affected lines', 'not a real change'). Web: 'Model changed since last take-off' badge on the project header, projects gallery and /work dashboard 'Needs a decision' table; owner email. ArchiCAD: same panel later.",
+    },
+  },
 ];
