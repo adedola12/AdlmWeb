@@ -16,6 +16,7 @@ import mongoose from "mongoose";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { similarityScore } from "../util/fuzzyMatch.js";
 import { formatRoomFinishes } from "../util/roomFinishes.js";
+import { ownOnly, isSampleProject } from "../util/agentSampleGuard.js";
 
 const OID = /^[a-f\d]{24}$/i;
 
@@ -26,14 +27,17 @@ function oid(id) {
 /** Owner or listed collaborator. Samples and strangers are refused. */
 export function canReadRoomFinishes(userId, project) {
   if (!userId || !project) return false;
+  if (isSampleProject(project)) return false;
   const me = String(userId);
   if (project.userId && String(project.userId) === me) return true;
   const collabs = Array.isArray(project.collaborators) ? project.collaborators : [];
   return collabs.some((c) => c?.userId && String(c.userId) === me);
 }
 
+// ownOnly: rooms are read from the user's own and shared projects, never from a
+// sample (util/agentSampleGuard.js).
 function mine(uid) {
-  return { $or: [{ userId: uid }, { "collaborators.userId": uid }] };
+  return ownOnly({ $or: [{ userId: uid }, { "collaborators.userId": uid }] });
 }
 
 const LIST_FIELDS = { name: 1, productKey: 1, slug: 1, updatedAt: 1, userId: 1, collaborators: 1 };

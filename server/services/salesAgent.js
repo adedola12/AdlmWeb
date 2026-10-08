@@ -26,6 +26,18 @@ import {
 } from "./agentUserData.js";
 import { getRoomFinishes } from "./agentRoomFinishes.js";
 import { watToday } from "./reportPeriod.js";
+import mongoose from "mongoose";
+import { TakeoffProject } from "../models/TakeoffProject.js";
+import {
+  sampleProposalRefusal,
+  samplePeriodReportRefusal,
+  SAMPLE_LABEL,
+  isSampleAnswer,
+  labelSampleReply,
+  mentionsSample,
+  rateTypedByUser,
+  SAMPLE_RATE_NOT_TYPED,
+} from "../util/agentSampleGuard.js";
 import {
   aiServiceEnabled,
   checkRatesAgainstMarket,
@@ -660,6 +672,12 @@ Rules for account answers:
 - If a project has no Material & Labour breakdown, explain it comes from the desktop plugin on save (MEP projects don't send one) — don't estimate one.
 - After answering, still be helpful commercially where natural (e.g. an expired sub → offer renewal; no RateGen → mention it) but don't force it.
 - For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.
+# SAMPLE PROJECTS (read-only learning material)
+Every subscriber can open a product's sample projects (names start "Sample:"). They belong to no client and their figures are illustrative.
+- Answer about a sample ONLY when the user names one or is on its page. To read a named sample, pass its name to the project tool WITH the word "sample" in it (e.g. "5-Bedroom Duplex sample").
+- Start every answer about a sample with exactly: "${SAMPLE_LABEL}"
+- A sample is NEVER one of "my projects": never count it in a portfolio, a total, a comparison, a period report or slot usage.
+- NEVER use a sample's rates, quantities or totals in an estimate, budget, valuation or rate for the user's own projects, and never copy them across. Rates cannot be proposed or applied on a sample.
 ${canUseUserRates ? "" : `- When the user STATES a cost or a rate for their own lines ("windows are 88,000 per sqm", "set blockwork to 9,500 per m2"): this chat cannot set rates from a message yet. Say plainly, in text, that pricing by message is coming soon, and that for now they can type the rate on the line in the project's Bill tab. Do not offer to do it, and NEVER say a rate was applied, set or saved.
 `}${canUseCards ? `
 # YOU ARE ALSO THEIR ESTIMATOR AND PROJECT MANAGER
@@ -739,7 +757,7 @@ A guest who is NOT logged in. If they show buying intent, encourage creating an 
   const ref = String(page?.projectRef || "").trim();
   const onPage = ref
     ? `
-ON A PROJECT PAGE: they are looking at one of their own projects right now (product: ${String(page?.productKey || "unknown")}, reference: ${ref}). When they say "this project", "this bill", "here", or name no project, it is THIS one: leave the project name out where a tool allows it (it then uses the page's project), and where a tool requires one, pass the reference above as the name. Do not ask which project.`
+ON A PROJECT PAGE: they are looking at a project right now, one of their own or a read-only sample (product: ${String(page?.productKey || "unknown")}, reference: ${ref}). When they say "this project", "this bill", "here", or name no project, it is THIS one: leave the project name out where a tool allows it (it then uses the page's project), and where a tool requires one, pass the reference above as the name. Do not ask which project.`
     : "";
 
   return `# VISITOR
@@ -764,6 +782,30 @@ export function withCard(out, ctx) {
   }
   return out.text || "";
 }
+// THE LAST LOCK BEFORE A CARD REACHES THE CHAT.
+//
+// The tools already refuse a sample (util/agentSampleGuard.js). This asks the
+// database again, by the card's own project id, so the Proposed rates card and
+// the report card can never be drawn for a sample even if a resolver changes.
+// A lookup that fails drops the card: a missing Apply button is a retry, a
+// sample's rates on a client's bill is not.
+export async function refuseSampleCard(out) {
+  if (!out || typeof out !== "object" || !out.card) return out;
+  const id = String(out.card?.project?.id || "");
+  if (!mongoose.Types.ObjectId.isValid(id)) return out;
+  let sample = null;
+  try {
+    sample = await TakeoffProject.findOne({ _id: id, isSample: true }, { _id: 1, name: 1 }).lean();
+  } catch (e) {
+    console.error("[salesAgent] sample check failed:", e?.message || e);
+    return "That could not be checked just now. Apologise briefly and ask the user to try again; do NOT say anything was proposed.";
+  }
+  if (!sample) return out;
+  return out.card.type === "project-report"
+    ? samplePeriodReportRefusal(sample)
+    : sampleProposalRefusal(sample);
+}
+
 async function handleSaveLead(input, ctx, outcome) {
   const email = String(input?.email || "").trim().toLowerCase();
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
@@ -848,7 +890,7 @@ function aiServiceMeta(ctx) {
 // Account tools require an authenticated user. The guard is here (not just the
 // tool availability) so a guest can never reach the data even if the model
 // somehow emits the call.
-async function handleAccountTool(name, input, ctx) {
+export async function handleAccountTool(name, input, ctx) {
   if (!ctx.user?._id) {
     // A guest reaching for these is showing real intent — they want something
     // done with THEIR bill. Treat it as the strongest buying signal in the
@@ -862,17 +904,20 @@ async function handleAccountTool(name, input, ctx) {
       "'signup' button. Frame it as the next step, never as a refusal."
     );
   }
+  // The page the user is on, plus who may open samples (util/agentSampleGuard.js):
+  // project tools may answer about ONE sample the user names or opens.
+  const here = ctx.lookup || ctx.page;
   try {
     if (name === "get_my_projects") return await getPortfolioSummary(ctx.user._id);
     if (name === "get_my_account") return await getAccountSummary(ctx.user);
     // ctx.page is the address the user is standing on. It is used only when
     // they did not name a project — see resolveProject.
     if (name === "get_project_details")
-      return await getProjectDetails(ctx.user._id, input?.projectName, ctx.page);
+      return await getProjectDetails(ctx.user._id, input?.projectName, here);
     if (name === "get_resource_quantity")
-      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName, ctx.page);
+      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName, here);
     if (name === "get_project_budget")
-      return await getProjectBudget(ctx.user._id, input?.projectName, ctx.page);
+      return await getProjectBudget(ctx.user._id, input?.projectName, here);
     if (name === "get_my_referral_link") {
       const r = await referralSummary(ctx.user._id);
       if (!r) return "Their referral link could not be made just now.";
@@ -888,48 +933,65 @@ async function handleAccountTool(name, input, ctx) {
       ].join("\n");
     }
     if (name === "get_procurement_schedule")
-      return await getProcurementSchedule(ctx.user._id, input?.projectName, ctx.page, {
+      return await getProcurementSchedule(ctx.user._id, input?.projectName, here, {
         leadDays: input?.leadDays,
       });
     if (name === "get_project_bill")
-      return await getProjectBill(ctx.user._id, input?.projectName, input?.search, ctx.page);
+      return await getProjectBill(ctx.user._id, input?.projectName, input?.search, here);
     if (name === "get_room_finishes")
       return await getRoomFinishes(ctx.user._id, input, ctx.page);
 
     // ── Estimator & PM ──
     if (name === "propose_project_pricing")
-      return withCard(await getPricingProposal(ctx.user._id, input?.projectName, ctx.page), ctx);
+      return withCard(
+        await refuseSampleCard(await getPricingProposal(ctx.user._id, input?.projectName, here)),
+        ctx,
+      );
     // Only offered to a chat that draws their card; refused again here so a
     // tool call the model makes up anyway never reaches an older chat.
     if ((name === "propose_price_by_area" || name === "propose_set_rates") && !ctx.userRates)
       return "Pricing by message is not available in this chat yet. Tell the user it is coming soon and that for now they can type the rate on the line in the project's Bill tab. Do not say any rate was set.";
+    // After a sample's figures were shown, a stated rate must be one the user
+    // typed in this message: Ada never carries a sample's rate across.
+    if (
+      (name === "propose_price_by_area" || name === "propose_set_rates") &&
+      ctx.sampleInConversation &&
+      !rateTypedByUser(name === "propose_price_by_area" ? input?.ratePerM2 : input?.rate, ctx.message)
+    )
+      return SAMPLE_RATE_NOT_TYPED;
     if (name === "propose_price_by_area")
       return withCard(
-        await getAreaPricingProposal(
-          ctx.user._id,
-          input?.projectName,
-          { category: input?.category, ratePerM2: input?.ratePerM2, split: input?.split },
-          ctx.page,
+        await refuseSampleCard(
+          await getAreaPricingProposal(
+            ctx.user._id,
+            input?.projectName,
+            { category: input?.category, ratePerM2: input?.ratePerM2, split: input?.split },
+            here,
+          ),
         ),
         ctx,
       );
     if (name === "propose_set_rates")
       return withCard(
-        await getSetRatesProposal(
-          ctx.user._id,
-          input?.projectName,
-          { match: input?.match, rate: input?.rate, unit: input?.unit, split: input?.split },
-          ctx.page,
+        await refuseSampleCard(
+          await getSetRatesProposal(
+            ctx.user._id,
+            input?.projectName,
+            { match: input?.match, rate: input?.rate, unit: input?.unit, split: input?.split },
+            here,
+          ),
         ),
         ctx,
       );
     if (name === "project_report")
       return withCard(
-        await getProjectPeriodReport(ctx.user._id, input?.projectName, input?.from, input?.to, ctx.page),
+        await refuseSampleCard(
+          await getProjectPeriodReport(ctx.user._id, input?.projectName, input?.from, input?.to, here),
+        ),
         ctx,
       );
     if (name === "project_tips")
-      return await getProjectTipsForAgent(ctx.user._id, input?.projectName, ctx.page);
+      return await getProjectTipsForAgent(ctx.user._id, input?.projectName, here);
 
     // ── ADLM AI Service (AWS) — always fed the user's REAL bill lines ──
     if (name === "check_my_rates" || name === "find_project_errors") {
@@ -941,6 +1003,7 @@ async function handleAccountTool(name, input, ctx) {
         // A ₦0 line can't be benchmarked (it just returns "100% below
         // market"), but IS worth flagging in an error scan.
         { requireRate: name === "check_my_rates" },
+        here,
       );
       if (picked.error) return picked.error;
 
@@ -972,7 +1035,9 @@ async function handleAccountTool(name, input, ctx) {
         );
       }
       if (picked.note) extra.push(picked.note);
-      return extra.length ? `${out}\n${extra.join("\n")}` : out;
+      // A sample's bill can be checked; the answer is labelled as one.
+      const body = extra.length ? `${out}\n${extra.join("\n")}` : out;
+      return picked.sample ? `${picked.banner}${body}` : body;
     }
 
     if (name === "suggest_rate") {
@@ -1045,6 +1110,23 @@ export async function runSalesAgent(history, message, opts = {}) {
       projectRef: String(opts.page?.projectRef || "").trim().slice(0, 120),
       productKey: String(opts.page?.productKey || "").trim().toLowerCase().slice(0, 40),
     },
+    // The page plus who may open samples: the project tools answer about ONE
+    // sample only when the user names it or is on its page, read-only.
+    lookup: {
+      projectRef: String(opts.page?.projectRef || "").trim().slice(0, 120),
+      productKey: String(opts.page?.productKey || "").trim().toLowerCase().slice(0, 40),
+      sampleViewer: opts.user || null,
+    },
+    // This turn's own words, so a stated rate can be checked against them.
+    message: String(message || "").slice(0, 2000),
+    // A tool answered about a sample this turn: the reply carries the label.
+    sampleAnswered: false,
+    // A sample's figures are in this conversation (now or earlier).
+    sampleInConversation:
+      mentionsSample(message) ||
+      (Array.isArray(history) ? history : []).some(
+        (m) => m && m.role === "assistant" && String(m.text || "").includes(SAMPLE_LABEL),
+      ),
     productIndex,
     pendingActions: [],
     // The chat can show the stated-rate card (see CAP_USER_RATE_CARD).
@@ -1116,6 +1198,10 @@ export async function runSalesAgent(history, message, opts = {}) {
       if (tu.name === "save_lead") out = await handleSaveLead(tu.input, ctx, outcome);
       else if (tu.name === "offer_actions") out = handleOfferActions(tu.input, ctx, outcome);
       else if (accountToolNames.has(tu.name)) out = await handleAccountTool(tu.name, tu.input, ctx);
+      if (isSampleAnswer(out)) {
+        ctx.sampleAnswered = true;
+        ctx.sampleInConversation = true;
+      }
       toolResults.push({
         type: "tool_result",
         tool_use_id: tu.id,
@@ -1129,6 +1215,9 @@ export async function runSalesAgent(history, message, opts = {}) {
     finalText =
       "I want to make sure I point you to the right thing — could you tell me a bit more about what you're trying to do?";
   }
+
+  // Every answer about a sample is labelled, whatever the model wrote.
+  finalText = labelSampleReply(finalText, ctx.sampleAnswered);
 
   return { reply: finalText, actions: ctx.pendingActions, outcome };
 }

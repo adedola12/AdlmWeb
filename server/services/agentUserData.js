@@ -23,6 +23,16 @@ import { RateUsage } from "../models/RateUsage.js";
 import { usageIndex } from "../util/rateSuggestions.js";
 import { parseReportRange, buildPeriodSummary } from "./reportPeriod.js";
 import { projectTips } from "../util/projectTips.js";
+import {
+  ownOnly,
+  isSampleProject,
+  sampleProposalRefusal,
+  samplePeriodReportRefusal,
+  sampleBanner,
+  mentionsSample,
+  withoutSampleWord,
+} from "../util/agentSampleGuard.js";
+import { hasActiveEntitlement } from "../middleware/requireEntitlement.js";
 
 function oid(id) {
   return new mongoose.Types.ObjectId(String(id));
@@ -73,7 +83,8 @@ export async function getPortfolioSummary(userId) {
   };
 
   const rows = await TakeoffProject.aggregate([
-    { $match: { userId: uid, pmTrackerOnly: { $ne: true } } },
+    // ownOnly: a sample is never part of the user's portfolio (util/agentSampleGuard.js).
+    { $match: ownOnly({ userId: uid, pmTrackerOnly: { $ne: true } }) },
     {
       $addFields: {
         safeItems: { $ifNull: ["$items", []] },
@@ -250,6 +261,16 @@ export async function getPortfolioSummary(userId) {
 // Fuzzy-find ONE of the user's own projects by name. Returns either
 // { project } (loaded, owner-scoped) or { error } — a sentence Ada can relay.
 // Shared by every project-scoped tool so they all disambiguate identically.
+//
+// SAMPLES (work-board item ada-reads-samples, 8 Oct 2026). A tool that passes
+// { allowSample: true } may also get ONE read-only sample back, marked
+// { sample: true }, and only when:
+//   - the user is standing on that sample's page and named no project, or
+//   - the name Ada passed says "sample" ("the 5-bedroom duplex sample").
+// A name that merely resembles a sample never reaches one, the user's own
+// project always wins, and only samples the user can open on the website
+// (an active licence for that product) are considered. Nothing here widens a
+// cross-project query: those use ownOnly() and never call this.
 /**
  * THE PROJECT THE USER IS LOOKING AT.
  *
@@ -261,7 +282,7 @@ async function projectFromRef(userId, ref, productKey) {
   const raw = String(ref || "").trim();
   if (!raw) return null;
   const uid = oid(userId);
-  const where = { userId: uid };
+  const where = ownOnly({ userId: uid });
   if (productKey) where.productKey = String(productKey).trim().toLowerCase();
   const fields = { name: 1, productKey: 1, updatedAt: 1, pmTrackerOnly: 1 };
   if (/^[a-f\d]{24}$/i.test(raw)) {
@@ -271,9 +292,99 @@ async function projectFromRef(userId, ref, productKey) {
   return TakeoffProject.findOne({ ...where, slug: raw }, fields).lean();
 }
 
-async function resolveProject(userId, projectName, context = {}) {
+const SAMPLE_FIELDS = { name: 1, productKey: 1, slug: 1, updatedAt: 1, isSample: 1 };
+
+// The website opens a product's samples to anyone holding an active licence
+// for it (routes/projects.js accessFilter sits behind requireEntitlementParam).
+// Ada sees exactly the same samples, never more.
+function canOpenSample(viewer, sample) {
+  return !!viewer && sample?.isSample === true && hasActiveEntitlement(viewer, sample.productKey);
+}
+
+/** The whole sample document, by id. Only ever matches a sample. */
+async function loadSample(id) {
+  const doc = await TakeoffProject.findOne({ _id: id, isSample: true }).lean();
+  return doc?.isSample === true ? doc : null;
+}
+
+/** The sample whose page the user is on, if they may open it. */
+async function sampleFromRef(ref, productKey, viewer) {
+  const raw = String(ref || "").trim();
+  if (!raw || !viewer) return null;
+  const where = { isSample: true };
+  if (productKey) where.productKey = String(productKey).trim().toLowerCase();
+  let hit = null;
+  if (/^[a-f\d]{24}$/i.test(raw)) {
+    hit = await TakeoffProject.findOne({ ...where, _id: raw }, SAMPLE_FIELDS).lean();
+  }
+  if (!hit) hit = await TakeoffProject.findOne({ ...where, slug: raw.toLowerCase() }, SAMPLE_FIELDS).lean();
+  if (!canOpenSample(viewer, hit)) return null;
+  return loadSample(hit._id);
+}
+
+/** The samples this user may open, newest first. */
+async function visibleSamples(viewer) {
+  if (!viewer) return [];
+  const rows = await TakeoffProject.find({ isSample: true }, SAMPLE_FIELDS).sort({ updatedAt: -1 }).lean();
+  return (rows || []).filter((s) => canOpenSample(viewer, s));
+}
+
+/**
+ * The sample a "...sample" name means. Matched with the word "sample" taken
+ * out of both sides; the product of the page the user is on wins a tie (the
+ * same house is a sample in QUIV, PlanSwift and ArchiCAD), then the shortest
+ * name (the closest fit).
+ */
+async function sampleByName(query, viewer, pageProductKey) {
+  const samples = await visibleSamples(viewer);
+  if (!samples.length) return { samples };
+  const q = withoutSampleWord(query).toLowerCase();
+  if (!q) return { samples };
+  const scored = samples.map((s) => {
+    const name = withoutSampleWord(s.name).toLowerCase();
+    return { s, score: name.includes(q) ? 1 : similarityScore(q, name) };
+  });
+  const top = Math.max(...scored.map((x) => x.score));
+  if (top < 0.5) return { samples };
+  const page = String(pageProductKey || "").trim().toLowerCase();
+  const ties = scored
+    .filter((x) => x.score === top)
+    .sort(
+      (a, b) =>
+        (b.s.productKey === page) - (a.s.productKey === page) ||
+        String(a.s.name).length - String(b.s.name).length,
+    );
+  const chosen = ties[0].s;
+  const notes = [];
+  const otherNames = [...new Set(ties.map((x) => x.s.name).filter((n) => n !== chosen.name))];
+  if (otherNames.length) {
+    notes.push(
+      `Note: "${withoutSampleWord(query)}" also matches the sample(s) ${otherNames
+        .slice(0, 4)
+        .map((n) => `"${n}"`)
+        .join(", ")}; these figures are from "${chosen.name}". Say which one you read and offer the others.`,
+    );
+  }
+  const products = [...new Set(ties.filter((x) => x.s.name === chosen.name).map((x) => x.s.productKey))];
+  if (products.length > 1) {
+    notes.push(
+      `Note: this sample exists for ${products.map(productLabel).join(", ")}; these figures are from the ${productLabel(chosen.productKey)} version. Mention that.`,
+    );
+  }
+  return { samples, chosen, score: top, note: notes.join("\n") };
+}
+
+function sampleNamesHint(samples) {
+  if (!samples?.length) return "";
+  const names = [...new Set(samples.map((s) => s.name))].slice(0, 12).join(", ");
+  return ` Read-only sample projects they can also ask about (pass the name with the word "sample"): ${names}.`;
+}
+
+async function resolveProject(userId, projectName, context = {}, { allowSample = false } = {}) {
   const uid = oid(userId);
   const query = String(projectName || "").trim();
+  // Only a tool that asked for samples, for a signed-in user, ever sees one.
+  const viewer = allowSample ? context.sampleViewer || null : null;
 
   // WHAT THE USER IS LOOKING AT, WHEN THEY DID NOT SAY A NAME.
   //
@@ -289,17 +400,25 @@ async function resolveProject(userId, projectName, context = {}) {
   if (!query || (ref && query === ref)) {
     const here = await projectFromRef(uid, context.projectRef, context.productKey);
     if (here) return { project: here };
+    // The page is a sample the user opened: that sample, read-only.
+    const sample = await sampleFromRef(context.projectRef, context.productKey, viewer);
+    if (sample) return { project: sample, sample: true };
     return { error: "Ask the user which project they mean (by name)." };
   }
 
   const candidates = await TakeoffProject.find(
-    { userId: uid },
+    ownOnly({ userId: uid }),
     { name: 1, productKey: 1, updatedAt: 1, pmTrackerOnly: 1 },
   )
     .sort({ updatedAt: -1 })
     .lean();
 
-  if (!candidates.length) return { error: "The user has no projects yet." };
+  // A sample is looked up by name only when the name says "sample".
+  const wantsSample = !!viewer && mentionsSample(query);
+  if (!candidates.length && !wantsSample) {
+    const hint = viewer ? sampleNamesHint(await visibleSamples(viewer)) : "";
+    return { error: `The user has no projects yet.${hint}` };
+  }
 
   let best = null;
   let bestScore = 0;
@@ -320,17 +439,34 @@ async function resolveProject(userId, projectName, context = {}) {
     bestScore = 1;
   }
 
+  // The user's own project wins: a sample is taken only when the name says
+  // "sample", no own project contains that name, and the sample fits at least
+  // as well as the user's best.
+  let samples = [];
+  if (wantsSample && !sub) {
+    const pick = await sampleByName(query, viewer, context.productKey);
+    samples = pick.samples || [];
+    if (pick.chosen && pick.score >= bestScore) {
+      const project = await loadSample(pick.chosen._id);
+      if (!project) return { error: "That sample project could not be loaded." };
+      return { project, sample: true, note: pick.note || "" };
+    }
+  } else if (viewer && (!best || bestScore < 0.5)) {
+    samples = await visibleSamples(viewer);
+  }
+
   // 0.5, not 0.3: at 0.3 a single shared filler word was enough for "zzz
   // nonexistent project" to resolve to "Project Takeoff" and answer with a
   // real project's figures. Better to ask than to quote the wrong bill.
   if (!best || bestScore < 0.5) {
     const names = candidates.slice(0, 12).map((c) => c.name).join(", ");
+    const own = names ? ` The user's projects are: ${names}.` : " The user has no projects of their own yet.";
     return {
-      error: `No project clearly matches "${query}". The user's projects are: ${names}. Ask them which one they mean — do NOT answer with figures from a guessed project.`,
+      error: `No project clearly matches "${query}".${own}${sampleNamesHint(samples)} Ask them which one they mean — do NOT answer with figures from a guessed project.`,
     };
   }
 
-  const project = await TakeoffProject.findOne({ _id: best._id, userId: uid }).lean();
+  const project = await TakeoffProject.findOne(ownOnly({ _id: best._id, userId: uid })).lean();
   if (!project) return { error: "That project could not be loaded." };
 
   // Duplicate project names are common (a re-save creates another "New
@@ -345,10 +481,20 @@ async function resolveProject(userId, projectName, context = {}) {
   return { project, note };
 }
 
+/** The sample label for a tool's answer, or "" for the user's own project. */
+function bannerFor(project) {
+  return isSampleProject(project) ? sampleBanner(project) : "";
+}
+
+/** `text`, with the sample label in front when the project is a sample. */
+function labelled(project, text) {
+  return bannerFor(project) + text;
+}
+
 // ── Single project detail ──────────────────────────────────────────────────
 // Summarise one project's value, progress and schedule.
 export async function getProjectDetails(userId, projectName, context = {}) {
-  const { project, error, note } = await resolveProject(userId, projectName, context);
+  const { project, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return error;
 
   const scope = computeProjectScope(project);
@@ -379,7 +525,7 @@ export async function getProjectDetails(userId, projectName, context = {}) {
     "Tell the user they can open the full Project or PM report from the project's page for the detailed breakdown.",
   );
   if (note) lines.push(note);
-  return lines.join("\n");
+  return labelled(project, lines.join("\n"));
 }
 
 // ── Bill / Budget primitives ───────────────────────────────────────────────
@@ -517,22 +663,26 @@ export async function getResourceQuantity(userId, resource, projectName, context
 
   let projects = [];
   let resolveNote = "";
+  // A named sample is answered on its own, labelled; never in a total with anything else.
+  let banner = "";
   if (String(projectName || "").trim()) {
-    const { project, error, note } = await resolveProject(userId, projectName, context);
+    const { project, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
     if (error) return error;
     projects = [project];
     resolveNote = note || "";
+    banner = bannerFor(project);
   } else {
     // origin "takeoff-derived" projects are auto-created "<name> - material"
     // twins of a takeoff — their lines are the SAME materials as the parent's.
     // Counting both would silently double every quantity, so the twins are
     // excluded from an all-projects total (naming one explicitly still works).
+    // ownOnly: a total across projects never counts a sample.
     projects = await TakeoffProject.find(
-      {
+      ownOnly({
         userId: oid(userId),
         pmTrackerOnly: { $ne: true },
         origin: { $ne: "takeoff-derived" },
-      },
+      }),
       {
         name: 1,
         productKey: 1,
@@ -605,7 +755,7 @@ export async function getResourceQuantity(userId, resource, projectName, context
 
   if (!perProject.length) {
     const scope = projects.length === 1 ? `project "${projects[0].name}"` : "any of their projects";
-    return `No material, labour or bill line matching "${query}" was found in ${scope}. Say so plainly — do NOT estimate a quantity. Suggest they check the Budget (Material & Labour) tab, or that the resource may be named differently there (ask what wording their bill uses).`;
+    return `${banner}No material, labour or bill line matching "${query}" was found in ${scope}. Say so plainly — do NOT estimate a quantity. Suggest they check the Budget (Material & Labour) tab, or that the resource may be named differently there (ask what wording their bill uses).`;
   }
 
   const lines = [];
@@ -644,19 +794,19 @@ export async function getResourceQuantity(userId, resource, projectName, context
     );
   }
   if (resolveNote) lines.push(resolveNote);
-  return lines.join("\n");
+  return banner + lines.join("\n");
 }
 
 // ── Budget (Material & Labour) breakdown ───────────────────────────────────
 // The whole cost plan for one project: Material vs Labour vs Plant totals,
 // procurement status, and the biggest resources by cost.
 export async function getProjectBudget(userId, projectName, context = {}) {
-  const { project, error, note } = await resolveProject(userId, projectName, context);
+  const { project, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return error;
 
   const rows = budgetRows(project);
   if (!rows.length) {
-    return `Project "${project.name}" has no Material & Labour breakdown yet. The breakdown is pushed by the desktop plugin when the project is saved (MEP projects don't send one). Tell the user plainly, and point them to the project's Budget tab.`;
+    return labelled(project, `Project "${project.name}" has no Material & Labour breakdown yet. The breakdown is pushed by the desktop plugin when the project is saved (MEP projects don't send one). Tell the user plainly, and point them to the project's Budget tab.`);
   }
 
   const byKind = new Map(); // kind → { cost, count, procured }
@@ -718,19 +868,19 @@ export async function getProjectBudget(userId, projectName, context = {}) {
     "Quote these figures exactly. Lines with a ₦0 rate simply aren't priced yet — say that rather than treating them as free.",
   );
   if (note) lines.push(note);
-  return lines.join("\n");
+  return labelled(project, lines.join("\n"));
 }
 
 // ── Bill of Quantities lines ───────────────────────────────────────────────
 // The measured work items themselves — qty, unit, rate, amount, % complete —
 // optionally filtered to lines matching a search phrase.
 export async function getProjectBill(userId, projectName, search, context = {}) {
-  const { project, error, note } = await resolveProject(userId, projectName, context);
+  const { project, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return error;
 
   const all = billRows(project);
   if (!all.length) {
-    return `Project "${project.name}" has no bill lines yet.`;
+    return labelled(project, `Project "${project.name}" has no bill lines yet.`);
   }
 
   const q = String(search || "").trim();
@@ -745,7 +895,10 @@ export async function getProjectBill(userId, projectName, search, context = {}) 
 
   if (!rows.length) {
     const cats = [...new Set(all.map((r) => String(r.category || "").trim()).filter(Boolean))].slice(0, 15);
-    return `No bill line in "${project.name}" matches "${q}". Its ${all.length} lines are grouped under: ${cats.join(", ") || "(no categories)"}. Ask the user to rephrase — do NOT invent a line.`;
+    return labelled(
+      project,
+      `No bill line in "${project.name}" matches "${q}". Its ${all.length} lines are grouped under: ${cats.join(", ") || "(no categories)"}. Ask the user to rephrase — do NOT invent a line.`,
+    );
   }
 
   const enriched = rows.map((r) => {
@@ -787,7 +940,7 @@ export async function getProjectBill(userId, projectName, search, context = {}) 
     "Quote these exactly. A ₦0 rate means the line isn't priced yet. For the material/labour behind a line, use get_project_budget or get_resource_quantity.",
   );
   if (note) lines.push(note);
-  return lines.join("\n");
+  return labelled(project, lines.join("\n"));
 }
 
 // ── Bill lines shaped for the ADLM AI Service ──────────────────────────────
@@ -798,7 +951,7 @@ export async function getProjectBill(userId, projectName, search, context = {}) 
 // anything the model retyped. `search` narrows a big bill; `limit` keeps the
 // request (and the AI service's per-call cost) bounded.
 export async function getBillItemsForAi(userId, projectName, search, limit = 200, opts = {}, context = {}) {
-  const { project, error, note } = await resolveProject(userId, projectName, context);
+  const { project, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return { error };
 
   const all = billRows(project);
@@ -851,6 +1004,9 @@ export async function getBillItemsForAi(userId, projectName, search, limit = 200
 
   return {
     project: { name: project.name, productKey: project.productKey },
+    // A sample's lines can be checked, read-only; the answer is labelled.
+    sample: isSampleProject(project),
+    banner: bannerFor(project),
     items,
     truncated: capped.length < rows.length ? rows.length - capped.length : 0,
     unpriced,
@@ -899,11 +1055,11 @@ export async function getAccountSummary(user) {
     // wrong answer to the question she is advertising.
     const counts = await TakeoffProject.aggregate([
       {
-        $match: {
+        $match: ownOnly({
           userId: uid,
           pmTrackerOnly: { $ne: true },
           productKey: { $not: /-material/i },
-        },
+        }),
       },
       { $group: { _id: "$productKey", count: { $sum: 1 } } },
     ]);
@@ -952,13 +1108,13 @@ export async function getAccountSummary(user) {
 // Nothing is invented: a project with no programme has no dates, and this says
 // so rather than making some up.
 export async function getProcurementSchedule(userId, projectName, context = {}, opts = {}) {
-  const { project, error, note } = await resolveProject(userId, projectName, context);
+  const { project, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return error;
 
   const leadDays = Math.max(0, Math.min(180, safeNum(opts.leadDays) || 14));
   const budget = Array.isArray(project.budgetItems) ? project.budgetItems : [];
   if (!budget.length) {
-    return `${project.name} has no Material & Labour breakdown yet, so there is nothing to buy from. It arrives with the bill from QUIV or HERON, or from cost rates typed against each line.`;
+    return labelled(project, `${project.name} has no Material & Labour breakdown yet, so there is nothing to buy from. It arrives with the bill from QUIV or HERON, or from cost rates typed against each line.`);
   }
 
   const tasks = Array.isArray(project?.projectManagement?.tasks)
@@ -1004,7 +1160,7 @@ export async function getProcurementSchedule(userId, projectName, context = {}, 
     .filter((r) => !r.bought);
 
   if (!rows.length) {
-    return `Everything on ${project.name}'s material schedule is already marked bought.`;
+    return labelled(project, `Everything on ${project.name}'s material schedule is already marked bought.`);
   }
 
   const dated = rows.filter((r) => r.buyBy).sort((a, b) => a.buyBy - b.buyBy);
@@ -1046,7 +1202,7 @@ export async function getProcurementSchedule(userId, projectName, context = {}, 
   }
 
   if (note) lines.push(note);
-  return lines.join("\n");
+  return labelled(project, lines.join("\n"));
 }
 
 // ── Estimator & PM tools: pricing proposal, period report, tips ────────────
@@ -1063,7 +1219,7 @@ export async function getProcurementSchedule(userId, projectName, context = {}, 
 // reference. These tools need the whole document.
 async function loadWhole(userId, project) {
   if (Array.isArray(project?.items)) return project;
-  return TakeoffProject.findOne({ _id: project._id, userId: oid(userId) }).lean();
+  return TakeoffProject.findOne(ownOnly({ _id: project._id, userId: oid(userId) })).lean();
 }
 
 // What the caller may do with it, by the same rule as routes/projects.js.
@@ -1091,10 +1247,13 @@ function cardProject(project) {
  * @returns {Promise<string | {text: string, card: object}>}
  */
 export async function getPricingProposal(userId, projectName, context = {}) {
-  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  const { project: found, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return error;
+  // A sample is refused before anything is read from it: no Proposed rates card.
+  if (isSampleProject(found)) return sampleProposalRefusal(found);
   const project = await loadWhole(userId, found);
   if (!project) return "That project could not be loaded.";
+  if (isSampleProject(project)) return sampleProposalRefusal(project);
 
   const access = await accessFor(userId, project);
   if (!access.canSeeRates) {
@@ -1191,10 +1350,12 @@ export async function getPricingProposal(userId, projectName, context = {}) {
 
 /** The project, whole, if the caller may price it; otherwise the words why not. */
 async function projectToPrice(userId, projectName, context) {
-  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  const { project: found, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return { error };
+  if (isSampleProject(found)) return { error: sampleProposalRefusal(found) };
   const project = await loadWhole(userId, found);
   if (!project) return { error: "That project could not be loaded." };
+  if (isSampleProject(project)) return { error: sampleProposalRefusal(project) };
   const access = await accessFor(userId, project);
   if (!access.canSeeRates) {
     return { error: `The user cannot see rates on "${project.name}", so no rates can be set on it. Say so plainly.` };
@@ -1388,10 +1549,13 @@ export async function getProjectPeriodReport(userId, projectName, from, to, cont
   }
   if (!range.from && !range.to) return "Ask the user which dates the report should cover.";
 
-  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  const { project: found, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return error;
+  // Period reports are for the user's own projects only, never a sample.
+  if (isSampleProject(found)) return samplePeriodReportRefusal(found);
   const project = await loadWhole(userId, found);
   if (!project) return "That project could not be loaded.";
+  if (isSampleProject(project)) return samplePeriodReportRefusal(project);
   const access = await accessFor(userId, project);
 
   const where = { projectId: project._id, createdAt: {} };
@@ -1497,7 +1661,7 @@ export async function getProjectPeriodReport(userId, projectName, from, to, cont
  * work-project tabs (util/projectTips.js mirrors the client's).
  */
 export async function getProjectTipsForAgent(userId, projectName, context = {}, { now = new Date() } = {}) {
-  const { project: found, error, note } = await resolveProject(userId, projectName, context);
+  const { project: found, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return error;
   const project = await loadWhole(userId, found);
   if (!project) return "That project could not be loaded.";
@@ -1507,18 +1671,19 @@ export async function getProjectTipsForAgent(userId, projectName, context = {}, 
     { now, canEdit: access.canEdit },
   );
   if (!tips.length) {
-    return `Nothing stands out on "${project.name}": the bill is priced, and nothing on the programme or the money needs attention. Say so, and offer a report for the last month.${note ? `\n${note}` : ""}`;
+    return labelled(project, `Nothing stands out on "${project.name}": the bill is priced, and nothing on the programme or the money needs attention. Say so, and offer a report for the last month.${note ? `\n${note}` : ""}`);
   }
   const TAB_NAMES = { pm: "PM dashboard", rates: "Rates & budget", valuations: "Valuations", bill: "Bill" };
   const L = [`What to do next on "${project.name}", most urgent first:`];
   for (const t of tips) {
     let how = "";
-    if (t.id === "unpriced") how = " (you can run propose_project_pricing for this)";
+    // A sample is never priced: no offer of the pricing tool on one.
+    if (t.id === "unpriced" && !isSampleProject(project)) how = " (you can run propose_project_pricing for this)";
     else if (t.action?.kind === "tab") how = ` (on the project's ${TAB_NAMES[t.action.tab] || t.action.tab} tab)`;
     L.push(`- ${t.title}. ${t.body}${how}`);
   }
   L.push("");
   L.push("Give the top one or two in plain words and offer to do the first. Do not list all of them unless asked.");
   if (note) L.push(note);
-  return L.join("\n");
+  return labelled(project, L.join("\n"));
 }

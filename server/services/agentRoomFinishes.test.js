@@ -30,6 +30,8 @@ function matches(doc, filter) {
   for (const [k, v] of Object.entries(filter || {})) {
     if (k === "$or") {
       if (!v.some((f) => matches(doc, f))) return false;
+    } else if (v && typeof v === "object" && "$ne" in v) {
+      if (doc[k] === v.$ne) return false;
     } else if (k === "collaborators.userId") {
       if (!(doc.collaborators || []).some((c) => String(c.userId) === String(v))) return false;
     } else if (String(doc[k]) !== String(v)) {
