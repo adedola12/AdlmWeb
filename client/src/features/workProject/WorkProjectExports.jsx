@@ -96,6 +96,8 @@ export default function WorkProjectExports({
   // below the shell's own banner saying the read had failed.
   failed: loadFailed = false,
   onToast,
+  // Opens the ICMS details form in place of this panel. Absent, the section is not shown.
+  onOpenIcms,
 }) {
   const rows = React.useMemo(
     () => exportsFor(project, { productKey, saveId }),
@@ -161,6 +163,20 @@ export default function WorkProjectExports({
     <>
       <Group title="The bill" list={bill} busy={busy} failed={failed} onTake={take} />
       <Group title="Payment documents" list={priced} busy={busy} failed={failed} onTake={take} />
+      {onOpenIcms ? (
+        <div className="pn-sec">
+          <span className="k">ICMS 3</span>
+          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={onOpenIcms}>
+            ICMS details…
+          </button>
+          <p className="hint">
+            Country, currency, base date, asset type, stage, floor areas and carbon boundary,
+            stated once for this project. The ICMS 3 cost and carbon report, in Excel or
+            JSON, is in the Export menu and gives cost and carbon per m2 once a floor area
+            is saved.
+          </p>
+        </div>
+      ) : null}
       {classicHref ? (
         <div className="pn-sec">
           <span className="k">Not here</span>

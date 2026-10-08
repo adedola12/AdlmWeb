@@ -96,6 +96,30 @@ test("details are checked: codes, ISO formats, dates, areas, and Sub-Groups in t
   assert.match(icmsDetailsFromBody({ overrides: [{ key: "a", group: "14" }] }).error, /Unknown ICMS Group/);
 });
 
+test("the ICMS details form's save is accepted whole, and its areas give cost and carbon per m2", () => {
+  // What client/src/features/icms/icmsDetails.js icmsBodyFrom() sends: every
+  // field, blanks as "" and an empty area as null. A blank must clear (and so
+  // fall back to the stated assumption), not be refused.
+  const body = {
+    projectType: "01", country: "", currency: "ngn", baseDate: "2026-10-01", projectStatus: "Tender",
+    priceBasis: "", location: "Ikoyi, Lagos", gfaIpms1: 240, gfaIpms2: 200, carbonBoundary: "",
+  };
+  const { details, error } = icmsDetailsFromBody(body);
+  assert.equal(error, undefined);
+  assert.equal(details.currency, "NGN");
+  assert.equal(details.country, "");
+  const r = buildIcmsReport({ ...PROJECT, icms: details }, { productKey: "revit", carbonRates: RATES });
+  assert.equal(r.attributes.country.stated, false); // blank -> assumed NG
+  assert.equal(r.attributes.projectStatus.value, "Tender");
+  assert.equal(r.perM2.area, 200);
+  near(r.perM2.cost, r.summary.total / 200);
+  near(r.perM2.carbonKg, r.summary.carbonKg / 200);
+  assert.ok(r.perM2.carbonKg > 0);
+  // Cleared areas take per m2 away again.
+  const cleared = icmsDetailsFromBody({ ...body, gfaIpms1: null, gfaIpms2: null }).details;
+  assert.equal(buildIcmsReport({ ...PROJECT, icms: cleared }, { productKey: "revit" }).perM2, null);
+});
+
 test("the workbook opens with its five sheets and the totals in them", async () => {
   const r = buildIcmsReport(PROJECT, { productKey: "revit", carbonRates: RATES });
   const out = await exportIcmsWorkbook(r);

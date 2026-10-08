@@ -39,6 +39,7 @@ import { workbookRequest } from "./exportModel.js";
 import { downloadWorkbook } from "./downloadWorkbook.js";
 import WorkProjectPeople from "./WorkProjectPeople.jsx";
 import WorkProjectExports from "./WorkProjectExports.jsx";
+import IcmsDetailsForm from "../icms/IcmsDetailsForm.jsx";
 import WorkProjectIssueCert from "./WorkProjectIssueCert.jsx";
 import { withIssuedCertificate } from "./certificateDraft.js";
 import { withVariationWrite } from "./variationDraft.js";
@@ -913,6 +914,10 @@ export default function WorkProjectShell({ productKey, id }) {
         panel.show({ kind: "people" });
         return;
       }
+      if (action === "icms") {
+        panel.show({ kind: "icms" });
+        return;
+      }
       if (action === "export") {
         panel.show({ kind: "export" });
         return;
@@ -1335,6 +1340,23 @@ export default function WorkProjectShell({ productKey, id }) {
               // and only the shell can tell them apart.
               failed={fullFailed}
               onToast={fb.toast}
+              onOpenIcms={() => panel.show({ kind: "icms" })}
+            />
+          </WorkProjectPanel>
+        ) : null}
+
+        {panel.content?.kind === "icms" ? (
+          <WorkProjectPanel title="ICMS details" visible={panel.visible} onClose={panel.close}>
+            {/* Once per project, read by both ICMS 3 exports. Samples and
+                view-only shares see the details but cannot change them; the
+                server refuses the write for them too (403 NO_EDIT). */}
+            <IcmsDetailsForm
+              productKey={productKey}
+              projectId={saveId}
+              accessToken={accessToken}
+              canEdit={!viewOnly && !(full?.isSample || project?.isSample)}
+              readOnlyReason={full?.isSample || project?.isSample ? "sample" : "view"}
+              onDone={panel.close}
             />
           </WorkProjectPanel>
         ) : null}

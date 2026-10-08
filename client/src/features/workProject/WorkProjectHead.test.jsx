@@ -230,6 +230,23 @@ describe("the Export menu", () => {
     expect(onAction).toHaveBeenCalledWith("report", "report");
   });
 
+  it("has the ICMS 3 group with the classic menu's labels, and ICMS details opens the form", () => {
+    const onAction = vi.fn();
+    const c = head({ onAction });
+    fireEvent.click(within(c).getByRole("button", { name: "Export" }));
+    expect(screen.getByText("ICMS 3")).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: /ICMS 3 cost and carbon \(Excel\)/ }));
+    expect(onAction).toHaveBeenLastCalledWith("export", "icms-x");
+
+    fireEvent.click(within(c).getByRole("button", { name: "Export" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /ICMS 3 cost and carbon \(JSON\)/ }));
+    expect(onAction).toHaveBeenLastCalledWith("export", "icms-j");
+
+    fireEvent.click(within(c).getByRole("button", { name: "Export" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "ICMS details…" }));
+    expect(onAction).toHaveBeenLastCalledWith("icms");
+  });
+
   it("is busy while a file is on its way, so it is not fetched twice", () => {
     const c = head({ exporting: "bb-cat" });
     const b = within(c).getByRole("button", { name: "Exporting…" });
