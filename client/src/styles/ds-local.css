@@ -1125,6 +1125,16 @@
   .ds .adm-compose .adm-split { grid-template-columns: 1fr; }
 }
 
+/* On a phone the composer's toolbar ran off the right edge: .adm-acts is
+   flex:none (above, for the register headings), so five buttons kept one row
+   and "Print or save as PDF", the last of them, was clipped by .adm-main's
+   overflow:hidden. Stack the counts over the actions and let them wrap. */
+@media (max-width: 720px) {
+  .ds .adm-compose .adm-bar { flex-wrap: wrap; align-items: flex-start; padding: 12px 14px; }
+  .ds .adm-compose .adm-bar > div:first-child { flex: 1 1 100%; min-width: 0; }
+  .ds .adm-compose .adm-acts { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
+}
+
 /* The composer sidebar, sitting under his .adm-grp labels rather than inside
    them. The saved list needs the small wrapper his markup implies. */
 .ds .adm-compose .adm-side .adm-seg { margin: 0 6px; }
