@@ -212,6 +212,14 @@ describe("a tool keeps its place across the redirect", () => {
     expect(storageKeyForSlug("planswift")).toBe("planswift");
   });
 
+  it("opens a RateGen project (a priced bill) in the classic workspace", () => {
+    expect(classicFallbackFor("/work/project/rategen/lekki-duplex")).toBe(
+      "/projects/rategen?project=lekki-duplex",
+    );
+    // RateGen's tool page is still its rates library.
+    expect(classicFallbackFor("/work/tool/rategen")).toBe("/rategen");
+  });
+
   it("sends ArchiCAD to its own route, not under /projects", () => {
     expect(classicFallbackFor("/work/tool/archicad")).toBe("/archicad");
     expect(classicFallbackFor("/work/project/archicad/ikoyi-tower")).toBe(

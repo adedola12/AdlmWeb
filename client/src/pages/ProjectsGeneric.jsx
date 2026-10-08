@@ -82,6 +82,7 @@ const TITLES = {
   mep: "Revit MEP projects",
   planswift: "HERON projects",
   civil3d: "CIVIQ projects",
+  rategen: "RateGen projects",
   "revit-materials": "QUIV",
   "revit-material": "QUIV",
   "planswift-materials": "HERON",
