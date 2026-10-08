@@ -36,6 +36,7 @@ import "../styles/ds-doc.css";
 import { parseDocument } from "./docParser.js";
 import { readDocx } from "./docxFile.js";
 import { sampleFor, ALL_SAMPLES } from "./docSamples.js";
+import { downloadDocPdf, docFilename, printIsUnreliable } from "./docPdf.js";
 
 // The in-progress document, so a refresh does not lose it. NOT the library —
 // that is on the server. See the note above readDraft.
@@ -242,6 +243,44 @@ export default function DsDocComposer() {
     }),
     [template, title, number, to, from, blocks, docDate, paper, firm, subject, signed],
   );
+
+  // Fit the sheets to the screen. A sheet is 210mm (~794px) wide, so on a
+  // phone the stage scrolled sideways and only a strip of the page showed.
+  // A CSS zoom (through --doc-fit, see ds-local.css) shrinks it to the width
+  // available; print and the PDF capture both draw it back at full size.
+  React.useEffect(() => {
+    const el = host.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const SHEET_PX = (210 / 25.4) * 96;
+    const fit = () => {
+      const cs = getComputedStyle(el);
+      const room = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const f = room > 0 ? Math.min(1, room / SHEET_PX) : 1;
+      el.style.setProperty("--doc-fit", f.toFixed(4));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Print on a computer; on a phone or tablet the browser's print puts the A4
+  // sheet on Letter and cuts it, so build the PDF from the sheets instead.
+  const [exporting, setExporting] = React.useState(false);
+  const printDoc = React.useCallback(async () => {
+    if (!printIsUnreliable()) {
+      window.print();
+      return;
+    }
+    setExporting(true);
+    try {
+      await downloadDocPdf(host.current, docFilename(title || template));
+    } catch (e) {
+      setProblem(e?.message || "The PDF could not be made. Try again.");
+    } finally {
+      setExporting(false);
+    }
+  }, [title, template]);
 
   // Re-render the document whenever anything it is made of changes. mount()
   // replaces the host's contents, so there is nothing to tear down.
@@ -527,9 +566,10 @@ export default function DsDocComposer() {
               <button
                 type="button"
                 className="ds-btn btn-p ds-btn-sm"
-                onClick={() => window.print()}
+                disabled={exporting}
+                onClick={printDoc}
               >
-                Print or save as PDF
+                {exporting ? "Making the PDF…" : "Print or save as PDF"}
               </button>
             </div>
           </div>

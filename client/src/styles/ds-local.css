@@ -1135,6 +1135,19 @@
   .ds .adm-compose .adm-acts { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
 }
 
+/* The sheet fitted to the screen. DsDocComposer sets --doc-fit on the stage
+   (the room available over the 210mm sheet width, never above 1); zoom, not
+   transform, so the layout shrinks with it and nothing scrolls sideways.
+   Print and the PDF capture draw the sheet at full size, so both put it back. */
+.ds .adm-compose .doc-stage .doc-sheet { zoom: var(--doc-fit, 1); }
+.ds .adm-compose .doc-stage.doc-capturing .doc-sheet { zoom: 1; }
+@media (max-width: 720px) {
+  .ds .adm-compose .doc-stage { padding: 10px; gap: 10px; }
+}
+@media print {
+  .ds .adm-compose .doc-stage .doc-sheet { zoom: 1 !important; }
+}
+
 /* The composer sidebar, sitting under his .adm-grp labels rather than inside
    them. The saved list needs the small wrapper his markup implies. */
 .ds .adm-compose .adm-side .adm-seg { margin: 0 6px; }
