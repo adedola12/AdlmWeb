@@ -26,6 +26,9 @@ import {
 } from "./agentUserData.js";
 import { getRoomFinishes } from "./agentRoomFinishes.js";
 import { watToday } from "./reportPeriod.js";
+import mongoose from "mongoose";
+import { TakeoffProject } from "../models/TakeoffProject.js";
+import { sampleProposalRefusal, samplePeriodReportRefusal } from "../util/agentSampleGuard.js";
 import {
   aiServiceEnabled,
   checkRatesAgainstMarket,
@@ -764,6 +767,30 @@ export function withCard(out, ctx) {
   }
   return out.text || "";
 }
+// THE LAST LOCK BEFORE A CARD REACHES THE CHAT.
+//
+// The tools already refuse a sample (util/agentSampleGuard.js). This asks the
+// database again, by the card's own project id, so the Proposed rates card and
+// the report card can never be drawn for a sample even if a resolver changes.
+// A lookup that fails drops the card: a missing Apply button is a retry, a
+// sample's rates on a client's bill is not.
+export async function refuseSampleCard(out) {
+  if (!out || typeof out !== "object" || !out.card) return out;
+  const id = String(out.card?.project?.id || "");
+  if (!mongoose.Types.ObjectId.isValid(id)) return out;
+  let sample = null;
+  try {
+    sample = await TakeoffProject.findOne({ _id: id, isSample: true }, { _id: 1, name: 1 }).lean();
+  } catch (e) {
+    console.error("[salesAgent] sample check failed:", e?.message || e);
+    return "That could not be checked just now. Apologise briefly and ask the user to try again; do NOT say anything was proposed.";
+  }
+  if (!sample) return out;
+  return out.card.type === "project-report"
+    ? samplePeriodReportRefusal(sample)
+    : sampleProposalRefusal(sample);
+}
+
 async function handleSaveLead(input, ctx, outcome) {
   const email = String(input?.email || "").trim().toLowerCase();
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
@@ -898,34 +925,43 @@ async function handleAccountTool(name, input, ctx) {
 
     // ── Estimator & PM ──
     if (name === "propose_project_pricing")
-      return withCard(await getPricingProposal(ctx.user._id, input?.projectName, ctx.page), ctx);
+      return withCard(
+        await refuseSampleCard(await getPricingProposal(ctx.user._id, input?.projectName, ctx.page)),
+        ctx,
+      );
     // Only offered to a chat that draws their card; refused again here so a
     // tool call the model makes up anyway never reaches an older chat.
     if ((name === "propose_price_by_area" || name === "propose_set_rates") && !ctx.userRates)
       return "Pricing by message is not available in this chat yet. Tell the user it is coming soon and that for now they can type the rate on the line in the project's Bill tab. Do not say any rate was set.";
     if (name === "propose_price_by_area")
       return withCard(
-        await getAreaPricingProposal(
-          ctx.user._id,
-          input?.projectName,
-          { category: input?.category, ratePerM2: input?.ratePerM2, split: input?.split },
-          ctx.page,
+        await refuseSampleCard(
+          await getAreaPricingProposal(
+            ctx.user._id,
+            input?.projectName,
+            { category: input?.category, ratePerM2: input?.ratePerM2, split: input?.split },
+            ctx.page,
+          ),
         ),
         ctx,
       );
     if (name === "propose_set_rates")
       return withCard(
-        await getSetRatesProposal(
-          ctx.user._id,
-          input?.projectName,
-          { match: input?.match, rate: input?.rate, unit: input?.unit, split: input?.split },
-          ctx.page,
+        await refuseSampleCard(
+          await getSetRatesProposal(
+            ctx.user._id,
+            input?.projectName,
+            { match: input?.match, rate: input?.rate, unit: input?.unit, split: input?.split },
+            ctx.page,
+          ),
         ),
         ctx,
       );
     if (name === "project_report")
       return withCard(
-        await getProjectPeriodReport(ctx.user._id, input?.projectName, input?.from, input?.to, ctx.page),
+        await refuseSampleCard(
+          await getProjectPeriodReport(ctx.user._id, input?.projectName, input?.from, input?.to, ctx.page),
+        ),
         ctx,
       );
     if (name === "project_tips")

@@ -23,6 +23,12 @@ import { RateUsage } from "../models/RateUsage.js";
 import { usageIndex } from "../util/rateSuggestions.js";
 import { parseReportRange, buildPeriodSummary } from "./reportPeriod.js";
 import { projectTips } from "../util/projectTips.js";
+import {
+  ownOnly,
+  isSampleProject,
+  sampleProposalRefusal,
+  samplePeriodReportRefusal,
+} from "../util/agentSampleGuard.js";
 
 function oid(id) {
   return new mongoose.Types.ObjectId(String(id));
@@ -73,7 +79,8 @@ export async function getPortfolioSummary(userId) {
   };
 
   const rows = await TakeoffProject.aggregate([
-    { $match: { userId: uid, pmTrackerOnly: { $ne: true } } },
+    // ownOnly: a sample is never part of the user's portfolio (util/agentSampleGuard.js).
+    { $match: ownOnly({ userId: uid, pmTrackerOnly: { $ne: true } }) },
     {
       $addFields: {
         safeItems: { $ifNull: ["$items", []] },
@@ -261,7 +268,7 @@ async function projectFromRef(userId, ref, productKey) {
   const raw = String(ref || "").trim();
   if (!raw) return null;
   const uid = oid(userId);
-  const where = { userId: uid };
+  const where = ownOnly({ userId: uid });
   if (productKey) where.productKey = String(productKey).trim().toLowerCase();
   const fields = { name: 1, productKey: 1, updatedAt: 1, pmTrackerOnly: 1 };
   if (/^[a-f\d]{24}$/i.test(raw)) {
@@ -293,7 +300,7 @@ async function resolveProject(userId, projectName, context = {}) {
   }
 
   const candidates = await TakeoffProject.find(
-    { userId: uid },
+    ownOnly({ userId: uid }),
     { name: 1, productKey: 1, updatedAt: 1, pmTrackerOnly: 1 },
   )
     .sort({ updatedAt: -1 })
@@ -330,7 +337,7 @@ async function resolveProject(userId, projectName, context = {}) {
     };
   }
 
-  const project = await TakeoffProject.findOne({ _id: best._id, userId: uid }).lean();
+  const project = await TakeoffProject.findOne(ownOnly({ _id: best._id, userId: uid })).lean();
   if (!project) return { error: "That project could not be loaded." };
 
   // Duplicate project names are common (a re-save creates another "New
@@ -527,12 +534,13 @@ export async function getResourceQuantity(userId, resource, projectName, context
     // twins of a takeoff — their lines are the SAME materials as the parent's.
     // Counting both would silently double every quantity, so the twins are
     // excluded from an all-projects total (naming one explicitly still works).
+    // ownOnly: a total across projects never counts a sample.
     projects = await TakeoffProject.find(
-      {
+      ownOnly({
         userId: oid(userId),
         pmTrackerOnly: { $ne: true },
         origin: { $ne: "takeoff-derived" },
-      },
+      }),
       {
         name: 1,
         productKey: 1,
@@ -899,11 +907,11 @@ export async function getAccountSummary(user) {
     // wrong answer to the question she is advertising.
     const counts = await TakeoffProject.aggregate([
       {
-        $match: {
+        $match: ownOnly({
           userId: uid,
           pmTrackerOnly: { $ne: true },
           productKey: { $not: /-material/i },
-        },
+        }),
       },
       { $group: { _id: "$productKey", count: { $sum: 1 } } },
     ]);
@@ -1063,7 +1071,7 @@ export async function getProcurementSchedule(userId, projectName, context = {}, 
 // reference. These tools need the whole document.
 async function loadWhole(userId, project) {
   if (Array.isArray(project?.items)) return project;
-  return TakeoffProject.findOne({ _id: project._id, userId: oid(userId) }).lean();
+  return TakeoffProject.findOne(ownOnly({ _id: project._id, userId: oid(userId) })).lean();
 }
 
 // What the caller may do with it, by the same rule as routes/projects.js.
@@ -1093,8 +1101,11 @@ function cardProject(project) {
 export async function getPricingProposal(userId, projectName, context = {}) {
   const { project: found, error, note } = await resolveProject(userId, projectName, context);
   if (error) return error;
+  // A sample is refused before anything is read from it: no Proposed rates card.
+  if (isSampleProject(found)) return sampleProposalRefusal(found);
   const project = await loadWhole(userId, found);
   if (!project) return "That project could not be loaded.";
+  if (isSampleProject(project)) return sampleProposalRefusal(project);
 
   const access = await accessFor(userId, project);
   if (!access.canSeeRates) {
@@ -1193,8 +1204,10 @@ export async function getPricingProposal(userId, projectName, context = {}) {
 async function projectToPrice(userId, projectName, context) {
   const { project: found, error, note } = await resolveProject(userId, projectName, context);
   if (error) return { error };
+  if (isSampleProject(found)) return { error: sampleProposalRefusal(found) };
   const project = await loadWhole(userId, found);
   if (!project) return { error: "That project could not be loaded." };
+  if (isSampleProject(project)) return { error: sampleProposalRefusal(project) };
   const access = await accessFor(userId, project);
   if (!access.canSeeRates) {
     return { error: `The user cannot see rates on "${project.name}", so no rates can be set on it. Say so plainly.` };
@@ -1390,8 +1403,11 @@ export async function getProjectPeriodReport(userId, projectName, from, to, cont
 
   const { project: found, error, note } = await resolveProject(userId, projectName, context);
   if (error) return error;
+  // Period reports are for the user's own projects only, never a sample.
+  if (isSampleProject(found)) return samplePeriodReportRefusal(found);
   const project = await loadWhole(userId, found);
   if (!project) return "That project could not be loaded.";
+  if (isSampleProject(project)) return samplePeriodReportRefusal(project);
   const access = await accessFor(userId, project);
 
   const where = { projectId: project._id, createdAt: {} };
