@@ -249,8 +249,10 @@ export function AdaReportCard({ card, onOpen }) {
   const masked = Boolean(s.moneyMasked);
   const fig = (v) => (masked ? EN_DASH : money(v));
   return (
-    <div style={box} aria-label="Project report">
+    <div style={box} aria-label={card?.sample ? "Sample project report" : "Project report"}>
       <div style={head}>
+        {/* A sample's report says so first (server: card.sample + card.title). */}
+        {card?.sample ? <div style={{ ...small, fontWeight: 600 }}>{card?.title || "Sample project, figures are illustrative"}</div> : null}
         <b>{card?.project?.name || "Project"} report</b>
         <div style={small}>{rangeLabel(card?.from, card?.to)}</div>
       </div>

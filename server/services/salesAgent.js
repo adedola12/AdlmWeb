@@ -32,6 +32,7 @@ import {
   sampleProposalRefusal,
   samplePeriodReportRefusal,
   SAMPLE_LABEL,
+  SAMPLE_REPORT_TITLE,
   isSampleAnswer,
   labelSampleReply,
   mentionsSample,
@@ -676,7 +677,8 @@ Rules for account answers:
 Every subscriber can open a product's sample projects (names start "Sample:"). They belong to no client and their figures are illustrative.
 - Answer about a sample ONLY when the user names one or is on its page. To read a named sample, pass its name to the project tool WITH the word "sample" in it (e.g. "5-Bedroom Duplex sample").
 - Start every answer about a sample with exactly: "${SAMPLE_LABEL}"
-- A sample is NEVER one of "my projects": never count it in a portfolio, a total, a comparison, a period report or slot usage.
+- A sample is NEVER one of "my projects": never count it in a portfolio, a total, a comparison, a multi-project report or slot usage.
+- project_report may run for ONE sample the user opened or named with "sample". Its answer starts with the label above, says "${SAMPLE_REPORT_TITLE}", and covers that sample only; never mix it with the user's own projects.
 - NEVER use a sample's rates, quantities or totals in an estimate, budget, valuation or rate for the user's own projects, and never copy them across. Rates cannot be proposed or applied on a sample.
 ${canUseUserRates ? "" : `- When the user STATES a cost or a rate for their own lines ("windows are 88,000 per sqm", "set blockwork to 9,500 per m2"): this chat cannot set rates from a message yet. Say plainly, in text, that pricing by message is coming soon, and that for now they can type the rate on the line in the project's Bill tab. Do not offer to do it, and NEVER say a rate was applied, set or saved.
 `}${canUseCards ? `
@@ -785,8 +787,11 @@ export function withCard(out, ctx) {
 // THE LAST LOCK BEFORE A CARD REACHES THE CHAT.
 //
 // The tools already refuse a sample (util/agentSampleGuard.js). This asks the
-// database again, by the card's own project id, so the Proposed rates card and
-// the report card can never be drawn for a sample even if a resolver changes.
+// database again, by the card's own project id, so the Proposed rates card can
+// never be drawn for a sample even if a resolver changes. A report card for a
+// sample passes only when the period-report tool built it as a labelled sample
+// report (card.sample and the sample title, owner's decision 8 Oct 2026); any
+// other report card for a sample is refused.
 // A lookup that fails drops the card: a missing Apply button is a retry, a
 // sample's rates on a client's bill is not.
 export async function refuseSampleCard(out) {
@@ -801,9 +806,12 @@ export async function refuseSampleCard(out) {
     return "That could not be checked just now. Apologise briefly and ask the user to try again; do NOT say anything was proposed.";
   }
   if (!sample) return out;
-  return out.card.type === "project-report"
-    ? samplePeriodReportRefusal(sample)
-    : sampleProposalRefusal(sample);
+  if (out.card.type === "project-report") {
+    const labelled =
+      out.card.sample === true && out.card.title === SAMPLE_REPORT_TITLE && isSampleAnswer(out.text);
+    return labelled ? out : samplePeriodReportRefusal(sample);
+  }
+  return sampleProposalRefusal(sample);
 }
 
 async function handleSaveLead(input, ctx, outcome) {

@@ -29,6 +29,7 @@ import {
   sampleProposalRefusal,
   samplePeriodReportRefusal,
   sampleBanner,
+  SAMPLE_REPORT_TITLE,
   mentionsSample,
   withoutSampleWord,
 } from "../util/agentSampleGuard.js";
@@ -1538,6 +1539,21 @@ export async function getSetRatesProposal(userId, projectName, input = {}, conte
 }
 
 /**
+ * May the period report run on this sample? The same conditions as every other
+ * sample read in resolveProject: a licence for the sample's product, and the
+ * user either named it with the word "sample" or is on its page and named no
+ * other project.
+ */
+function sampleReportAllowed(sample, projectName, context = {}) {
+  if (!isSampleProject(sample) || !canOpenSample(context.sampleViewer || null, sample)) return false;
+  const query = String(projectName || "").trim();
+  if (query && mentionsSample(query)) return true;
+  const ref = String(context.projectRef || "").trim();
+  if (!ref || (query && query !== ref)) return false;
+  return ref === String(sample._id) || ref.toLowerCase() === String(sample.slug || "").toLowerCase();
+}
+
+/**
  * What moved on one project between two dates (YYYY-MM-DD, Lagos days).
  *
  * @returns {Promise<string | {text: string, card: object}>}
@@ -1551,25 +1567,37 @@ export async function getProjectPeriodReport(userId, projectName, from, to, cont
 
   const { project: found, error, note } = await resolveProject(userId, projectName, context, { allowSample: true });
   if (error) return error;
-  // Period reports are for the user's own projects only, never a sample.
-  if (isSampleProject(found)) return samplePeriodReportRefusal(found);
-  const project = await loadWhole(userId, found);
+  // ONE sample may be reported on (owner's decision, 8 Oct 2026), and only by
+  // the route every other sample read takes. Asked again here, from the
+  // document itself, so a resolver that ever hands a sample over another way
+  // is still refused.
+  if (isSampleProject(found) && !sampleReportAllowed(found, projectName, context)) {
+    return samplePeriodReportRefusal(found);
+  }
+  const sample = isSampleProject(found);
+  const project = sample ? found : await loadWhole(userId, found);
   if (!project) return "That project could not be loaded.";
-  if (isSampleProject(project)) return samplePeriodReportRefusal(project);
+  // An own project that turns out to be a sample on the full load is refused:
+  // it was not reached by the sample route.
+  if (isSampleProject(project) && !sample) return samplePeriodReportRefusal(project);
   const access = await accessFor(userId, project);
 
-  const where = { projectId: project._id, createdAt: {} };
-  if (range.from) where.createdAt.$gte = range.from;
-  if (range.to) where.createdAt.$lte = range.to;
-  const activity = await ActivityLog.find(where, {
-    createdAt: 1,
-    summary: 1,
-    category: 1,
-    actorName: 1,
-  })
-    .sort({ createdAt: -1 })
-    .limit(300)
-    .lean();
+  // A sample's activity trail is ADLM staff building it, not a site: left out.
+  let activity = [];
+  if (!sample) {
+    const where = { projectId: project._id, createdAt: {} };
+    if (range.from) where.createdAt.$gte = range.from;
+    if (range.to) where.createdAt.$lte = range.to;
+    activity = await ActivityLog.find(where, {
+      createdAt: 1,
+      summary: 1,
+      category: 1,
+      actorName: 1,
+    })
+      .sort({ createdAt: -1 })
+      .limit(300)
+      .lean();
+  }
 
   const s = buildPeriodSummary(project, {
     from: range.from,
@@ -1581,6 +1609,9 @@ export async function getProjectPeriodReport(userId, projectName, from, to, cont
   const card = {
     type: "project-report",
     label: "Open the report",
+    // A sample's card says so on its first line, and carries the flag the
+    // chat's last lock (salesAgent.js refuseSampleCard) looks for.
+    ...(sample ? { sample: true, title: SAMPLE_REPORT_TITLE } : {}),
     project: cardProject(project),
     from: range.fromDay,
     to: range.toDay,
@@ -1597,14 +1628,20 @@ export async function getProjectPeriodReport(userId, projectName, from, to, cont
     },
   };
 
+  // A sample's report opens with the sample banner (so the reply is labelled)
+  // and then the report title, before any figure.
+  const lead = sample ? `${bannerFor(project)}${SAMPLE_REPORT_TITLE}.
+` : "";
+
   if (s.quiet) {
     return {
-      text: `Nothing was recorded on "${project.name}" between ${span} (Lagos time): no progress, certificates, variations, purchases, programme changes or activity. Say so plainly — a quiet period is a finding, not an error. The card under your reply still opens the full report.${note ? `\n${note}` : ""}`,
+      text: `${lead}Nothing was recorded on "${project.name}" between ${span} (Lagos time): no progress, certificates, variations, purchases, programme changes or activity. Say so plainly — a quiet period is a finding, not an error. The card under your reply still opens the full report.${note ? `\n${note}` : ""}`,
       card,
     };
   }
 
   const L = [];
+  if (lead) L.push(lead.trimEnd());
   L.push(`Report for "${project.name}" (${productLabel(project.productKey)}), ${span} (Lagos days):`);
   L.push(
     `- Progress: ${s.progress.events} valuation tick(s) on ${s.progress.linesMoved} line(s), net ${naira(s.progress.net)} of work valued (${naira(s.progress.valued)} forward, ${naira(s.progress.reversed)} wound back). ${s.progress.completedLines} line(s) signed off complete, worth ${naira(s.progress.completedValue)}.`,
@@ -1652,6 +1689,11 @@ export async function getProjectPeriodReport(userId, projectName, from, to, cont
   L.push(
     "Quote these figures exactly. Lead with the two or three that matter most (value done, certified, overspend or slippage), flag any risk, and suggest one next step. A card under your reply opens the full Project report for this range as a PDF.",
   );
+  if (sample) {
+    L.push(
+      `This report covers this ONE sample only. Its figures are illustrative: never add them to, compare them with or carry them into the user's own projects or reports. The card and the PDF are titled "${SAMPLE_REPORT_TITLE}".`,
+    );
+  }
   if (note) L.push(note);
   return { text: L.join("\n"), card };
 }
