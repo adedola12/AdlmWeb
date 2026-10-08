@@ -216,7 +216,9 @@ export default function WorkProjectHead({
                   role="menuitem"
                   onClick={() => {
                     close();
-                    onAction?.(it.kind === "report" ? it.key : "export", it.key);
+                    // "ICMS details…" opens a form, not a download.
+                    if (it.kind === "icms-details") onAction?.("icms");
+                    else onAction?.(it.kind === "report" ? it.key : "export", it.key);
                   }}
                 >
                   <span>

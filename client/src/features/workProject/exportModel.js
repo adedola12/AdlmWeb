@@ -206,13 +206,38 @@ const WORKBOOKS = [
   { key: "tr-m", group: "trade", label: "Multi-storey", route: "boq", query: { building: "multistorey", format: "trade" }, file: "Trade BOQ" },
   { key: "ms-b", group: "milestone", label: "Bungalow", route: "boq", query: { building: "bungalow", format: "milestone" }, file: "Milestone BOQ" },
   { key: "ms-m", group: "milestone", label: "Multi-storey", route: "boq", query: { building: "multistorey", format: "milestone" }, file: "Milestone BOQ" },
+  // ICMS 3, with the classic menu's labels (ProjectOpenView ExportMenu) so the
+  // two screens name the same file the same way.
+  {
+    key: "icms-x",
+    group: "icms",
+    label: "ICMS 3 cost and carbon (Excel)",
+    note: "Cost by Group · carbon by Group · every line",
+    route: "icms",
+    query: {},
+    file: "ICMS 3",
+  },
+  {
+    key: "icms-j",
+    group: "icms",
+    label: "ICMS 3 cost and carbon (JSON)",
+    note: "The same report as data, with full ICMS 3 codes",
+    route: "icms",
+    query: { format: "json" },
+    file: "ICMS 3",
+    ext: "json",
+  },
 ];
+
+// Not a file: opens the ICMS details form, which the two ICMS exports read.
+export const ICMS_DETAILS_ITEM = { key: "icms-details", label: "ICMS details…", kind: "icms-details" };
 
 const GROUPS = [
   { key: "bill", label: "Bill & budget, Excel" },
   { key: "elemental", label: "Elemental BoQ, Excel", note: "by building element" },
   { key: "trade", label: "Trade BoQ, Excel", note: "by work section (NRM2-style)" },
   { key: "milestone", label: "Milestone BoQ, Excel", note: "one bill per stage" },
+  { key: "icms", label: "ICMS 3", note: "international cost and carbon report" },
   { key: "pdf", label: "Reports, PDF" },
 ];
 
@@ -235,6 +260,7 @@ export function exportMenu({ canSeePm = true, isBoqImport = false } = {}) {
             note: note || "",
             kind: "workbook",
           }));
+    if (g.key === "icms") items.push({ ...ICMS_DETAILS_ITEM, note: "" });
     const hint =
       g.key === "bill" && isBoqImport
         ? "This bill came from Excel: this export keeps its own sections and totals."
@@ -251,7 +277,7 @@ export function workbookRequest(key, { productKey, projectId, projectName } = {}
   const tool = encodeURIComponent(String(productKey).trim().toLowerCase());
   const qs = new URLSearchParams(w.query).toString();
   const path = `/projectsboq/${tool}/${encodeURIComponent(projectId)}/export/${w.route}${qs ? `?${qs}` : ""}`;
-  return { path, filename: `${safeName(projectName)} - ${w.file}.xlsx` };
+  return { path, filename: `${safeName(projectName)} - ${w.file}.${w.ext || "xlsx"}`, json: w.ext === "json" };
 }
 
 export function safeName(name) {

@@ -2520,6 +2520,11 @@
   background:var(--bg);font:400 13.5px var(--font);color:var(--ink);font-variant-numeric:tabular-nums}
 .ds .pn-num input:focus{outline:2px solid color-mix(in srgb,var(--action) 45%,transparent);outline-offset:1px}
 .ds .pn-num input:disabled{opacity:.6}
+/* A choice in the same box (the ICMS details' asset type, stage, boundary). */
+.ds .pn-num select{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);font:400 13.5px var(--font);color:var(--ink)}
+.ds .pn-num select:focus{outline:2px solid color-mix(in srgb,var(--action) 45%,transparent);outline-offset:1px}
+.ds .pn-num select:disabled{opacity:.6}
 .ds .pj-need-note{margin:0 16px 10px;font-size:11.5px;color:var(--ink-3);line-height:1.55}
 /* Finding a rate by name, in the side panel. A rate in the wrong unit is shown
    but dimmed and unclickable — visible so nobody hunts for it, inert so nobody

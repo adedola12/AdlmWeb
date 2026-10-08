@@ -21,6 +21,10 @@ import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
 // it here makes the route look the same whichever door it was opened by.
 import "../styles/ds-work-proj.css";
 import WkModal from "../ds/WkModal.jsx";
+import WorkProjectPanel from "../features/workProject/WorkProjectPanel.jsx";
+import { useProjectPanel } from "../features/workProject/useProjectPanel.js";
+import IcmsDetailsForm from "../features/icms/IcmsDetailsForm.jsx";
+import { canEditIcms } from "../features/icms/icmsDetails.js";
 import { useFeedback } from "../ds/feedback/feedbackContext.js";
 import {
   approvedVariationsEarned,
@@ -1357,6 +1361,9 @@ export default function ProjectsGeneric() {
 
   const _boqFileRef = React.useRef(null);
   const [exportOpen, setExportOpen] = React.useState(false);
+  // "ICMS details…" from the Export menu: the same side panel and form as
+  // /work/project, so the details are stated the same way on both screens.
+  const icmsPanel = useProjectPanel();
   const [_boqTemplateReady, setBoqTemplateReady] = React.useState(
     !!loadBoqTemplateFromLocal(),
   );
@@ -6008,6 +6015,10 @@ export default function ProjectsGeneric() {
                     setErr(e?.message || "Failed to export the ICMS 3 report");
                   }
                 }}
+                onOpenIcmsDetails={() => {
+                  setExportOpen(false);
+                  if (selectedId) icmsPanel.show({ id: selectedId });
+                }}
                 itemQuery={itemQuery}
                 onItemQueryChange={setItemQuery}
                 onClearItemQuery={() => setItemQuery("")}
@@ -6182,6 +6193,19 @@ export default function ProjectsGeneric() {
             )}
         </main>
       </div>
+
+      {icmsPanel.content ? (
+        <WorkProjectPanel title="ICMS details" visible={icmsPanel.visible} onClose={icmsPanel.close}>
+          <IcmsDetailsForm
+            productKey={toolNorm}
+            projectId={icmsPanel.content.id}
+            accessToken={accessToken}
+            canEdit={canEditIcms(sel)}
+            readOnlyReason={sel?.isSample ? "sample" : "view"}
+            onDone={icmsPanel.close}
+          />
+        </WorkProjectPanel>
+      ) : null}
 
       {/* Add a project a colleague shared (claim by code) */}
       <WkModal

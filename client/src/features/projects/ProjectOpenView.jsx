@@ -153,6 +153,7 @@ function ExportMenu({
   onExportGenericTradeBoQ,
   onExportElementalBoQ,
   onExportIcms,
+  onOpenIcmsDetails,
 }) {
   const ref = React.useRef(null);
   const close = React.useCallback(() => {
@@ -284,6 +285,14 @@ function ExportMenu({
                 "Cost by Group · carbon by Group · every line",
               )}
               {item("icms-j", "ICMS 3 cost and carbon (JSON)", "The same report as data, with full ICMS 3 codes", () => onExportIcms("json"))}
+              {onOpenIcmsDetails
+                ? item(
+                    "icms-d",
+                    "ICMS details…",
+                    "Country, currency, base date, asset type, stage, floor areas and carbon boundary: stated once for this project and used by both ICMS 3 exports",
+                    onOpenIcmsDetails,
+                  )
+                : null}
             </>
           ) : null}
         </div>
@@ -434,6 +443,7 @@ export default function ProjectOpenView({
   onExportGenericBoQ,
   onExportGenericTradeBoQ,
   onExportIcms,
+  onOpenIcmsDetails,
   onItemQueryChange,
   onMoveItem,
   onPickCandidate,
@@ -960,6 +970,7 @@ export default function ProjectOpenView({
               onExportGenericTradeBoQ={onExportGenericTradeBoQ}
               onExportElementalBoQ={onExportElementalBoQ}
               onExportIcms={onExportIcms}
+              onOpenIcmsDetails={onOpenIcmsDetails}
             />
           ) : null}
 

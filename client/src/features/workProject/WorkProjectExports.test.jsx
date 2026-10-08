@@ -205,3 +205,20 @@ describe("the export panel", () => {
     ).not.toThrow();
   });
 });
+
+describe("ICMS details from the export panel", () => {
+  it("opens the ICMS details form when the shell gives it a way to", () => {
+    const onOpenIcms = vi.fn();
+    const c = render(
+      <MemoryRouter>
+        <WorkProjectExports project={job()} productKey="revit" saveId="66f1a2b3c4d5e6f7a8b9c0d1" accessToken="t" onOpenIcms={onOpenIcms} />
+      </MemoryRouter>,
+    ).container;
+    fireEvent.click(within(c).getByRole("button", { name: "ICMS details…" }));
+    expect(onOpenIcms).toHaveBeenCalled();
+  });
+
+  it("has no ICMS section without one", () => {
+    expect(within(panel()).queryByRole("button", { name: "ICMS details…" })).toBe(null);
+  });
+});

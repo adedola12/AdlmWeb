@@ -18,19 +18,25 @@ async function reasonFrom(res, fallback) {
   }
 }
 
-export async function downloadWorkbook({ path, filename, token }) {
+// `json` is for the one export that is data rather than a workbook (the ICMS 3
+// report as RICS Data Standard JSON): the same guard, against the JSON type.
+export async function downloadWorkbook({ path, filename, token, json = false }) {
   const url = new URL(path, API_BASE || window.location.origin).toString();
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      Accept: json ? "application/json" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     },
     credentials: "include",
   });
   if (!res.ok) throw new Error(await reasonFrom(res, "The export failed."));
 
   const ct = String(res.headers.get("content-type") || "").toLowerCase();
-  if (!ct.includes("spreadsheetml.sheet") && !ct.includes("application/octet-stream")) {
+  if (json) {
+    if (!ct.includes("application/json")) {
+      throw new Error("The server sent something that is not the JSON report. Try again in a moment.");
+    }
+  } else if (!ct.includes("spreadsheetml.sheet") && !ct.includes("application/octet-stream")) {
     throw new Error("The server sent something that is not a workbook. Try again in a moment.");
   }
 

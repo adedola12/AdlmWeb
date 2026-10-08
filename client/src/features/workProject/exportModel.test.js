@@ -168,8 +168,18 @@ describe("the addresses it builds", () => {
 describe("the export menu", () => {
   it("lists the bill & budget, elemental, trade and milestone workbooks and the PDF reports", () => {
     const groups = exportMenu();
-    expect(groups.map((g) => g.key)).toEqual(["bill", "elemental", "trade", "milestone", "pdf"]);
+    expect(groups.map((g) => g.key)).toEqual(["bill", "elemental", "trade", "milestone", "icms", "pdf"]);
     expect(groups.find((g) => g.key === "pdf").items.map((i) => i.key)).toEqual(["report", "pm-report"]);
+  });
+
+  it("offers ICMS 3 as Excel, JSON and the details form, labelled as the classic menu labels them", () => {
+    const icms = exportMenu().find((g) => g.key === "icms");
+    expect(icms.label).toBe("ICMS 3");
+    expect(icms.items.map((i) => [i.key, i.label, i.kind])).toEqual([
+      ["icms-x", "ICMS 3 cost and carbon (Excel)", "workbook"],
+      ["icms-j", "ICMS 3 cost and carbon (JSON)", "workbook"],
+      ["icms-details", "ICMS details…", "icms-details"],
+    ]);
   });
 
   it("drops the PM report where the project has no PM tab", () => {
@@ -192,6 +202,18 @@ describe("where each workbook comes from", () => {
     expect(workbookRequest("el-m", at).path).toBe("/projectsboq/planswift/64f0c0ffee/export/boq?building=multistorey");
     expect(workbookRequest("tr-b", at).path).toBe("/projectsboq/planswift/64f0c0ffee/export/boq?building=bungalow&format=trade");
     expect(workbookRequest("ms-b", at).path).toBe("/projectsboq/planswift/64f0c0ffee/export/boq?building=bungalow&format=milestone");
+  });
+
+  it("fetches the ICMS 3 report from the classic route, the JSON one as JSON", () => {
+    const x = workbookRequest("icms-x", at);
+    expect(x.path).toBe("/projectsboq/planswift/64f0c0ffee/export/icms");
+    expect(x.filename).toBe("Ikoyi Block A - ICMS 3.xlsx");
+    expect(x.json).toBe(false);
+    const j = workbookRequest("icms-j", at);
+    expect(j.path).toBe("/projectsboq/planswift/64f0c0ffee/export/icms?format=json");
+    expect(j.filename).toBe("Ikoyi Block A - ICMS 3.json");
+    expect(j.json).toBe(true);
+    expect(workbookRequest("icms-details", at)).toBe(null);
   });
 
   it("names the fallback file safely, and is null for a report or a missing id", () => {
