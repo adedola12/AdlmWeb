@@ -27,6 +27,10 @@ export const GATED_SETTINGS = {
     label: "Installer Hub download",
     what: "the file every customer's Download the Installer Hub button fetches",
   },
+  mobileAppUrl: {
+    label: "ADLM mobile app download",
+    what: "the APK every customer's Download the app button fetches",
+  },
 };
 
 export function isGatedSetting(field) {
@@ -54,7 +58,8 @@ export async function stageSettingChange({ field, value, previous, actor, req })
     settingField: field,
     settingPrevious: previous || "",
     // productKey is required by the model and indexes the desk's list.
-    productKey: "installer-hub",
+    // Groups the desk's list; one key per gated setting.
+    productKey: field === "mobileAppUrl" ? "mobile-app" : "installer-hub",
     displayName: meta?.label || field,
     fromVersion: previous ? "current" : "none",
     toVersion: "new",
