@@ -182,6 +182,7 @@ const ArchiCADElement = React.lazy(() => import("./pages/ArchiCADElement.jsx"));
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import NewBuildGate from "./components/NewBuildGate.jsx";
 import { isGatedPath } from "./lib/classicPaths.js";
+import { DS_PRODUCT_SLUGS } from "./lib/dsPublicPaths.js";
 import AdminRoute from "./components/AdminRoute.jsx";
 
 const TrainingEnrollment = lazyScreen(() => import("./pages/TrainingEnrollment.jsx"));
@@ -303,6 +304,12 @@ const router = createBrowserRouter([
 
       { path: "products", element: dsPublic("products") },
       { path: "quote", element: dsPublic("quote") },
+      // His six product pages at their catalogue paths. Static segments outrank
+      // ":key", so these win and every other key keeps the classic page.
+      ...Object.entries(DS_PRODUCT_SLUGS).map(([key, slug]) => ({
+        path: `product/${key}`,
+        element: dsPublic(slug),
+      })),
       { path: "product/:key", element: <ProductDetail /> },
 
       ...landingRoutes,

@@ -41,6 +41,23 @@ import DsAbout from "./ds/pages/DsAbout.jsx";
 import DsLearn from "./ds/custom/DsLearn.jsx";
 import DsWhatsNew from "./ds/custom/DsWhatsNew.jsx";
 import DsTrainings from "./ds/custom/DsTrainings.jsx";
+import DsQuiv from "./ds/custom/DsQuiv.jsx";
+import DsHeron from "./ds/custom/DsHeron.jsx";
+import DsRateGen from "./ds/custom/DsRateGen.jsx";
+import DsMep from "./ds/custom/DsMep.jsx";
+import DsTimePro from "./ds/custom/DsTimePro.jsx";
+import DsCiviq from "./ds/custom/DsCiviq.jsx";
+import { DS_PRODUCT_SLUGS } from "./lib/dsPublicPaths.js";
+
+// His product pages by manifest slug, matching what main.jsx mounts.
+const DS_PRODUCT_PAGES = {
+  quiv: DsQuiv,
+  heron: DsHeron,
+  rategen: DsRateGen,
+  mep: DsMep,
+  timepro: DsTimePro,
+  civiq: DsCiviq,
+};
 
 // The same shape main.jsx mounts, minus the Suspense it does not need here.
 const dsPublic = (Page) => (
@@ -80,6 +97,10 @@ export const marketingRoutes = [
       { index: true, element: dsPublic(DsHome) },
 
       { path: "products", element: dsPublic(DsProducts) },
+      ...Object.entries(DS_PRODUCT_SLUGS).map(([key, slug]) => ({
+        path: `product/${key}`,
+        element: dsPublic(DS_PRODUCT_PAGES[slug]),
+      })),
       { path: "product/:key", element: <ProductDetail /> },
       { path: "about", element: dsPublic(DsAbout) },
       { path: "learn", element: dsPublic(DsLearn) },
