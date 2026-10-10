@@ -258,6 +258,7 @@ const DsSignupPage = lazyScreen(() => import("./ds/custom/DsSignupPage.jsx"));
 const DsTrainings = lazyScreen(() => import("./ds/custom/DsTrainings.jsx"));
 const DsTrainingSignup = lazyScreen(() => import("./ds/custom/DsTrainingSignup.jsx"));
 const DsAdminReleases = lazyScreen(() => import("./ds/DsAdminReleases.jsx"));
+const DsAdminDesk = lazyScreen(() => import("./ds/DsAdminDesk.jsx"));
 
 const dsPublic = (slug) => (
   <React.Suspense fallback={null}>
@@ -1205,6 +1206,19 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin"]}>
             <AdminRoles />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Your desk: one queue for everything waiting on the approver — the
+      //    ideas from the work board, the website batch, plugin builds, gated
+      //    settings and emergency reviews. Same audience and same permission as
+      //    the two screens it draws from; it adds no endpoint of its own.
+      {
+        path: "admin/desk",
+        element: (
+          <AdminRoute permission="releases">
+            <DsAdminDesk />
           </AdminRoute>
         ),
       },

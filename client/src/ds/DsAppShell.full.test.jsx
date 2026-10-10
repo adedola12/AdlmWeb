@@ -68,8 +68,12 @@ const css = (f) =>
 function fsRules(file) {
   const out = [];
   const re = /([^{}]+)\{([^{}]*)\}/g;
+  // Read once. This used to call css(file) in the loop condition, so every
+  // rule in the sheet re-read 80KB from disk and re-stripped its comments —
+  // slow enough to pass its own 5s timeout once the suite grew by a file.
+  const text = css(file);
   let m;
-  while ((m = re.exec(css(file)))) {
+  while ((m = re.exec(text))) {
     const sel = m[1].trim();
     if (sel.includes(".dsh-fs")) out.push({ sel, body: m[2] });
   }
