@@ -166,6 +166,14 @@ export class AdlmReleaseGateStack extends Stack {
       }),
     );
 
+    // The deploy workflow invokes the watcher once after each deploy, because
+    // a Lambda that cannot even start looks identical to a healthy one from
+    // CloudFormation's side: on 4 Oct an undefined constant left it dead for
+    // twenty minutes and only a manual invoke found it. Invoke only; it reads
+    // nothing and changes nothing by being called.
+    watch.grantInvoke(
+      new iam.ArnPrincipal(`arn:aws:iam::${this.account}:role/github-actions-deploy-api`),
+    );
     new CfnOutput(this, "AuditBucketName", { value: bucket.bucketName });
     new CfnOutput(this, "GithubRoleArn", { value: githubRole.roleArn });
     new CfnOutput(this, "WatchFnName", { value: watch.functionName });
