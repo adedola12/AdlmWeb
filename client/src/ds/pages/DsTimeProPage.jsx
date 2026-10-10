@@ -72,7 +72,7 @@ export default function DsTimeProPage({ d }) {
           <p className="phero-note">
             <span className="pulse">
             </span>
-            Latest v1.1.0 · desktop and mobile
+            {d.latest} · desktop and mobile
           </p>
           {" "}
         </div>
