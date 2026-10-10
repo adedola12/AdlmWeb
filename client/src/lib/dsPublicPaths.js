@@ -24,9 +24,26 @@
 // trainings.html and the manifest has no such slug), so there is nothing to
 // switch it to. It stays classic until he designs one.
 //
-// /product/:key, /quote's thank-you, the course player, checkout and every
+// /product/:key for a key his design has no page for (anything not in
+// DS_PRODUCT_SLUGS below), /quote's thank-you, the course player, checkout and every
 // signed-in screen are out of scope: this list is only the public marketing
 // pages that had a classic page AND have a ported replacement.
+
+// The six product pages. His nav, his products page and his home all link
+// /product/<catalogue key>, and until 10 Oct 2026 that path still rendered the
+// classic ProductDetail, so every product click on the live site dropped the
+// visitor out of his design. The keys are the legacy CAD-host slugs the
+// catalogue uses (QUIV is "revit", HERON "planswift", Time Pro "qs-takeoff",
+// CIVIQ "civil3d"); the values are his page slugs in ds/pages/manifest.js.
+// Any other key still falls through to the classic ProductDetail.
+export const DS_PRODUCT_SLUGS = Object.freeze({
+  revit: "quiv",
+  planswift: "heron",
+  rategen: "rategen",
+  mep: "mep",
+  "qs-takeoff": "timepro",
+  civil3d: "civiq",
+});
 
 export const DS_PUBLIC_PATHS = new Set([
   "/",
@@ -47,6 +64,8 @@ export const DS_PUBLIC_PATHS = new Set([
   // has no trainings.html. It renders in DsShell like the rest, so the classic
   // nav and footer must not sit around it.
   "/trainings",
+
+  ...Object.keys(DS_PRODUCT_SLUGS).map((key) => `/product/${key}`),
 ]);
 
 /** The slug in ds/pages/manifest.js that serves a given public path. */
@@ -57,6 +76,9 @@ export const DS_PUBLIC_SLUGS = Object.freeze({
   "/learn": "learn",
   "/whats-new": "whats-new",
   "/quote": "quote",
+  ...Object.fromEntries(
+    Object.entries(DS_PRODUCT_SLUGS).map(([key, slug]) => [`/product/${key}`, slug]),
+  ),
   // login/signup are served by the WIRED pages in ds/custom, not by the
   // generated ones in ds/pages, so they have no manifest slug here.
 });
