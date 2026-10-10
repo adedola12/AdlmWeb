@@ -24,6 +24,7 @@ import { AdlmEdgeStack } from "../lib/adlm-edge-stack.js";
 import { AdlmApiStack } from "../lib/adlm-api-stack.js";
 import { AdlmOpsAlertsStack } from "../lib/adlm-ops-alerts-stack.js";
 import { AdlmReleaseGateStack } from "../lib/adlm-release-gate-stack.js";
+import { AdlmProspectingStack } from "../lib/adlm-prospecting-stack.js";
 import { AdlmFilesStack } from "../lib/adlm-files-stack.js";
 
 const app = new App();
@@ -186,4 +187,14 @@ new AdlmReleaseGateStack(app, "AdlmReleaseGate", {
   // Three years. COMPLIANCE mode: nobody, root included, can shorten this for
   // an object once written.
   retentionDays: 1095,
+});
+
+// Outbound prospecting (docs/PROSPECTING.md): the daily find-and-draft run.
+// Its own stack, referencing nothing in AdlmApi, so a deploy of either can
+// never remove the other. Deploying does not switch it on: the run waits for
+// PROSPECTING_ENABLED=true in SSM. Deploy alone:  npx cdk deploy AdlmProspecting
+new AdlmProspectingStack(app, "AdlmProspecting", {
+  env: { account: config.account, region: config.region },
+  description: "ADLM outbound prospecting - daily finder and email drafts for review, sends nothing",
+  config,
 });
