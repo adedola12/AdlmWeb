@@ -75,3 +75,13 @@ test("maxVersion picks the highest readable version and ignores the rest", () =>
   assert.equal(maxVersion([]), "");
   assert.equal(maxVersion(["nope"]), "");
 });
+
+test("displayVersion: a 2026 build reads as the launch version and its build", async () => {
+  const { displayVersion } = await import("./releaseVersion.js");
+  assert.equal(displayVersion("4.0.2610.1"), "4.0, build 4.0.2610.1");
+  assert.equal(displayVersion("v4.0.2611.2"), "4.0, build 4.0.2611.2");
+  assert.equal(displayVersion("3.0.2610.1"), "3.0, build 3.0.2610.1");
+  assert.equal(displayVersion("3.1.11"), "3.1.11");
+  assert.equal(displayVersion("v3.0.0"), "3.0.0");
+  assert.equal(displayVersion("latest"), "latest");
+});
