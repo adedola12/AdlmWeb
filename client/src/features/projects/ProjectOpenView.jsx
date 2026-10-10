@@ -811,7 +811,9 @@ export default function ProjectOpenView({
             <>
               <br />
               <span style={{ color: "var(--pal-orange-key)" }}>
-                Rates hidden. A RateGen subscription is required to view rates.
+                {access?.moneyHiddenByOwner
+                  ? "Money hidden by the project owner. Rates, totals and priced exports are not shared with you."
+                  : "Rates hidden. A RateGen subscription is required to view rates."}
               </span>
             </>
           ) : null}

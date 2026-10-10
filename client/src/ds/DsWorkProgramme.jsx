@@ -843,10 +843,10 @@ export default function DsWorkProgramme() {
               </p>
               <div className="f">
                 <div>
+                  {/* Withheld money arrives as zero; show the en dash, never ₦0.
+                      R4b: say so when it was the owner who withheld it. */}
                   <b>{isMoneyHidden(p) ? DASH : money(p.totalCost)}</b>
-                  {/* Withheld money arrives as zero; show the en dash, never ₦0. */}
-                  <b>{isMoneyHidden(p) ? "–" : money(p.totalCost)}</b>
-                  <span>bill value</span>
+                  <span>{isMoneyHidden(p) && p.moneyHiddenBy === "owner" ? "hidden by the owner" : "bill value"}</span>
                 </div>
                 <div>
                   <b>Open</b>

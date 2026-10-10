@@ -541,4 +541,23 @@ export const SEED = [
     refs: "AdlmWeb PR #22 (feat/work-board, fix 6085fa0) · docs/WORK_BOARD.md",
     design: { status: "needed", surfaces: "This board: summary tiles, the proposal form, the decision buttons, the design track" },
   },
+  {
+    key: "r4b-share-money-visibility",
+    title: "Sharing a project: the owner chooses whether collaborators see its money",
+    products: ["website"],
+    kind: "feature",
+    // Filed by proposal (work-board.mjs propose) and awaiting Richard's
+    // decision. Listed here only so a re-seed carries the build's progress; a
+    // seed never changes its stage or decision.
+    stage: "proposed",
+    summary: "Add a per-share money switch (showMoney) on each share code and on each collaborator record. The owner sets it when making a code and can change it per person later. The server enforces it on the project page, on /me/projects-rollup and on the per-product /projects list. Every screen shows \"–\" where money is hidden. Today whether a collaborator sees money depends only on the collaborator's own RateGen subscription, and three project totals are never hidden at all.",
+    progress: "Built locally on branch feat/r4b-share-money-visibility (27 Sep, owner said build locally while approval is pending). Server: showMoney on share codes and collaborators (default on; a record without it reads as on, so existing shares are unchanged); resolveProjectAccess narrows canSeeRates by it, so the project page, masked-save guard, priced exports, certificates, variations and final account all honour it; /projects/:key, /me/projects-rollup (+ merged contracts) and /me/work-overview mask per row, with moneyHiddenBy owner|rategen; PM dashboard, project and management reports and /projectsboq exports refuse or null the money. 22 server tests + 3 client tests. Client: money switch in the share dialog and the collaborator roster, en dash + 'hidden by owner' hint on gallery, programme cards, classic portfolio rows and the project header.",
+    pending: "Richard approves the proposal, then one push and a PR to main. Design pass on the surfaces below. Related fixes shipped separately as bug fixes: PR #72 (list totals + /projectsboq exports now follow the RateGen rule; this branch is rebased on it) and PR #70 (ArchiCAD shared-project money).",
+    blockedOn: "Richard: approve r4b-share-money-visibility on the work board.",
+    refs: "branch feat/r4b-share-money-visibility · server/util/ownerMoney.js · server/util/sharedMoney.js · server/routes/projects.shareMoney.test.js · client/src/features/projects/CollaboratorsModal.jsx",
+    design: {
+      status: "needed",
+      surfaces: "Share dialog (Show money / Hide money switch, 'Money hidden' chip on a code). Collaborator roster (per-person Money shown / Money hidden). Project header notice ('Money hidden by the project owner'). Gallery card flag ('Money hidden by owner'), programme cards ('hidden by the owner'), classic portfolio rows (en dash).",
+    },
+  },
 ];

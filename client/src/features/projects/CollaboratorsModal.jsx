@@ -5,9 +5,13 @@ import { apiAuthed } from "../../http.js";
 import WkModal from "../../ds/WkModal.jsx";
 
 // Owner-only panel to share a project with colleagues: generate share codes
-// (each carrying a view/full access level, optional email restriction and use
-// limit), see who has joined, change a collaborator's level, and revoke
-// codes/people. Self-contained — it talks to /projects/:tool/:id/collab/*
+// (each carrying a view/full access level, whether collaborators see money,
+// optional email restriction and use limit), see who has joined, change a
+// collaborator's level or money visibility, and revoke codes/people.
+//
+// Money visibility (R4b) is enforced by the server: switching it off makes the
+// API send that person zeros, it is not hidden here. It narrows the RateGen
+// rule and never widens it, so "shown" still needs the collaborator's RateGen. Self-contained — it talks to /projects/:tool/:id/collab/*
 // directly so the parent only has to open/close it.
 export default function CollaboratorsModal({
   open,
@@ -23,6 +27,8 @@ export default function CollaboratorsModal({
 
   // New-code form
   const [level, setLevel] = React.useState("view");
+  // On by default: the same as every share made before this switch existed.
+  const [showMoney, setShowMoney] = React.useState(true);
   const [label, setLabel] = React.useState("");
   const [emails, setEmails] = React.useState("");
   const [maxUses, setMaxUses] = React.useState("");
@@ -77,6 +83,7 @@ export default function CollaboratorsModal({
         method: "POST",
         body: {
           accessLevel: level,
+          showMoney,
           label: label.trim(),
           allowedEmails: emails
             .split(/[,\s;]+/)
@@ -120,6 +127,20 @@ export default function CollaboratorsModal({
       await load();
     } catch (e) {
       setErr(e?.data?.error || e?.message || "Failed to update level");
+    }
+  }
+
+  async function changeMoney(userId, next) {
+    setErr("");
+    try {
+      await apiAuthed(base + "/" + userId, {
+        token: accessToken,
+        method: "PATCH",
+        body: { showMoney: next },
+      });
+      await load();
+    } catch (e) {
+      setErr(e?.data?.error || e?.message || "Failed to update money visibility");
     }
   }
 
@@ -256,6 +277,37 @@ export default function CollaboratorsModal({
               </div>
             </div>
 
+            <div>
+              <span style={{ display: "block", fontSize: 12.5, color: "var(--ink-2)", marginBottom: 7 }}>
+                Collaborators can see money
+              </span>
+              <div className="wk-loc-sw" role="tablist" aria-label="Collaborators can see money">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={showMoney}
+                  onClick={() => setShowMoney(true)}
+                  className={showMoney ? "on" : ""}
+                >
+                  Show money
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!showMoney}
+                  onClick={() => setShowMoney(false)}
+                  className={!showMoney ? "on" : ""}
+                >
+                  Hide money
+                </button>
+              </div>
+              <p className="wk-locnote" style={{ margin: "6px 0 0" }}>
+                {showMoney
+                  ? "Rates and totals show to people with an active RateGen subscription."
+                  : "Rates, totals, certificates and priced exports stay hidden from everyone who joins with this code."}
+              </p>
+            </div>
+
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
               <label className="wk-f" style={{ flex: "1 1 180px", minWidth: 0 }}>
                 <span>Label (optional)</span>
@@ -318,6 +370,11 @@ export default function CollaboratorsModal({
                         >
                           {c.accessLevel === "full" ? "Full" : "View"}
                         </span>
+                        {c.showMoney === false ? (
+                          <span className="wk-src sm" style={palChip("orange")}>
+                            Money hidden
+                          </span>
+                        ) : null}
                       </div>
                       <div
                         className="wk-locnote"
@@ -452,7 +509,7 @@ export default function CollaboratorsModal({
                   <div
                     key={p.userId}
                     className="wk-useline"
-                    style={{ gridTemplateColumns: "minmax(0, 1fr) auto auto", alignItems: "center" }}
+                    style={{ gridTemplateColumns: "minmax(0, 1fr) auto auto auto", alignItems: "center" }}
                   >
                     <span
                       className="p"
@@ -471,11 +528,22 @@ export default function CollaboratorsModal({
                         <option value="full">Full access</option>
                       </select>
                     </label>
+                    <label className="wk-f" style={{ gridColumn: 3, gridRow: 1, margin: 0 }}>
+                      <select
+                        value={p.showMoney === false ? "hide" : "show"}
+                        onChange={(e) => changeMoney(p.userId, e.target.value === "show")}
+                        aria-label={`Money visibility for ${p.email || p.userId}`}
+                        style={{ padding: "7px 10px", fontSize: 13 }}
+                      >
+                        <option value="show">Money shown</option>
+                        <option value="hide">Money hidden</option>
+                      </select>
+                    </label>
                     <button
                       type="button"
                       onClick={() => removePerson(p.userId)}
                       className="ds-btn ds-btn-sm btn-o"
-                      style={{ gridColumn: 3, gridRow: 1, ...WARN_TEXT }}
+                      style={{ gridColumn: 4, gridRow: 1, ...WARN_TEXT }}
                     >
                       <FaTrash size={13} /> Remove
                     </button>
@@ -487,8 +555,10 @@ export default function CollaboratorsModal({
         </section>
 
         <p className="wk-locnote" style={{ margin: 0 }}>
-          View-only collaborators can't download or edit. Rates stay hidden
-          unless the collaborator has an active RateGen subscription.
+          View-only collaborators can't download or edit. Money shows only
+          where you leave it on and the collaborator has an active RateGen
+          subscription. Changing it takes effect the next time they open the
+          project.
         </p>
       </div>
     </WkModal>
