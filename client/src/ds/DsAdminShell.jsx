@@ -214,6 +214,20 @@ export default function DsAdminShell({ children, title }) {
             <span className="tag">Admin</span>
           </Link>
 
+          {/* On a phone the rail is a drawer, and a phone has no Escape key:
+              the only way out was the strip of veil beside it. Hidden on a
+              desk, where the rail never covers anything. */}
+          <button
+            type="button"
+            className="adm-rail-x"
+            onClick={() => setOpen(false)}
+            aria-label="Close the navigation"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+
           <button
             type="button"
             className="adm-tog"
