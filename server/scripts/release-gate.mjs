@@ -38,7 +38,7 @@ import {
   recordGateEvent,
 } from "../util/releaseGate.js";
 
-const REPO = process.env.RELEASE_GATE_REPO || "adedola12/AdlmWeb";
+const REPO = process.env.RELEASE_GATE_REPO || "ADLM-Studio/AdlmWeb";
 const ENVIRONMENT = "production";
 
 // Every repository the gate covers. `private` ones cannot be protected on
@@ -46,18 +46,18 @@ const ENVIRONMENT = "production";
 // carries on; the plugin release gate on the API still covers what they ship.
 // Offboarding removes the leaver from ALL of these, protected or not.
 const GATED_REPOS = [
-  { repo: "adedola12/AdlmWeb", branch: "main" },
-  { repo: "adedola12/adlm-ai-service", branch: "main" },
-  { repo: "adedola12/ADLMRateGen-SingleUser", branch: "may30-version" },
-  { repo: "adedola12/ADLMInstaller", branch: "master", private: true },
-  { repo: "adedola12/RevitPluginBuilding", branch: "main", private: true },
-  { repo: "adedola12/RevitPluginArch", branch: "master", private: true },
-  { repo: "adedola12/ADLMRvtMEPPlugin", branch: "master", private: true },
-  { repo: "adedola12/ADLMRateGen", branch: "master", private: true },
-  { repo: "adedola12/ADLMPlanswiftApp", branch: "master", private: true },
-  { repo: "adedola12/ADLM-C3D-RoadTools", branch: "master", private: true },
-  { repo: "adedola12/TimeManagementApp", branch: "master", private: true },
-  { repo: "adedola12/adlm-mobile", branch: "main", private: true },
+  { repo: "ADLM-Studio/AdlmWeb", branch: "main" },
+  { repo: "ADLM-Studio/adlm-ai-service", branch: "main" },
+  { repo: "ADLM-Studio/ADLMRateGen-SingleUser", branch: "may30-version" },
+  { repo: "ADLM-Studio/ADLMInstaller", branch: "master", private: true },
+  { repo: "ADLM-Studio/RevitPluginBuilding", branch: "main", private: true },
+  { repo: "ADLM-Studio/RevitPluginArch", branch: "master", private: true },
+  { repo: "ADLM-Studio/ADLMRvtMEPPlugin", branch: "master", private: true },
+  { repo: "ADLM-Studio/ADLMRateGen", branch: "master", private: true },
+  { repo: "ADLM-Studio/ADLMPlanswiftApp", branch: "master", private: true },
+  { repo: "ADLM-Studio/ADLM-C3D-RoadTools", branch: "master", private: true },
+  { repo: "ADLM-Studio/TimeManagementApp", branch: "master", private: true },
+  { repo: "ADLM-Studio/adlm-mobile", branch: "main", private: true },
 ];
 
 const NEEDS_PRO = /upgrade to github pro/i;
@@ -136,7 +136,7 @@ function codeownersFor(login, repo = REPO) {
   const lines = [
     "# Every change needs the release approver's review before it reaches the",
     "# default branch. Managed by server/scripts/release-gate.mjs.",
-    "# See adedola12/AdlmWeb docs/RELEASE_GATE.md.",
+    "# See ADLM-Studio/AdlmWeb docs/RELEASE_GATE.md.",
     `* ${who}`,
     `/.github/ ${who}`,
   ];

@@ -39,7 +39,7 @@ const ReleaseBatchSchema = new mongoose.Schema(
     // The published test sheet he works from.
     sheetUrl: { type: String, trim: true, default: "" },
 
-    repo: { type: String, trim: true, default: "adedola12/AdlmWeb" },
+    repo: { type: String, trim: true, default: "ADLM-Studio/AdlmWeb" },
     fromBranch: { type: String, trim: true, default: "release" },
     toBranch: { type: String, trim: true, default: "main" },
     // The commit on `release` he is asked to test. The approval is worthless

@@ -12,9 +12,9 @@
 // as `error` and the page says so.
 
 export const PROTECTED_REPOS = [
-  { repo: "adedola12/AdlmWeb", label: "Website and API" },
-  { repo: "adedola12/adlm-ai-service", label: "AI service" },
-  { repo: "adedola12/ADLMRateGen-SingleUser", label: "RateGen (single user)" },
+  { repo: "ADLM-Studio/AdlmWeb", label: "Website and API" },
+  { repo: "ADLM-Studio/adlm-ai-service", label: "AI service" },
+  { repo: "ADLM-Studio/ADLMRateGen-SingleUser", label: "RateGen (single user)" },
 ];
 
 const TTL_MS = 5 * 60 * 1000;

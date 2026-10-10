@@ -146,10 +146,19 @@ export class AdlmReleaseGateStack extends Stack {
       assumedBy: new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
         StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
         // Only workflows running from the shipping branch of a watched repo.
+        //
+        // The repos moved to the ADLM-Studio org on 7 Oct 2026. A redirect
+        // covers old GET requests, but an OIDC `sub` is matched literally, so
+        // a stale entry here silently stops the alert workflow assuming this
+        // role — which is how the branch-protection alert went quiet. Both
+        // spellings are accepted while anything may still run under the old
+        // path; drop the adedola12 ones once nothing does.
         StringLike: {
-          "token.actions.githubusercontent.com:sub": props.repos.map((r) => {
+          "token.actions.githubusercontent.com:sub": props.repos.flatMap((r) => {
             const [repo, branch] = r.split("@");
-            return `repo:${repo}:ref:refs/heads/${branch || "main"}`;
+            const ref = `ref:refs/heads/${branch || "main"}`;
+            const name = repo.split("/")[1];
+            return [`repo:${repo}:${ref}`, `repo:adedola12/${name}:${ref}`];
           }),
         },
       }),
