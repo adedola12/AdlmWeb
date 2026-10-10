@@ -1,0 +1,285 @@
+/* Your desk.
+ *
+ * Its own file rather than another block in ds-local.css, so a screen that is
+ * still being argued about cannot conflict with work already in flight.
+ *
+ * Everything here is a `dk-` class. The table, tabs, drawer, chips and buttons
+ * are the admin's own and are not restyled: a screen that invents its own
+ * table is a screen that drifts from every other one by the second change.
+ *
+ * Two decisions worth naming. An emergency is the only thing on this screen
+ * allowed to be red, because it is the only row describing something that has
+ * already happened. And the rollout choice is two large targets rather than a
+ * pair of radios, because which one is picked decides how many machines a
+ * mistake lands on.
+ */
+
+.dk-what-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* a deadline, said in the one colour this screen reserves for them */
+.dk-urgent {
+  color: var(--adm-bad, #d13438);
+  font-weight: 600;
+}
+
+/* a heading inside the drawer; the admin's own h2 rhythm, one step down */
+.dk-h {
+  margin: 20px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.dk-warn {
+  margin: 10px 0;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(209, 52, 56, 0.35);
+  background: rgba(209, 52, 56, 0.06);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ------------------------------------------------------------- an idea */
+
+.dk-case {
+  margin: 8px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.dk-case dt {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.dk-case dd {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------- a batch flow */
+
+.dk-prog {
+  margin: 14px 0 6px;
+  font-size: 13.5px;
+}
+
+.dk-flow {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--adm-line, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+}
+.dk-flow.is-done {
+  opacity: 0.72;
+}
+.dk-flow h4 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.dk-no {
+  display: inline-grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 999px;
+  background: var(--adm-inset, rgba(0, 0, 0, 0.06));
+  font-size: 11px;
+  font-weight: 700;
+}
+.dk-where {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  opacity: 0.7;
+}
+.dk-steps {
+  margin: 6px 0 10px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.dk-flow-a {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.dk-vs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dk-behind {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--adm-inset, rgba(0, 0, 0, 0.04));
+}
+.dk-behind h4 {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+}
+.dk-behind ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ------------------------------------- a build, a setting, an emergency */
+
+/* what version becomes what version: the one fact a build is really about */
+.dk-ver {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 4px;
+  padding: 13px 16px;
+  border: 1px solid var(--adm-line, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+}
+.dk-ver span {
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0.6;
+}
+.dk-ver i {
+  font-style: normal;
+  opacity: 0.5;
+}
+.dk-ver b {
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+
+.dk-notes {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.dk-notes li {
+  margin-bottom: 5px;
+}
+
+/* a URL is unreadable prose, so it is set as what it is: a string to click */
+.dk-url {
+  margin: 6px 0 0;
+  padding: 11px 14px;
+  border: 1px solid var(--adm-line, rgba(0, 0, 0, 0.1));
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.dk-url.was {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+/* Which one is picked decides how many machines a mistake lands on, so they
+   are two large targets and each says its own consequence. */
+.dk-roll {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+.dk-r {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 13px 16px;
+  border: 1px solid var(--adm-line, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.dk-r b {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+.dk-r span {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.5;
+  opacity: 0.7;
+}
+.dk-r.on {
+  border-color: var(--adm-action, #239cff);
+  box-shadow: inset 0 0 0 1px var(--adm-action, #239cff);
+}
+
+/* It is already on customers' machines. Saying that quietly would be a lie. */
+.dk-alarm {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(209, 52, 56, 0.4);
+  background: rgba(209, 52, 56, 0.07);
+}
+.dk-alarm b {
+  display: block;
+  font-size: 15px;
+  color: var(--adm-bad, #d13438);
+  margin-bottom: 4px;
+}
+.dk-alarm span {
+  display: block;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dk-due {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--adm-line, rgba(0, 0, 0, 0.1));
+}
+.dk-due b {
+  font-size: 13.5px;
+}
+.dk-due span {
+  font-size: 12px;
+  opacity: 0.65;
+}
+.dk-due.hot {
+  border-color: rgba(209, 52, 56, 0.4);
+  background: rgba(209, 52, 56, 0.07);
+}
+.dk-due.hot b {
+  color: var(--adm-bad, #d13438);
+}
+
+/* their words, set as a quotation, because he is judging the reason itself */
+.dk-why {
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  border-left: 3px solid var(--adm-accent, #e86a27);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+@media (max-width: 720px) {
+  .dk-what-cell {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+}
